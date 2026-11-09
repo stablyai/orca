@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from '../terminal-pane/layout/terminal-layout-leaf-traversal'
 import {
   readWorkerAutoClose,
   setWorkerKeptOpen,

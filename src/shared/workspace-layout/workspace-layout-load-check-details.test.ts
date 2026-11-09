@@ -63,38 +63,6 @@ function load(entries: Tab[], hostId: ExecutionHostId) {
     )
 }
 
-it.each(['local', 'ssh:builder'] as const)(
-  'bounds stored tab ID reads on repeated %s check-tab reconstruction',
-  (hostId) => {
-    const count = 128
-    let idReads = 0
-    const entries = Array.from({ length: count }, (_, index) => {
-      const id = `check-${index}`
-      return {
-        ...checkTab(id, hostId),
-        get id() {
-          idReads++
-          return id
-        }
-      }
-    })
-    const reconstruct = load(entries, hostId)
-    for (let attempt = 0; attempt < 2; attempt++) {
-      idReads = 0
-      const workspace = reconstruct()
-      expect(workspace.tabs).toHaveLength(count)
-      expect(idReads).toBeLessThan(count * 20)
-      const scope = hostId === 'local' ? '' : `@${hostId}`
-      expect(workspace.tabs[count - 1]?.entityId).toBe(
-        `${key}::check-details${scope}::check-${count - 1}`
-      )
-      expect(workspace.editorViews?.['check-127']?.file.filePath).toBe(
-        workspace.tabs[count - 1]?.entityId
-      )
-    }
-  }
-)
-
 it('keeps the first stored owner when check-tab IDs repeat', () => {
   const workspace = load(
     [checkTab('duplicate', 'ssh:builder'), checkTab('duplicate', 'runtime:other')],

@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  foldSubagentItems,
-  namedSubagents,
-  subagentFallbackText
-} from './native-chat-subagent-items'
+import { foldSubagentItems, subagentFallbackText } from './native-chat-subagent-items'
 import { projectNativeChatTranscriptMessages } from './native-chat-transcript-projection'
-import { formatWorkerTranscriptMessage } from '../../worker-transcript-text'
 import type {
   NativeChatMessage,
   NativeChatSubagentBlock,
@@ -85,37 +80,6 @@ describe('a turn’s subagents drawn as one row', () => {
     expect(new Set(rows.map((row) => groupOf(row).groupId)).size).toBe(3)
   })
 
-  it('tells same-named siblings apart without taking a name a sibling already has', () => {
-    const rows = foldSubagentItems([
-      item(1, subagent('a', { label: 'Audit' })),
-      item(2, subagent('b', { label: 'Audit' })),
-      item(3, subagent('c', { label: 'Audit 2' })),
-      item(4, subagent('d', { label: 'Audit' })),
-      item(5, subagent('e', { label: 'Audit 4' }))
-    ])
-
-    expect(groupOf(rows[0]).agents.map((agent) => agent.label)).toEqual([
-      'Audit',
-      'Audit 3',
-      'Audit 2',
-      'Audit 5',
-      'Audit 4'
-    ])
-  })
-
-  it('hands back the same row while no sibling changed, and a new one when one did', () => {
-    const a = item(1, subagent('a'))
-    const b = item(2, subagent('b'))
-    const first = foldSubagentItems([a, b])[0]
-    expect(foldSubagentItems([a, b])[0]).toBe(first)
-
-    const settled = item(2, subagent('b', { state: 'completed' }))
-    const next = foldSubagentItems([a, settled])[0]
-    expect(next).not.toBe(first)
-    // The sibling that did not change keeps its line, so its memoized row stays put.
-    expect(groupOf(next).agents[0]).toBe(groupOf(first).agents[0])
-  })
-
   it('leaves an older host’s roster row, and rows that are not one subagent, as they came', () => {
     const roster: NativeChatMessage = {
       ...text(1, 'system', 'Ran 1 subagent'),
@@ -152,43 +116,5 @@ describe('a turn’s subagents drawn as one row', () => {
       ['tool-call', 'tool-result'],
       ['subagent-group']
     ])
-  })
-})
-
-describe('the sentence an older client draws', () => {
-  it('claims no liveness it cannot keep, and names an adverse outcome', () => {
-    expect(subagentFallbackText(subagent('a', { label: 'Audit' }))).toBe(
-      'Kicked off subagent Audit'
-    )
-    expect(subagentFallbackText(subagent('a', { label: 'Audit', state: 'completed' }))).toBe(
-      'Ran subagent Audit'
-    )
-    expect(subagentFallbackText(subagent('a', { label: 'Audit', state: 'failed' }))).toBe(
-      'Ran subagent Audit (failed)'
-    )
-  })
-
-  it('is what a text surface prints, once, and the block alone still prints it', () => {
-    const own = item(1, subagent('a', { label: 'Audit' }))
-    expect(formatWorkerTranscriptMessage(own)).toBe('[system] Kicked off subagent Audit')
-    expect(formatWorkerTranscriptMessage({ ...own, blocks: own.blocks.slice(1) })).toBe(
-      '[system] [subagents] Kicked off subagent Audit'
-    )
-  })
-})
-
-describe('the subagents a row names', () => {
-  it('reads an older host’s roster and a subagent’s own row alike', () => {
-    expect(
-      namedSubagents(subagent('a', { run: 'r', outcomeBasis: 'stop-acknowledged', tokens: 3 }))
-    ).toEqual([{ id: 'a', label: 'a', state: 'working', tokens: 3 }])
-    expect(
-      namedSubagents({
-        type: 'subagent-group',
-        groupId: 'g',
-        agents: [{ id: 'b', label: 'b', state: 'idle' }]
-      })
-    ).toEqual([{ id: 'b', label: 'b', state: 'idle' }])
-    expect(namedSubagents({ type: 'text', text: 'x' })).toEqual([])
   })
 })

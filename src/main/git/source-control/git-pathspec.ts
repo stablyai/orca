@@ -65,7 +65,8 @@ export function bulkPathspecCommands(
   leadingArgs: readonly string[],
   filePaths: readonly string[],
   worktreePath: string,
-  options: GitRuntimeOptions
+  options: GitRuntimeOptions,
+  pathSource: 'host' | 'git' = 'host'
 ): string[][] {
   // Budget belongs to the host that spawns; the overhead measured above belongs to the transport.
   const budget = process.platform === 'win32' ? MAX_COMMAND_LINE_CHARS : POSIX_COMMAND_LINE_BUDGET
@@ -74,7 +75,10 @@ export function bulkPathspecCommands(
   let pathspecs: string[] = []
   let length = baseLength
   for (const filePath of filePaths) {
-    const pathspec = literalPathspec(filePath, worktreePath, options)
+    const pathspec =
+      pathSource === 'git'
+        ? `:(literal)${filePath}`
+        : literalPathspec(filePath, worktreePath, options)
     const cost =
       finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
     if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {

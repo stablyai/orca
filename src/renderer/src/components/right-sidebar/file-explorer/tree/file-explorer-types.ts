@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { DirEntryCursor } from '../../../../../../shared/file-dir-page'
+import type { DirEntryCursor } from '../../../../../../shared/file-listing/file-dir-page'
 
 export type FileExplorerOperationOwner =
   | { kind: 'local' }

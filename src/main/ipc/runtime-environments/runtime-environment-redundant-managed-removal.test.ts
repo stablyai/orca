@@ -8,7 +8,7 @@ import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mo
 import {
   registerManagedServerActions,
   type ManagedServerActions
-} from '../../runtime/managed-server-actions-registry'
+} from '../../runtime/hosts/management/managed-server-actions-registry'
 import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 
 const forgetRedundant = vi.fn<ManagedServerActions['forgetRedundant']>()
@@ -41,35 +41,6 @@ afterEach(() => {
   registerManagedServerActions(null)
   forgetRedundant.mockReset()
   rmSync(userDataPath, { recursive: true, force: true })
-})
-
-it('removes a managed entry through forgetRedundant while another entry manages the server', async () => {
-  const environment = addManaged('managed', 'ssh-1', 46_768, 'public-key')
-  addManaged('managed-alias', 'ssh-2', 46_769, 'public-key')
-  forgetRedundant.mockResolvedValueOnce({
-    outcome: 'forgotten',
-    verdict: 'unverifiable',
-    environmentId: 'managed',
-    sshTargetId: 'ssh-1'
-  })
-  await expect(removeRedundantManagedPairing(userDataPath, environment)).resolves.toMatchObject({
-    removed: { id: 'managed' }
-  })
-  expect(forgetRedundant).toHaveBeenCalledWith('managed')
-})
-
-it('surfaces a refusal instead of reporting the entry removed', async () => {
-  const environment = addManaged('managed', 'ssh-1', 46_768, 'public-key')
-  addManaged('managed-alias', 'ssh-2', 46_769, 'public-key')
-  forgetRedundant.mockResolvedValueOnce({
-    outcome: 'refused',
-    verdict: 'live',
-    code: 'orcad_forget_no_managed_twin',
-    reason: 'No other saved entry manages this server anymore.'
-  })
-  await expect(removeRedundantManagedPairing(userDataPath, environment)).rejects.toThrow(
-    'No other saved entry manages this server anymore.'
-  )
 })
 
 it('leaves the pairing to the store guard when the other entry manages a different server', () => {

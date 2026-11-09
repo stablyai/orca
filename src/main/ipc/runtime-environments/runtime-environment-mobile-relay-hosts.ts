@@ -34,7 +34,7 @@ import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
@@ -209,7 +209,7 @@ function watchRuntimeEnvironmentChanges(
   callbacks: Parameters<MobileDesktopRelayHosts['watchChanges']>[2]
 ): MobileDesktopRelayHostWatch {
   const controller = new AbortController()
-  let subscription: RemoteRuntimeSubscription | null = null
+  let subscription: RemoteRuntimeTransportSubscription | null = null
   const generation = getRuntimeEnvironmentTransportGeneration(environmentId)
   const current = (): boolean =>
     !controller.signal.aborted &&

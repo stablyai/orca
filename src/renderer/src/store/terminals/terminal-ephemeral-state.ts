@@ -1,6 +1,6 @@
 import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
-import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
@@ -202,7 +202,7 @@ export function createTerminalEphemeralActions(
           if (!tab.title || !isClaudeAgent(tab.title)) {
             continue
           }
-          const status = classifyTitleActivity(tab.title)
+          const status = detectAgentStatusFromTitle(tab.title)
           if (status === null || status === 'working') {
             continue
           }

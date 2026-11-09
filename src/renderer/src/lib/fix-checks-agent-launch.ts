@@ -1,3 +1,4 @@
+import type { StartFixChecksAgentArgs } from './fix-checks-agent-launch-request'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
@@ -14,7 +15,7 @@ import {
   ensureDetectedAgentsForRepo,
   ensureDetectedAgentsForWorktree,
   type RepoHostFields
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -23,8 +24,9 @@ import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-a
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
-import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
+import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
@@ -33,24 +35,9 @@ import {
   renderSourceControlActionCommandTemplate
 } from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
-import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
-
-type StartFixChecksAgentArgs = {
-  repoId: string
-  basePrompt: string
-  item?: GitHubWorkItem
-  worktreeId?: string | null
-  groupId?: string | null
-  launchSource: LaunchSource
-  telemetrySource?: WorkspaceCreateTelemetrySource
-  openModalFallback?: () => void
-  onSetupRequired?: () => void
-}
 
 type SavedAgentOverrideResult =
   | { kind: 'agent'; agent: TuiAgent }
@@ -68,8 +55,7 @@ async function resolveSavedAgentOverride(
     return { kind: 'launch-default' }
   }
   const pendingAgents = ensureDetectedAgentsForRepo(useAppStore.getState(), repo ?? {})
-  // Why: a paired server answers per workspace, so only the enabled check can run before it exists;
-  // the direct launch checks installation on the new workspace.
+  // Paired installation can only be checked after its workspace exists.
   const [choices, preferences] = await Promise.all([
     pendingAgents ? acquireAgentLaunchChoices(workspace, () => pendingAgents) : null,
     preferencesPromise
@@ -217,15 +203,6 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     const launchPlatform = targetRepo
       ? resolveRepoWorktreeLaunchPlatform(latestStore, targetRepo, targetWorktree)
       : undefined
-    if (!launchPlatform) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.822bf52295',
-          'Unable to resolve the workspace launch platform.'
-        )
-      )
-      return false
-    }
     const { commandInput: projectedPrompt, ...projection } = projectSourceControlActionLaunch(
       recipe,
       agent,
@@ -244,25 +221,21 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       launchSource: args.launchSource,
       beforeSurfaceOpen: () => {
         // Why: the launcher owns the initial surface, so revealing must not seed a sibling shell.
-        const revealed = activateAndRevealWorktree(targetWorktreeId, {
+        const revealed = activateAndRevealWorktreeWithOutcome(targetWorktreeId, {
           providesInitialSurface: true
         })
-        revealFailed = revealed === false
+        revealFailed = !reportAgentWorkspaceActivation(
+          revealed,
+          agent,
+          translate(
+            'auto.lib.fix.checks.agent.launch.03c1d61f83',
+            'Unable to open the workspace attached to these checks.'
+          )
+        )
         return !revealFailed
       }
     })
-    if (!result) {
-      toast.error(
-        revealFailed
-          ? translate(
-              'auto.lib.fix.checks.agent.launch.03c1d61f83',
-              'Unable to open the workspace attached to these checks.'
-            )
-          : translate(
-              'auto.lib.fix.checks.agent.launch.fb6c294e85',
-              'Could not build the agent launch command.'
-            )
-      )
+    if (!result || 'refused' in result) {
       return false
     }
     if (result.surface.kind === 'local-terminal') {

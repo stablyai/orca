@@ -2,7 +2,8 @@
 import type * as StoreModule from '@/store/index'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -18,7 +19,7 @@ vi.mock('@/store/index', () => ({
     getState: vi.fn()
   }
 }))
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => null,
   getConnectionIdForFile: () => null
 }))

@@ -2,7 +2,7 @@ import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import { formatMessageBanner } from '../orchestration/mailbox/formatting/message-formatting'
-import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../shared/orchestration-message-wait-timeout'
+import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../shared/orchestration/mailbox/orchestration-message-wait-timeout'
 import type { LegacyCompatibilityAuthority } from './orchestration-legacy-authority'
 import {
   operationIdentity,

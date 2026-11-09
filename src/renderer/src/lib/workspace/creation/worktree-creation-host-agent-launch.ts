@@ -1,12 +1,15 @@
+import { useAppStore } from '@/store'
+import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
-import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
+import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/launch-outcome/agent-launch-pane-notice-text'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { InitialTerminalOptions } from '@/lib/workspace/activation/worktree-activation-store-contract'
 import type {
+  CreateWorktreeCallOptions,
   CreatedWorktreeResult,
   HostAgentLaunch
 } from '@/store/slices/worktrees/create/worktree-create-payload'
@@ -73,12 +76,81 @@ function planWindowStartup(
     }
     return { agent: null }
   }
-  if (request.startupPlan && !backendSpawned && !request.startupPlan.launchToken) {
-    // Share one renderer-session token so delayed delivery targets the pane this queued startup spawns.
-    request.startupPlan.launchToken = createBrowserUuid()
+  if (!backendSpawned) {
+    const token =
+      request.creationStartup?.launchToken ??
+      request.startupPlan?.launchToken ??
+      createBrowserUuid()
+    if (request.creationStartup) {
+      request.creationStartup.launchToken = token
+    }
+    if (request.startupPlan) {
+      request.startupPlan.launchToken = token
+    }
   }
   if (request.agentLaunchRoute === 'structured-native-chat') {
     return { agent: request.agent }
   }
   return { startup: buildWorktreeCreationStartupOpt(request, backendSpawned), agent: request.agent }
+}
+
+export function worktreeCreationAgentLaunchOptions(
+  request: WorktreeCreationRequest
+): Pick<CreateWorktreeCallOptions, 'creationAgentLaunch' | 'legacyStartup'> {
+  if (
+    request.agentLaunchRoute === 'structured-native-chat' ||
+    request.ephemeralVmCheckoutMode === 'provisioned-root' ||
+    request.ephemeralVmRecipe ||
+    !request.agent ||
+    (request.launchInputs === undefined && !request.launchDraftPrompt)
+  ) {
+    return {}
+  }
+  const intent = request.creationStartup
+  return {
+    creationAgentLaunch: {
+      agent: request.agent,
+      prompt: request.quickPrompt,
+      draft: request.launchDraftPrompt,
+      inputs: request.launchInputs,
+      launchSource: request.quickTelemetry?.launch_source
+    },
+    ...(intent
+      ? {
+          legacyStartup: () => {
+            let legacy
+            try {
+              legacy = intent.legacy()
+            } catch (error) {
+              throw new WorktreeLegacyPreparationError(error)
+            }
+            request.startupPlan = legacy.startupPlan
+            request.startup = legacy.backendStartup
+            return resolveBackendDraftStartup(request)
+          }
+        }
+      : {})
+  }
+}
+
+export class WorktreeLegacyPreparationError extends Error {
+  constructor(readonly preparationError: unknown) {
+    super('Workspace launch preparation failed', { cause: preparationError })
+  }
+}
+
+export function recoverWorktreeLegacyPreparation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  error: unknown
+): boolean {
+  if (
+    !(error instanceof WorktreeLegacyPreparationError) ||
+    !request.creationStartup?.onLegacyPreparationFailure
+  ) {
+    return false
+  }
+  useAppStore.getState().removePendingWorktreeCreation(creationId)
+  request.creationStartup.onLegacyPreparationFailure(error.preparationError)
+  return true
 }

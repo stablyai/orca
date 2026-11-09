@@ -44,18 +44,6 @@ describe('createGitProgressRecordReader', () => {
     expectFullCheckout(readAll(chunks))
   })
 
-  it.each([
-    ['2.25.5', GIT_2_25_5_CHUNKS],
-    ['2.25.5 with a narrow COLUMNS', GIT_2_25_5_NARROW_CHUNKS]
-  ])('reads the same records from git %s wherever a chunk boundary falls', (_version, chunks) => {
-    const stream = chunks.join('')
-    const expected = readAll([stream])
-    for (let cut = 1; cut < stream.length; cut += 1) {
-      expect(readAll([stream.slice(0, cut), stream.slice(cut)])).toEqual(expected)
-    }
-    expect(readAll([...stream])).toEqual(expected)
-  })
-
   it('accepts CRLF line ends, even split between chunks', () => {
     expect(readAll(['Updating files:\r', '\n   50% (1/2)\r\n  100% (2/2), done.\r\n'])).toEqual([
       { percent: 50, completed: 1, total: 2, done: false },

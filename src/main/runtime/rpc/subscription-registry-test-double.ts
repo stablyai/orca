@@ -1,4 +1,4 @@
-import type { SubscriptionRegistration } from '../runtime-subscription-registry'
+import type { SubscriptionRegistration } from '../client/runtime-subscription-registry'
 
 type Cleanup = () => void | Promise<void>
 type Entry = {

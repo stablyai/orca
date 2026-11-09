@@ -1,5 +1,5 @@
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
-import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
+import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../../shared/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../../../../shared/worktree/create-types'

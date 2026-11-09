@@ -21,7 +21,7 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { canOpenAiVaultSessionLogInOrca } from '../session-actions/ai-vault-session-path-actions'
 import { openAiVaultSessionLogInOrca } from '../session-actions/ai-vault-session-log-open'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   aiVaultSessionResumeLabel,
   type AiVaultSessionResumeState
@@ -68,13 +68,14 @@ function SubagentsBranch({
   resume,
   ancestors
 }: SectionProps & { ancestors: string[] }): React.JSX.Element {
+  const t = useTranslate()
   const subagents = useSubagentSessions(session)
   return (
     <section className="space-y-1.5" aria-busy={subagents.status === 'loading'}>
       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Bot className="size-3" />
         <span>
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSessionSubagents.subagentsCount',
             'Subagents ({{value0}})',
             { value0: subagents.sessions.length }
@@ -83,12 +84,12 @@ function SubagentsBranch({
       </div>
       {subagents.showLoading ? (
         <p role="status" className="text-xs text-muted-foreground">
-          {translate('aiVault.subagents.loading', 'Loading subagents…')}
+          {t('aiVault.subagents.loading', 'Loading subagents…')}
         </p>
       ) : null}
       {subagents.status === 'error' ? (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
-          <span>{translate('aiVault.subagents.loadError', 'Could not load all subagents.')}</span>
+          <span>{t('aiVault.subagents.loadError', 'Could not load all subagents.')}</span>
           <Button
             variant="ghost"
             size="xs"
@@ -97,13 +98,13 @@ function SubagentsBranch({
               subagents.retry()
             }}
           >
-            {translate('common.retry', 'Retry')}
+            {t('common.retry', 'Retry')}
           </Button>
         </div>
       ) : null}
       {subagents.status === 'loaded' && subagents.sessions.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          {translate('aiVault.subagents.empty', 'No subagents found.')}
+          {t('aiVault.subagents.empty', 'No subagents found.')}
         </p>
       ) : null}
       <div className="space-y-1.5">
@@ -125,6 +126,7 @@ function SubagentBranchRow({
   resume,
   ancestors
 }: SectionProps & { ancestors: string[] }): React.JSX.Element {
+  const t = useTranslate()
   const expansion = useSubagentExpansion()
   const contentId = useId()
   const locator = subagentTranscriptKey(session)
@@ -135,7 +137,7 @@ function SubagentBranchRow({
     session.subagentTranscriptCount > 0 &&
     !ancestors.includes(locator)
   const open = expandable && Boolean(expansion?.expanded.has(key))
-  const label = translate(
+  const label = t(
     'auto.components.right.sidebar.AiVaultSessionSubagents.subagentsCount',
     'Subagents ({{value0}})',
     { value0: session.subagentTranscriptCount }
@@ -196,6 +198,7 @@ function SubagentSessionLine({
   resume?: AiVaultSubagentResumeActions | null
   disclosure?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const resumeState =
     resume && isIndependentlyResumableSubagent(session) ? resume.getState(session) : null
   const dotState = session.subagent?.status ? SUBAGENT_DOT_STATES[session.subagent.status] : null
@@ -223,8 +226,8 @@ function SubagentSessionLine({
             size="icon-xs"
             draggable={false}
             disabled={resumeState.blocked || !resumeState.worktreeId}
-            title={aiVaultSessionResumeLabel(resumeState)}
-            aria-label={aiVaultSessionResumeLabel(resumeState)}
+            title={aiVaultSessionResumeLabel(resumeState, t)}
+            aria-label={aiVaultSessionResumeLabel(resumeState, t)}
             onClick={(event) => {
               event.stopPropagation()
               if (resumeState.worktreeId && !resumeState.blocked) {
@@ -242,10 +245,7 @@ function SubagentSessionLine({
             variant="ghost"
             size="icon-xs"
             draggable={false}
-            title={translate(
-              'auto.components.right.sidebar.AiVaultSessionSubagents.viewLog',
-              'View Log'
-            )}
+            title={t('auto.components.right.sidebar.AiVaultSessionSubagents.viewLog', 'View Log')}
             onClick={(event) => {
               event.stopPropagation()
               void openAiVaultSessionLogInOrca(session)
@@ -266,7 +266,7 @@ function SubagentSessionLine({
           </Badge>
         ) : null}
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSessionSubagents.messageCount',
             '{{value0}} msgs',
             { value0: session.messageCount }

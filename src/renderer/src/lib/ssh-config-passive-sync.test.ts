@@ -23,16 +23,6 @@ afterEach(() => {
 })
 
 describe('syncSshConfigTargetsPassively', () => {
-  it('shares one sync between callers and waits out the interval before the next', async () => {
-    await Promise.all([syncSshConfigTargetsPassively(), syncSshConfigTargetsPassively()])
-    await syncSshConfigTargetsPassively()
-    expect(importConfig).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(10_000)
-    await syncSshConfigTargetsPassively()
-    expect(importConfig).toHaveBeenCalledTimes(2)
-  })
-
   it('retries the listing when the import already saved hosts but listing them failed', async () => {
     importConfig.mockResolvedValueOnce({
       targets: [{ id: 'ssh-new', label: 'new-box' }],

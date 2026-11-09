@@ -1,4 +1,4 @@
-import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../shared/work-items/task-source-context'
 import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
 import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { useGitHubOperationOwner } from './useGitHubOperationScope'

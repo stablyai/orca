@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeFileListState } from '@/components/quick-open-file-list'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
@@ -16,7 +16,7 @@ import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
-import type { WslHostUnavailableReason } from '../../../terminal-pane/use-wsl-host-unavailable-reason'
+import type { WslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
 import type { StoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 
 type FileExplorerFilesTreePaneProps = {
@@ -64,6 +64,7 @@ export function FileExplorerFilesTreePane({
   wslHostUnavailable = null,
   stoppedWslHost = null
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
+  const t = useTranslate()
   const { loadingDirPaths, rootError } = tree
   const rootCache = displayRootPath ? tree.dirCache[displayRootPath] : undefined
   const { selectedPaths, preserveSelectionForContextMenu, copyPathsForNode } = selection
@@ -129,10 +130,7 @@ export function FileExplorerFilesTreePane({
   const wslHostStopped = hasError && stoppedWslHost !== null
   const emptyMessage =
     hasNameFilter && !nameFilterFiles.loadError
-      ? translate(
-          'auto.components.right.sidebar.FileExplorer.2f4483d6c4',
-          'No files match this filter'
-        )
+      ? t('auto.components.right.sidebar.FileExplorer.2f4483d6c4', 'No files match this filter')
       : undefined
 
   return (
@@ -179,7 +177,7 @@ export function FileExplorerFilesTreePane({
               size="xs"
               onClick={() => void tree.refreshDir(displayRootPath, { wakeWslDistro: true })}
             >
-              {translate('fileExplorer.root.retry', 'Retry')}
+              {t('fileExplorer.root.retry', 'Retry')}
             </Button>
           </div>
         )}

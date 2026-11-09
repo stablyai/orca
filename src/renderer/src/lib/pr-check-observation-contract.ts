@@ -1,16 +1,16 @@
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web/web-runtime-request-registry'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '../store/types'
-import type { callRuntimeRpc } from '../runtime/runtime-rpc-client'
+import type { callRuntimeRpc } from '../runtime/rpc/calls/runtime-rpc-call'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '../runtime/local-runtime-capabilities'
-import { getRuntimeEnvironmentRevision } from '../runtime/runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '../store/slices/runtime-status-connection-generation'
+import { readLocalRuntimeCapabilitiesOrUnknown } from '../runtime/hosts/capabilities/local-runtime-capabilities'
+import { getRuntimeEnvironmentRevision } from '../runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '../store/slices/runtime-status/runtime-status-connection-generation'
 
 export function capturePRCheckContract(
   get: () => AppState,

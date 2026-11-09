@@ -1,14 +1,18 @@
 // @vitest-environment happy-dom
-import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+// @vitest-environment happy-dom
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { afterEach, beforeEach, it, vi } from 'vitest'
-import { verifyOmniboxPresetIdentity } from './agent-launch-picker-omnibox.test-fixture'
+import {
+  verifyOmniboxPresetIdentity,
+  verifyOmniboxSetupKeepsSearchFocus
+} from './agent-launch-picker-omnibox.test-fixture'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: async (_target: unknown, method: string) =>
     method === 'agentSession.modelCatalog' ? entry.catalog : { seedOptions: {} }
 }))
@@ -25,7 +29,15 @@ const entry: AgentPickerEntry = {
     origin: 'probe',
     fetchedAt: 1,
     models: [
-      { id: 'astra', label: 'Astra', isDefault: true, efforts: [{ value: 'low', label: 'Low' }] }
+      {
+        id: 'astra',
+        label: 'Astra',
+        isDefault: true,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ]
+      }
     ]
   }
 }
@@ -47,6 +59,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('keeps + ordinary and actual omnibox original presets independent after editing their models', async () => {
+it('keeps + ordinary and actual omnibox original presets independent after editing the ordinary effort', async () => {
   await verifyOmniboxPresetIdentity(root, launch)
+})
+
+it('keeps typing in the omnibox search when a search row setup opens on hover and closes', async () => {
+  await verifyOmniboxSetupKeepsSearchFocus(root, launch)
 })

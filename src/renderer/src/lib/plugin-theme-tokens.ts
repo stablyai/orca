@@ -2,149 +2,30 @@ import {
   pluginAppThemeCssFallback,
   type PluginThemeCssFallbackRule
 } from '../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
+import {
+  BORDERS,
+  CONTRAST_RULES,
+  MIN_BORDER_ALPHA,
+  MIN_RING_CONTRAST,
+  RINGS,
+  type ContrastRule
+} from './plugin-theme-contrast-rules'
+
+import { contrastRatio, mix, over, type Rgba } from '../../../shared/color/rgba-contrast'
 
 /** sRGB channels 0-255 and alpha 0-1, or null when the value is not a CSS color. */
-export type ColorProbe = (value: string) => readonly [number, number, number, number] | null
-export type Rgba = readonly [number, number, number, number]
+export type ColorProbe = (value: string) => Rgba | null
 
-type ContrastRule = {
-  surface: string
-  text: string
-  min: number
-  /** What a failure drops, when not both sides: never a shared token this check must not cost. */
-  drop?: readonly string[]
-  /** A translucent surface is checked as painted over this opaque one. */
-  over?: string
-  /** Also dropped when the theme omitted the surface, which then follows this token. */
-  surfaceSource?: string
-}
-
-const MIN_TEXT_CONTRAST = 4.5
-// Why 3:1: status hues only tint file names, so a theme's own git palette keeps working.
-const MIN_STATUS_TEXT_CONTRAST = 3
-const textPair = (surface: string, text: string): ContrastRule => ({
-  surface,
-  text,
-  min: MIN_TEXT_CONTRAST
-})
-const GIT_DECORATIONS = [
-  'added',
-  'modified',
-  'deleted',
-  'renamed',
-  'untracked',
-  'copied',
-  'ignored'
-]
-
-// Why: a theme must not be able to hide text, so every text/surface pair keeps WCAG AA contrast.
-const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
-  textPair('--background', '--foreground'),
-  textPair('--background', '--muted-foreground'),
-  // Notebook markdown renders directly on the editor surface.
-  textPair('--editor-surface', '--foreground'),
-  textPair('--editor-surface', '--muted-foreground'),
-  textPair('--card', '--card-foreground'),
-  textPair('--popover', '--popover-foreground'),
-  textPair('--primary', '--primary-foreground'),
-  textPair('--secondary', '--secondary-foreground'),
-  textPair('--muted', '--muted-foreground'),
-  textPair('--accent', '--accent-foreground'),
-  textPair('--sidebar', '--sidebar-foreground'),
-  textPair('--sidebar-primary', '--sidebar-primary-foreground'),
-  textPair('--sidebar-accent', '--sidebar-accent-foreground'),
-  textPair('--worktree-sidebar', '--worktree-sidebar-foreground'),
-  textPair('--worktree-sidebar-accent', '--worktree-sidebar-accent-foreground'),
-  {
-    ...textPair('--worktree-sidebar-active', '--worktree-sidebar-foreground'),
-    drop: ['--worktree-sidebar-active'],
-    over: '--worktree-sidebar'
-  },
-  { ...textPair('--host-badge', '--host-badge-foreground'), over: '--worktree-sidebar' },
-  textPair('--tab-active', '--tab-active-foreground'),
-  textPair('--tab-inactive', '--tab-inactive-foreground'),
-  // Hovered inactive tabs take the active text color.
-  textPair('--tab-inactive', '--tab-active-foreground'),
-  {
-    ...textPair('--chat-user-message', '--chat-foreground-strong'),
-    drop: ['--chat-user-message'],
-    over: '--chat-canvas'
-  },
-  ...['added', 'removed'].flatMap((side): ContrastRule[] => {
-    const tint = (kind: string): ContrastRule => ({
-      ...textPair(`--diff-${side}-${kind}`, '--foreground'),
-      drop: [`--diff-${side}-${kind}`],
-      surfaceSource: `--diff-${side}`,
-      over: '--editor-surface'
-    })
-    // Chat diff rows paint the hue-mixed text on the line tint over the chat canvas.
-    return [
-      tint('background'),
-      tint('emphasis'),
-      { ...tint('background'), text: `--chat-diff-${side}`, over: '--chat-canvas' }
-    ]
-  }),
-  { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
-  {
-    ...textPair('--chat-user-message', '--chat-link'),
-    drop: ['--chat-user-message'],
-    over: '--chat-canvas'
-  },
-  ...GIT_DECORATIONS.map((status): ContrastRule => ({
-    surface: '--sidebar',
-    text: `--git-decoration-${status}`,
-    min: MIN_STATUS_TEXT_CONTRAST,
-    drop: [`--git-decoration-${status}`]
-  }))
-]
-const CONTRAST_RULES = CONTRAST_RULE_DEFINITIONS.map((rule) => ({
-  ...rule,
-  dropped: rule.drop ?? [rule.surface, rule.text]
-}))
-// Why 2:1, not WCAG's 3:1: Orca's own light ring is 2.6:1; the goal is a ring that never vanishes.
-const RINGS: readonly (readonly [string, string])[] = [
-  ['--ring', '--background'],
-  ['--sidebar-ring', '--sidebar'],
-  ['--worktree-sidebar-ring', '--worktree-sidebar'],
-  ['--tab-active-indicator', '--tab-active']
-]
-const MIN_RING_CONTRAST = 2
-// Why a floor, not opaque: Orca's own dark borders are 7% white; 0 or near-0 alpha hides them.
-const BORDERS = [
-  '--border',
-  '--input',
-  '--sidebar-border',
-  '--worktree-sidebar-border',
-  '--worktree-sidebar-active-border',
-  '--split-divider',
-  '--split-divider-hover'
-]
-const MIN_BORDER_ALPHA = 0.05
-
-function luminance([r, g, b]: Rgba): number {
-  const channel = (value: number): number => {
-    const c = value / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  }
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-}
-
-/** WCAG contrast ratio between two opaque colors. */
-export function contrastRatio(a: Rgba, b: Rgba): number {
-  const first = luminance(a)
-  const second = luminance(b)
-  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
-}
-
-export function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
-  return [r * a + br * (1 - a), g * a + bg * (1 - a), b * a + bb * (1 - a), 1]
-}
-
-/** `color-mix(in srgb, a percent%, b)`. */
-export function mix(a: Rgba, b: Rgba, percent: number): Rgba {
-  const p = percent / 100
-  const channel = (index: 0 | 1 | 2 | 3): number => a[index] * p + b[index] * (1 - p)
-  return [channel(0), channel(1), channel(2), channel(3)]
+/** The `over` layers painted bottom-up; opaque only when the bottom layer is. */
+function paintedLayers(
+  layers: ContrastRule['over'],
+  effective: (token: string) => Rgba | null
+): Rgba | null {
+  const stack = typeof layers === 'string' ? [layers] : (layers ?? [])
+  return stack.reduceRight<Rgba | null>((below, layer) => {
+    const color = effective(layer)
+    return color && below?.[3] === 1 ? over(color, below) : color
+  }, null)
 }
 
 /** A token as main.css paints it: the theme's own color, else its CSS fallback, else built-in. */
@@ -158,7 +39,14 @@ function themeTokenResolver(
   const derived = (rule: PluginThemeCssFallbackRule): Rgba | null => {
     if ('tint' in rule) {
       const hue = effective(rule.tint)
-      return hue ? [hue[0], hue[1], hue[2], (hue[3] * rule.percent) / 100] : null
+      if (!hue) {
+        return null
+      }
+      if (!rule.into) {
+        return [hue[0], hue[1], hue[2], (hue[3] * rule.percent) / 100]
+      }
+      const into = effective(rule.into)
+      return into ? mix(hue, into, rule.percent) : null
     }
     if (!('mixForeground' in rule)) {
       return rule.map(effective).find(Boolean) ?? null
@@ -221,14 +109,16 @@ export function safePluginThemeTokens(
       }
       const textColor = effective(rule.text)
       const ownSurface = effective(rule.surface)
-      const beneath = rule.over ? effective(rule.over) : null
+      const beneath = paintedLayers(rule.over, effective)
       const surfaceColor = ownSurface && beneath?.[3] === 1 ? over(ownSurface, beneath) : ownSurface
+      const min =
+        rule.noWorseThanOver && beneath?.[3] === 1 && textColor?.[3] === 1
+          ? Math.min(rule.min, contrastRatio(beneath, textColor))
+          : rule.min
       if (
         surfaceColor &&
         textColor &&
-        (surfaceColor[3] < 1 ||
-          textColor[3] < 1 ||
-          contrastRatio(surfaceColor, textColor) < rule.min)
+        (surfaceColor[3] < 1 || textColor[3] < 1 || contrastRatio(surfaceColor, textColor) < min)
       ) {
         changed = drop(...dropped) || changed
       }
@@ -274,6 +164,21 @@ export function hostPillOutlineMixOver(foreground: Rgba, sidebar: Rgba, wash: Rg
   return 100
 }
 
+/** Each token as main.css paints it for a theme whose tokens already passed safePluginThemeTokens. */
+export function paintedThemeColors(
+  tokens: Readonly<Record<string, string>>,
+  base: 'light' | 'dark',
+  builtIns: Readonly<Record<string, string>>,
+  probe: ColorProbe
+): (token: string) => Rgba | null {
+  return themeTokenResolver(
+    (token) => (tokens[token] ? probe(tokens[token]) : null),
+    base,
+    builtIns,
+    probe
+  )
+}
+
 /** hostPillOutlineMixOver for a theme's tokens, which already passed safePluginThemeTokens. */
 export function hostPillOutlineMix(
   tokens: Readonly<Record<string, string>>,
@@ -281,12 +186,7 @@ export function hostPillOutlineMix(
   builtIns: Readonly<Record<string, string>>,
   probe: ColorProbe
 ): number {
-  const effective = themeTokenResolver(
-    (token) => (tokens[token] ? probe(tokens[token]) : null),
-    base,
-    builtIns,
-    probe
-  )
+  const effective = paintedThemeColors(tokens, base, builtIns, probe)
   const foreground = effective('--worktree-sidebar-foreground')
   const sidebar = effective('--worktree-sidebar')
   return foreground && sidebar

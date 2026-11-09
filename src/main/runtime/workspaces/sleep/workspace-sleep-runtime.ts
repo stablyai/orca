@@ -90,8 +90,6 @@ function needsWindowToast(outcome: WorkspaceSleepOutcome): boolean {
   )
 }
 
-export type { RecipeVmOpening, RecipeVmState }
-
 export class WorkspaceSleepCoordinator {
   /** Reopening during sleep prevents subsequent VM suspension. */
   private readonly reopenings = new Map<string, number>()
@@ -169,6 +167,12 @@ export class WorkspaceSleepCoordinator {
     const request = platform.acceptWake(worktreeId)
     const run = this.afterVmOperations(worktreeId, () => platform.resumeVm(worktreeId, request))
     return this.trackVmOperation(worktreeId, { kind: 'wake', settled: run }, run)
+  }
+
+  /** Runs a VM-destroying operation behind this workspace's running wake or suspend, and ahead of
+   *  any asked for later, which then find no VM. Untracked: a destroyed VM is neither up nor asleep. */
+  destroyVm<T>(worktreeId: string, destroy: () => Promise<T>): Promise<T> {
+    return this.afterVmOperations(worktreeId, destroy)
   }
 
   /** Where the VM stands, from its pending operations, which outrank its stored record: a wake

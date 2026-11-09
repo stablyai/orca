@@ -15,9 +15,9 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { ensureHooksApproved } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { listAutomationsForTarget } from './automation-host-client'
@@ -28,6 +28,7 @@ import {
 import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
+import { reconfirmSkippedSetup } from './automation-setup-review'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -47,7 +48,6 @@ export async function saveOrcaAutomation(
     draft,
     editingAutomationId,
     editingRowKey,
-    editingDestination,
     draftAtOpen,
     setEditorNotice,
     setEditorNoticeHost,
@@ -60,7 +60,8 @@ export async function saveOrcaAutomation(
     rowRecoveryHost,
     createDestination
   } = destination
-  const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
+  const { dialogRepos, editHostResolution, automationDialogTarget, editingDestination } =
+    destinationForm
 
   // Fence the destination before hook probes/trust prompts or any other transaction side effect.
   const createCheck = editingAutomationId === null ? createDestination.check(draft.projectId) : null
@@ -134,16 +135,16 @@ export async function saveOrcaAutomation(
           draftSetupDecision: draft.setupDecision
         })
       : currentAutomation.setupDecision
-  if (setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))) {
-    const trustDecision = await ensureHooksConfirmed(
-      useAppStore.getState(),
-      draft.projectId,
-      'setup',
-      setupHostId
-    )
-    if (trustDecision === 'skip') {
-      setupDecision = 'skip'
-    }
+  const trust =
+    setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))
+      ? await ensureHooksApproved(useAppStore.getState(), draft.projectId, 'setup', setupHostId)
+      : null
+  // Stored with `run` so later runs execute only this content.
+  const setupTrustHash =
+    trust?.approvedContentHash ??
+    (await reconfirmSkippedSetup(context, trust, setupDecision, currentAutomation, setupHostId))
+  if (trust?.decision === 'skip') {
+    setupDecision = 'skip'
   }
 
   const runContext = targetEdited
@@ -207,6 +208,7 @@ export async function saveOrcaAutomation(
     ...(edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
       ? { setupDecision }
       : {}),
+    ...(setupTrustHash ? { setupTrustHash } : {}),
     ...(edited('reuseSession') || edited('workspaceMode')
       ? { reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession }
       : {}),
@@ -228,6 +230,7 @@ export async function saveOrcaAutomation(
     workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
     baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
     setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
+    setupTrustHash: currentAutomation ? currentAutomation.setupTrustHash : setupTrustHash,
     reuseSession: currentAutomation
       ? currentAutomation.reuseSession
       : draft.workspaceMode === 'existing' && draft.reuseSession,

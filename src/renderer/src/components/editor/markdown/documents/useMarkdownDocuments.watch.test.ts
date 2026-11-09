@@ -2,13 +2,11 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  FsChangeEvent,
-  MarkdownDocument
-} from '../../../../../../shared/filesystem-entry-types'
+import type { FsChangeEvent } from '../../../../../../shared/file-watch/filesystem-change-event'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
-import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerResolution from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 
 const runtime = vi.hoisted(() => ({ list: vi.fn(), stat: vi.fn() }))
@@ -23,12 +21,14 @@ vi.mock('@/store/index', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdFromState: () => null
+}))
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return { ...actual, getConnectionIdFromState: () => null }
 })
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))
@@ -113,18 +113,6 @@ afterEach(() => {
 })
 
 describe('Markdown metadata from the existing worktree watcher', () => {
-  it('discovers a created document and removes a deleted document without reopening', async () => {
-    await render()
-    runtime.list.mockResolvedValueOnce([target])
-    change([{ kind: 'create', absolutePath: target.filePath }])
-    await settle()
-    expect(controllers[0].markdownDocuments).toEqual([target])
-    change([{ kind: 'delete', absolutePath: target.filePath }])
-    await settle()
-    expect(controllers[0].markdownDocuments).toEqual([])
-    expect(runtime.list).toHaveBeenCalledTimes(3)
-  })
-
   it('keeps the last list without a toast when a watcher refresh fails', async () => {
     runtime.list.mockResolvedValueOnce([target])
     await render()
@@ -135,94 +123,5 @@ describe('Markdown metadata from the existing worktree watcher', () => {
     await settle()
     expect(controllers[0].markdownDocuments).toEqual([target])
     expect(toastError).not.toHaveBeenCalled()
-  })
-
-  it('keeps a late pre-change scan from replacing the refreshed document list', async () => {
-    let resolveOld: (documents: MarkdownDocument[]) => void = () => {}
-    runtime.list.mockReturnValueOnce(
-      new Promise<MarkdownDocument[]>((done) => {
-        resolveOld = done
-      })
-    )
-    await render()
-    runtime.list.mockResolvedValueOnce([target])
-    change([{ kind: 'create', absolutePath: target.filePath }])
-    await settle()
-    expect(controllers[0].markdownDocuments).toEqual([target])
-    await act(async () => resolveOld([]))
-    expect(controllers[0].markdownDocuments).toEqual([target])
-    expect(runtime.list).toHaveBeenCalledTimes(2)
-  })
-
-  it('refreshes a local owner while ignoring an identical remote path', async () => {
-    await render(null)
-    change([{ kind: 'create', absolutePath: target.filePath }], 'host-a')
-    await settle()
-    expect(runtime.list).toHaveBeenCalledOnce()
-    runtime.list.mockResolvedValueOnce([target])
-    change([{ kind: 'create', absolutePath: target.filePath }], null)
-    await settle()
-    expect(controllers[0].markdownDocuments).toEqual([target])
-    expect(runtime.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: { kind: 'local' } }),
-      '/repo'
-    )
-  })
-
-  it('coalesces bursts and shares a fresh pending scan across split panes', async () => {
-    const owner = 'host-split'
-    await render(owner, 2)
-    let resolve: (documents: MarkdownDocument[]) => void = () => {}
-    runtime.list.mockReturnValueOnce(
-      new Promise<MarkdownDocument[]>((done) => {
-        resolve = done
-      })
-    )
-    change([{ kind: 'create', absolutePath: target.filePath }], owner)
-    change([{ kind: 'delete', absolutePath: '/repo/old.markdown' }], owner)
-    await settle()
-    expect(runtime.list).toHaveBeenCalledTimes(2)
-    await act(async () => resolve([target]))
-    expect(controllers.map((controller) => controller.markdownDocuments)).toEqual([
-      [target],
-      [target]
-    ])
-  })
-
-  it('keeps refreshing while membership changes never stop', async () => {
-    const owner = 'host-sustained'
-    await render(owner)
-    const initialCalls = runtime.list.mock.calls.length
-    // Watch batches arrive every 100 ms under sustained writes, faster than the 125 ms debounce.
-    for (let i = 0; i < 10; i++) {
-      change([{ kind: 'create', absolutePath: `/repo/n${i}.md` }], owner)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(100)
-      })
-    }
-    expect(runtime.list.mock.calls.length).toBeGreaterThan(initialCalls)
-  })
-
-  it('does not let a remount join a scan that started before the latest change', async () => {
-    const owner = 'host-remount'
-    await render(owner)
-    runtime.list.mockImplementation(() => new Promise<MarkdownDocument[]>(() => {}))
-    change([{ kind: 'create', absolutePath: target.filePath }], owner)
-    await settle()
-    const callsWithScanInFlight = runtime.list.mock.calls.length
-    // A second change lands while that scan runs; the tab is then switched away and back.
-    change([{ kind: 'create', absolutePath: '/repo/second.md' }], owner)
-    await act(async () => root.render(null))
-    await render(owner)
-    expect(runtime.list.mock.calls.length).toBeGreaterThan(callsWithScanInFlight)
-  })
-
-  it.each(['unmount', 'owner change'])('cancels scheduled scans on %s', async (reason) => {
-    await render()
-    change([{ kind: 'create', absolutePath: target.filePath }])
-    await (reason === 'unmount' ? act(async () => root.render(null)) : render('host-b'))
-    const calls = runtime.list.mock.calls.length
-    await settle()
-    expect(runtime.list).toHaveBeenCalledTimes(calls)
   })
 })

@@ -40,6 +40,12 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
     label: translate('settings.openInApp.preset.devinDesktop', 'Devin Desktop'),
     command: BUILT_IN_EDITOR_COMMANDS['devin-desktop'],
     faviconDomain: 'devin.ai'
+  },
+  {
+    id: 'antigravity-ide',
+    label: translate('settings.openInApp.preset.antigravityIde', 'Antigravity IDE'),
+    command: BUILT_IN_EDITOR_COMMANDS['antigravity-ide'],
+    faviconDomain: 'antigravity.google'
   }
 ])
 

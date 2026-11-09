@@ -18,7 +18,8 @@ import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportD
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useAppStore } from '@/store'
 import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../../shared/browser/browser-family-labels'
 import type {
   BrowserSessionProfile,
   BrowserViewportPresetId
@@ -37,7 +38,7 @@ type DetectedBrowserEntry = {
 }
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
 import { browserViewportPresetLabel } from './browser-viewport-preset-label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   BrowserChromeFoldedMenuItems,
   type BrowserChromeOverflowMenuProps
@@ -90,6 +91,7 @@ export function BrowserToolbarMenuDropdown({
   onOpenSourceFile = null,
   overflow
 }: BrowserToolbarMenuDropdownProps): React.JSX.Element {
+  const t = useTranslate()
   const keybindings = useAppStore((s) => s.keybindings)
   const historyShortcut = formatOptionalShortcutLabel('browser.showHistory', keybindings)
   return (
@@ -100,10 +102,7 @@ export function BrowserToolbarMenuDropdown({
           size="icon"
           variant="ghost"
           className="h-8 w-8"
-          title={translate(
-            'auto.components.browser.pane.BrowserToolbarMenu.7b838540c7',
-            'Browser menu'
-          )}
+          title={t('auto.components.browser.pane.BrowserToolbarMenu.7b838540c7', 'Browser menu')}
         >
           <Ellipsis className="size-4" />
         </Button>
@@ -122,10 +121,7 @@ export function BrowserToolbarMenuDropdown({
           <>
             <DropdownMenuItem onSelect={onOpenSourceFile}>
               <FileCode2 className="mr-2 size-3.5" />
-              {translate(
-                'auto.components.editor.HtmlDocPreview.openSourceControl',
-                'Open source file'
-              )}
+              {t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
@@ -155,7 +151,7 @@ export function BrowserToolbarMenuDropdown({
 
         <DropdownMenuItem onSelect={onNewProfile}>
           <Plus className="mr-2 size-3.5" />
-          {translate('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
+          {t('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -176,10 +172,7 @@ export function BrowserToolbarMenuDropdown({
             data-contextual-tour-target="browser-import-cookies-control"
           >
             <Import className="mr-2 size-3.5" />
-            {translate(
-              'auto.components.browser.pane.BrowserToolbarMenu.2293adf620',
-              'Import Cookies'
-            )}
+            {t('auto.components.browser.pane.BrowserToolbarMenu.2293adf620', 'Import Cookies')}
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
@@ -188,7 +181,7 @@ export function BrowserToolbarMenuDropdown({
                 browser.profiles.length > 1 ? (
                   <DropdownMenuSub key={browser.family}>
                     <DropdownMenuSubTrigger>
-                      {translate(
+                      {t(
                         'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
                         'From {{value0}}',
                         { value0: browser.label }
@@ -212,7 +205,7 @@ export function BrowserToolbarMenuDropdown({
                     key={browser.family}
                     onSelect={() => onImportFromBrowser(browser.family)}
                   >
-                    {translate(
+                    {t(
                       'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
                       'From {{value0}}',
                       { value0: browser.label }
@@ -222,10 +215,7 @@ export function BrowserToolbarMenuDropdown({
               )}
               {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
               <DropdownMenuItem onSelect={onImportFromFile}>
-                {translate(
-                  'auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa',
-                  'From File…'
-                )}
+                {t('auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa', 'From File…')}
               </DropdownMenuItem>
               <BrowserCookieImportDisclosure />
             </DropdownMenuSubContent>
@@ -243,10 +233,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <Monitor className="mr-2 size-3.5" />
-            {translate(
-              'auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9',
-              'Viewport Size'
-            )}
+            {t('auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9', 'Viewport Size')}
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
@@ -258,15 +245,12 @@ export function BrowserToolbarMenuDropdown({
                 }
               >
                 <DropdownMenuRadioItem value="default">
-                  {translate(
-                    'auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d',
-                    'Default'
-                  )}
+                  {t('auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d', 'Default')}
                 </DropdownMenuRadioItem>
                 <DropdownMenuSeparator />
                 {BROWSER_VIEWPORT_PRESETS.map((preset) => (
                   <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                    <span className="truncate">{browserViewportPresetLabel(preset)}</span>
+                    <span className="truncate">{browserViewportPresetLabel(preset, t)}</span>
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -285,7 +269,7 @@ export function BrowserToolbarMenuDropdown({
           }
         >
           <History className="mr-2 size-3.5" />
-          {translate('browser.history.menuItem', 'History')}
+          {t('browser.history.menuItem', 'History')}
           {historyShortcut ? <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -295,10 +279,7 @@ export function BrowserToolbarMenuDropdown({
           }}
         >
           <Settings className="mr-2 size-3.5" />
-          {translate(
-            'auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8',
-            'Browser Settings…'
-          )}
+          {t('auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8', 'Browser Settings…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

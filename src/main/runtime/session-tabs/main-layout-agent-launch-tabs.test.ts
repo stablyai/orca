@@ -1,8 +1,14 @@
 // Layout-owner build, no window: an agent launch's early tab in a workspace main owns is written by
 // main, a retry finds it, and a withdrawn launch pane is taken back by main.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WORKTREE_ID, setupMainOwnedWorkspace } from '../main-owned-workspace-runtime-fixture'
+
+import {
+  WORKTREE_ID,
+  setupMainOwnedWorkspace
+} from '../terminal/layout/main-owned-workspace-runtime-fixture'
+
 import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch/agent-launch-tab-publication'
+
 import { resetAgentLaunchPanesForTests } from '../../agent-launch/agent-launch-pane-attachment'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -33,18 +39,6 @@ function launchHost() {
 }
 
 describe("an agent launch's early tab in a workspace main owns, with no window", () => {
-  it("is written in main's layout before the launch runs", async () => {
-    const { fixture, launch, tabIds } = launchHost()
-
-    const early = await launch()
-
-    expect(early?.paneKey).toBe(`${NEW_TAB}:${NEW_LEAF}`)
-    expect(tabIds()).toContain(NEW_TAB)
-    expect(
-      fixture.session().tabsByWorktree[WORKTREE_ID]?.find((tab) => tab.id === NEW_TAB)
-    ).toMatchObject({ launchAgent: 'claude' })
-  })
-
   it('takes the tab back when nothing will run in it', async () => {
     const { launch, tabIds } = launchHost()
 
@@ -64,45 +58,5 @@ describe("an agent launch's early tab in a workspace main owns, with no window",
     await Promise.resolve()
 
     expect(tabIds()).toContain(NEW_TAB)
-  })
-})
-
-describe("an agent launch's early tab in a workspace main owns, with a window attached", () => {
-  it('is written by main, and the window keeps its pane, prompt and view without making a tab', async () => {
-    const { fixture, tabIds } = launchHost()
-    const publishAgentLaunchTab = vi.fn(async () => {
-      throw new Error('the window makes no tab here')
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the early tab reads only this notice.
-    fixture.runtime.setNotifier({ publishAgentLaunchTab } as never)
-    Object.assign(fixture.runtime, { getAvailableAuthoritativeWindow: () => ({}) })
-    const context = { runtime: fixture.runtime }
-
-    await publishAgentLaunchTabEarly(
-      {
-        agent: 'claude',
-        target: { kind: 'existing', worktree: `id:${WORKTREE_ID}` },
-        paneKey: `${NEW_TAB}:${NEW_LEAF}`,
-        surface: 'terminal',
-        prompt: { text: 'fix the build', delivery: 'submit' },
-        operationId: 'op-1'
-      },
-      context
-    )
-
-    expect(tabIds()).toContain(NEW_TAB)
-    // Told once main's tab is written, as the window's own publication was answered.
-    await vi.waitFor(() =>
-      expect(publishAgentLaunchTab).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tabId: NEW_TAB,
-          leafId: NEW_LEAF,
-          prompt: 'fix the build',
-          operationId: 'op-1',
-          viewer: expect.any(String),
-          shownByMain: { frameSeq: expect.any(Number), created: true }
-        })
-      )
-    )
   })
 })

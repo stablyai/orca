@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type React from 'react'
 import type { RefObject } from 'react'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { toast } from 'sonner'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
@@ -10,7 +10,7 @@ import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute
 } from '../navigation/file-explorer-operation-owner'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
 
 type UseFileExplorerHandlersParams = {

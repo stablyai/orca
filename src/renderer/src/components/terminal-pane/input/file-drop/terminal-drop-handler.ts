@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
+import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import {
   isResolvedWorkspaceFileDragExecutionHost,
   readWorkspaceFileDragPaths,

@@ -3,7 +3,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
@@ -103,6 +103,7 @@ function useLegacyHostListSections({
 }
 
 const NO_SECTIONS: Section[] = []
+const PHONE_FEED_LINEAGE = { acceptLegacyLineage: true }
 
 function useFeedHostListSections({
   client,
@@ -134,7 +135,8 @@ function useFeedHostListSections({
     [state.view, projectOrderBy, domains, hostPlatform]
   )
   const built = useMemo(
-    () => (domains ? buildSidebarFeedRows(domains, catalog, view) : null),
+    // The phone keeps nesting by an older server's edges without instance ids, as it always has.
+    () => (domains ? buildSidebarFeedRows(domains, catalog, view, PHONE_FEED_LINEAGE) : null),
     [domains, catalog, view]
   )
   const lastVisited = useLastVisitedWorktreeOnHost(hostId)

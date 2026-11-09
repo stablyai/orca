@@ -6,6 +6,7 @@ export function isKnownRemoteStartFailure(code: string): boolean {
     'agent_unconfigured',
     'worktree_not_found_on_server',
     'terminal_worktree_mismatch',
+    'terminal_busy',
     'capability_unsupported'
   ].includes(code)
 }

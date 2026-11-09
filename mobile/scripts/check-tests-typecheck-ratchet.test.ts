@@ -59,6 +59,14 @@ describe('the @ts-nocheck guard', () => {
 })
 
 describe('checked transfers', () => {
+  it('rejects a declared checked transfer missing from the configured roots', () => {
+    expect(
+      checkTransfers(
+        { ok: true, expected: [], programTestFiles: [], failures: [], problems: [] },
+        new Map([['checked.test.ts', 'Checked transfer: strict Node program']])
+      )
+    ).toEqual(['checked transfer is absent from tsconfig.test.node.json: checked.test.ts'])
+  })
   const allowed = new Map(transfers.map((file) => [file, 'checked transfer']))
 
   it('never reads a failed declaration producer or final compiler as clean output', () => {

@@ -46,6 +46,14 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
 export function collectHiddenChildAgentPaneKeys(
   threads: readonly ChildAgentClassifiableThread[]
 ): Set<string> {
+  return classifyChildAgents(threads).hidden
+}
+
+/** Each child's parent and the children a hidden-children view folds away. */
+export function classifyChildAgents(threads: readonly ChildAgentClassifiableThread[]): {
+  parentPaneKeyByChild: Map<string, string>
+  hidden: Set<string>
+} {
   const baseRows: AgentLineageSourceRow[] = threads.map((thread) => ({
     paneKey: thread.paneKey,
     entry: { terminalHandle: firstReportedTerminalHandle(thread) }
@@ -83,11 +91,18 @@ export function collectHiddenChildAgentPaneKeys(
   const livePaneKeys = new Set(
     threads.filter((thread) => thread.currentAgentState).map((thread) => thread.paneKey)
   )
+  const tree = buildAgentRowLineageTree(rows)
+  const parentPaneKeyByChild = new Map<string, string>()
+  for (const [parentPaneKey, children] of tree.childrenByParentPaneKey) {
+    for (const child of children) {
+      parentPaneKeyByChild.set(child.paneKey, parentPaneKey)
+    }
+  }
   const hidden = new Set<string>()
-  for (const paneKey of buildAgentRowLineageTree(rows).childPaneKeys) {
+  for (const paneKey of tree.childPaneKeys) {
     if (!livePaneKeys.has(paneKey)) {
       hidden.add(paneKey)
     }
   }
-  return hidden
+  return { parentPaneKeyByChild, hidden }
 }

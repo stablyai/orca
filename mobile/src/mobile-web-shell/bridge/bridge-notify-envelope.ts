@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS } from './bridge-liveness-probe-notify'

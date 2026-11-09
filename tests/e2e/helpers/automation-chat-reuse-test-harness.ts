@@ -116,13 +116,18 @@ export async function exerciseBusyChatReuse(
       openedAgentSessionRecordStore: () => rig.store,
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
+      canOpenRunTerminals: () => true,
       showManagedWorktree: async () => {
         throw new Error('optional display unavailable')
       }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime facade is scripted; the real host/store and service/send/receipt/queue/observer/writer execute.
     const runtime = runtimeFacade as unknown as OrcaRuntimeService
-    service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
+    service = createRuntimeAutomationService({
+      store: disk,
+      runtime,
+      allowRemoteHostScheduling: true
+    })
     const dispatched = await runNowSettled(service, disk, saved.id)
     expect(dispatched).toMatchObject({
       status: 'dispatched',
@@ -149,7 +154,11 @@ export async function exerciseBusyChatReuse(
       })
       await rig.restartHostProcess()
       controls.setHost(rig.host)
-      service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
+      service = createRuntimeAutomationService({
+        store: disk,
+        runtime,
+        allowRemoteHostScheduling: true
+      })
       service.start()
       await eventually(() =>
         expect(disk.listAutomationRuns(saved.id).find((r) => r.id === current.id)).toMatchObject({

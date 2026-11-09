@@ -1,5 +1,5 @@
 import { Identifier, SessionId } from './structured-agent-session-identifiers'
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const MutationEnvelope = z
   .object({

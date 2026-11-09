@@ -1,4 +1,8 @@
 import type { SpeechModelManifest } from '../../shared/speech-types'
+import {
+  DICTATION_LANGUAGES,
+  SENSE_VOICE_DICTATION_LANGUAGES
+} from '../../shared/dictation-language'
 import { getSpeechModelDownloadMetadata } from './model-download-catalog'
 
 export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
@@ -110,6 +114,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     provider: 'local',
     language: 'multilingual',
     ...getSpeechModelDownloadMetadata('whisper-tiny'),
+    dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
     streaming: false
   },
@@ -122,6 +127,18 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     provider: 'local',
     language: 'multilingual',
     ...getSpeechModelDownloadMetadata('sense-voice-zh-en-ja-ko-yue'),
+    dictationLanguages: SENSE_VOICE_DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'openai-gpt-transcribe',
+    label: 'GPT Transcribe',
+    description: 'Cloud transcription with high accuracy. Requires an OpenAI API key.',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
     streaming: false
   },
@@ -133,8 +150,11 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'openai',
     provider: 'openai',
     language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    // OpenAI shuts the gpt-4o transcribe models down on 2027-02-26.
+    replacedBy: 'openai-gpt-transcribe'
   },
   {
     id: 'openai-gpt-4o-transcribe',
@@ -143,8 +163,10 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'openai',
     provider: 'openai',
     language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    replacedBy: 'openai-gpt-transcribe'
   }
 ]
 

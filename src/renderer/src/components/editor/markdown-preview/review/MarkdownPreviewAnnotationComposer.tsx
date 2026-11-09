@@ -1,11 +1,14 @@
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
-import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  formatMarkdownReviewNotes,
+  type MarkdownReviewNote
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { installOpenDraftAddReviewNoteGuard } from '../../editor-shortcuts'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 
@@ -26,6 +29,7 @@ export function MarkdownPreviewSingleNoteSendMenu({
   modeSlot: string
   onDelivered: (notes: readonly MarkdownReviewNote[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <NotesSendMenu
       owner={owner}
@@ -35,14 +39,14 @@ export function MarkdownPreviewSingleNoteSendMenu({
       scopes={[
         {
           id: 'note',
-          label: translate('auto.components.editor.MarkdownPreview.f37b98999e', 'This note'),
+          label: t('auto.components.editor.MarkdownPreview.f37b98999e', 'This note'),
           notes: note.sentAt ? [] : [note],
           formatPrompt: (notes) => formatMarkdownReviewNotes(notes, content)
         }
       ]}
-      targetModeLabel={translate('auto.components.editor.NotesSendMenu.thisNote', 'This note')}
+      targetModeLabel={t('auto.components.editor.NotesSendMenu.thisNote', 'This note')}
       triggerClassName="orca-diff-comment-pill-btn"
-      disabledTooltip={translate(
+      disabledTooltip={t(
         'auto.components.editor.NotesSendMenu.noteAlreadySent',
         'Note already sent'
       )}
@@ -60,6 +64,7 @@ export function MarkdownPreviewAnnotationComposer({
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
@@ -106,15 +111,12 @@ export function MarkdownPreviewAnnotationComposer({
       onClick={(event) => event.stopPropagation()}
     >
       <div className="orca-diff-comment-popover-label">
-        {translate('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
+        {t('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
       </div>
       <ImeTextarea
         ref={focusTextareaRef}
         className="orca-diff-comment-popover-textarea"
-        placeholder={translate(
-          'auto.components.editor.MarkdownPreview.d737791433',
-          'Add note for the AI'
-        )}
+        placeholder={t('auto.components.editor.MarkdownPreview.d737791433', 'Add note for the AI')}
         value={body}
         onChange={(event) => {
           setBody(event.target.value)
@@ -137,12 +139,12 @@ export function MarkdownPreviewAnnotationComposer({
       />
       <div className="orca-diff-comment-popover-footer">
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
-          {translate('auto.components.editor.MarkdownPreview.e4683f70c4', 'Cancel')}
+          {t('auto.components.editor.MarkdownPreview.e4683f70c4', 'Cancel')}
         </Button>
         <Button size="sm" onClick={() => void submit()} disabled={submitting || !trimmed}>
           {submitting
-            ? translate('auto.components.editor.MarkdownPreview.d652c87c91', 'Saving…')
-            : translate('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
+            ? t('auto.components.editor.MarkdownPreview.d652c87c91', 'Saving…')
+            : t('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
           {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
         </Button>
       </div>

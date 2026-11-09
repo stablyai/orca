@@ -8,7 +8,7 @@ import { useAppStore } from '@/store'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 import { runBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 
@@ -18,25 +18,25 @@ import {
 } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { registerNativeChatPane } from '@/components/native-chat/native-chat-composer-mount'
+import { registerNativeChatPane } from '@/components/native-chat/composer/focus/native-chat-composer-mount'
 import { AppWorkspaceShell } from './AppWorkspaceShell'
 import { useAppChromeLayout } from './use-app-chrome-layout'
 import { useFloatingWorkspacePanel } from './use-floating-workspace-panel'
 
 const host = vi.hoisted(() => ({ createSupport: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn((_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? host.createSupport() : new Promise(() => undefined)
   )
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -50,7 +50,7 @@ vi.mock('./TitlebarMainStrip', () => ({
   TitlebarMainStrip: () => null,
   RightSidebarToggle: () => null
 }))
-vi.mock('@/components/native-chat/NativeChatComposer', () => ({
+vi.mock('@/components/native-chat/composer/NativeChatComposer', () => ({
   NativeChatComposer: () => <textarea aria-label="Pending chat message" />
 }))
 vi.mock('../components/Terminal', () => ({

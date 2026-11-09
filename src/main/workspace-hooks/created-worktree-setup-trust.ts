@@ -4,6 +4,8 @@ import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupDecision, SetupTrustMismatch } from '../../shared/worktree/create-types'
+import type { ApprovedSetupHashes } from '../../shared/worktree/approved-setup-hashes'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
 import { shouldRunSetupForCreate } from './effective-hook-config'
 
 /** Same digest as the renderer's hashOrcaHookScript, so host and prompt hashes compare. */
@@ -19,9 +21,10 @@ export function checkCreatedWorktreeSetupTrust(
   repo: Repo,
   createdYamlHooks: OrcaHooks | null,
   decision: SetupDecision | undefined,
-  approvedSetupHash: string | undefined
+  approved: ApprovedSetupHashes
 ): SetupTrustMismatch | undefined {
-  if (approvedSetupHash === undefined) {
+  const { approvedSetupHash, approvedSetupHashes } = approved
+  if (approvedSetupHash === undefined && approvedSetupHashes === undefined) {
     return undefined
   }
   const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
@@ -32,7 +35,8 @@ export function checkCreatedWorktreeSetupTrust(
     return undefined
   }
   const contentHash = hashOrcaHookTrustContent(scriptContent)
-  return contentHash === approvedSetupHash ? undefined : { contentHash, scriptContent }
+  const matches = contentHash === approvedSetupHash || approvedSetupHashes?.includes(contentHash)
+  return matches ? undefined : { contentHash, scriptContent }
 }
 
 function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean {
@@ -41,4 +45,25 @@ function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean
   } catch {
     return false
   }
+}
+
+type DefaultTabsLaunch = WorktreeDefaultTabsLaunch | undefined
+
+/** A skipped create opens only the command-less default tabs; an approved run adds the rest. */
+export function defaultTabsWithoutCommands(defaultTabs: DefaultTabsLaunch): DefaultTabsLaunch {
+  return filterDefaultTabs(defaultTabs, false)
+}
+
+export function defaultTabsWithCommands(defaultTabs: DefaultTabsLaunch): DefaultTabsLaunch {
+  return filterDefaultTabs(defaultTabs, true)
+}
+
+function filterDefaultTabs(
+  defaultTabs: DefaultTabsLaunch,
+  withCommand: boolean
+): DefaultTabsLaunch {
+  const tabs = (defaultTabs?.tabs ?? []).filter(
+    (tab) => Boolean(tab.command?.trim()) === withCommand
+  )
+  return defaultTabs && tabs.length > 0 ? { ...defaultTabs, tabs } : undefined
 }

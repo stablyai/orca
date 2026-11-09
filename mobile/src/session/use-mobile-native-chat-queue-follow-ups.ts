@@ -1,7 +1,10 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { RpcClient } from '../transport/rpc-client'
-import { mobileNativeChatFollowUpPreference } from './mobile-native-chat-follow-up-preference'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  mobileNativeChatHostPreference,
+  QUEUE_FOLLOW_UPS_PREFERENCE
+} from './mobile-native-chat-host-preference'
 
 const defaultSnapshot = (): boolean => nativeChatQueueFollowUps(null)
 
@@ -12,9 +15,11 @@ export function useMobileNativeChatQueueFollowUps(
   pairedHostClient: RpcClient | null,
   active: boolean
 ): boolean {
-  const preference = client ? mobileNativeChatFollowUpPreference(client) : null
+  const preference = client
+    ? mobileNativeChatHostPreference(client, QUEUE_FOLLOW_UPS_PREFERENCE)
+    : null
   const pairedPreference = pairedHostClient
-    ? mobileNativeChatFollowUpPreference(pairedHostClient)
+    ? mobileNativeChatHostPreference(pairedHostClient, QUEUE_FOLLOW_UPS_PREFERENCE)
     : null
   // The paired host's stream outlives an execution-server outage; the projection follows its own connection.
   const subscribePaired = useCallback(

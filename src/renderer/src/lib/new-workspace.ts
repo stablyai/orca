@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
-import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
+import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
+import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-followup-delivery'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-session/launch/background/agent-background-session-timeout-toast'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
@@ -9,15 +9,13 @@ import {
   getAgentStartupTabPtyId,
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
-} from '@/lib/agent-startup-delayed-delivery'
+} from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../shared/worktree/types'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
-
-export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
 
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'

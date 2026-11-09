@@ -145,9 +145,11 @@ export async function listAiVaultSessions(
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
   }
+  // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
+  const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
   if (
     args?.force !== true &&
-    cachedList?.key === key &&
+    (cachedList?.key === key || cachedList?.key === fullKey) &&
     cachedList.expiresAt > now &&
     aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
@@ -180,6 +182,7 @@ export async function listAiVaultSessions(
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
+          scopeOnly: args?.scopeOnly,
           ...roots
         },
         scanSignal,

@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { dismissStaleAgentRowByKey } from '../../../terminal-pane/stale-agent-row'
+import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 
 export function useWorktreeAgentActivation(worktreeId: string) {

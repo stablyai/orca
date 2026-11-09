@@ -10,7 +10,7 @@ import type {
   WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
 import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 
 type LineageParent =
@@ -59,7 +59,7 @@ export function crossStoreManualLineage(parent: CrossStoreParentRef): CrossStore
   }
 }
 
-/** App picks are manual; otherwise the CLI's --parent-worktree, or the caller workspace it inferred. */
+/** App picks are manual; an orchestration-picked parent is orchestration's; else the CLI's flag or inferred caller. */
 export function crossStoreCreateLineage(input: {
   crossStoreParent: CrossStoreParentRef
   parentWorkspaceOrigin?: 'manual'
@@ -71,7 +71,8 @@ export function crossStoreCreateLineage(input: {
   return {
     kind: 'crossStore',
     parent: input.crossStoreParent,
-    origin: 'cli',
+    origin:
+      input.crossStoreParentInferredFrom === 'orchestration-context' ? 'orchestration' : 'cli',
     capture: input.crossStoreParentInferredFrom
       ? { source: input.crossStoreParentInferredFrom, confidence: 'inferred' }
       : { source: 'explicit-cli-flag', confidence: 'explicit' }
@@ -157,7 +158,8 @@ export function recordCreatedWorktreeLineage(
     childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
     childInstanceId,
     parentWorkspaceKey: resolution.parent.workspaceKey,
-    parentInstanceId,
+    parentInstanceId:
+      resolution.parent.type === 'folder' ? resolution.parent.folderWorkspace.id : parentInstanceId,
     origin: resolution.origin,
     capture: resolution.capture,
     ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
@@ -169,6 +171,7 @@ export function recordCreatedWorktreeLineage(
     createdAt
   }
   if (resolution.parent.type === 'folder') {
+    // Created already: a same-id twin owning the bucket leaves the folder link unsaved, with a warning.
     workspaceLineage = (target && store?.setFolderParentLineage?.(target, row)) ?? null
     if (!workspaceLineage) {
       warnings.push({

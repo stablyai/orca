@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getLocalFileManager } from './local-file-manager-label'
 import {
   getLocalPathOpenOwnerForRoute,
@@ -11,24 +12,21 @@ import {
 } from './local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import { getConnectionIdFromState } from './workspace/ownership/connection-owner-resolution'
 import type { AppState } from '@/store/types'
 
 /** Menu label for showing a path in the OS file manager, as each platform names it. */
-export function getRevealInFileManagerLabel(): string {
+export function getRevealInFileManagerLabel(t: Translate = translate): string {
   switch (getLocalFileManager()) {
     case 'finder':
-      return translate(
-        'auto.components.right.sidebar.FileExplorerRow.revealInFinder',
-        'Reveal in Finder'
-      )
+      return t('auto.components.right.sidebar.FileExplorerRow.revealInFinder', 'Reveal in Finder')
     case 'file-explorer':
-      return translate(
+      return t(
         'auto.components.right.sidebar.FileExplorerRow.revealInFileExplorer',
         'Reveal in File Explorer'
       )
     case 'file-manager':
-      return translate(
+      return t(
         'auto.components.right.sidebar.FileExplorerRow.openContainingFolder',
         'Open Containing Folder'
       )

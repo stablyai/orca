@@ -15,9 +15,12 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamText
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { createDeferred, flushAsyncTicks } from '../../pty-connection-test-async'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from '../../pty-connection/test-fixtures/pty-connection-test-async'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const ORIGINAL_ID = 'remote:env-1@@terminal-1'
 

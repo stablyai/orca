@@ -7,7 +7,7 @@ import type {
   BrowserInterceptDisableResult,
   BrowserInterceptEnableResult,
   BrowserViewportResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserCommandTargetParams } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 

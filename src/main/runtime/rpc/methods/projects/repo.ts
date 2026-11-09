@@ -173,10 +173,21 @@ export const REPO_METHODS = [
     params: RepoClone,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.cloneRepo(params.url, params.destination),
+        await context.runtime.cloneRepo(
+          params.url,
+          params.destination,
+          undefined,
+          params.folderName
+        ),
         context
       )
     })
+  }),
+  defineMethod({
+    name: 'repo.checkCloneTarget',
+    permission: 'workspace',
+    params: RepoClone,
+    handler: async (params, { runtime }) => ({ target: await runtime.checkCloneTarget(params) })
   }),
   defineMethod({
     name: 'repo.show',
@@ -236,16 +247,21 @@ export const REPO_METHODS = [
     name: 'repo.searchRefs',
     permission: 'workspace',
     params: RepoSearchRefs,
-    handler: async (params, { runtime, clientCapabilities }) =>
-      projectRepoSearchRefsForClient(
-        await runtime.searchRepoRefs(
-          params.repo,
-          params.query,
-          params.limit,
-          includesQualifiedSearchRefs(clientCapabilities)
-        ),
+    handler: async (params, { runtime, clientCapabilities }) => {
+      const searchArgs: Parameters<typeof runtime.searchRepoRefs> = [
+        params.repo,
+        params.query,
+        params.limit,
+        includesQualifiedSearchRefs(clientCapabilities)
+      ]
+      if (params.namespace !== undefined) {
+        searchArgs.push(params.namespace)
+      }
+      return projectRepoSearchRefsForClient(
+        await runtime.searchRepoRefs(...searchArgs),
         clientCapabilities
       )
+    }
   }),
   defineMethod({
     name: 'repo.hooks',

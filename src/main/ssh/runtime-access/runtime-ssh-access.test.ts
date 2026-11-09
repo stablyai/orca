@@ -1,0 +1,250 @@
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import {
+  addEnvironmentFromPairingCode,
+  resolveEnvironment
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+
+import type { SshTarget } from '../../../shared/ssh-types'
+
+const mocks = vi.hoisted(() => ({
+  infrastructure: vi.fn(),
+  connect: vi.fn(),
+  disconnect: vi.fn(async () => undefined),
+  start: vi.fn(),
+  close: vi.fn(),
+  ensure: vi.fn(),
+  verify: vi.fn(),
+  flush: vi.fn(),
+  preflight: vi.fn()
+}))
+vi.mock('../../managed-server/lifecycle/orcad-managed-runtime-context', () => ({
+  requireManagedOrcadInfrastructure: mocks.infrastructure
+}))
+vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  startOrcadManagedTunnel: mocks.start,
+  closeOrcadManagedTunnel: mocks.close,
+  ensureOrcadManagedTunnel: mocks.ensure
+}))
+vi.mock('./runtime-ssh-access-verification', () => ({
+  verifyRuntimeEnvironmentSshTunnel: mocks.verify
+}))
+import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from './runtime-ssh-access'
+import './runtime-ssh-target-fingerprint'
+
+const pairing = {
+  v: 2 as const,
+  endpoint: 'wss://example.test/runtime',
+  publicKeyB64: Buffer.alloc(32, 1).toString('base64'),
+  deviceToken: 'secret',
+  pairedDeviceId: 'client'
+}
+
+describe('independent runtime SSH access coordinator', () => {
+  let userDataPath: string
+  let environmentId: string
+  let target: SshTarget
+  let events: string[]
+  const request = () => ({
+    selector: environmentId,
+    requestId: 'request',
+    sshTargetId: 'target',
+    remotePort: 6768
+  })
+  const current = () => resolveEnvironment(userDataPath, environmentId)
+  const unlink = (requestId = 'unlink') =>
+    unlinkRuntimeSshAccess(
+      userDataPath,
+      { selector: environmentId, requestId },
+      {
+        invalidateTransport: () => {
+          events.push('invalidate')
+          expect(current().sshAccess).toBeUndefined()
+        }
+      }
+    )
+  beforeEach(() => {
+    vi.resetAllMocks()
+    events = []
+    userDataPath = mkdtempSync(join(tmpdir(), 'runtime-access-test-'))
+    environmentId = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'server',
+      pairingCode: encodePairingOffer(pairing)
+    }).id
+    target = {
+      id: 'target',
+      label: 'host',
+      host: 'host.example',
+      port: 22,
+      username: 'user',
+      source: 'manual',
+      generation: 3
+    }
+    mocks.preflight.mockReturnValue({ blockers: [] })
+    mocks.flush.mockImplementation(async () => {
+      expect(current().pendingSshAccessOperation).toBeDefined()
+      events.push('flush')
+    })
+    mocks.infrastructure.mockReturnValue({
+      connectionManager: { connect: mocks.connect, disconnect: mocks.disconnect },
+      claims: {
+        listTargets: () => [target],
+        preflight: mocks.preflight,
+        flush: mocks.flush,
+        claim: () => {
+          expect(current().pendingSshAccessOperation?.operation).toBe('link')
+          events.push('claim')
+          target = { ...target, orcadFence: { environmentId: environmentId } }
+          return target
+        },
+        release: () => {
+          expect(current().pendingSshAccessOperation?.operation).toBe('unlink')
+          events.push('release')
+          target = { ...target, orcadFence: undefined }
+          return target
+        }
+      }
+    })
+    mocks.connect.mockImplementation(async () => {
+      events.push('connect')
+      return {}
+    })
+    mocks.start.mockImplementation(async () => {
+      events.push('tunnel')
+      return 41000
+    })
+    mocks.close.mockImplementation(async () => {
+      events.push('close')
+    })
+    mocks.verify.mockImplementation(async () => {
+      events.push('verify')
+      return {
+        verifiedRuntimeId: 'runtime',
+        verifiedConnection: pairedRuntimeConnectionFromOffer({
+          ...pairing,
+          endpoint: 'ws://127.0.0.1:41000'
+        }),
+        runtimeStatus: {}
+      }
+    })
+  })
+  afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
+
+  it('cancels a pending connect and starts no tunnel when the link is aborted', async () => {
+    const controller = new AbortController()
+    mocks.connect.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          mocks.disconnect.mockImplementationOnce(async () => {
+            fail(new Error('cancelled'))
+            return undefined
+          })
+        })
+    )
+    const link = linkRuntimeSshAccess(userDataPath, request(), { signal: controller.signal })
+    await vi.waitFor(() => expect(mocks.connect).toHaveBeenCalled())
+    controller.abort()
+    await expect(link).rejects.toThrow('cancelled')
+    expect(mocks.disconnect).toHaveBeenCalledWith('target')
+    expect(mocks.start).not.toHaveBeenCalled()
+  })
+
+  it('preserves the committed tunnel when transport refresh fails and retries the same link', async () => {
+    const invalidateTransport = vi.fn().mockRejectedValueOnce(new Error('refresh failed'))
+    await expect(
+      linkRuntimeSshAccess(userDataPath, request(), { invalidateTransport })
+    ).rejects.toThrow('refresh failed')
+    const committed = current()
+    expect(committed.sshAccess?.requestId).toBe('request')
+    expect(committed.pendingSshAccessOperation).toBeUndefined()
+    expect(target?.orcadFence).toEqual({ environmentId: environmentId })
+    expect(mocks.close).not.toHaveBeenCalled()
+
+    await linkRuntimeSshAccess(userDataPath, request(), { invalidateTransport })
+    expect(current()).toEqual(committed)
+    expect(mocks.ensure).toHaveBeenCalledExactlyOnceWith(userDataPath, environmentId)
+    expect(mocks.connect).toHaveBeenCalledTimes(1)
+    expect(mocks.verify).toHaveBeenCalledTimes(1)
+    expect(mocks.start).toHaveBeenCalledTimes(1)
+    expect(invalidateTransport).toHaveBeenCalledTimes(2)
+    expect(mocks.close).not.toHaveBeenCalled()
+  })
+
+  it('fences connection configuration changes before opening a forward', async () => {
+    mocks.connect.mockImplementationOnce(async () => {
+      target = { ...target, username: 'other' }
+      return {}
+    })
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('changed')
+    expect(mocks.start).not.toHaveBeenCalled()
+    expect(current().pendingSshAccessOperation?.operation).toBe('link')
+  })
+
+  it('restores pairing before invalidating and closes before releasing the exact claim', async () => {
+    await linkRuntimeSshAccess(userDataPath, request())
+    events = []
+    await unlink()
+    expect(events).toEqual(['invalidate', 'close', 'release', 'flush'])
+    expect(current().endpoints[0].endpoint).toBe(pairing.endpoint)
+    expect(current().sshAccess).toBeUndefined()
+    expect(target.orcadFence).toBeUndefined()
+  })
+
+  it('retains claim and pending intent on wrong-host proof, then permits cancellation', async () => {
+    mocks.verify.mockRejectedValueOnce(new Error('wrong host'))
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('wrong host')
+    expect(current().pendingSshAccessOperation?.operation).toBe('link')
+    expect(current().sshAccess).toBeUndefined()
+    expect(target.orcadFence).toBeDefined()
+    expect(mocks.close).toHaveBeenCalledTimes(1)
+    await unlink('request')
+    expect(target.orcadFence).toBeUndefined()
+  })
+
+  it.each([1, 2])('never connects when durable flush %s fails', async (flushNumber) => {
+    if (flushNumber === 2) {
+      mocks.flush.mockResolvedValueOnce(undefined)
+    }
+    mocks.flush.mockRejectedValueOnce(new Error('disk full'))
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('disk full')
+    expect(mocks.connect).not.toHaveBeenCalled()
+    expect(current().pendingSshAccessOperation).toBeDefined()
+    expect(!!target.orcadFence).toBe(flushNumber === 2)
+  })
+
+  it('resumes unlink after release flush failed without releasing another owner', async () => {
+    await linkRuntimeSshAccess(userDataPath, request())
+    mocks.flush.mockRejectedValueOnce(new Error('disk full'))
+    await expect(unlink()).rejects.toThrow('disk full')
+    expect(target.orcadFence).toBeUndefined()
+    await unlink()
+    expect(events.filter((event) => event === 'release')).toHaveLength(1)
+    expect(current().pendingSshAccessOperation).toBeUndefined()
+  })
+
+  it('does not release a new owner when retrying an interrupted unlink', async () => {
+    await linkRuntimeSshAccess(userDataPath, request())
+    mocks.flush.mockRejectedValueOnce(new Error('disk full'))
+    await expect(unlink()).rejects.toThrow('disk full')
+    target = { ...target, orcadFence: { environmentId: 'other' } }
+    await expect(unlink()).rejects.toThrow('changed')
+    expect(events.filter((event) => event === 'release')).toHaveLength(1)
+    expect(current().pendingSshAccessOperation?.operation).toBe('unlink')
+  })
+
+  it('refuses direct authority even on an already claimed retry', async () => {
+    mocks.verify.mockRejectedValueOnce(new Error('offline'))
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow()
+    mocks.preflight.mockReturnValue({
+      blockers: [{ code: 'orcad_migration_direct_ssh_repositories' }]
+    })
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow(
+      'direct SSH authority'
+    )
+    expect(mocks.connect).toHaveBeenCalledTimes(1)
+  })
+})
