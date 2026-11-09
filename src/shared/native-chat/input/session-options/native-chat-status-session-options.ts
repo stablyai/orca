@@ -38,9 +38,9 @@ export function takeNativeChatStatusReport(
   if (!reportedModel) {
     return null
   }
-  // OMP reports exact selectors, including models absent from cached discovery.
+  // OMP and Antigravity report exact selectors, including models absent from cached discovery.
   const model =
-    agent === 'omp'
+    agent === 'omp' || agent === 'antigravity'
       ? reportedModel.trim()
       : matchNativeChatCatalogModelId({ ...catalog, models: [...models] }, reportedModel, {
           allowUnlisted: agent === 'codex'
