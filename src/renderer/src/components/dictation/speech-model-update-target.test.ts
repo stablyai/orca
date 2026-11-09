@@ -10,6 +10,7 @@ function model(id: string, extra: Partial<SpeechModelManifest> = {}): SpeechMode
     type: 'transducer',
     provider: 'local',
     language: 'en',
+    languages: ['en'],
     sampleRate: 16000,
     streaming: false,
     ...extra
