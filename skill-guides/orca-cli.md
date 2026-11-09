@@ -344,7 +344,7 @@ Search rules:
 
 - Quote a multi-word query; unquoted words are read as command names.
 - Search for a distinctive phrase or identifier, not a description of the topic. An exact sentence matches as a phrase first, then as all of its words, then as any of them.
-- `--scope all` (the default) covers conversation turns, commands, and tool output; `--scope conversation` keeps user and assistant turns only.
+- `--scope all` (the default) and `--scope conversation` search user and assistant turns; tool output is excluded.
 - Each hit carries the session, a snippet with the matched text marked, and a `resumeCommand`. `--debug` adds the route the host used.
 - Check `--index-status --json` first. Search runs only where a human turned it on under Settings → Agent Session History; when `enabled` is false, say so and stop. There is no CLI way to turn it on.
 - While `phase` is `indexing`, results can be incomplete. `--fresh` waits up to five seconds for the host to catch up, then searches anyway.

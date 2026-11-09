@@ -1,6 +1,6 @@
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { clearSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { clearSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { isSshConnectionSolelyOwnedBy } from '../../ssh/connection/ssh-connection-attribution'
 import {
   connectInFlight,
@@ -23,7 +23,7 @@ import { errorMessage } from '../../../shared/error-message'
 import {
   forgetLegacyRelayTarget,
   stopLegacyRelayBridge
-} from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)

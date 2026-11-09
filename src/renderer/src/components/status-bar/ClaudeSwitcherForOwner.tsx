@@ -4,14 +4,14 @@ import { useProviderAccountList } from './use-provider-account-list'
 import { providerChatAccountControl } from './ProviderAccountChatButton'
 import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import type { AccountOwner } from '@/lib/wsl-host-account-owner'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   selectClaudeProviderAccount,
   emptyClaudeAccountsState
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { toast } from 'sonner'
-import { getClaudeAccountErrorDescription } from '../settings/accounts/accounts-pane-action-errors'
+import { getClaudeAccountErrorDescription } from '../../lib/provider-accounts/provider-account-action-errors'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -32,7 +32,7 @@ import {
   normalizeClaudeStatusRuntimeTarget,
   resolveClaudeStatusAccountState
 } from './status-bar-claude-accounts'
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -42,7 +42,7 @@ import {
 import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
-import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
+import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 
 // Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherForOwner({

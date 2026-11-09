@@ -83,7 +83,7 @@ vi.mock('../runtime-client', () => {
   }
 })
 
-vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
   getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
 }))

@@ -17,7 +17,7 @@ function testHomePath(...parts: string[]): string {
 vi.mock('fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args)
 }))
-vi.mock('../ssh-identity-file-read', () => ({
+vi.mock('../authentication/ssh-identity-file-read', () => ({
   readSshIdentityFileSync: (path: string) => {
     try {
       return { contents: mockReadFileSync(path) ?? null, problem: null }
@@ -28,9 +28,9 @@ vi.mock('../ssh-identity-file-read', () => ({
 }))
 
 import { buildConnectConfig } from './ssh-connect-config'
-import { findDefaultKeyFile } from '../ssh-auth-resolution'
-import { resolveEffectiveProxy } from '../ssh-proxy-command'
-import { walkInitialAuthLadder } from './ssh-connection-test-fixtures'
+import { findDefaultKeyFile } from '../authentication/ssh-auth-resolution'
+import { resolveEffectiveProxy } from '../system-transport/ssh-proxy-command'
+import { walkInitialAuthLadder } from './testing/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 

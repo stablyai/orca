@@ -557,10 +557,6 @@
     "desktops": {
       "pairDesktop": "Pair a desktop"
     },
-    "jumpBackIn": {
-      "lastOpened": "Last opened",
-      "connectToOpen": "Connect {{desktop}} to open"
-    },
     "sections": {
       "tasks": "Tasks",
       "tasksSubtitle": "Browse your issues and reviews"
@@ -573,12 +569,6 @@
       "days": "{{days}}d",
       "hours": "{{hours}}h",
       "minutes": "{{minutes}}m"
-    },
-    "agents": {
-      "heading": "Agents",
-      "activeCount": "{{count}} active",
-      "showFewer": "Show fewer",
-      "showAll": "Show all {{count}}"
     },
     "automationsTab": {
       "newAutomation": "New automation",
@@ -598,7 +588,8 @@
       "automations": "Automations",
       "feed": "Feed",
       "chooseDesktop": "{{desktop}}, choose another desktop",
-      "usage": "Usage"
+      "usage": "Usage",
+      "agents": "Agents"
     },
     "usage": {
       "refresh": "Refresh usage",
@@ -611,6 +602,10 @@
       "active": "Active",
       "openAccountsHint": "Opens this desktop’s accounts",
       "emptyTitle": "No usage yet"
+    },
+    "needsYou": {
+      "heading": "Needs you",
+      "seeAll": "See all agents"
     }
   },
   "hooks": {
@@ -900,7 +895,8 @@
       "hours_other": "{{count}}h",
       "days_one": "{{count}}d",
       "days_other": "{{count}}d",
-      "done": "Done"
+      "done": "Done",
+      "permission": "Needs attention"
     },
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
@@ -1966,8 +1962,7 @@
     "markdownReader": {
       "readOnly": "Read only",
       "changedOnDesktop": "Changed on desktop",
-      "dismissKeyboard": "Dismiss keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the markdown editor open.",
+      "previewTruncated": "Preview truncated.",
       "discard": "Discard",
       "copyLoadedSource": "Copy loaded Markdown source",
       "copySource": "Copy Markdown source",
@@ -2547,6 +2542,12 @@
       "fallback": "Worktree"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+      "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+      "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
       "backgroundTasksRunning": "Background tasks are still running.",
       "waitForBackgroundTasks": "Wait for the background tasks to finish.",
       "agentStarting": "The agent is still starting.",
@@ -3038,6 +3039,11 @@
       "forkedFrom": "Forked from",
       "signIn": "Sign in",
       "signInHint": "Opens a terminal on the computer running this chat"
+    },
+    "ciResultLine": {
+      "failingLead": "CI failing on",
+      "greenLead": "CI green on",
+      "at": "at"
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -4750,5 +4756,83 @@
     "renameUnconfirmed": "Not confirmed yet. Orca checks the name when {{host}} is back.",
     "saving": "Saving",
     "serverUnreachable": "Its server can't be reached."
+  },
+  "agents": {
+    "list": {
+      "idleCount": "{{count}} idle",
+      "offlineTitle": "{{desktop}} is offline",
+      "offlineMessage": "Reconnect it to open this agent.",
+      "actions": "Actions for {{title}}",
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers",
+      "noMatches": "No agents match “{{query}}”",
+      "emptyTitle": "No agents running",
+      "pairDesktop": "Pair a desktop to see its agents here.",
+      "emptyBody": "Start an agent in any workspace and it shows up here.",
+      "unread": "Unread",
+      "noDesktopTitle": "No desktop connected",
+      "noDesktopBody": "Agents show up here once a desktop connects.",
+      "hideWorkers": "Hide {{workers}}",
+      "showWorkers": "Show {{workers}}"
+    },
+    "actions": {
+      "offlineHint": "Its desktop is offline.",
+      "open": "Open",
+      "goToWorkspace": "Go to workspace",
+      "copyTitle": "Copy title",
+      "copied": "Copied",
+      "copyFailed": "Couldn’t copy the title",
+      "markRead": "Mark as read",
+      "markUnread": "Mark as unread",
+      "clear": "Clear from list"
+    },
+    "groupBy": {
+      "status": "Status",
+      "workspace": "Workspace",
+      "project": "Project",
+      "agent": "Agent",
+      "desktop": "Desktop"
+    },
+    "options": {
+      "groupBy": "Group by",
+      "showWorkers": "Show worker agents",
+      "open": "Agent list options",
+      "unreadOnly": "Unread only",
+      "markAllRead": "Mark all read",
+      "clearFinished": "Clear finished"
+    },
+    "search": {
+      "toggle": "Search agents",
+      "placeholder": "Search agents"
+    },
+    "desktops": {
+      "pickerTitle": "Show agents on",
+      "agents_one": "{{count}} agent",
+      "agents_other": "{{count}} agents",
+      "all": "All desktops",
+      "offline": "Offline",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "sections": {
+      "needsYou": "Needs you",
+      "working": "Working",
+      "done": "Done",
+      "offline": "Offline",
+      "offlineSeenAgo": "Offline · seen {{ago}} ago",
+      "offlineSeenJustNow": "Offline · seen just now",
+      "seenAgo": "Seen {{ago}} ago",
+      "seenJustNow": "Seen just now",
+      "clear": "Clear"
+    },
+    "swipe": {
+      "read": "Read",
+      "unread": "Unread",
+      "clear": "Clear"
+    },
+    "activity": {
+      "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
+      "failed": "Couldn’t update the agent list."
+    }
   }
 }

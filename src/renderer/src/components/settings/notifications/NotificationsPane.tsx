@@ -11,12 +11,29 @@ import {
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
-import {
-  createNotificationVolumeDraftState,
-  resolveNotificationVolumeDraftState,
-  sendNotificationSettingsTestNotification
-} from './notification-settings-copy'
+import { sendNotificationSettingsTestNotification } from '@/components/notifications/notification-test-delivery'
 import { useTranslate } from '@/i18n/use-translate'
+
+type NotificationVolumeDraftState = {
+  sourceVolume: number
+  draft: number
+}
+
+function createNotificationVolumeDraftState(sourceVolume: number): NotificationVolumeDraftState {
+  return {
+    sourceVolume,
+    draft: sourceVolume
+  }
+}
+
+function resolveNotificationVolumeDraftState(
+  state: NotificationVolumeDraftState,
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return state.sourceVolume === sourceVolume
+    ? state
+    : createNotificationVolumeDraftState(sourceVolume)
+}
 
 type NotificationsPaneProps = {
   settings: GlobalSettings

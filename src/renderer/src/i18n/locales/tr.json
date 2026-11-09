@@ -4178,6 +4178,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aç"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Başka bir pencereye göre boyutlandı",
+            "fitHere": "Buraya sığdır"
           }
         }
       },
@@ -5953,7 +5957,10 @@
           "69f5b5380d": "Klonlanıyor...",
           "cloneOnHostDescription": "Git URL'sini girin ve {{value0}} üzerinde nereye klonlanacağını seçin.",
           "cloneParentFolder": "Üst klasör",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Klasör adı",
+          "cloneFolderTakenByRepo": "Bu klasördeki \"{{value0}}\" zaten farklı bir depo, bu yüzden bu klonun kendi klasörü olmalı.",
+          "cloneFolderNotEmpty": "Bu klasörde \"{{value0}}\" zaten var, bu yüzden bu klonun kendi klasörü olmalı."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Kapat",
@@ -16286,6 +16293,7 @@
           "kernelStartFailed": "Çekirdek başlatılamadı.",
           "noPython": "Bu bilgisayarda Python bulunamadı. [python.org](https://www.python.org/downloads/) adresinden yükleyin, ardından hücreyi yeniden çalıştırın.",
           "kernelDied": "Çekirdek sonlandı.",
+          "outputTruncated": "Çıktı kısaltıldı: Orca bu hücrenin çıktısının başını tuttu ve gerisini attı. Tamamını korumak için çıktıyı bir dosyaya yazın.",
           "localOnly": "Not defteri hücreleri yalnızca bu bilgisayardaki dosyalar için çalıştırılabilir.",
           "pythonOnly": "Orca'da yalnızca Python not defterleri çalıştırılabilir.",
           "ownerUnresolved": "Orca bu not defterinin hangi bilgisayarda olduğunu henüz belirleyemediği için hücreleri çalıştırılamıyor.",
@@ -19464,6 +19472,7 @@
         "noCommands": "Eşleşen komut yok",
         "commands": "Komutlar",
         "skills": "Beceriler",
+        "checkingSkills": "Yeni beceriler denetleniyor…",
         "loadingSkills": "Beceriler yükleniyor...",
         "skillsLoaded": "Beceriler yüklendi",
         "clearDescription": "Konuşma bağlamını temizle",
@@ -20173,6 +20182,7 @@
         "copyIdentity": "{{value0}} kopyala",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
+        "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın.",
@@ -21281,6 +21291,7 @@
       "switch": "Dal değiştir: {{branch}}",
       "search": "Dallarda ara",
       "recover": "{{branch}} dalına geç",
+      "copy": "Dal adını kopyala",
       "create": "{{branch}} dalından {{name}} dalını oluştur",
       "open": "Çalışma alanını aç",
       "occupied": "{{path}} konumunda kullanımda",
@@ -21371,7 +21382,6 @@
       "sortRelevance": "En alakalı",
       "sortNewest": "En yeni",
       "sortResultsAriaLabel": "Sonuçları sırala: {{value0}}",
-      "consent": "Tam metin arama etkinleştirilsin mi? Orca, tam konuşmalar ve araç çıktısı başına 3.072 karaktere kadar dahil olmak üzere yerel ajan dökümlerinden bu bilgisayarda bir dizin oluşturur. İçerik sansürlenmez. Kimliği doğrulanmış eşlenmiş istemciler bu dizinde arama yapabilir.",
       "remoteDisabled": "Arama bu bilgisayarda devre dışı. Oturumlarında arama yapmak için o bilgisayarda döküm dizinlemeyi etkinleştirin.",
       "titleOnly": "Bu bilgisayarda tam metin araması kapalı olduğu için yalnızca oturum başlıklarında eşleşme aranır.",
       "notReady": "Arama dizini henüz hazır değil. Birazdan tekrar deneyin.",
@@ -21431,7 +21441,6 @@
       "description": "Bu bilgisayarda ve eşlenmiş herhangi bir Orca sunucusunda ajanlarınızın söylediği ve yaptığı her şeyi arayın.",
       "searchDescription": "Bu bilgisayar ve eşlenmiş sunucular için oturum aramasını açın veya arama verilerini temizleyin.",
       "indexComputers": "Oturumların içinde ara",
-      "computersConsent": "Her bilgisayar, kendi ajan konuşmalarının ve araç çıktısının aranabilir bir kopyasını tutar. Hiçbir şey o bilgisayardan dışarı çıkmaz.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} üzerindeki oturumları ara",
       "serverOffline": "Çevrimdışı",

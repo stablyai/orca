@@ -301,6 +301,7 @@
       "switch": "Trocar de branch: {{branch}}",
       "search": "Pesquisar branches",
       "recover": "Trocar para {{branch}}",
+      "copy": "Copiar nome do branch",
       "create": "Criar branch {{name}} a partir de {{branch}}",
       "open": "Abrir espaço de trabalho",
       "occupied": "Em uso em {{path}}",
@@ -793,7 +794,6 @@
       "loadMore": "Carregar mais resultados",
       "indexedHistory": "Histórico indexado · melhores resultados",
       "hostsSkipped": "Não pesquisado: {{value0}}",
-      "consent": "Ativar a busca em texto completo? O Orca cria um índice neste computador a partir das transcrições locais dos agentes, incluindo conversas completas e até 3.072 caracteres por saída de ferramenta. O conteúdo não é ocultado. Clientes pareados autenticados podem pesquisá-lo.",
       "remoteDisabled": "A busca está desativada neste computador. Ative a indexação de transcrições nesse computador para pesquisar suas sessões.",
       "notReady": "O índice de busca ainda não está pronto. Tente novamente em breve.",
       "noService": "A busca não está disponível neste computador. Pode ser necessário atualizar o Orca ou usar um runtime com suporte a busca.",
@@ -893,7 +893,6 @@
       "description": "Pesquise tudo o que seus agentes disseram e fizeram, neste computador e em qualquer servidor Orca pareado.",
       "searchDescription": "Ative a busca de sessões para este computador e servidores pareados, ou limpe os dados de busca.",
       "indexComputers": "Pesquisar dentro das sessões",
-      "computersConsent": "Cada computador mantém uma cópia pesquisável das próprias conversas de agente e saídas de ferramentas. Nada sai desse computador.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Pesquisar sessões em {{host}}",
       "serverOffline": "Off-line",
@@ -11952,7 +11951,10 @@
           "69f5b5380d": "Clonando...",
           "cloneOnHostDescription": "Digite a URL do Git e escolha onde cloná-lo em {{value0}}.",
           "cloneParentFolder": "Pasta pai",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Nome da pasta",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" nesta pasta já é outro repositório, então este clone precisa da sua própria pasta.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" já existe nesta pasta, então este clone precisa da sua própria pasta."
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar o Orca",
@@ -13091,6 +13093,7 @@
           "kernelStartFailed": "Não foi possível iniciar o kernel.",
           "noPython": "O Python não foi encontrado neste computador. Instale-o pelo [python.org](https://www.python.org/downloads/) e execute a célula novamente.",
           "kernelDied": "O kernel parou.",
+          "outputTruncated": "Saída truncada: o Orca manteve o início da saída desta célula e descartou o restante. Para manter tudo, grave-a em um arquivo.",
           "localOnly": "As células do notebook só podem ser executadas para arquivos neste computador.",
           "pythonOnly": "O Orca só executa notebooks Python.",
           "ownerUnresolved": "O Orca ainda não sabe em qual computador este notebook está, por isso não pode executar suas células.",
@@ -16652,6 +16655,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Ligar"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Dimensionado para outra janela",
+            "fitHere": "Ajustar aqui"
           }
         },
         "quick": {
@@ -20215,6 +20222,7 @@
         "noCommands": "Nenhum comando correspondente",
         "commands": "Comandos",
         "skills": "Skills",
+        "checkingSkills": "Procurando novas habilidades…",
         "loadingSkills": "Carregando skills...",
         "skillsLoaded": "Skills carregadas",
         "skillsUnavailableHost": "As skills não estão disponíveis para este host",
@@ -21170,6 +21178,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",
