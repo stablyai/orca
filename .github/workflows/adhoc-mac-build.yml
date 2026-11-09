@@ -404,6 +404,7 @@ jobs:
           sparse-checkout: |
             config/scripts/desktop-distribution/macos/adhoc-mac-manifests.mjs
             config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs
+            src/shared/macos-darwin-floor.ts
           sparse-checkout-cone-mode: false
           persist-credentials: false
 

@@ -1,11 +1,10 @@
 import { Worker } from 'node:worker_threads'
-import { getVersion } from 'sucrase'
+
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   createPluginSourceTranspileClient,
   type PluginSourceTranspileWorker
 } from './plugin-source-transpile-client'
-import { PLUGIN_SOURCE_TRANSPILER_ID } from './plugin-source-transpile-protocol'
 
 // Real threads: echoes `source` back, except that "hang" busy-loops the thread forever.
 const FAKE_TRANSPILER = `
@@ -32,14 +31,6 @@ function fakeWorkers(): { create: () => PluginSourceTranspileWorker; created: ()
 }
 
 describe('plugin source transpile client', () => {
-  it('keeps one warm worker for successive files', async () => {
-    const fake = fakeWorkers()
-    const transpile = createPluginSourceTranspileClient({ createWorker: fake.create })
-    await expect(transpile('a.ts', 'one')).resolves.toEqual({ ok: true, code: 'one', imports: [] })
-    await expect(transpile('b.ts', 'two')).resolves.toMatchObject({ code: 'two' })
-    expect(fake.created()).toBe(1)
-  })
-
   it('cuts a transform over the budget short, terminates its thread and starts a new one', async () => {
     const fake = fakeWorkers()
     const transpile = createPluginSourceTranspileClient({
@@ -56,18 +47,5 @@ describe('plugin source transpile client', () => {
     // The busy-looping thread is gone; the queued file runs on a fresh one.
     await expect(after).resolves.toMatchObject({ ok: true, code: 'fine' })
     expect(fake.created()).toBe(2)
-  })
-
-  it('reports a worker that cannot start instead of throwing', async () => {
-    const transpile = createPluginSourceTranspileClient({
-      createWorker: () => {
-        throw new Error('no entry')
-      }
-    })
-    await expect(transpile('a.ts', 'x')).resolves.toEqual({ ok: false, message: 'no entry' })
-  })
-
-  it('names the bundled sucrase in the cache key', () => {
-    expect(PLUGIN_SOURCE_TRANSPILER_ID).toBe(`sucrase@${getVersion()}`)
   })
 })

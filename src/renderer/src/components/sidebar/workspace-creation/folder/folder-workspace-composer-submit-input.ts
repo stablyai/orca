@@ -6,7 +6,7 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry-events'
-import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
@@ -27,6 +27,7 @@ export type SubmitFolderWorkspaceCreateParams = {
   note: string
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
+  legacyLaunchInputs?: AgentLaunchInputViews
   launchInputs?: AgentLaunchInputViews
   sessionOptions?: Record<string, string>
   chatSessionOptions?: Readonly<Record<string, string>>

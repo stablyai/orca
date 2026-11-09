@@ -1,7 +1,11 @@
 import type { PRFilterChange } from '@/components/github/PRFilterSections'
-import { parseTaskQuery, serializeTaskQuery, withQualifier } from '../../../../../shared/task-query'
-import type { ParsedTaskQuery } from '../../../../../shared/task-query'
-import { getTaskPresetQuery } from '../../../../../shared/task-preset-query'
+import {
+  parseTaskQuery,
+  serializeTaskQuery,
+  withQualifier
+} from '../../../../../shared/work-items/task-query'
+import type { ParsedTaskQuery } from '../../../../../shared/work-items/task-query'
+import { getTaskPresetQuery } from '../../../../../shared/work-items/task-preset-query'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
 
 export type GitHubPRStateChip = 'open' | 'merged' | 'closed' | 'all'

@@ -16,8 +16,8 @@ import {
   RUNTIME_ENVIRONMENT_WAKING_MESSAGE,
   type RecipeVmWakeIntent
 } from '../../../shared/remote-runtime/recipe-vm-wake'
-import { getRecipeVmWaker } from '../../runtime/recipe-vm-waker-registry'
-import { recipeVmWakePairing } from '../../ephemeral-vm/recipe-vm-wake-pairings'
+import { getRecipeVmWaker } from '../../runtime/workspaces/sleep/recipe-vm-waker-registry'
+import { latestRecipeVmWake } from '../../ephemeral-vm/recipe-vm-wake-pairings'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   runtimeEnvironmentManualDisconnectCount,
@@ -26,7 +26,7 @@ import {
 import type {
   RecipeVmOpening,
   RecipeVmState
-} from '../../runtime/workspaces/sleep/workspace-sleep-runtime'
+} from '../../runtime/workspaces/sleep/recipe-vm-operations'
 
 type RecipeVmEnvironment = Pick<KnownRuntimeEnvironment, 'id' | 'source' | 'orcadDeployment'>
 
@@ -93,7 +93,7 @@ export async function prepareRecipeVm(
         runtimeEnvironmentManualDisconnectReason(environment.id)
       )
     }
-    const pairingBefore = recipeVmWakePairing(environment.id)
+    const wakeBefore = latestRecipeVmWake(environment.id)
     const disconnectsBefore = runtimeEnvironmentManualDisconnectCount(environment.id)
     const opening = await waker.holdOpen(vm.workspaceId, vm.recordSuspended, holdMs, signal)
     if (opening !== 'up') {
@@ -106,9 +106,9 @@ export async function prepareRecipeVm(
         runtimeEnvironmentManualDisconnectReason(environment.id)
       )
     }
-    // A wake that ran while this request waited re-paired the server onto this exact pairing.
-    const wokenPairing = recipeVmWakePairing(environment.id)
-    return { wokenPairingRevision: wokenPairing !== pairingBefore ? (wokenPairing ?? null) : null }
+    // A wake that ran while this request waited left the server on this exact pairing.
+    const woken = latestRecipeVmWake(environment.id)
+    return { wokenPairingRevision: woken !== wakeBefore ? (woken?.pairingRevision ?? null) : null }
   }
   const state = waker.state(vm.workspaceId, vm.recordSuspended)
   if (state !== 'up') {

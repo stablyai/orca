@@ -6,7 +6,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '../../../ui/popover'
 import { ScrollArea } from '../../../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './font-suggestion-filter'
 import { useInstalledFontsUnavailable } from './installed-font-list'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 
 // Why: these OS-shipped fonts draw pictographs or Greek for Latin letters, so their own name would be unreadable.
@@ -55,6 +55,7 @@ export function FontAutocomplete({
   onRequestSuggestions,
   onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
   const [open, setOpen] = useState(false)
@@ -297,14 +298,11 @@ export function FontAutocomplete({
                     focusInput()
                   }}
                   className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.settings.SettingsFormControls.a4ff6143f8',
                     'Clear font selection'
                   )}
-                  title={translate(
-                    'auto.components.settings.SettingsFormControls.74bcecd5ec',
-                    'Clear'
-                  )}
+                  title={t('auto.components.settings.SettingsFormControls.74bcecd5ec', 'Clear')}
                 >
                   <CircleX className="size-3.5" />
                 </button>
@@ -325,14 +323,11 @@ export function FontAutocomplete({
                   }
                 }}
                 className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.SettingsFormControls.c766f8ac75',
                   'Toggle font suggestions'
                 )}
-                title={translate(
-                  'auto.components.settings.SettingsFormControls.b55371ea18',
-                  'Fonts'
-                )}
+                title={t('auto.components.settings.SettingsFormControls.b55371ea18', 'Fonts')}
               >
                 <ChevronsUpDown className="size-3.5" />
               </button>
@@ -390,7 +385,7 @@ export function FontAutocomplete({
                 ))
               ) : (
                 <div className="px-3 py-3 text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.SettingsFormControls.42a4d15a30',
                     'No matching fonts.'
                   )}
@@ -400,7 +395,7 @@ export function FontAutocomplete({
           </ScrollArea>
           {installedFontsUnavailable ? (
             <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.FontAutocomplete.installedFontsUnavailable',
                 'Couldn’t list installed fonts. Type any installed font name to use it.'
               )}

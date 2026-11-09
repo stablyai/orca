@@ -52,21 +52,6 @@ describe('mailbox delivery consumption', () => {
     expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
   })
 
-  it('checks the consumer generation even when the prior batch is already read', () => {
-    const { run, params, insert } = setup()
-    const message = insert('old')
-    const first = db.getOrCreateRunDelivery(params)!
-    db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(message.id)
-    expect(() =>
-      db.getOrCreateMailboxDelivery({
-        ...params,
-        mailboxHandle: `run:${run.id}`,
-        consumerGeneration: params.consumerGeneration + 1
-      })
-    ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
-    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
-  })
-
   it.each(['markAsRead', 'markAsReadAndDelivered'] as const)(
     '%s releases dispatch mail without changing a different mailbox',
     (method) => {

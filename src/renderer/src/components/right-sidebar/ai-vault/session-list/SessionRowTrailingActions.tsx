@@ -21,7 +21,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import './ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import './ai-vault-session-worktree'
 import { aiVaultWorktreeJumpTooltip } from './ai-vault-session-worktree-affordances'
@@ -62,6 +62,7 @@ export function SessionRowTrailingActions({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   deleteBlockedReason,
   onRequestDelete,
   actionsHidden = false
@@ -90,12 +91,14 @@ export function SessionRowTrailingActions({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   deleteBlockedReason: string | null
   onRequestDelete?: () => void
   /** Only the details toggle shows. */
   actionsHidden?: boolean
 }) {
-  const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
+  const t = useTranslate()
+  const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo, t)
   const [menuOpen, setMenuOpen] = useState(false)
 
   // Why: the wrapper's pointerdown stopPropagation hides this click from other menus' outside-dismiss.
@@ -131,7 +134,7 @@ export function SessionRowTrailingActions({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
                     'Jump to Original Pane'
                   )}
@@ -147,7 +150,7 @@ export function SessionRowTrailingActions({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
+                {t(
                   'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
                   'Jump to Original Pane'
                 )}
@@ -229,7 +232,7 @@ export function SessionRowTrailingActions({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'components.agentSessionContinuation.handOffToAnotherAgent',
                     'Hand Off to Another Agent'
                   )}
@@ -245,7 +248,7 @@ export function SessionRowTrailingActions({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
+                {t(
                   'components.agentSessionContinuation.handOffToAnotherAgent',
                   'Hand Off to Another Agent'
                 )}
@@ -260,7 +263,7 @@ export function SessionRowTrailingActions({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.right.sidebar.AiVaultSessionRow.toggleSessionDetails',
               '{{value0}} session details',
               { value0: agentLabel(session.agent) }
@@ -292,7 +295,7 @@ export function SessionRowTrailingActions({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.right.sidebar.AiVaultSessionRow.moreSessionActions',
                     'More Session Actions'
                   )}
@@ -305,10 +308,7 @@ export function SessionRowTrailingActions({
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.moreActions',
-                'More Actions'
-              )}
+              {t('auto.components.right.sidebar.AiVaultSessionRow.moreActions', 'More Actions')}
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
@@ -331,6 +331,7 @@ export function SessionRowTrailingActions({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
+              onRevealArtifacts={onRevealArtifacts}
               deleteBlockedReason={deleteBlockedReason}
               onDelete={onRequestDelete}
             />

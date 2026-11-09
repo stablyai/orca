@@ -7,7 +7,7 @@ import { createSshOperationAbortError, type SshExecOptions } from '../connection
 import {
   REMOTE_COMMAND_DECODER_UNAVAILABLE,
   REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT
-} from '../ssh-posix-command-wrapper'
+} from './ssh-posix-command-wrapper'
 import {
   redactRelayInstallMarkerError,
   redactRelayInstallMarkerTokens

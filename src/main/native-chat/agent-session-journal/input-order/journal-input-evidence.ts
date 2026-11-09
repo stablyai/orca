@@ -11,6 +11,7 @@ import type {
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
 import { JournalInputObservations } from './journal-input-observations'
+import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
 import { JournalSubmissionLinks } from './journal-submission-links'
 
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
@@ -33,6 +34,30 @@ export class JournalInputEvidence extends JournalInputObservations {
   private readonly stoppedOwed = new JournalInputPlaceIndex('')
   private readonly carrierCoverage = new Map<string, readonly string[]>()
   private readonly coveredBy = new Map<string, Set<string>>()
+
+  private personAcceptedSequence = 0
+
+  latestPersonAcceptedSequence(): number {
+    return this.personAcceptedSequence
+  }
+  seedPersonAcceptance(sequence: number): void {
+    this.personAcceptedSequence = Math.max(this.personAcceptedSequence, sequence)
+  }
+  personalSubmission(
+    submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>
+  ): boolean {
+    return journalSubmissionIsPersonal(this.state, submission)
+  }
+  notePersonAcceptance(
+    submission: Pick<
+      AgentJournalSubmission,
+      'acceptedSequence' | 'queuedMessageId' | 'source' | 'origin'
+    >
+  ): void {
+    if (this.personalSubmission(submission)) {
+      this.seedPersonAcceptance(submission.acceptedSequence ?? 0)
+    }
+  }
 
   refreshLink(id: string): void {
     this.links.refreshInput(this.state, id)
@@ -158,6 +183,7 @@ export class JournalInputEvidence extends JournalInputObservations {
       this.ordinals.delete(id)
     }
     if (entry?.dispatchState === 'accepted') {
+      this.notePersonAcceptance(entry)
       this.acceptedByTime.setPosition(id, entry.submittedAt, ordinal)
     } else {
       this.acceptedByTime.delete(id)

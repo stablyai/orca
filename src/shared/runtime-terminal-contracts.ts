@@ -262,6 +262,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   title?: string

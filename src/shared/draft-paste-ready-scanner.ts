@@ -1,3 +1,5 @@
+// OpenCode show-cursor follows composer mount ~2s after paste mode; mimo-code shares this signal.
+import { CURSOR_SHOW_SEQUENCE as DECTCEM_SHOW_CURSOR } from './terminal/protocol/escape/terminal-cursor-restore'
 import type {
   DraftPasteReadySignal,
   TuiAgentConfig
@@ -8,8 +10,6 @@ import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
 // Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
-// OpenCode show-cursor follows composer mount ~2s after paste mode; do not race slow startup with a quiet timer. mimo-code shares this signal.
-const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
 // Grok ❯ also appears in shell prompts: require alt screen. Legacy Windows > is too generic, so retain quiet/timeout fallback.
 const GROK_COMPOSER_PROMPT = '❯'
 // ZCode’s locale-independent round composer corner differs from square modal corners; anchor alt screen because powerline shell prompts also draw ╭.
@@ -27,6 +27,9 @@ const SGR_RUN = '(?:\\x1b\\[[0-9;:]*m)*'
 const ANTIGRAVITY_COMPOSER_READY = new RegExp(
   `\\? for shortcuts|─{8}${SGR_RUN}\\r?\\n${SGR_RUN}>(?:\\s+[A-Za-z][A-Za-z-]*\\s+mode:[^\\n]*)?${SGR_RUN}\\r?\\n${SGR_RUN}─{8}`
 )
+// Copilot's composer row: a rule then `❯` at column 1. Its trust menu draws `❯ 1. Yes` inside a box, never after a rule row.
+// Evidence: Copilot CLI 1.0.107 draws this at ~1.2-2.4s, then animates its loading spinner and mascot past 4s.
+const COPILOT_COMPOSER_READY = new RegExp(`─{8}${SGR_RUN}\\r*\\n${SGR_RUN}❯`)
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -98,6 +101,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     markerAnchorEnd: DECRST_BRACKETED_PASTE,
     marker: ANTIGRAVITY_COMPOSER_READY,
     quietAnchor: null
+  },
+  // Its loading spinner and mascot keep the quiet window from settling for seconds after the composer accepts paste.
+  'copilot-composer-prompt': {
+    markerAnchor: DECSET_ALT_SCREEN,
+    markerAnchorEnd: DECRST_ALT_SCREEN,
+    marker: COPILOT_COMPOSER_READY,
+    // Keep the quiet fallback for a build or platform whose composer row differs.
+    quietAnchor: DECSET_BRACKETED_PASTE
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,

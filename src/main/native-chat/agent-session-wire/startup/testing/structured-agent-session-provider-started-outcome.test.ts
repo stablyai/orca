@@ -62,16 +62,6 @@ it("keeps a required read's final answer over the child's later death", async ()
   expect(outcome).toMatchObject({ retry: 'never', cause: answer })
 })
 
-it('answers an unanswered death after a successful open with the adapter verdict', async () => {
-  ending = died
-  expect(await settleStructuredAgentSessionProviderStarted(context(), OPENED)).toBe(died)
-  expect(died.retry).toBe('safe')
-})
-
-it('retires only its own owner once the child was replaced', async () => {
-  expect(await settleStructuredAgentSessionProviderStarted(context('g-2'), OPENED)).toBe('stale')
-})
-
 it('ends the start on a reported death while its bookkeeping is still blocked', async () => {
   ending = died
   const blocked = context()

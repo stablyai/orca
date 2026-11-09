@@ -328,7 +328,7 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
     expect(result).not.toHaveProperty('warnings')
   })
 
-  it('keeps a reply on the raw handle when the sender has no Run or live pane', async () => {
+  it('refuses a reply when the sender has no Run or live pane, storing nothing', async () => {
     setup()
     const note = db.insertMessage({
       from: 'term_offline',
@@ -337,13 +337,11 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
       runId: rootRun.id
     })
 
-    const reply = await call('orchestration.reply', {
-      id: note.id,
-      from: 'term_coord',
-      body: 'Ack'
-    })
-
-    expect(reply).toMatchObject({ message: { to_handle: 'term_offline', run_id: rootRun.id } })
+    await expect(
+      call('orchestration.reply', { id: note.id, from: 'term_coord', body: 'Ack' })
+    ).rejects.toMatchObject({ code: 'terminal_not_found' })
+    expect(db.getMessageById(note.id)?.read).toBe(0)
+    expect(db.getAllMessagesForHandle('term_offline')).toHaveLength(0)
   })
 })
 

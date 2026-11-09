@@ -1,3 +1,4 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { SshTarget } from '../../../../../shared/ssh-types'
@@ -35,15 +36,17 @@ import {
 } from './targets/SshManagedHostRemoveDialog'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { resolveSshHostRemoval } from '../../sidebar/ssh-host-remove-resolution'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useSshAddTargetIntent } from './targets/use-ssh-add-target-intent'
 import { syncSshConfigTargetsPassively } from '../../../lib/ssh-config-passive-sync'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
 
 export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const [targets, setTargets] = useState<SshTarget[]>([])
   // Reuse globally hydrated SSH state instead of duplicate listeners and per-target IPC reads.
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -149,8 +152,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       }
       toast.success(
         editingId
-          ? translate('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
-          : translate('auto.components.settings.SshPane.f602009125', 'Target added')
+          ? t('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
+          : t('auto.components.settings.SshPane.f602009125', 'Target added')
       )
       setShowForm(false)
       setEditingId(null)
@@ -161,7 +164,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         toast.error(
           err instanceof Error
             ? err.message
-            : translate('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
+            : t('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
         )
       }
     } finally {
@@ -183,7 +186,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     const resolution = resolveSshHostRemoval({
       targetId: target.id,
       repos: useAppStore.getState().repos,
-      worktrees: getAllWorktreesFromState(useAppStore.getState())
+      worktrees: getIndexedAllWorktrees(selectWorktreesByRepo(useAppStore.getState()))
     })
     if (resolution.workspaceCount > 0) {
       setHostRemoveTarget({ targetId: target.id, label: target.label })
@@ -200,7 +203,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     try {
       await removeTargetQuietly(id)
       if (mountedRef.current) {
-        toast.success(translate('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
+        toast.success(t('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
       }
       await loadTargets()
     } catch (err) {
@@ -208,7 +211,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         toast.error(
           extractIpcErrorMessage(
             err,
-            translate('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
+            t('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
           )
         )
       }
@@ -237,7 +240,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       toastSshConnectFailure(
         targetId,
         err,
-        translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
+        t('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
       )
     }
   }
@@ -250,7 +253,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       toast.error(
         err instanceof Error
           ? err.message
-          : translate('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
+          : t('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
       )
     }
   }
@@ -301,7 +304,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
               <SshTargetsEmptyState />
             ) : visibleTargets.length === 0 ? (
               <p className="px-1 py-4 text-center text-xs text-muted-foreground">
-                {translate('auto.components.settings.SshPane.noFilterMatch', 'No hosts match.')}
+                {t('auto.components.settings.SshPane.noFilterMatch', 'No hosts match.')}
               </p>
             ) : (
               <SshTargetList

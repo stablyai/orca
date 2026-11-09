@@ -180,7 +180,7 @@ describe('Codex chat catch-up', () => {
     await c.reopen()
     expect(c.journal.submission('old-gap')?.dispatchState).toBe('accepted')
     expect(c.journal.submission('fetched-known')?.dispatchState).toBe('accepted')
-    expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+    expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
 
     for (const n of [100, 1_000]) {
       for (const id of [`tail-${n}`, `second-${n}`]) {
@@ -268,10 +268,11 @@ describe('Codex chat catch-up', () => {
       })
       expect(settled).toContain(first)
       expect(settled).not.toContain(next)
+      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
       await c.reopen()
       expect(c.journal.submission(first)?.dispatchState).toBe('accepted')
-      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
-      expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+      expect(c.journal.submission(next)?.dispatchState).toBe('rejected')
+      expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
       // Losing ownership or cancellation during a read forbids a new proof callback.
       const blocked = new AbortController()
       current = true
@@ -535,7 +536,10 @@ describe('Codex chat catch-up', () => {
     store = await openTestAgentSessionRecordStore(c.root)
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
-    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
+    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())).toMatchObject({
+      kind: 'legacy_import',
+      importedAt: 200_000
+    })
     await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
     expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:old A answer',

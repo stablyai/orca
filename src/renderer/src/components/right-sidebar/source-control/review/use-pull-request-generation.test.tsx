@@ -2,18 +2,17 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeGitGenerationClient from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/runtime-git-client-context'
+import type * as RuntimeGitGenerationClient from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/source-control/git/runtime-git-client-context'
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
-import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 const runtime = vi.hoisted(() => ({
   cancel: vi.fn().mockResolvedValue(undefined),
   generate: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-git-generation-client', async (importOriginal) => {
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', async (importOriginal) => {
   const original = await importOriginal<typeof RuntimeGitGenerationClient>()
   return {
     ...original,
@@ -63,9 +62,7 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
         allocatePullRequestGenerationRequestId: () => 11,
         branchName: 'user/alt-42-fix-login',
         hostedReviewCreateProvider: 'gitlab',
-        prGenerationRecords: {},
         refreshGitStatusAfterPullRequestGeneration: vi.fn(),
-        resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
         setPullRequestGenerationRecord: state.setPullRequestGenerationRecord,
         updatePullRequestGenerationRecord: state.updatePullRequestGenerationRecord,
         worktreePath: '/repo/wt'

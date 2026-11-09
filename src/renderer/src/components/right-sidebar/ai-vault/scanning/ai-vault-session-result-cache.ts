@@ -18,10 +18,15 @@ const cachedSessionResults = new Map<string, CachedSessionResult>()
 
 export function aiVaultSessionResultCacheKey(
   executionHostScope: ExecutionHostScope,
-  scopePaths: readonly string[]
+  scopePaths: readonly string[],
+  scopeOnly = false
 ): string {
   // JSON keeps the parts unambiguous: a path may legally contain any separator.
-  return JSON.stringify([executionHostScope, ...[...new Set(scopePaths)].sort()])
+  return JSON.stringify([
+    executionHostScope,
+    ...(scopeOnly ? [{ scopeOnly }] : []),
+    ...[...new Set(scopePaths)].sort()
+  ])
 }
 
 export function readCachedAiVaultSessionResult(args: {

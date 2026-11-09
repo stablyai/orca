@@ -11,6 +11,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getProjectGroupHeaderKey } from '../../../../shared/sidebar-list/group-keys'
 import { getDistinctProjectGroups } from '../../../../shared/project-groups'
 import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
@@ -61,19 +62,22 @@ function projectRuleQualityClass(rule: number): PaletteResultQualityClass {
 const PROJECT_GROUP_ALIASES = ['group', 'repo group']
 const PROJECT_ALIASES = ['project', 'repo']
 
-function buildCmdJProjectSearchCandidates({
-  projectGroups,
-  repos,
-  projects,
-  projectHostSetups,
-  renderableRepoIds
-}: {
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-  projects: readonly Project[]
-  projectHostSetups: readonly ProjectHostSetup[]
-  renderableRepoIds?: ReadonlySet<string>
-}): CmdJProjectSearchResult[] {
+function buildCmdJProjectSearchCandidates(
+  {
+    projectGroups,
+    repos,
+    projects,
+    projectHostSetups,
+    renderableRepoIds
+  }: {
+    projectGroups: readonly ProjectGroup[]
+    repos: readonly Repo[]
+    projects: readonly Project[]
+    projectHostSetups: readonly ProjectHostSetup[]
+    renderableRepoIds?: ReadonlySet<string>
+  },
+  t: Translate = translate
+): CmdJProjectSearchResult[] {
   const projectGrouping: ProjectGroupingModel = { projects, projectHostSetups }
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
   const candidates: CmdJProjectSearchResult[] = []
@@ -83,10 +87,7 @@ function buildCmdJProjectSearchCandidates({
       id: `project-group:${group.id}`,
       kind: 'project-group',
       title: group.name,
-      description: translate(
-        'auto.components.cmd.j.palette.project.results.repoGroup',
-        'Repo group'
-      ),
+      description: t('auto.components.cmd.j.palette.project.results.repoGroup', 'Repo group'),
       rowKey: getProjectGroupHeaderKey(group.id),
       order,
       keywords: uniqueNormalizedCmdJPaletteKeywords([group.name, ...PROJECT_GROUP_ALIASES])
@@ -107,7 +108,7 @@ function buildCmdJProjectSearchCandidates({
       id: `project:${target.key}`,
       kind: 'project',
       title: target.label,
-      description: translate('auto.components.cmd.j.palette.project.results.project', 'Project'),
+      description: t('auto.components.cmd.j.palette.project.results.project', 'Project'),
       rowKey: target.key,
       repo: target.repo,
       order: projectGroups.length + repoIndex,
@@ -122,27 +123,33 @@ function buildCmdJProjectSearchCandidates({
   return candidates
 }
 
-export function hasCmdJProjectSearchCandidates({
-  projectGroups,
-  repos,
-  projects,
-  projectHostSetups,
-  renderableRepoIds
-}: {
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-  projects: readonly Project[]
-  projectHostSetups: readonly ProjectHostSetup[]
-  renderableRepoIds?: ReadonlySet<string>
-}): boolean {
+export function hasCmdJProjectSearchCandidates(
+  {
+    projectGroups,
+    repos,
+    projects,
+    projectHostSetups,
+    renderableRepoIds
+  }: {
+    projectGroups: readonly ProjectGroup[]
+    repos: readonly Repo[]
+    projects: readonly Project[]
+    projectHostSetups: readonly ProjectHostSetup[]
+    renderableRepoIds?: ReadonlySet<string>
+  },
+  t?: Translate
+): boolean {
   return (
-    buildCmdJProjectSearchCandidates({
-      projectGroups,
-      repos,
-      projects,
-      projectHostSetups,
-      renderableRepoIds
-    }).length > 0
+    buildCmdJProjectSearchCandidates(
+      {
+        projectGroups,
+        repos,
+        projects,
+        projectHostSetups,
+        renderableRepoIds
+      },
+      t
+    ).length > 0
   )
 }
 
@@ -182,21 +189,24 @@ function compareProjectRanked(a: RankedProjectResult, b: RankedProjectResult): n
   return a.result.id.localeCompare(b.result.id)
 }
 
-export function searchCmdJProjectResults({
-  query,
-  projectGroups,
-  repos,
-  projects,
-  projectHostSetups,
-  renderableRepoIds
-}: {
-  query: string
-  projectGroups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-  projects: readonly Project[]
-  projectHostSetups: readonly ProjectHostSetup[]
-  renderableRepoIds?: ReadonlySet<string>
-}): CmdJRankedProjectSearchResult[] {
+export function searchCmdJProjectResults(
+  {
+    query,
+    projectGroups,
+    repos,
+    projects,
+    projectHostSetups,
+    renderableRepoIds
+  }: {
+    query: string
+    projectGroups: readonly ProjectGroup[]
+    repos: readonly Repo[]
+    projects: readonly Project[]
+    projectHostSetups: readonly ProjectHostSetup[]
+    renderableRepoIds?: ReadonlySet<string>
+  },
+  t?: Translate
+): CmdJRankedProjectSearchResult[] {
   // Bound pasted queries before scanning potentially private project, repo or group names.
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
@@ -207,13 +217,16 @@ export function searchCmdJProjectResults({
     return []
   }
   const queryTokens = uniqueCmdJPaletteQueryTokens(normalizedQuery)
-  return buildCmdJProjectSearchCandidates({
-    projectGroups,
-    repos,
-    projects,
-    projectHostSetups,
-    renderableRepoIds
-  })
+  return buildCmdJProjectSearchCandidates(
+    {
+      projectGroups,
+      repos,
+      projects,
+      projectHostSetups,
+      renderableRepoIds
+    },
+    t
+  )
     .map((candidate) => projectRankingForCandidate(normalizedQuery, queryTokens, candidate))
     .filter((entry): entry is RankedProjectResult => entry !== null)
     .sort(compareProjectRanked)

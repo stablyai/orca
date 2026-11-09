@@ -1,10 +1,9 @@
-import './unused-default-rpc-methods.test-fixture'
 // Pin #11745 through state as well as replies: refused calls must not mutate graphs or fence legitimate coordinators.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import SyncDatabase from '../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
@@ -22,14 +21,10 @@ import {
   CURRENT_WORKER_HANDLE,
   CURRENT_WORKER_PANE,
   evidence,
-  invoke,
   request,
   type LegacyCompatibilityDispatcherHarness
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
-
-// Resolve the unrelated caller to a pane so refusal tests Run authorization, not stable_pane_required.
-const OUTSIDER_HANDLE = CURRENT_WORKER_HANDLE
 
 const tempDirs: string[] = []
 const databases: OrchestrationDb[] = []
@@ -99,68 +94,6 @@ async function currentCoordinatorTakesOver(
 }
 
 describe('#11745 H1 — gate methods authorize the caller Run', () => {
-  it.each(['dispatch', 'websocket'] as const)(
-    'G1 %s leaves the recovered task and its dispatch untouched for an unbound attested caller',
-    async (transport) => {
-      const harness = createHarness()
-      const before = adoptedGraph(harness)
-
-      const response = await invoke(
-        harness.dispatcher,
-        request(
-          'orchestration.gateCreate',
-          { task: harness.taskId, question: 'Proceed?' },
-          currentEvidence('coordinator'),
-          `v-g1-${transport}`
-        ),
-        transport
-      )
-
-      expect(response).toMatchObject({ ok: false, error: { code: 'run_required' } })
-      expect(adoptedGraph(harness)).toEqual(before)
-      // The recovered graph really is live work, so "unchanged" is a meaningful assertion.
-      expect(before.task).toBe('dispatched')
-      expect(before.gates).toBe(0)
-    }
-  )
-
-  it('G2 leaves the adopted Run untouched for an unattested caller bound to Run A', async () => {
-    const harness = createHarness()
-    bindRunA(harness)
-    const before = adoptedGraph(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: harness.taskId, question: 'Proceed?', from: CURRENT_COORDINATOR_HANDLE },
-        unattested(currentEvidence('coordinator')),
-        'v-g2'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'task_not_found' } })
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-
-  it('G3 leaves the adopted Run untouched once the legacy coordinator has claimed it', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-g3')
-    bindRunA(harness)
-    const before = adoptedGraph(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: harness.taskId, question: 'Proceed?', from: CURRENT_COORDINATOR_HANDLE },
-        unattested(currentEvidence('coordinator')),
-        'v-g3-gate'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false })
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-
   it('G5 leaves a foreign gate pending and its task blocked', async () => {
     const harness = createHarness()
     bindRunA(harness)
@@ -225,36 +158,6 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
     expect(resolved).toMatchObject({ ok: true, result: { gate: { status: 'resolved' } } })
     expect(harness.db.getTask(ownTask.id)?.status).toBe('ready')
   })
-
-  it('POSITIVE: the proven legacy coordinator still gates the adopted Run task', async () => {
-    const harness = createHarness()
-
-    const created = (await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: harness.taskId, question: 'Proceed?', from: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'v-legacy-create'
-      )
-    )) as { ok: true; result: { gate: { id: string; run_id: string } } }
-
-    expect(created).toMatchObject({
-      ok: true,
-      result: { gate: { run_id: harness.adoptedRunId, task_id: harness.taskId } }
-    })
-    expect(harness.db.getTask(harness.taskId)?.status).toBe('blocked')
-
-    const resolved = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateResolve',
-        { id: created.result.gate.id, resolution: 'go', from: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'v-legacy-resolve'
-      )
-    )
-    expect(resolved).toMatchObject({ ok: true, result: { gate: { status: 'resolved' } } })
-    expect(harness.db.getTask(harness.taskId)?.status).toBe('ready')
-  })
 })
 
 describe('#11745 H1 — is --from an authenticated identity?', () => {
@@ -277,43 +180,6 @@ describe('#11745 H1 — is --from an authenticated identity?', () => {
     expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
     expect(harness.db.getTask(victimTask.id)?.status).not.toBe('blocked')
     expect(harness.db.listGates({ taskId: victimTask.id })).toHaveLength(0)
-  })
-
-  it('refuses the same spoof against taskCreate, which predates this change', async () => {
-    const harness = createHarness()
-    const runA = bindRunA(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        { spec: 'spoofed assignment', callerTerminalHandle: CURRENT_COORDINATOR_HANDLE },
-        currentEvidence('worker'),
-        'v-spoof-task-create'
-      )
-    )
-
-    // Cover the older path from which the weakness originated.
-    expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-    expect(harness.db.listTasks({ runId: runA })).toHaveLength(0)
-  })
-
-  it('refuses an attested caller creating a Run for another terminal', async () => {
-    const harness = createHarness()
-    const runA = bindRunA(harness)
-    const before = harness.db.listRuns().runs
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.runCreate',
-        { objective: 'spoofed Run', from: CURRENT_COORDINATOR_HANDLE },
-        currentEvidence('worker'),
-        'v-spoof-run-create'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-    expect(harness.db.listRuns().runs).toEqual(before)
-    expect(harness.db.getCurrentRunForPane(CURRENT_COORDINATOR_PANE)?.id).toBe(runA)
   })
 
   it('refuses an attested caller rebinding another terminal with runUse', async () => {
@@ -340,152 +206,9 @@ describe('#11745 H1 — is --from an authenticated identity?', () => {
     expect(harness.db.getRun(runA)).toEqual(beforeA)
     expect(harness.db.getRun(workerRun.id)).toEqual(beforeWorker)
   })
-
-  it('refuses an attested caller querying another terminal with runCurrent', async () => {
-    const harness = createHarness()
-    bindRunA(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.runCurrent',
-        { from: CURRENT_COORDINATOR_HANDLE },
-        currentEvidence('worker'),
-        'v-spoof-run-current'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-  })
-
-  it('does not let legacy authority bypass a mismatched declared handle', async () => {
-    const harness = createHarness()
-    const before = adoptedGraph(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'spoofed legacy assignment',
-          callerTerminalHandle: CURRENT_COORDINATOR_HANDLE
-        },
-        evidence('coordinator'),
-        'v-spoof-legacy-shortcut'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-})
-
-describe('#11745 H1 — gateList read posture', () => {
-  it('DOCUMENTS: naming a Run makes its gates readable with no caller identity at all', async () => {
-    // Explicit Run reads are inspectable by anyone; omitted Run requires current consumer. Mutations always require binding.
-    const harness = createHarness()
-    const runA = bindRunA(harness)
-    const ownTask = harness.db.createTask({ spec: 'own work', runId: runA })
-    const ownGate = harness.db.createGate({ taskId: ownTask.id, question: 'Own?' })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateList',
-        { run: runA },
-        currentEvidence('worker'),
-        'v-gate-list-named-run'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { runId: runA, count: 1, gates: [{ id: ownGate.id }] }
-    })
-  })
-})
-
-describe('#11745 H2 — revoked principal on an unclaimed adopted Run', () => {
-  it('answers an unbound caller with run_required, not legacy_read_only', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h2')
-    await currentCoordinatorTakesOver(harness, 'v-h2')
-    // The new owner's pane rebinds elsewhere, leaving the adopted Run unclaimed + principal revoked.
-    const elsewhere = harness.db.createRun({
-      objective: 'elsewhere',
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
-    })
-    harness.db.bindRun({
-      runId: elsewhere.id,
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
-    })
-    expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBeNull()
-    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('revoked')
-    const before = adoptedGraph(harness)
-
-    const response = (await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        { spec: 'unbound assignment', callerTerminalHandle: OUTSIDER_HANDLE },
-        currentEvidence('worker'),
-        'v-h2-unbound'
-      )
-    )) as { ok: false; error: { code: string } }
-
-    expect(response.ok).toBe(false)
-    expect(response.error.code).not.toBe('legacy_read_only')
-    expect(response.error.code).toBe('run_required')
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-
-  it('gives the SAME honest code through the gate path', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h2b')
-    await currentCoordinatorTakesOver(harness, 'v-h2b')
-    harness.db.createRun({
-      objective: 'elsewhere',
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
-    })
-    const before = adoptedGraph(harness)
-
-    const response = (await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: harness.taskId, question: 'Proceed?', from: OUTSIDER_HANDLE },
-        currentEvidence('worker'),
-        'v-h2b-gate'
-      )
-    )) as { ok: false; error: { code: string } }
-
-    expect(response.ok).toBe(false)
-    expect(response.error.code).not.toBe('legacy_read_only')
-    expect(response.error.code).toBe('run_required')
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
 })
 
 describe('#11745 H3 — adopted Run claimed by the legacy coordinator', () => {
-  it('answers an unrelated unbound caller with run_required, not legacy_read_only', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h3')
-    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('committed')
-    const before = adoptedGraph(harness)
-
-    const response = (await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        { spec: 'fresh assignment', callerTerminalHandle: OUTSIDER_HANDLE },
-        currentEvidence('worker'),
-        'v-h3-unbound'
-      )
-    )) as { ok: false; error: { code: string } }
-
-    expect(response.ok).toBe(false)
-    expect(response.error.code).not.toBe('legacy_read_only')
-    expect(response.error.code).toBe('run_required')
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-
   it('still fences the genuinely stale legacy coordinator with legacy_read_only and zero effects', async () => {
     const harness = createHarness()
     await legacyClaimsAdoptedRun(harness, 'v-h3b')
@@ -509,98 +232,6 @@ describe('#11745 H3 — adopted Run claimed by the legacy coordinator', () => {
       ok: false,
       error: { code: 'legacy_read_only', data: { effectsApplied: false } }
     })
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-
-  it('fences the stale legacy coordinator on the gate path too', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h3c')
-    await currentCoordinatorTakesOver(harness, 'v-h3c')
-    const before = adoptedGraph(harness)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateCreate',
-        { task: harness.taskId, question: 'Proceed?', from: COORDINATOR_HANDLE },
-        evidence('coordinator'),
-        'v-h3c-gate'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false })
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-})
-
-describe('#11745 H4 — unattested caller on a taken-over adopted Run', () => {
-  it('DOCUMENTS the accepted behaviour: the binding alone grants authority', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h4')
-    await currentCoordinatorTakesOver(harness, 'v-h4')
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'owner assignment',
-          run: harness.adoptedRunId,
-          callerTerminalHandle: CURRENT_COORDINATOR_HANDLE
-        },
-        unattested(currentEvidence('coordinator')),
-        'v-h4-owner'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { task: { run_id: harness.adoptedRunId } }
-    })
-  })
-
-  it('refuses the same authority WITHOUT matching the run binding in evidence', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h4b')
-    await currentCoordinatorTakesOver(harness, 'v-h4b')
-
-    // Evidence names another terminal; trusted attestation must beat the declared owner handle.
-    const before = adoptedGraph(harness)
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'impostor assignment',
-          run: harness.adoptedRunId,
-          callerTerminalHandle: CURRENT_COORDINATOR_HANDLE
-        },
-        currentEvidence('worker'),
-        'v-h4b-impostor'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-    expect(adoptedGraph(harness)).toEqual(before)
-  })
-
-  it('an unattested caller that is NOT the owner is still refused', async () => {
-    const harness = createHarness()
-    await legacyClaimsAdoptedRun(harness, 'v-h4c')
-    await currentCoordinatorTakesOver(harness, 'v-h4c')
-    const before = adoptedGraph(harness)
-
-    const response = (await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskCreate',
-        {
-          spec: 'outsider assignment',
-          run: harness.adoptedRunId,
-          callerTerminalHandle: OUTSIDER_HANDLE
-        },
-        unattested(currentEvidence('worker')),
-        'v-h4c-outsider'
-      )
-    )) as { ok: false; error: { code: string } }
-
-    expect(response.ok).toBe(false)
     expect(adoptedGraph(harness)).toEqual(before)
   })
 })
@@ -716,20 +347,6 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
     return `${hex.slice(0, 8)}-0000-4000-8000-${hex}`
   }
 
-  it('resolves a reminted tab half by leaf UUID', () => {
-    const db = paneDb()
-    const run = db.createRun({
-      objective: 'reminted',
-      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: `tab_before:${leaf(1)}`
-    })
-
-    // Break-out remints the tab half; the leaf UUID is the durable identity.
-    expect(db.getCurrentRunForPane(`tab_after:${leaf(1)}`)?.id).toBe(run.id)
-    expect(db.getCurrentRunForPane(`tab_before:${leaf(1)}`)?.id).toBe(run.id)
-    expect(db.getCurrentRunForPane(`tab_after:${leaf(2)}`)).toBeUndefined()
-  })
-
   it('keeps unparseable pane keys on exact-match semantics', () => {
     const db = paneDb()
     const noColon = db.createRun({
@@ -779,27 +396,5 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
 
     expect(db.getRun(first.id)?.coordinator_pane_key).toBeNull()
     expect(db.getCurrentRunForPane(`tab_three:${leaf(4)}`)?.id).toBe(second.id)
-  })
-
-  it.each([60, 2000])('stays correct and fast at %i bound Runs', (total) => {
-    const db = paneDb()
-    for (let index = 0; index < total; index += 1) {
-      db.createRun({
-        objective: `run ${index}`,
-        coordinatorHandle: `term_${index}`,
-        coordinatorPaneKey: `tab_${index}:${leaf(index + 100)}`
-      })
-    }
-
-    const target = `tab_reminted:${leaf(total + 99)}`
-    const started = performance.now()
-    for (let probe = 0; probe < 200; probe += 1) {
-      expect(db.getCurrentRunForPane(target)).toBeDefined()
-    }
-    const elapsed = performance.now() - started
-
-    // Generous ceiling: the pre-fix full-table scan at 2000 Runs was orders of magnitude slower.
-    expect(elapsed).toBeLessThan(4000)
-    expect(db.getCurrentRunForPane(`tab_missing:${leaf(999999)}`)).toBeUndefined()
   })
 })

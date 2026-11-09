@@ -1,5 +1,3 @@
-import type * as ProfileIndexStoreModule from '../../orca-profiles/profile-index-store'
-import type * as ProfileTelemetryConsentSeedModule from '../../orca-profiles/profile-telemetry-consent-seed'
 import { existsSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -25,19 +23,12 @@ vi.mock('../../startup/quit/app-relaunch', () => ({ relaunchApp: vi.fn() }))
 vi.mock('../../orca-profiles/profile-index-store', () => ({
   getOrcaProfileListState: () => ({ activeProfileId: 'source', profiles: [] }),
   setActiveOrcaProfile: select,
-  createLocalOrcaProfile: vi.fn(),
-  seedNewOrcaProfileTelemetryConsent: vi.fn()
+  createLocalOrcaProfile: vi.fn()
 }))
 
-vi.mock('../../orca-profiles/profile-telemetry-consent-seed', async (importOriginal) => {
-  const facadeMocks = await vi.importMock<typeof ProfileIndexStoreModule>(
-    '../../orca-profiles/profile-index-store'
-  )
-  return {
-    ...(await importOriginal<typeof ProfileTelemetryConsentSeedModule>()),
-    seedNewOrcaProfileTelemetryConsent: facadeMocks.seedNewOrcaProfileTelemetryConsent
-  }
-})
+vi.mock('../../orca-profiles/new-profile-state', () => ({
+  initializeNewOrcaProfileState: vi.fn()
+}))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })

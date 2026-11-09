@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest'
+
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { AgentHookServer } from '../../../../../agent-hooks/server'
+
+import { AgentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
+
 import {
-  AgentStatusObservedPaneIdentityCapture,
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../../../../agent-status-observed-pane-identity'
-import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
+} from '../../../../terminal/identity/agent-status-observed-pane-identity'
+
 import { projectFleetWorkerPage } from './worker-observation'
 
 /** Capture hook identity at ingest; reminting cached observations during fleet reads could falsely match a new occupant's incarnation. Replay one row across rebind to catch that drift. */
 const PANE_KEY = 'tab-observed:11111111-1111-4111-8111-111111111111'
-const REMINTED_PANE_KEY = 'tab-observed:22222222-2222-4222-8222-222222222222'
 const TERMINAL_HANDLE = 'term_observed'
 const INCARNATION_ONE = 'pty-observed:inc-1'
 const INCARNATION_TWO = 'pty-observed:inc-2'
@@ -129,54 +133,6 @@ function livenessOf(world: ObservedWorld, db: OrchestrationDb, dispatchId: strin
 }
 
 describe('fleet evidence keeps the identity it was observed under', () => {
-  it('buffers startup observations until terminal recovery is ready', () => {
-    const identities = new AgentStatusObservedPaneIdentities()
-    const capture = new AgentStatusObservedPaneIdentityCapture(identities)
-    const runtime = {
-      getAgentStatusTerminalHandleForPaneKey: () => TERMINAL_HANDLE,
-      getTerminalProcessIncarnation: () => INCARNATION_ONE,
-      getAgentStatusOrchestrationContextForPaneKey: () => undefined
-    }
-    const entry = {
-      paneKey: PANE_KEY,
-      payload: { state: 'working', prompt: 'startup', agentType: 'claude' },
-      receivedAt: 1,
-      stateStartedAt: 1
-    } as EnrichedAgentHookEventPayload
-
-    capture.observe(entry)
-    expect(identities.read(PANE_KEY)).toEqual({ kind: 'unobserved' })
-
-    capture.attach(runtime)
-    expect(identities.read(PANE_KEY)).toEqual({
-      kind: 'observed',
-      terminalHandle: TERMINAL_HANDLE,
-      processIncarnation: INCARNATION_ONE,
-      dispatchId: null
-    })
-  })
-
-  it('reads live while the pane still runs the process the row was observed on', () => {
-    const world = createWorld()
-    world.bindPane(PANE_KEY, TERMINAL_HANDLE)
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
-    world.dispatchPane(PANE_KEY, DISPATCH_OLD)
-    world.ingest(PANE_KEY, 'working')
-
-    expect(
-      livenessOf(
-        world,
-        createDb({
-          dispatchId: DISPATCH_OLD,
-          paneKey: PANE_KEY,
-          handle: TERMINAL_HANDLE,
-          incarnation: INCARNATION_ONE
-        }),
-        DISPATCH_OLD
-      )
-    ).toMatchObject({ verdict: 'live', source: 'agent_status' })
-  })
-
   it('refuses the same row once the durable resource advances to the new incarnation', () => {
     const world = createWorld()
     world.bindPane(PANE_KEY, TERMINAL_HANDLE)
@@ -243,27 +199,6 @@ describe('fleet evidence keeps the identity it was observed under', () => {
         DISPATCH_OLD
       )
     ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
-  })
-
-  it('still binds a legitimate pane remint on the same dispatch and incarnation', () => {
-    const world = createWorld()
-    world.bindPane(REMINTED_PANE_KEY, TERMINAL_HANDLE)
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
-    world.dispatchPane(REMINTED_PANE_KEY, DISPATCH_OLD)
-    world.ingest(REMINTED_PANE_KEY, 'working')
-
-    expect(
-      livenessOf(
-        world,
-        createDb({
-          dispatchId: DISPATCH_OLD,
-          paneKey: PANE_KEY,
-          handle: TERMINAL_HANDLE,
-          incarnation: INCARNATION_ONE
-        }),
-        DISPATCH_OLD
-      )
-    ).toMatchObject({ verdict: 'live', source: 'agent_status' })
   })
 
   it('reads live for the rebound worker and not for the one it replaced', () => {

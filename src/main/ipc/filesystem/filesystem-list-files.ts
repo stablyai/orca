@@ -1,15 +1,15 @@
 import {
   FileInventoryBudget,
   FileInventoryCapacityError
-} from '../../../shared/file-inventory-budget'
-import { quickOpenListingPathFilter } from '../../../shared/quick-open-listing-path-filter'
-import { getQuickOpenRgOutputMode } from '../../../shared/quick-open-ripgrep-output-mode'
+} from '../../../shared/file-listing/file-inventory-budget'
+import { quickOpenListingPathFilter } from '../../../shared/quick-open/quick-open-listing-path-filter'
+import { getQuickOpenRgOutputMode } from '../../../shared/quick-open/quick-open-ripgrep-output-mode'
 import {
   RipgrepFilenameDecoder,
   RipgrepFilenameError
-} from '../../../shared/ripgrep-filename-decoder'
+} from '../../../shared/ripgrep/ripgrep-filename-decoder'
 import { sep } from 'node:path'
-import type { RuntimeStore as Store } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore as Store } from '../../runtime/construction/runtime-store-contract'
 import { resolveAuthorizedPath } from './access/filesystem-auth'
 import { toWindowsWslPath } from '../../../shared/wsl-paths'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
@@ -18,11 +18,11 @@ import {
   buildExcludePathPrefixes,
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine
-} from '../../../shared/quick-open-filter'
+} from '../../../shared/quick-open/quick-open-filter'
 import {
   limitQuickOpenFilesBySerializedBytes,
   serializedQuickOpenPathBytes
-} from '../../../shared/quick-open-transport-budget'
+} from '../../../shared/quick-open/quick-open-transport-budget'
 import { bundledRipgrepUnavailableError } from '../../ripgrep/bundled-ripgrep-path'
 import { spawnBundledRipgrep } from '../../ripgrep/bundled-ripgrep-spawn'
 import {
@@ -35,8 +35,8 @@ import {
   killSpawnedRipgrepProcess,
   ripgrepMissingCwdError,
   RipgrepUnavailableError
-} from '../../../shared/ripgrep-process-availability'
-import * as listingCancellation from '../../../shared/file-listing-cancellation'
+} from '../../../shared/ripgrep/ripgrep-process-availability'
+import * as listingCancellation from '../../../shared/file-listing/file-listing-cancellation'
 import {
   finishFilesystemListingProcesses,
   type FilesystemListingProcess

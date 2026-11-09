@@ -1,4 +1,8 @@
-import { LEAF_1, LEAF_2, unboundSplitLayout } from '../../terminal-pane-tab-detach-fixture'
+import {
+  LEAF_1,
+  LEAF_2,
+  unboundSplitLayout
+} from '../../layout/detach/terminal-pane-tab-detach-fixture'
 import type { AppState } from '@/store/types'
 import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
 import './recovery/remote-runtime-pty-recovery-state'
@@ -7,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn<() => AppState>(() => {
@@ -18,7 +22,7 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 // Why: the recovery portals read a pairing-refusal hook this pane-binding test doesn't exercise.
-vi.mock('../../use-managed-pairing-refused', () => ({
+vi.mock('./recovery/use-managed-pairing-refused', () => ({
   useManagedPairingRefusedEnvironmentId: () => null
 }))
 
@@ -77,16 +81,20 @@ describe('remote runtime pane binding ownership', () => {
         vi.useFakeTimers()
       }
       composedStore = true
-      vi.doMock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+      vi.doMock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+        scheduleRuntimeGraphSync: vi.fn()
+      }))
       vi.doMock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
         notifyCodexPaneBoundForStaleSweep: vi.fn()
       }))
-      const { createTestStore, makeTab, seedStore } =
-        await import('@/store/slices/store-test-helpers')
-      const { installPanePtyVisibilityBind } =
-        await import('../../pty-connection/pane-pty-visibility-bind')
+      const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
+        { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture')
+      const { installActivePanePtyBinding } =
+        await import('../../pty-connection/lifecycle/active-pane-pty-binding')
+      const { installTerminalBellCompletionArbitration } =
+        await import('../../pty-connection/notifications/terminal-bell-completion-arbitration')
       const { bindReplacedProcessInputModes } =
-        await import('../../pty-connection/replaced-process-input-modes')
+        await import('../../pty-connection/output/replaced-process-input-modes')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const store = createTestStore()
       const old = 'remote:env-1@@saved-predecessor'
@@ -169,7 +177,8 @@ describe('remote runtime pane binding ownership', () => {
         clearPaneMode2031State: vi.fn(),
         agentCompletionCoordinator: { startProcessTracking: vi.fn() }
       } as unknown as ConnectPanePtySession
-      installPanePtyVisibilityBind(session)
+      installActivePanePtyBinding(session)
+      installTerminalBellCompletionArbitration(session)
       bindReplacedProcessInputModes(session)
       const onError = vi.fn()
       try {
@@ -326,7 +335,8 @@ describe('remote runtime pane binding ownership', () => {
           expect(await connecting).toBeUndefined()
           await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
           expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-          const { createPaneRecoveryReconnect } = await import('../../TerminalPaneRecoveryPortals')
+          const { createPaneRecoveryReconnect } =
+            await import('./recovery/TerminalPaneRecoveryPortals')
           reachable = true
           const retryRecovery = transport.retryRecovery
           let accepted: boolean | undefined
@@ -530,7 +540,7 @@ describe('remote runtime pane binding ownership', () => {
       return defaultCall?.(args)
     })
     const { listRemoteRuntimeSessionTabsDeduped } =
-      await import('@/runtime/remote-runtime-session-tabs-inflight')
+      await import('@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight')
     // Another pane's inventory request starts before this leaf is published.
     const preexisting = listRemoteRuntimeSessionTabsDeduped({
       environmentId: 'env-1',

@@ -7,7 +7,11 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
-import { resolveBareOrchestrationRecipient } from './recipient-routing'
+import {
+  resolveBareOrchestrationRecipient,
+  type BareRecipientResolution,
+  type SendRecipientWarning
+} from './recipient-routing'
 import {
   listAddressableStructuredWorkers,
   type OrchestrationAddressableAgent
@@ -15,9 +19,9 @@ import {
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
-import type { BareRecipientResolution, SendRecipientWarning } from './recipient-routing'
-import type { SendParams } from '../schemas'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+
+import type { SendParams } from './send-params'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>

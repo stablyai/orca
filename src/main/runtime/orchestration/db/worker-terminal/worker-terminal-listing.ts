@@ -24,15 +24,6 @@ import {
   keepWorkerTerminalOpen
 } from './worker-terminal-user-keep'
 
-export {
-  countWorkerTerminalInventory,
-  getWorkerAttentionFacts,
-  getWorkerAttentionFactsForDispatches,
-  allowWorkerTerminalAutoClose,
-  getWorkerAutoCloseState,
-  keepWorkerTerminalOpen
-}
-
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
 export type WorkerTerminalOrderingKey = {
   createdAt: string

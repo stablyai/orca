@@ -1,4 +1,4 @@
-import type { ArtifactListItem, ArtifactListPage } from '../shared/artifacts'
+import type { ArtifactListItem, ArtifactListPage } from '../shared/artifacts/artifacts'
 
 export function formatArtifactList(artifacts: readonly ArtifactListItem[]): string {
   if (artifacts.length === 0) {

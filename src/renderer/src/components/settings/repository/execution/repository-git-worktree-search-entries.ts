@@ -1,16 +1,21 @@
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../../search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
-export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearchEntry[] {
+export function getRepositoryGitWorktreeSearchEntries(
+  repo: Repo,
+  t: Translate = translate
+): SettingsSearchEntry[] {
+  const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: translate(
+      title: t(
         'auto.components.settings.repository.search.externalWorktrees',
         'External worktrees'
       ),
-      description: translate(
+      description: t(
         'auto.components.settings.repository.search.externalWorktreesDescription',
         'Override whether worktrees created outside Orca appear for this project.'
       ),
@@ -28,11 +33,8 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.repository.search.094adbe930',
-        'Default Worktree Base'
-      ),
-      description: translate(
+      title: t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+      description: t(
         'auto.components.settings.repository.search.f571081ec4',
         'Default base branch or ref when creating worktrees.'
       ),
@@ -46,11 +48,8 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.repository.search.443d127b5a',
-        'Worktree Location'
-      ),
-      description: translate(
+      title: t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+      description: t(
         'auto.components.settings.repository.search.cd33a5525e',
         'Project-specific directory for new worktrees.'
       ),
@@ -79,11 +78,8 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.repository.search.1f0f20bbb6',
-        'Sparse Checkout Presets'
-      ),
-      description: translate(
+      title: t('auto.components.settings.repository.search.1f0f20bbb6', 'Sparse Checkout Presets'),
+      description: t(
         'auto.components.settings.repository.search.90a331fd68',
         'Saved directory sets for sparse worktree creation.'
       ),
@@ -120,11 +116,8 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.repository.search.01b3377ebc',
-        'Worktree Shared Paths'
-      ),
-      description: translate(
+      title: t('auto.components.settings.repository.search.01b3377ebc', 'Worktree Shared Paths'),
+      description: t(
         'auto.components.settings.repository.search.ed885e589f',
         'Paths to materialize from the primary checkout into newly created worktrees.'
       ),

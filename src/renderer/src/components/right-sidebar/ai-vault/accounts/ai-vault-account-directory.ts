@@ -5,12 +5,12 @@ import {
   type AccountDirectoryEntry as Entry
 } from './ai-vault-account-publication'
 import { useAppStore } from '../../../../store/index'
-import { subscribeRuntimeRpc } from '@/runtime/runtime-rpc-subscribe'
+import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import {
   watchProviderAccounts,
   type ProviderAccountsWatcher,
   type ProviderAccountsSnapshot
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { AccountBinding, NativeAccountBinding } from './ai-vault-account-binding'
 import {
   NativeAccountInputs,

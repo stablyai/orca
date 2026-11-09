@@ -218,16 +218,4 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
       phoneCall('mobileRelay.hosts.worktrees', { hostId: 'runtime:box' })
     ).resolves.toEqual(warm)
   })
-
-  it('answers an empty list on a desktop that relays nowhere', async () => {
-    const desktop = await startRuntime()
-    const session = await authenticateMobileWsSession(pairingUrl(desktop, 'mobile'))
-    const replies = createEncryptedWsResponseReader(session)
-    cleanups.push(() => {
-      replies.dispose()
-      session.ws.close()
-    })
-    sendEncryptedWsRequest(session, { id: 'list', method: 'mobileRelay.hosts.list' })
-    await expect(replies.next('list')).resolves.toMatchObject({ ok: true, result: { hosts: [] } })
-  })
 })

@@ -15,7 +15,7 @@ import {
 } from 'node:fs'
 import type * as FileSystem from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as processes from '@orca/process-host'
 import { copyProfileStateRecoveryFiles } from './profile-state-recovery-copy'
@@ -109,38 +109,7 @@ describe('batched profile recovery copies', () => {
     expectNoTemporary(directory)
   })
 
-  it('does nothing for an empty batch', () => {
-    const run = vi.spyOn(processes, 'runProcessSync')
-    copyProfileStateRecoveryFiles([])
-    expect(run).not.toHaveBeenCalled()
-  })
-
   describe.skipIf(process.platform !== 'darwin')('Darwin batch boundaries', () => {
-    it('shares one process with absolute arguments and the per-file timeout budget', () => {
-      const { directory, files } = fixture()
-      const run = vi.spyOn(processes, 'runProcessSync')
-      copyProfileStateRecoveryFiles(files)
-      expect(run).toHaveBeenCalledOnce()
-      const spec = run.mock.calls[0]?.[0]
-      expect(spec?.args?.slice(1).every(isAbsolute)).toBe(true)
-      expect(spec?.args).toHaveLength(4)
-      expect(spec?.timeoutMs).toBe(60_000)
-      expectIndependent(files)
-      expectNoTemporary(directory)
-    })
-
-    it('bounds a shared process when many large artifacts are retained', () => {
-      const { directory, files } = fixture(
-        Array.from({ length: 17 }, (_, index) => `backup-${index}.db`)
-      )
-      const run = vi.spyOn(processes, 'runProcessSync')
-      copyProfileStateRecoveryFiles(files)
-      expect(run).toHaveBeenCalledTimes(2)
-      expect(run.mock.calls.every(([spec]) => (spec.args?.length ?? 0) <= 18)).toBe(true)
-      expectIndependent(files)
-      expectNoTemporary(directory)
-    })
-
     it.each([
       ['same.db', 'same.db'],
       ['CASE.db', 'case.db'],

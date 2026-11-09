@@ -22,6 +22,16 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
           /^src\/renderer\/src\/components\/browser-pane\/workspace-doc\/[^/]+\.tsx?$/.test(file)))
   },
   {
+    // Preview ⇄ web-tab conversion from the address bar, including Back/Forward across it and document suggestions.
+    id: 'browser.preview-address-bar-convergence',
+    specs: ['tests/e2e/paired-preview-address-bar-convergence.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/(?:components\/browser-pane\/(?:workspace-doc\/doc-preview-address-edit|navigate\/(?:workspace-doc-address-submission|use-client-hosted-page-url-submission)|assemble-chrome\/browser-address-bar-suggestions)|lib\/(?:workspace-doc-address-input|browser\/history\/browser-page-conversion-history)|store\/slices\/browser\/pages\/(?:browser-page-conversion|browser-page-conversion-actions))\.tsx?$/.test(
+        file
+      )
+  },
+  {
     // Client-rendered host rows need two real Electron apps; omit high-churn ipc/runtime/useIpcEvents/preload seams covered by main-process integration.
     id: 'client-hosted-browser.host-strip',
     specs: ['tests/e2e/paired-client-hosted-browser-host-strip.spec.ts'],

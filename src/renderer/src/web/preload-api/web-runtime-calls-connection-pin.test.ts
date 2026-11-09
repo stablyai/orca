@@ -20,7 +20,7 @@ vi.mock('./web-runtime-session', () => ({
 }))
 
 import { callEnvironmentEnvelope } from './web-runtime-calls'
-import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web-runtime-request-registry'
+import { RuntimeConnectionChangedBeforeSendError } from '../../runtime/rpc/calls/runtime-rpc-result'
 
 describe('web runtime call pinned to the probed runtime', () => {
   beforeEach(() => {
@@ -43,7 +43,7 @@ describe('web runtime call pinned to the probed runtime', () => {
 
     await expect(
       callEnvironmentEnvelope('env-1', 'files.write', {}, 15_000, undefined, 'runtime-a')
-    ).rejects.toThrow(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    ).rejects.toBeInstanceOf(RuntimeConnectionChangedBeforeSendError)
     expect(session.client.call).not.toHaveBeenCalledWith(
       'files.write',
       expect.anything(),

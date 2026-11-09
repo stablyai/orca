@@ -3,7 +3,7 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_START_IMPLICIT_RUN_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 
 async function runtimeLacks(client: RuntimeClient, capability: string): Promise<boolean> {

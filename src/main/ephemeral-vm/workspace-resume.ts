@@ -9,15 +9,16 @@ import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
 } from '../../shared/ephemeral-vm-recipes'
-import {
-  resolveEnvironment,
-  updateEnvironmentFromPairingCode
-} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
-import { getRuntimeOwnedSshTargetId } from '../ssh/connection/ssh-connection-store'
-import { isSshUserDisconnected, sshUserDisconnectCount } from '../ssh/ssh-user-disconnect'
+import { applyResumedRuntimePairing } from './runtime-resume-pairing'
+import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
+import {
+  isSshUserDisconnected,
+  sshUserDisconnectCount
+} from '../ssh/connection/ssh-user-disconnect'
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
@@ -53,11 +54,17 @@ export async function resumeEphemeralVmWorkspace(
     if (!pairingCode) {
       throw new Error('Resume result did not include an Orca Server pairing code.')
     }
-    const repaired = updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-      pairingCode
+    const { environment } = await applyResumedRuntimePairing({
+      userDataPath,
+      environmentId: runtime.runtimeEnvironmentId,
+      pairingCode,
+      invalidateTransport: invalidateRuntimeEnvironmentTransport
     })
-    noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt)
-    invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
+    noteRecipeVmWakePairing(
+      environment.id,
+      environment.pairingRevision ?? environment.createdAt,
+      true
+    )
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.

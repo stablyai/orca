@@ -3,19 +3,17 @@ import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/loca
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
-  AdoptProvisionedRootArgs
+  AdoptProvisionedRootArgs,
+  RunApprovedWorktreeSetupArgs,
+  RunApprovedWorktreeSetupResult
 } from '../../../../shared/worktree/create-types'
+import { runApprovedCreatedWorktreeSetup } from '../../../runtime/workspaces/creation/created-worktree-approved-setup'
 import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
 } from '../../../observability/instrumentation'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import type { WorkspaceSource } from '../../../../shared/telemetry-events'
-import {
-  resolveAutomationWorkspaceProvenance,
-  releaseAutomationWorkspaceProvenanceRequest,
-  finishAutomationWorkspaceProvenanceRequest
-} from '../../../automations/workspace-provenance'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
@@ -24,7 +22,6 @@ import { classifyWorkspaceCreateError } from '../../workspace-create-error-class
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
 import { adoptProvisionedRootSshCheckout } from '../../../workspaces/catalog/provisioned-root-ssh-adoption'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
-import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
@@ -51,19 +48,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
         assertWslMoveRepoWritable(store, repo)
         return withProjectWorktreeCreate(repo, async () => {
-          const automationProvenance = resolveAutomationWorkspaceProvenance({
-            authority: runtime,
-            repoSelector: args.repoId,
-            repo,
-            request: args.automationProvenanceRequest
-          })
-          let createArgs: CreateWorktreeArgsWithSystemProvenance = { ...args, automationProvenance }
-          try {
-            createArgs = await applyWorkspaceCreatePluginHook(createArgs, repo)
-          } catch (error) {
-            releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
-            throw error
-          }
+          const createArgs = await applyWorkspaceCreatePluginHook(args, repo)
 
           let result: CreateWorktreeResult
           // Keep failure telemetry in the handler so rejected creates retain their stage.
@@ -103,13 +88,11 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
               )
             }
           } catch (error) {
-            releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
             telemetry.failed(error)
             throw error
           } finally {
             creation?.close()
           }
-          finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           if (result.timing) {
             addWorktreeCreatePhaseAttributes(span, result.timing)
           }
@@ -135,6 +118,15 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
   )
 
   ipcMain.handle(
+    'worktrees:runApprovedSetup',
+    (_event, args: RunApprovedWorktreeSetupArgs): Promise<RunApprovedWorktreeSetupResult> =>
+      // A click on the trust prompt is the user's act, so it may start the repo's WSL distro.
+      runApprovedCreatedWorktreeSetup(runtime, `id:${args.worktreeId}`, args.approvedSetupHash, {
+        wslUserAct: true
+      })
+  )
+
+  ipcMain.handle(
     'worktrees:adoptProvisionedRoot',
     async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
@@ -146,23 +138,16 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         assertWslMoveRepoWritable(store, repo)
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
-        const automationProvenance = resolveAutomationWorkspaceProvenance({
-          authority: runtime,
-          repoSelector: args.repoId,
-          repo,
-          request: args.automationProvenanceRequest
-        })
         let result: CreateWorktreeResult
         try {
           result = await adoptProvisionedRootSshCheckout({
             userDataPath: app.getPath('userData'),
-            request: { ...args, automationProvenance },
+            request: args,
             repo,
             store,
             isRepoCurrent: () => isCapturedRepoCurrent(store, repo, args.executionHostId)
           })
         } catch (error) {
-          releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           track('workspace_create_failed', {
             source,
             error_class: classifyWorkspaceCreateError(error),
@@ -170,7 +155,6 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           })
           throw error
         }
-        finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
         track('workspace_created', {
           source,
           from_existing_branch: false,
