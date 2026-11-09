@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Plus, X } from 'lucide-react'
 import type { VoiceSettings } from '../../../../../shared/speech-types'
 import {
@@ -6,7 +7,7 @@ import {
   MAX_DICTATION_TERM_LENGTH,
   type DictationTerm
 } from '../../../../../shared/dictation-dictionary'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,14 +37,43 @@ export function VoiceVocabularySetting({
   const repo = useAppStore((s) => selectRepoByIdForActiveWorkspace(s, s.activeRepoId))
   const updateRepo = useAppStore((s) => s.updateRepo)
   const [chosenScope, setScope] = useState<VocabularyScope>('personal')
+  // A repo write is a round trip (RPC for a remote host); the next edit builds on it, not on the stored list.
+  const [pending, setPending] = useState<{ repoId: string; terms: DictationTerm[] } | null>(null)
+  const pendingRef = useRef(pending)
   const scope = repo ? chosenScope : 'personal'
   const personalTerms = voiceSettings.dictationTerms ?? NO_TERMS
-  const repoTerms = repo?.dictationTerms ?? NO_TERMS
+  const repoTerms =
+    pending && pending.repoId === repo?.id ? pending.terms : (repo?.dictationTerms ?? NO_TERMS)
   const terms = scope === 'repo' ? repoTerms : personalTerms
+
+  const saveRepoTerms = async (repoId: string, hostId: ExecutionHostId, next: DictationTerm[]) => {
+    const write = { repoId, terms: next }
+    pendingRef.current = write
+    setPending(write)
+    const saved = await updateRepo(repoId, { dictationTerms: next }, { hostId })
+    const stored =
+      useAppStore
+        .getState()
+        .repos.find((r) => r.id === repoId && getRepoExecutionHostId(r) === hostId)
+        ?.dictationTerms ?? []
+    // An older host drops the field it doesn't know and still answers success.
+    if (!saved || JSON.stringify(stored) !== JSON.stringify(next)) {
+      toast.error(
+        t(
+          'components.settings.voice.vocabulary.repoSaveFailed',
+          "Couldn't save the repo's terms. The host running this repo may need an Orca update."
+        )
+      )
+    }
+    if (pendingRef.current === write) {
+      pendingRef.current = null
+      setPending(null)
+    }
+  }
 
   const saveTerms = (next: DictationTerm[]): void => {
     if (scope === 'repo' && repo) {
-      void updateRepo(repo.id, { dictationTerms: next }, { hostId: getRepoExecutionHostId(repo) })
+      void saveRepoTerms(repo.id, getRepoExecutionHostId(repo), next)
     } else {
       onUpdateVoiceSettings({ dictationTerms: next })
     }

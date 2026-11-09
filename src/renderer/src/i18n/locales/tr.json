@@ -20747,7 +20747,8 @@
           "heardAsLabel": "Duyulan biçim",
           "add": "Ekle",
           "repoNameHint": "Depo adını ipucu olarak kullan",
-          "repoNameHintDescription": "Depo adının tanınmasına yardımcı olur."
+          "repoNameHintDescription": "Depo adının tanınmasına yardımcı olur.",
+          "repoSaveFailed": "Deponun terimleri kaydedilemedi. Bu deponun ana makinesinde Orca güncellemesi gerekebilir."
         }
       },
       "repositoryHooks": {

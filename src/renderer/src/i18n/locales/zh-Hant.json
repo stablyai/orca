@@ -20448,7 +20448,8 @@
           "heardAsLabel": "聽成",
           "add": "新增",
           "repoNameHint": "將儲存庫名稱用作提示",
-          "repoNameHintDescription": "幫助辨識儲存庫名稱。"
+          "repoNameHintDescription": "幫助辨識儲存庫名稱。",
+          "repoSaveFailed": "無法儲存儲存庫的術語。執行此儲存庫的主機可能需要更新 Orca。"
         }
       },
       "repositoryHooks": {

@@ -20045,7 +20045,8 @@
           "heardAsLabel": "听成",
           "add": "添加",
           "repoNameHint": "将仓库名用作提示",
-          "repoNameHintDescription": "帮助识别仓库名称。"
+          "repoNameHintDescription": "帮助识别仓库名称。",
+          "repoSaveFailed": "无法保存仓库的术语。运行此仓库的主机可能需要更新 Orca。"
         }
       },
       "repositoryHooks": {

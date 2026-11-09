@@ -23,12 +23,13 @@ function wordKey(text: string): string {
   return (text.normalize('NFKC').toLowerCase().match(WORD_RE) ?? []).join('')
 }
 
-/** Well-formed entries only, trimmed and capped; undefined when the value isn't a list. */
+/** Well-formed, distinct entries only, trimmed and capped; undefined when the value isn't a list. */
 export function normalizeDictationTerms(value: unknown): DictationTerm[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
   }
   const terms: DictationTerm[] = []
+  const seen = new Set<string>()
   for (const entry of value) {
     const term: unknown = entry?.term
     const heardAs: unknown = entry?.heardAs
@@ -36,10 +37,18 @@ export function normalizeDictationTerms(value: unknown): DictationTerm[] | undef
     if (typeof term !== 'string' || !term.trim()) {
       continue
     }
-    const alias = typeof heardAs === 'string' ? heardAs.trim() : ''
+    const spelling = term.trim().slice(0, MAX_DICTATION_TERM_LENGTH)
+    const alias =
+      typeof heardAs === 'string' ? heardAs.trim().slice(0, MAX_DICTATION_TERM_LENGTH) : ''
+    // The settings list keys a chip by its spelling and alias, so the same pair is kept once.
+    const id = `${spelling}\u0000${alias}`
+    if (seen.has(id)) {
+      continue
+    }
+    seen.add(id)
     terms.push({
-      term: term.trim().slice(0, MAX_DICTATION_TERM_LENGTH),
-      ...(alias ? { heardAs: alias.slice(0, MAX_DICTATION_TERM_LENGTH) } : {}),
+      term: spelling,
+      ...(alias ? { heardAs: alias } : {}),
       ...(hint === true ? { hint } : {})
     })
   }

@@ -21735,7 +21735,8 @@
           "heardAsLabel": "Ouvido como",
           "add": "Adicionar",
           "repoNameHint": "Usar o nome do repositório como dica",
-          "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório."
+          "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório.",
+          "repoSaveFailed": "Não foi possível salvar os termos do repositório. O host deste repositório pode precisar de uma atualização do Orca."
         }
       },
       "repositoryHooks": {

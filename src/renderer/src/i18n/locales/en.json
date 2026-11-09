@@ -21464,7 +21464,8 @@
           "heardAsLabel": "Heard as",
           "add": "Add",
           "repoNameHint": "Use the repo name as a hint",
-          "repoNameHintDescription": "Helps recognize the repo's name."
+          "repoNameHintDescription": "Helps recognize the repo's name.",
+          "repoSaveFailed": "Couldn't save the repo's terms. The host running this repo may need an Orca update."
         }
       },
       "repositoryHooks": {

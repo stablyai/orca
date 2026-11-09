@@ -20046,7 +20046,8 @@
           "heardAsLabel": "聞き取られ方",
           "add": "追加",
           "repoNameHint": "リポジトリ名をヒントとして使う",
-          "repoNameHintDescription": "リポジトリ名を認識しやすくします。"
+          "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
+          "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
         }
       },
       "repositoryHooks": {

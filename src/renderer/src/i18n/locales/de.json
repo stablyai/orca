@@ -20765,7 +20765,8 @@
           "heardAsLabel": "Gehört als",
           "add": "Hinzufügen",
           "repoNameHint": "Repo-Namen als Hinweis verwenden",
-          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen."
+          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
+          "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
         }
       },
       "repositoryHooks": {
