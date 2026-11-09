@@ -64,7 +64,7 @@ function invoke(
   mode: 'direct' | 'shell' = 'direct'
 ) {
   const [program, ...args] =
-    mode === 'shell' ? ['/bin/sh', '-c', command] : tokenizeCommandLine(command)
+    mode === 'shell' ? ['/bin/sh', '-c', `${command}; exit $?`] : tokenizeCommandLine(command)
   if (!program) {
     throw new Error('Missing executable')
   }
