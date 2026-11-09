@@ -6597,7 +6597,10 @@
               "modelMemoryKeyword": "memória",
               "fillerWordsTitle": "Remover hesitações",
               "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
-              "fillerWordsKeyword": "hesitações"
+              "fillerWordsKeyword": "hesitações",
+              "vocabularyTitle": "Vocabulário",
+              "vocabularyDescription": "Nomes e termos de código que o ditado escreve do seu jeito, para você ou para um repositório.",
+              "vocabularyKeyword": "dicionário"
             }
           }
         },
@@ -21716,6 +21719,23 @@
           "local": "Neste computador",
           "cloudDescription": "Modelos na nuvem enviam seu áudio ao provedor. Os deste computador o mantêm aqui.",
           "sendsToCompatible": "Envia seu áudio para o serviço que você configurou."
+        },
+        "vocabulary": {
+          "title": "Vocabulário",
+          "description": "Nomes e termos de código escritos do seu jeito. Adicione como o modelo os ouve errado, se ele continuar errando.",
+          "repoScope": "Usado só ao ditar em {{repo}}.",
+          "personalScope": "Usado em todos os repositórios.",
+          "scope": "Termos para",
+          "personal": "Pessoal · {{total}}",
+          "repo": "Repositório {{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Remover {{term}}",
+          "term": "Palavra ou frase",
+          "heardAs": "Ouvido como (opcional)",
+          "heardAsLabel": "Ouvido como",
+          "add": "Adicionar",
+          "repoNameHint": "Usar o nome do repositório como dica",
+          "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório."
         }
       },
       "repositoryHooks": {

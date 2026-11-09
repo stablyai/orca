@@ -12,6 +12,7 @@ import { OpenAiCompatibleProviderDialog } from './OpenAiCompatibleProviderDialog
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
+import { VoiceVocabularySetting } from './VoiceVocabularySetting'
 import { VOICE_MICROPHONE_ROW_ID, VoiceInputSettings } from './VoiceInputSettings'
 import { VoiceSetupCard } from './VoiceSetupCard'
 import { cancelSpeechModelDownload, startSpeechModelDownload } from './speech-model-download'
@@ -328,6 +329,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
           onUpdateVoiceSettings={updateVoiceSettings}
         />
       </div>
+
+      <Separator />
+
+      <VoiceVocabularySetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
 
       <Separator />
 

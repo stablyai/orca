@@ -10589,7 +10589,10 @@
               "modelMemoryKeyword": "内存",
               "fillerWordsTitle": "移除语气词",
               "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
-              "fillerWordsKeyword": "语气词"
+              "fillerWordsKeyword": "语气词",
+              "vocabularyTitle": "词汇",
+              "vocabularyDescription": "听写按你的写法拼写的名称和代码术语，可用于个人或某个仓库。",
+              "vocabularyKeyword": "词典"
             }
           }
         },
@@ -20026,6 +20029,23 @@
           "local": "这台电脑",
           "cloudDescription": "云端模型会把你的音频发送给服务商。本机模型会把音频留在这台电脑上。",
           "sendsToCompatible": "会把你的音频发送到你设置的服务。"
+        },
+        "vocabulary": {
+          "title": "词汇",
+          "description": "按你的写法拼写的名称和代码术语。如果模型总是听错，可以加上它听成的说法。",
+          "repoScope": "仅在 {{repo}} 中听写时使用。",
+          "personalScope": "在所有仓库中使用。",
+          "scope": "术语范围",
+          "personal": "个人 · {{total}}",
+          "repo": "{{repo}} 仓库 · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "移除 {{term}}",
+          "term": "词语或短语",
+          "heardAs": "听成（可选）",
+          "heardAsLabel": "听成",
+          "add": "添加",
+          "repoNameHint": "将仓库名用作提示",
+          "repoNameHintDescription": "帮助识别仓库名称。"
         }
       },
       "repositoryHooks": {

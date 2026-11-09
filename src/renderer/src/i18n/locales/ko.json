@@ -10589,7 +10589,10 @@
               "modelMemoryKeyword": "메모리",
               "fillerWordsTitle": "군말 제거",
               "fillerWordsDescription": "받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다.",
-              "fillerWordsKeyword": "군말"
+              "fillerWordsKeyword": "군말",
+              "vocabularyTitle": "어휘",
+              "vocabularyDescription": "받아쓰기가 원하는 대로 표기하는 이름과 코드 용어, 개인용 또는 저장소용.",
+              "vocabularyKeyword": "사전"
             }
           }
         },
@@ -20027,6 +20030,23 @@
           "local": "이 컴퓨터",
           "cloudDescription": "클라우드 모델은 오디오를 제공업체로 보냅니다. 이 컴퓨터의 모델은 오디오를 밖으로 보내지 않습니다.",
           "sendsToCompatible": "오디오를 설정한 서비스로 보냅니다."
+        },
+        "vocabulary": {
+          "title": "어휘",
+          "description": "원하는 대로 표기할 이름과 코드 용어입니다. 모델이 계속 잘못 들으면 잘못 들리는 말도 추가하세요.",
+          "repoScope": "{{repo}}에서 받아쓸 때만 사용합니다.",
+          "personalScope": "모든 저장소에서 사용합니다.",
+          "scope": "용어 대상",
+          "personal": "개인 · {{total}}",
+          "repo": "{{repo}} 저장소 · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} 삭제",
+          "term": "단어 또는 구문",
+          "heardAs": "들리는 말(선택)",
+          "heardAsLabel": "들리는 말",
+          "add": "추가",
+          "repoNameHint": "저장소 이름을 힌트로 사용",
+          "repoNameHintDescription": "저장소 이름을 더 잘 인식하도록 돕습니다."
         }
       },
       "repositoryHooks": {
