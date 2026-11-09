@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const PERSONAL_PROJECT_ORDER_CAPABILITY = 'ui.personalProjectOrder.v1'
 

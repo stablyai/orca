@@ -3,7 +3,7 @@ import {
   readProbedHostCapabilities
 } from '../transport/connection/host-status-probe-operations'
 import { randomUUID } from 'expo-crypto'
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { PERSONAL_PROJECT_ORDER_CAPABILITY } from '../../../src/shared/personal-project-order'
 import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
