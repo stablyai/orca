@@ -38,6 +38,7 @@ function formatDaemonLogLine(event: string, details: Record<string, unknown>): s
     pid: process.pid,
     event,
     // Mostly error messages: redact at write so a spawn error quoting a token never lands on disk.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: redactValue preserves the shape of the object it is given.
     ...(redactValue(details) as Record<string, unknown>)
   })}\n`
 }

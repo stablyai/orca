@@ -9,7 +9,7 @@ export const skeletonCard = defineFixture({
   render: () => (
     <div className="space-y-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center gap-3">
-        <Skeleton className="size-6 rounded-full" />
+        <Skeleton shape="circle" className="size-6" />
         <Skeleton className="h-3.5 w-40" />
       </div>
       <Skeleton className="h-3 w-full" />
