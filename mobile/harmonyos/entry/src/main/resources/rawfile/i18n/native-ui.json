@@ -1780,18 +1780,9 @@
     "es": "Sonido de notificación",
     "zh-Hant": "通知音效"
   },
-  "配对另一台桌面": {
-    "zh": "配对另一台桌面",
-    "tr": "Pair another desktop",
-    "ja": "Pair another desktop",
-    "de": "Pair another desktop",
-    "ru": "Pair another desktop",
-    "pt": "Pair another desktop",
-    "en": "Pair another desktop",
-    "fr": "Pair another desktop",
-    "ko": "Pair another desktop",
-    "es": "Pair another desktop",
-    "zh-Hant": "Pair another desktop"
+  "配对一台桌面": {
+    "en": "Pair a desktop",
+    "zh": "配对桌面"
   },
   "配对桌面": {
     "zh": "配对桌面",
@@ -3922,5 +3913,65 @@
   "提醒类型遵循各个已配对桌面的通知设置。": {
     "zh": "提醒类型遵循各个已配对桌面的通知设置。",
     "en": "Alert types follow each paired desktop’s notification settings."
+  },
+  "正在检查主机": {
+    "zh": "正在检查主机",
+    "tr": "Sunucu kontrol ediliyor",
+    "ja": "ホストを確認中",
+    "de": "Host wird geprüft",
+    "ru": "Проверка сервера",
+    "pt": "Verificando host",
+    "en": "Checking host",
+    "fr": "Vérification de l'hôte",
+    "ko": "호스트 확인 중",
+    "es": "Comprobando el host",
+    "zh-Hant": "正在檢查主機"
+  },
+  "正在打开工作区": {
+    "zh": "正在打开工作区",
+    "tr": "Çalışma alanı açılıyor",
+    "ja": "ワークスペースを開いています",
+    "de": "Arbeitsbereich wird geöffnet",
+    "ru": "Открытие рабочего пространства",
+    "pt": "Abrindo espaço de trabalho",
+    "en": "Opening workspace",
+    "fr": "Ouverture de l'espace de travail",
+    "ko": "워크스페이스 여는 중",
+    "es": "Abriendo espacio de trabajo",
+    "zh-Hant": "正在開啟工作區"
+  },
+  "连接到此主机以下载最新版本的应用": {
+    "zh": "连接到此主机以下载最新版本的应用",
+    "tr": "Uygulamanın son sürümünü indirmek için bu sunucuya bağlanın",
+    "ja": "このホストに接続して、最新のアプリをダウンロードしてください。",
+    "de": "Mit diesem Host verbinden, um die neueste App-Version herunterzuladen",
+    "ru": "Подключитесь к этому серверу, чтобы скачать последнюю версию приложения",
+    "pt": "Conecte-se a este host para baixar a versão mais recente do app",
+    "en": "Connect to this host to download the latest app",
+    "fr": "Connectez-vous à cet hôte pour télécharger la dernière version de l'application",
+    "ko": "최신 앱을 다운로드하려면 이 호스트에 연결하세요.",
+    "es": "Conéctate a este host para descargar la última versión de la aplicación",
+    "zh-Hant": "連線至此主機以下載最新版應用程式"
+  },
+  "正在下载最新版本的应用": {
+    "zh": "正在下载最新版本的应用",
+    "en": "Downloading the latest app"
+  },
+  "来自 {{desktop}} · {{size}}": {
+    "zh": "来自 {{desktop}} · {{size}}",
+    "en": "From {{desktop}} · {{size}}"
+  },
+  "无法读取桌面凭证": {
+    "zh": "无法读取桌面凭证",
+    "tr": "Bu sunucunun bilgileri cihazınızda okunamadı. Tekrar deneyin.",
+    "ja": "このデバイスでこのホストの情報を読み取れませんでした。再試行してください。",
+    "de": "Die Daten dieses Hosts konnten auf dem Gerät nicht gelesen werden. Erneut versuchen.",
+    "ru": "Не удалось прочитать данные этого сервера на вашем устройстве. Попробуйте ещё раз.",
+    "pt": "Não foi possível ler os dados deste host no seu dispositivo. Tente novamente.",
+    "en": "Could not read this host on your device. Try again.",
+    "fr": "Impossible de lire les informations de cet hôte sur votre appareil. Réessayez.",
+    "ko": "기기에서 이 호스트 정보를 읽지 못했습니다. 다시 시도하세요.",
+    "es": "No se pudo leer la información de este host en tu dispositivo. Inténtalo de nuevo.",
+    "zh-Hant": "裝置無法讀取此主機的資料。請重試。"
   }
 }

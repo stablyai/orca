@@ -15,6 +15,9 @@ import { claimHomeDocument } from './HomeShellPrewarm';
 import { BridgeHost, BridgeNativePage } from './BridgeHost';
 import { HostMeta } from '../storage/HostStore';
 import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute } from '../navigation/ShellRoute';
+import { lucideColorFilter } from '../settings/LucideColor';
+
+type ShellStage = 'checking' | 'downloading' | 'opening' | 'offline' | 'repair' | 'failed' | 'ready';
 
 export class ShellSurfaceBack {
   private handler: (() => boolean) | null = null;
@@ -43,25 +46,25 @@ export struct ShellSurface {
   @StorageProp('themeScheme') @Watch('onThemeChanged') scheme: string = 'dark';
   @StorageProp('shellKeyboardTop') @Watch('publishKeyboardInset') keyboardTop: number = -1;
   @StorageProp('themeBg') themeBg: string = '#111111';
+  @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeSheet') themeSheet: string = '#171717';
   @StorageProp('themeBorder') themeBorder: string = '#353a42';
   @StorageProp('themeText') themeText: string = '#e8e8e8';
   @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
   @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
   private document: ShellDocument | null = null;
   private documentMount: ShellDocumentMount = new ShellDocumentMount();
   private bridge: BridgeHost | null = null;
   private client: SpikeRpcClient | null = null;
   private hostId: string = '';
-  @State phase: string = '启动中…';
+  private phase: string = '';
+  @State stage: ShellStage = 'checking';
+  @State failureMessage: string = '';
+  @State desktopName: string = '';
   @State downloadPercent: number = -1;
   @State downloadCaption: string = '';
   @State wideDrawer: boolean = false;
-  @State logs: string[] = [];
-  @State hasDocument: boolean = false;
   @State painted: boolean = false;
-  @State showLog: boolean = false;
   private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
   private startupGeneration: number = 0;
   private routePathname: string = '';
@@ -88,16 +91,6 @@ export struct ShellSurface {
     this.foreground = false; this.clearViewing();
     if (this.nativeDevice) { this.nativeDevice.pause().catch(() => {}); }
   };
-
-  appendLog(line: string): void {
-    let stamped = `${new Date().toLocaleTimeString()}  ${line}`;
-    let next = this.logs.slice();
-    next.push(stamped);
-    if (next.length > 120) {
-      next.splice(0, next.length - 120);
-    }
-    this.logs = next;
-  }
 
   aboutToAppear(): void {
     this.hostId = this.request.hostId;
@@ -130,8 +123,7 @@ export struct ShellSurface {
     this.releaseBridge();
   }
   private handleBack(): boolean {
-    if (this.showLog) { this.showLog = false; return true; }
-    if ((!this.asDrawer || this.painted) && this.bridge?.handleBack()) { return true; }
+    if (this.painted && this.bridge?.handleBack()) { return true; }
     if (!this.asDrawer) { return false; }
     this.onOverlayClose(); return true;
   }
@@ -212,7 +204,7 @@ export struct ShellSurface {
     }
     let document = this.document; this.document = null;
     if (document) { this.documentMount.setDocument(null); document.dispose(); }
-    this.hasDocument = false; this.clearViewing();
+    this.clearViewing();
     if (this.nativeDevice) { this.nativeDevice.dispose().catch(() => {}); this.nativeDevice = null; }
     this.client = null;
   }
@@ -227,7 +219,8 @@ export struct ShellSurface {
     if (this.disposed) { return; }
     this.startup.cancel(); this.generation++; this.releaseBridge();
     this.painted = false;
-    this.publishPhase(`失败：${message}`);
+    this.failureMessage = message;
+    this.publishPhase(`失败：${message}`, 'failed');
     if (this.asDrawer) {
       let generation = this.generation;
       setTimeout((): void => {
@@ -239,14 +232,16 @@ export struct ShellSurface {
   private pagePainted(client: SpikeRpcClient, generation: number): void {
     if (this.disposed || generation !== this.generation || this.client !== client) { return; }
     if (this.startup.complete(this.startupGeneration)) {
-      this.painted = true; this.publishPhase('已连接'); this.updateViewing();
+      this.painted = true; this.publishPhase('已连接', 'ready'); this.updateViewing();
       if (this.opensSessionNatively) { this.openPendingNativeSession(); }
       else { this.pendingSession = null; }
     }
   }
 
-  private publishPhase(state: string): void {
-    if (this.disposed || this.phase === state) { return; }
+  private publishPhase(state: string, stage: ShellStage): void {
+    if (this.disposed) { return; }
+    this.stage = stage;
+    if (this.phase === state) { return; }
     this.phase = state;
     recordConnection(getContext(this), state.startsWith('失败') ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO, state, '', this.hostId, 'web-shell-flow').catch(() => {});
   }
@@ -264,15 +259,17 @@ export struct ShellSurface {
         if (client && meta && client !== this.client) { this.loadConnected(client, meta).catch(() => {}); }
       } else if (phase === 'reconnecting' || phase === 'connecting') {
         if (this.client || this.bridge) { this.suspendTransport(desktop.connection.getReconnectAttempt()); }
-        this.publishPhase(phase === 'connecting' ? '连接桌面…' : `连接中断 · ${detail}`);
+        this.publishPhase(phase === 'connecting' ? '连接桌面…' : `连接中断 · ${detail}`,
+          phase === 'connecting' ? 'checking' : 'offline');
       } else if (phase === 'auth-failed') {
         if (this.asDrawer) { this.failStartup('凭证已失效，请重新配对'); return; }
         this.startup.cancel(); this.generation++; this.releaseBridge();
-        this.publishPhase('凭证已失效，请重新配对'); this.painted = false;
+        this.publishPhase('凭证已失效，请重新配对', 'repair'); this.painted = false;
       } else if (phase === 'stopped') {
         if (this.asDrawer) { this.failStartup(detail); return; }
         if (this.client || this.bridge) { this.suspendTransport(0); }
-        this.publishPhase(detail === '已断开' ? detail : `失败：${detail}`);
+        if (detail === '已断开') { this.publishPhase(detail, 'offline'); }
+        else { this.failStartup(detail); }
       }
     });
     desktop.connection.connect(true);
@@ -293,13 +290,13 @@ export struct ShellSurface {
       this.client = client;
       this.nativeDevice.setDesktopClient(client);
       this.bridge.attachTransport(client, path);
-      this.publishPhase('已连接');
+      this.publishPhase('已连接', 'ready');
       return;
     }
     let generation = ++this.generation; this.releaseBridge(); this.client = client;
-    this.painted = false; this.startupGeneration = this.startup.begin();
+    this.painted = false; this.desktopName = meta.name; this.startupGeneration = this.startup.begin();
     try {
-      this.publishPhase('已连接 · 加载会话…');
+      this.publishPhase('已连接 · 加载会话…', 'checking');
       let fetcher = new WebBundleFetcher(client, getContext(this));
       let manifest = await fetcher.fetchManifest();
       if (this.disposed || generation !== this.generation || this.client !== client) { return; }
@@ -311,8 +308,9 @@ export struct ShellSurface {
         if (this.disposed || generation !== this.generation || this.client !== client) { return; }
         this.startup.progress(startupGeneration);
         if (total > 0) {
+          this.stage = 'downloading';
           this.downloadPercent = Math.floor(received * 100 / total);
-          if (this.asDrawer) { this.downloadCaption = `${(received / 1_000_000).toFixed(1)} / ${(total / 1_000_000).toFixed(1)} MB`; }
+          this.downloadCaption = `${(received / 1_000_000).toFixed(1)} / ${(total / 1_000_000).toFixed(1)} MB`;
         }
       });
       if (this.disposed || generation !== this.generation || this.client !== client) { return; }
@@ -343,7 +341,7 @@ export struct ShellSurface {
         let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
         let params: Record<string, string> = { 'hostId': meta.id };
         let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
-        navigation.catch(() => { this.appendLog('Could not open the native screen'); });
+        navigation.catch(() => {});
       });
       this.recordResume(this.routePathname, this.routeParams);
       bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
@@ -356,27 +354,80 @@ export struct ShellSurface {
         });
       }
       bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
-      bridge.setLogSink((line: string): void => this.appendLog(line));
       this.bridge = bridge;
       this.publishKeyboardInset();
       document.onReady = (): void => {};
       document.allowExternal = (): boolean => this.pageVisible && this.foreground && this.document === document;
       document.onLoaded = (): void => {
-        if (this.document === document && !this.painted) { this.publishPhase('页面已加载，正在初始化…'); }
+        if (this.document === document && !this.painted) { this.publishPhase('页面已加载，正在初始化…', 'opening'); }
       };
       document.onFailure = (message: string): void => { if (this.document === document) { this.failStartup(message); } };
-      this.publishPhase('正在打开会话…');
+      this.publishPhase('正在打开会话…', 'opening');
       document.bind(bridge, this.asDrawer);
       document.prepare(this.getUIContext());
       this.documentMount.setDocument(document);
       document.activate();
-      this.hasDocument = true;
       if (warm) {
         recordConnection(getContext(this), LOG_LEVEL_INFO, '已复用预热页面', '', meta.id, 'web-shell-flow').catch(() => {});
       }
     } catch (e) {
       if (!this.disposed && generation === this.generation) { this.failStartup('会话加载未完成，请重试'); }
     }
+  }
+
+  private t(label: string): string { return uiText(label, this.uiLocale); }
+
+  private waitingLabel(): string {
+    if (this.stage === 'downloading') { return this.t('正在下载最新版本的应用'); }
+    if (this.stage === 'opening') { return this.t('正在打开工作区'); }
+    if (this.stage === 'offline') { return this.t('连接到此主机以下载最新版本的应用'); }
+    if (this.stage === 'repair') { return this.t('凭证已失效，请重新配对'); }
+    if (this.stage === 'failed') { return this.t(this.failureMessage); }
+    return this.t('正在检查主机');
+  }
+
+  @Builder
+  private startupScreen() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column({ space: 8 }) {
+        if (this.stage === 'downloading') {
+          Progress({ value: this.downloadPercent, total: 100, type: ProgressType.Linear })
+            .width('100%').constraintSize({ maxWidth: 240 }).color(this.themeText).backgroundColor(this.themeBorder)
+            .accessibilityText(this.waitingLabel())
+        } else if (this.stage === 'checking' || this.stage === 'opening') {
+          LoadingProgress().width(20).height(20).color(this.themeSecondary)
+        }
+        Text(this.waitingLabel()).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary)
+          .textAlign(TextAlign.Center).margin({ top: 4 })
+        if (this.stage === 'downloading') {
+          Text(this.t('来自 {{desktop}} · {{size}}').replace('{{desktop}}', this.desktopName).replace('{{size}}', this.downloadCaption))
+            .fontFamily('Geist').fontSize(12).fontColor(this.themeMuted).textAlign(TextAlign.Center)
+        }
+        if (this.stage === 'failed' || this.stage === 'offline' || this.stage === 'repair') {
+          Button(this.t(this.stage === 'repair' ? '重新配对' : '重试'), { type: ButtonType.Normal })
+            .fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeText)
+            .backgroundColor(this.themeSurface).borderRadius(12).constraintSize({ minHeight: 40 })
+            .padding({ left: 16, right: 16 }).margin({ top: 8 })
+            .onClick((): void => {
+              if (this.stage === 'repair') {
+                router.pushUrl({ url: 'pages/PairScan', params: { 'repairHostId': this.hostId } }).catch(() => {});
+              }
+              else { this.retryStartup(); }
+            })
+          Button(this.t('网络诊断'), { type: ButtonType.Normal }).fontFamily('Geist').fontSize(14)
+            .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).constraintSize({ minHeight: 40 })
+            .onClick((): void => {
+              router.pushUrl({ url: 'pages/ConnectionLog', params: { 'hostId': this.hostId } }).catch(() => {});
+            })
+        }
+      }.width('100%').height('100%').justifyContent(FlexAlign.Center).padding({ left: 16, right: 16 })
+
+      Button({ type: ButtonType.Normal }) {
+        Image($r('app.media.lucide_chevron_left')).width(22).height(22).supportSvg2(true)
+          .colorFilter(lucideColorFilter(this.themeSecondary))
+      }.width(36).height(36).borderRadius(12).backgroundColor(Color.Transparent).margin({ left: 16, top: 8 })
+        .accessibilityText(this.t('返回')).onClick((): void => this.navigateBack())
+    }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 
   @Builder
@@ -404,96 +455,21 @@ export struct ShellSurface {
   }
 
   build() {
-    Column() {
-      // A painted page owns reconnect status and keeps its viewport during recovery.
-      if (!this.asDrawer && (!this.hasDocument || !this.painted || this.phase === '已断开' || this.phase.startsWith('失败') || this.showLog)) {
-      Row({ space: 10 }) {
-        Button(uiText('返回', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).backgroundColor(Color.Transparent)
-          .onClick(() => this.navigateBack())
-        Text(uiText('会话', this.uiLocale))
-          .fontFamily('Geist').fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeText)
-          .layoutWeight(1)
-        Text(uiText(this.phase, this.uiLocale))
-          .fontFamily('Geist').fontSize(11)
-          .fontColor(this.themeWarning)
-          .maxLines(1)
-        if (this.phase.includes('重新配对')) {
-          Button(uiText('重新配对', this.uiLocale)).height(28).fontFamily('Geist').fontSize(12).onClick(() => {
-            router.replaceUrl({ url: 'pages/PairScan' }).catch(() => {});
-          })
-        }
-        if (this.phase.startsWith('失败') || this.phase === '已断开') {
-          Button(uiText('重试', this.uiLocale)).height(28).fontFamily('Geist').fontSize(11).onClick(() => {
-            this.retryStartup();
-          })
-        }
-        Button(this.showLog ? '页面' : '日志')
-          .fontFamily('Geist').fontSize(11)
-          .height(28)
-          .onClick(() => {
-            this.showLog = !this.showLog;
-          })
+    Stack() {
+      NodeContainer(this.documentMount).width('100%').height('100%')
+        .backgroundColor(this.asDrawer ? Color.Transparent : this.themeBg)
+        .accessibilityLevel(this.painted ? 'auto' : 'no-hide-descendants')
+        .opacity(this.asDrawer && !this.painted ? 0 : 1)
+        .onAreaChange((_previous: Area, area: Area): void => {
+          this.viewportTop = Number(area.globalPosition.y); this.viewportHeight = Number(area.height);
+          if (this.asDrawer) { this.wideDrawer = Number(area.width) >= 700 && this.viewportHeight >= 600; }
+          this.publishKeyboardInset();
+        })
+      // Keep the viewport fixed through first paint and transport recovery.
+      if (!this.painted) {
+        if (this.asDrawer) { this.overlayLoadingDrawer() }
+        else { this.startupScreen() }
       }
-      .width('100%')
-      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-      }
-
-      // Web must stay mounted regardless of the log overlay — conditional unmount
-      // reloads the shell document and bounces the page back to the host root.
-      Stack() {
-        NodeContainer(this.documentMount).width('100%').height('100%')
-          .backgroundColor(this.asDrawer ? Color.Transparent : this.themeBg)
-          .opacity(this.asDrawer && !this.painted ? 0 : 1)
-          .onAreaChange((_previous: Area, area: Area): void => {
-            this.viewportTop = Number(area.globalPosition.y); this.viewportHeight = Number(area.height);
-            if (this.asDrawer) { this.wideDrawer = Number(area.width) >= 700 && this.viewportHeight >= 600; }
-            this.publishKeyboardInset();
-          })
-        if (this.asDrawer && !this.painted) { this.overlayLoadingDrawer() }
-        if (!this.asDrawer && !this.hasDocument) {
-          Column({ space: 12 }) {
-            Text(uiText(this.phase, this.uiLocale))
-              .fontFamily('Geist').fontSize(16)
-              .fontColor(this.phase.startsWith('失败') ? this.themeWarning : this.themeText)
-              .textAlign(TextAlign.Center)
-            if (this.downloadPercent >= 0) {
-              Progress({ value: this.downloadPercent, total: 100, type: ProgressType.Linear })
-                .width('100%').color(this.themeText).backgroundColor(this.themeBorder)
-              Text(`${this.downloadPercent}%`).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
-            } else if (!this.phase.startsWith('失败') && !this.phase.includes('重新配对')
-              && this.phase !== '主机不存在' && this.phase !== '已断开') {
-              LoadingProgress().width(24).height(24).color(this.themeSecondary)
-            }
-          }
-          .width('100%').constraintSize({ maxWidth: 420 })
-          .padding({ left: 24, right: 24 })
-        }
-
-        if (this.showLog) {
-          List({ space: 2 }) {
-            ForEach(this.logs, (line: string) => {
-              ListItem() {
-                Text(line)
-                  .fontFamily('Geist').fontSize(9)
-                  .fontColor(this.themeSecondary)
-                  .maxLines(3)
-                  .width('100%')
-              }
-            }, (line: string, index: number) => `${index}-${line}`)
-          }
-          .width('100%')
-          .height('100%')
-          .padding({ left: 12, right: 12, top: 8 })
-          .backgroundColor(this.themeBg)
-        }
-      }
-      .width('100%')
-      .layoutWeight(1)
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.asDrawer ? Color.Transparent : this.themeBg)
+    }.width('100%').height('100%').backgroundColor(this.asDrawer ? Color.Transparent : this.themeBg)
   }
 }

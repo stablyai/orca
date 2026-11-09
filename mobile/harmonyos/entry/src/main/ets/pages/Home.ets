@@ -738,7 +738,7 @@ struct Home {
   // ---------------------------------------------------------------- actions
 
   openHostDetail(hostId: string): void {
-    if (this.hostPhases[hostId] === 'auth-failed') { this.openPairScan(); return; }
+    if (this.runtimes.get(hostId)?.lease.connection.isCredentialMissing()) { this.openPairScan(); return; }
     this.openHostRoute(hostId, '');
   }
 
@@ -1027,7 +1027,7 @@ struct Home {
           .colorFilter(lucideColorFilter(this.pal().textMuted))
       }
       .padding({ left: 10, right: 14 })
-      .margin({ top: 9 })
+      .alignSelf(ItemAlign.Center)
     }
     .width('100%')
     .padding({ left: 16 })
@@ -1096,21 +1096,28 @@ struct Home {
               ForEach(this.hosts, (host: HostMeta, index: number) => {
                 Column() {
                   if (index > 0) {
-                    this.hairline(56)
+                    this.hairline(57)
                   }
                   this.desktopRow(host)
                 }
                 .width('100%')
               }, (host: HostMeta): string => `${host.id}:${host.name}:${host.endpoint}`)
+              this.hairline(16)
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 10 }) {
+                  Image($r('app.media.lucide_plus')).supportSvg2(true).width(18).height(18)
+                    .colorFilter(lucideColorFilter(this.pal().accentBlue))
+                  Text(uiText('配对一台桌面', this.uiLocale)).fontFamily('Geist').fontSize(16 * this.fontScale)
+                    .fontColor(this.pal().accentBlue)
+                }.width('100%').padding({ left: 16, right: 16 })
+              }.width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
+                .accessibilityText(uiText('配对一台桌面', this.uiLocale)).onClick(() => this.openPairScan())
             }
             .width('100%')
             .borderRadius(16)
             .backgroundColor(this.pal().bgPanel)
             .clip(true)
             .margin({ bottom: 8 })
-            Button(uiText('配对另一台桌面', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.pal().accentBlue)
-              .backgroundColor(Color.Transparent).constraintSize({ minHeight: 44 })
-              .onClick(() => this.openPairScan())
             Row({ space: 12 }) {
               Image($r('app.media.lucide_list')).supportSvg2(true).width(18).height(18)
                 .colorFilter(lucideColorFilter(this.pal().textSecondary))

@@ -7,6 +7,7 @@ import { SpikeRpcClient } from './SpikeRpcClient';
 type ProfileChange = 'name' | 'endpoint' | 'paired';
 
 type DesktopListener = (phase: SessionPhase, detail: string) => void;
+const CREDENTIAL_MISSING = '凭证缺失 — 请重新配对';
 
 export interface DesktopConnectionLease {
   connection: DesktopConnection;
@@ -104,6 +105,7 @@ export class DesktopConnection {
   }
 
   getPhase(): SessionPhase { return this.phase; }
+  isCredentialMissing(): boolean { return this.phase === 'auth-failed' && this.detail === CREDENTIAL_MISSING; }
   getClient(): SpikeRpcClient | null { return this.client; }
   getMeta(): HostMeta | null { return this.meta; }
   getActivePath(): string { return this.activePath; }
@@ -154,7 +156,7 @@ export class DesktopConnection {
     let token = await getDeviceToken(this.context, this.hostId);
     if (generation !== this.generation) { return; }
     if (!token) {
-      this.opening = false; this.publish('auth-failed', '凭证缺失 — 请重新配对'); return;
+      this.opening = false; this.publish('auth-failed', CREDENTIAL_MISSING); return;
     }
     let relay = await getRelayCredential(this.context, this.hostId);
     if (generation !== this.generation) { return; }

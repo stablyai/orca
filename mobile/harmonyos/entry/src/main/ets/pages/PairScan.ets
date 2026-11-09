@@ -41,6 +41,7 @@ struct PairScan {
   @StorageProp('themeScheme') themeScheme: string = 'dark';
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeSheet') themeSheet: string = '#171717';
   @StorageProp('themeBorder') themeBorder: string = '#2c2c2c';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
@@ -60,14 +61,17 @@ struct PairScan {
   @State decoded: boolean = false;
   @State showCamera: boolean = false;
   private confirmedOffer: PairingOffer | null = null;
+  private repairHostId: string = '';
   private deadline: number = -1;
   private timedOut: boolean = false;
+  private pairingStartedAt: number = 0;
   private attempt: PairingConnection | null = null;
   private disposed: boolean = false;
   private visible: boolean = false;
   private navigationEpoch: number = 0;
   private context?: common.UIAbilityContext;
   private pasteInput: TextInputController = new TextInputController();
+  private logScroll: Scroller = new Scroller();
   private priorKeyboardMode?: PageKeyboardAvoidMode;
   private foreground: boolean = true;
   private onForeground = (): void => { this.foreground = true; this.refreshCameraPermission(); };
@@ -79,6 +83,7 @@ struct PairScan {
     context.eventHub.on('orcaForeground', this.onForeground);
     context.eventHub.on('orcaBackground', this.onBackground);
     let params = (router.getParams() ?? {}) as Record<string, string>;
+    this.repairHostId = params['repairHostId'] ?? '';
     if (typeof params['pairingCode'] === 'string') {
       this.openedFromLink = true;
       this.acceptOffer(params['pairingCode'], true);
@@ -178,7 +183,8 @@ struct PairScan {
   }
 
   private appendLog(line: string): void {
-    this.logs = [...this.logs.slice(-199), `${new Date().toLocaleTimeString()}  ${line}`];
+    let elapsed = Math.max(0, Date.now() - this.pairingStartedAt) / 1000;
+    this.logs = [...this.logs.slice(-199), `+${elapsed.toFixed(elapsed < 10 ? 2 : 1)}s  ${line}`];
   }
 
   onBackPress(): boolean {
@@ -213,6 +219,7 @@ struct PairScan {
     this.navigationBusy = true;
     try {
       let steps = loadMobileOnboardingSteps(getContext(this));
+      if (steps.length === 0 && hostId === this.repairHostId) { router.back(); return; }
       let params: Record<string, string> = { 'hostId': hostId };
       await router.replaceUrl({ url: steps.length > 0 ? 'pages/MobileOnboarding' : 'pages/ShellScreen', params: params });
     } catch (e) {
@@ -226,6 +233,7 @@ struct PairScan {
       return;
     }
     let pairingStartedAt = Date.now();
+    this.pairingStartedAt = pairingStartedAt;
     let navigationEpoch = this.navigationEpoch;
     this.busy = true; this.confirming = false; this.error = '';
     this.updateCamera();
@@ -340,12 +348,19 @@ struct PairScan {
   }
 
   @Builder
-  private primary(label: string, activate: () => void, fullWidth: boolean = false, enabled: boolean = true) {
-    Button(this.t(label), { type: ButtonType.Normal })
-      .fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeBg)
+  private primary(label: string, activate: () => void, fullWidth: boolean = false, enabled: boolean = true, qr: boolean = false) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 4 }) {
+        if (qr) {
+          Image($r('app.media.lucide_qr_code')).width(16).height(16).supportSvg2(true)
+            .colorFilter(lucideColorFilter(this.themeBg))
+        }
+        Text(this.t(label)).fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeBg)
+      }.justifyContent(FlexAlign.Center)
+    }
       .backgroundColor(this.themeText).borderRadius(12).constraintSize({ minHeight: 40 })
       .width(fullWidth ? '100%' : 'auto').padding({ left: 24, right: 24 })
-      .enabled(enabled).opacity(enabled ? 1 : 0.48).onClick(activate)
+      .enabled(enabled).opacity(enabled ? 1 : 0.48).accessibilityText(this.t(label)).onClick(activate)
   }
 
   @Builder
@@ -372,14 +387,16 @@ struct PairScan {
 
   @Builder
   private pasteSheet() {
-    Column({ space: 12 }) {
+    Column({ space: 8 }) {
       Column() {
-        Blank().width(36).height(4).borderRadius(2).backgroundColor(this.themeBorder)
-      }.width('100%').height(12).justifyContent(FlexAlign.Center)
+        Blank().width(36).height(5).borderRadius(3).backgroundColor(this.themeMuted).opacity(0.5)
+      }.width('100%').height(20).justifyContent(FlexAlign.Center)
         .gesture(PanGesture({ direction: PanDirection.Down, distance: 12 }).onActionEnd((): void => this.closePaste()))
-      Text(this.t('粘贴配对码')).fontFamily('Geist').fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.themeText)
-      Text(this.t('复制电脑上二维码下方显示的配对码。')).fontFamily('Geist').fontSize(14)
-        .fontColor(this.themeSecondary).lineHeight(20)
+      Column({ space: 2 }) {
+        Text(this.t('粘贴配对码')).fontFamily('Geist').fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.themeText)
+        Text(this.t('复制电脑上二维码下方显示的配对码。')).fontFamily('Geist').fontSize(13)
+          .fontColor(this.themeMuted).lineHeight(18)
+      }.alignItems(HorizontalAlign.Start).padding({ left: 4, right: 4, bottom: 4 })
       TextInput({ text: this.pairingCode, controller: this.pasteInput, placeholder: this.t('orca://pair?code=... 或粘贴配对码') })
         .fontFamily('Geist').fontSize(14).fontColor(this.themeText).placeholderColor(this.themeMuted)
         .backgroundColor(this.themeBg).border({ width: 1, color: this.themeBorder, radius: 12 }).height(44)
@@ -396,11 +413,12 @@ struct PairScan {
         Button(this.t('保存'), { type: ButtonType.Normal })
           .fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeBg)
           .backgroundColor(this.themeText).borderRadius(12).constraintSize({ minHeight: 40 })
-          .padding({ left: 24, right: 24 }).enabled(this.pairingCode.trim().length > 0)
+          .padding({ left: 16, right: 16 }).enabled(this.pairingCode.trim().length > 0)
+          .opacity(this.pairingCode.trim().length > 0 ? 1 : 0.4)
           .onClick((): void => this.submitPaste())
       }.width('100%').justifyContent(FlexAlign.End)
     }.width('100%').constraintSize({ maxWidth: 520 }).alignItems(HorizontalAlign.Start)
-      .padding({ left: 20, right: 20, top: 8, bottom: 20 }).backgroundColor(this.themeSurface)
+      .padding({ left: 12, right: 12, top: 8, bottom: 20 }).backgroundColor(this.themeSheet)
       .borderRadius({ topLeft: 24, topRight: 24 })
   }
 
@@ -409,14 +427,17 @@ struct PairScan {
     if (this.logs.length > 0) {
       Column({ space: 4 }) {
         Text(this.t('配对日志')).fontFamily('monospace').fontSize(11).fontColor(this.themeMuted).letterSpacing(1)
-        Scroll() {
+        Scroll(this.logScroll) {
           Column({ space: 6 }) {
             ForEach(this.logs, (line: string): void => {
               Text(line).fontFamily('monospace').fontSize(11).fontColor(this.themeSecondary).maxLines(3)
             }, (line: string, index: number): string => `${index}-${line}`)
           }.width('100%').alignItems(HorizontalAlign.Start)
-        }.scrollBar(BarState.Off).constraintSize({ maxHeight: 160 }).width('100%')
-      }.alignItems(HorizontalAlign.Start).width('100%').constraintSize({ maxWidth: 520 }).margin({ top: 8, bottom: 12 })
+            .onSizeChange((): void => this.logScroll.scrollEdge(Edge.Bottom))
+        }.scrollBar(BarState.Off).constraintSize({ maxHeight: 200 }).width('100%')
+      }.alignItems(HorizontalAlign.Start).width('100%').constraintSize({ maxWidth: 520 })
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 }).backgroundColor(this.themeSurface)
+        .border({ width: 0.5, radius: 16, color: this.themeBorder }).margin({ top: 8, bottom: 12 })
     }
   }
 
@@ -475,7 +496,8 @@ struct PairScan {
           this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED
             ? '扫描电脑上 Orca 显示的二维码，或改为粘贴配对码。' : '在设置中启用相机访问，或改为粘贴配对码。')
         this.primary(this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED ? '继续' : '打开设置',
-          (): void => { this.requestCamera().catch(() => {}); }, false, !this.permissionBusy)
+          (): void => { this.requestCamera().catch(() => {}); }, false, !this.permissionBusy,
+          this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED)
         this.secondary('改为粘贴配对码', (): void => this.openPaste(), true)
       }
     }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).padding({ bottom: this.openedFromLink ? 48 : 0 })
@@ -514,7 +536,7 @@ struct PairScan {
     Stack({ alignContent: Alignment.Bottom }) {
       this.pairingContent()
       if (this.showPaste) {
-        Blank().width('100%').height('100%').backgroundColor('rgba(0, 0, 0, 0.35)')
+        Blank().width('100%').height('100%').backgroundColor('rgba(0, 0, 0, 0.55)')
           .accessibilityLevel('no').onClick((): void => this.closePaste())
         this.pasteSheet()
       }
