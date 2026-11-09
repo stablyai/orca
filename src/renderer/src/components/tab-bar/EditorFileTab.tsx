@@ -16,7 +16,7 @@ import { useWorktreeById } from '@/store/workspaces/selection/use-selected-workt
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { useAppStore } from '@/store'
-import { STATUS_COLORS } from '../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'

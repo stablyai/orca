@@ -32,15 +32,15 @@ type GitHubSubmitResolutionInput = Pick<
 
 import { useCallback } from 'react'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
-import { getLinkedWorkItemProvider } from '@/lib/new-workspace'
-import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getSmartGitHubSubmitResolution,
   getSmartGitHubSubmitIntent,
   lookupSmartGitHubSubmitItem
-} from '@/lib/smart-github-submit'
+} from '@/lib/work-items/github/smart-github-submit'
 import { getForkPushWarning } from '../fork-push-warning'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
@@ -94,7 +94,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
           !isProjectGroupTarget &&
           linkedWorkItemIdentity?.type === 'pr' &&
           startPointIdentity?.type === 'pr' &&
-          getLinkedWorkItemProvider(linkedWorkItem) === 'github' &&
+          getWorkspaceSourceProvider(linkedWorkItem) === 'github' &&
           selectedRepo &&
           selectedRepoIsGit &&
           startPointSelection?.repoId === selectedRepo.id &&

@@ -48,9 +48,9 @@ import {
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
+} from '@/lib/work-items/linear/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
