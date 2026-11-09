@@ -56,18 +56,18 @@ afterEach(() => {
 })
 describe('shared settings screen state', () => {
   it('shows a desktop on Auto as Auto and switches it to plain Toggle', async () => {
-    const operations = {
-      load: vi.fn().mockResolvedValue({
+    const operations: VoiceSettingsOperations = {
+      load: vi.fn<VoiceSettingsOperations['load']>().mockResolvedValue({
         enabled: true,
         dictationMode: 'toggle',
         dictationHoldToRecord: true,
         selectedModelId: '',
         models: []
       }),
-      configure: vi.fn().mockImplementation(() => new Promise(() => {})),
+      configure: vi.fn<VoiceSettingsOperations['configure']>(() => new Promise(() => {})),
       download: vi.fn(),
       delete: vi.fn()
-    } as VoiceSettingsOperations
+    }
     await act(async () => {
       renderer = create(
         createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
