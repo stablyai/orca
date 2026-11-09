@@ -125,7 +125,7 @@ export function insertPeerMailMessage(
       ) {
         throw new OrchestrationError(
           'request_mismatch',
-          `Conversation ${params.conversationId} belongs to another paired Orca. Nothing was delivered.`,
+          `Conversation ${params.conversationId} belongs to another server. Nothing was delivered.`,
           { effectsApplied: false }
         )
       }

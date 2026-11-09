@@ -54,5 +54,5 @@ side. Mail from another server names its sender as `<sender> on <server name>`.
 to you, so an agent never mails with it. Your mailbox stays on your own Orca:
 `check` takes no server flag. Read-only commands such as `inbox` or
 `worker-list` with `--server` show that server's records. A server whose Orca
-is too old answers `peer_mail_unsupported` and nothing is sent. Pair servers
+is too old answers `server_mail_unsupported` and nothing is sent. Pair servers
 with `orca pair` or in Settings.

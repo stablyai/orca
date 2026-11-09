@@ -9,6 +9,6 @@ export const ORCHESTRATION_FEDERATION_ERROR_CODES = [
   'invalid_runtime_response',
   'capability_unsupported',
   'relay_quota_exceeded',
-  'peer_mail_unsupported',
-  'peer_mail_requires_server_pairing'
+  'server_mail_unsupported',
+  'mail_requires_server_pairing'
 ] as const

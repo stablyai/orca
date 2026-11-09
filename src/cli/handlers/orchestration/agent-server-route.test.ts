@@ -93,7 +93,7 @@ describe('send --on from an older Orca', () => {
     } as unknown as Parameters<typeof requirePeerMailCarrier>[0]
 
     await expect(requirePeerMailCarrier(context)).rejects.toMatchObject({
-      code: 'peer_mail_unsupported'
+      code: 'server_mail_unsupported'
     })
     expect(call).toHaveBeenCalledTimes(1)
     expect(call).toHaveBeenCalledWith('status.get')

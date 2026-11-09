@@ -230,12 +230,12 @@ describe('agent mail between paired Orca servers', () => {
 
     expect(sent).toMatchObject({
       ok: false,
-      error: { code: 'peer_mail_unsupported', data: { effectsApplied: false } }
+      error: { code: 'server_mail_unsupported', data: { effectsApplied: false } }
     })
     expect(b.db.getInbox(10)).toEqual([])
   })
 
-  it('takes peer mail only from a paired computer, not a phone', async () => {
+  it('takes mail between servers only from a paired computer, not a phone', async () => {
     bClientKind = 'mobile'
 
     const sent = await mutation(a, 'orchestration.send', {
@@ -247,7 +247,7 @@ describe('agent mail between paired Orca servers', () => {
 
     expect(sent).toMatchObject({
       ok: false,
-      error: { code: 'peer_mail_requires_server_pairing' }
+      error: { code: 'mail_requires_server_pairing' }
     })
     expect(b.db.getInbox(10)).toEqual([])
   })
