@@ -10,21 +10,41 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type * as UsageLimitChain from '../recovery/structured-agent-session-usage-limit-chain'
 import {
-  readUsageLimitContinueChain,
+  hostUsageLimitCut,
   usageLimitContinueMessageId,
   usageLimitContinueTag
 } from '../recovery/structured-agent-session-usage-limit-chain'
+import {
+  chainReads,
+  countedItems,
+  countedSubmissions
+} from '../recovery/structured-agent-session-usage-limit-chain-reads-test-support'
 import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'
 
+let reads = chainReads()
 vi.mock('../recovery/structured-agent-session-usage-limit-chain', async (importOriginal) => {
   const actual = await importOriginal<typeof UsageLimitChain>()
-  return { ...actual, readUsageLimitContinueChain: vi.fn(actual.readUsageLimitContinueChain) }
+  return {
+    ...actual,
+    hostUsageLimitCut: vi.fn((...[snapshot, cut]: Parameters<typeof actual.hostUsageLimitCut>) =>
+      actual.hostUsageLimitCut(
+        {
+          items: countedItems(snapshot.items, reads),
+          submissions: countedSubmissions(snapshot.submissions, reads)
+        },
+        cut
+      )
+    )
+  }
 })
 
 const fixture = createFixture()
-const derivations = () => vi.mocked(readUsageLimitContinueChain).mock.calls.length
+let measured = 0
+const derivations = () =>
+  vi.mocked(hostUsageLimitCut).mock.calls.filter(([, cut]) => cut !== null).length
 beforeEach(() => {
-  vi.mocked(readUsageLimitContinueChain).mockClear()
+  vi.mocked(hostUsageLimitCut).mockClear()
+  reads = chainReads()
 })
 
 async function limitedTurn(
@@ -69,40 +89,6 @@ async function limitedTurn(
   return scope
 }
 
-it.each([100, 1_000])(
-  'derives a cut chain once over %i rows, however many rebuilds follow, and again for a new cut or epoch',
-  async (rows) => {
-    const journal = await fixture.open()
-    const projections = new StructuredAgentSessionJournalProjections()
-    const scope = await limitedTurn(journal, 'first', rows)
-    expect(projections.read(journal, null).usageLimitCut?.chain).toBe(0)
-    // Rows that change nothing the chain reads rebuild the status without walking the journal again.
-    for (let index = 0; index < 20; index += 1) {
-      await journal.appendItem(
-        { provider: 'orca', clientMessageId: `late-${index}` },
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'late' }] },
-        scope
-      )
-      expect(projections.read(journal, null).usageLimitCut?.chain).toBe(0)
-    }
-    expect(derivations()).toBe(1)
-
-    const second = await limitedTurn(journal, 'second', 0)
-    expect(projections.read(journal, null).usageLimitCut?.turnItemId).toBe(
-      second.turnScope.turnItemId
-    )
-    expect(derivations()).toBe(2)
-
-    // The same cut identity in a new epoch is a different conversation and is read again.
-    await journal.rollEpoch('unreconcilable_prefix', 1)
-    await limitedTurn(journal, 'second', 0)
-    expect(projections.read(journal, null).usageLimitCut?.turnItemId).toBe(
-      second.turnScope.turnItemId
-    )
-    expect(derivations()).toBe(3)
-  }
-)
-
 async function hostContinue(
   journal: AgentSessionJournal,
   cut: { turnItemId: string; resetsAt: number },
@@ -128,6 +114,143 @@ async function hostContinue(
   })
   return clientMessageId
 }
+
+async function personTurn(journal: AgentSessionJournal, name: string) {
+  const clientMessageId = `person-${name}`
+  await journal.appendSubmission({
+    clientMessageId,
+    payloadFingerprint: clientMessageId,
+    body: { kind: 'message', role: 'user', blocks: [] },
+    origin: 'client',
+    fence: 1
+  })
+  await journal.resolveDispatch({
+    clientMessageId,
+    state: 'accepted',
+    providerIdentity: null,
+    fence: 1
+  })
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: `turn-${name}` },
+    {
+      kind: 'turn',
+      turnId: name,
+      state: 'completed',
+      outcome: 'success',
+      completedAt: 1,
+      userItemId: agentJournalSubmissionKey(clientMessageId)
+    },
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+}
+
+/** A person's limited turn of `rows` rows and one automatic continue that hit the limit again after `rows` more. */
+async function chainOfOne(journal: AgentSessionJournal, rows: number) {
+  const first = await limitedTurn(journal, 'first', rows)
+  const sent = await hostContinue(
+    journal,
+    { turnItemId: first.turnScope.turnItemId, resetsAt: 60_000 },
+    2_000
+  )
+  await journal.resolveDispatch({
+    clientMessageId: sent,
+    state: 'accepted',
+    providerIdentity: null,
+    fence: 1
+  })
+  return limitedTurn(journal, 'second', rows, {
+    userItemId: agentJournalSubmissionKey(sent),
+    resetsAt: 120_000
+  })
+}
+
+it('derives the chain only when the status projection rebuilds', async () => {
+  const journal = await fixture.open()
+  const projections = new StructuredAgentSessionJournalProjections()
+  const cut = await chainOfOne(journal, 0)
+  expect(projections.read(journal, null).usageLimitCut?.chain).toBe(1)
+  projections.read(journal, null)
+  expect(derivations()).toBe(1)
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'late' },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'late' }] },
+    cut
+  )
+  expect(projections.read(journal, null).usageLimitCut?.chain).toBe(1)
+  expect(derivations()).toBe(2)
+})
+
+// Bounds come from what the walk must read: the chain's own turns once each way, never the history before it.
+it('reads the chain tail linearly, whatever history precedes it', async () => {
+  const measure = async (history: number, rows: number) => {
+    const journal = await fixture.open({
+      identity: { ...fixture.IDENTITY, sessionId: `measure-${(measured += 1)}` }
+    })
+    for (let index = 0; index < history; index += 1) {
+      await personTurn(journal, `old-${index}`)
+    }
+    await chainOfOne(journal, rows)
+    reads = chainReads()
+    const chain = new StructuredAgentSessionJournalProjections().read(journal, null).usageLimitCut
+      ?.chain
+    return { chain, total: reads.total }
+  }
+  const short = await measure(50, 0)
+  const long = await measure(500, 0)
+  expect([short.chain, long.chain]).toEqual([1, 1])
+  expect(long.total).toBe(short.total)
+  const rows = await measure(0, 200)
+  const tenfold = await measure(0, 2_000)
+  expect([rows.chain, tenfold.chain]).toEqual([1, 1])
+  // Each of the two turns' rows is read a few fields at a time on one pass back and one pass forward.
+  expect(tenfold.total).toBeLessThanOrEqual(10 * 2 * 2_000 + short.total)
+  expect(tenfold.total - short.total).toBeLessThanOrEqual(10 * (rows.total - short.total) + 50)
+})
+
+it('scans the sends once when the turn opener matches none of them', async () => {
+  const measure = async (sends: number) => {
+    const journal = await fixture.open({
+      identity: { ...fixture.IDENTITY, sessionId: `measure-${(measured += 1)}` }
+    })
+    for (let index = 0; index < sends; index += 1) {
+      await personTurn(journal, `old-${index}`)
+    }
+    await limitedTurn(journal, 'unmatched', 0, { userItemId: 'provider-echo-never-attributed' })
+    reads = chainReads()
+    const chain = new StructuredAgentSessionJournalProjections().read(journal, null).usageLimitCut
+      ?.chain
+    return { chain, total: reads.total }
+  }
+  const few = await measure(50)
+  const many = await measure(500)
+  expect([few.chain, many.chain]).toEqual([0, 0])
+  // Two fields of each send are compared to the opener, newest first, and nothing is read twice.
+  expect(many.total).toBeLessThanOrEqual(2 * 500 + 20)
+  expect(many.total - few.total).toBeLessThanOrEqual(2 * 450)
+})
+
+it('stops counting a link when its earlier usage limit is revised to another reset', async () => {
+  const journal = await fixture.open()
+  const projections = new StructuredAgentSessionJournalProjections()
+  await chainOfOne(journal, 0)
+  expect(projections.read(journal, null).usageLimitCut?.chain).toBe(1)
+  // The provider rewrites the first turn's failure under the same row with a later reset.
+  const first = projections.read(journal, null).usageLimitCut
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'first-limit' },
+    {
+      kind: 'status',
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: 90_000 } }),
+        { surface: 'row' }
+      )
+    },
+    { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn-first' } }
+  )
+  const revised = projections.read(journal, null).usageLimitCut
+  expect(revised?.turnItemId).toBe(first?.turnItemId)
+  expect(revised?.chain).toBe(0)
+})
 
 it.each([
   ['the newest link', 0],

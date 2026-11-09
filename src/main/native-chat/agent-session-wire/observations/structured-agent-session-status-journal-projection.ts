@@ -1,12 +1,7 @@
+import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
-  latestNativeChatUsageLimitCut,
-  type NativeChatUsageLimitCut
-} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
-import {
-  readUsageLimitContinueChain,
-  usageLimitContinueIdentity,
-  type HostUsageLimitCut,
-  type UsageLimitContinueChainRead
+  hostUsageLimitCut,
+  type HostUsageLimitCut
 } from '../recovery/structured-agent-session-usage-limit-chain'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -42,46 +37,6 @@ export type StructuredAgentSessionJournalProjection = {
   firstInputSubmissionKey: string | null
   submissionCount: number
   stopping: boolean
-}
-
-/** Everything a chain read could have seen change: the turn rows it looked up and the join evidence
- *  of every submission from the oldest it examined. Rows before the cut are otherwise fixed. */
-function usageLimitChainKey(
-  journal: AgentSessionJournal,
-  snapshot: ReturnType<AgentSessionJournal['statusRead']>,
-  cut: NativeChatUsageLimitCut,
-  read: Omit<UsageLimitContinueChainRead, 'chain'>
-): string {
-  return JSON.stringify([
-    usageLimitContinueIdentity(cut),
-    read.turnsRead.map((itemId) => journal.item(itemId)?.revision),
-    snapshot.submissions.length,
-    snapshot.submissions
-      .slice(read.submissionsFrom)
-      .map((entry) => [entry.clientMessageId, entry.dispatchState, entry.providerItemId])
-  ])
-}
-
-/** A rebuild whose chain inputs are unchanged reuses the count instead of walking the journal again. */
-function usageLimitCutWithChain(
-  journal: AgentSessionJournal,
-  snapshot: ReturnType<AgentSessionJournal['statusRead']>,
-  cut: NativeChatUsageLimitCut | null,
-  previous: HostUsageLimitCut | null | undefined
-): HostUsageLimitCut | null {
-  if (!cut) {
-    return null
-  }
-  const reused = previous?.chainRead
-  if (reused && usageLimitChainKey(journal, snapshot, cut, reused) === reused.key) {
-    return { ...cut, chain: previous.chain, chainRead: reused }
-  }
-  const read = readUsageLimitContinueChain(snapshot.items, snapshot.submissions, cut)
-  return {
-    ...cut,
-    chain: read.chain,
-    chainRead: { ...read, key: usageLimitChainKey(journal, snapshot, cut, read) }
-  }
 }
 
 export class StructuredAgentSessionJournalProjections {
@@ -168,11 +123,9 @@ export class StructuredAgentSessionJournalProjections {
       projection = {
         ...cursor,
         contextId,
-        usageLimitCut: usageLimitCutWithChain(
-          journal,
+        usageLimitCut: hostUsageLimitCut(
           snapshot,
-          latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions, journal.itemBody),
-          sameContext?.usageLimitCut
+          latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions, journal.itemBody)
         ),
         firstInputSubmissionKey,
         submissionCount: journal.inputOrder.inputCount(),

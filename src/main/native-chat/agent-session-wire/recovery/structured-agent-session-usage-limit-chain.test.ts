@@ -11,6 +11,11 @@ import {
   usageLimitContinueMessageId,
   usageLimitContinueTag
 } from './structured-agent-session-usage-limit-chain'
+import {
+  chainReads,
+  countedItems,
+  countedSubmissions
+} from './structured-agent-session-usage-limit-chain-reads-test-support'
 
 type Submission = Pick<AgentJournalSubmission, 'clientMessageId' | 'providerItemId' | 'origin'>
 
@@ -64,67 +69,16 @@ function conversation(history: number, links: number) {
   return { items, submissions, cut }
 }
 
-/** Rows the derivation looks at: each read of a row's fields marks that row visited. */
-function countedItems(
-  items: AgentJournalRenderItem[],
-  reads: Set<string>
-): AgentJournalRenderItem[] {
-  return items.map((item, index) => {
-    const mark = () => reads.add(`item-${index}`)
-    return {
-      revision: item.revision,
-      sequence: item.sequence,
-      observedAt: item.observedAt,
-      get itemId() {
-        mark()
-        return item.itemId
-      },
-      get body() {
-        mark()
-        return item.body
-      },
-      get turnScope() {
-        mark()
-        return item.turnScope
-      },
-      get agentId() {
-        mark()
-        return item.agentId
-      }
-    }
-  })
-}
-
-function countedSubmissions(submissions: Submission[], reads: Set<string>): Submission[] {
-  return submissions.map((submission, index) => {
-    const mark = () => reads.add(`submission-${index}`)
-    return {
-      get clientMessageId() {
-        mark()
-        return submission.clientMessageId
-      },
-      get providerItemId() {
-        mark()
-        return submission.providerItemId
-      },
-      get origin() {
-        mark()
-        return submission.origin
-      }
-    }
-  })
-}
-
 it('reads only the chain, never the older conversation, at N and 10N rows of history', () => {
   const measure = (history: number) => {
     const { items, submissions, cut } = conversation(history, 3)
-    const reads = new Set<string>()
+    const reads = chainReads()
     const chain = usageLimitContinueChain(
       countedItems(items, reads),
       countedSubmissions(submissions, reads),
       cut
     )
-    return { chain, reads: reads.size }
+    return { chain, reads: reads.visited.size }
   }
   const small = measure(1_000)
   const large = measure(10_000)
