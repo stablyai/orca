@@ -44,16 +44,13 @@ export class LoadedCohortMigrationOperations {
     }
     if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
       this.runtime.loadNeedsSave = true
-      // Why: existing users keep Claude Code's look until they accept the offer at their next Claude launch.
-      // Not keyed on a saved claudeCodeThemeSync: offline writers copy the default (on) into old profiles.
-      const offer = existingProfile
+      // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
       state = {
         ...state,
         settings: {
           ...state.settings,
-          ...(offer
-            ? { claudeCodeThemeSync: false, claudeCodeThemeSyncOffer: 'pending' as const }
-            : { claudeCodeThemeSyncOffer: 'settled' as const })
+          claudeCodeThemeSync: false,
+          claudeCodeThemeSyncOffer: 'pending'
         }
       }
     }

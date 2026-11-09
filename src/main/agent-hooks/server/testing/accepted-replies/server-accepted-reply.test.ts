@@ -1,5 +1,6 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
@@ -58,7 +59,7 @@ describe('accepted lead reply', () => {
     expect(replyForCurrentRow()).toBe(REPLY)
     server.flushStatusPersistSync()
     for (const published of [
-      readFileSync(join(userDataPath, 'agent-hooks', 'last-status.json'), 'utf8'),
+      readSavedStatus(join(userDataPath, 'agent-hooks', 'last-status.json')),
       JSON.stringify(server.getStatusSnapshot())
     ]) {
       expect(published).not.toContain('MIDDLE-MARKER')

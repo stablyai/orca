@@ -83,9 +83,12 @@ export class StoreRuntimeState {
   dirtyProfileStateDomains: Set<string> | null = new Set()
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
-  githubCacheGeneration = 0
+  githubCachePersistedAt = Date.now()
+  githubCachePersistTimer: ReturnType<typeof setTimeout> | null = null
+  githubCacheRetryDelayMs = 0
+  /** Fingerprint of a sidecar the loaded cache imported or supersedes; retired once rows commit. */
+  githubCacheLegacyFileHash: string | null = null
   readonly githubCacheWriteListeners = new Set<() => void>()
-  pendingGithubCacheWrite: Promise<void> | null = null
   readonly staleGithubCacheTempCleanup: Promise<void>
   readonly staleProfileStateTempCleanup: Promise<void>
   readonly gitUsernameCache = new Map<string, string>()

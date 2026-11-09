@@ -1,5 +1,6 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
@@ -72,7 +73,7 @@ describe('AgentHookServer removed-worktree retirement', () => {
       server.clearStatusEntriesForConnection('idle@box')
       const persisted = () => {
         server.flushStatusPersistSync()
-        const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+        const file = JSON.parse(readSavedStatus(lastStatusPath()))
         return {
           entries: Object.keys(file.entries).sort(),
           commitments: Object.keys(file.authorityCommitments ?? {})
@@ -156,7 +157,7 @@ describe('AgentHookServer removed-worktree retirement', () => {
         reportLocally('done')
 
         server.flushStatusPersistSync()
-        const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+        const file = JSON.parse(readSavedStatus(lastStatusPath()))
         if (localWorktree === REMOVED) {
           expect(file.authorityCommitments?.[pane]).toMatchObject({ worktreeId: KEPT })
           expect(file.entries[pane]).toBeUndefined()

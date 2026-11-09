@@ -14,7 +14,7 @@ import type {
 } from '../../../../shared/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
-import { browserManager } from '../../../browser/browser-manager'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'

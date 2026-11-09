@@ -110,7 +110,8 @@ export function resolvePaneBuild(
           repo: request.repo,
           entry: rowEntry,
           tab: request.tab,
-          agentType: request.agentType
+          agentType: request.agentType,
+          migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
         }
 
   cache?.panes.set(request.cacheKey, {
