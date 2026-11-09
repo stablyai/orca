@@ -24531,9 +24531,11 @@
     "cancelledToast": "Sign-in cancelled. The agent did not start.",
     "copyPrompt": "Copy prompt",
     "signedOutToast": "Signed out of {{agent}} on {{host}}",
-    "signedOutDetail": "The next {{agent}} you start there asks to sign in.",
     "signOutFailed": "Could not sign out on {{host}}.",
     "menuLabel": "Agents on {{host}}",
-    "signOutOf": "Sign out of {{agent}}"
+    "signOutOf": "Sign out of {{agent}}…",
+    "signOutTitle": "Sign out of {{agent}} on {{host}}?",
+    "signOutBody": "Runs {{agent}}’s own sign-out on {{host}}. The next {{agent}} you start there asks you to sign in. Agents already running there aren’t stopped, and saved accounts stay listed.",
+    "signOut": "Sign out"
   }
 }

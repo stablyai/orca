@@ -66,6 +66,7 @@ export type RuntimeServiceCommandSurface = {
   finishClaudeSignIn: RuntimeAccountController['finishClaudeSignIn']
   cancelClaudeSignIn: RuntimeAccountController['cancelClaudeSignIn']
   runHostAccountSignIn: RuntimeAccountController['runHostSignIn']
+  getHostCodexLaunchHome: RuntimeAccountController['hostCodexLaunchHome']
   removeCodexAccount: RuntimeAccountController['removeCodex']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
   addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
@@ -184,6 +185,7 @@ export function installRuntimeServiceCommandSurface(
     finishClaudeSignIn: accounts.finishClaudeSignIn.bind(accounts),
     cancelClaudeSignIn: accounts.cancelClaudeSignIn.bind(accounts),
     runHostAccountSignIn: accounts.runHostSignIn.bind(accounts),
+    getHostCodexLaunchHome: accounts.hostCodexLaunchHome.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
     addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),

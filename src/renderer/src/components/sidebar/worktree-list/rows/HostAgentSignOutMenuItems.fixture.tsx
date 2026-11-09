@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { rememberHostAgentSignInReport } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
-import { HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
+import { HostAgentSignOutDialog, HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
 
 export const signedIn = defineFixture({
   width: 320,
@@ -36,9 +36,28 @@ export const signedIn = defineFixture({
             <RefreshCw className="size-3.5" />
             Check connection
           </DropdownMenuItem>
-          <HostAgentSignOutMenuItems environmentId="env-m4air" hostLabel="m4air" open={false} />
+          <HostAgentSignOutMenuItems
+            environmentId="env-m4air"
+            hostLabel="m4air"
+            open={false}
+            onSignOut={() => {}}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  )
+})
+
+export const confirm = defineFixture({
+  width: 520,
+  render: () => (
+    <div className="h-[260px]">
+      <HostAgentSignOutDialog
+        environmentId="env-m4air"
+        hostLabel="m4air"
+        agent="claude"
+        onClose={() => {}}
+      />
     </div>
   )
 })

@@ -43,7 +43,8 @@ import { HostRenameDialog } from '../../HostRenameDialog'
 import { HostRemoveDialog } from '../../HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-rename-remove'
-import { HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
+import { HostAgentSignOutDialog, HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
+import type { HostAgentSignInAgent } from '../../../../../../shared/host-agent-sign-in-status'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -79,6 +80,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
+  const [signOutAgent, setSignOutAgent] = useState<HostAgentSignInAgent | null>(null)
   const mountedRef = useMountedRef()
   const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
@@ -303,6 +305,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             environmentId={runtimeEnvironmentId}
             hostLabel={row.label}
             open={open}
+            onSignOut={setSignOutAgent}
           />
         )}
         <DropdownMenuSeparator />
@@ -329,6 +332,14 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         hostId={row.hostId}
         derivedLabel={row.label}
       />
+      {runtimeEnvironmentId && (
+        <HostAgentSignOutDialog
+          environmentId={runtimeEnvironmentId}
+          hostLabel={row.label}
+          agent={signOutAgent}
+          onClose={() => setSignOutAgent(null)}
+        />
+      )}
       {runtimeEnvironmentId && (
         <RuntimeRepairDialog
           open={repairOpen}
