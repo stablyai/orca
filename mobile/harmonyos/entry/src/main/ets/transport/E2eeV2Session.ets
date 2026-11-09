@@ -1,3 +1,4 @@
+import { url } from '@kit.ArkTS';
 import { PairingRelay, readPairingRelay, isDirectEndpoint } from './RelayProtocol';
 import { uint32Bytes, uint64BeBytes, utf8Encode, utf8Decode, concatBytes, equalBytes, base64Encode, base64DecodeCanonical, base64UrlDecode } from './crypto/Bytes';
 import { sha256, hkdfSha256 } from './crypto/Sha256';
@@ -527,23 +528,44 @@ export interface PairingOffer {
   relay?: PairingRelay;
 }
 
+const MAX_PAIRING_CODE_CHARS = 128 * 1024;
+const PAIRING_BASE64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+function decodePairingCode(code: string): string {
+  if (code.length > MAX_PAIRING_CODE_CHARS || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(code)) {
+    throw new Error('Invalid pairing code');
+  }
+  let normalized = code.replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  let remainder = normalized.length % 4;
+  if (remainder === 1) { throw new Error('Invalid pairing code'); }
+  if (remainder > 1) {
+    // Saved pairing codes can carry unused bits in their last sextet.
+    let end = normalized.length - 1;
+    let sextet = PAIRING_BASE64URL_ALPHABET.indexOf(normalized.charAt(end));
+    let mask = remainder === 2 ? 0x30 : 0x3c;
+    normalized = normalized.substring(0, end) + PAIRING_BASE64URL_ALPHABET.charAt(sextet & mask);
+  }
+  return utf8Decode(base64UrlDecode(normalized));
+}
+
 export function parsePairingOffer(raw: string, requireLink: boolean = false): PairingOffer {
-  if (raw.length > 132096) { throw new Error('Pairing input is too long'); }
+  if (raw.length > MAX_PAIRING_CODE_CHARS + 1024) { throw new Error('Pairing input is too long'); }
   let text = raw.trim();
   let link = /^orca:\/\/pair\/?(?=[?#]|$)/i.exec(text);
   if (link) {
     let suffix = text.substring(link[0].length);
     let hash = suffix.indexOf('#');
-    let query = (hash < 0 ? suffix : suffix.substring(0, hash)).substring(1);
-    let field = query.split('&').find((entry: string): boolean => entry.startsWith('code='));
-    let code = field ? decodeURIComponent(field.substring(5)) : '';
+    let query = suffix.startsWith('?') ? suffix.substring(1, hash < 0 ? suffix.length : hash) : '';
+    let codes = new url.URLParams(query.replace(/\+/g, '%2B')).getAll('code');
+    if (codes.length > 1) { throw new Error('Duplicate pairing code parameter'); }
+    let code = codes[0] ?? '';
     if (!code && hash >= 0) { code = suffix.substring(hash + 1); }
     if (!code) { throw new Error('Missing pairing code'); }
-    text = utf8Decode(base64UrlDecode(code));
+    text = decodePairingCode(code);
   } else if (requireLink || /^orca:\/\//i.test(text)) {
     throw new Error('Invalid pairing link');
   } else if (!text.startsWith('{')) {
-    text = utf8Decode(base64UrlDecode(text));
+    text = decodePairingCode(text);
   }
   let parsed: Object | null = JSON.parse(text) as Object | null;
   if (!isRecord(parsed)) {

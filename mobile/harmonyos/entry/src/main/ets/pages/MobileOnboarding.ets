@@ -1,28 +1,27 @@
 import { lucideColorFilter } from '../settings/LucideColor';
-import { router } from '@kit.ArkUI';
+import { curves, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { uiText } from '../settings/NativeUi';
 import { LocalNotifier } from '../notifications/LocalNotifier';
 import { loadMobileOnboardingSteps, saveOnboardingSessionView, saveOnboardingOnlineNotifications } from '../onboarding/MobileOnboardingPlan';
+import { MobileOnboardingPanel } from '../onboarding/MobileOnboardingPanel';
 
 @Entry
 @Component
 struct MobileOnboarding {
   @StorageProp('uiLocale') uiLocale: string = 'en';
-  @StorageProp('themeScheme') scheme: string = 'dark';
   @StorageProp('themeBorder') themeBorder: string = '#262626';
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
-  @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
-  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @State pages: string[] = [];
   @State step: string = '';
   @State error: string = '';
-  @State busy: boolean = false;
+  @State busyChoice: string = '';
   @State loaded: boolean = false;
   @State completed: number = 0;
+  private pager: SwiperController = new SwiperController();
   private hostId: string = '';
-  private total: number = 0;
   private disposed: boolean = false;
   private visible: boolean = false;
   private navigationEpoch: number = 0;
@@ -39,10 +38,18 @@ struct MobileOnboarding {
   refresh(): void {
     try {
       let steps = loadMobileOnboardingSteps(getContext(this));
-      if (!this.loaded) { this.total = steps.length; }
+      if (!this.loaded) { this.pages = steps; }
       this.loaded = true; this.error = '';
       if (steps.length === 0) { this.step = ''; this.continueToApp(); }
-      else { this.step = steps[0]; }
+      else {
+        this.step = steps[0];
+        let index = this.pages.indexOf(this.step);
+        if (index < 0) { this.pages = steps; index = 0; }
+        if (this.completed !== index) {
+          this.completed = index;
+          this.pager.changeIndex(index, true);
+        }
+      }
     } catch (e) { this.error = '无法读取首次设置，请重试'; }
   }
 
@@ -56,22 +63,22 @@ struct MobileOnboarding {
   }
 
   async chooseSession(view: string): Promise<void> {
-    if (this.busy || this.disposed || !this.visible || this.step !== 'session-view') { return; }
-    this.busy = true; this.error = '';
+    if (this.busyChoice || this.disposed || !this.visible || this.step !== 'session-view') { return; }
+    this.busyChoice = view; this.error = '';
     let navigationEpoch = this.navigationEpoch;
     try {
       await saveOnboardingSessionView(getContext(this), view);
-      if (!this.disposed && this.visible && navigationEpoch === this.navigationEpoch) { this.completed++; this.refresh(); }
+      if (!this.disposed && this.visible && navigationEpoch === this.navigationEpoch) { this.refresh(); }
     } catch (e) { if (!this.disposed) { this.error = '无法保存选择，请重试'; } }
     finally {
-      this.busy = false;
+      this.busyChoice = '';
       if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch) { this.refresh(); }
     }
   }
 
   async chooseNotifications(enable: boolean): Promise<void> {
-    if (this.busy || this.disposed || !this.visible || this.step !== 'online-notifications') { return; }
-    this.busy = true; this.error = '';
+    if (this.busyChoice || this.disposed || !this.visible || this.step !== 'online-notifications') { return; }
+    this.busyChoice = enable ? 'enable' : 'skip'; this.error = '';
     let navigationEpoch = this.navigationEpoch;
     try {
       let granted = false;
@@ -81,64 +88,59 @@ struct MobileOnboarding {
       }
       if (this.disposed) { return; }
       await saveOnboardingOnlineNotifications(getContext(this), granted);
-      if (!this.disposed && this.visible && navigationEpoch === this.navigationEpoch) { this.completed++; this.refresh(); }
+      if (!this.disposed && this.visible && navigationEpoch === this.navigationEpoch) { this.refresh(); }
     } catch (e) { if (!this.disposed) { this.error = '无法保存通知选择，请重试'; } }
     finally {
-      this.busy = false;
+      this.busyChoice = '';
       if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch) { this.refresh(); }
     }
   }
 
-  build() {
-    Column({ space: 20 }) {
+  @Builder
+  private brand() {
+    Stack() {
       Row({ space: 8 }) {
-        Image($r('app.media.icon')).width(24).height(24)
-        Text('Orca').fontFamily('Geist').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.themeText).layoutWeight(1)
-        if (this.loaded && this.total > 1 && this.step.length > 0) {
-          Row({ space: 7 }) {
-            ForEach([0, 1], (index: number) => {
-              Row().height(7).width(index === this.completed ? 22 : 7).borderRadius(999)
-                .backgroundColor(index === this.completed ? this.themeText : this.themeBorder)
-            })
-          }.accessibilityText(`${this.completed + 1} / ${this.total}`)
-        }
-      }.width('100%')
-      Scroll() {
-        Column({ space: 16 }) {
-          if (this.step === 'session-view') {
-            Stack() {
-              Image($r('app.media.lucide_message_square')).supportSvg2(true).colorFilter(lucideColorFilter(this.themeText)).width(30).height(30)
-            }.width(64).height(64).borderRadius(10).backgroundColor(this.scheme === 'light' ? '#f5f5f5' : '#262626').margin({ bottom: 24 })
-            Text(uiText('会话应如何打开？', this.uiLocale)).fontFamily('Geist').fontSize(26).fontWeight(FontWeight.Bold).fontColor(this.themeText).textAlign(TextAlign.Center)
-            Text(uiText('选择此手机上支持的智能体会话默认使用聊天界面还是终端。长按会话标签可单独切换，也可随时在设置 → 聊天界面更改默认值。', this.uiLocale))
-              .fontFamily('Geist').fontSize(14).lineHeight(21).fontColor(this.themeSecondary).textAlign(TextAlign.Center)
-            Button(uiText('使用聊天界面', this.uiLocale)).fontFamily('Geist').fontSize(14).width('100%').height(44).borderRadius(12)
-              .fontColor(this.themeBg).backgroundColor(this.scheme === 'light' ? '#171717' : '#e5e5e5').enabled(!this.busy)
-              .onClick(() => { this.chooseSession('chat').catch(() => {}); })
-            Button(uiText('保留终端', this.uiLocale)).fontFamily('Geist').fontSize(14).width('100%').height(44).borderRadius(12)
-              .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).enabled(!this.busy)
-              .onClick(() => { this.chooseSession('terminal').catch(() => {}); })
-          } else if (this.step === 'online-notifications') {
-            Image($r('app.media.lucide_bell')).supportSvg2(true).colorFilter(lucideColorFilter(this.themeText)).width(44).height(44)
-            Text(uiText('开启在线智能体提醒？', this.uiLocale)).fontFamily('Geist').fontSize(26).fontWeight(FontWeight.Bold).fontColor(this.themeText).textAlign(TextAlign.Center)
-            Text(uiText('当此应用与桌面保持连接时，可在智能体完成或等待输入时显示本机通知。点击开启后才会请求系统通知权限。', this.uiLocale))
-              .fontFamily('Geist').fontSize(14).lineHeight(21).fontColor(this.themeSecondary).textAlign(TextAlign.Center)
-            Text(uiText('本版本尚未接入华为远程推送；应用断开或退出后无法保证送达。此选择仅控制在线通知。', this.uiLocale))
-              .fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).textAlign(TextAlign.Center)
-            Button(uiText('开启在线通知', this.uiLocale)).fontFamily('Geist').fontSize(14).width('100%').height(44).borderRadius(12)
-              .fontColor(this.themeBg).backgroundColor(this.scheme === 'light' ? '#171717' : '#e5e5e5').enabled(!this.busy)
-              .onClick(() => { this.chooseNotifications(true).catch(() => {}); })
-            Button(uiText('暂不开启', this.uiLocale)).fontFamily('Geist').fontSize(14).width('100%').height(44).borderRadius(12)
-              .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).enabled(!this.busy)
-              .onClick(() => { this.chooseNotifications(false).catch(() => {}); })
-          }
-          if (this.busy) { LoadingProgress().width(28).height(28) }
+        Image($r('app.media.orca_mark')).supportSvg2(true).width(35).height(22)
+          .colorFilter(lucideColorFilter(this.themeText))
+        Text('Orca').fontFamily('Geist').fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.themeText)
+      }.width('100%').padding({ left: 24, right: 24 })
+      if (this.pages.length > 1 && this.step.length > 0) {
+        Row({ space: 7 }) {
+          ForEach(this.pages, (_page: string, index: number) => {
+            Row().height(7).width(index === this.completed ? 22 : 7).borderRadius(999)
+              .backgroundColor(index === this.completed ? this.themeText : this.themeBorder)
+          }, (page: string): string => page)
+        }.accessibilityText(`${this.completed + 1} / ${this.pages.length}`)
+      }
+    }.width('100%').height(52)
+  }
+
+  build() {
+    Column() {
+      this.brand()
+      if (this.step.length > 0) {
+        Swiper(this.pager) {
+          ForEach(this.pages, (page: string) => {
+            MobileOnboardingPanel({ step: page, active: this.step === page, busyChoice: this.busyChoice,
+              error: this.step === page ? this.error : '', onChoice: (choice: string): void => {
+                if (page === 'session-view') { this.chooseSession(choice).catch(() => {}); }
+                else { this.chooseNotifications(choice === 'enable').catch(() => {}); }
+              } })
+          }, (page: string): string => page)
+        }.layoutWeight(1).width('100%').indicator(false).loop(false).disableSwipe(true)
+          .duration(300).curve(curves.cubicBezierCurve(0.2, 0.8, 0.2, 1))
+      } else {
+        Column({ space: 8 }) {
           if (this.error.length > 0) {
-            Text(uiText(this.error, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).width('100%')
-            if (!this.loaded || this.step.length === 0) { Button(uiText('重试', this.uiLocale)).fontFamily('Geist').fontSize(14).enabled(!this.busy).onClick(() => this.refresh()) }
+            Text(uiText(this.error, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText)
+              .textAlign(TextAlign.Center)
+            Button(uiText('重试', this.uiLocale)).fontFamily('Geist').fontSize(14)
+              .enabled(this.busyChoice === '').onClick((): void => this.refresh())
+          } else {
+            LoadingProgress().width(28).height(28).color(this.themeSecondary)
           }
-        }.width('100%').constraintSize({ minHeight: '100%' }).justifyContent(FlexAlign.Center)
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
-    }.width('100%').height('100%').padding(24).backgroundColor(this.themeBg)
+        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).padding(24)
+      }
+    }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 }

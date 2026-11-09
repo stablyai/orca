@@ -36,7 +36,8 @@ export class PairingConnection {
     await client.connect(endpoint, offer.deviceToken, offer.publicKeyB64, 'v2');
     let reply = await client.request('status.get', null, 8000);
     if (reply instanceof RpcSuccess) { return { client: client, status: reply }; }
-    throw new Error(reply.errorCode === 'unauthorized' ? PAIRING_CODE_REFUSED : 'Desktop status unavailable');
+    let refused = reply.errorCode === 'unauthorized' || client.authenticationRejected();
+    throw new Error(refused ? PAIRING_CODE_REFUSED : 'Desktop status unavailable');
   }
 
   private async direct(offer: PairingOffer, log: (line: string) => void): Promise<PairingConnectionResult> {

@@ -1064,7 +1064,9 @@ struct Home {
   @Builder
   feedTab() {
     Column() {
-      this.tabHeader(uiText('动态', this.uiLocale))
+      if (!this.loaded || this.loadError.length > 0 || this.hosts.length > 0) {
+        this.tabHeader(uiText('动态', this.uiLocale))
+      }
       if (this.loadError.length > 0) {
         Text(this.loadError).fontColor(this.pal().statusRed).fontFamily('Geist').fontSize(15).padding(16)
         Button(uiText('重试', this.uiLocale)).onClick(() => this.reload())
@@ -1183,10 +1185,10 @@ struct Home {
     Scroll() {
       Column() {
         Column() {
-          Image($r('app.media.icon'))
-            .width(44)
-            .height(44)
-            .borderRadius(10)
+          Image($r('app.media.orca_mark')).supportSvg2(true)
+            .width(69.17).height(44)
+            .colorFilter(lucideColorFilter(this.pal().textPrimary))
+            .accessibilityLevel('no')
           Text(uiText('连接桌面', this.uiLocale))
             .fontFamily('Geist').fontSize(28 * this.fontScale)
             .fontWeight(FontWeight.Bold)
@@ -1205,9 +1207,9 @@ struct Home {
 
         Column() {
           this.stepRow(1, '打开 Orca 桌面应用', '前往“设置” → “移动端”，生成配对二维码。')
-          this.hairline(46)
+          this.hairline(56)
           this.stepRow(2, '扫描二维码', '轻点下方“配对桌面”，扫描电脑屏幕上的二维码。')
-          this.hairline(46)
+          this.hairline(56)
           this.stepRow(3, '已连接', '桌面将显示在这里。所有数据均采用端到端加密。')
         }
         .width('100%')
@@ -1215,22 +1217,23 @@ struct Home {
         .backgroundColor(this.pal().bgPanel)
         .clip(true)
 
-        Row({ space: 8 }) {
-          Image($r('app.media.lucide_qr_code')).supportSvg2(true)
-            .width(18).height(18)
-            .colorFilter(lucideColorFilter(this.pal().onAccent))
-          Text(uiText('配对桌面', this.uiLocale))
-            .fontFamily('Geist').fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.pal().onAccent)
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 8 }) {
+            Image($r('app.media.lucide_qr_code')).supportSvg2(true)
+              .width(18).height(18)
+              .colorFilter(lucideColorFilter(this.pal().onAccent))
+            Text(uiText('配对桌面', this.uiLocale))
+              .fontFamily('Geist').fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.pal().onAccent)
+          }
         }
-        .alignItems(VerticalAlign.Center)
-        .justifyContent(FlexAlign.Center)
         .constraintSize({ minHeight: 48 })
         .padding({ left: 22, right: 22 })
         .borderRadius(12)
         .backgroundColor(this.pal().accentBlue)
         .margin({ top: 22 })
+        .accessibilityText(uiText('配对桌面', this.uiLocale))
         .onClick(() => {
           this.openPairScan();
         })

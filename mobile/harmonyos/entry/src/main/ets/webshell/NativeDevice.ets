@@ -1,4 +1,3 @@
-import { vibrator } from '@kit.SensorServiceKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { audio } from '@kit.AudioKit';
 import { abilityAccessCtrl, common } from '@kit.AbilityKit';
@@ -7,6 +6,7 @@ import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { window } from '@kit.ArkUI';
 import { DICTATION_ENGINE_ONDEVICE, readDictationEngine } from '../settings/SettingsStore';
+import { playHapticFeedback } from '../settings/HapticFeedback';
 import { base64Encode } from '../transport/crypto/Bytes';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import { NativeSpeech } from './NativeSpeech';
@@ -138,12 +138,7 @@ export class NativeDevice {
 
   async notifyHaptic(kind: string): Promise<void> {
     if (this.disposed || !['mediumImpact', 'selection', 'success', 'error', 'edgeBump'].includes(kind)) { throw new Error('Invalid haptic feedback'); }
-    let effectId = kind === 'success' ? vibrator.HapticFeedback.EFFECT_NOTICE_SUCCESS
-      : kind === 'error' ? vibrator.HapticFeedback.EFFECT_NOTICE_FAILURE
-      : kind === 'mediumImpact' ? vibrator.HapticFeedback.EFFECT_HARD : vibrator.HapticFeedback.EFFECT_SOFT;
-    let supported = vibrator.isSupportEffectSync(effectId);
-    if (supported) { await vibrator.startVibration({ type: 'preset', effectId: effectId }, { usage: 'touch' }); }
-    else { await vibrator.startVibration({ type: 'time', duration: kind === 'mediumImpact' ? 30 : kind === 'error' ? 60 : 10 }, { usage: 'touch' }); }
+    await playHapticFeedback(kind);
   }
 
   private checkSelection(generation: number): void {

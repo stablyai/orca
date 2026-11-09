@@ -16,7 +16,10 @@ import { BridgeHost, BridgeNativePage } from './BridgeHost';
 import { HostMeta } from '../storage/HostStore';
 import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute } from '../navigation/ShellRoute';
 import { lucideColorFilter } from '../settings/LucideColor';
-import { projectPageRegions, WindowRegion, WindowRegions } from './WindowRegions';
+import { projectPageRegions, projectSideRail, readWindowRegions, WindowRegion } from './WindowRegions';
+import { TerminalKeyRail } from './TerminalKeyRail';
+import { terminalRailKeys, TerminalRailClaim } from './TerminalRailClaim';
+import terminalRail, { SideRailStrip } from '../vendor/terminal-rail.js';
 
 type ShellStage = 'checking' | 'downloading' | 'opening' | 'offline' | 'repair' | 'failed' | 'ready';
 
@@ -45,7 +48,7 @@ export struct ShellSurface {
   private unbindBack: (() => void) | null = null;
   @StorageProp('uiLocale') @Watch('onLocaleChanged') uiLocale: string = 'en';
   @StorageProp('themeScheme') @Watch('onThemeChanged') scheme: string = 'dark';
-  @StorageProp('shellKeyboardTop') @Watch('publishKeyboardInset') keyboardTop: number = -1;
+  @StorageProp('shellKeyboardTop') @Watch('publishWindowLayout') keyboardTop: number = -1;
   @StorageProp('shellWindowRegions') @Watch('publishPageRegions') windowRegions: string = '';
   @StorageProp('themeBg') themeBg: string = '#111111';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
@@ -67,6 +70,10 @@ export struct ShellSurface {
   @State downloadCaption: string = '';
   @State wideDrawer: boolean = false;
   @State painted: boolean = false;
+  @State sideRail: SideRailStrip | null = null;
+  @State railClaim: TerminalRailClaim | null = null;
+  @State railKeys: string[] = [];
+  @State directionPadAvailable: boolean = false;
   private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
   private startupGeneration: number = 0;
   private routePathname: string = '';
@@ -79,6 +86,7 @@ export struct ShellSurface {
   private pageVisible: boolean = true;
   private foreground: boolean = true;
   private viewport: WindowRegion = { x: 0, y: 0, width: 0, height: 0 };
+  private surface: WindowRegion = { x: 0, y: 0, width: 0, height: 0 };
   private pendingDrawerRoute: ShellRoute | null = null;
   private pendingSession: ShellRoute | null = null;
   private opensSessionNatively: boolean = false;
@@ -89,7 +97,7 @@ export struct ShellSurface {
   };
   private generation: number = 0;
   private backgroundListener: () => void = (): void => {
-    this.foreground = false; this.clearViewing();
+    this.foreground = false; this.publishPageRegions(); this.clearViewing();
     if (this.nativeDevice) { this.nativeDevice.pause().catch(() => {}); }
   };
 
@@ -140,6 +148,7 @@ export struct ShellSurface {
     this.pageVisible = this.visible;
     if (this.pageVisible) { this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing(); this.flushDrawerRoute(); }
     else {
+      this.publishPageRegions();
       this.pendingSession = null;
       this.clearViewing();
       this.nativeDevice?.pause().catch(() => {});
@@ -172,11 +181,23 @@ export struct ShellSurface {
     this.bridge.setKeyboardInset(Math.max(0, Math.min(this.viewport.height, covered)));
   }
 
+  private publishWindowLayout(): void { this.publishKeyboardInset(); this.publishPageRegions(); }
+
   private publishPageRegions(): void {
-    if (!this.pageVisible || !this.foreground || !this.bridge) { return; }
-    let regions: WindowRegions = this.windowRegions ? JSON.parse(this.windowRegions) as WindowRegions : { occlusions: [], creases: [] };
+    let bridge = this.bridge;
+    if (!bridge) { return; }
+    let visible = this.pageVisible && this.foreground;
+    bridge.setTerminalRailFocus(visible && this.painted);
+    let regions = readWindowRegions(this.windowRegions);
+    let capable = !this.asDrawer && bridge.hasTerminalRail();
+    let strip = capable ? projectSideRail(regions, this.surface, this.keyboardTop) : null;
+    if (JSON.stringify(this.sideRail) !== JSON.stringify(strip)) { this.sideRail = strip; }
+    this.directionPadAvailable = capable && terminalRail.hasTerminalDirectionPadSpace(projectSideRail(regions, this.surface));
+    let keys = visible && this.painted && strip && this.railClaim ? terminalRailKeys(this.railClaim) : [];
+    if (JSON.stringify(this.railKeys) !== JSON.stringify(keys)) { this.railKeys = keys; }
     let page = projectPageRegions(regions, this.viewport);
-    this.bridge.setPageGeometry({ occlusions: page.occlusions, sideRail: false, directionPadAvailable: false }, page.division);
+    bridge.setPageGeometry({ occlusions: page.occlusions, sideRail: strip !== null,
+      directionPadAvailable: this.directionPadAvailable }, page.division, keys);
   }
   private clearViewing(): void { this.desktop?.connection.clearViewing(this.viewingOwner); }
   private updateViewing(): void {
@@ -204,6 +225,7 @@ export struct ShellSurface {
 
   private releaseBridge(): void {
     this.downloadPercent = -1; this.downloadCaption = '';
+    this.railClaim = null; this.railKeys = []; this.sideRail = null; this.directionPadAvailable = false;
     if (this.bridge) {
       this.routePathname = this.bridge.getRoute();
       this.routeParams = this.bridge.getRouteParams();
@@ -241,6 +263,7 @@ export struct ShellSurface {
     if (this.disposed || generation !== this.generation || this.client !== client) { return; }
     if (this.startup.complete(this.startupGeneration)) {
       this.painted = true; this.publishPhase('已连接', 'ready'); this.updateViewing();
+      this.publishPageRegions();
       if (this.opensSessionNatively) { this.openPendingNativeSession(); }
       else { this.pendingSession = null; }
     }
@@ -339,6 +362,11 @@ export struct ShellSurface {
       let params: Record<string, string> = open ? { 'open': open } : target ? {} : shown.params;
       let bridge = new BridgeHost(client, document.controller, manifest, meta, target ? root : shown.pathname, path);
       bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(params);
+      if (!this.asDrawer) {
+        bridge.setTerminalRailClaimSink((claim: TerminalRailClaim | null): void => {
+          if (this.bridge === bridge) { this.railClaim = claim; this.publishPageRegions(); }
+        });
+      }
       if (this.returnsToDesktop) { bridge.setDesktopListBack(); }
       bridge.setLivenessSink((): void => {
         if (this.pageVisible && this.foreground && this.bridge === bridge) { this.desktop?.connection.revive(); }
@@ -464,8 +492,10 @@ export struct ShellSurface {
   }
 
   build() {
-    Stack() {
-      NodeContainer(this.documentMount).width('100%').height('100%')
+    Stack({ alignContent: Alignment.TopStart }) {
+      Row() {
+        if (this.sideRail?.side === 'left') { Blank().width(this.sideRail.width) }
+        NodeContainer(this.documentMount).layoutWeight(1).height('100%')
         .backgroundColor(this.asDrawer ? Color.Transparent : this.themeBg)
         .accessibilityLevel(this.painted ? 'auto' : 'no-hide-descendants')
         .opacity(this.asDrawer && !this.painted ? 0 : 1)
@@ -473,9 +503,21 @@ export struct ShellSurface {
           this.viewport = { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
             width: Number(area.width), height: Number(area.height) };
           if (this.asDrawer) { this.wideDrawer = this.viewport.width >= 700 && this.viewport.height >= 600; }
-          this.publishKeyboardInset();
+          this.publishWindowLayout();
+        })
+        if (this.sideRail?.side === 'right') { Blank().width(this.sideRail.width) }
+      }.width('100%').height('100%')
+        .onAreaChange((_previous: Area, area: Area): void => {
+          this.surface = { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
+            width: Number(area.width), height: Number(area.height) };
           this.publishPageRegions();
         })
+      if (this.sideRail && this.railKeys.length > 0 && this.railClaim) {
+        TerminalKeyRail({ strip: this.sideRail, claim: this.railClaim, keys: this.railKeys, hasPad: this.directionPadAvailable,
+          onKey: (owner: string, key: string): Promise<boolean> =>
+            this.bridge?.sendTerminalRailKey(owner, key) ?? Promise.resolve(false) })
+          .position({ x: this.sideRail.side === 'left' ? 0 : this.surface.width - this.sideRail.width, y: this.sideRail.top })
+      }
       // Keep the viewport fixed through first paint and transport recovery.
       if (!this.painted) {
         if (this.asDrawer) { this.overlayLoadingDrawer() }

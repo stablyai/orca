@@ -74,7 +74,7 @@ function createRpcPeer({ authenticate = true } = {}) {
     ...capabilities,
     fflateModule: require('../../../entry/src/main/ets/vendor/fflate-umd.js'),
     sent,
-    close: () => handlers.get('close')(null, { code: 1006, reason: 'reset' }),
+    close: (code = 1006, reason = 'reset') => handlers.get('close')(null, { code, reason }),
     failSend: () => {
       failSend = true
     },

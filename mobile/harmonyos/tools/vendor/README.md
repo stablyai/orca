@@ -10,3 +10,5 @@
 `prepare-vendor.mjs` generates the ArkTS TweetNaCl module by replacing the Node crypto fallback and retargeting the UMD export to a local CommonJS object. HarmonyOS installs secure randomness through `NaclBinding`. The fflate UMD is copied unchanged from the pinned source.
 
 Keep each dependency's LICENSE. Full attribution is packaged in `entry/src/main/resources/rawfile/licenses/THIRD_PARTY_NOTICES.txt` and verified by the preparation check.
+
+`sync-mobile-models.mjs` also bundles first-party code from the pinned Orca revision. `terminal-rail.js` reuses the mobile side-strip geometry and terminal key repeat controller.

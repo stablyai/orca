@@ -5,6 +5,7 @@ import { url } from '@kit.ArkTS';
 import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { PairingCamera } from '../pairing/PairingCamera';
 import { lucideColorFilter } from '../settings/LucideColor';
+import { playHapticFeedback } from '../settings/HapticFeedback';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { refreshDesktopConnection } from '../transport/DesktopConnections';
 import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
@@ -20,6 +21,14 @@ const PAIR_TIMEOUT_MS = 25000;
 const PAIRED_HOLD_MS = 450;
 const PAIRING_CODE_FIELD = 'orca-pairing-code';
 const REJECTED_CODE = '配对码已过期、已使用或已被替换。请在桌面显示新配对码后重新扫描。';
+
+type PairingLogLevel = 'info' | 'success' | 'error';
+
+interface PairingLogLine {
+  elapsed: string;
+  message: string;
+  level: PairingLogLevel;
+}
 
 function scanErrorLabel(raw: string): string {
   try {
@@ -41,16 +50,19 @@ struct PairScan {
   @StorageProp('themeScheme') themeScheme: string = 'dark';
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeRaised') themeRaised: string = '#262626';
   @StorageProp('themeSheet') themeSheet: string = '#171717';
   @StorageProp('themeBorder') themeBorder: string = '#2c2c2c';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
+  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
   @State pairingCode: string = '';
-  @State logs: string[] = [];
+  @State logs: PairingLogLine[] = [];
   @State busy: boolean = false;
   @State openedFromLink: boolean = false;
   @State showPaste: boolean = false;
+  @State pasteFocused: boolean = false;
   @State error: string = '';
   @State confirming: boolean = false;
   @State pairedHostId: string = '';
@@ -164,7 +176,7 @@ struct PairScan {
   }
 
   private dismissPaste(): void {
-    this.pasteInput.stopEditing(); this.showPaste = false; this.pairingCode = '';
+    this.pasteInput.stopEditing(); this.showPaste = false; this.pasteFocused = false; this.pairingCode = '';
     this.restoreKeyboardMode();
   }
 
@@ -172,7 +184,7 @@ struct PairScan {
 
   private submitPaste(): void {
     if (!this.showPaste || !this.pairingCode.trim()) { return; }
-    let input = this.pairingCode;
+    let input = this.pairingCode.trim();
     this.dismissPaste();
     this.acceptOffer(input);
   }
@@ -182,14 +194,27 @@ struct PairScan {
     this.refreshCameraPermission();
   }
 
-  private appendLog(line: string): void {
+  private appendLog(message: string, level: PairingLogLevel = 'info'): void {
     let elapsed = Math.max(0, Date.now() - this.pairingStartedAt) / 1000;
-    this.logs = [...this.logs.slice(-199), `+${elapsed.toFixed(elapsed < 10 ? 2 : 1)}s  ${line}`];
+    let duration = elapsed < 100 ? elapsed.toFixed(elapsed < 10 ? 2 : 1) : String(Math.round(elapsed));
+    this.logs = [...this.logs.slice(-199), { elapsed: `+${duration}s`, message: message, level: level }];
   }
 
   onBackPress(): boolean {
     if (this.showPaste) { this.closePaste(); return true; }
-    if (this.openedFromLink) { router.back({ url: 'pages/Home' }); return true; }
+    if (this.openedFromLink) {
+      this.disposed = true;
+      this.attempt?.close();
+      let navigation = this.getUIContext().getRouter();
+      if (navigation.getStateByUrl('pages/Home').length > 0) {
+        navigation.back({ url: 'pages/Home' });
+      } else {
+        navigation.replaceUrl({ url: 'pages/Home' }).then((): void => navigation.clear()).catch((): void => {
+          this.disposed = false;
+        });
+      }
+      return true;
+    }
     return false;
   }
 
@@ -312,10 +337,11 @@ struct PairScan {
       refreshDesktopConnection(meta.id, 'paired');
       if (this.disposed) { return; }
       this.pairingCode = '';
-      this.appendLog('配对成功');
+      this.appendLog(this.t('已连接'), 'success');
       recordConnection(getContext(this), LOG_LEVEL_INFO, '桌面配对成功', '', meta.id).catch(() => {});
       attempt.close();
       this.confirmedOffer = null; this.pairedHostId = meta.id;
+      if (this.foreground && this.visible) { playHapticFeedback('success').catch(() => {}); }
       await new Promise<void>((resolve): void => { setTimeout(resolve, PAIRED_HOLD_MS); });
       await this.continueAfterPair(meta.id);
     } catch (e) {
@@ -323,7 +349,7 @@ struct PairScan {
       this.confirmedOffer = null; this.decoded = false;
       this.error = this.timedOut ? '未能在 {{seconds}} 秒内连接，请查看下方日志' :
         (e as Error).message === PAIRING_CODE_REFUSED ? REJECTED_CODE : '配对失败，请检查配对码和网络连接后重试';
-      this.appendLog(this.t(this.error).replace('{{seconds}}', String(PAIR_TIMEOUT_MS / 1000)));
+      this.appendLog(this.t(this.error).replace('{{seconds}}', String(PAIR_TIMEOUT_MS / 1000)), 'error');
       recordConnection(getContext(this), LOG_LEVEL_ERROR, '桌面配对失败', '', hostIdFor(offer.publicKeyB64)).catch(() => {});
     } finally {
       if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
@@ -342,7 +368,7 @@ struct PairScan {
     Row({ space: 8 }) {
       Text(String(number)).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Bold)
         .fontColor(this.themeSecondary).textAlign(TextAlign.Center).width(22).height(22).borderRadius(11)
-        .backgroundColor(this.themeScheme === 'light' ? '#f5f5f5' : '#262626')
+        .backgroundColor(this.themeRaised)
       Text(this.t(label)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).layoutWeight(1)
     }.width('100%')
   }
@@ -364,7 +390,7 @@ struct PairScan {
   }
 
   @Builder
-  private secondary(label: string, activate: () => void, clipboard: boolean = false) {
+  private secondary(label: string, activate: () => void, clipboard: boolean = false, fullWidth: boolean = false) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 4 }) {
         if (clipboard) {
@@ -373,7 +399,7 @@ struct PairScan {
         }
         Text(this.t(label)).fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeSecondary)
       }.justifyContent(FlexAlign.Center)
-    }.constraintSize({ minHeight: 40 }).borderRadius(12).backgroundColor(Color.Transparent)
+    }.width(fullWidth ? '100%' : 'auto').constraintSize({ minHeight: 40 }).borderRadius(12).backgroundColor(Color.Transparent)
       .accessibilityText(this.t(label)).onClick(activate)
   }
 
@@ -382,7 +408,8 @@ struct PairScan {
     Text(this.t(title)).fontFamily('Geist').fontSize(24).fontWeight(FontWeight.Medium)
       .fontColor(this.themeText).textAlign(TextAlign.Center)
     Text(this.t(description)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary)
-      .textAlign(TextAlign.Center).lineHeight(20).constraintSize({ maxWidth: 360 }).margin({ bottom: 16 })
+      .textAlign(TextAlign.Center).lineHeight(20).constraintSize({ maxWidth: this.openedFromLink ? 520 : 310 })
+      .margin({ bottom: 16 })
   }
 
   @Builder
@@ -390,17 +417,23 @@ struct PairScan {
     Column({ space: 8 }) {
       Column() {
         Blank().width(36).height(5).borderRadius(3).backgroundColor(this.themeMuted).opacity(0.5)
-      }.width('100%').height(20).justifyContent(FlexAlign.Center)
-        .gesture(PanGesture({ direction: PanDirection.Down, distance: 12 }).onActionEnd((): void => this.closePaste()))
-      Column({ space: 2 }) {
-        Text(this.t('粘贴配对码')).fontFamily('Geist').fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.themeText)
-        Text(this.t('复制电脑上二维码下方显示的配对码。')).fontFamily('Geist').fontSize(13)
-          .fontColor(this.themeMuted).lineHeight(18)
-      }.alignItems(HorizontalAlign.Start).padding({ left: 4, right: 4, bottom: 4 })
+          .margin({ top: 8, bottom: 12 })
+        Column({ space: 2 }) {
+          Text(this.t('粘贴配对码')).fontFamily('Geist').fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.themeText)
+          Text(this.t('复制电脑上二维码下方显示的配对码。')).fontFamily('Geist').fontSize(13)
+            .fontColor(this.themeMuted).lineHeight(18)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 4, right: 4 })
+      }.width('100%').gesture(PanGesture({ direction: PanDirection.Down, distance: 12 })
+        .onActionEnd((): void => this.closePaste()))
       TextInput({ text: this.pairingCode, controller: this.pasteInput, placeholder: this.t('orca://pair?code=... 或粘贴配对码') })
         .fontFamily('Geist').fontSize(14).fontColor(this.themeText).placeholderColor(this.themeMuted)
-        .backgroundColor(this.themeBg).border({ width: 1, color: this.themeBorder, radius: 12 }).height(44)
+        .backgroundColor(this.themeBg).border({ width: this.pasteFocused ? 2 : 1,
+          color: this.pasteFocused ? this.themeAccent : '#737373', radius: 12 }).height(44)
         .width('100%').id(PAIRING_CODE_FIELD).enterKeyType(EnterKeyType.Done).maxLength(132096)
+        .enableAutoFill(false).enablePreviewText(false)
+        .accessibilityText(this.t('粘贴配对码'))
+        .onFocus((): void => { this.pasteFocused = true; })
+        .onBlur((): void => { this.pasteFocused = false; })
         .onAppear((): void => {
           setTimeout((): void => {
             if (this.showPaste && this.visible) { this.getUIContext().getFocusController().requestFocus(PAIRING_CODE_FIELD); }
@@ -417,8 +450,8 @@ struct PairScan {
           .opacity(this.pairingCode.trim().length > 0 ? 1 : 0.4)
           .onClick((): void => this.submitPaste())
       }.width('100%').justifyContent(FlexAlign.End)
-    }.width('100%').constraintSize({ maxWidth: 520 }).alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 12, top: 8, bottom: 20 }).backgroundColor(this.themeSheet)
+    }.width('100%').constraintSize({ maxWidth: 480 }).alignItems(HorizontalAlign.Start)
+      .padding({ left: 12, right: 12, bottom: 20 }).backgroundColor(this.themeSheet)
       .borderRadius({ topLeft: 24, topRight: 24 })
   }
 
@@ -426,12 +459,19 @@ struct PairScan {
   private pairingLog() {
     if (this.logs.length > 0) {
       Column({ space: 4 }) {
-        Text(this.t('配对日志')).fontFamily('monospace').fontSize(11).fontColor(this.themeMuted).letterSpacing(1)
+        Text(this.t('配对日志').toUpperCase()).fontFamily('monospace').fontSize(11).fontColor(this.themeMuted).letterSpacing(1)
         Scroll(this.logScroll) {
           Column({ space: 6 }) {
-            ForEach(this.logs, (line: string): void => {
-              Text(line).fontFamily('monospace').fontSize(11).fontColor(this.themeSecondary).maxLines(3)
-            }, (line: string, index: number): string => `${index}-${line}`)
+            ForEach(this.logs, (line: PairingLogLine): void => {
+              Row({ space: 8 }) {
+                Text(line.elapsed).fontFamily('monospace').fontSize(12).fontColor(this.themeMuted).width(52)
+                Text(line.level === 'success' ? '✓' : line.level === 'error' ? '✕' : '•')
+                  .fontFamily('monospace').fontSize(12).fontColor(this.logColor(line.level)).width(12)
+                  .textAlign(TextAlign.Center).accessibilityLevel('no')
+                Text(line.message).fontFamily('monospace').fontSize(12).fontColor(this.logColor(line.level))
+                  .lineHeight(16).layoutWeight(1)
+              }.width('100%').alignItems(VerticalAlign.Top)
+            })
           }.width('100%').alignItems(HorizontalAlign.Start)
             .onSizeChange((): void => this.logScroll.scrollEdge(Edge.Bottom))
         }.scrollBar(BarState.Off).constraintSize({ maxHeight: 200 }).width('100%')
@@ -439,6 +479,12 @@ struct PairScan {
         .padding({ left: 12, right: 12, top: 8, bottom: 8 }).backgroundColor(this.themeSurface)
         .border({ width: 0.5, radius: 16, color: this.themeBorder }).margin({ top: 8, bottom: 12 })
     }
+  }
+
+  private logColor(level: PairingLogLevel): string {
+    if (level === 'success') { return this.themeScheme === 'light' ? '#147638' : '#86efac'; }
+    if (level === 'error') { return this.themeScheme === 'light' ? '#e40014' : '#ff6568'; }
+    return this.themeSecondary;
   }
 
   @Builder
@@ -451,7 +497,8 @@ struct PairScan {
             onFailure: (): void => { this.cameraFailed = true; this.updateCamera(); } })
         }
       }.width('100%').layoutWeight(1).borderRadius(16).clip(true).backgroundColor(this.themeSurface)
-      this.secondary('或粘贴配对码', (): void => this.openPaste(), true)
+      Row() { this.secondary('或粘贴配对码', (): void => this.openPaste(), true, true) }
+        .width('100%').margin({ top: 12 })
     }.width('100%').layoutWeight(1)
   }
 
@@ -462,17 +509,18 @@ struct PairScan {
         this.heading('要与这台桌面配对吗？', '你打开了来自桌面的配对链接。确认后会将它添加到你的主机。')
         Column({ space: 8 }) {
           this.primary('配对', (): void => { this.doPair().catch(() => {}); }, true)
-          this.secondary('取消', (): void => { this.onBackPress(); })
+          this.secondary('取消', (): void => { this.onBackPress(); }, false, true)
         }.width('100%').constraintSize({ maxWidth: 360 })
       } else if (this.pairedHostId && !this.error) {
         Image($r('app.media.lucide_check')).width(36).height(36).padding(7).supportSvg2(true)
           .colorFilter(lucideColorFilter(this.themeBg)).borderRadius(18)
-          .backgroundColor(this.themeScheme === 'light' ? '#147638' : '#86efac')
+          .backgroundColor(this.logColor('success')).accessibilityLevel('no')
+          .transition(TransitionEffect.OPACITY.animation({ duration: 150 }))
         Text(this.t('已连接')).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).margin({ top: 8 })
         this.pairingLog()
       } else if (this.error) {
         Text(this.t(this.error).replace('{{seconds}}', String(PAIR_TIMEOUT_MS / 1000)))
-          .fontFamily('Geist').fontSize(14).fontColor(this.themeScheme === 'light' ? '#b91c1c' : '#ff6568')
+          .fontFamily('Geist').fontSize(14).fontColor(this.logColor('error'))
           .textAlign(TextAlign.Center).lineHeight(20).constraintSize({ maxWidth: 360 })
         this.pairingLog()
         if (this.pairedHostId) {
@@ -481,7 +529,7 @@ struct PairScan {
           this.primary('返回首页', (): void => { this.onBackPress(); })
         } else {
           this.primary('重试', (): void => this.retry())
-          this.secondary('改为粘贴配对码', (): void => this.openPaste(), true)
+          this.secondary('改为粘贴配对码', (): void => { this.retry(); this.openPaste(); })
         }
       } else if (this.busy) {
         LoadingProgress().width(36).height(36).color(this.themeSecondary)
@@ -515,7 +563,8 @@ struct PairScan {
             if (!this.onBackPress()) { router.back(); }
           })
       }.width('100%')
-      if (!this.openedFromLink && this.permission === abilityAccessCtrl.PermissionStatus.GRANTED) {
+      if (!this.openedFromLink && (this.permission === abilityAccessCtrl.PermissionStatus.GRANTED ||
+        this.busy || this.pairedHostId.length > 0 || this.error.length > 0)) {
         Column({ space: 8 }) {
           this.step(1, '在电脑上打开 Orca')
           this.step(2, '前往设置 → 移动端')

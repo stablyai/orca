@@ -41,28 +41,71 @@ const nacl = loadArkts(
     }
   }
 )
+const { isDirectEndpoint } = loadArkts('transport/RelayProtocol.ets', ['isDirectEndpoint'], {
+  url: { URL }
+})
+const { parsePairingOffer } = loadArkts('transport/E2eeV2Session.ets', ['parsePairingOffer'], {
+  ...bytes,
+  ...nacl,
+  isDirectEndpoint,
+  url: { URLParams: URLSearchParams }
+})
+const pairingOffer = {
+  v: 2,
+  endpoint: 'ws://desktop.invalid:6768',
+  deviceToken: 'test-pair-token',
+  publicKeyB64: fixture.clientPublicKeyB64
+}
+const pairingCode = Buffer.from(JSON.stringify(pairingOffer)).toString('base64url')
+
 test('scanning accepts Orca pairing links, while paste also accepts raw desktop codes', () => {
-  const { isDirectEndpoint } = loadArkts('transport/RelayProtocol.ets', ['isDirectEndpoint'], {
-    url: { URL }
-  })
-  const { parsePairingOffer } = loadArkts('transport/E2eeV2Session.ets', ['parsePairingOffer'], {
-    ...bytes,
-    ...nacl,
-    isDirectEndpoint
-  })
-  const code = Buffer.from(
-    JSON.stringify({
-      v: 2,
-      endpoint: 'ws://desktop.invalid:6768',
-      deviceToken: 'test-pair-token',
-      publicKeyB64: fixture.clientPublicKeyB64
-    })
+  assert.equal(parsePairingOffer(pairingCode).endpoint, 'ws://desktop.invalid:6768')
+  assert.equal(
+    parsePairingOffer(`orca://pair/?code=${pairingCode}`, true).deviceToken,
+    'test-pair-token'
+  )
+  assert.equal(parsePairingOffer(`orca://pair#${pairingCode}`, true).deviceToken, 'test-pair-token')
+  assert.throws(() => parsePairingOffer(pairingCode, true), /Invalid pairing link/)
+  assert.throws(() => parsePairingOffer(`orca://other?code=${pairingCode}`), /Invalid pairing link/)
+})
+
+test('legacy pairing code aliases preserve the offer while pinned keys still require canonical base64', () => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  for (const trailingWhitespace of ['', '  ']) {
+    const code = Buffer.from(JSON.stringify(pairingOffer) + trailingWhitespace)
+      .toString('base64')
+      .replace(/=+$/, '')
+    const alias = code.slice(0, -1) + alphabet[alphabet.indexOf(code.at(-1)) + 1]
+    assert.equal(parsePairingOffer(`${alias}=`).deviceToken, 'test-pair-token')
+  }
+
+  const publicKey = pairingOffer.publicKeyB64
+  const keyAlias = publicKey.slice(0, -2) + alphabet[alphabet.indexOf(publicKey.at(-2)) + 1] + '='
+  const aliasedKeyOffer = Buffer.from(
+    JSON.stringify({ ...pairingOffer, publicKeyB64: keyAlias })
   ).toString('base64url')
-  assert.equal(parsePairingOffer(code).endpoint, 'ws://desktop.invalid:6768')
-  assert.equal(parsePairingOffer(`orca://pair/?code=${code}`, true).deviceToken, 'test-pair-token')
-  assert.equal(parsePairingOffer(`orca://pair#${code}`, true).deviceToken, 'test-pair-token')
-  assert.throws(() => parsePairingOffer(code, true), /Invalid pairing link/)
-  assert.throws(() => parsePairingOffer(`orca://other?code=${code}`), /Invalid pairing link/)
+  assert.throws(() => parsePairingOffer(aliasedKeyOffer))
+})
+
+test('a pairing link decodes the code parameter name and refuses duplicate parameters', () => {
+  assert.equal(
+    parsePairingOffer(`orca://pair?%63ode=${pairingCode}`, true).deviceToken,
+    'test-pair-token'
+  )
+  assert.throws(() =>
+    parsePairingOffer(`orca://pair?code=${pairingCode}&code=${pairingCode}`, true)
+  )
+  assert.throws(() =>
+    parsePairingOffer(`orca://pair?code=${pairingCode}&%63ode=${pairingCode}`, true)
+  )
+  const standard = Buffer.from(JSON.stringify({ ...pairingOffer, label: '>>>>>' })).toString(
+    'base64'
+  )
+  assert.ok(standard.includes('+'))
+  assert.equal(
+    parsePairingOffer(`orca://pair?code=${standard}`, true).deviceToken,
+    'test-pair-token'
+  )
 })
 
 function session(vector) {

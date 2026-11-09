@@ -18,6 +18,7 @@ import {
 } from '../transport/TerminalBinaryFrame';
 import { HostMeta } from '../storage/HostStore';
 import { FoldDivision } from './WindowRegions';
+import { parseTerminalRailClaim, terminalRailKeyEnabled, TerminalRailClaim } from './TerminalRailClaim';
 
 /**
  * Bridge host (Phase 2b): the page↔shell JSON protocol from
@@ -140,6 +141,7 @@ interface BridgeInitWire {
   keyboardInset: number;
   pageGeometry: BridgePageGeometry;
   foldDivision: FoldDivision | null;
+  terminalKeyRail: string[];
 }
 
 /** A forwarded terminal.subscribe: the handle its params named, for viewport routing. */
@@ -200,6 +202,11 @@ export class BridgeHost {
   private keyboardInset: number = 0;
   private pageGeometry: BridgePageGeometry = { occlusions: [], sideRail: false, directionPadAvailable: false };
   private foldDivision: FoldDivision | null = null;
+  private railKeys: string[] = [];
+  private railClaim: TerminalRailClaim | null = null;
+  private railClaimSink: ((claim: TerminalRailClaim | null) => void) | null = null;
+  private railFocused: boolean = false;
+  private railReady: boolean = false;
   private readySink: (() => void) | null = null;
   private faultSink: ((message: string) => void) | null = null;
   private livenessSink: (() => void) | null = null;
@@ -217,15 +224,44 @@ export class BridgeHost {
     if (!this.validInset(value) || value === this.keyboardInset) { return; }
     this.keyboardInset = value; if (this.pushReady && !this.disposed) { this.sendInit(); }
   }
-  setPageGeometry(value: BridgePageGeometry, fold: FoldDivision | null): void {
+  setPageGeometry(value: BridgePageGeometry, fold: FoldDivision | null, railKeys: string[] = []): void {
     if (fold && (!['vertical', 'horizontal'].includes(fold.axis) || !this.validInset(fold.start)
       || !this.validInset(fold.end) || fold.end <= fold.start)) { return; }
     if (!Array.isArray(value.occlusions) || value.occlusions.length > 16 || typeof value.sideRail !== 'boolean'
       || (value.directionPadAvailable !== undefined && typeof value.directionPadAvailable !== 'boolean')
       || value.occlusions.some((rect: BridgePageOcclusion): boolean => ![rect.x, rect.y, rect.width, rect.height].every((coordinate: number): boolean => this.validInset(coordinate)))
-      || (JSON.stringify(value) === JSON.stringify(this.pageGeometry) && JSON.stringify(fold) === JSON.stringify(this.foldDivision))) { return; }
-    this.pageGeometry = value; this.foldDivision = fold;
+      || (JSON.stringify(value) === JSON.stringify(this.pageGeometry) && JSON.stringify(fold) === JSON.stringify(this.foldDivision)
+        && JSON.stringify(railKeys) === JSON.stringify(this.railKeys))) { return; }
+    this.pageGeometry = value; this.foldDivision = fold; this.railKeys = railKeys;
     if (this.pushReady && !this.disposed) { this.sendInit(); }
+  }
+
+  setTerminalRailClaimSink(sink: (claim: TerminalRailClaim | null) => void): void { this.railClaimSink = sink; }
+  setTerminalRailFocus(focused: boolean): void { this.railFocused = focused; }
+  hasTerminalRail(): boolean { return this.routeGrants(this.entryPathname).includes('terminalKeyRail'); }
+
+  private isTerminalRailRoute(path: string): boolean {
+    return !this.overlayNavigation && this.routeMatches('/h/[hostId]/session/[worktreeId]', path);
+  }
+
+  private reportRailClaim(): void {
+    this.railClaimSink?.(this.client && this.isTerminalRailRoute(this.routePathname) ? this.railClaim : null);
+  }
+
+  private canDeliverRailKey(owner: string, key: string): boolean {
+    let claim = this.railClaim;
+    return !this.disposed && this.pushReady && this.railReady && this.railFocused && this.client !== null &&
+      claim !== null && claim.owner === owner && this.isTerminalRailRoute(this.routePathname) &&
+      this.railKeys.includes(key) && terminalRailKeyEnabled(claim, key);
+  }
+
+  async sendTerminalRailKey(owner: string, key: string): Promise<boolean> {
+    if (!this.canDeliverRailKey(owner, key)) { return false; }
+    let frame = JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'terminalKey', inputOwner: owner, key: key });
+    try {
+      await this.controller.runJavaScript(`window.__orcaNativePush(${JSON.stringify(frame)})`);
+      return this.canDeliverRailKey(owner, key);
+    } catch (e) { return false; }
   }
   private locale: string = 'en';
   private externalLink: ((url: string) => Promise<void>) | null = null;
@@ -278,6 +314,7 @@ export class BridgeHost {
   }
   dispose(): void {
     if (this.disposed) { return; }
+    this.railClaimSink = null;
     let ids = Array.from(this.subscriptions);
     for (let i = 0; i < ids.length; i++) { this.releaseDesktopSubscription(ids[i]); }
     this.detachTransport();
@@ -314,6 +351,7 @@ export class BridgeHost {
     const client = this.client;
     if (!client) { return; }
     this.client = null;
+    this.railClaim = null; this.reportRailClaim();
     this.unbindBinary?.();
     this.unbindBinary = null;
     this.desktopPending.forEach((id: string): void => {
@@ -348,6 +386,7 @@ export class BridgeHost {
     this.connection.lastConnectedAt = Date.now();
     this.connection.activePath = path;
     this.publishState('connected', 0);
+    if (this.railReady && this.hasTerminalRail()) { this.sendInit(); }
     this.desktopSubs.forEach((record: DesktopSubscriptionRecord, id: string): void => {
       if (!record.cancelled) { this.openDesktopSubscription(id, record, client, true); }
     });
@@ -432,6 +471,7 @@ export class BridgeHost {
     if (grant === 'externalLink') { return this.externalLink !== null; }
     if (grant === 'externalNavigation') { return this.externalNavigationEnabled; }
     if (grant === 'haptics') { return this.haptics !== null; }
+    if (grant === 'terminalKeyRail') { return this.railClaimSink !== null && !this.overlayNavigation; }
     return ['navigate', 'storage', 'rpcEnvelope', 'screencastBinary'].includes(grant);
   }
 
@@ -509,6 +549,7 @@ export class BridgeHost {
     let type: string = msg['type'];
     if (type === 'ready') {
       this.readDeclaredStorageKeys(msg);
+      this.railReady = true; this.railClaim = null; this.reportRailClaim();
       this.sendInit(); if (this.readySink) { this.readySink(); }
       return;
     }
@@ -558,6 +599,14 @@ export class BridgeHost {
   /** Notify dispatch (bridge-host-notify.ts). One-way frames owe no reply. */
   private handleNotify(msg: ESObject): void {
     let name: string = msg['name'];
+    if (name === 'terminal-key-rail-claim') {
+      if (!this.railReady || !this.client || !this.hasTerminalRail() || typeof msg['claimed'] !== 'boolean') { return; }
+      let claim = msg['claimed'] === true ? parseTerminalRailClaim(msg['inputOwner'], msg['toolbar']) : null;
+      if (JSON.stringify(claim) !== JSON.stringify(this.railClaim)) {
+        this.railClaim = claim; this.reportRailClaim();
+      }
+      return;
+    }
     if (name === 'foreground' || name === 'liveness-probe') {
       this.livenessSink?.();
       return;
@@ -649,8 +698,15 @@ export class BridgeHost {
       }
       return;
     }
+    let previous = this.routePathname;
     this.routePathname = pathname;
     this.routeParams = params;
+    if (previous !== pathname && this.hasTerminalRail()) {
+      if (this.isTerminalRailRoute(previous)) { this.railClaim = null; }
+      this.reportRailClaim();
+      // A new session can claim before its location arrives. Ask it to reassert once the route is settled.
+      if (this.railReady && this.isTerminalRailRoute(previous) && this.isTerminalRailRoute(pathname)) { this.sendInit(); }
+    }
     if (this.locationSink) { this.locationSink(pathname, params); }
   }
 
@@ -1240,7 +1296,8 @@ export class BridgeHost {
       safeAreaInsets: this.safeAreaInsets,
       keyboardInset: this.keyboardInset,
       pageGeometry: this.pageGeometry,
-      foldDivision: this.foldDivision
+      foldDivision: this.foldDivision,
+      terminalKeyRail: this.railKeys
     };
     this.pushFrame(JSON.stringify(init));
     this.log(`init sent (v1) grants=${grants.length} storage=${count}`);

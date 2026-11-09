@@ -13,6 +13,14 @@ const revision = execFileSync('git', ['rev-parse', 'origin/main'], {
 }).trim()
 const models = [
   {
+    file: 'terminal-rail',
+    provenance: 'orcaTerminalRail',
+    contents: `
+      export { getSideRailStrip, hasTerminalDirectionPadSpace, sideRailStripAboveKeyboard } from './mobile/src/layout/side-rail-strip'
+      export { createTerminalAccessoryRepeatController, TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from './mobile/src/terminal/terminal-accessory-repeat'
+    `
+  },
+  {
     file: 'agent-list',
     provenance: 'orcaAgentList',
     contents: `

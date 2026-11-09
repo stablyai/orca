@@ -7,6 +7,8 @@ import { listHosts, HostMeta } from '../storage/HostStore';
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { RpcSuccess } from '../transport/SpikeRpcClient';
+import { projectSideRail, readWindowRegions, WindowRegion } from '../webshell/WindowRegions';
+import terminalRail from '../vendor/terminal-rail.js';
 
 interface HostFit { id: string; name: string; connected: boolean; ms: number | null; loaded: boolean; saving: boolean; }
 interface FitConnection { lease: DesktopConnectionLease; unobserve: () => void; }
@@ -24,11 +26,13 @@ struct TerminalSettings {
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @StorageProp('shellWindowRegions') @Watch('updateDirectionPad') windowRegions: string = '';
   @State terminalScale: number = 1;
   @State error: string = '';
   @State ordered: string[] = TERMINAL_SHORTCUTS.map((key: TerminalShortcut): string => key.id);
   @State visible: string[] = TERMINAL_SHORTCUTS.map((key: TerminalShortcut): string => key.id);
   @State directionPad: boolean = true;
+  @State directionPadAvailable: boolean = false;
   @State custom: CustomShortcut[] = [];
   @State customLabel: string = '';
   @State customBytes: string = '';
@@ -37,6 +41,11 @@ struct TerminalSettings {
   @State fits: HostFit[] = [];
   private sessions: Map<string, FitConnection> = new Map();
   private epoch = 0;
+  private frame: WindowRegion = { x: 0, y: 0, width: 0, height: 0 };
+
+  private updateDirectionPad(): void {
+    this.directionPadAvailable = terminalRail.hasTerminalDirectionPadSpace(projectSideRail(readWindowRegions(this.windowRegions), this.frame));
+  }
 
   onPageShow(): void { this.load(); }
   onPageHide(): void { this.stopSessions(); }
@@ -208,6 +217,19 @@ struct TerminalSettings {
               }.width('100%').height(44).padding({ left: 16, right: 16 }).onClick((): void => { this.saveScale(scale); })
             })
           }.width('100%').backgroundColor(this.themeSurface).borderRadius(12)
+          if (this.directionPadAvailable) {
+            this.sectionTitle('方向键盘')
+            Row({ space: 12 }) {
+              Column({ space: 4 }) {
+                Text(uiText('显示方向键盘', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.themeText)
+                Text(uiText('将方向键盘固定在侧栏。关闭后，侧栏会列出各个方向键。', this.uiLocale))
+                  .fontFamily('Geist').fontSize(13).fontColor(this.themeMuted)
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+              Toggle({ type: ToggleType.Switch, isOn: this.directionPad }).selectedColor(this.themeAccent)
+                .accessibilityText(uiText('显示方向键盘', this.uiLocale)).id('terminal-direction-pad-setting')
+                .onChange((on: boolean): void => { this.saveLayout(this.ordered, this.visible, on); })
+            }.width('100%').padding(16).backgroundColor(this.themeSurface).borderRadius(16)
+          }
           this.sectionTitle('快捷键 · 拖动或使用箭头调整顺序')
           Column() {
             ForEach(this.ordered, (id: string) => {
@@ -249,5 +271,10 @@ struct TerminalSettings {
         }.width('100%').padding({ left: 16, right: 16, bottom: 24 })
       }.layoutWeight(1).width('100%')
     }.width('100%').height('100%').backgroundColor(this.themeBg)
+      .onAreaChange((_previous: Area, area: Area): void => {
+        this.frame = { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
+          width: Number(area.width), height: Number(area.height) };
+        this.updateDirectionPad();
+      })
   }
 }

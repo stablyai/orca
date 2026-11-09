@@ -1,6 +1,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { loadArkts } = require('./arkts-source.cjs')
+const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
 
 const offer = {
   endpoint: 'ws://desktop.invalid:6768',
@@ -28,6 +29,9 @@ function createPairing() {
     }
     isRelay() {
       return this.path === 'relay'
+    }
+    authenticationRejected() {
+      return false
     }
     async connect() {}
     request(method) {
@@ -78,4 +82,25 @@ test('a rejected status reply cannot beat an authenticated direct answer', async
   assert.equal((await selected).client.isRelay(), false)
   assert.deepEqual([...closed], ['relay'])
   connection.close()
+})
+
+test('a revoked device is distinguished from an unsupported handshake', async () => {
+  for (const authenticate of [true, false]) {
+    const peer = createRpcPeer({ authenticate })
+    const { PairingConnection } = loadArkts(
+      'pairing/PairingConnection.ets',
+      ['PairingConnection'],
+      peer
+    )
+    const connection = new PairingConnection()
+    const result = connection.connect({ ...offer, relay: null }, () => {})
+    const expected = authenticate
+      ? /desktop rejected the pairing code/
+      : /pairing paths unavailable/
+    const rejection = assert.rejects(result, expected)
+    await Promise.resolve()
+    peer.close(4001, authenticate ? 'Unauthorized' : 'Invalid e2ee_hello')
+    await rejection
+    connection.close()
+  }
 })

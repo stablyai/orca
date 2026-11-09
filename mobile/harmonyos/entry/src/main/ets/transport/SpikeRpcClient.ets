@@ -188,6 +188,9 @@ export class SpikeRpcClient {
       });
       this.ws.on('close', (_err: BusinessError, value: webSocket.CloseResult) => {
         this.relayCloseCode = value.code;
+        if (this.state === 'ready' && value.code === 4001 && value.reason === 'Unauthorized') {
+          this.authRejected = true;
+        }
         this.log('连接已关闭');
         this.terminate('socket closed');
       });

@@ -79,6 +79,149 @@ test('a measured cutout and single crossing hinge reach the page and clear when 
   bridge.dispose()
 })
 
+test('a terminal rail press is scoped to its visible page, active input owner and connected transport', async () => {
+  const contract = loadArkts('webshell/TerminalRailClaim.ets', [
+    'parseTerminalRailClaim',
+    'terminalRailKeyEnabled',
+    'terminalRailKeys',
+    'TERMINAL_RAIL_ARROWS'
+  ])
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], {
+    ...peer,
+    ...bytes,
+    ...contract
+  })
+  const controller = createController()
+  const host = `/h/${hostId}`
+  const terminal = `${host}/session/worktree-a`
+  const railManifest = {
+    ...manifest,
+    routes: [
+      ...manifest.routes,
+      {
+        pathname: '/h/[hostId]/session/[worktreeId]',
+        grants: ['navigate'],
+        optionalGrants: ['terminalKeyRail']
+      }
+    ]
+  }
+  const bridge = new BridgeHost(new peer.SpikeRpcClient(), controller, railManifest, meta, host)
+  const claims = []
+  bridge.setTerminalRailClaimSink((claim) => claims.push(claim))
+  bridge.setTerminalRailFocus(true)
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
+  const toolbar = {
+    canSend: true,
+    canCompose: false,
+    keyboardVisible: false,
+    liveInputEnabled: true,
+    phoneDisplayMode: true,
+    runsAgent: false,
+    modifiers: { ctrl: 'off', alt: 'off', shift: 'off' }
+  }
+  const claim = (owner) =>
+    post(bridge, {
+      type: 'notify',
+      name: 'terminal-key-rail-claim',
+      claimed: true,
+      inputOwner: owner,
+      toolbar
+    })
+  claim('pane-a')
+  assert.equal(await bridge.sendTerminalRailKey('pane-a', 'arrowUp'), false)
+  post(bridge, { type: 'notify', name: 'location', href: terminal })
+  assert.equal(claims.at(-1)?.owner, 'pane-a')
+  bridge.setPageGeometry({ occlusions: [], sideRail: true }, null, ['arrowUp', 'moreKeys'])
+  assert.equal(await bridge.sendTerminalRailKey('pane-a', 'arrowUp'), true)
+  assert.deepEqual(controller.replies.at(-1), {
+    v: 1,
+    type: 'terminalKey',
+    inputOwner: 'pane-a',
+    key: 'arrowUp'
+  })
+  claim('pane-b')
+  assert.equal(await bridge.sendTerminalRailKey('pane-a', 'arrowUp'), false)
+  assert.equal(await bridge.sendTerminalRailKey('pane-b', 'enter'), false)
+  bridge.setTerminalRailFocus(false)
+  assert.equal(await bridge.sendTerminalRailKey('pane-b', 'arrowUp'), false)
+  bridge.setTerminalRailFocus(true)
+  bridge.suspendTransport(1)
+  assert.equal(claims.at(-1), null)
+  assert.equal(await bridge.sendTerminalRailKey('pane-b', 'arrowUp'), false)
+  bridge.attachTransport(new peer.SpikeRpcClient(), 'lan')
+  assert.equal(await bridge.sendTerminalRailKey('pane-b', 'arrowUp'), false)
+  claim('pane-b')
+  assert.equal(await bridge.sendTerminalRailKey('pane-b', 'arrowUp'), true)
+  post(bridge, { type: 'notify', name: 'location', href: host })
+  assert.equal(claims.at(-1), null)
+  assert.equal(await bridge.sendTerminalRailKey('pane-b', 'arrowUp'), false)
+  bridge.dispose()
+})
+
+test('a drawable side strip clips above the keyboard and disappears when outside the window', () => {
+  const terminalRail = require('../../entry/src/main/ets/vendor/terminal-rail.js')
+  const { projectSideRail } = loadArkts('webshell/WindowRegions.ets', ['projectSideRail'], {
+    terminalRail
+  })
+  const regions = {
+    occlusions: [],
+    creases: [],
+    rail: { side: 'right', region: { x: 316, y: 64, width: 84, height: 600 } }
+  }
+  const frame = { x: 0, y: 32, width: 400, height: 660 }
+  const clipped = projectSideRail(regions, frame, 400)
+  assert.equal(clipped.height, 336)
+  assert.equal(clipped.bottom, 292)
+  assert.equal(projectSideRail(regions, frame, 60), null)
+  assert.equal(projectSideRail(regions, { ...frame, width: 316 }), null)
+})
+
+test('a system status column can reserve a side strip while a camera cutout alone cannot', async () => {
+  const terminalRail = require('../../entry/src/main/ets/vendor/terminal-rail.js')
+  const empty = { left: 0, top: 0, width: 0, height: 0 }
+  const avoid = { leftRect: empty, rightRect: empty, topRect: empty, bottomRect: empty }
+  const cutout = { left: 948, top: 198, width: 252, height: 141 }
+  let status = { ...avoid, topRect: { left: 948, top: 0, width: 252, height: 174 } }
+  let observed
+  const { ShellWindowRegions } = loadArkts('webshell/WindowRegions.ets', ['ShellWindowRegions'], {
+    terminalRail,
+    window: { AvoidAreaType: { TYPE_SYSTEM: 0, TYPE_KEYBOARD: 3, TYPE_NAVIGATION_INDICATOR: 4 } },
+    display: {
+      on() {},
+      off() {},
+      isFoldable: () => false,
+      convertGlobalToRelativeCoordinate: () => ({ displayId: 0, position: { x: 0, y: 0 } }),
+      getDisplayByIdSync: () => ({ getCutoutInfo: async () => ({ boundingRects: [cutout] }) })
+    },
+    AppStorage: { setOrCreate: (_key, value) => observed?.(JSON.parse(value || 'null')) }
+  })
+  const regions = new ShellWindowRegions({
+    on() {},
+    off() {},
+    getWindowProperties: () => ({ windowRect: { ...empty, width: 1200, height: 2400 } }),
+    getUIContext: () => ({ px2vp: (pixels) => pixels / 3 }),
+    getWindowAvoidArea: (type) => (type === 0 ? status : avoid)
+  })
+  let next = new Promise((resolve) => {
+    observed = resolve
+  })
+  regions.start()
+  let state = await next
+  assert.equal(state.rail.side, 'right')
+  assert.equal(state.rail.region.width, 84)
+  assert.equal(state.rail.region.y, 113)
+  status = { ...avoid, topRect: { left: 0, top: 0, width: 1200, height: 60 } }
+  next = new Promise((resolve) => {
+    observed = resolve
+  })
+  regions.refresh()
+  state = await next
+  assert.equal(state.rail, null)
+  regions.dispose()
+})
+
 test('closing during handshake rejects the connection', async () => {
   const peer = createRpcPeer({ authenticate: false })
   const client = new peer.SpikeRpcClient()
