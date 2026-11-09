@@ -2,9 +2,16 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { BrowserError } from '../../../browser-error'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
-import { routeBrowserClientDownload } from '../../../client-hosts/file-transfers/browser-client-download-routing'
+import {
+  isClientHostedWebContents,
+  routeBrowserClientDownload
+} from '../../../client-hosts/file-transfers/browser-client-download-routing'
 import { safeOrigin } from '../../browser-event-origin'
-import type { ActiveDownload, BrowserDownloadDoneState } from './browser-active-download'
+import type {
+  ActiveDownload,
+  BrowserDownloadDoneState,
+  BrowserDownloadFinishListener
+} from './browser-active-download'
 import type { BrowserDownloadFinishedEvent } from '../../../../../shared/browser-guest-events'
 import { BrowserManagerQueries } from '../browser-manager-queries'
 
@@ -25,7 +32,10 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
   private unownedDownloadOwnerResolver: ((webContentsId: number) => string | null) | null = null
   private readonly requestedFilenames = new WeakMap<Electron.DownloadItem, string>()
   private readonly requestedSavePaths = new WeakMap<Electron.DownloadItem, string>()
-  private readonly extensionDownloads = new WeakSet<Electron.DownloadItem>()
+  private readonly extensionDownloads = new WeakMap<
+    Electron.DownloadItem,
+    BrowserDownloadFinishListener
+  >()
   private readonly downloadClaimsByGuestId = new Map<number, PendingDownloadClaim>()
 
   /**
@@ -36,9 +46,15 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     this.unownedDownloadOwnerResolver = resolver
   }
 
-  /** chrome.downloads items are the extension's, so an agent `download` claim never takes them. */
-  markExtensionDownload(item: Electron.DownloadItem): void {
-    this.extensionDownloads.add(item)
+  /**
+   * chrome.downloads items are the extension's, so an agent `download` claim never takes them.
+   * onFinished hears how the item ended: after its remote save, or here if Orca refuses it.
+   */
+  markExtensionDownload(
+    item: Electron.DownloadItem,
+    onFinished: BrowserDownloadFinishListener
+  ): void {
+    this.extensionDownloads.set(item, onFinished)
   }
 
   /** chrome.downloads `filename`: names the item before its destination is reserved. */
@@ -84,6 +100,25 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     }
   }
 
+  /** chrome.downloads: whether this guest's downloads belong to a client-hosted page, asked before one starts. */
+  downloadRoutesToClient(guestWebContentsId: number): boolean {
+    return isClientHostedWebContents(
+      this.resolveDownloadOwner(guestWebContentsId).ownerGuestWebContentsId
+    )
+  }
+
+  private resolveDownloadOwner(guestWebContentsId: number) {
+    const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
+    const adoptedTabId = ownerContext
+      ? null
+      : (this.unownedDownloadOwnerResolver?.(guestWebContentsId) ?? null)
+    const ownerGuestWebContentsId =
+      ownerContext?.rootGuestWebContentsId ??
+      (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
+      guestWebContentsId
+    return { ownerContext, adoptedTabId, ownerGuestWebContentsId }
+  }
+
   protected isAwaitingDownloadFrom(
     guestWebContentsId: number,
     rootGuestWebContentsId: number
@@ -127,14 +162,8 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     })()
 
     // Stage client-hosted downloads for the remote workspace; popups use their opener.
-    const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
-    const adoptedTabId = ownerContext
-      ? null
-      : (this.unownedDownloadOwnerResolver?.(guestWebContentsId) ?? null)
-    const ownerGuestWebContentsId =
-      ownerContext?.rootGuestWebContentsId ??
-      (adoptedTabId ? this.getGuestWebContentsId(adoptedTabId) : null) ??
-      guestWebContentsId
+    const { ownerContext, adoptedTabId, ownerGuestWebContentsId } =
+      this.resolveDownloadOwner(guestWebContentsId)
     const decision = routeBrowserClientDownload({ guestWebContentsId: ownerGuestWebContentsId })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
     // Extension pages and chrome.downloads start their own downloads, never the agent's click.
@@ -185,13 +214,14 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       savePath: fallbackSavePath,
       reservationKey: destination?.reservationKey ?? null,
       clientRoute,
+      routedRemotely: clientRoute !== null,
       remoteDestination: undefined,
       receivedBytes: 0,
       transientState: null,
       terminalEvent: null,
       startedSent: false,
       cleanup: null,
-      onFinished: claim?.finish ?? null
+      onFinished: claim?.finish ?? this.extensionDownloads.get(item) ?? null
     }
     this.downloadsById.set(downloadId, download)
     claim?.start(true)

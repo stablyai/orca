@@ -88,7 +88,8 @@ export function routeBrowserClientDownload(input: {
   return { kind: 'blocked' }
 }
 
-function isClientHostedWebContents(webContentsId: number): boolean {
+/** Whether this is a client-hosted page or its popup, asked without staging a transfer. */
+export function isClientHostedWebContents(webContentsId: number): boolean {
   try {
     return isClientRouteWebContents?.(webContentsId) === true
   } catch {

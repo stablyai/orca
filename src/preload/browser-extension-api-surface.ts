@@ -210,8 +210,8 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
   },
   downloads: {
     permission: 'downloads',
-    methods: { download: {} },
-    events: ['onCreated', 'onChanged']
+    methods: { download: {}, search: {}, cancel: {}, erase: {}, show: {}, setUiOptions: {} },
+    events: ['onCreated', 'onChanged', 'onErased']
   },
   // Electron's native methods succeed but enforce nothing; onRuleMatchedDebug stays native.
   declarativeNetRequest: {

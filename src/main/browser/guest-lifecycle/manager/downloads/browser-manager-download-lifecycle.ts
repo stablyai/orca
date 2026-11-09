@@ -4,7 +4,7 @@ import type {
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
 } from '../../../../../shared/browser-guest-events'
-import type { ActiveDownload } from './browser-active-download'
+import type { ActiveDownload, BrowserDownloadFinishCause } from './browser-active-download'
 import { BrowserManagerDownloadCreation } from './browser-manager-download-creation'
 
 export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDownloadCreation {
@@ -156,7 +156,8 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
   protected cancelDownloadInternal(
     downloadId: string,
     reason: string,
-    status: 'canceled' | 'failed' = 'canceled'
+    status: 'canceled' | 'failed' = 'canceled',
+    cause?: BrowserDownloadFinishCause
   ): void {
     const download = this.downloadsById.get(downloadId)
     if (!download) {
@@ -179,7 +180,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
 
     if (shouldSendFinish) {
-      this.finishDownloadInternal(downloadId, status, reason || null)
+      this.finishDownloadInternal(downloadId, status, reason || null, cause)
       return
     }
 
@@ -190,7 +191,8 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
   protected finishDownloadInternal(
     downloadId: string,
     status: BrowserDownloadFinishedEvent['status'],
-    error: string | null
+    error: string | null,
+    cause?: BrowserDownloadFinishCause
   ): void {
     const download = this.downloadsById.get(downloadId)
     if (!download || download.terminalEvent) {
@@ -220,7 +222,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       error
     }
     download.terminalEvent = event
-    download.onFinished?.(event)
+    download.onFinished?.(event, cause, download.routedRemotely)
     if (download.browserTabId) {
       this.sendDownloadStarted(downloadId)
       this.sendDownloadFinished(download.browserTabId, event)
@@ -269,6 +271,50 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
         this.downloadsById.delete(downloadId)
       }
     }
+  }
+
+  /** A will-download listener refused this item: Electron drops it without done, so end it here. */
+  forgetRefusedDownload(item: Electron.DownloadItem): void {
+    for (const [downloadId, download] of this.downloadsById) {
+      if (download.item !== item) {
+        continue
+      }
+      // Why the terminal path: it frees the name, tells a claim, and ends a row already shown.
+      // Why no error text: the row then shows its own localized "Download failed".
+      this.finishDownloadInternal(downloadId, 'failed', null)
+      // Why only the entry: its page's queue skips an id without one at registration and teardown.
+      this.downloadsById.delete(downloadId)
+    }
+  }
+
+  /** chrome.downloads: whether onFinished is still to come for this item. */
+  tracksDownload(item: Electron.DownloadItem): boolean {
+    return this.activeDownloadIdFor(item) !== null
+  }
+
+  /** chrome.downloads: whether a remote save is under way, so the item's local path is only staging. */
+  downloadSavesRemotely(item: Electron.DownloadItem): boolean {
+    const downloadId = this.activeDownloadIdFor(item)
+    return Boolean(downloadId && this.downloadsById.get(downloadId)?.routedRemotely)
+  }
+
+  /** chrome.downloads cancel: also stops a remote save in progress, which item.cancel() cannot. */
+  cancelExtensionDownload(item: Electron.DownloadItem): boolean {
+    const downloadId = this.activeDownloadIdFor(item)
+    if (downloadId) {
+      // Why no reason: the UI then shows its own localized cancel text.
+      this.cancelDownloadInternal(downloadId, '')
+    }
+    return downloadId !== null
+  }
+
+  private activeDownloadIdFor(item: Electron.DownloadItem): string | null {
+    for (const download of this.downloadsById.values()) {
+      if (download.item === item && !download.terminalEvent) {
+        return download.downloadId
+      }
+    }
+    return null
   }
 
   protected getDownloadReceivedBytes(item: Electron.DownloadItem): number {

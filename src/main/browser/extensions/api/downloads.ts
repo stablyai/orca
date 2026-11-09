@@ -5,25 +5,51 @@ import {
   parseChromeExtensionUrl
 } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
-import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import {
+  browserDownloadDestinationReservations,
+  type BrowserDownloadTargetDestination
+} from '../../downloads/browser-download-destination'
 import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { chooseDownloadSavePath } from './downloads-save-as'
 import {
+  requestedPlace,
+  requireDownloadContext,
+  reserveTarget,
+  type DownloadPlace
+} from './downloads-place'
+import {
+  cancelDownload,
+  downloadQuerySchema,
+  emitDownloadsEvent,
+  eraseDownloads,
+  searchDownloads,
+  showDownload
+} from './downloads-history'
+import {
+  createDownloadRecord,
+  describeDownloadRecord,
+  downloadRecordDelta,
+  finishedDownloadError,
+  noteDownloadUpdate,
+  requestedUrl,
+  settleDownloadRecord,
+  type ChromeDownloadError
+} from './downloads-records'
+import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
+  extensionHasPermission,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
 
 const WILL_DOWNLOAD_TIMEOUT_MS = 15_000
+type DoneState = 'completed' | 'cancelled' | 'interrupted'
 let nextDownloadId = 1
 /** Owner + URL → the start in flight; will-download names no caller, so identical starts take turns. */
 const startsInFlight = new Map<string, Promise<unknown>>()
-
-/** A name inside Downloads, or with saveAs, the exact path the user chose. */
-type DownloadPlace = { filename?: string; savePath?: string }
 
 const optionsSchema = z
   .object({
@@ -39,48 +65,12 @@ const optionsSchema = z
   .required({ url: true })
   .loose()
 
-type ChromeDownloadState = 'in_progress' | 'interrupted' | 'complete'
-
-function chromeState(item: Electron.DownloadItem): ChromeDownloadState {
-  const state = item.getState()
-  return state === 'completed'
-    ? 'complete'
-    : state === 'progressing'
-      ? 'in_progress'
-      : 'interrupted'
-}
-
-// Why the chain: getURL is the URL after redirects; Chrome's `url` is the one requested.
-function requestedUrl(item: Electron.DownloadItem): string {
-  return item.getURLChain()[0] ?? item.getURL()
-}
-
-function describeItem(id: number, item: Electron.DownloadItem, extensionId: string) {
-  return {
-    id,
-    url: requestedUrl(item),
-    finalUrl: item.getURL(),
-    referrer: '',
-    filename: item.getSavePath(),
-    incognito: false,
-    danger: 'safe',
-    mime: item.getMimeType(),
-    startTime: new Date(item.getStartTime() * 1000).toISOString(),
-    state: chromeState(item),
-    paused: item.isPaused(),
-    canResume: item.canResume(),
-    bytesReceived: item.getReceivedBytes(),
-    totalBytes: item.getTotalBytes(),
-    fileSize: item.getTotalBytes(),
-    exists: true,
-    byExtensionId: extensionId
-  }
-}
-
 /** Why a tab: Orca's download UI belongs to a page, so a worker's download lands on the active tab. */
-function downloadOwner(caller: BrowserExtensionCaller): Electron.WebContents {
+function downloadOwner(caller: BrowserExtensionCaller, url: string): Electron.WebContents {
   const own = caller.webContents
-  if (own && !own.isDestroyed() && browserManager.getTabIdForWebContentsId(own.id)) {
+  // Why blob: a page's blob URL resolves only in the renderer that created it.
+  const ownsBlob = url.startsWith('blob:')
+  if (own && !own.isDestroyed() && (ownsBlob || browserManager.getTabIdForWebContentsId(own.id))) {
     return own
   }
   const activeId = getActiveBrowserTabId()
@@ -107,49 +97,77 @@ function resolveDownloadUrl(caller: BrowserExtensionCaller, raw: string): string
   return url.toString()
 }
 
-function emit(caller: BrowserExtensionCaller, event: string, args: unknown[]): void {
-  emitBrowserExtensionEvent(
-    { session: caller.session, extensionId: caller.extension.id },
-    'downloads',
-    event,
-    args
+function track(
+  caller: BrowserExtensionCaller,
+  id: number,
+  item: Electron.DownloadItem,
+  destination: BrowserDownloadTargetDestination | null,
+  willDownload: Electron.Event
+): void {
+  const settled = Promise.withResolvers<void>()
+  const record = createDownloadRecord(
+    caller.session,
+    caller.extension.id,
+    id,
+    item,
+    destination?.savePath ?? '',
+    settled.promise
   )
-}
-
-function track(caller: BrowserExtensionCaller, id: number, item: Electron.DownloadItem): void {
-  emit(caller, 'onCreated', [describeItem(id, item, caller.extension.id)])
-  let previous = chromeState(item)
+  // Why from the reservation: will-download must not wait on disk, and only an overwrite starts with a file there.
+  emitDownloadsEvent(caller, 'onCreated', [
+    describeDownloadRecord(record, { exists: destination?.replacesFile ?? false, size: null })
+  ])
+  let previous = { state: record.state, error: record.error }
   const report = (): void => {
-    const current = chromeState(item)
-    if (current !== previous) {
-      emit(caller, 'onChanged', [{ id, state: { previous, current } }])
-      previous = current
+    const delta = downloadRecordDelta(previous, record)
+    if (delta) {
+      emitDownloadsEvent(caller, 'onChanged', [delta])
+      previous = { state: record.state, error: record.error }
     }
   }
-  item.on('updated', report)
-  item.once('done', () => {
-    item.off('updated', report)
+  const onUpdated = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => {
+    noteDownloadUpdate(record, state)
     report()
+  }
+  let finished = false
+  let doneState: DoneState | null = null
+  const finish = (error: ChromeDownloadError | null, remote = false): void => {
+    if (finished) {
+      return
+    }
+    finished = true
+    item.off('updated', onUpdated)
+    item.off('done', onDone)
+    settleDownloadRecord(record, error, remote)
+    browserDownloadDestinationReservations.release(destination?.reservationKey ?? null)
+    report()
+    settled.resolve()
+  }
+  const onDone = (_event: Electron.Event, state: DoneState): void => {
+    doneState = state
+    // Why: an item the manager tracks settles from its outcome, which a remote save delays.
+    if (!browserManager.tracksDownload(item)) {
+      finish(
+        state === 'completed' ? null : state === 'interrupted' ? 'NETWORK_FAILED' : 'USER_CANCELED'
+      )
+    }
+  }
+  item.on('updated', onUpdated)
+  item.once('done', onDone)
+  // Why here: this listener runs before the manager's, which may finish the item inside will-download.
+  // Why the route, not the outcome: a failed remote save's local path was staging too.
+  browserManager.markExtensionDownload(item, (event, cause, routedRemotely = false) =>
+    finish(finishedDownloadError(record, event.status, doneState, cause), routedRemotely)
+  )
+  // Why after the emit: a later will-download listener can refuse the item, and then done may never come.
+  queueMicrotask(() => {
+    if (willDownload.defaultPrevented) {
+      finish('FILE_BLOCKED')
+    }
   })
 }
 
-/** Chrome's rule: relative to Downloads, no back-references. Orca keeps only the last segment. */
-function requestedFilename(raw: string | undefined): string | undefined {
-  if (raw === undefined) {
-    return undefined
-  }
-  const segments = raw.split(/[\\/]/)
-  if (
-    raw.trim() === '' ||
-    /^([\\/]|[A-Za-z]:)/.test(raw) ||
-    segments.some((segment) => segment === '..')
-  ) {
-    throw new BrowserExtensionApiError('Invalid filename')
-  }
-  return raw
-}
-
-function startDownload(
+async function startDownload(
   caller: BrowserExtensionCaller,
   owner: Electron.WebContents,
   url: string,
@@ -157,50 +175,75 @@ function startDownload(
   place: DownloadPlace,
   signal: AbortSignal
 ): Promise<number> {
-  requireDownloadContext(signal)
-  // Why: the tab can close during the save dialog or an earlier identical start.
-  if (owner.isDestroyed()) {
-    throw new BrowserExtensionApiError('The tab closed before the download started')
+  requireDownloadContext(signal, owner)
+  const saveAs = place.savePath !== undefined
+  // Why before reserving: a client-hosted page keeps only the name, as on main, and never touches local Downloads.
+  const clientHosted =
+    !saveAs && place.target !== undefined && browserManager.downloadRoutesToClient(owner.id)
+  if (clientHosted && place.target?.overwrite) {
+    throw new BrowserExtensionApiError(
+      'A remote workspace cannot overwrite a file; use conflictAction "uniquify"'
+    )
   }
+  const destination =
+    !saveAs && place.target && !clientHosted
+      ? await reserveTarget(place.target, signal, owner)
+      : null
   const id = nextDownloadId++
-  const started = new Promise<number>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      caller.session.off('will-download', onWillDownload)
-      reject(new BrowserExtensionApiError('The download did not start'))
-    }, WILL_DOWNLOAD_TIMEOUT_MS)
-    function onWillDownload(
-      _event: Electron.Event,
-      item: Electron.DownloadItem,
-      contents: Electron.WebContents
-    ): void {
-      if (contents !== owner || requestedUrl(item) !== url) {
-        return
-      }
-      clearTimeout(timer)
-      caller.session.off('will-download', onWillDownload)
-      browserManager.markExtensionDownload(item)
-      if (place.savePath !== undefined) {
-        browserManager.requestDownloadSavePath(item, place.savePath)
-      } else if (place.filename !== undefined) {
-        browserManager.requestDownloadFilename(item, place.filename)
-      }
-      track(caller, id, item)
-      resolve(id)
+  const started = Promise.withResolvers<number>()
+  const stopWaiting = (): void => {
+    clearTimeout(timer)
+    caller.session.off('will-download', onWillDownload)
+  }
+  const abandon = (): void => {
+    stopWaiting()
+    browserDownloadDestinationReservations.release(destination?.reservationKey ?? null)
+  }
+  const timer = setTimeout(() => {
+    abandon()
+    started.reject(new BrowserExtensionApiError('The download did not start'))
+  }, WILL_DOWNLOAD_TIMEOUT_MS)
+  function onWillDownload(
+    event: Electron.Event,
+    item: Electron.DownloadItem,
+    contents: Electron.WebContents
+  ): void {
+    if (contents !== owner || requestedUrl(item) !== url) {
+      return
     }
-    // Why prepend: the download manager's listener reserves the destination from the filename.
-    caller.session.prependListener('will-download', onWillDownload)
-  })
+    stopWaiting()
+    // Why: closing the window clears Downloads while a start waits, and then no one holds its path.
+    if (destination && !browserDownloadDestinationReservations.holds(destination.reservationKey)) {
+      // Why prevent, not cancel: Electron drops the item, and the manager's listener skips it.
+      event.preventDefault()
+      started.reject(
+        new BrowserExtensionApiError('Downloads were reset before the download started')
+      )
+      return
+    }
+    if (place.savePath !== undefined) {
+      browserManager.requestDownloadSavePath(item, place.savePath)
+    } else if (destination) {
+      browserManager.requestDownloadSavePath(item, destination.savePath)
+    } else if (place.filename !== undefined) {
+      browserManager.requestDownloadFilename(item, place.filename)
+    }
+    track(caller, id, item, destination, event)
+    started.resolve(id)
+  }
+  // Why prepend: the download manager's listener reserves the destination from the filename.
+  caller.session.prependListener('will-download', onWillDownload)
   const headers = Object.fromEntries(
     (options.headers ?? []).map(({ name, value }) => [name, value])
   )
-  owner.downloadURL(url, { headers })
-  return started
-}
-
-function requireDownloadContext(signal: AbortSignal): void {
-  if (signal.aborted) {
-    throw new BrowserExtensionApiError('Extension context was unloaded')
+  try {
+    owner.downloadURL(url, { headers })
+  } catch {
+    // Why: the tab can be destroyed between the check above and this call.
+    abandon()
+    throw new BrowserExtensionApiError('The download did not start')
   }
+  return started.promise
 }
 
 async function download(
@@ -212,20 +255,25 @@ async function download(
   }
   const saveAs = options.saveAs === true
   // Why only without saveAs: the save dialog asks before replacing a file itself.
-  if (!saveAs && options.conflictAction !== undefined && options.conflictAction !== 'uniquify') {
-    throw new BrowserExtensionApiError('Orca saves downloads only with conflictAction "uniquify"')
+  if (!saveAs && options.conflictAction === 'prompt') {
+    throw new BrowserExtensionApiError(
+      'Orca saves downloads only with conflictAction "uniquify" or "overwrite"'
+    )
   }
-  const filename = requestedFilename(options.filename)
+  const requested = requestedPlace(
+    options.filename,
+    !saveAs && options.conflictAction === 'overwrite'
+  )
   const url = resolveDownloadUrl(caller, options.url)
-  const owner = downloadOwner(caller)
+  const owner = downloadOwner(caller, url)
   const state = getHostSessionState(caller.session)
   if (!state) {
     throw new BrowserExtensionApiError('Extension context was unloaded')
   }
   const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
-  const place: DownloadPlace = { filename }
+  const place: DownloadPlace = { ...requested }
   if (saveAs) {
-    const savePath = await chooseDownloadSavePath(owner, url, filename)
+    const savePath = await chooseDownloadSavePath(owner, url, requested.filename)
     requireDownloadContext(signal)
     if (savePath === null) {
       throw new BrowserExtensionApiError('Download canceled by the user')
@@ -248,12 +296,29 @@ async function download(
   }
 }
 
+function setUiOptions(caller: BrowserExtensionCaller): void {
+  if (!extensionHasPermission(caller.extension, 'downloads.ui', caller.session)) {
+    throw new BrowserExtensionApiError(
+      'downloads.setUiOptions requires the "downloads.ui" permission'
+    )
+  }
+  // Why nothing to apply: Orca lists each download in its tab, and that list stays visible.
+}
+
 export function registerDownloadsNamespace(): void {
   registerBrowserExtensionNamespace('downloads', {
     permission: 'downloads',
     methods: {
-      download: defineBrowserExtensionMethod(z.tuple([optionsSchema]), download)
+      download: defineBrowserExtensionMethod(z.tuple([optionsSchema]), download),
+      search: defineBrowserExtensionMethod(z.tuple([downloadQuerySchema]), searchDownloads),
+      cancel: defineBrowserExtensionMethod(z.tuple([z.number().int()]), cancelDownload),
+      erase: defineBrowserExtensionMethod(z.tuple([downloadQuerySchema]), eraseDownloads),
+      show: defineBrowserExtensionMethod(z.tuple([z.number().int()]), showDownload),
+      setUiOptions: defineBrowserExtensionMethod(
+        z.tuple([z.strictObject({ enabled: z.boolean() })]),
+        setUiOptions
+      )
     },
-    events: ['onCreated', 'onChanged']
+    events: ['onCreated', 'onChanged', 'onErased']
   })
 }
