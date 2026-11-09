@@ -28,8 +28,8 @@ import {
   isClaudeAccountCancellation,
   isCodexAccountCancellation
 } from '../../../lib/provider-accounts/provider-account-action-errors'
-import { getClaudeAccountLabel } from '@/lib/claude-account-label'
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 type CodexActionContext = {
   settings: GlobalSettings

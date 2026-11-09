@@ -16,7 +16,7 @@ import { getIndexedRepoMap, getIndexedReposById } from '@/store/repos/repository
 import { defaultScopeHost } from './default-creation-host'
 import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
-import { getEnvironmentRuntimeContextKey } from './provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '../runtime/hosts/observations/provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
   getProjectRuntimePreflightContext,

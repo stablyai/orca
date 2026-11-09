@@ -1,7 +1,7 @@
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { jiraGetProjectStatusOrder } from '@/runtime/jira/runtime-jira-client'
 import type { RowLessSource as RuntimeJiraSettings } from '@/lib/default-creation-host'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'

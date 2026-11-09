@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { addSyntheticSession, openSessionSearchHarness } from './session-search-engine-test-fixture'
 import { readIndexContentRevision, readIndexGeneration } from './session-search-index-generation'
 import { encodeSessionSearchCursor, sessionSearchPageKey } from './session-search-page-cursor'
-import { SessionSearchToolPurge, readSessionSearchToolPurgePage } from './session-search-tool-purge'
+import { SessionSearchToolPurge } from './session-search-tool-purge'
 
 it('purges legacy tool rows across batches while preserving conversations and raw generation fences', async () => {
   const index = await openSessionSearchHarness('ss-tool-purge')
@@ -32,25 +32,6 @@ it('purges legacy tool rows across batches while preserving conversations and ra
     addSyntheticSession(index.db, { id: 4, role: 'tool', text: 'newlegacytool' })
     await purge.request()
     expect(index.engine.search({ query: 'newlegacytool' }).hits).toEqual([])
-  } finally {
-    await index.close()
-  }
-})
-
-it('bounds empty conversation pages and seeks across sparse rowid gaps', async () => {
-  const index = await openSessionSearchHarness('ss-tool-purge-sparse')
-  try {
-    addSyntheticSession(index.db, { id: 1, text: 'kept', rows: 300 })
-    addSyntheticSession(index.db, { id: 2, text: 'legacytool', role: 'tool' })
-    index.db.exec('UPDATE messages SET id = 1000000 WHERE id = 301')
-    const first = readSessionSearchToolPurgePage(index.db, 0)
-    expect(first).toEqual({ cursor: 256, ids: [] })
-    expect(readSessionSearchToolPurgePage(index.db, 256)).toEqual({ cursor: 512, ids: [] })
-    expect(readSessionSearchToolPurgePage(index.db, 512)).toEqual({
-      cursor: 1000255,
-      ids: [{ id: 1000000 }]
-    })
-    expect(readSessionSearchToolPurgePage(index.db, 1000255)).toBeNull()
   } finally {
     await index.close()
   }

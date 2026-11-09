@@ -1,4 +1,5 @@
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
+import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
 import type { CodexAccountUsageRead } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
@@ -347,11 +348,19 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<void> | undefined
   stopProviderNaming?(): void
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
-  closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
+  closeSession?(
+    sessionId: string,
+    observeClose?: AgentSessionCloseObserver,
+    options?: ProviderProcessCloseOptions
+  ): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Teardown without requiring a future-resume cursor. */
-  disposeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
+  disposeSession?(
+    sessionId: string,
+    observeClose?: AgentSessionCloseObserver,
+    options?: ProviderProcessCloseOptions
+  ): Promise<boolean>
   /** Acknowledge only after dead-child, lease and journal ownership release. */
   acknowledgeSessionRelease?(sessionId: string, acquisition?: AcquisitionReceipt): void
 }

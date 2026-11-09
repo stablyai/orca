@@ -272,6 +272,7 @@ const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
     'check-react-compiler-compat-ratchet.mjs'
   ],
+  'config/react-compiler-uncompiled-files.txt': ['check-react-compiler-compat-ratchet.mjs'],
   'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
     'check-render-path-translate-ratchet.mjs'
   ]

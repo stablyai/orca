@@ -20,7 +20,7 @@ import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import {
   getProviderRuntimeContextKey,
   bumpProviderRuntimeSessionGeneration
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'

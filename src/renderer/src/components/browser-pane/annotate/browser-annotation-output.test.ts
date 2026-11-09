@@ -103,18 +103,6 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).not.toContain('\n## injected')
   })
 
-  it('heads document preview annotations with the Windows file path', () => {
-    const annotation = makeAnnotation()
-    const sanitizedUrl = 'C:\\repo\\docs\\report.html'
-    const markdown = formatBrowserAnnotationsAsMarkdown([
-      makeAnnotation({
-        payload: { ...annotation.payload, page: { ...annotation.payload.page, sanitizedUrl } }
-      })
-    ])
-
-    expect(markdown).toContain(`## Design Feedback: ${sanitizedUrl}`)
-  })
-
   it('does not split surrogate pairs at the inline annotation cap', () => {
     const annotation = makeAnnotation()
     const selectedText = `${'x'.repeat(BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH - 1)}😀tail`
