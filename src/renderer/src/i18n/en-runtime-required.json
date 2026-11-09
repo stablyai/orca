@@ -1378,6 +1378,20 @@
       "manyOtherSites_other": "Read and change your data on {{hosts}} and {{count}} other sites"
     }
   },
+  "cloudSecrets": {
+    "paste": {
+      "blocked_one": "{{count}} needs a fix and will be skipped",
+      "blocked_other": "{{count}} need a fix and will be skipped",
+      "duplicates_one": "{{count}} duplicate ignored",
+      "duplicates_other": "{{count}} duplicates ignored",
+      "save_one": "Save {{count}} secret",
+      "save_other": "Save {{count}} secrets"
+    },
+    "value": {
+      "lines_one": "Multi-line value · {{count}} line",
+      "lines_other": "Multi-line value · {{count}} lines"
+    }
+  },
   "codeHost": {
     "bitbucketConnect": {
       "accessTokenRequired": "Enter an access token.",

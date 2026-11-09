@@ -61,10 +61,10 @@ function ValueProps(): React.JSX.Element {
     },
     {
       icon: KeyRound,
-      title: t('auto.components.billing.plans.vpSecretsTitle', 'Secrets never stored in the VM'),
+      title: t('auto.components.billing.plans.vpSecretsTitle', 'API keys stay out of the sandbox'),
       body: t(
         'auto.components.billing.plans.vpSecretsBody2',
-        'Credentials are injected into outbound requests and never touch the VM’s disk.'
+        'Agents and terminals get them as environment variables; they are never written to the sandbox’s disk.'
       )
     }
   ]

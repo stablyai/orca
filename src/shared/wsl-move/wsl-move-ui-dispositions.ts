@@ -137,6 +137,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'trayMinimizeNoticeShown',
   'mobileEmulatorTabIntroDismissed',
   'mobileEmulatorAgentSetupDismissed',
+  'cloudAgentSetupDone',
   'projectOrderManualDefaultNoticeDismissed',
   'usagePercentageDisplayChangeNoticeDismissed',
   'statusBarCompactChangeNoticeDismissed',

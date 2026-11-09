@@ -100,6 +100,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ mobileEmulatorAgentSetupDismissed: true }).catch(console.error)
         return { mobileEmulatorAgentSetupDismissed: true }
       }),
+    cloudAgentSetupDone: false,
+    markCloudAgentSetupDone: () =>
+      set((s) => {
+        if (s.cloudAgentSetupDone) {
+          return s
+        }
+        window.api.ui.set({ cloudAgentSetupDone: true }).catch(console.error)
+        return { cloudAgentSetupDone: true }
+      }),
     projectOrderManualDefaultNoticeDismissed: true,
     dismissProjectOrderManualDefaultNotice: () =>
       set((s) => {

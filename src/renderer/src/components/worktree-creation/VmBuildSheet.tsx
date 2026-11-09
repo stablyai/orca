@@ -14,6 +14,7 @@ import { StepIcon } from './WorktreeSetupSteps'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
+import { VmBuildCloudAgentStep } from '../cloud-agent-setup/VmBuildCloudAgentStep'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import { classifyVmBuildFailure, isAccountGate, type VmBuildFailure } from './vm-build-failure'
 import {
@@ -72,7 +73,8 @@ export function VmBuildSheet({
   onRetry,
   onDismiss,
   onEditRecipe,
-  agentSignInRow
+  agentSignInRow,
+  cloudAgentStep
 }: {
   creationId: string
   entry: PendingWorktreeCreation
@@ -85,6 +87,8 @@ export function VmBuildSheet({
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
+  /** Fixtures only: a fixed "Add an agent" step in place of the live one. */
+  cloudAgentStep?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const logId = React.useId()
@@ -195,6 +199,7 @@ export function VmBuildSheet({
                 t={t}
               />
             ))}
+            {cloudAgentStep ?? <VmBuildCloudAgentStep creationId={creationId} entry={entry} />}
             {agentSignInRow ??
               (entry.vmEnvironmentId ? (
                 <VmBuildAgentSignInRow

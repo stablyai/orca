@@ -76,7 +76,7 @@ if ! alive xvnc || [ ! -s "$STATE/password" ]; then
   start xvnc Xvnc ":$DISPLAY_NUM" -geometry "$GEOMETRY" -depth 24 -nolisten tcp \
     -rfbport -1 -rfbunixpath "$SOCKET" -rfbunixmode 0600 \
     -SecurityTypes VncAuth -PasswordFile "$STATE/passwd" \
-    -AlwaysShared -AcceptSetDesktopSize -desktop 'Remote Desktop'
+    -AlwaysShared -AcceptSetDesktopSize -desktop 'Remote desktop'
   for _ in $(seq 1 100); do
     [ -S "$SOCKET" ] && break
     alive xvnc || { tail -n 20 "$STATE/xvnc.log" >&2; fail 'Xvnc exited'; }

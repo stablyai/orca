@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
+import { ComposerCloudAgentHint } from '../cloud-agent-setup/ComposerCloudAgentHint'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/new-workspace-project-options'
@@ -190,6 +192,7 @@ export function NewWorkspaceComposerProjectSection({
           </div>
         ) : null}
       </div>
+      {selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? <ComposerCloudAgentHint /> : null}
       {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (
         <p className="whitespace-pre-line text-2xs text-destructive">{ephemeralVmRecipeError}</p>
       ) : null}

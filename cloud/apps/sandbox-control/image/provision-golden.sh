@@ -128,11 +128,14 @@ install_desktop() {
   rm -rf "$dir" && mkdir -p "$dir/novnc" "$dir/websockify" || return 1
   tar -xzf "$tmp/novnc.tgz" -C "$dir/novnc" --strip-components 1 || return 1
   tar -xzf "$tmp/websockify.tgz" -C "$dir/websockify" --strip-components 1 || return 1
-  # Orca tab fit: title "Remote Desktop" (Xvnc's -desktop name), no noVNC favicon, control bar on
-  # the right (away from Orca's sidebar edge), and no reconnect loop on a stale per-boot password.
+  # Orca tab fit: title "Remote desktop" (Xvnc's -desktop name), no noVNC favicon, control bar on
+  # the right (away from Orca's sidebar edge); a stale per-boot password ends the session with one
+  # plain message instead of a reconnect loop. "Unencrypted" is noVNC's view of plain ws:// to
+  # localhost; the hop to the sandbox rides the end-to-end encrypted runtime connection.
   sed -i -e 's/document.title = e.detail.name + " - " + PAGE_TITLE;/document.title = e.detail.name;/' \
     -e "s/WebUtil.readSetting('controlbar_pos') === 'right'/WebUtil.readSetting('controlbar_pos', 'right') === 'right'/" \
-    -e 's/securityFailed(e) {/securityFailed(e) { UI.inhibitReconnect = true;/' \
+    -e 's/securityFailed(e) {/securityFailed(e) { UI.inhibitReconnect = true; UI.showStatus("This remote desktop session ended. Reopen it from the workspace menu.", "error"); return;/' \
+    -e 's/_("Connected (unencrypted) to ")/_("Connected to ")/' \
     "$dir/novnc/app/ui.js" || return 1
   sed -i '/rel="icon"/d; /rel="apple-touch-icon"/d' "$dir/novnc/vnc.html" || return 1
   rm -rf "$tmp"
