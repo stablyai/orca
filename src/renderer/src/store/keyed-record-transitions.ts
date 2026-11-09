@@ -1,4 +1,4 @@
-import { isIndexKey, keepsKeyOrder, verifyNamedKeys } from './keyed-record-key-checks'
+import { isIndexKey, verifyNamedKeys } from './keyed-record-key-checks'
 
 // Accepted-write provenance for keyed store records: the writer's helper names what it replaced,
 // so readers update only those keys; anything it did not annotate reads as a full resync.
@@ -12,17 +12,35 @@ export type FullResyncReason =
   | 'reordered'
   | 'unknown'
 
+/**
+ * Addressed order contract: surviving keys keep their relative order (writers declare a move as
+ * `reordered`, a full resync) and `added` lists the keys now present that weren't, in source
+ * order. A reader holding its own key ranks places every change exactly in O(changed).
+ */
+export type AddressedKeyChanges = {
+  /** Every added, deleted or replaced key; not ordered. */
+  keys: ReadonlySet<string>
+  /** In source order: index keys ascending first for records, then insertion order. */
+  added: readonly string[]
+  deleted: ReadonlySet<string>
+}
+
 export type RecordChanges =
-  | { kind: 'addressed'; keys: ReadonlySet<string> }
+  | ({ kind: 'addressed' } & AddressedKeyChanges)
   | { kind: 'full-resync'; reason: FullResyncReason }
+
+/** How a builder that already produced `next` placed its keys: survivors kept, additions appended in named order. */
+export type KeyOrder = 'appended' | 'reordered'
 
 export type TabMapChanges =
   | {
       kind: 'addressed'
       workspaceIds: ReadonlySet<string>
       tabIds: ReadonlySet<string>
-      /** A workspace key was added or deleted, so readers that keep source order must re-walk keys. */
+      /** A workspace key was added or deleted; `addedWorkspaceIds` is in source order. */
       workspaceSetChanged: boolean
+      addedWorkspaceIds: readonly string[]
+      deletedWorkspaceIds: ReadonlySet<string>
     }
   | { kind: 'full-resync'; reason: FullResyncReason }
 
@@ -146,17 +164,18 @@ export function replaceMapEntries<V>(
 export function annotateRecordReplacement<R extends KeyedSnapshot>(
   previous: KeyedSnapshot,
   next: R,
-  keys: Iterable<string>
+  keys: Iterable<string>,
+  order: KeyOrder = 'appended'
 ): R {
   if (next === previous) {
     return next
   }
   const named = new Set(keys)
-  verifyNamedKeys(previous, next, named)
-  if (keepsKeyOrder(previous, next)) {
-    link(next, previous, named)
-  } else {
+  verifyNamedKeys(previous, next, named, order)
+  if (order === 'reordered') {
     links.set(next, { reason: 'reordered' })
+  } else {
+    link(next, previous, named)
   }
   return next
 }
@@ -214,18 +233,19 @@ export function replaceTabBuckets<T extends TabRow>(
 export function annotateTabBucketReplacement<R extends KeyedSnapshot>(
   previous: KeyedSnapshot,
   next: R,
-  workspaceIds: Iterable<string>
+  workspaceIds: Iterable<string>,
+  order: KeyOrder = 'appended'
 ): R {
   if (next === previous) {
     return next
   }
   const named = new Set(workspaceIds)
-  verifyNamedKeys(previous, next, named)
-  if (keepsKeyOrder(previous, next)) {
-    linkTabBuckets(previous, next, named)
-  } else {
+  verifyNamedKeys(previous, next, named, order)
+  if (order === 'reordered') {
     // Key order is ownership precedence, so a moved key cannot be expressed as addressed keys.
     links.set(next, { reason: 'reordered' })
+  } else {
+    linkTabBuckets(previous, next, named)
   }
   return next
 }
@@ -236,11 +256,7 @@ export function markFullResync<R extends Keyed>(next: R, reason: FullResyncReaso
   return next
 }
 
-type Walked = {
-  keys: Set<string>
-  tabIds: Set<string> | null
-  keySetChanged: boolean
-}
+type Walked = AddressedKeyChanges & { tabIds: Set<string> | null }
 
 // Composes forward, oldest write first, so added keys come out in the order the source holds them.
 function walk(next: Keyed, previous: Keyed): Walked | FullResyncReason {
@@ -267,20 +283,24 @@ function walk(next: Keyed, previous: Keyed): Walked | FullResyncReason {
     }
     current = before
   }
-  const touched = new Set<string>()
+  const keys = new Set<string>()
+  const added = new Set<string>()
   const deleted = new Set<string>()
   let tabIds: Set<string> | null = new Set()
-  let keySetChanged = false
   for (const step of steps.toReversed()) {
+    for (const key of step.deleted) {
+      if (!added.delete(key)) {
+        deleted.add(key)
+      }
+    }
     for (const key of step.added) {
-      // A key deleted earlier in the chain and added back has moved; only a walk can place it.
+      // A key the start held, deleted and added back, has moved; only a walk can place it.
       if (deleted.has(key)) {
         return 'reordered'
       }
+      added.add(key)
     }
-    step.deleted.forEach((key) => deleted.add(key))
-    step.keys.forEach((key) => touched.add(key))
-    keySetChanged ||= step.added.length > 0 || step.deleted.length > 0
+    step.keys.forEach((key) => keys.add(key))
     if (step.tabIds && tabIds) {
       step.tabIds.forEach((id) => tabIds?.add(id))
     } else {
@@ -289,15 +309,14 @@ function walk(next: Keyed, previous: Keyed): Walked | FullResyncReason {
   }
   const ordered = steps[0]?.integerKeysFirst
     ? [
-        ...[...touched].filter(isIndexKey).sort((a, b) => Number(a) - Number(b)),
-        ...[...touched].filter((key) => !isIndexKey(key))
+        ...[...added].filter(isIndexKey).sort((a, b) => Number(a) - Number(b)),
+        ...[...added].filter((key) => !isIndexKey(key))
       ]
-    : [...touched]
-  return { keys: new Set(ordered), tabIds, keySetChanged }
+    : [...added]
+  return { keys, added: ordered, deleted, tabIds }
 }
 
 /** null: same identity. Addressed only when every write from `previous` to `next` was annotated. */
-/** Changed keys come in source order: chronological additions, with integer keys first for records. */
 export function readRecordChanges(next: Keyed, previous: Keyed): RecordChanges | null {
   if (next === previous) {
     return null
@@ -305,7 +324,7 @@ export function readRecordChanges(next: Keyed, previous: Keyed): RecordChanges |
   const result = walk(next, previous)
   return typeof result === 'string'
     ? { kind: 'full-resync', reason: result }
-    : { kind: 'addressed', keys: result.keys }
+    : { kind: 'addressed', keys: result.keys, added: result.added, deleted: result.deleted }
 }
 
 export function readTabMapChanges(
@@ -325,7 +344,9 @@ export function readTabMapChanges(
         kind: 'addressed',
         workspaceIds: result.keys,
         tabIds: result.tabIds,
-        workspaceSetChanged: result.keySetChanged
+        workspaceSetChanged: result.added.length > 0 || result.deleted.size > 0,
+        addedWorkspaceIds: result.added,
+        deletedWorkspaceIds: result.deleted
       }
     : { kind: 'full-resync', reason: 'unknown' }
 }

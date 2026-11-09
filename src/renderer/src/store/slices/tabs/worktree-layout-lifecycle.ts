@@ -196,6 +196,8 @@ export function removeWorktreeLayout(
     ...affectedWorkspaces
   ])
   const terminalKeys = new Set([...worktreeIds, ...(removed.kept?.worktreeIds ?? [])])
+  // Editor transfers may create entries for their target workspaces in tab order, not named order.
+  const layoutOrder = affectedWorkspaces.size ? 'reordered' : 'appended'
   const patch: WorktreeLayoutPatch = {
     tabsByWorktree: annotateTabBucketReplacement(
       s.tabsByWorktree ?? {},
@@ -216,22 +218,26 @@ export function removeWorktreeLayout(
     unifiedTabsByWorktree: annotateTabBucketReplacement(
       s.unifiedTabsByWorktree,
       unifiedTabs,
-      layoutKeys
+      layoutKeys,
+      layoutOrder
     ),
     groupsByWorktree: annotateRecordReplacement(
       s.groupsByWorktree ?? {},
       collapsed.groups,
-      layoutKeys
+      layoutKeys,
+      layoutOrder
     ),
     layoutByWorktree: annotateRecordReplacement(
       s.layoutByWorktree ?? {},
       omitByWorktree(ownerLayouts),
-      layoutKeys
+      layoutKeys,
+      layoutOrder
     ),
     activeGroupIdByWorktree: annotateRecordReplacement(
       s.activeGroupIdByWorktree ?? {},
       omitByWorktree(ownerActiveGroups),
-      layoutKeys
+      layoutKeys,
+      layoutOrder
     ),
     tabBarOrderByWorktree: Object.fromEntries(
       Object.entries(ownerOrders).map(([id, order]) => [

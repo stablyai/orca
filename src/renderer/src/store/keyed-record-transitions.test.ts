@@ -22,7 +22,9 @@ describe('keyed record transitions', () => {
       kind: 'addressed',
       workspaceIds: new Set(['a']),
       tabIds: new Set(['a2']),
-      workspaceSetChanged: false
+      workspaceSetChanged: false,
+      addedWorkspaceIds: [],
+      deletedWorkspaceIds: new Set()
     })
     expect(next.b).toBe(start.b)
   })
@@ -38,7 +40,9 @@ describe('keyed record transitions', () => {
       kind: 'addressed',
       workspaceIds: new Set(['a', 'b', 'c']),
       tabIds: new Set(['a2', 'c1']),
-      workspaceSetChanged: true
+      workspaceSetChanged: true,
+      addedWorkspaceIds: ['c'],
+      deletedWorkspaceIds: new Set()
     })
   })
 
@@ -52,11 +56,14 @@ describe('keyed record transitions', () => {
     expect(readTabMapChanges(hydrated, start)).toEqual({ kind: 'full-resync', reason: 'hydration' })
   })
 
-  it('reads a builder that moved a surviving bucket as reordered', () => {
+  it('reads a builder that declares a move as reordered, and refuses an undeclared one', () => {
     const start = { a: [a1], b: [b1] }
     const { a: _a, ...rest } = start
-    const moved = annotateTabBucketReplacement(start, { ...rest, a: [a1, a2] }, ['a'])
+    const moved = annotateTabBucketReplacement(start, { ...rest, a: [a1, a2] }, ['a'], 'reordered')
     expect(readTabMapChanges(moved, start)).toEqual({ kind: 'full-resync', reason: 'reordered' })
+    expect(() => annotateTabBucketReplacement(start, { ...rest, a: [a1, a2] }, ['a'])).toThrow(
+      "annotate it with order 'reordered'"
+    )
   })
 
   it('reports keys added across a chain in source order, index keys first', () => {
@@ -68,7 +75,23 @@ describe('keyed record transitions', () => {
     ])
     expect(Object.keys(two)).toEqual(['7', 'base', 'earlier', 'later'])
     const changes = readRecordChanges(two, start)
-    expect(changes?.kind === 'addressed' && [...changes.keys]).toEqual(['7', 'earlier', 'later'])
+    expect(changes?.kind === 'addressed' && changes.added).toEqual(['7', 'earlier', 'later'])
+  })
+
+  it('keeps modified keys out of the ordered additions; survivors keep their source order', () => {
+    const start = { a: 1, b: 1 }
+    const one = replaceRecordEntries(start, [['c', 1]])
+    const two = replaceRecordEntries(one, [
+      ['b', 2],
+      ['a', 2]
+    ])
+    expect(Object.keys(two)).toEqual(['a', 'b', 'c'])
+    expect(readRecordChanges(two, start)).toEqual({
+      kind: 'addressed',
+      keys: new Set(['c', 'b', 'a']),
+      added: ['c'],
+      deleted: new Set()
+    })
   })
 
   it('reads a delete then re-add of a surviving key as reordered, across a chain or in one write', () => {
@@ -101,8 +124,12 @@ describe('keyed record transitions', () => {
       ['env-1', 'revoked'],
       ['env-3', 'online']
     ])
-    const changes = readRecordChanges(next, start)
-    expect(changes?.kind === 'addressed' && [...changes.keys]).toEqual(['env-1', 'env-2', 'env-3'])
+    expect(readRecordChanges(next, start)).toEqual({
+      kind: 'addressed',
+      keys: new Set(['env-1', 'env-2', 'env-3']),
+      added: ['env-3'],
+      deleted: new Set(['env-2'])
+    })
     expect(readRecordChanges(new Map(next), start)).toEqual({
       kind: 'full-resync',
       reason: 'unknown'
@@ -113,7 +140,12 @@ describe('keyed record transitions', () => {
     const start = { t1: 'pty-1', t2: 'pty-2' }
     const next = replaceRecordEntries(start, [['t1', null]])
     expect(next).toEqual({ t2: 'pty-2' })
-    expect(readRecordChanges(next, start)).toEqual({ kind: 'addressed', keys: new Set(['t1']) })
+    expect(readRecordChanges(next, start)).toEqual({
+      kind: 'addressed',
+      keys: new Set(['t1']),
+      added: [],
+      deleted: new Set(['t1'])
+    })
   })
 
   it('refuses an annotation that omits a changed bucket', () => {
