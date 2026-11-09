@@ -1,9 +1,9 @@
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { selectEffectiveTerminalExecutionContext } from '../../../shared/terminal/effective-terminal-execution-context'
 import { isWslShellName } from '../../../shared/local-windows-terminal-runtime'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
 
 export type WslSessionContext = {
   distro: string
@@ -32,18 +32,18 @@ export function resolveWslSessionContext(args: {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
 }): WslSessionContext | undefined {
-  if (process.platform !== 'win32') {
-    return undefined
-  }
-  const cwdDistro = args.cwd ? parseWslUncPath(args.cwd)?.distro : undefined
-  if (cwdDistro) {
-    return { distro: cwdDistro, treatPosixCwdAsWsl: true }
-  }
-  return (
-    (args.sessionId ? getWslContextFromSessionId(args.sessionId) : undefined) ??
-    (isWslShellName(args.shellOverride)
-      ? (getWslContextFromPreferredDistro(args.terminalWindowsWslDistro) ??
-        getWslContextFromPreferredDistro(getDefaultWslDistro()))
-      : undefined)
-  )
+  const selected = selectEffectiveTerminalExecutionContext({
+    platform: process.platform,
+    cwd: args.cwd,
+    worktreeContext: args.sessionId ? getWslContextFromSessionId(args.sessionId) : undefined,
+    shell: args.shellOverride,
+    preferredDistro: args.terminalWindowsWslDistro,
+    defaultDistro:
+      process.platform === 'win32' &&
+      isWslShellName(args.shellOverride) &&
+      !args.terminalWindowsWslDistro
+        ? getDefaultWslDistro()
+        : undefined
+  })
+  return selected.kind === 'wsl' ? selected.context : undefined
 }

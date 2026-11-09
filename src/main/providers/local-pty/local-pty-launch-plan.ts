@@ -1,3 +1,5 @@
+import { selectEffectiveTerminalExecutionContext } from '../../../shared/terminal/effective-terminal-execution-context'
+import { isWslShellName } from '../../../shared/local-windows-terminal-runtime'
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
@@ -114,9 +116,18 @@ function createWindowsLocalPtyLaunchPlan(
     process.env.COMSPEC ||
     'powershell.exe'
   const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
-  if (!seed.launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
-    seed.launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
-  }
+  const selected = selectEffectiveTerminalExecutionContext({
+    platform: process.platform,
+    cwd,
+    worktreeContext: worktreeWslContext,
+    shell: shellFamily,
+    preferredDistro: args.terminalWindowsWslDistro,
+    defaultDistro:
+      isWslShellName(shellFamily) && !args.terminalWindowsWslDistro
+        ? getDefaultWslDistro()
+        : undefined
+  })
+  seed.launchWslContext = selected.kind === 'wsl' ? selected.context : undefined
   const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
   const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
   // Normalize family names and paths so PowerShell resolution can fall back to inbox powershell.exe.
