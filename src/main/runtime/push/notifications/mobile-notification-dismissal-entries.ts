@@ -1,7 +1,7 @@
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DeliveredNotificationIdentity } from '../../../../shared/mobile-notification-identity'
-import type { KeyedJsonRow } from '../../../sqlite/keyed-json-row-cache'
+import type { KeyedJsonRow } from '../../../sqlite/row-cache/keyed-json-row-cache'
 import {
   isStructuredAttentionOrigin,
   type StructuredAttentionOrigin
