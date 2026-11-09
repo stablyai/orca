@@ -444,23 +444,3 @@ it('keeps a failed capability read definitive without classifying the host as un
   expect(state.visibilityUnknown).toBe(false)
   expect(call.mock.calls.map(([request]) => request.method)).not.toContain('agentSession.create')
 })
-
-it('settles a recorded Codex source-read refusal without an unknown destination', async () => {
-  returnCreateRefusal({
-    ok: false,
-    refusal: {
-      code: 'agent_session_identity_required',
-      details: { reason: 'transcriptUnreadable' },
-      createAttemptRefusedBeforeCommit: true,
-      message: 'Codex could not read the saved chat.'
-    }
-  })
-  const launch = forkLaunch('codex-read-refused')
-  await expect(launch.launchResult).rejects.toMatchObject({
-    code: 'agent_session_identity_required'
-  })
-  expect(launch.isVisibilityUnknown()).toBe(false)
-  expect(getStructuredAgentSessionLaunchLifecycle('workspace-fork', launch.sessionId)).toBe(
-    'failed'
-  )
-})

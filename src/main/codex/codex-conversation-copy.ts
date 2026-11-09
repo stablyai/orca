@@ -4,7 +4,6 @@ import {
   agentConversationCopyRefusal
 } from '../native-chat/agent-conversation-copy-error'
 import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import { sayAgentSessionFailureEnglish } from '../../shared/agent-session/failures/agent-session-failure-copy'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -12,7 +11,7 @@ import { asRecord } from '../ai-vault/session-scanner-values'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import {
-  isCodexMethodNotFoundError,
+  isCodexAppServerUnsupportedError,
   type CodexAppServerRpc
 } from './app-server/codex-app-server-session'
 import {
@@ -110,12 +109,7 @@ export async function copyCodexConversation(
       throw agentConversationCopyRefusal(
         'agent_session_operation_invalid',
         { reason: 'savedConversationMissing' },
-        record.conversationName
-          ? sayAgentSessionFailureEnglish('forkOriginalMissingNamed', {
-              agent: 'Codex',
-              detail: record.conversationName
-            })
-          : 'Codex could not find this response in the saved chat. Open the chat again, then fork a response still in its history.'
+        'Codex could not find this response in the saved chat. Open the chat again, then fork a response still in its history.'
       )
     }
     let history = legacy && !checkpoint.turnId ? await physicalHistory(undefined) : undefined
@@ -125,7 +119,7 @@ export async function copyCodexConversation(
         ...invocation,
         resolveLaunchArgs: () => record.launchArgs ?? invocation.resolveLaunchArgs()
       },
-      { timeoutMs: 60_000, signal, experimentalApi: legacy },
+      { timeoutMs: 60_000, signal, experimentalApi: true },
       async (rpc, cwd) => {
         let metadata
         try {
@@ -146,7 +140,7 @@ export async function copyCodexConversation(
             throw new Error('Invalid source metadata')
           }
         } catch (error) {
-          if (!isCodexMethodNotFoundError(error)) {
+          if (!isCodexAppServerUnsupportedError(error)) {
             throw error
           }
         }

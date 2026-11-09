@@ -18,6 +18,7 @@ import type { CodexAppServerRpc } from './app-server/codex-app-server-session'
 const state = vi.hoisted(() => {
   const session: {
     run?: (body: (rpc: CodexAppServerRpc) => Promise<unknown>) => Promise<unknown>
+    transport?: 'native' | 'unsupported-read'
   } = {}
   return {
     home: '',
@@ -38,18 +39,55 @@ vi.mock('../native-chat/codex-rollout-history-stream', async (importOriginal) =>
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))
-vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof AppServerSession>()),
-  runCodexAppServerSession: async (
-    launch: unknown,
-    body: (rpc: CodexAppServerRpc) => Promise<unknown>
-  ) => {
-    state.initialize(launch)
-    return state.session.run
-      ? state.session.run(body)
-      : body({ request: state.request, notify: () => {} })
+vi.mock('./app-server/codex-app-server-session', async (importOriginal) => {
+  const original = await importOriginal<typeof AppServerSession>()
+  return {
+    ...original,
+    runCodexAppServerSession: async (
+      launch: AppServerSession.CodexAppServerInvocation,
+      body: (rpc: CodexAppServerRpc) => Promise<unknown>
+    ) => {
+      state.initialize(launch)
+      if (state.session.transport) {
+        const server = String.raw`
+          let experimental = false
+          require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+            const message = JSON.parse(line)
+            if (typeof message.id !== 'number') return
+            if (message.method === 'initialize') {
+              experimental = message.params.capabilities?.experimentalApi === true
+            }
+            const error = message.method === 'thread/read' && process.argv[1] === 'unsupported-read'
+              ? { code: -32601, message: 'thread/read is not supported yet' }
+              : message.method === 'thread/turns/list' && !experimental
+                ? { code: -32600, message: 'thread/turns/list requires experimentalApi capability' }
+                : null
+            process.stdout.write(JSON.stringify({ id: message.id, ...(error ? { error } : { result: {} }) }) + '\n')
+          })
+        `
+        return original.runCodexAppServerSession(
+          {
+            ...launch,
+            command: process.execPath,
+            args: ['-e', server, state.session.transport],
+            cliPath: null
+          },
+          (rpc) =>
+            body({
+              ...rpc,
+              request: async (method, params) => {
+                await rpc.request(method, params)
+                return state.request(method, params)
+              }
+            })
+        )
+      }
+      return state.session.run
+        ? state.session.run(body)
+        : body({ request: state.request, notify: () => {} })
+    }
   }
-}))
+})
 
 const SOURCE = '01a1bdd2-6d33-7a21-9a1d-c14f0117bc8c'
 const CHILD = '01a1bde0-5ded-7f03-a1bf-3dae1613d8c7'
@@ -61,6 +99,7 @@ beforeEach(async () => {
   state.paths.clear()
   state.request.mockReset()
   state.session.run = undefined
+  state.session.transport = undefined
   state.initialize.mockReset()
   vi.mocked(readCodexLocalHistory).mockClear()
   vi.mocked(readCodexRolloutBytes).mockClear()
@@ -276,12 +315,10 @@ it('uses exact physical identities across repeated prompts rather than a retaine
 })
 
 it('keeps method-not-found compatibility with frozen unrecorded IDs despite source growth and child replacements', async () => {
+  state.session.transport = 'unsupported-read'
   await history(SOURCE, [...turn(undefined, 1), ...turn(undefined, 2), ...turn(undefined, 3)])
   let reverted = false
   state.request.mockImplementation(async (method, params) => {
-    if (method === 'thread/read') {
-      throw { code: -32601, message: 'Method not found' }
-    }
     if (method === 'thread/fork') {
       await history(SOURCE, [
         ...turn(undefined, 1),
@@ -351,6 +388,7 @@ it('keeps legacy-mode compatibility for recorded turns in a standalone copied ro
 })
 
 it('forks the current paged native prefix after rewind without source or child rollout authority', async () => {
+  state.session.transport = 'native'
   await history(SOURCE, [
     ...turn('01a1bdd2-6d5e-7960-8fbb-30c962a5eeaa', 1),
     ...turn('01a1bdd3-1293-7bc2-b750-017ca47738f9', 2)
@@ -551,6 +589,7 @@ it('cannot dispatch an abandoned preparation after its lifetime ends, but keeps 
   await expect(invoked).rejects.not.toHaveProperty('refusal')
   pending.reject(timeout)
   state.session.run = undefined
+  state.session.transport = undefined
   const caller = new AbortController()
   caller.abort(new Error('caller cancelled'))
   await expect(copy(undefined, true, 'selected', { signal: caller.signal })).rejects.toBe(

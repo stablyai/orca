@@ -323,8 +323,9 @@ it('does not prove no copy when source revalidation fails after the native copy'
   }
 })
 
-it('settles a real Codex preparation refusal but not a dispatched child-read failure', async () => {
+it('settles a redirected Codex preparation refusal but not a dispatched child-read failure', async () => {
   const { rig, test, createFork } = await forkHost()
+  test.record.conversationName = '  Release notes  '
   try {
     test.copy.mockImplementation((input) =>
       copyCodexConversation(input, {

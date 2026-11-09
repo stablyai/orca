@@ -9,7 +9,10 @@ import {
   type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  isAgentSessionRefusalError,
+  type AgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionForkSourceAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   AGENT_SESSION_FAILURE_COPY,
@@ -70,7 +73,7 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
     const capability = host.deps.agents.capabilities(input.agent)?.fork
     const { head, pendingClear } = activeProviderContext(record)
     const fail = (
-      message: string,
+      message: string | AgentSessionRefusalError,
       reason:
         | 'conversationCleared'
         | 'rewindUnconfirmed'
@@ -79,16 +82,16 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
         | 'providerRejected'
         | 'launchFolderMissing' = 'savedConversationMissing'
     ): never => {
-      const refusal = agentConversationCopyRefusal(
-        'agent_session_operation_invalid',
-        { reason },
-        message
-      )
+      const refusal =
+        typeof message === 'string'
+          ? agentConversationCopyRefusal('agent_session_operation_invalid', { reason }, message)
+          : message
+      const failureReason = refusal.refusal.details?.reason
       if (original) {
         const piece =
-          reason === 'savedConversationMissing'
+          failureReason === 'savedConversationMissing'
             ? 'forkOriginalMissing'
-            : reason === 'turnActive'
+            : failureReason === 'turnActive'
               ? 'forkOriginalLatestOnly'
               : 'forkOriginalUnavailable'
         const title = record.conversationName?.trim()
