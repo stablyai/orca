@@ -86,7 +86,11 @@ function headerContext(): SectionHeaderRowContext {
     toggleGroupWithScrollAnchor: vi.fn(),
     headerDrag: {
       canReorderRepoHeaders: false,
+      canDragRepoHeaders: false,
+      canDragProjectHeader: () => false,
       canReorderProjectGroupHeaders: false,
+      canDragProjectGroupHeader: () => false,
+      moveProjectGroupToParent: vi.fn(),
       orderedHostIds: [],
       hostDrag: {
         state: { draggingHostId: null, dropIndex: null, dropIndicatorY: null },
@@ -100,8 +104,12 @@ function headerContext(): SectionHeaderRowContext {
       repoHeaderBucketByRepoId: new Map(),
       projectGroupHeaderIndexByGroupId: new Map(),
       projectGroupHeaderBucketByGroupId: new Map(),
+      headerSectionEndByRowIndex: new Map(),
+      headerSectionEndIndexByRowIndex: new Map(),
       repoHeaderSectionEndByRepoId: new Map(),
+      repoHeaderSectionEndIndexByRepoId: new Map(),
       projectGroupHeaderSectionEndByGroupId: new Map(),
+      projectGroupHeaderSectionEndIndexByGroupId: new Map(),
       rootProjectHeaderKeys: undefined,
       rootProjectHeaderCountByOccurrenceKey: new Map(),
       rootProjectHeaderSectionEndByKey: new Map()

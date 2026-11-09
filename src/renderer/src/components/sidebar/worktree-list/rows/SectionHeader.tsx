@@ -3,18 +3,16 @@ import {
   getRootProjectHeaderOccurrenceKey
 } from '../drag/root-project-header-drop'
 import React from 'react'
-import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
-import '@/store/project-groups/project-group-owner-routing'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getCatalogHostIdForExecutionHost } from '../drag/project-header-group-drop'
 import {
   getHeaderDragRepo,
-  isSingleHostProjectHeader,
   type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
@@ -24,33 +22,19 @@ import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-statu
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
-import { ProjectHeaderActions } from './ProjectHeaderActions'
+import { SectionHeaderTrailingActions } from './ProjectHeaderActions'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
 } from './indentation'
-import {
-  FolderPathStatusIndicator,
-  isFolderWorkspaceCreateDisabled
-} from './FolderPathStatusIndicator'
+import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
-import {
-  ProjectGroupCreateWorkspaceButton,
-  ProjectGroupHeaderMenu
-} from './project-group-header-actions'
-import {
-  RepoHeaderCreateWorkspaceButton,
-  RepoHeaderProjectActionsMenu
-} from './repo-header-project-actions'
-import {
-  handleRepoHeaderCollapseAffordancePointerDown,
-  shouldIgnoreRepoHeaderToggle,
-  toggleSectionHeaderCollapse
-} from './header-event-guards'
+import { shouldIgnoreRepoHeaderToggle, toggleSectionHeaderCollapse } from './header-event-guards'
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
 
+export type { SectionHeaderRowContext }
 export function renderWorktreeSectionHeaderRow(
   args: {
     ctx: SectionHeaderRowContext
@@ -70,11 +54,13 @@ export function renderWorktreeSectionHeaderRow(
   const usesRootProjectDrag = Boolean(
     headerDrag.rootProjectHeaderKeys && (row.projectGroupDepth ?? 0) === 0
   )
+  // Drag keys on the project's anchor and skips copies an earlier host section already drew unless root drag owns it.
   const headerRepo = isRepoHeader
     ? usesRootProjectDrag
       ? (row.anchorRepo ?? row.repo)
       : getHeaderDragRepo(row)
     : undefined
+  const groupDragRepo = isRepoHeader && !row.repeated && !row.hostRepos ? (row.repo ?? null) : null
   const projectIdForHeader = headerRepo?.id
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
@@ -107,25 +93,39 @@ export function renderWorktreeSectionHeaderRow(
       ))
     : undefined
   const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
+    isRepoHeader &&
+    headerRepo &&
     projectIdForHeader &&
-    repoHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
+    ((headerDrag.canReorderRepoHeaders &&
+      rootProjectHeaderCount !== undefined &&
+      rootProjectHeaderCount > 1) ||
+      headerDrag.canDragProjectHeader(headerRepo, groupDragRepo))
   )
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-          0) > 1)
+    ((rootProjectHeaderCount !== undefined && rootProjectHeaderCount > 1) ||
+      headerDrag.canDragProjectGroupHeader(projectGroupDragIdForHeader))
   )
   const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
+    headerDrag.canDragRepoHeaders &&
+    headerDrag.repoDrag.state.draggingRepoId !== null &&
     headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
+  const activeGroupDropTargetId =
+    headerDrag.repoDrag.state.dropTargetGroupId ??
+    headerDrag.projectGroupDrag.state.dropTargetGroupId
+  const activeGroupDropCatalogHostId =
+    headerDrag.repoDrag.state.dropTargetGroupId !== null
+      ? headerDrag.repoDrag.state.dropTargetCatalogHostId
+      : headerDrag.projectGroupDrag.state.dropTargetCatalogHostId
+  const isProjectGroupDropTarget =
+    isProjectGroupHeader &&
+    !row.repo &&
+    projectGroupDragIdForHeader !== undefined &&
+    activeGroupDropTargetId === projectGroupDragIdForHeader &&
+    (!activeGroupDropCatalogHostId ||
+      activeGroupDropCatalogHostId ===
+        getCatalogHostIdForExecutionHost(projectGroupHostIdForHeader))
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
@@ -166,7 +166,7 @@ export function renderWorktreeSectionHeaderRow(
     toggleSectionHeaderCollapse(event, collapseKey, ctx)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
-    row.count > 0 &&
+    (row.count > 0 || row.hasChildGroups === true) &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
   return (
     <div
@@ -214,17 +214,36 @@ export function renderWorktreeSectionHeaderRow(
           data-repo-header-bucket={repoHeaderBucketKey}
           data-repo-header-section-end={
             projectIdForHeader
-              ? headerDrag.repoHeaderSectionEndByRepoId.get(projectIdForHeader)
+              ? (headerDrag.headerSectionEndByRowIndex?.get(vItem.index) ??
+                headerDrag.repoHeaderSectionEndByRepoId.get(projectIdForHeader))
+              : undefined
+          }
+          data-repo-header-section-end-index={
+            projectIdForHeader
+              ? (headerDrag.headerSectionEndIndexByRowIndex?.get(vItem.index) ??
+                headerDrag.repoHeaderSectionEndIndexByRepoId?.get(projectIdForHeader))
               : undefined
           }
           // Padding remains a drag handle; only the title shows grab so action buttons never inherit it.
           data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
           data-project-group-header-id={projectGroupDragIdForHeader}
+          data-project-group-header-host={
+            projectGroupDragIdForHeader ? (row.hostId ?? '') : undefined
+          }
           data-project-group-header-index={projectGroupHeaderIndex}
           data-project-group-header-bucket={projectGroupHeaderBucketKey}
           data-project-group-header-section-end={
             projectGroupDragIdForHeader
-              ? headerDrag.projectGroupHeaderSectionEndByGroupId.get(projectGroupDragIdForHeader)
+              ? (headerDrag.headerSectionEndByRowIndex?.get(vItem.index) ??
+                headerDrag.projectGroupHeaderSectionEndByGroupId.get(projectGroupDragIdForHeader))
+              : undefined
+          }
+          data-project-group-header-section-end-index={
+            projectGroupDragIdForHeader
+              ? (headerDrag.headerSectionEndIndexByRowIndex?.get(vItem.index) ??
+                headerDrag.projectGroupHeaderSectionEndIndexByGroupId?.get(
+                  projectGroupDragIdForHeader
+                ))
               : undefined
           }
           data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
@@ -243,6 +262,8 @@ export function renderWorktreeSectionHeaderRow(
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
             isPinnedHeader &&
               ctx.pinDragOver &&
+              'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
+            isProjectGroupDropTarget &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
             row.repo && 'overflow-hidden'
           )}
@@ -274,7 +295,7 @@ export function renderWorktreeSectionHeaderRow(
           }
           onPointerDown={
             isDraggableRepoHeader && headerRepo
-              ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, headerRepo)
+              ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, headerRepo, groupDragRepo)
               : isDraggableProjectGroupHeader && projectGroupDragIdForHeader
                 ? (event) =>
                     headerDrag.projectGroupDrag.onHandlePointerDown(
@@ -338,66 +359,26 @@ export function renderWorktreeSectionHeaderRow(
             </div>
           </div>
 
-          <ProjectHeaderActions>
-            {showHeaderCollapseAffordance ? (
-              <div
-                className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-                data-repo-header-collapse-affordance=""
-                aria-hidden
-                onPointerDown={handleRepoHeaderCollapseAffordancePointerDown}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  toggleHeader(event)
-                }}
-              >
-                <ChevronDown
-                  className={cn('size-3.5 transition-transform', isHeaderCollapsed && '-rotate-90')}
-                />
-              </div>
-            ) : null}
-
-            {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
-              <ProjectGroupHeaderMenu
-                groupId={projectGroupIdForHeader}
-                hostId={projectGroupHostIdForHeader}
-                label={label}
-                projectGroup={folderBackedProjectGroup}
-                onRefreshProjectGroup={ctx.onRefreshProjectGroup}
-                onRename={ctx.onRenameProjectGroup}
-                onDelete={ctx.onDeleteProjectGroup}
-              />
-            ) : null}
-
-            {folderBackedProjectGroup ? (
-              <ProjectGroupCreateWorkspaceButton
-                projectGroup={folderBackedProjectGroup}
-                label={label}
-                pathStatus={projectGroupPathStatus}
-                disabled={isFolderWorkspaceCreateDisabled(projectGroupPathStatus)}
-                onCreate={ctx.onCreateFolderWorkspace}
-              />
-            ) : null}
-
-            {row.repo && ctx.groupBy === 'repo' ? (
-              <RepoHeaderProjectActionsMenu
-                repo={row.repo}
-                label={label}
-                projectGroups={ctx.projectGroups}
-                actions={ctx.projectActions}
-              />
-            ) : null}
-
-            {row.repo && ctx.groupBy === 'repo' ? (
-              <RepoHeaderCreateWorkspaceButton
-                key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
-                repo={row.repo}
-                label={label}
-                pinHost={isSingleHostProjectHeader(row)}
-                onCreateForRepo={ctx.projectActions.onCreateForRepo}
-              />
-            ) : null}
-          </ProjectHeaderActions>
+          <SectionHeaderTrailingActions
+            row={row}
+            label={label}
+            isRepoView={ctx.groupBy === 'repo'}
+            showHeaderCollapseAffordance={showHeaderCollapseAffordance}
+            isHeaderCollapsed={isHeaderCollapsed}
+            onToggleHeader={toggleHeader}
+            projectGroupIdForHeader={projectGroupIdForHeader}
+            projectGroupHostIdForHeader={projectGroupHostIdForHeader}
+            folderBackedProjectGroup={folderBackedProjectGroup}
+            projectGroupPathStatus={projectGroupPathStatus}
+            projectGroups={ctx.projectGroups}
+            projectActions={ctx.projectActions}
+            onRefreshProjectGroup={ctx.onRefreshProjectGroup}
+            onCreateProjectSubgroup={ctx.onCreateProjectSubgroup}
+            onMoveProjectGroup={!row.repeated ? headerDrag.moveProjectGroupToParent : undefined}
+            onRenameProjectGroup={ctx.onRenameProjectGroup}
+            onDeleteProjectGroup={ctx.onDeleteProjectGroup}
+            onCreateFolderWorkspace={ctx.onCreateFolderWorkspace}
+          />
         </div>
       </ProjectHeaderHostTooltip>
     </div>

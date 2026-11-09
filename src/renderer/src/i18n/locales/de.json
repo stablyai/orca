@@ -1371,7 +1371,11 @@
           "pendingRemovalRefused": "Der Server hat ein Projekt beibehalten, das entfernt wurde, während er offline war",
           "removeProjectHostUnreachable": "Der Server ist nicht erreichbar. Das Projekt jetzt von diesem Desktop entfernen; Orca entfernt es vom Server, sobald die Verbindung wiederhergestellt ist.",
           "removeProjectLocallyNow": "Jetzt von diesem Desktop entfernen",
-          "removeProjectHostDisconnected": "Der Server ist getrennt. Das Projekt jetzt von diesem Desktop entfernen; Orca entfernt es vom Server, sobald die Verbindung wiederhergestellt wird."
+          "removeProjectHostDisconnected": "Der Server ist getrennt. Das Projekt jetzt von diesem Desktop entfernen; Orca entfernt es vom Server, sobald die Verbindung wiederhergestellt wird.",
+          "moveProjectGroupFailed": "Projektgruppe konnte nicht verschoben werden",
+          "moveProjectGroupFailedDesc": "Der Computer der Gruppe hat die neue übergeordnete Gruppe nicht übernommen. Aktualisieren Sie Orca auf diesem Computer und versuchen Sie es erneut.",
+          "createSubgroupCleanupFailed": "Untergruppe konnte nicht erstellt werden",
+          "createSubgroupCleanupFailedDesc": "Der Computer der Gruppe hat stattdessen eine Gruppe auf oberster Ebene erstellt und die Bereinigung ist fehlgeschlagen, sodass die Gruppe auf diesem Computer verbleibt."
         },
         "settings": {
           "e12dab333b": "Serverwechsel fehlgeschlagen"
@@ -6318,7 +6322,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "Neuer Arbeitsbereich",
-          "addProject": "Projekt hinzufügen"
+          "addProject": "Projekt hinzufügen",
+          "newProjectGroup": "Neue Gruppe"
         },
         "SidebarNav": {
           "80611a8b10": "Suchen",
@@ -6648,7 +6653,15 @@
           "childCount_other": "{{count}} untergeordnete Arbeitsbereiche",
           "groupProjectsRemained_one": "Verbleibende Projekte aus der gelöschten Gruppe: {{remaining}} von {{count}}.",
           "groupProjectsRemained_other": "Verbleibende Projekte aus der gelöschten Gruppe: {{remaining}} von {{count}}.",
-          "hostServerReplaced": "Anderer Server: entfernen und dann verbinden"
+          "hostServerReplaced": "Anderer Server: entfernen und dann verbinden",
+          "newSubgroup": "Neue Untergruppe",
+          "newSubgroupTitle": "Neue Untergruppe",
+          "newSubgroupDesc": "Erstellen Sie eine Untergruppe in {{group}}.",
+          "newEmptyGroupDesc": "Erstellen Sie eine leere Gruppe in der Seitenleiste.",
+          "groupCreateFailed": "Gruppe konnte nicht erstellt werden",
+          "groupCreateFailedDesc": "Orca konnte die neue Gruppe beim zugehörigen Host nicht bestätigen. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
+          "moveProjectToParentGroup": "In übergeordnete Gruppe verschieben ({{group}})",
+          "moveGroupToTopLevel": "Auf oberste Ebene verschieben"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Abbrechen",

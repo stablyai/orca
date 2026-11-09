@@ -881,7 +881,11 @@
           "pendingRemovalRefused": "서버가 오프라인일 때 제거한 프로젝트를 서버가 유지했습니다",
           "removeProjectHostUnreachable": "서버에 연결할 수 없습니다. 지금 이 데스크톱에서 제거하면 다시 연결될 때 Orca가 서버에서도 제거합니다.",
           "removeProjectLocallyNow": "지금 이 데스크톱에서 제거",
-          "removeProjectHostDisconnected": "서버 연결이 끊어졌습니다. 지금 이 데스크톱에서 제거하면 다시 연결할 때 Orca가 서버에서도 제거합니다."
+          "removeProjectHostDisconnected": "서버 연결이 끊어졌습니다. 지금 이 데스크톱에서 제거하면 다시 연결할 때 Orca가 서버에서도 제거합니다.",
+          "moveProjectGroupFailed": "프로젝트 그룹을 이동할 수 없습니다",
+          "moveProjectGroupFailedDesc": "그룹의 호스트가 새 상위 그룹을 적용하지 않았습니다. 해당 컴퓨터의 Orca를 업데이트한 후 다시 시도하세요.",
+          "createSubgroupCleanupFailed": "하위 그룹을 만들 수 없습니다",
+          "createSubgroupCleanupFailedDesc": "그룹의 호스트가 대신 최상위 그룹을 만들었으며 정리에 실패하여 해당 컴퓨터에 그룹이 남아 있습니다."
         },
         "settings": {
           "e12dab333b": "서버를 전환하지 못했습니다."
@@ -5637,7 +5641,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
-          "addProject": "프로젝트 추가"
+          "addProject": "프로젝트 추가",
+          "newProjectGroup": "새 그룹"
         },
         "SidebarNav": {
           "80611a8b10": "검색",
@@ -5952,7 +5957,15 @@
           "hideChildWorkspaces_other": "하위 워크스페이스 {{count}}개 숨기기",
           "childCount_other": "하위 {{count}}개",
           "groupProjectsRemained_other": "그룹을 삭제한 후 포함된 프로젝트 {{count}}개 중 {{remaining}}개가 남았습니다.",
-          "hostServerReplaced": "다른 서버: 삭제 후 연결"
+          "hostServerReplaced": "다른 서버: 삭제 후 연결",
+          "newSubgroup": "새 하위 그룹",
+          "newSubgroupTitle": "새 하위 그룹",
+          "newSubgroupDesc": "{{group}} 안에 하위 그룹을 만듭니다.",
+          "newEmptyGroupDesc": "사이드바에 빈 그룹을 만듭니다.",
+          "groupCreateFailed": "그룹을 만들지 못했습니다",
+          "groupCreateFailedDesc": "호스트에서 새 그룹을 확인하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
+          "moveProjectToParentGroup": "상위 그룹으로 이동 ({{group}})",
+          "moveGroupToTopLevel": "최상위로 이동"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",

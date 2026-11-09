@@ -1,23 +1,38 @@
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { HostHeaderRect } from './host-header-drag-dom'
 import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
+
+export const ROOT_INTERLEAVED_GROUP_BUCKET_KEY = 'root-interleaved'
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  dropTargetGroupId: string | null
+  dropTargetCatalogHostId: ExecutionHostId | null
 }
 
 export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
   draggingGroupId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  dropTargetGroupId: null,
+  dropTargetCatalogHostId: null
+}
+
+export type ProjectGroupHeaderUpdatePatch = {
+  tabOrder?: number
+  parentGroupId?: string | null
+  rootProjectOrder?: number | null
 }
 
 export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
@@ -26,7 +41,13 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
     readonly string[]
   >
   projectGroupById: ReadonlyMap<string, ProjectGroup>
-  onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
+  projectGroupOwnerHostIdByGroupId?: ReadonlyMap<string, ExecutionHostId | null>
+  getLiveRepos?: () => readonly Repo[]
+  getLiveProjectGroups?: () => readonly ProjectGroup[]
+  onCommitProjectGroupUpdate: (
+    groupId: string,
+    updates: ProjectGroupHeaderUpdatePatch
+  ) => Promise<boolean> | boolean | void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -41,8 +62,11 @@ export type ProjectGroupHeaderDragSession = {
   sidebarProjectGroupHeaderIds: readonly string[]
   rootProjectHeaderKeys?: readonly string[]
   rootProjectHeaderHostId?: string
+  rootHeaderRects?: ProjectGroupHeaderDragRect[]
+  reparentableGroupIds: ReadonlySet<string>
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
+  hostHeaderRects: HostHeaderRect[]
   handleEl: HTMLElement
   startX: number
   startY: number

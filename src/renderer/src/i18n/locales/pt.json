@@ -2331,7 +2331,11 @@
           "pendingRemovalRefused": "O servidor manteve um projeto que você removeu enquanto ele estava offline",
           "removeProjectHostUnreachable": "O servidor dele está inacessível. Remova-o deste desktop agora, e o Orca o removerá do servidor quando ele se reconectar.",
           "removeProjectLocallyNow": "Remover deste desktop agora",
-          "removeProjectHostDisconnected": "O servidor dele está desconectado. Remova-o deste desktop agora, e o Orca o removerá do servidor quando você se reconectar."
+          "removeProjectHostDisconnected": "O servidor dele está desconectado. Remova-o deste desktop agora, e o Orca o removerá do servidor quando você se reconectar.",
+          "moveProjectGroupFailed": "Não foi possível mover o grupo de projetos",
+          "moveProjectGroupFailedDesc": "O computador do grupo não aplicou o novo grupo superior. Atualize o Orca nesse computador e tente novamente.",
+          "createSubgroupCleanupFailed": "Não foi possível criar o subgrupo",
+          "createSubgroupCleanupFailedDesc": "O computador do grupo criou um grupo de nível superior em vez disso e a limpeza falhou, portanto o grupo permanece nesse computador."
         },
         "settings": {
           "e12dab333b": "Falha ao alternar servidores"
@@ -11837,7 +11841,15 @@
           "projectGroupRefreshSuccess_other": "Adicionados {{count}} projetos a {{group}}",
           "refreshProjectGroup": "Atualizar projetos",
           "projectGroupRefreshing": "Atualizando {{group}}…",
-          "projectGroupRefreshSuccess_many": "Adicionados {{count}} projetos a {{group}}"
+          "projectGroupRefreshSuccess_many": "Adicionados {{count}} projetos a {{group}}",
+          "newSubgroup": "Novo subgrupo",
+          "newSubgroupTitle": "Novo subgrupo",
+          "newSubgroupDesc": "Crie um subgrupo dentro de {{group}}.",
+          "newEmptyGroupDesc": "Crie um grupo vazio na barra lateral.",
+          "groupCreateFailed": "Falha ao criar o grupo",
+          "groupCreateFailedDesc": "O Orca não conseguiu confirmar o novo grupo com o computador dele. Verifique a conexão e tente novamente.",
+          "moveProjectToParentGroup": "Mover para o grupo superior ({{group}})",
+          "moveGroupToTopLevel": "Mover para o nível superior"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Metadados do espaço de trabalho",
@@ -12620,7 +12632,8 @@
           "92154beb7e": "Novo espaço de trabalho",
           "addProject": "Adicionar projeto",
           "expandAllProjects": "Expandir todos os projetos",
-          "collapseAllProjects": "Recolher todos os projetos"
+          "collapseAllProjects": "Recolher todos os projetos",
+          "newProjectGroup": "Novo grupo"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Ocultar worktrees externas permanentemente para {{value0}}",

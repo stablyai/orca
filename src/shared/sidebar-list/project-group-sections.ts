@@ -114,7 +114,8 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      hasChildGroups: childGroups.length > 0
     })
     if (!collapsedGroups.has(key)) {
       // The group's folders, with whatever is nested under them, precede its projects.
