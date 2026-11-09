@@ -14,5 +14,37 @@
     "mobile/src/i18n/locales/es.json": "2d99d7788167f3ce95604da83a051a89e4dffc12be702bb80dedc61316df71e1",
     "mobile/src/i18n/locales/zh-Hant.json": "2302a6956f5d90231cb576bcc996e36432d5c6ce17a9c76f2521f3aacfce65f6"
   },
-  "notes": "Native labels use existing mobile catalogs where keys match. HarmonyOS-specific descriptions fall back to English outside Simplified Chinese."
+  "notes": "Native labels use existing mobile catalogs where keys match. HarmonyOS-specific descriptions fall back to English outside Simplified Chinese.",
+  "agentListSources": {
+    "revision": "be059c443d944de458e2339c6eeae3dd9442d08b",
+    "catalogs": {
+      "mobile/src/i18n/locales/de.json": "489502fef3be3a1b3bbbbde30bdb0c41749d842306eceb01102ea3854eb502df",
+      "mobile/src/i18n/locales/en.json": "3e13faeb2860f049dcf3029e9c592f2eab28f4e0cc479e6563e9e13295104155",
+      "mobile/src/i18n/locales/es.json": "f3c7d91e59d38f9aaf7818a830219b577809dc87fa66c7e750b36b4948d1f30d",
+      "mobile/src/i18n/locales/fr.json": "40a2dfcfa8fb134e0346b8fc0b6164c83d4cbc9ca218caa30d5ba3bca83ef2ae",
+      "mobile/src/i18n/locales/ja.json": "b8d45f421a8ac189915750fd4305fc5c3b6b2266a78b6d73ebaa12cc0c3a7c34",
+      "mobile/src/i18n/locales/ko.json": "58b27ceae5215dc60d8c1fc9138b2f51f492b97db8b9f079b95fd9de149d54da",
+      "mobile/src/i18n/locales/pt.json": "3aa9ba2bffd3978239f14d34b45c78dd6c6b4f1297dd241825fdbcd6beac768e",
+      "mobile/src/i18n/locales/ru.json": "571b41b9e8c061c1aa35b36cbefd49efc206e22b2ec4c99110da6bb91d66cb67",
+      "mobile/src/i18n/locales/tr.json": "210565bb6f64919af2686543e48e5df9e1b249af65ee464ca696180e3e3419b6",
+      "mobile/src/i18n/locales/zh-Hant.json": "c76f488763fcdd38a60a1186f36ba7a4dd223a23853b9cf0cb4872742097a6bb",
+      "mobile/src/i18n/locales/zh.json": "51fb9ccbeaea7f9c6620f55bc59324d78534093fa761bc214c25f594abf30978"
+    }
+  },
+  "pairingSources": {
+    "revision": "be059c443d944de458e2339c6eeae3dd9442d08b",
+    "catalogs": {
+      "mobile/src/i18n/locales/de.json": "489502fef3be3a1b3bbbbde30bdb0c41749d842306eceb01102ea3854eb502df",
+      "mobile/src/i18n/locales/en.json": "3e13faeb2860f049dcf3029e9c592f2eab28f4e0cc479e6563e9e13295104155",
+      "mobile/src/i18n/locales/es.json": "f3c7d91e59d38f9aaf7818a830219b577809dc87fa66c7e750b36b4948d1f30d",
+      "mobile/src/i18n/locales/fr.json": "40a2dfcfa8fb134e0346b8fc0b6164c83d4cbc9ca218caa30d5ba3bca83ef2ae",
+      "mobile/src/i18n/locales/ja.json": "b8d45f421a8ac189915750fd4305fc5c3b6b2266a78b6d73ebaa12cc0c3a7c34",
+      "mobile/src/i18n/locales/ko.json": "58b27ceae5215dc60d8c1fc9138b2f51f492b97db8b9f079b95fd9de149d54da",
+      "mobile/src/i18n/locales/pt.json": "3aa9ba2bffd3978239f14d34b45c78dd6c6b4f1297dd241825fdbcd6beac768e",
+      "mobile/src/i18n/locales/ru.json": "571b41b9e8c061c1aa35b36cbefd49efc206e22b2ec4c99110da6bb91d66cb67",
+      "mobile/src/i18n/locales/tr.json": "210565bb6f64919af2686543e48e5df9e1b249af65ee464ca696180e3e3419b6",
+      "mobile/src/i18n/locales/zh-Hant.json": "c76f488763fcdd38a60a1186f36ba7a4dd223a23853b9cf0cb4872742097a6bb",
+      "mobile/src/i18n/locales/zh.json": "51fb9ccbeaea7f9c6620f55bc59324d78534093fa761bc214c25f594abf30978"
+    }
+  }
 }

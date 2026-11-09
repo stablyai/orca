@@ -768,15 +768,15 @@
   },
   "扫描二维码": {
     "zh": "扫描二维码",
-    "tr": "Kodu tarayın",
-    "ja": "コードをスキャン",
-    "de": "Code scannen",
-    "ru": "Отсканируйте код",
-    "pt": "Escaneie o código",
-    "en": "Scan the code",
-    "fr": "Scanner le code",
-    "ko": "코드 스캔",
-    "es": "Escanea el código",
+    "tr": "QR kodunu tarayın",
+    "ja": "QR コードをスキャン",
+    "de": "QR-Code scannen",
+    "ru": "Отсканируйте QR-код",
+    "pt": "Escaneie o código QR",
+    "en": "Scan the QR code",
+    "fr": "Scannez le QR code",
+    "ko": "QR 코드를 스캔하세요",
+    "es": "Escanea el código QR",
     "zh-Hant": "掃描 QR Code"
   },
   "扫码": {
@@ -877,7 +877,7 @@
     "de": "Agent",
     "ru": "Агент",
     "pt": "Agente",
-    "en": "Agent",
+    "en": "Agents",
     "fr": "Agent",
     "ko": "에이전트",
     "es": "Agente",
@@ -2411,5 +2411,522 @@
     "ru": "Поддержка",
     "tr": "Destek",
     "de": "Hilfe"
+  },
+  "需要处理": {
+    "zh": "需要处理",
+    "en": "Needs you"
+  },
+  "查看所有智能体": {
+    "zh": "查看所有智能体",
+    "en": "See all agents"
+  },
+  "搜索智能体": {
+    "zh": "搜索智能体",
+    "en": "Search agents"
+  },
+  "智能体列表选项": {
+    "zh": "智能体列表选项",
+    "en": "Agent list options"
+  },
+  "分组方式": {
+    "zh": "分组方式",
+    "en": "Group by"
+  },
+  "仅未读": {
+    "zh": "仅未读",
+    "en": "Unread only"
+  },
+  "显示子智能体": {
+    "zh": "显示子智能体",
+    "en": "Show worker agents"
+  },
+  "全部标为已读": {
+    "zh": "全部标为已读",
+    "en": "Mark all read"
+  },
+  "清除已完成": {
+    "zh": "清除已完成",
+    "en": "Clear finished"
+  },
+  "工作区": {
+    "zh": "工作区",
+    "en": "Workspace"
+  },
+  "项目": {
+    "zh": "项目",
+    "en": "Project"
+  },
+  "智能体类型": {
+    "zh": "智能体类型",
+    "en": "Agent"
+  },
+  "桌面": {
+    "zh": "桌面",
+    "en": "Desktop"
+  },
+  "没有与“{{query}}”匹配的智能体": {
+    "zh": "没有与“{{query}}”匹配的智能体",
+    "en": "No agents match “{{query}}”"
+  },
+  "没有运行中的智能体": {
+    "zh": "没有运行中的智能体",
+    "en": "No agents running"
+  },
+  "配对桌面后可在这里查看智能体。": {
+    "zh": "配对桌面后可在这里查看智能体。",
+    "en": "Pair a desktop to see its agents here."
+  },
+  "没有连接的桌面": {
+    "zh": "没有连接的桌面",
+    "en": "No desktop connected"
+  },
+  "连接桌面后，智能体会显示在这里。": {
+    "zh": "连接桌面后，智能体会显示在这里。",
+    "en": "Agents show up here once a desktop connects."
+  },
+  "在任意工作区启动智能体后，就会显示在这里。": {
+    "zh": "在任意工作区启动智能体后，就会显示在这里。",
+    "en": "Start an agent in any workspace and it shows up here."
+  },
+  "选择显示智能体的桌面": {
+    "zh": "选择显示智能体的桌面",
+    "en": "Show agents on"
+  },
+  "所有桌面": {
+    "zh": "所有桌面",
+    "en": "All desktops"
+  },
+  "离线": {
+    "zh": "离线",
+    "en": "Offline"
+  },
+  "{{count}} 个智能体（单数）": {
+    "zh": "{{count}} 个智能体",
+    "en": "{{count}} agent"
+  },
+  "{{count}} 个智能体": {
+    "zh": "{{count}} 个智能体",
+    "en": "{{count}} agents"
+  },
+  "{{count}} 个需要处理（单数）": {
+    "zh": "{{count}} 个需要处理",
+    "en": "{{count}} needs you"
+  },
+  "{{count}} 个需要处理": {
+    "zh": "{{count}} 个需要处理",
+    "en": "{{count}} need you"
+  },
+  "刚刚在线": {
+    "zh": "刚刚在线",
+    "en": "Seen just now"
+  },
+  "上次在线 {{time}}": {
+    "zh": "上次在线 {{time}}",
+    "en": "Last seen at {{time}}"
+  },
+  "子智能体": {
+    "zh": "子智能体",
+    "en": "Workers"
+  },
+  "已读": {
+    "zh": "已读",
+    "en": "Read"
+  },
+  "未读": {
+    "zh": "未读",
+    "en": "Unread"
+  },
+  "清除": {
+    "zh": "清除",
+    "en": "Clear"
+  },
+  "需要注意": {
+    "zh": "需要注意",
+    "en": "Needs attention"
+  },
+  "无法确认": {
+    "zh": "无法确认",
+    "tr": "Doğrulanamadı",
+    "ja": "確認できませんでした",
+    "de": "Bestätigung nicht möglich",
+    "ru": "Не удалось подтвердить",
+    "pt": "Não foi possível confirmar",
+    "en": "Couldn’t confirm",
+    "fr": "Impossible de confirmer",
+    "ko": "확인하지 못함",
+    "es": "No se pudo confirmar",
+    "zh-Hant": "無法確認"
+  },
+  "暂无更新": {
+    "zh": "暂无更新",
+    "tr": "Yakın zamanda güncelleme yok",
+    "ja": "最近の更新なし",
+    "de": "Keine aktuelle Meldung",
+    "ru": "Давно не было обновлений",
+    "pt": "Nenhuma atualização recente",
+    "en": "No recent update",
+    "fr": "Aucune mise à jour récente",
+    "ko": "최근 업데이트 없음",
+    "es": "Sin actualizaciones recientes",
+    "zh-Hant": "暫無近期更新"
+  },
+  "打开": {
+    "zh": "打开",
+    "en": "Open"
+  },
+  "前往工作区": {
+    "zh": "前往工作区",
+    "en": "Go to workspace"
+  },
+  "标为已读": {
+    "zh": "标为已读",
+    "en": "Mark as read"
+  },
+  "标为未读": {
+    "zh": "标为未读",
+    "en": "Mark as unread"
+  },
+  "复制标题": {
+    "zh": "复制标题",
+    "en": "Copy title"
+  },
+  "清除列表项": {
+    "zh": "清除列表项",
+    "en": "Clear from list"
+  },
+  "已复制": {
+    "zh": "已复制",
+    "en": "Copied"
+  },
+  "无法复制标题": {
+    "zh": "无法复制标题",
+    "en": "Couldn’t copy the title"
+  },
+  "无法更新智能体列表。": {
+    "zh": "无法更新智能体列表。",
+    "en": "Couldn’t update the agent list."
+  },
+  "无法更新。请在 {{desktop}} 上打开 Orca。": {
+    "zh": "无法更新。请在 {{desktop}} 上打开 Orca。",
+    "en": "Couldn’t update. Open Orca on {{desktop}}."
+  },
+  "{{desktop}} 离线": {
+    "zh": "{{desktop}} 离线",
+    "en": "{{desktop}} is offline"
+  },
+  "重新连接后可打开此智能体。": {
+    "zh": "重新连接后可打开此智能体。",
+    "en": "Reconnect it to open this agent."
+  },
+  "与桌面配对": {
+    "zh": "与桌面配对",
+    "de": "Mit Desktop koppeln",
+    "en": "Pair with desktop",
+    "es": "Emparejar con un escritorio",
+    "fr": "Appairer un ordinateur",
+    "ja": "デスクトップのペアリング",
+    "ko": "데스크톱과 페어링",
+    "pt": "Parear com desktop",
+    "ru": "Сопряжение с компьютером",
+    "tr": "Masaüstüyle eşleştir",
+    "zh-Hant": "與電腦配對"
+  },
+  "相机权限已关闭": {
+    "zh": "相机权限已关闭",
+    "de": "Kamerazugriff deaktiviert",
+    "en": "Camera Access Disabled",
+    "es": "Acceso a la cámara desactivado",
+    "fr": "Accès à la caméra désactivé",
+    "ja": "カメラへのアクセスが無効",
+    "ko": "카메라 접근 비활성화",
+    "pt": "Acesso à câmera desativado",
+    "ru": "Доступ к камере отключён",
+    "tr": "Kamera Erişimi Devre Dışı",
+    "zh-Hant": "相機存取權限已停用"
+  },
+  "扫描电脑上 Orca 显示的二维码，或改为粘贴配对码。": {
+    "zh": "扫描电脑上 Orca 显示的二维码，或改为粘贴配对码。",
+    "de": "Den QR-Code in Orca auf dem Desktop scannen oder stattdessen den Kopplungscode einfügen.",
+    "en": "Scan the QR code from Orca on your desktop, or paste the pairing code instead.",
+    "es": "Escanea el código QR de Orca en tu escritorio o pega el código de emparejamiento.",
+    "fr": "Scannez le QR code affiché dans Orca sur votre ordinateur, ou collez le code d'appairage.",
+    "ja": "デスクトップの Orca に表示された QR コードをスキャンするか、ペアリングコードを貼り付けてください。",
+    "ko": "데스크톱의 Orca에 표시된 QR 코드를 스캔하거나 페어링 코드를 붙여넣으세요.",
+    "pt": "Escaneie o código QR do Orca no seu desktop ou cole o código de pareamento.",
+    "ru": "Отсканируйте QR-код в Orca на компьютере или вставьте код сопряжения.",
+    "tr": "Masaüstünüzdeki Orca'da gösterilen QR kodunu tarayın veya eşleştirme kodunu yapıştırın.",
+    "zh-Hant": "掃描電腦上 Orca 顯示的 QR Code，或改為貼上配對碼。"
+  },
+  "在设置中启用相机访问，或改为粘贴配对码。": {
+    "zh": "在设置中启用相机访问，或改为粘贴配对码。",
+    "de": "Den Kamerazugriff in den Einstellungen aktivieren oder stattdessen den Kopplungscode einfügen.",
+    "en": "Enable camera access in Settings, or paste the pairing code instead.",
+    "es": "Activa el acceso a la cámara en Ajustes o pega el código de emparejamiento.",
+    "fr": "Activez l'accès à la caméra dans les paramètres, ou collez le code d'appairage.",
+    "ja": "設定でカメラへのアクセスを有効にするか、ペアリングコードを貼り付けてください。",
+    "ko": "설정에서 카메라 접근을 허용하거나 페어링 코드를 붙여넣으세요.",
+    "pt": "Ative o acesso à câmera nas Configurações ou cole o código de pareamento.",
+    "ru": "Разрешите доступ к камере в настройках или вставьте код сопряжения.",
+    "tr": "Ayarlar bölümünde kamera erişimini etkinleştirin veya eşleştirme kodunu yapıştırın.",
+    "zh-Hant": "請在「設定」中啟用相機存取權限，或改為貼上配對碼。"
+  },
+  "打开设置": {
+    "zh": "打开设置",
+    "de": "Einstellungen öffnen",
+    "en": "Open Settings",
+    "es": "Abrir Ajustes",
+    "fr": "Ouvrir les paramètres",
+    "ja": "設定を開く",
+    "ko": "설정 열기",
+    "pt": "Abrir Configurações",
+    "ru": "Открыть настройки",
+    "tr": "Ayarları Aç",
+    "zh-Hant": "開啟設定"
+  },
+  "改为粘贴配对码": {
+    "zh": "改为粘贴配对码",
+    "de": "Stattdessen Code einfügen",
+    "en": "Paste code instead",
+    "es": "Pegar código en su lugar",
+    "fr": "Coller plutôt le code",
+    "ja": "代わりにコードを貼り付け",
+    "ko": "대신 코드 붙여넣기",
+    "pt": "Colar código em vez disso",
+    "ru": "Вставить код",
+    "tr": "Bunun yerine kod yapıştır",
+    "zh-Hant": "改為貼上配對碼"
+  },
+  "或粘贴配对码": {
+    "zh": "或粘贴配对码",
+    "de": "Oder Kopplungscode einfügen",
+    "en": "Or paste pairing code",
+    "es": "O pegar código de emparejamiento",
+    "fr": "Ou coller le code d'appairage",
+    "ja": "またはペアリングコードを貼り付け",
+    "ko": "또는 페어링 코드 붙여넣기",
+    "pt": "Ou colar o código de pareamento",
+    "ru": "Или вставить код сопряжения",
+    "tr": "Veya eşleştirme kodunu yapıştır",
+    "zh-Hant": "或貼上配對碼"
+  },
+  "粘贴配对码": {
+    "zh": "粘贴配对码",
+    "de": "Kopplungscode einfügen",
+    "en": "Paste pairing code",
+    "es": "Pegar código de emparejamiento",
+    "fr": "Coller le code d'appairage",
+    "ja": "ペアリングコードを貼り付け",
+    "ko": "페어링 코드 붙여넣기",
+    "pt": "Colar código de pareamento",
+    "ru": "Вставить код сопряжения",
+    "tr": "Eşleştirme kodunu yapıştır",
+    "zh-Hant": "貼上配對碼"
+  },
+  "复制电脑上二维码下方显示的配对码。": {
+    "zh": "复制电脑上二维码下方显示的配对码。",
+    "de": "Den Code kopieren, der auf dem Computer unter dem QR-Code angezeigt wird.",
+    "en": "Copy the code shown under the QR on your computer.",
+    "es": "Copia el código que aparece debajo del QR en tu ordenador.",
+    "fr": "Copiez le code affiché sous le QR code sur votre ordinateur.",
+    "ja": "コンピュータの QR コードの下に表示されているコードをコピーしてください。",
+    "ko": "컴퓨터의 QR 코드 아래에 표시된 코드를 복사하세요.",
+    "pt": "Copie o código que aparece abaixo do QR no seu computador.",
+    "ru": "Скопируйте код, показанный под QR-кодом на компьютере.",
+    "tr": "Bilgisayarınızda QR kodunun altında gösterilen kodu kopyalayın.",
+    "zh-Hant": "複製電腦上 QR Code 下方顯示的配對碼。"
+  },
+  "orca://pair?code=... 或粘贴配对码": {
+    "zh": "orca://pair?code=... 或粘贴配对码",
+    "de": "orca://pair?code=... oder den Code einfügen",
+    "en": "orca://pair?code=... or paste the code",
+    "es": "orca://pair?code=... o pega el código",
+    "fr": "orca://pair?code=... ou collez le code",
+    "ja": "orca://pair?code=... またはコードを貼り付け",
+    "ko": "orca://pair?code=... 또는 코드 붙여넣기",
+    "pt": "orca://pair?code=... ou cole o código",
+    "ru": "orca://pair?code=... или вставьте код",
+    "tr": "orca://pair?code=... veya kodu yapıştırın",
+    "zh-Hant": "orca://pair?code=... 或貼上配對碼"
+  },
+  "在电脑上打开 Orca": {
+    "zh": "在电脑上打开 Orca",
+    "de": "Orca auf dem Computer öffnen",
+    "en": "Open Orca on your computer",
+    "es": "Abre Orca en tu ordenador",
+    "fr": "Ouvrez Orca sur votre ordinateur",
+    "ja": "コンピュータで Orca を開く",
+    "ko": "컴퓨터에서 Orca를 실행하세요",
+    "pt": "Abra o Orca no seu computador",
+    "ru": "Откройте Orca на компьютере",
+    "tr": "Bilgisayarınızda Orca'yı açın",
+    "zh-Hant": "在電腦上開啟 Orca"
+  },
+  "前往设置 → 移动端": {
+    "zh": "前往设置 → 移动端",
+    "de": "Einstellungen → Mobil öffnen",
+    "en": "Go to Settings → Mobile",
+    "es": "Ve a Ajustes → Móvil",
+    "fr": "Allez dans Paramètres → Mobile",
+    "ja": "「設定」→「モバイル」を開く",
+    "ko": "설정 → 모바일로 이동하세요",
+    "pt": "Vá para Configurações → Mobile",
+    "ru": "Перейдите в «Настройки → Мобильный доступ»",
+    "tr": "Ayarlar → Mobil bölümüne gidin",
+    "zh-Hant": "前往「設定」→「行動版」"
+  },
+  "配对日志": {
+    "zh": "配对日志",
+    "de": "Kopplungsprotokoll",
+    "en": "Pairing log",
+    "es": "Registro de emparejamiento",
+    "fr": "Journal d'appairage",
+    "ja": "ペアリングログ",
+    "ko": "페어링 로그",
+    "pt": "Log de pareamento",
+    "ru": "Журнал сопряжения",
+    "tr": "Eşleştirme günlüğü",
+    "zh-Hant": "配對記錄"
+  },
+  "配对码无效，请从电脑复制后重新粘贴": {
+    "zh": "配对码无效，请从电脑复制后重新粘贴",
+    "de": "Kein gültiger Kopplungscode – vom Computer kopieren und erneut einfügen",
+    "en": "Not a valid pairing code — copy it from your computer and paste again",
+    "es": "No es un código de emparejamiento válido; cópialo de tu ordenador y vuelve a pegarlo.",
+    "fr": "Code d'appairage invalide — copiez-le depuis votre ordinateur et collez-le à nouveau.",
+    "ja": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
+    "ko": "유효한 페어링 코드가 아닙니다. 컴퓨터에서 코드를 복사해 다시 붙여넣으세요.",
+    "pt": "Código de pareamento inválido — copie-o do seu computador e cole novamente",
+    "ru": "Неверный код сопряжения — скопируйте его с компьютера и вставьте ещё раз",
+    "tr": "Geçerli bir eşleştirme kodu değil — bilgisayarınızdan kopyalayıp yeniden yapıştırın",
+    "zh-Hant": "配對碼無效，請從電腦複製後重新貼上"
+  },
+  "这不是有效的 Orca 二维码": {
+    "zh": "这不是有效的 Orca 二维码",
+    "de": "Kein gültiger Orca-QR-Code",
+    "en": "Not a valid Orca QR code",
+    "es": "No es un código QR de Orca válido",
+    "fr": "QR code Orca invalide",
+    "ja": "Orca の有効な QR コードではありません",
+    "ko": "유효한 Orca QR 코드가 아닙니다.",
+    "pt": "Código QR do Orca inválido",
+    "ru": "Неверный QR-код Orca",
+    "tr": "Geçerli bir Orca QR kodu değil",
+    "zh-Hant": "無效的 Orca QR Code"
+  },
+  "此链接缺少有效的配对码": {
+    "zh": "此链接缺少有效的配对码",
+    "en": "This link is missing a valid pairing code"
+  },
+  "要与这台桌面配对吗？": {
+    "zh": "要与这台桌面配对吗？",
+    "de": "Mit diesem Desktop koppeln?",
+    "en": "Pair with this desktop?",
+    "es": "¿Emparejar con este escritorio?",
+    "fr": "Appairer cet ordinateur ?",
+    "ja": "このデスクトップとペアリングしますか？",
+    "ko": "이 데스크톱과 페어링하시겠습니까?",
+    "pt": "Parear com este desktop?",
+    "ru": "Выполнить сопряжение с этим компьютером?",
+    "tr": "Bu masaüstüyle eşleştirilsin mi?",
+    "zh-Hant": "要與這台電腦配對嗎？"
+  },
+  "你打开了来自桌面的配对链接。确认后会将它添加到你的主机。": {
+    "zh": "你打开了来自桌面的配对链接。确认后会将它添加到你的主机。",
+    "de": "Ein Kopplungslink vom Desktop wurde geöffnet. Bestätigen, um diesen Desktop zu den Hosts hinzuzufügen.",
+    "en": "You opened a pairing link from your desktop. Confirm to add it to your hosts.",
+    "es": "Has abierto un enlace de emparejamiento desde tu escritorio. Confirma para añadirlo a tus hosts.",
+    "fr": "Vous avez ouvert un lien d'appairage depuis votre ordinateur. Confirmez pour l'ajouter à vos hôtes.",
+    "ja": "デスクトップのペアリングリンクを開きました。確認すると、このデスクトップがホスト一覧に追加されます。",
+    "ko": "데스크톱의 페어링 링크를 열었습니다. 확인하면 이 데스크톱이 호스트 목록에 추가됩니다.",
+    "pt": "Você abriu um link de pareamento do seu desktop. Confirme para adicioná-lo aos seus hosts.",
+    "ru": "Вы открыли ссылку сопряжения, полученную с компьютера. Подтвердите, чтобы добавить его в список серверов.",
+    "tr": "Masaüstünüzden bir eşleştirme bağlantısı açtınız. Bu masaüstünü sunucu listenize eklemek için onaylayın.",
+    "zh-Hant": "您開啟了來自電腦的配對連結。確認後，即可將該電腦加入主機清單。"
+  },
+  "配对": {
+    "zh": "配对",
+    "de": "Koppeln",
+    "en": "Pair",
+    "es": "Emparejar",
+    "fr": "Appairer",
+    "ja": "ペアリング",
+    "ko": "페어링",
+    "pt": "Parear",
+    "ru": "Выполнить сопряжение",
+    "tr": "Eşleştir",
+    "zh-Hant": "配對"
+  },
+  "返回首页": {
+    "zh": "返回首页",
+    "de": "Zurück zur Startseite",
+    "en": "Back to home",
+    "es": "Volver al inicio",
+    "fr": "Retour à l'accueil",
+    "ja": "ホームに戻る",
+    "ko": "홈으로 돌아가기",
+    "pt": "Voltar ao início",
+    "ru": "На главный экран",
+    "tr": "Ana ekrana dön",
+    "zh-Hant": "返回首頁"
+  },
+  "未能在 {{seconds}} 秒内连接，请查看下方日志": {
+    "zh": "未能在 {{seconds}} 秒内连接，请查看下方日志",
+    "de": "Verbindung konnte nicht innerhalb von {{seconds}} s hergestellt werden – das Protokoll unten zeigt, wo der Vorgang hängen blieb",
+    "en": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
+    "es": "No se pudo conectar en {{seconds}} s; consulta el registro de abajo para ver dónde se detuvo.",
+    "fr": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
+    "ja": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
+    "ko": "{{seconds}}초 내에 연결하지 못했습니다. 어느 단계에서 멈췄는지 아래 로그를 확인하세요.",
+    "pt": "Não foi possível conectar em {{seconds}}s — veja no log abaixo em que etapa a conexão parou",
+    "ru": "Не удалось подключиться за {{seconds}} с — посмотрите в журнале ниже, на каком этапе остановилось подключение",
+    "tr": "{{seconds}} saniye içinde bağlantı kurulamadı — işlemin nerede takıldığını görmek için aşağıdaki günlüğe bakın",
+    "zh-Hant": "未能在 {{seconds}} 秒內連線；請查看下方記錄，確認停在哪個步驟"
+  },
+  "正在连接…": {
+    "zh": "正在连接…",
+    "de": "Verbindung wird hergestellt…",
+    "en": "Connecting…",
+    "es": "Conectando…",
+    "fr": "Connexion…",
+    "ja": "接続中…",
+    "ko": "연결 중…",
+    "pt": "Conectando…",
+    "ru": "Подключение…",
+    "tr": "Bağlanılıyor…",
+    "zh-Hant": "連線中…"
+  },
+  "这是下载二维码，请扫描电脑上第 2 步中的配对二维码。": {
+    "zh": "这是下载二维码，请扫描电脑上第 2 步中的配对二维码。",
+    "de": "Das ist der Download-Code. Scanne den Kopplungscode in Schritt 2 auf deinem Computer.",
+    "en": "That's the download code. Scan the pairing code in step 2 on your desktop.",
+    "es": "Ese es el código de descarga. Escanea el código de emparejamiento del paso 2 en tu ordenador.",
+    "fr": "C’est le code de téléchargement. Scannez le code d’association à l’étape 2 sur votre ordinateur.",
+    "ja": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
+    "ko": "다운로드용 코드입니다. 데스크톱의 2단계에 있는 페어링 코드를 스캔하세요.",
+    "pt": "Esse é o código de download. Leia o código de pareamento na etapa 2 no seu computador.",
+    "ru": "Это код для скачивания. Отсканируйте код сопряжения на шаге 2 на компьютере.",
+    "tr": "Bu indirme kodu. Bilgisayarınızdaki 2. adımda bulunan eşleştirme kodunu tarayın.",
+    "zh-Hant": "這是下載碼。請掃描桌面端第 2 步中的配對碼。"
+  },
+  "配对码已过期、已使用或已被替换。请在桌面显示新配对码后重新扫描。": {
+    "zh": "配对码已过期、已使用或已被替换。请在桌面显示新配对码后重新扫描。",
+    "de": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut.",
+    "en": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
+    "es": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear.",
+    "fr": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau.",
+    "ja": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。",
+    "ko": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요.",
+    "pt": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente.",
+    "ru": "Этот код сопряжения истёк, уже использован или был заменён. Покажите новый код на компьютере и отсканируйте его снова.",
+    "tr": "Bu eşleştirme kodunun süresi doldu, kod zaten kullanıldı veya değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın.",
+    "zh-Hant": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
+  },
+  "无法启动相机": {
+    "zh": "无法启动相机",
+    "en": "Could not start camera"
+  },
+  "你可以重试扫码，或改为粘贴配对码。": {
+    "zh": "你可以重试扫码，或改为粘贴配对码。",
+    "en": "Try scanning again, or paste the pairing code instead."
   }
 }

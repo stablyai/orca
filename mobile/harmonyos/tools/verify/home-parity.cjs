@@ -1,10 +1,12 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { loadArkts } = require('./arkts-source.cjs')
-const { readHomeCatalog, isHomeAttention } = loadArkts('home/HomeCatalog.ets', [
-  'readHomeCatalog',
-  'isHomeAttention'
-])
+const { readHomeCatalog } = loadArkts('home/HomeCatalog.ets', ['readHomeCatalog'])
+const { buildAgentList, agentsNeedingYou, listedAgents } = loadArkts(
+  'home/AgentListModel.ets',
+  ['buildAgentList', 'agentsNeedingYou', 'listedAgents'],
+  { upstream: require('../../entry/src/main/ets/vendor/agent-list.js') }
+)
 const { readHomeUsage, readHomeAutomations, homeAutomationToggleParams, readHomeAutomationRuns } =
   loadArkts('home/HomeAccountUsage.ets', [
     'readHomeUsage',
@@ -13,54 +15,79 @@ const { readHomeUsage, readHomeAutomations, homeAutomationToggleParams, readHome
     'readHomeAutomationRuns'
   ])
 
-test('host sidebar verdict wins over process activity and links its named agent pane', () => {
-  const rows = readHomeCatalog(
-    JSON.stringify({
-      worktrees: [
-        {
-          worktreeId: 'folder/workspace',
-          repo: 'repo',
-          displayName: 'Workspace',
-          status: 'active',
-          sidebarStatus: 'permission',
-          hasHostSidebarActivity: false,
-          hostId: 'runtime:ssh-host',
-          agents: [
-            {
-              state: 'waiting',
-              conversationName: 'Fix issue',
-              paneKey: 'pane-3',
-              updatedAt: 900,
-              parentPaneKey: null
-            }
-          ]
-        }
-      ]
-    })
-  )
-  assert.equal(rows[0].state, 'permission')
-  assert.equal(rows[0].title, 'Fix issue')
-  assert.equal(rows[0].paneKey, 'pane-3')
-  assert.equal(rows[0].executionHost, 'runtime:ssh-host')
-  assert.equal(isHomeAttention(rows[0]), true)
-})
-
-test('background PTYs and read completions do not turn into active agent cards', () => {
+test('the desktop catalog keeps every listed pane and routes SSH workspaces to their runtime', () => {
   const rows = readHomeCatalog(
     JSON.stringify({
       worktrees: [
         { worktreeId: 'pty', status: 'active', hasHostSidebarActivity: false },
-        { worktreeId: 'done-read', sidebarStatus: 'done', unread: false },
-        { worktreeId: 'done-unread', sidebarStatus: 'done', unread: true },
-        { worktreeId: 'archived', sidebarStatus: 'working', isArchived: true }
+        {
+          worktreeId: 'folder/workspace',
+          repo: 'repo',
+          displayName: 'Workspace',
+          sidebarStatus: 'permission',
+          hostId: 'runtime:ssh-host',
+          agents: [
+            {
+              paneKey: 'coordinator',
+              activity: {
+                listed: true,
+                status: 'working',
+                unread: false,
+                clearable: false,
+                sortAt: 800,
+                title: 'Coordinator'
+              }
+            },
+            {
+              paneKey: 'worker',
+              activity: {
+                listed: true,
+                status: 'permission',
+                unread: true,
+                clearable: false,
+                sortAt: 900,
+                title: 'Fix issue',
+                childOf: 'coordinator'
+              }
+            },
+            { paneKey: 'hidden', activity: { listed: false } },
+            { paneKey: 'invalid', conversationName: 7 }
+          ]
+        },
+        { worktreeId: 'archived', isArchived: true, sidebarStatus: 'working' }
       ]
     })
   )
   assert.deepEqual(
-    Array.from(rows.filter(isHomeAttention), (row) => row.worktreeId),
-    ['done-unread']
+    Array.from(rows, (row) => row.state),
+    ['inactive', 'permission']
   )
-  assert.equal(rows[0].state, 'inactive')
+  const catalog = Array.from(rows).flatMap((row) => Array.from(row.agents))
+  const host = { id: 'desk', connection: 'connected', catalog, live: true, seenAt: 1000 }
+  const view = { groupBy: 'workspace', showWorkers: true, unreadOnly: false }
+  const needsYou = agentsNeedingYou([host])
+  assert.deepEqual(
+    Array.from(needsYou, (row) => row.title),
+    ['Fix issue']
+  )
+  const list = buildAgentList([host], view, '', '')
+  assert.deepEqual(
+    Array.from(listedAgents(list.sections), (row) => [row.title, row.entry.executionHost]).sort(),
+    [
+      ['Coordinator', 'runtime:ssh-host'],
+      ['Fix issue', 'runtime:ssh-host']
+    ]
+  )
+  const matches = buildAgentList([host], { ...view, unreadOnly: true }, '', 'fix issue')
+  assert.deepEqual(
+    Array.from(listedAgents(matches.sections), (row) => row.title),
+    ['Fix issue']
+  )
+  const offline = { ...host, connection: 'disconnected', live: false }
+  assert.equal(agentsNeedingYou([offline]).length, 0)
+  const remembered = listedAgents(buildAgentList([offline], view, '', '').sections)
+  assert.equal(remembered.length, 2)
+  assert.ok(remembered.every((row) => row.offline && row.unread === undefined && !row.clearable))
 })
 
 test('catalog refusal is distinct from a confirmed empty catalog', () => {

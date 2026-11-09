@@ -41,6 +41,30 @@ const nacl = loadArkts(
     }
   }
 )
+test('scanning accepts Orca pairing links, while paste also accepts raw desktop codes', () => {
+  const { isDirectEndpoint } = loadArkts('transport/RelayProtocol.ets', ['isDirectEndpoint'], {
+    url: { URL }
+  })
+  const { parsePairingOffer } = loadArkts('transport/E2eeV2Session.ets', ['parsePairingOffer'], {
+    ...bytes,
+    ...nacl,
+    isDirectEndpoint
+  })
+  const code = Buffer.from(
+    JSON.stringify({
+      v: 2,
+      endpoint: 'ws://desktop.invalid:6768',
+      deviceToken: 'test-pair-token',
+      publicKeyB64: fixture.clientPublicKeyB64
+    })
+  ).toString('base64url')
+  assert.equal(parsePairingOffer(code).endpoint, 'ws://desktop.invalid:6768')
+  assert.equal(parsePairingOffer(`orca://pair/?code=${code}`, true).deviceToken, 'test-pair-token')
+  assert.equal(parsePairingOffer(`orca://pair#${code}`, true).deviceToken, 'test-pair-token')
+  assert.throws(() => parsePairingOffer(code, true), /Invalid pairing link/)
+  assert.throws(() => parsePairingOffer(`orca://other?code=${code}`), /Invalid pairing link/)
+})
+
 function session(vector) {
   const { E2eeV2ClientSession, buildV2TokenAuthJson } = loadArkts(
     'transport/E2eeV2Session.ets',

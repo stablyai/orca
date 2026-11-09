@@ -1,146 +1,208 @@
 import { uiText } from '../settings/NativeUi';
 import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR } from '../diagnostics/ConnectionLogStore';
-import { router } from '@kit.ArkUI';
+import { KeyboardAvoidMode as PageKeyboardAvoidMode, router } from '@kit.ArkUI';
 import { url } from '@kit.ArkTS';
+import { abilityAccessCtrl, common } from '@kit.AbilityKit';
+import { PairingCamera } from '../pairing/PairingCamera';
+import { lucideColorFilter } from '../settings/LucideColor';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
-import { RelayConnectionOptions, relayConnectUrl } from '../transport/RelayProtocol';
+import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
 import { prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
-import { scanBarcode, scanCore } from '@kit.ScanKit';
-import { BusinessError } from '@kit.BasicServicesKit';
-import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
+import { RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { parsePairingOffer, PairingOffer } from '../transport/E2eeV2Session';
 import { hostIdFor, saveHost, HostMeta } from '../storage/HostStore';
 import { randomBytes, toHex } from '../transport/crypto/Bytes';
 
-/**
- * Pairing flow (Phase 1): scan the desktop QR (Scan Kit default UI) or paste the
- * `orca://pair?code=…` offer, connect over E2EE v2, read the desktop status for
- * its machine name and capabilities, exchange the pairing ticket when the host
- * advertises the capability, then persist the host (token into the Asset Store).
- */
-
 const TICKET_EXCHANGE_CAPABILITY = 'pairing.ticket-exchange.v1';
+const CAMERA_PERMISSION = 'ohos.permission.CAMERA';
+const PAIR_TIMEOUT_MS = 25000;
+const PAIRED_HOLD_MS = 450;
+const PAIRING_CODE_FIELD = 'orca-pairing-code';
+const REJECTED_CODE = '配对码已过期、已使用或已被替换。请在桌面显示新配对码后重新扫描。';
+
+function scanErrorLabel(raw: string): string {
+  try {
+    let target = new url.URL(raw.trim());
+    let path = target.pathname.replace(/\/$/, '');
+    let download = (target.origin === 'https://apps.apple.com' && /^\/(?:[a-z]{2}\/)?app\/(?:[^/]+\/)?id6766130217$/.test(path)) ||
+      (['https://www.onorca.dev', 'https://onorca.dev'].includes(target.origin) && path === '/download/android') ||
+      (target.origin === 'https://testflight.apple.com' && path === '/join/YjeGMQBA') ||
+      (target.origin === 'https://github.com' && /^\/stablyai\/orca\/releases\/download\/mobile-android-v[^/]+\/app-release\.apk$/.test(path));
+    if (download) { return '这是下载二维码，请扫描电脑上第 2 步中的配对二维码。'; }
+  } catch (e) {}
+  return '这不是有效的 Orca 二维码';
+}
 
 @Entry
 @Component
 struct PairScan {
   @StorageProp('uiLocale') uiLocale: string = 'en';
-  @StorageProp('themeBg') themeBg: string = '#111111';
-  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
-  @StorageProp('themeBorder') themeBorder: string = '#353a42';
-  @StorageProp('themeText') themeText: string = '#e8e8e8';
-  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
-  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
-  @StorageProp('themeLink') themeLink: string = '#96b8e5';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
-  @State endpointOverride: string = '';
+  @StorageProp('themeScheme') themeScheme: string = 'dark';
+  @StorageProp('themeBg') themeBg: string = '#0a0a0a';
+  @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeBorder') themeBorder: string = '#2c2c2c';
+  @StorageProp('themeText') themeText: string = '#fafafa';
+  @StorageProp('themeMuted') themeMuted: string = '#898989';
+  @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
   @State pairingCode: string = '';
   @State logs: string[] = [];
   @State busy: boolean = false;
-  @State scanning: boolean = false;
   @State openedFromLink: boolean = false;
-  @State advanced: boolean = false;
   @State showPaste: boolean = false;
-  @State stage: string = '';
+  @State error: string = '';
   @State confirming: boolean = false;
-  @State desktopEndpoint: string = '';
-  @State desktopIdentity: string = '';
   @State pairedHostId: string = '';
   @State navigationBusy: boolean = false;
+  @State permission: number = abilityAccessCtrl.PermissionStatus.NOT_DETERMINED;
+  @State permissionBusy: boolean = false;
+  @State cameraFailed: boolean = false;
+  @State decoded: boolean = false;
+  @State showCamera: boolean = false;
   private confirmedOffer: PairingOffer | null = null;
   private deadline: number = -1;
   private timedOut: boolean = false;
-  private client: SpikeRpcClient | null = null;
+  private attempt: PairingConnection | null = null;
   private disposed: boolean = false;
   private visible: boolean = false;
   private navigationEpoch: number = 0;
-  aboutToDisappear(): void {
-    this.disposed = true; this.visible = false; this.navigationEpoch++;
-    if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
-    if (this.client) { this.client.close(); this.client = null; }
-  }
+  private context?: common.UIAbilityContext;
+  private pasteInput: TextInputController = new TextInputController();
+  private priorKeyboardMode?: PageKeyboardAvoidMode;
+  private foreground: boolean = true;
+  private onForeground = (): void => { this.foreground = true; this.refreshCameraPermission(); };
+  private onBackground = (): void => { this.foreground = false; this.cancelCameraDecode(); this.updateCamera(); };
 
   aboutToAppear(): void {
+    let context = getContext(this) as common.UIAbilityContext;
+    this.context = context;
+    context.eventHub.on('orcaForeground', this.onForeground);
+    context.eventHub.on('orcaBackground', this.onBackground);
     let params = (router.getParams() ?? {}) as Record<string, string>;
-    if (params && typeof params['pairingCode'] === 'string') {
+    if (typeof params['pairingCode'] === 'string') {
       this.openedFromLink = true;
-      this.pairingCode = params['pairingCode']; this.previewOffer(true);
+      this.acceptOffer(params['pairingCode'], true);
     }
+  }
+
+  aboutToDisappear(): void {
+    this.disposed = true; this.visible = false; this.navigationEpoch++; this.restoreKeyboardMode();
+    this.context?.eventHub.off('orcaForeground', this.onForeground);
+    this.context?.eventHub.off('orcaBackground', this.onBackground);
+    if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
+    this.attempt?.close(); this.attempt = null;
   }
 
   onPageShow(): void {
     this.visible = true; this.navigationEpoch++;
+    if (this.showPaste) { this.resizeForKeyboard(); }
+    this.refreshCameraPermission();
     if (this.pairedHostId.length > 0 && !this.busy && !this.navigationBusy) {
       this.continueAfterPair(this.pairedHostId).catch(() => {});
-    } else if (this.confirmedOffer && !this.confirming) {
-      this.doPair().catch(() => {});
     }
   }
-  onPageHide(): void { this.visible = false; this.navigationEpoch++; }
 
-  appendLog(line: string): void {
-    let stamped = `${new Date().toLocaleTimeString()}  ${line}`;
-    let next = this.logs.slice();
-    next.push(stamped);
-    if (next.length > 200) {
-      next.splice(0, next.length - 200);
-    }
-    this.logs = next;
+  onPageHide(): void { this.visible = false; this.navigationEpoch++; this.cancelCameraDecode(); this.restoreKeyboardMode(); this.updateCamera(); }
+
+  private cancelCameraDecode(): void {
+    if (this.decoded && !this.busy) { this.confirmedOffer = null; this.decoded = false; }
   }
 
-  async doScan(): Promise<void> {
-    if (this.busy || this.scanning || this.disposed) { return; }
-    this.scanning = true;
+  private t(text: string): string { return uiText(text, this.uiLocale); }
+
+  private refreshCameraPermission(): void {
+    if (this.openedFromLink || this.disposed) { return; }
     try {
-      let options: scanBarcode.ScanOptions = { scanTypes: [scanCore.ScanType.QR_CODE] };
-      // API 26 Scan Kit exposes callback-only startScan; wrap it in a promise.
-      let result: scanBarcode.ScanResult = await new Promise<scanBarcode.ScanResult>((resolve, reject) => {
-        scanBarcode.startScan(options, (err: BusinessError, value: scanBarcode.ScanResult) => {
-          if (err) {
-            reject(err as Error);
-          } else {
-            resolve(value);
-          }
-        });
-      });
-      if (this.disposed) { return; }
-      this.pairingCode = result.originalValue;
-      this.scanning = false;
-      this.previewOffer(false);
-    } catch (e) {
-      if (!this.disposed) { this.appendLog('未读取到有效配对码，可重试扫码或手动粘贴'); }
-    } finally {
-      this.scanning = false;
-    }
+      this.permission = abilityAccessCtrl.createAtManager().getSelfPermissionStatus(CAMERA_PERMISSION);
+    } catch (e) { this.permission = abilityAccessCtrl.PermissionStatus.DENIED; }
+    this.updateCamera();
+  }
+
+  private updateCamera(): void {
+    this.showCamera = this.visible && this.foreground && !this.disposed && !this.openedFromLink &&
+      !this.busy && !this.error && !this.showPaste && !this.cameraFailed && !this.pairedHostId &&
+      this.permission === abilityAccessCtrl.PermissionStatus.GRANTED;
+  }
+
+  private async requestCamera(): Promise<void> {
+    let context = this.context;
+    if (!context || this.permissionBusy) { return; }
+    this.permissionBusy = true;
+    let manager = abilityAccessCtrl.createAtManager();
+    try {
+      if (this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED) {
+        await manager.requestPermissionsFromUser(context, [CAMERA_PERMISSION]);
+      } else {
+        await manager.requestPermissionOnSetting(context, [CAMERA_PERMISSION]);
+      }
+    } catch (e) {}
+    finally { this.permissionBusy = false; this.refreshCameraPermission(); }
+  }
+
+  private openPaste(): void {
+    this.cancelCameraDecode();
+    this.error = ''; this.logs = []; this.pairingCode = ''; this.showPaste = true;
+    this.resizeForKeyboard(); this.updateCamera();
+  }
+
+  private resizeForKeyboard(): void {
+    if (this.priorKeyboardMode !== undefined) { return; }
+    let context = this.getUIContext();
+    this.priorKeyboardMode = context.getKeyboardAvoidMode();
+    context.setKeyboardAvoidMode(PageKeyboardAvoidMode.RESIZE);
+  }
+
+  private restoreKeyboardMode(): void {
+    if (this.priorKeyboardMode === undefined) { return; }
+    this.getUIContext().setKeyboardAvoidMode(this.priorKeyboardMode);
+    this.priorKeyboardMode = undefined;
+  }
+
+  private dismissPaste(): void {
+    this.pasteInput.stopEditing(); this.showPaste = false; this.pairingCode = '';
+    this.restoreKeyboardMode();
+  }
+
+  private closePaste(): void { this.dismissPaste(); this.updateCamera(); }
+
+  private submitPaste(): void {
+    if (!this.showPaste || !this.pairingCode.trim()) { return; }
+    let input = this.pairingCode;
+    this.dismissPaste();
+    this.acceptOffer(input);
+  }
+
+  private retry(): void {
+    this.error = ''; this.logs = []; this.decoded = false; this.cameraFailed = false;
+    this.refreshCameraPermission();
+  }
+
+  private appendLog(line: string): void {
+    this.logs = [...this.logs.slice(-199), `${new Date().toLocaleTimeString()}  ${line}`];
   }
 
   onBackPress(): boolean {
+    if (this.showPaste) { this.closePaste(); return true; }
     if (this.openedFromLink) { router.back({ url: 'pages/Home' }); return true; }
-    if (this.showPaste && !this.busy) { this.showPaste = false; this.pairingCode = ''; return true; }
     return false;
   }
 
-  previewOffer(requireConfirmation: boolean): void {
-    if (this.busy || this.disposed || this.pairedHostId.length > 0) { return; }
+  private acceptOffer(input: string, fromLink: boolean = false, fromCamera: boolean = false): void {
+    if (this.busy || this.disposed || this.pairedHostId.length > 0 || this.decoded) { return; }
     try {
-      let offer = parsePairingOffer(this.pairingCode);
-      let endpoint = this.endpointOverride.trim() || offer.endpoint;
-      let parsed = new url.URL(endpoint);
-      if (!['ws:', 'wss:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) {
-        throw new Error('Invalid desktop endpoint');
-      }
-      this.confirmedOffer = offer;
-      this.desktopEndpoint = endpoint;
-      let id = hostIdFor(offer.publicKeyB64);
-      this.desktopIdentity = `${id.substring(0, 8)} ${id.substring(8, 16)} ${id.substring(16, 24)} ${id.substring(24, 32)}`;
-      this.pairingCode = '';
-      this.stage = ''; this.confirming = requireConfirmation;
-      if (!requireConfirmation) { this.doPair().catch(() => {}); }
+      this.confirmedOffer = parsePairingOffer(input, fromLink || fromCamera);
+      this.error = ''; this.confirming = fromLink;
+      if (fromCamera) {
+        this.decoded = true;
+        let offer = this.confirmedOffer;
+        setTimeout((): void => {
+          if (offer === this.confirmedOffer && this.foreground) { this.doPair().catch(() => {}); }
+        }, 160);
+      } else if (!fromLink) { this.doPair().catch(() => {}); }
     } catch (e) {
-      this.pairingCode = '';
       this.confirmedOffer = null; this.confirming = false;
-      this.stage = '配对信息无效或已过期，请重新获取';
+      this.error = fromLink ? '此链接缺少有效的配对码' : fromCamera ? scanErrorLabel(input) :
+        '配对码无效，请从电脑复制后重新粘贴';
+      this.updateCamera();
     }
   }
 
@@ -153,110 +215,48 @@ struct PairScan {
       let params: Record<string, string> = { 'hostId': hostId };
       await router.replaceUrl({ url: steps.length > 0 ? 'pages/MobileOnboarding' : 'pages/ShellScreen', params: params });
     } catch (e) {
-      if (!this.disposed) { this.stage = '配对已保存，无法继续首次设置，请重试'; }
+      if (!this.disposed) { this.error = '配对已保存，无法继续首次设置，请重试'; }
     } finally { this.navigationBusy = false; }
-  }
-
-  private async connectOffer(offer: PairingOffer, endpoint: string): Promise<SpikeRpcClient> {
-    let direct = new SpikeRpcClient(8000);
-    this.client = direct;
-    direct.setLogSink((line: string): void => this.appendLog(line));
-    try {
-      await direct.connect(endpoint, offer.deviceToken, offer.publicKeyB64, 'v2');
-      return direct;
-    } catch (e) {
-      direct.close();
-      if (!offer.relay || this.disposed || this.timedOut) { throw e as Error; }
-    }
-    let relay = offer.relay;
-    if (!relay) { throw new Error('Relay offer unavailable'); }
-    let origin = relay.cellUrl;
-    let assignmentEpoch = relay.assignmentEpoch;
-    let assignedCell = relay.cellUrl;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (this.disposed || this.timedOut) { throw new Error('Pairing cancelled'); }
-      let candidate = new SpikeRpcClient(12000);
-      this.client = candidate;
-      let options: RelayConnectionOptions = { relayHostId: relay.relayHostId,
-        credential: relay.inviteToken, credentialKind: 'invite' };
-      candidate.configureRelay(options);
-      candidate.setLogSink((line: string): void => this.appendLog(line));
-      try {
-        await candidate.connect(relayConnectUrl(origin, relay.relayHostId), offer.deviceToken, offer.publicKeyB64, 'v2');
-        return candidate;
-      } catch (e) {
-        let move = candidate.getRelayMove();
-        let closeCode = candidate.getRelayCloseCode();
-        candidate.close();
-        if (move) {
-          if (move.assignmentEpoch < assignmentEpoch
-            || (move.assignmentEpoch === assignmentEpoch && move.cellUrl !== assignedCell)) { throw e as Error; }
-          origin = move.cellUrl; assignedCell = move.cellUrl; assignmentEpoch = move.assignmentEpoch;
-        } else if ([0, 1006, 4409, 4503].includes(closeCode) && origin !== relay.directorUrl) { origin = relay.directorUrl; }
-        else { throw e as Error; }
-        await new Promise<void>((resolve): void => { setTimeout(resolve, 1000); });
-      }
-    }
-    throw new Error('Relay pairing unavailable');
   }
 
   async doPair(): Promise<void> {
     let offer = this.confirmedOffer;
-    if (this.busy || this.scanning || this.disposed || !this.visible || !offer || this.pairedHostId.length > 0) {
+    if (this.busy || this.disposed || !this.visible || !offer || this.pairedHostId.length > 0) {
       return;
     }
     let pairingStartedAt = Date.now();
     let navigationEpoch = this.navigationEpoch;
-    this.busy = true;
+    this.busy = true; this.confirming = false; this.error = '';
+    this.updateCamera();
     this.logs = [];
     this.timedOut = false;
+    let attempt = new PairingConnection();
+    this.attempt = attempt;
     this.deadline = setTimeout((): void => {
-      this.timedOut = true; if (this.client) { this.client.close(); }
-    }, 25000);
-    this.stage = '正在验证配对信息…';
-    let client: SpikeRpcClient | null = null;
+      this.timedOut = true; attempt.close();
+    }, PAIR_TIMEOUT_MS);
     try {
-      this.appendLog('正在验证配对信息…');
-      let endpoint = this.desktopEndpoint;
-      this.stage = '正在连接桌面…';
-
-      client = await this.connectOffer(offer, endpoint);
+      this.appendLog(this.t('正在验证配对信息…'));
+      let endpoint = offer.endpoint;
+      let connected = await attempt.connect(offer, (line: string): void => {
+        if (!this.disposed) { this.appendLog(line); }
+      });
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      this.stage = '正在确认桌面身份…';
-
-      // Read desktop identity + capabilities, then exchange the pairing ticket
-      // when the host advertises it (upstream pairing-ticket-exchange semantics).
+      let client = connected.client;
       let hostName = endpoint;
       let capabilities: string[] = [];
-      let status: RpcResponse = await client.request('status.get', null);
-      if (this.disposed) { return; }
-      if (status instanceof RpcSuccess) {
-        let parsed: Object | null = JSON.parse(status.result) as Object | null;
-        if (parsed !== null && typeof parsed === 'object') {
-          let rec = parsed as Record<string, Object>;
-          let machineName: Object = rec['machineName'];
-          if (typeof machineName === 'string' && machineName.length > 0) {
-            hostName = machineName;
-          }
-          let capsValue: Object = rec['capabilities'];
-          if (Array.isArray(capsValue)) {
-            let caps = capsValue as Array<string>;
-            for (let i = 0; i < caps.length; i++) {
-              if (typeof caps[i] === 'string') {
-                capabilities.push(caps[i]);
-              }
-            }
-          }
-        }
-        this.appendLog(`host: ${hostName}`);
-      } else {
-        this.appendLog('桌面状态暂不可用，使用已验证的加密身份继续配对');
+      let status: ESObject = JSON.parse(connected.status.result);
+      if (status && typeof status['machineName'] === 'string' && status['machineName'].length > 0) {
+        hostName = status['machineName'];
       }
+      if (status && Array.isArray(status['capabilities'])) {
+        capabilities = (status['capabilities'] as string[]).filter((value: string): boolean => typeof value === 'string');
+      }
+      this.appendLog(`host: ${hostName}`);
 
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      this.stage = '正在建立安全配对…';
       let prepared = await prepareRelayPairing(getContext(this), offer, client, pairingStartedAt, (): boolean => !this.disposed && !this.timedOut);
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
@@ -298,31 +298,28 @@ struct PairScan {
       };
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      this.stage = '正在保存配对…';
       if (prepared) { await commitRelayPairing(getContext(this), meta, token, prepared, (): boolean => !this.disposed && !this.timedOut); }
       else { await saveHost(getContext(this), meta, token, undefined, pairingStartedAt); }
       if (this.disposed) { return; }
       this.pairingCode = '';
-      this.stage = '配对成功';
       this.appendLog('配对成功');
       recordConnection(getContext(this), LOG_LEVEL_INFO, '桌面配对成功', '').catch(() => {});
-      client.close();
-      this.confirming = false; this.confirmedOffer = null;
+      attempt.close();
+      this.confirmedOffer = null; this.pairedHostId = meta.id;
+      await new Promise<void>((resolve): void => { setTimeout(resolve, PAIRED_HOLD_MS); });
       await this.continueAfterPair(meta.id);
     } catch (e) {
       if (this.disposed) { return; }
-      if (!this.confirming) { this.confirmedOffer = null; }
-      this.stage = '配对失败，请检查配对码和网络连接后重试';
-      this.appendLog(this.stage);
+      this.confirmedOffer = null; this.decoded = false;
+      this.error = this.timedOut ? '未能在 {{seconds}} 秒内连接，请查看下方日志' :
+        (e as Error).message === PAIRING_CODE_REFUSED ? REJECTED_CODE : '配对失败，请检查配对码和网络连接后重试';
+      this.appendLog(this.t(this.error).replace('{{seconds}}', String(PAIR_TIMEOUT_MS / 1000)));
       recordConnection(getContext(this), LOG_LEVEL_ERROR, '桌面配对失败', '').catch(() => {});
-      if (client) {
-        client.close();
-      }
     } finally {
       if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
-      if (client) { client.close(); }
-      this.client = null;
-      this.busy = false;
+      attempt.close();
+      this.attempt = null;
+      this.busy = false; this.updateCamera();
       if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch
         && this.pairedHostId.length > 0 && !this.navigationBusy) {
         this.continueAfterPair(this.pairedHostId).catch(() => {});
@@ -330,101 +327,195 @@ struct PairScan {
     }
   }
 
-  build() {
-    Column({ space: 10 }) {
-      Row({ space: 10 }) {
-        Button(uiText('返回', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).backgroundColor(Color.Transparent)
-          .onClick(() => {
+  @Builder
+  private step(number: number, label: string) {
+    Row({ space: 8 }) {
+      Text(String(number)).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Bold)
+        .fontColor(this.themeSecondary).textAlign(TextAlign.Center).width(22).height(22).borderRadius(11)
+        .backgroundColor(this.themeScheme === 'light' ? '#f5f5f5' : '#262626')
+      Text(this.t(label)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).layoutWeight(1)
+    }.width('100%')
+  }
+
+  @Builder
+  private primary(label: string, activate: () => void, fullWidth: boolean = false, enabled: boolean = true) {
+    Button(this.t(label), { type: ButtonType.Normal })
+      .fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeBg)
+      .backgroundColor(this.themeText).borderRadius(12).constraintSize({ minHeight: 40 })
+      .width(fullWidth ? '100%' : 'auto').padding({ left: 24, right: 24 })
+      .enabled(enabled).opacity(enabled ? 1 : 0.48).onClick(activate)
+  }
+
+  @Builder
+  private secondary(label: string, activate: () => void, clipboard: boolean = false) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 4 }) {
+        if (clipboard) {
+          Image($r('app.media.lucide_clipboard')).width(16).height(16).supportSvg2(true)
+            .colorFilter(lucideColorFilter(this.themeSecondary))
+        }
+        Text(this.t(label)).fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeSecondary)
+      }.justifyContent(FlexAlign.Center)
+    }.constraintSize({ minHeight: 40 }).borderRadius(12).backgroundColor(Color.Transparent)
+      .accessibilityText(this.t(label)).onClick(activate)
+  }
+
+  @Builder
+  private heading(title: string, description: string) {
+    Text(this.t(title)).fontFamily('Geist').fontSize(24).fontWeight(FontWeight.Medium)
+      .fontColor(this.themeText).textAlign(TextAlign.Center)
+    Text(this.t(description)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary)
+      .textAlign(TextAlign.Center).lineHeight(20).constraintSize({ maxWidth: 360 }).margin({ bottom: 16 })
+  }
+
+  @Builder
+  private pasteSheet() {
+    Column({ space: 12 }) {
+      Column() {
+        Blank().width(36).height(4).borderRadius(2).backgroundColor(this.themeBorder)
+      }.width('100%').height(12).justifyContent(FlexAlign.Center)
+        .gesture(PanGesture({ direction: PanDirection.Down, distance: 12 }).onActionEnd((): void => this.closePaste()))
+      Text(this.t('粘贴配对码')).fontFamily('Geist').fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.themeText)
+      Text(this.t('复制电脑上二维码下方显示的配对码。')).fontFamily('Geist').fontSize(14)
+        .fontColor(this.themeSecondary).lineHeight(20)
+      TextInput({ text: this.pairingCode, controller: this.pasteInput, placeholder: this.t('orca://pair?code=... 或粘贴配对码') })
+        .fontFamily('Geist').fontSize(14).fontColor(this.themeText).placeholderColor(this.themeMuted)
+        .backgroundColor(this.themeBg).border({ width: 1, color: this.themeBorder, radius: 12 }).height(44)
+        .width('100%').id(PAIRING_CODE_FIELD).enterKeyType(EnterKeyType.Done).maxLength(132096)
+        .onAppear((): void => {
+          setTimeout((): void => {
+            if (this.showPaste && this.visible) { this.getUIContext().getFocusController().requestFocus(PAIRING_CODE_FIELD); }
+          }, 0);
+        })
+        .onChange((value: string): void => { this.pairingCode = value; })
+        .onSubmit((): void => this.submitPaste())
+      Row({ space: 8 }) {
+        this.secondary('取消', (): void => this.closePaste())
+        Button(this.t('保存'), { type: ButtonType.Normal })
+          .fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.themeBg)
+          .backgroundColor(this.themeText).borderRadius(12).constraintSize({ minHeight: 40 })
+          .padding({ left: 24, right: 24 }).enabled(this.pairingCode.trim().length > 0)
+          .onClick((): void => this.submitPaste())
+      }.width('100%').justifyContent(FlexAlign.End)
+    }.width('100%').constraintSize({ maxWidth: 520 }).alignItems(HorizontalAlign.Start)
+      .padding({ left: 20, right: 20, top: 8, bottom: 20 }).backgroundColor(this.themeSurface)
+      .borderRadius({ topLeft: 24, topRight: 24 })
+  }
+
+  @Builder
+  private pairingLog() {
+    if (this.logs.length > 0) {
+      Column({ space: 4 }) {
+        Text(this.t('配对日志')).fontFamily('monospace').fontSize(11).fontColor(this.themeMuted).letterSpacing(1)
+        Scroll() {
+          Column({ space: 6 }) {
+            ForEach(this.logs, (line: string): void => {
+              Text(line).fontFamily('monospace').fontSize(11).fontColor(this.themeSecondary).maxLines(3)
+            }, (line: string, index: number): string => `${index}-${line}`)
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }.scrollBar(BarState.Off).constraintSize({ maxHeight: 160 }).width('100%')
+      }.alignItems(HorizontalAlign.Start).width('100%').constraintSize({ maxWidth: 520 }).margin({ top: 8, bottom: 12 })
+    }
+  }
+
+  @Builder
+  private scanPreview() {
+    Column() {
+      Stack() {
+        if (this.showCamera) {
+          PairingCamera({ decoded: this.decoded,
+            onCode: (code: string): void => this.acceptOffer(code, false, true),
+            onFailure: (): void => { this.cameraFailed = true; this.updateCamera(); } })
+        }
+      }.width('100%').layoutWeight(1).borderRadius(16).clip(true).backgroundColor(this.themeSurface)
+      this.secondary('或粘贴配对码', (): void => this.openPaste(), true)
+    }.width('100%').layoutWeight(1)
+  }
+
+  @Builder
+  private centeredContent() {
+    Column({ space: 8 }) {
+      if (this.confirming) {
+        this.heading('要与这台桌面配对吗？', '你打开了来自桌面的配对链接。确认后会将它添加到你的主机。')
+        Column({ space: 8 }) {
+          this.primary('配对', (): void => { this.doPair().catch(() => {}); }, true)
+          this.secondary('取消', (): void => { this.onBackPress(); })
+        }.width('100%').constraintSize({ maxWidth: 360 })
+      } else if (this.pairedHostId && !this.error) {
+        Image($r('app.media.lucide_check')).width(36).height(36).padding(7).supportSvg2(true)
+          .colorFilter(lucideColorFilter(this.themeBg)).borderRadius(18)
+          .backgroundColor(this.themeScheme === 'light' ? '#147638' : '#86efac')
+        Text(this.t('已连接')).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).margin({ top: 8 })
+        this.pairingLog()
+      } else if (this.error) {
+        Text(this.t(this.error).replace('{{seconds}}', String(PAIR_TIMEOUT_MS / 1000)))
+          .fontFamily('Geist').fontSize(14).fontColor(this.themeScheme === 'light' ? '#b91c1c' : '#ff6568')
+          .textAlign(TextAlign.Center).lineHeight(20).constraintSize({ maxWidth: 360 })
+        this.pairingLog()
+        if (this.pairedHostId) {
+          this.primary('继续首次设置', (): void => { this.continueAfterPair(this.pairedHostId).catch(() => {}); })
+        } else if (this.openedFromLink) {
+          this.primary('返回首页', (): void => { this.onBackPress(); })
+        } else {
+          this.primary('重试', (): void => this.retry())
+          this.secondary('改为粘贴配对码', (): void => this.openPaste(), true)
+        }
+      } else if (this.busy) {
+        LoadingProgress().width(36).height(36).color(this.themeSecondary)
+        Text(this.t('正在连接…')).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).margin({ top: 8 })
+        this.pairingLog()
+      } else if (this.cameraFailed) {
+        this.heading('无法启动相机', '你可以重试扫码，或改为粘贴配对码。')
+        this.primary('重试', (): void => this.retry())
+        this.secondary('改为粘贴配对码', (): void => this.openPaste(), true)
+      } else {
+        this.heading(this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED ? '与桌面配对' : '相机权限已关闭',
+          this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED
+            ? '扫描电脑上 Orca 显示的二维码，或改为粘贴配对码。' : '在设置中启用相机访问，或改为粘贴配对码。')
+        this.primary(this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED ? '继续' : '打开设置',
+          (): void => { this.requestCamera().catch(() => {}); }, false, !this.permissionBusy)
+        this.secondary('改为粘贴配对码', (): void => this.openPaste(), true)
+      }
+    }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).padding({ bottom: this.openedFromLink ? 48 : 0 })
+  }
+
+  @Builder
+  private pairingContent() {
+    Column({ space: 8 }) {
+      Row() {
+        Button({ type: ButtonType.Normal }) {
+          Image($r('app.media.lucide_chevron_left')).width(22).height(22).supportSvg2(true)
+            .colorFilter(lucideColorFilter(this.themeSecondary))
+        }.width(36).height(36).borderRadius(12).backgroundColor(Color.Transparent)
+          .accessibilityText(this.t('返回')).onClick((): void => {
             if (!this.onBackPress()) { router.back(); }
           })
-        Text(uiText('配对桌面', this.uiLocale))
-          .fontFamily('Geist').fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeText)
-          .layoutWeight(1)
+      }.width('100%')
+      if (!this.openedFromLink && this.permission === abilityAccessCtrl.PermissionStatus.GRANTED) {
+        Column({ space: 8 }) {
+          this.step(1, '在电脑上打开 Orca')
+          this.step(2, '前往设置 → 移动端')
+          this.step(3, '扫描二维码')
+        }.width('100%').padding({ left: 7, bottom: 8 })
       }
-      .width('100%')
-      .padding({ left: 14, right: 14, top: 10 })
-
-      if (this.pairedHostId.length > 0) {
-        Text(uiText('配对已保存', this.uiLocale)).fontFamily('Geist').fontSize(20).fontColor(this.themeText)
-        if (this.stage.length > 0) { Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary) }
-        Button(uiText('继续首次设置', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
-          .enabled(!this.navigationBusy).onClick(() => { this.continueAfterPair(this.pairedHostId).catch(() => {}); })
-      } else if (this.busy) {
-        Column({ space: 14 }) {
-          LoadingProgress().width(32).height(32).color(this.themeText)
-          Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(17).fontColor(this.themeText)
-        }.width('100%').padding({ top: 36, bottom: 20 })
-      } else if (this.confirming) {
-        Text(uiText('信任并配对此桌面？', this.uiLocale)).fontFamily('Geist').fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.themeText)
-        Text(uiText('此身份来自你扫描或粘贴的配对信息。确认你信任这台桌面后继续。', this.uiLocale))
-          .fontFamily('Geist').fontSize(15).fontColor(this.themeSecondary)
-        Text(this.desktopEndpoint).fontFamily('Geist').fontSize(16).fontColor(this.themeText).width('100%')
-        Text(uiText('桌面身份指纹', this.uiLocale)).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary).width('100%')
-        Text(this.desktopIdentity).fontFamily('monospace').fontSize(15).fontColor(this.themeText).width('100%')
-        Text(uiText('配对后，此手机可访问该桌面提供的工作区、终端、文件和智能体功能。确认后才会建立加密连接并保存凭证。', this.uiLocale))
-          .fontFamily('Geist').fontSize(15).fontColor(this.themeSecondary)
-        if (this.stage.length > 0) { Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).width('100%') }
-        Button(uiText(this.busy ? '配对中…' : '信任并配对', this.uiLocale))
-          .fontFamily('Geist').fontSize(16).width('100%').height(48).enabled(!this.busy)
-          .onClick(() => { this.doPair().catch(() => {}); })
-        Button(uiText('取消', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(44)
-          .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).enabled(!this.busy)
-          .onClick(() => { this.onBackPress(); })
-      } else if (this.openedFromLink) {
-        Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.themeWarning)
-          .textAlign(TextAlign.Center).padding({ top: 36, left: 12, right: 12 })
+      if (!this.openedFromLink && this.permission === abilityAccessCtrl.PermissionStatus.GRANTED &&
+        !this.busy && !this.pairedHostId && !this.error && !this.cameraFailed) {
+        this.scanPreview()
       } else {
-        Column({ space: 12 }) {
-          Text(uiText('在桌面 Orca 的设置 → 移动端生成二维码，然后扫码或粘贴配对链接。', this.uiLocale))
-            .fontFamily('Geist').fontSize(15).fontColor(this.themeSecondary).textAlign(TextAlign.Center)
-          if (!this.showPaste) {
-            Button(uiText('扫码', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
-              .fontColor(this.themeBg).backgroundColor(this.themeText)
-              .enabled(!this.scanning).onClick(() => { this.doScan().catch(() => {}); })
-            Button(uiText('粘贴配对链接或配对码', this.uiLocale)).fontFamily('Geist').fontSize(14)
-              .fontColor(this.themeSecondary).backgroundColor(Color.Transparent)
-              .enabled(!this.scanning).onClick(() => { this.showPaste = true; })
-          } else {
-            TextArea({ placeholder: uiText('粘贴配对链接或配对码', this.uiLocale), text: this.pairingCode })
-              .fontFamily('Geist').fontSize(14).height(110)
-              .onChange((value: string) => { this.pairingCode = value; })
-            Button(uiText('继续', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
-              .fontColor(this.themeBg).backgroundColor(this.themeText)
-              .enabled(this.pairingCode.trim().length > 0).onClick(() => this.previewOffer(false))
-            Button(uiText(this.advanced ? '收起连接选项' : '连接选项', this.uiLocale))
-              .fontFamily('Geist').fontSize(13).fontColor(this.themeMuted).backgroundColor(Color.Transparent)
-              .onClick(() => { this.advanced = !this.advanced; })
-            if (this.advanced) {
-              TextInput({ placeholder: uiText('桌面 WebSocket 地址（可选）', this.uiLocale), text: this.endpointOverride })
-                .fontFamily('Geist').fontSize(14).height(44)
-                .onChange((value: string) => { this.endpointOverride = value; })
-            }
-          }
-          if (this.stage.length > 0) {
-            Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary)
-          }
-        }
-        .width('100%').constraintSize({ maxWidth: 420 }).padding({ top: 24, left: 12, right: 12 })
+        this.centeredContent()
       }
+    }.width('100%').height('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 }).backgroundColor(this.themeBg)
+      .accessibilityLevel(this.showPaste ? 'no-hide-descendants' : 'auto')
+  }
 
-      List({ space: 2 }) {
-        ForEach(this.logs, (line: string) => {
-          ListItem() {
-            Text(line)
-              .fontFamily('Geist').fontSize(10)
-              .fontColor(this.themeSecondary)
-              .maxLines(3)
-          }
-        }, (line: string, index: number) => `${index}-${line}`)
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      this.pairingContent()
+      if (this.showPaste) {
+        Blank().width('100%').height('100%').backgroundColor('rgba(0, 0, 0, 0.35)')
+          .accessibilityLevel('no').onClick((): void => this.closePaste())
+        this.pasteSheet()
       }
-      .layoutWeight(1)
-      .width('100%')
-    }
-    .width('100%')
-    .height('100%')
-    .padding(12)
-    .backgroundColor(this.themeBg)
+    }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 }

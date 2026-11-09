@@ -2,6 +2,7 @@ import { lucideColorFilter } from '../settings/LucideColor';
 import { uiText } from '../settings/NativeUi';
 import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { pasteboard } from '@kit.BasicServicesKit';
 import { AgentWatch } from '../notifications/AgentWatch';
 import { LocalNotifier, DesktopNotification } from '../notifications/LocalNotifier';
 import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED } from '../settings/SettingsStore';
@@ -11,22 +12,18 @@ import { deletePageStorage } from '../storage/PageStorageStore';
 import { listHosts, deleteHost, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { HostSession, SessionPhase } from '../transport/HostSession';
-import { HomeWorktree, readHomeCatalog, isHomeAttention, homeAttentionRank } from '../home/HomeCatalog';
+import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
+import { AgentDesktop, AgentListRow, HomeAgentEntry, agentsNeedingYou } from '../home/AgentListModel';
+import { AgentListRows } from '../home/AgentListRows';
+import { AgentsTab } from '../home/AgentsTab';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
 import { SETTINGS_LINK_ITEMS, SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { recoverRelayPairings } from '../transport/RelayPairing';
-import { HomeResume, readHomeResume, saveHomeResume, clearHomeResume } from '../home/HomeResume';
+import { clearHomeResume } from '../home/HomeResume';
 import { HomeStats, readHomeStats, totalHomeStats } from '../home/HomeStats';
 import { HomeQuotaOffer, HomeQuotaScope, readHomeQuotaOffer, consumeHomeQuotaReset } from '../home/HomeQuotaReset';
-
-/**
- * Home：对齐上游 MobileHomeScreen（src/home/MobileHomeScreen.tsx）的外壳结构——
- * 底部 4 个 Tab（动态 feed / 使用情况 usage / 自动化 automations / 设置 settings），
- * feed 页 = MobileHomeJumpBackIn（智能体）+ DesktopRow（台式机）+ 未配对空态 +
- * 浮动「New workspace」FAB。主题取上游 mobile-theme.ts 的暗色/亮色 palette。
- */
 
 // upstream src/theme/mobile-theme.ts: darkColors / lightColors（外壳用到的子集）
 interface HomePalette {
@@ -74,31 +71,14 @@ const PALETTE_LIGHT: HomePalette = {
   statusRed: '#e40014'
 };
 
-// Agent 状态点配色：上游 AgentSpinner.agentStatusColors()
-const DOT_WORKING = '#eab308';
-const DOT_DONE = '#10b981';
-const DOT_NEEDS_YOU = '#ef4444';
-
 interface TabSpec {
   id: string;
   label: string;
   icon: Resource;
 }
 
-interface JumpRow {
-  hostId: string;
-  hostName: string;
-  worktreeId: string;
-  title: string;
-  repo: string;
-  state: string;
-  unread: boolean;
-  lastOutputAt: number;
-  paneKey: string;
-  executionHost: string;
-  lastOpened: boolean;
-  actionable: boolean;
-}
+interface AgentCatalog { entries: HomeAgentEntry[]; at: number; }
+interface AgentActivityArgs { paneKeys: string[]; read?: boolean; }
 
 interface HostRuntime {
   session: HostSession;
@@ -107,6 +87,7 @@ interface HostRuntime {
   connecting: boolean;
   refreshTimer: number;
   catalogPending: boolean;
+  catalogRefetch: boolean;
   automationPending: boolean;
   automationFetchedAt: number;
   watch: AgentWatch | null;
@@ -114,6 +95,7 @@ interface HostRuntime {
 
 const TAB_SPECS: TabSpec[] = [
   { id: 'feed', label: '动态', icon: $r('app.media.lucide_list') },
+  { id: 'agents', label: '智能体', icon: $r('app.media.lucide_bot') },
   { id: 'usage', label: '使用情况', icon: $r('app.media.lucide_gauge') },
   { id: 'automations', label: '自动化', icon: $r('app.media.lucide_calendar_clock') },
   { id: 'settings', label: '设置', icon: $r('app.media.lucide_settings') }
@@ -133,12 +115,11 @@ struct Home {
   @State fontScale: number = 1;
   @State online: Record<string, boolean> = {};
   @State connecting: boolean = false;
-  @State agentRows: JumpRow[] = [];
+  @State agentRows: AgentListRow[] = [];
+  @State agentDesktops: AgentDesktop[] = [];
   @State summaries: Record<string, string> = {};
   @State loadError: string = '';
-  @State agentsExpanded: boolean = false;
   @State hostPickerRoute: string = '';
-  @State resume: HomeResume | null = null;
   @State usageByHost: Record<string, HomeUsageCard[]> = {};
   @State automationsByHost: Record<string, HomeAutomation[]> = {};
   @State usageErrors: Record<string, string> = {};
@@ -154,6 +135,8 @@ struct Home {
   @State automationRequested: Record<string, boolean> = {};
   private runtimes: Map<string, HostRuntime> = new Map();
   private accByHost: Map<string, HomeWorktree[]> = new Map();
+  private agentCatalogs: Map<string, AgentCatalog> = new Map();
+  private agentActivityWrites: Set<string> = new Set();
   private epoch: number = 0;
   private visible: boolean = false;
   private loadEpoch: number = 0;
@@ -208,10 +191,12 @@ struct Home {
   reload(): void {
     let loadEpoch = ++this.loadEpoch;
     let context = getContext(this) as common.Context;
-    this.resume = readHomeResume(context);
     recoverRelayPairings(context).then(() => listHosts(context)).then((hosts: HostMeta[]): void => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.hosts = hosts;
+      this.agentCatalogs.forEach((_catalog: AgentCatalog, id: string): void => {
+        if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.agentCatalogs.delete(id); }
+      });
       this.statsTotal = totalHomeStats(this.statsByHost, hosts.map((host: HostMeta): string => host.id));
       this.loaded = true;
       this.loadError = '';
@@ -265,16 +250,6 @@ struct Home {
     return this.hosts.length > 0 ? this.hosts[0].id : '';
   }
 
-  needsYouCount(): number {
-    let count = 0;
-    for (let i = 0; i < this.agentRows.length; i++) {
-      if (isNeedsYou(this.agentRows[i].state)) {
-        count++;
-      }
-    }
-    return count;
-  }
-
   // ------------------------------------------------- live probes + tab data
 
   private syncConnState(): void {
@@ -307,8 +282,7 @@ struct Home {
     this.usageErrors = {}; this.automationErrors = {};
     this.automationRunsByHost = {}; this.automationBusy = []; this.automationRequested = {};
     this.quotaOffers = {}; this.quotaAllowed = {}; this.quotaBusy = [];
-    this.agentRows = [];
-    this.summaries = {};
+    this.rebuildRows();
     this.connecting = false;
   }
 
@@ -326,7 +300,7 @@ struct Home {
       if (!this.visible || epoch !== this.epoch) { return; }
       let session = new HostSession(host, token, relay ?? undefined, context);
       let rt: HostRuntime = { session: session, client: null, online: false,
-        connecting: true, refreshTimer: -1, catalogPending: false, automationPending: false, automationFetchedAt: 0, watch: null };
+        connecting: true, refreshTimer: -1, catalogPending: false, catalogRefetch: false, automationPending: false, automationFetchedAt: 0, watch: null };
       this.runtimes.set(host.id, rt);
       session.addListener((phase: SessionPhase, _detail: string): void => {
         if (epoch !== this.epoch || this.runtimes.get(host.id) !== rt) { return; }
@@ -334,8 +308,10 @@ struct Home {
         rt.connecting = phase === 'connecting' || phase === 'reconnecting';
         if (rt.watch) { rt.watch.stop(); rt.watch = null; }
         if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); rt.refreshTimer = -1; }
-        rt.catalogPending = false; rt.automationPending = false;
-        rt.client = session.getClient();
+        rt.catalogPending = false; rt.catalogRefetch = false; rt.automationPending = false;
+        let nextClient = session.getClient();
+        if (rt.client !== nextClient) { this.accByHost.delete(host.id); }
+        rt.client = nextClient;
         if (rt.online && rt.client) {
           this.fetchCatalog(rt.client, host.id, epoch);
           this.subscribeUsage(rt.client, host.id, epoch);
@@ -567,29 +543,31 @@ struct Home {
     let found = this.runtimes.get(hostId);
     if (!found || found.client !== client || found.catalogPending) { return; }
     let rt: HostRuntime = found;
+    if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); rt.refreshTimer = -1; }
     rt.catalogPending = true;
-    // No afterSnapshotId: every reply is a full replacement, never a delta against a missing base.
     client.request('worktree.ps', JSON.stringify({ limit: 10000 }), 8000).then((response: RpcResponse): void => {
-      if (epoch !== this.epoch || this.runtimes.get(hostId) !== rt || rt.client !== client) { return; }
-      rt.catalogPending = false;
-      if (response instanceof RpcSuccess) {
-        let rows = readHomeCatalog(response.result);
-        if (rows !== null) { this.accByHost.set(hostId, rows); }
-        else { this.accByHost.delete(hostId); }
-      } else { this.accByHost.delete(hostId); }
-      this.rebuildRows();
-      if (Date.now() - rt.automationFetchedAt > 15000) { this.fetchAutomations(client, hostId, epoch); }
-      rt.refreshTimer = setTimeout((): void => {
-        rt.refreshTimer = -1;
-        if (epoch === this.epoch && rt.online) { this.fetchCatalog(client, hostId, epoch); }
-      }, 3000);
-    }).catch((): void => {
-      if (epoch !== this.epoch || rt.client !== client) { return; }
-      rt.catalogPending = false;
+      let rows = response instanceof RpcSuccess ? readHomeCatalog(response.result) : null;
+      this.finishCatalog(client, hostId, epoch, rt, rows);
+    }).catch((): void => this.finishCatalog(client, hostId, epoch, rt, null));
+  }
+
+  private finishCatalog(client: SpikeRpcClient, hostId: string, epoch: number, rt: HostRuntime, rows: HomeWorktree[] | null): void {
+    if (epoch !== this.epoch || this.runtimes.get(hostId) !== rt || rt.client !== client) { return; }
+    rt.catalogPending = false;
+    if (rows) {
+      this.accByHost.set(hostId, rows);
+      let entries = rows.flatMap((row: HomeWorktree): HomeAgentEntry[] => row.agents);
+      this.agentCatalogs.set(hostId, { entries: entries, at: Date.now() });
+    } else {
       this.accByHost.delete(hostId);
-      this.rebuildRows();
-      rt.refreshTimer = setTimeout((): void => this.fetchCatalog(client, hostId, epoch), 3000);
-    });
+    }
+    this.rebuildRows();
+    if (rt.catalogRefetch) { rt.catalogRefetch = false; this.fetchCatalog(client, hostId, epoch); return; }
+    if (Date.now() - rt.automationFetchedAt > 15000) { this.fetchAutomations(client, hostId, epoch); }
+    rt.refreshTimer = setTimeout((): void => {
+      rt.refreshTimer = -1;
+      if (epoch === this.epoch && rt.online) { this.fetchCatalog(client, hostId, epoch); }
+    }, 3000);
   }
 
   private refreshSummaries(): void {
@@ -602,103 +580,19 @@ struct Home {
   }
 
   private rebuildRows(): void {
-    let rows: JumpRow[] = [];
-    let multipleHosts = this.hosts.length > 1;
-    this.accByHost.forEach((hostAcc: HomeWorktree[], hostId: string): void => {
-      let hostName = hostId;
-      for (let i = 0; i < this.hosts.length; i++) {
-        if (this.hosts[i].id === hostId) {
-          hostName = this.hosts[i].name;
-          break;
-        }
-      }
-      hostAcc.forEach((acc: HomeWorktree): void => {
-        // 只展示有内容的行：空闲/无 agent 状态的 worktree 不进「智能体」区（上游同样按需隐藏）
-        if (!isHomeAttention(acc)) {
-          return;
-        }
-        let where = acc.repo;
-        if (multipleHosts && hostName.length > 0) {
-          where = where.length > 0 ? `${where} · ${hostName}` : hostName;
-        }
-        rows.push({
-          hostId: hostId,
-          hostName: hostName,
-          worktreeId: acc.worktreeId,
-          title: acc.title.length > 0 ? acc.title : acc.worktreeId,
-          repo: where,
-          state: acc.state, unread: acc.unread, lastOutputAt: acc.lastOutputAt,
-          paneKey: acc.paneKey, executionHost: acc.executionHost, lastOpened: false, actionable: true
-        });
-      });
+    let desktops = this.hosts.map((host: HostMeta): AgentDesktop => {
+      let snapshot = this.agentCatalogs.get(host.id);
+      let runtime = this.runtimes.get(host.id);
+      return {
+        id: host.id, name: host.name, catalog: snapshot?.entries ?? null, seenAt: snapshot?.at ?? 0,
+        connection: runtime?.online ? 'connected' : runtime?.connecting ? 'connecting' : 'disconnected',
+        live: runtime?.online === true && this.accByHost.has(host.id),
+        loading: runtime?.connecting === true || (runtime?.online === true && runtime.catalogPending)
+      };
     });
-    rows.sort((a: JumpRow, b: JumpRow): number => homeAttentionRank(a.state) - homeAttentionRank(b.state)
-      || b.lastOutputAt - a.lastOutputAt);
-    rows = rows.slice(0, 25);
-    let heldResume = this.resume;
-    if (heldResume) {
-    let resume: HomeResume = heldResume;
-    if ( this.hosts.some((host: HostMeta): boolean => host.id === resume.hostId)
-      && !rows.some((row: JumpRow): boolean => row.hostId === resume.hostId
-        && row.worktreeId === resume.worktreeId && row.executionHost === resume.executionHost)) {
-      let host = this.hosts.find((candidate: HostMeta): boolean => candidate.id === resume.hostId);
-      rows.push({ hostId: resume.hostId, hostName: host ? host.name : '', worktreeId: resume.worktreeId,
-        title: resume.title, repo: resume.repo, state: 'inactive', unread: false, lastOutputAt: 0,
-        paneKey: resume.paneKey, executionHost: resume.executionHost, lastOpened: true,
-        actionable: this.online[resume.hostId] === true });
-    }
-    }
-    this.agentRows = rows;
+    this.agentDesktops = desktops;
+    this.agentRows = agentsNeedingYou(desktops);
     this.refreshSummaries();
-  }
-
-  stateLabel(state: string): string {
-    if (state === 'working') {
-      return uiText('工作中', this.uiLocale);
-    }
-    if (state === 'monitoring') {
-      return uiText('监控后台任务', this.uiLocale);
-    }
-    if (state === 'waiting' || state === 'interactivePrompt') {
-      return uiText('等待输入', this.uiLocale);
-    }
-    if (state === 'blocked' || state === 'permission') {
-      return uiText('已阻塞', this.uiLocale);
-    }
-    if (state === 'done') {
-      return uiText('已完成', this.uiLocale);
-    }
-    if (state === 'failed') {
-      return uiText('失败', this.uiLocale);
-    }
-    if (state === 'interrupted') {
-      return uiText('已中断', this.uiLocale);
-    }
-    return uiText('空闲', this.uiLocale);
-  }
-
-  stateDotColor(state: string): string {
-    if (isNeedsYou(state)) {
-      return DOT_NEEDS_YOU;
-    }
-    if (state === 'working' || state === 'monitoring') {
-      return DOT_WORKING;
-    }
-    if (state === 'done') {
-      return DOT_DONE;
-    }
-    return this.pal().textMuted;
-  }
-
-  statusTextColor(state: string): string {
-    // 上游：只有 permission/failed/done 让文字带状态色，运行中保持安静
-    if (isNeedsYou(state)) {
-      return DOT_NEEDS_YOU;
-    }
-    if (state === 'done') {
-      return DOT_DONE;
-    }
-    return this.pal().textSecondary;
   }
 
   // ---------------------------------------------------------------- actions
@@ -714,18 +608,88 @@ struct Home {
     router.pushUrl({ url: 'pages/ShellScreen', params: routeParams }).catch(() => {});
   }
 
-  openSession(row: JumpRow): void {
-    if (!row.actionable) { return; }
-    let catalog = this.accByHost.get(row.hostId);
-    if (row.lastOpened && catalog && !catalog.some((item: HomeWorktree): boolean =>
-      item.worktreeId === row.worktreeId && item.executionHost === row.executionHost)) {
-      this.openHostRoute(row.hostId, ''); return;
+  private openAgent(row: AgentListRow, withPane: boolean = true): void {
+    if (this.online[row.hostId] !== true) {
+      let desktop = this.hosts.find((host: HostMeta): boolean => host.id === row.hostId);
+      promptAction.showDialog({ title: uiText('{{desktop}} 离线', this.uiLocale).replace('{{desktop}}', desktop?.name ?? ''),
+        message: uiText('重新连接后可打开此智能体。', this.uiLocale) }).catch(() => {});
+      return;
     }
-    let resume: HomeResume = { hostId: row.hostId, worktreeId: row.worktreeId, title: row.title,
-      repo: row.repo, paneKey: row.paneKey, executionHost: row.executionHost };
-    try { saveHomeResume(getContext(this), resume); } catch (e) {}
-    let params: Record<string, string> = { 'paneKey': row.paneKey, 'executionHost': row.executionHost };
-    this.openHostRoute(row.hostId, `/session/${encodeURIComponent(row.worktreeId)}`, params);
+    if (withPane && row.unread === true) { this.changeAgentActivity([row], true, false).catch(() => {}); }
+    let params: Record<string, string> = { 'executionHost': row.entry.executionHost };
+    if (withPane) { params['paneKey'] = String(row.entry.agent['paneKey']); }
+    this.openHostRoute(row.hostId, `/session/${encodeURIComponent(row.entry.worktreeId)}`, params);
+  }
+
+  private async writeAgentActivity(hostId: string, paneKeys: string[], read?: boolean): Promise<string> {
+    let runtime = this.runtimes.get(hostId);
+    let client = runtime?.client;
+    if (!runtime || !runtime.online || !client || this.agentActivityWrites.has(hostId)) { return 'unavailable'; }
+    let epoch = this.epoch;
+    this.agentActivityWrites.add(hostId);
+    let result = '';
+    try {
+      for (let start = 0; start < paneKeys.length; start += 500) {
+        if (this.epoch !== epoch || runtime.client !== client) { return 'unavailable'; }
+        let args: AgentActivityArgs = { paneKeys: paneKeys.slice(start, start + 500) };
+        if (read !== undefined) { args.read = read; }
+        let response = await client.request(read === undefined ? 'agentActivity.clear' : 'agentActivity.setRead', JSON.stringify(args));
+        if (!(response instanceof RpcSuccess)) {
+          return response.errorMessage.includes('agent_activity_needs_desktop_window')
+            ? 'agent_activity_needs_desktop_window' : response.errorCode || 'refused';
+        }
+        let accepted: ESObject = JSON.parse(response.result);
+        if (accepted?.['applied'] !== true) { return 'refused'; }
+      }
+    } catch (e) { result = 'refused'; }
+    finally {
+      this.agentActivityWrites.delete(hostId);
+      if (this.epoch === epoch && this.runtimes.get(hostId) === runtime && runtime.client === client) {
+        if (runtime.catalogPending) { runtime.catalogRefetch = true; }
+        else { this.fetchCatalog(client, hostId, epoch); }
+      }
+    }
+    return result;
+  }
+
+  private async changeAgentActivity(rows: AgentListRow[], read?: boolean, report: boolean = true): Promise<void> {
+    let requests = new Map<string, string[]>();
+    rows.forEach((row: AgentListRow): void => {
+      if (row.offline || (read === undefined ? !row.clearable : row.unread === undefined)) { return; }
+      let keys = requests.get(row.hostId) ?? [];
+      let paneKey = String(row.entry.agent['paneKey']);
+      if (!keys.includes(paneKey)) { keys.push(paneKey); }
+      requests.set(row.hostId, keys);
+    });
+    let outcomes = await Promise.all(Array.from(requests).map(async (entry: [string, string[]]): Promise<string> => {
+      let error = await this.writeAgentActivity(entry[0], entry[1], read);
+      if (!error) { return ''; }
+      let name = this.hosts.find((host: HostMeta): boolean => host.id === entry[0])?.name ?? '';
+      return error === 'agent_activity_needs_desktop_window' && name
+        ? uiText('无法更新。请在 {{desktop}} 上打开 Orca。', this.uiLocale).replace('{{desktop}}', name)
+        : uiText('无法更新智能体列表。', this.uiLocale);
+    }));
+    let failure = outcomes.find((message: string): boolean => message.length > 0);
+    if (report && failure && this.visible) { promptAction.showToast({ message: failure }); }
+  }
+
+  private async agentActions(row: AgentListRow): Promise<void> {
+    let actions: string[] = row.offline ? [] : ['打开', '前往工作区'];
+    if (row.unread !== undefined) { actions.push(row.unread ? '标为已读' : '标为未读'); }
+    actions.push('复制标题');
+    if (row.clearable) { actions.push('清除列表项'); }
+    let buttons = actions.map((label: string): promptAction.Button => ({ text: uiText(label, this.uiLocale), color: this.pal().textPrimary }));
+    let choice = await promptAction.showActionMenu({ title: row.title, buttons: [buttons[0], buttons[1], buttons[2], buttons[3], buttons[4]] });
+    let action = actions[choice.index];
+    if (action === '打开' || action === '前往工作区') { this.openAgent(row, action === '打开'); }
+    else if (action === '标为已读' || action === '标为未读') { await this.changeAgentActivity([row], action === '标为已读'); }
+    else if (action === '清除列表项') { await this.changeAgentActivity([row]); }
+    else if (action === '复制标题') {
+      try {
+        await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, row.title));
+        promptAction.showToast({ message: uiText('已复制', this.uiLocale) });
+      } catch (e) { promptAction.showToast({ message: uiText('无法复制标题', this.uiLocale) }); }
+    }
   }
 
   openPairScan(): void {
@@ -818,72 +782,6 @@ struct Home {
     .alignItems(VerticalAlign.Bottom)
     .padding({ left: 4, right: 4 })
     .margin({ top: first ? 4 : 20, bottom: 7 })
-  }
-
-  @Builder
-  agentDot(state: string) {
-    Circle({ width: 9, height: 9 }).fill(this.stateDotColor(state));
-  }
-
-  jumpStatus(row: JumpRow): string {
-    if (!row.lastOpened) { return this.stateLabel(row.state); }
-    return row.actionable ? '上次打开' : `连接 ${row.hostName} 后打开`;
-  }
-
-  @Builder
-  jumpRow(row: JumpRow) {
-    Row() {
-      Column() {
-        this.agentDot(row.state)
-      }
-      .width(24)
-      .height(20)
-      .margin({ top: 9 })
-      .justifyContent(FlexAlign.Center)
-
-      Column() {
-        Text(row.title)
-          .fontFamily('Geist').fontSize(16 * this.fontScale)
-          .fontColor(this.pal().textPrimary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%')
-        Row() {
-          Text(uiText(this.jumpStatus(row), this.uiLocale))
-            .fontFamily('Geist').fontSize(14)
-            .fontColor(this.statusTextColor(row.state))
-            .maxLines(1)
-          if (row.repo.length > 0) {
-            Text(`${this.jumpStatus(row).length > 0 ? ' · ' : ''}${row.repo}`)
-              .fontFamily('Geist').fontSize(14)
-              .fontColor(this.pal().textSecondary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1)
-          }
-        }
-        .width('100%')
-        .margin({ top: 1 })
-      }
-      .alignItems(HorizontalAlign.Start)
-      .padding({ top: 9, bottom: 9 })
-      .layoutWeight(1)
-
-      Row() {
-        Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
-          .width(16).height(16)
-          .colorFilter(lucideColorFilter(this.pal().textMuted))
-      }
-      .padding({ left: 10, right: 14 })
-      .margin({ top: 9 })
-    }
-    .width('100%')
-    .padding({ left: 16 })
-    .alignItems(VerticalAlign.Top)
-    .opacity(row.actionable ? 1 : 0.45)
-    .onClick(() => {
-      this.openSession(row);
-    })
   }
 
   @Builder
@@ -990,27 +888,19 @@ struct Home {
         Scroll() {
           Column() {
             if (this.agentRows.length > 0) {
-              this.sectionHeading(uiText('智能体', this.uiLocale), `${this.activeCountText()}`, true)
-              Column() {
-                ForEach(this.agentsExpanded ? this.agentRows : this.agentRows.slice(0, 5), (row: JumpRow, index: number) => {
-                  Column() {
-                    if (index > 0) {
-                      this.hairline(40)
-                    }
-                    this.jumpRow(row)
-                  }
-                  .width('100%')
-                }, (row: JumpRow, index: number) => `${row.hostId}-${row.executionHost}-${row.worktreeId}`)
-                if (this.agentRows.length > 5) {
-                  Button(this.agentsExpanded ? uiText('收起', this.uiLocale) : `${uiText('显示全部', this.uiLocale)} ${this.agentRows.length}`)
-                    .fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
-                    .onClick(() => { this.agentsExpanded = !this.agentsExpanded; })
-                }
-              }
-              .width('100%')
-              .borderRadius(16)
-              .backgroundColor(this.pal().bgPanel)
-              .clip(true)
+              Row() {
+                Text(`${uiText('需要处理', this.uiLocale)} · ${this.agentRows.length}`).fontFamily('Geist').fontSize(15 * this.fontScale)
+                  .fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary).layoutWeight(1)
+                Button(uiText('查看所有智能体', this.uiLocale)).fontFamily('Geist').fontSize(13)
+                  .fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
+                  .onClick(() => { this.activeTab = 'agents'; })
+              }.width('100%').padding({ left: 4, right: 4 })
+              AgentListRows({ rows: this.agentRows.slice(0, 3), desktops: this.agentDesktops,
+                nameDesktop: this.hosts.length > 1, fontScale: this.fontScale,
+                onOpen: (row: AgentListRow): void => this.openAgent(row),
+                onActions: (row: AgentListRow): void => { this.agentActions(row).catch(() => {}); },
+                onRead: (rows: AgentListRow[], read: boolean): void => { this.changeAgentActivity(rows, read).catch(() => {}); },
+                onClear: (rows: AgentListRow[]): void => { this.changeAgentActivity(rows).catch(() => {}); } })
             }
 
             this.sectionHeading(uiText('台式机', this.uiLocale), '', this.agentRows.length === 0)
@@ -1060,11 +950,6 @@ struct Home {
     }
     .width('100%')
     .height('100%')
-  }
-
-  activeCountText(): string {
-    let count = this.agentRows.filter((row: JumpRow): boolean => !row.lastOpened).length;
-    return count > 0 ? `${count} 个活跃` : '';
   }
 
   @Builder
@@ -1421,8 +1306,8 @@ struct Home {
             Image(tab.icon).supportSvg2(true)
               .width(25).height(25)
               .colorFilter(lucideColorFilter(this.activeTab === tab.id ? this.pal().textPrimary : this.pal().textMuted))
-            if (tab.id === 'feed' && this.needsYouCount() > 0) {
-              Text(`${this.needsYouCount()}`)
+            if (['feed', 'agents'].includes(tab.id) && this.agentRows.length > 0) {
+              Text(`${this.agentRows.length}`)
                 .fontFamily('Geist').fontSize(11)
                 .fontWeight(FontWeight.Bold)
                 .fontColor('#000000')
@@ -1510,6 +1395,13 @@ struct Home {
           Stack() {
             Column() { this.feedTab() }.width('100%').height('100%')
               .visibility(this.activeTab === 'feed' ? Visibility.Visible : Visibility.Hidden)
+            Column() {
+              AgentsTab({ desktops: this.agentDesktops, loaded: this.loaded, fontScale: this.fontScale,
+                onOpen: (row: AgentListRow): void => this.openAgent(row),
+                onActions: (row: AgentListRow): void => { this.agentActions(row).catch(() => {}); },
+                onRead: (rows: AgentListRow[], read: boolean): void => { this.changeAgentActivity(rows, read).catch(() => {}); },
+                onClear: (rows: AgentListRow[]): void => { this.changeAgentActivity(rows).catch(() => {}); } })
+            }.width('100%').height('100%').visibility(this.activeTab === 'agents' ? Visibility.Visible : Visibility.Hidden)
             Column() { this.usageTab() }.width('100%').height('100%')
               .visibility(this.activeTab === 'usage' ? Visibility.Visible : Visibility.Hidden)
             Column() { this.automationsTab() }.width('100%').height('100%')
@@ -1552,8 +1444,4 @@ struct Home {
     .height('100%')
     .backgroundColor(this.pal().bgBase)
   }
-}
-
-function isNeedsYou(state: string): boolean {
-  return state === 'permission' || state === 'failed';
 }

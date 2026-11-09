@@ -1,28 +1,37 @@
+import { HomeAgentEntry } from './AgentListModel';
+
 export interface HomeWorktree {
-  worktreeId: string;
-  title: string;
-  repo: string;
   state: string;
-  unread: boolean;
-  lastOutputAt: number;
-  paneKey: string;
-  executionHost: string;
+  agents: HomeAgentEntry[];
 }
+
+const AGENT_TEXT_FIELDS: string[] = ['conversationName', 'displayName', 'taskTitle', 'prompt',
+  'agentType', 'lastAssistantMessage', 'toolName', 'toolInput'];
+const AGENT_STATUS: string[] = ['working', 'monitoring', 'blocked', 'waiting', 'interrupted', 'failed',
+  'done', 'idle', 'unverifiable', 'unconfirmed', 'permission'];
 
 function stringField(record: Record<string, Object>, field: string): string {
   let value = record[field];
   return typeof value === 'string' ? value : '';
 }
 
-export function homeAttentionRank(state: string): number {
-  if (state === 'permission' || state === 'failed') { return 0; }
-  if (state === 'done') { return 1; }
-  if (state === 'working' || state === 'monitoring') { return 2; }
-  return 3;
-}
+function readAgent(value: Object): Record<string, Object> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) { return null; }
+  let agent = value as Record<string, Object>;
+  if (!stringField(agent, 'paneKey') || AGENT_TEXT_FIELDS.some((field: string): boolean =>
+    agent[field] !== undefined && agent[field] !== null && typeof agent[field] !== 'string')) { return null; }
+  let verdict = agent['activity'] as Record<string, Object> | undefined;
+  if (verdict && verdict['listed'] !== false &&
+    (verdict['listed'] !== true || typeof verdict['title'] !== 'string' || !AGENT_STATUS.includes(stringField(verdict, 'status')) ||
+      typeof verdict['unread'] !== 'boolean' || typeof verdict['clearable'] !== 'boolean' ||
+      typeof verdict['sortAt'] !== 'number' || !Number.isFinite(verdict['sortAt']))) { return null; }
+  if (typeof agent['prompt'] !== 'string') { agent['prompt'] = ''; }
 
-export function isHomeAttention(row: HomeWorktree): boolean {
-  return homeAttentionRank(row.state) < 3 && (row.state !== 'done' || row.unread);
+  if (typeof agent['stateStartedAt'] !== 'number') {
+    let updatedAt = agent['updatedAt'];
+    agent['stateStartedAt'] = typeof updatedAt === 'number' ? updatedAt : 0;
+  }
+  return agent;
 }
 
 function dotStatus(row: Record<string, Object>): string {
@@ -54,35 +63,23 @@ export function readHomeCatalog(json: string): HomeWorktree[] | null {
       if (id.length === 0) { return null; }
       if (row['isArchived'] === true) { continue; }
       let repo = stringField(row, 'repo');
-      let title = stringField(row, 'displayName') || repo || id;
-      let state = dotStatus(row);
-      let paneKey = '';
+      let workspaceName = stringField(row, 'displayName') || repo || id;
+      let branch = stringField(row, 'branch');
+      let host = stringField(row, 'hostId');
+      let executionHost = host.startsWith('runtime:') ? host : '';
       let agents = row['agents'];
-      let newest = -1;
+      let entries: HomeAgentEntry[] = [];
       if (Array.isArray(agents)) {
         let list = agents as Array<Object>;
-        for (let j = 0; j < list.length; j++) {
-          let item = list[j];
-          if (item === null || typeof item !== 'object' || Array.isArray(item)) { continue; }
-          let agent = item as Record<string, Object>;
-          let agentState = stringField(agent, 'state');
-          if (agentState === 'waiting' || agentState === 'blocked') { agentState = 'permission'; }
-          if (agentState === 'working' && agent['workingMode'] === 'monitoring') { agentState = 'monitoring'; }
-          let updatedAt = agent['updatedAt'];
-          let conversation = stringField(agent, 'conversationName').trim();
-          if (agentState === state && conversation.length > 0 && typeof updatedAt === 'number'
-            && updatedAt > newest && (agent['parentPaneKey'] === null || agent['parentPaneKey'] === undefined)) {
-            newest = updatedAt;
-            title = conversation;
-            paneKey = stringField(agent, 'paneKey');
+        list.forEach((item: Object): void => {
+          let agent = readAgent(item);
+          if (agent) {
+            entries.push({ worktreeId: id, workspaceName: workspaceName, repo: repo, branch: branch,
+              executionHost: executionHost, agent: agent });
           }
-        }
+        });
       }
-      let lastOutput = row['lastOutputAt'];
-      let host = stringField(row, 'hostId');
-      result.push({ worktreeId: id, title: title, repo: repo, state: state,
-        unread: row['unread'] === true, lastOutputAt: typeof lastOutput === 'number' ? lastOutput : 0,
-        paneKey: paneKey, executionHost: host.startsWith('runtime:') ? host : '' });
+      result.push({ state: dotStatus(row), agents: entries });
     }
     return result;
   } catch (e) { return null; }

@@ -527,20 +527,23 @@ export interface PairingOffer {
   relay?: PairingRelay;
 }
 
-export function parsePairingOffer(raw: string): PairingOffer {
+export function parsePairingOffer(raw: string, requireLink: boolean = false): PairingOffer {
+  if (raw.length > 132096) { throw new Error('Pairing input is too long'); }
   let text = raw.trim();
-  if (!text.startsWith('{')) {
-    let codeIndex = text.indexOf('code=');
-    if (text.startsWith('orca://') && codeIndex > 0) {
-      let code = text.substring(codeIndex + 5);
-      let amp = code.indexOf('&');
-      if (amp > 0) {
-        code = code.substring(0, amp);
-      }
-      text = utf8Decode(base64UrlDecode(decodeURIComponent(code)));
-    } else {
-      text = utf8Decode(base64UrlDecode(text));
-    }
+  let link = /^orca:\/\/pair\/?(?=[?#]|$)/i.exec(text);
+  if (link) {
+    let suffix = text.substring(link[0].length);
+    let hash = suffix.indexOf('#');
+    let query = (hash < 0 ? suffix : suffix.substring(0, hash)).substring(1);
+    let field = query.split('&').find((entry: string): boolean => entry.startsWith('code='));
+    let code = field ? decodeURIComponent(field.substring(5)) : '';
+    if (!code && hash >= 0) { code = suffix.substring(hash + 1); }
+    if (!code) { throw new Error('Missing pairing code'); }
+    text = utf8Decode(base64UrlDecode(code));
+  } else if (requireLink || /^orca:\/\//i.test(text)) {
+    throw new Error('Invalid pairing link');
+  } else if (!text.startsWith('{')) {
+    text = utf8Decode(base64UrlDecode(text));
   }
   let parsed: Object | null = JSON.parse(text) as Object | null;
   if (!isRecord(parsed)) {
@@ -553,8 +556,10 @@ export function parsePairingOffer(raw: string): PairingOffer {
   let endpoint = stringOf(offer['endpoint']);
   let deviceToken = stringOf(offer['deviceToken']);
   let publicKeyB64 = stringOf(offer['publicKeyB64']);
-  if (endpoint === null || !isDirectEndpoint(endpoint) || deviceToken === null || deviceToken.length < 1 || deviceToken.length > 4096 || publicKeyB64 === null) {
-    throw new Error('Pairing offer missing endpoint/deviceToken/publicKeyB64');
+  let publicKey = publicKeyB64 === null ? null : base64DecodeCanonical(publicKeyB64);
+  if (endpoint === null || !isDirectEndpoint(endpoint) || deviceToken === null || deviceToken.length < 1 ||
+    deviceToken.length > 4096 || publicKeyB64 === null || publicKey?.length !== 32) {
+    throw new Error('Invalid pairing endpoint or credentials');
   }
   let scope = stringOf(offer['scope']);
   let relay: PairingRelay | undefined = undefined;

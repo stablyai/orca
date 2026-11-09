@@ -28,8 +28,8 @@ function runtimeHost(value: string): string | null {
 
 /** Keep route identities encoded once; query values travel separately to bridge init. */
 export function parseLaunchRoute(uri: string): LaunchRoute | null {
-  if (uri.length > 131072 || !uri.startsWith('orca://')) { return null; }
-  if (uri.startsWith('orca://pair?')) {
+  if (uri.length > 132096) { return null; }
+  if (/^orca:\/\/pair\/?(?:[?#]|$)/i.test(uri)) {
     return { page: 'pages/PairScan', params: { 'pairingCode': uri } };
   }
   if (!uri.startsWith('orca://session?')) { return null; }
