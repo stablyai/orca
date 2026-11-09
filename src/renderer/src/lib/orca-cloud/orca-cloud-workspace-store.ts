@@ -1,7 +1,9 @@
 // Window-side cache of Orca Cloud workspace lifecycle: which workspaces are cloud, their last
-// status from the control plane, in-flight wakes and OOM notices. A tiny external store (not an
-// app-store slice) so the hundreds of sidebar rows that are not cloud workspaces subscribe to nothing.
+// status from the control plane, in-flight wakes and OOM notices. The one source of cloud ids and
+// wake state for every cloud surface. A tiny external store (not an app-store slice) so the
+// hundreds of sidebar rows that are not cloud workspaces subscribe to nothing.
 import { useSyncExternalStore } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type {
   CloudOomEvent,
   CloudWakeProgressEvent,
@@ -12,6 +14,7 @@ import type {
   HostedArchivePullRequest,
   HostedWorkspaceStatus
 } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { WAKE_FAILED_STALE_MS } from './orca-cloud-workspace-state'
 
 export type CloudStatusEntry = {
   status: HostedWorkspaceStatus | null
@@ -22,7 +25,10 @@ export type CloudStatusEntry = {
 
 export type CloudWorkspaceSnapshot = {
   ids: ReadonlySet<string>
+  /** True once the first id list arrived (until then "not cloud" is unknown, not false). */
+  idsLoaded: boolean
   status: Readonly<Record<string, CloudStatusEntry>>
+  /** In-flight or failed wakes only; a settled wake is removed. */
   wake: Readonly<Record<string, CloudWakeProgressEvent>>
   oom: Readonly<Record<string, CloudOomEvent>>
   /** OOM kill count the user dismissed, per workspace. */
@@ -33,6 +39,7 @@ export type CloudWorkspaceSnapshot = {
 
 const EMPTY: CloudWorkspaceSnapshot = {
   ids: new Set(),
+  idsLoaded: false,
   status: {},
   wake: {},
   oom: {},
@@ -119,6 +126,33 @@ export function refreshCloudWorkspaceStatus(workspaceId: string): Promise<void> 
   return run
 }
 
+/** Mount-time refresh that skips a status read in the last `maxAgeMs` (sidebar rows remount often). */
+export function refreshCloudWorkspaceStatusIfStale(
+  workspaceId: string,
+  maxAgeMs = 30_000
+): Promise<void> {
+  const fetchedAt = snapshot.status[workspaceId]?.fetchedAt
+  if (fetchedAt != null && Date.now() - fetchedAt < maxAgeMs) {
+    return Promise.resolve()
+  }
+  return refreshCloudWorkspaceStatus(workspaceId)
+}
+
+/**
+ * Before any wake: is this workspace archived? Reads a fresh status when there is none, it is
+ * older than `maxAgeMs`, or the last read failed — a cold start must never wake an archive.
+ */
+export async function isCloudWorkspaceArchivedFresh(
+  workspaceId: string,
+  maxAgeMs = 30_000
+): Promise<boolean> {
+  const entry = snapshot.status[workspaceId]
+  if (!entry?.fetchedAt || entry.error || Date.now() - entry.fetchedAt >= maxAgeMs) {
+    await refreshCloudWorkspaceStatus(workspaceId)
+  }
+  return isCloudWorkspaceArchived(workspaceId)
+}
+
 function applyStatus(workspaceId: string, result: CloudWorkspaceResult<HostedWorkspaceStatus>): void {
   set((s) => {
     const previous = s.status[workspaceId]
@@ -145,22 +179,40 @@ function applyStatus(workspaceId: string, result: CloudWorkspaceResult<HostedWor
   })
 }
 
+const STARTUP_STATUS_CONCURRENCY = 4
+
+/** Runs `work` over `items` with at most `limit` in flight. */
+async function eachLimited<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>) {
+  let next = 0
+  const lane = async (): Promise<void> => {
+    while (next < items.length) {
+      const item = items[next++]!
+      await work(item)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane))
+}
+
 export async function refreshCloudWorkspaceIds(): Promise<void> {
   const bridge = api()
   if (!bridge) {
     return
   }
-  const ids = new Set(await bridge.listCloudWorkspaceIds().catch(() => [] as string[]))
-  const same = ids.size === snapshot.ids.size && [...ids].every((id) => snapshot.ids.has(id))
+  const ids = new Set(await bridge.listCloudWorkspaceIds().catch(() => [...snapshot.ids]))
+  const same =
+    snapshot.idsLoaded &&
+    ids.size === snapshot.ids.size &&
+    [...ids].every((id) => snapshot.ids.has(id))
   if (!same) {
-    set(() => ({ ids }))
+    set(() => ({ ids, idsLoaded: true }))
   }
-  // A new id needs one status read so archived workspaces show as archived before anyone opens them.
-  for (const id of ids) {
-    if (!snapshot.status[id]) {
-      void refreshCloudWorkspaceStatus(id)
-    }
-  }
+  // A new id needs one status read so archived workspaces show as archived before anyone opens
+  // them; capped so a large list doesn't fan out into dozens of VM probes at startup.
+  await eachLimited(
+    [...ids].filter((id) => !snapshot.status[id]),
+    STARTUP_STATUS_CONCURRENCY,
+    (id) => refreshCloudWorkspaceStatus(id)
+  )
 }
 
 function withPending<T>(
@@ -179,10 +231,16 @@ function withPending<T>(
   })
 }
 
+const UNAVAILABLE = {
+  ok: false,
+  code: 'not_cloud',
+  message: 'Orca Cloud is unavailable.'
+} as const
+
 export function restartCloudWorkspace(workspaceId: string): Promise<CloudWorkspaceResult<null>> {
   const bridge = api()
   if (!bridge) {
-    return Promise.resolve({ ok: false, code: 'not_cloud', message: 'Orca Cloud is unavailable.' })
+    return Promise.resolve(UNAVAILABLE)
   }
   return withPending(workspaceId, 'restart', async () => {
     const result = await bridge.restart({ workspaceId })
@@ -206,7 +264,7 @@ export function archiveCloudWorkspace(
 ): Promise<CloudWorkspaceResult<null>> {
   const bridge = api()
   if (!bridge) {
-    return Promise.resolve({ ok: false, code: 'not_cloud', message: 'Orca Cloud is unavailable.' })
+    return Promise.resolve(UNAVAILABLE)
   }
   return withPending(workspaceId, 'archive', async () => {
     await deps.sleep(workspaceId)
@@ -224,16 +282,26 @@ export function unarchiveCloudWorkspace(
 ): Promise<CloudWorkspaceResult<null>> {
   const bridge = api()
   if (!bridge) {
-    return Promise.resolve({ ok: false, code: 'not_cloud', message: 'Orca Cloud is unavailable.' })
+    return Promise.resolve(UNAVAILABLE)
   }
   return withPending(workspaceId, 'unarchive', async () => {
     const result = await bridge.unarchive({ workspaceId })
     if (result.ok) {
-      // Clear the archived status first so the wake path is not short-circuited as archived.
+      // Mark it unarchived so the wake path's archive guard lets the wake through.
       set((s) => {
-        const status = { ...s.status }
-        delete status[workspaceId]
-        return { status }
+        const entry = s.status[workspaceId]
+        return entry?.status
+          ? {
+              status: {
+                ...s.status,
+                [workspaceId]: {
+                  ...entry,
+                  status: { ...entry.status, state: 'waking', archive: null },
+                  fetchedAt: Date.now()
+                }
+              }
+            }
+          : {}
       })
       await deps.wake(workspaceId)
     }
@@ -249,13 +317,41 @@ export function dismissCloudOom(workspaceId: string): void {
   set((s) => ({ oomDismissed: { ...s.oomDismissed, [workspaceId]: kills } }))
 }
 
+function dropWake(workspaceId: string, only?: CloudWakeProgressEvent): void {
+  set((s) => {
+    if (!s.wake[workspaceId] || (only && s.wake[workspaceId] !== only)) {
+      return {}
+    }
+    const wake = { ...s.wake }
+    delete wake[workspaceId]
+    return { wake }
+  })
+}
+
+/** "Dismiss" on the wake-failed card. */
+export function dismissCloudWake(workspaceId: string): void {
+  dropWake(workspaceId)
+}
+
 export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
+  // Keep the source the wake started with (later phases may not repeat it).
+  const started = snapshot.wake[event.workspaceId]
+  const next =
+    started && event.phase !== 'waking' && started.startedAt === event.startedAt
+      ? { ...event, source: started.source }
+      : event
   set((s) => ({
     ids: s.ids.has(event.workspaceId) ? s.ids : new Set([...s.ids, event.workspaceId]),
-    wake: { ...s.wake, [event.workspaceId]: event }
+    wake: { ...s.wake, [event.workspaceId]: next }
   }))
-  if (event.phase === 'ready' || event.phase === 'failed') {
+  if (event.phase === 'ready') {
+    // Settled: drop the entry once the status says what the VM is, so nothing keeps ticking.
+    void refreshCloudWorkspaceStatus(event.workspaceId).finally(() =>
+      dropWake(event.workspaceId, next)
+    )
+  } else if (event.phase === 'failed') {
     void refreshCloudWorkspaceStatus(event.workspaceId)
+    setTimeout(() => dropWake(event.workspaceId, next), WAKE_FAILED_STALE_MS)
   }
 }
 
@@ -265,6 +361,7 @@ export function noteCloudOom(event: CloudOomEvent): void {
 
 /** Test/fixture seam: replace the whole snapshot. */
 export function seedCloudWorkspaceSnapshot(next: Partial<CloudWorkspaceSnapshot>): void {
+  inflight.clear()
   set(() => ({ ...EMPTY, ...next }))
 }
 
@@ -273,7 +370,8 @@ const IDS_POLL_MS = 30_000
 
 /**
  * Starts the window's Orca Cloud listeners. Running workspaces refresh status every minute (CPU,
- * unresponsive); sleeping ones are not probed (the control plane would not wake them anyway).
+ * unresponsive); sleeping ones only re-read their state (no VM probe happens for them anyway).
+ * Both cadences stretch while the window is unfocused and stop while hidden.
  */
 export function installOrcaCloudWorkspaceStore(): () => void {
   const bridge = api()
@@ -283,19 +381,24 @@ export function installOrcaCloudWorkspaceStore(): () => void {
   const disposeWake = bridge.onWakeProgress(noteCloudWakeProgress)
   const disposeOom = bridge.onOom(noteCloudOom)
   void refreshCloudWorkspaceIds()
-  const idsTimer = setInterval(() => void refreshCloudWorkspaceIds(), IDS_POLL_MS)
-  const statusTimer = setInterval(() => {
-    for (const id of snapshot.ids) {
-      const state = snapshot.status[id]?.status?.state
-      if (state === 'ready' || state === 'unresponsive' || state === 'waking') {
-        void refreshCloudWorkspaceStatus(id)
-      }
-    }
-  }, STATUS_POLL_MS)
+  const stopIds = installWindowVisibilityInterval({
+    run: () => void refreshCloudWorkspaceIds(),
+    intervalMs: IDS_POLL_MS,
+    slowWhileUnfocused: true
+  })
+  const stopStatus = installWindowVisibilityInterval({
+    // Every cloud workspace: a sleeping one can be archived from the phone or another desktop.
+    run: () =>
+      void eachLimited([...snapshot.ids], STARTUP_STATUS_CONCURRENCY, (id) =>
+        refreshCloudWorkspaceStatusIfStale(id, STATUS_POLL_MS / 2)
+      ),
+    intervalMs: STATUS_POLL_MS,
+    slowWhileUnfocused: true
+  })
   return () => {
     disposeWake()
     disposeOom()
-    clearInterval(idsTimer)
-    clearInterval(statusTimer)
+    stopIds()
+    stopStatus()
   }
 }

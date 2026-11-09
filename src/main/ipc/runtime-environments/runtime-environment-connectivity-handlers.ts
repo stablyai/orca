@@ -1,3 +1,4 @@
+import { withCloudOfflineAnswer } from '../../hosted-sandbox/cloud-offline-service'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
@@ -297,10 +298,12 @@ function registerPassiveCallHandler(
       } catch (error) {
         const failure = runtimeEnvironmentCallFailure(environment, args.method, error)
         if (failure) {
-          return failure
+          return withCloudOfflineAnswer(environment.id, args.method, args.params, failure)
         }
         throw error
       }
+      // Orca Cloud: keep read-only answers; serve them while the VM sleeps.
+      response = withCloudOfflineAnswer(environment.id, args.method, args.params, response)
       observeWslOrcadHostResponse(environment.id, args.method, response)
       recordAnswer?.(environment, args.method, response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)

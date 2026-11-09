@@ -18,8 +18,8 @@ const HOVER_OPEN_MS = 250
 const HOVER_CLOSE_MS = 180
 
 /**
- * Sidebar mark for an Orca Cloud workspace: a cloud glyph with a live state dot. Hover previews,
- * click or Enter opens the status panel (CPU, memory, disk, uptime, hours and cost, Restart / Archive).
+ * Sidebar mark for an Orca Cloud workspace: a cloud glyph with its live state dot beside it.
+ * Hover previews the status panel; click or Enter pins it and moves focus into it.
  * Renders nothing for workspaces that are not on Orca Cloud.
  */
 export function CloudWorkspaceMark({
@@ -33,7 +33,9 @@ export function CloudWorkspaceMark({
   if (!view.isCloud) {
     return null
   }
-  return <CloudWorkspaceMarkInner workspaceId={workspaceId} view={view} onPointerDown={onPointerDown} />
+  return (
+    <CloudWorkspaceMarkInner workspaceId={workspaceId} view={view} onPointerDown={onPointerDown} />
+  )
 }
 
 function CloudWorkspaceMarkInner({
@@ -46,9 +48,9 @@ function CloudWorkspaceMarkInner({
   onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
   const t = useTranslate()
-  // Hover previews (focus stays put); click or Enter opens it for keyboard use (focus moves in).
   const [open, setOpen] = useState<'hover' | 'pinned' | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const content = useRef<HTMLDivElement | null>(null)
   const clearTimer = useCallback(() => {
     if (timer.current) {
       clearTimeout(timer.current)
@@ -94,41 +96,41 @@ function CloudWorkspaceMarkInner({
           onClick={(event) => {
             event.stopPropagation()
             if (open === 'hover') {
-              // Clicking a hover preview pins it instead of toggling it closed.
+              // Clicking (or Enter on) a hover preview pins it and moves focus in, instead of
+              // toggling it closed.
               event.preventDefault()
               clearTimer()
               setOpen('pinned')
+              content.current?.focus()
             }
           }}
           onPointerEnter={hoverIn}
           onPointerLeave={hoverOut}
           className={cn(
-            'relative inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground',
+            'inline-flex h-4 shrink-0 items-center gap-[3px] rounded px-px text-muted-foreground',
             'hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
           )}
         >
           <Cloud className="size-3" aria-hidden="true" />
-          <CloudStateDot
-            state={view.state}
-            className="absolute right-0 bottom-0.5 ring-[1.5px] ring-worktree-sidebar"
-          />
+          <CloudStateDot state={view.state} size="md" />
         </button>
       </PopoverTrigger>
       <PopoverContent
+        ref={content}
         side="right"
         align="start"
         sideOffset={10}
         className="w-72 p-3 outline-none"
         aria-label={label}
+        tabIndex={-1}
         onPointerEnter={() => clearTimer()}
         onPointerLeave={hoverOut}
-        tabIndex={-1}
         onOpenAutoFocus={(event) => {
-          // Hover previews keep focus in the sidebar; a pinned panel takes focus itself (not its
-          // first action, so Enter can't archive by accident).
+          // Hover previews keep focus in the sidebar; a pinned panel takes focus itself (not
+          // its first action, so Enter can't archive by accident).
           event.preventDefault()
           if (open !== 'hover') {
-            ;(event.currentTarget as HTMLElement | null)?.focus()
+            content.current?.focus()
           }
         }}
         onClick={(event) => event.stopPropagation()}

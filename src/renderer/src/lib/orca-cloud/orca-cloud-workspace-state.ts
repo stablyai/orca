@@ -1,4 +1,5 @@
 // Pure presentation logic for Orca Cloud workspace surfaces (sidebar dot, status panel, overlays).
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type {
   CloudOomEvent,
   CloudWakeProgressEvent
@@ -15,13 +16,19 @@ export type CloudDotState =
   | 'failed'
   | 'unknown'
 
-/** A wake event older than this without a terminal phase is treated as stale (the step timed out). */
-const WAKE_STALE_MS = 4 * 60_000
+/** A wake event older than this without a terminal event is treated as stale (the step timed out). */
+export const WAKE_STALE_MS = 4 * 60_000
+/** A failed wake's error card stays this long unless dismissed or retried. */
+export const WAKE_FAILED_STALE_MS = 10 * 60_000
 
 export function isWakeActive(wake: CloudWakeProgressEvent | undefined, now: number): boolean {
   return Boolean(
     wake && (wake.phase === 'waking' || wake.phase === 'connecting') && now - wake.at < WAKE_STALE_MS
   )
+}
+
+export function isWakeFailedFresh(wake: CloudWakeProgressEvent | undefined, now: number): boolean {
+  return Boolean(wake && wake.phase === 'failed' && now - wake.at < WAKE_FAILED_STALE_MS)
 }
 
 /**
@@ -41,10 +48,7 @@ export function deriveCloudDotState(input: {
   if (status?.state === 'archived' || status?.archive) {
     return 'archived'
   }
-  if (wake?.phase === 'failed' && now - wake.at < WAKE_STALE_MS) {
-    return 'failed'
-  }
-  if (status?.state === 'failed') {
+  if (isWakeFailedFresh(wake, now) || status?.state === 'failed') {
     return 'failed'
   }
   // The control plane is the truth for the VM; the desktop's own sleep record only fills in
@@ -68,7 +72,7 @@ export function deriveCloudDotState(input: {
   }
 }
 
-/** An OOM banner shows for kills the user has not dismissed. */
+/** An OOM notice shows for kills the user has not dismissed. */
 export function visibleOom(
   oom: CloudOomEvent | undefined,
   dismissedKills: number | undefined
@@ -81,40 +85,154 @@ export function visibleOom(
 
 export function formatBytes(bytes: number): string {
   const gb = bytes / 1e9
+  const number = (value: number, digits: number) =>
+    new Intl.NumberFormat(getIntlLocale(), {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: digits
+    }).format(value)
   if (gb >= 10) {
-    return `${Math.round(gb)} GB`
+    return translate('orcaCloudWorkspace.bytes.gb', '{{value}} GB', { value: number(gb, 0) })
   }
   if (gb >= 1) {
-    return `${gb.toFixed(1)} GB`
+    return translate('orcaCloudWorkspace.bytes.gb', '{{value}} GB', { value: number(gb, 1) })
   }
-  return `${Math.max(0, Math.round(bytes / 1e6))} MB`
+  return translate('orcaCloudWorkspace.bytes.mb', '{{value}} MB', {
+    value: number(Math.max(0, bytes / 1e6), 0)
+  })
 }
 
-/** "45s", "12m", "3h 05m", "2d 4h". */
+/** "45s", "12m", "3h 05m", "2d 4h" (units translated). */
 export function formatDuration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
   if (s < 60) {
-    return `${s}s`
+    return translate('orcaCloudWorkspace.duration.seconds', '{{s}}s', { s })
   }
   const m = Math.floor(s / 60)
   if (m < 60) {
-    return `${m}m`
+    return translate('orcaCloudWorkspace.duration.minutes', '{{m}}m', { m })
   }
   const h = Math.floor(m / 60)
   if (h < 24) {
-    return `${h}h ${String(m % 60).padStart(2, '0')}m`
+    return translate('orcaCloudWorkspace.duration.hoursMinutes', '{{h}}h {{m}}m', {
+      h,
+      m: String(m % 60).padStart(2, '0')
+    })
   }
-  return `${Math.floor(h / 24)}d ${h % 24}h`
+  return translate('orcaCloudWorkspace.duration.daysHours', '{{d}}d {{h}}h', {
+    d: Math.floor(h / 24),
+    h: h % 24
+  })
 }
 
 /** Hours used with one decimal under 100 h ("0.4 h", "12.5 h", "140 h"). */
 export function formatHours(ms: number): string {
   const h = ms / 3_600_000
-  return h >= 100 ? `${Math.round(h)} h` : `${h.toFixed(1)} h`
+  const digits = h >= 100 ? 0 : 1
+  const value = new Intl.NumberFormat(getIntlLocale(), {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(h)
+  return translate('orcaCloudWorkspace.duration.hours', '{{value}} h', { value })
 }
 
 export function formatCents(cents: number): string {
-  return `$${(Math.max(0, cents) / 100).toFixed(2)}`
+  return new Intl.NumberFormat(getIntlLocale(), { style: 'currency', currency: 'USD' }).format(
+    Math.max(0, cents) / 100
+  )
+}
+
+/** "5 minutes ago", "yesterday" in the UI language. */
+export function formatRelative(at: number, now: number): string {
+  const seconds = Math.round((at - now) / 1000)
+  const rtf = new Intl.RelativeTimeFormat(getIntlLocale(), { numeric: 'auto' })
+  const abs = Math.abs(seconds)
+  if (abs < 60) {
+    return rtf.format(seconds, 'second')
+  }
+  if (abs < 3600) {
+    return rtf.format(Math.round(seconds / 60), 'minute')
+  }
+  if (abs < 86_400) {
+    return rtf.format(Math.round(seconds / 3600), 'hour')
+  }
+  return rtf.format(Math.round(seconds / 86_400), 'day')
+}
+
+/** "Dec 8" in the UI language. */
+export function formatShortDate(at: number): string {
+  return new Intl.DateTimeFormat(getIntlLocale(), { month: 'short', day: 'numeric' }).format(at)
+}
+
+export type DiffStat = { files: number; insertions: number; deletions: number }
+
+/** Parses a `--shortstat` line ("2 files changed, 41 insertions(+), 6 deletions(-)"). */
+export function parseDiffStat(line: string | null | undefined): DiffStat | null {
+  if (!line) {
+    return null
+  }
+  const files = /(\d+) files? changed/.exec(line)
+  if (!files) {
+    return null
+  }
+  const insertions = /(\d+) insertions?\(\+\)/.exec(line)
+  const deletions = /(\d+) deletions?\(-\)/.exec(line)
+  return {
+    files: Number(files[1]),
+    insertions: insertions ? Number(insertions[1]) : 0,
+    deletions: deletions ? Number(deletions[1]) : 0
+  }
+}
+
+export type ChangeKind =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'untracked'
+  | 'unknown'
+
+/** Porcelain letters ("M", "??") or the offline cache's words ("modified") to one kind. */
+export function changeKind(status: string): ChangeKind {
+  const value = status.trim()
+  switch (value) {
+    case 'M':
+    case 'modified':
+      return 'modified'
+    case 'A':
+    case 'added':
+      return 'added'
+    case 'D':
+    case 'deleted':
+      return 'deleted'
+    case 'R':
+    case 'renamed':
+      return 'renamed'
+    case 'C':
+    case 'copied':
+      return 'copied'
+    case '??':
+    case 'U':
+    case 'untracked':
+      return 'untracked'
+    default:
+      return /^[MADRC]/.test(value) ? changeKind(value[0]!) : 'unknown'
+  }
+}
+
+export const CHANGE_LETTER: Record<ChangeKind, string> = {
+  modified: 'M',
+  added: 'A',
+  deleted: 'D',
+  renamed: 'R',
+  copied: 'C',
+  untracked: 'U',
+  unknown: '?'
+}
+
+/** "Updated Ns ago" hides while it would read as "just now". */
+export function showUpdatedAgo(fetchedAt: number | null, now: number): boolean {
+  return fetchedAt !== null && now - fetchedAt >= 10_000
 }
 
 export function percentOf(used: number, total: number): number {

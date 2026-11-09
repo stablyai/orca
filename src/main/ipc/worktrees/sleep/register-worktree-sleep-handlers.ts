@@ -1,3 +1,4 @@
+import { captureCloudWorkspacesBeforeSleep } from '../../../hosted-sandbox/cloud-offline-service'
 import { ipcMain } from 'electron'
 import type { WorkspaceSleepRequest } from '../../../../shared/workspace-sleep'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -17,12 +18,14 @@ function isRestoredPane(value: unknown): value is RestoredPane {
 }
 
 export function registerWorktreeSleepHandlers(context: WorktreeIpcContext): void {
-  ipcMain.handle('worktrees:sleep', (_event, request: WorkspaceSleepRequest) =>
-    context.runtime.sleepWorkspaces({
+  ipcMain.handle('worktrees:sleep', async (_event, request: WorkspaceSleepRequest) => {
+    // Orca Cloud: read terminals, git state and chats into the offline cache while they are up.
+    await captureCloudWorkspacesBeforeSleep(request.targets.map((target) => target.worktreeId))
+    return context.runtime.sleepWorkspaces({
       targets: request.targets,
       markChatsAsleep: request.markChatsAsleep
     })
-  )
+  })
   // Reopening during sleep must preserve the running VM.
   ipcMain.handle('worktrees:sleepReopened', (_event, worktreeId: string) =>
     context.runtime.noteWorkspaceReopened(worktreeId)

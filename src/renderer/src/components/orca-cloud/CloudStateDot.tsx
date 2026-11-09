@@ -2,29 +2,40 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
-// Shape carries state too (hollow = asleep, square = archived), so the dot reads without color.
-const DOT: Record<CloudDotState, string> = {
+/**
+ * The one palette for Orca Cloud state, shared by the sidebar badge, the panel and the views.
+ * Shape carries state too (hollow = asleep, dashed = checking, square = archived), so the dot
+ * reads without color; every hollow variant uses a strong enough stroke for light mode.
+ */
+export const CLOUD_DOT_CLASS: Record<CloudDotState, string> = {
   running: 'rounded-full bg-emerald-500',
-  sleeping: 'rounded-full border border-muted-foreground/70 bg-transparent',
+  sleeping: 'rounded-full border-[1.5px] border-muted-foreground bg-transparent',
   waking: 'rounded-full bg-sky-500 motion-safe:animate-pulse',
   unresponsive: 'rounded-full bg-amber-500',
-  archived: 'rounded-[1px] bg-muted-foreground/50',
-  failed: 'rounded-full bg-destructive',
-  unknown: 'rounded-full bg-muted-foreground/30'
+  archived: 'rounded-[2px] bg-muted-foreground',
+  failed: 'rounded-full bg-red-500',
+  unknown: 'rounded-full border-[1.5px] border-dashed border-muted-foreground bg-transparent'
 }
 
 export function CloudStateDot({
   state,
+  size = 'sm',
   className
 }: {
   state: CloudDotState
+  size?: 'sm' | 'md'
   className?: string
 }): React.JSX.Element {
   return (
     <span
       aria-hidden="true"
       data-cloud-state={state}
-      className={cn('inline-block size-1.5 shrink-0', DOT[state], className)}
+      className={cn(
+        'inline-block shrink-0',
+        size === 'md' ? 'size-2' : 'size-1.5',
+        CLOUD_DOT_CLASS[state],
+        className
+      )}
     />
   )
 }

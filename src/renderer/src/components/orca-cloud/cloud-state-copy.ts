@@ -7,11 +7,11 @@ export function cloudStateLabel(state: CloudDotState, t: Translate = translate):
     case 'running':
       return t('orcaCloudWorkspace.state.running', 'Running')
     case 'sleeping':
-      return t('orcaCloudWorkspace.state.sleeping', 'Sleeping')
+      return t('orcaCloudWorkspace.state.asleep', 'Asleep')
     case 'waking':
       return t('orcaCloudWorkspace.state.waking', 'Waking')
     case 'unresponsive':
-      return t('orcaCloudWorkspace.state.unresponsive', 'Unresponsive')
+      return t('orcaCloudWorkspace.state.notResponding', 'Not responding')
     case 'archived':
       return t('orcaCloudWorkspace.state.archived', 'Archived')
     case 'failed':
@@ -21,31 +21,21 @@ export function cloudStateLabel(state: CloudDotState, t: Translate = translate):
   }
 }
 
-/** One line under the state in the status panel: what this state means for the user's work. */
-export function cloudStateDetail(state: CloudDotState, t: Translate = translate): string {
+/** One line under the state in the status panel; null where the state says enough on its own. */
+export function cloudStateDetail(state: CloudDotState, t: Translate = translate): string | null {
   switch (state) {
-    case 'running':
-      return t('orcaCloudWorkspace.detail.running', 'Agents and terminals keep running while your laptop sleeps.')
     case 'sleeping':
-      return t(
-        'orcaCloudWorkspace.detail.sleeping',
-        'Files and chats are saved. Opening the workspace wakes it in a few seconds.'
-      )
+      return t('orcaCloudWorkspace.detail.asleep', 'Files and chats are saved. Opening it wakes it.')
     case 'waking':
-      return t('orcaCloudWorkspace.detail.waking', 'Starting the VM from its saved disk.')
+      return t('orcaCloudWorkspace.detail.starting', 'Starting…')
     case 'unresponsive':
-      return t(
-        'orcaCloudWorkspace.detail.unresponsive',
-        'The VM stopped answering. Restart keeps your files; interrupted agents continue.'
-      )
+      return t('orcaCloudWorkspace.detail.notResponding', 'Not responding. Restart keeps your files.')
     case 'archived':
-      return t(
-        'orcaCloudWorkspace.detail.archived',
-        'Stopped and kept as a snapshot. Unarchive to work in it again.'
-      )
+      return t('orcaCloudWorkspace.detail.archived', 'Kept as a snapshot. Unarchive to work in it again.')
     case 'failed':
-      return t('orcaCloudWorkspace.detail.failed', 'The last start failed. Your files are safe.')
+      return t('orcaCloudWorkspace.detail.failed', 'The last start failed. Your files are saved.')
+    case 'running':
     case 'unknown':
-      return t('orcaCloudWorkspace.detail.unknown', 'Asking Orca Cloud for the latest status.')
+      return null
   }
 }
