@@ -42,7 +42,9 @@ function TerminalSkeleton({ still }: { still: boolean }): React.JSX.Element {
         <span key={index} className="flex h-3 items-center gap-2">
           <span className="w-2 leading-none">{line.prompt ? '$' : ''}</span>
           <Skeleton
-            className={cn('h-2 rounded-sm', still ? 'animate-none' : '[animation-duration:2.4s]')}
+            shape="small"
+            motion={still ? 'still' : 'slow'}
+            className="h-2"
             style={{ width: `${line.width}%`, animationDelay: `${index * 140}ms` }}
           />
         </span>
@@ -184,8 +186,8 @@ export function CloudWakingOverlay({
               </div>
               <Button
                 size="icon-xs"
-                variant="ghost"
-                className="-mt-1 -mr-1 text-muted-foreground"
+                variant="quiet"
+                className="-mt-1 -mr-1"
                 aria-label={t('orcaCloudWorkspace.dismiss', 'Dismiss')}
                 onClick={onDismiss}
               >

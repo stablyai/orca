@@ -69,8 +69,6 @@ export function deriveCloudDotState(input: {
     case 'waking':
     case 'provisioning':
       return 'waking'
-    default:
-      return 'unknown'
   }
 }
 

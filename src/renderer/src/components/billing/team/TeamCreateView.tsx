@@ -1,4 +1,4 @@
-import { ORCA_ORG_NAME_MAX_LENGTH } from '../../../../../shared/orca-org-management'
+import { isValidOrgName, ORCA_ORG_NAME_MAX_LENGTH } from '../../../../../shared/orca-org-management'
 import { useId, useState } from 'react'
 import { ArrowRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudOrgSummary } from '../../../../../shared/orca-profiles'
 import { TeamMark } from './TeamAvatar'
+import { normalizeOrgRole, roleLabel } from './team-roles'
 
 export type TeamCreateViewProps = {
   /** Teams the user already belongs to (switch instead of creating). */
@@ -26,6 +27,8 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
   const id = useId()
   const [name, setName] = useState('')
   const trimmed = name.trim()
+  const nameValid = isValidOrgName(trimmed)
+  const showRule = trimmed.length > 0 && !nameValid
   return (
     <div className="space-y-6">
       <section
@@ -52,7 +55,7 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
           className="mt-4 space-y-2"
           onSubmit={(event) => {
             event.preventDefault()
-            if (trimmed && !props.creating) {
+            if (nameValid && !props.creating && !props.unavailable) {
               props.onCreate(trimmed)
             }
           }}
@@ -69,12 +72,18 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
                 'auto.components.billing.team.teamNamePlaceholder',
                 'Acme Engineering'
               )}
-              aria-invalid={props.error ? true : undefined}
-              aria-describedby={props.error ? `${id}-error` : undefined}
+              aria-invalid={props.error || showRule ? true : undefined}
+              aria-describedby={props.error ? `${id}-error` : showRule ? `${id}-rule` : undefined}
               onChange={(event) => setName(event.target.value)}
-              disabled={props.creating || props.unavailable}
+              readOnly={props.creating}
+              aria-disabled={props.creating || undefined}
+              disabled={props.unavailable}
             />
-            <Button type="submit" disabled={!trimmed || props.creating || props.unavailable}>
+            <Button
+              type="submit"
+              disabled={!props.creating && (!nameValid || props.unavailable)}
+              aria-disabled={props.creating || undefined}
+            >
               {props.creating ? <LoadingSpinner className="size-3.5" /> : null}
               {t('auto.components.billing.team.createCta', 'Create team')}
             </Button>
@@ -87,6 +96,14 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
               {t(
                 'auto.components.billing.team.createUnavailable',
                 'Team creation isn’t available yet. Ask a teammate to invite you.'
+              )}
+            </p>
+          ) : null}
+          {showRule && !props.error ? (
+            <p id={`${id}-rule`} className="text-xs text-muted-foreground">
+              {t(
+                'auto.components.billing.team.createInvalid2',
+                'Use letters, numbers, spaces or underscores (up to 64).'
               )}
             </p>
           ) : null}
@@ -110,8 +127,8 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{org.name}</p>
                   {org.role ? (
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {org.role.toLowerCase()}
+                    <p className="text-xs text-muted-foreground">
+                      {roleLabel(normalizeOrgRole(org.role), t)}
                     </p>
                   ) : null}
                 </div>
@@ -119,8 +136,12 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={props.switchingOrgId !== null}
-                  onClick={() => props.onSwitch(org.orgId)}
+                  aria-disabled={props.switchingOrgId !== null || undefined}
+                  onClick={() => {
+                    if (props.switchingOrgId === null) {
+                      props.onSwitch(org.orgId)
+                    }
+                  }}
                 >
                   {props.switchingOrgId === org.orgId ? (
                     <LoadingSpinner className="size-3.5" />

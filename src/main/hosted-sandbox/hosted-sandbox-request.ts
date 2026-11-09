@@ -21,7 +21,7 @@ const DEFAULT_TIMEOUTS = { boot: 180_000, control: 60_000 }
 const MAX_RESPONSE_BYTES = 256 * 1024
 
 export type HostedSandboxRequest = <T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   schema: z.ZodType<T>,
   init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }
@@ -36,7 +36,7 @@ export function createHostedSandboxRequest(
   const timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts }
 
   return async function call<T>(
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     schema: z.ZodType<T>,
     init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }

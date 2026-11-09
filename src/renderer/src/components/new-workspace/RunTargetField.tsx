@@ -57,17 +57,18 @@ export default function RunTargetField({
             }}
             className={COMBOBOX_FIELD_SHELL}
           >
-            <span className="flex w-4 shrink-0 items-center justify-center">
-              {committed ? (
-                recipeKind === 'orca-cloud' ? (
+            {/* No empty icon slot before the placeholder. */}
+            {committed ? (
+              <span className="flex w-4 shrink-0 items-center justify-center">
+                {recipeKind === 'orca-cloud' ? (
                   <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
                 ) : recipeKind === 'recipe' ? (
                   <Box className="size-3.5 shrink-0 text-muted-foreground" />
                 ) : hostId ? (
                   <HostRowIcon hostId={hostId} />
-                ) : null
-              ) : null}
-            </span>
+                ) : null}
+              </span>
+            ) : null}
             <div className="relative min-w-0 flex-1 overflow-hidden">
               <ImeInput
                 ref={inputRef}
@@ -83,7 +84,10 @@ export default function RunTargetField({
                 placeholder={
                   committed
                     ? ''
-                    : t('auto.components.NewWorkspaceComposerCard.chooseRunTarget', 'Choose target')
+                    : t(
+                        'auto.components.NewWorkspaceComposerCard.chooseWhereToRun',
+                        'Choose where to run'
+                      )
                 }
                 onChange={(event) => onQueryChange(event.target.value)}
                 onFocus={onOpenRequest}

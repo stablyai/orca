@@ -1,6 +1,8 @@
 // Types, limits and small helpers of the Orca Cloud offline cache (see cloud-offline-cache.ts).
-import { readdirSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { z } from 'zod'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 
 /** Read-only methods whose answers stay meaningful while the VM sleeps. Nothing that mutates. */
@@ -76,14 +78,15 @@ export type CloudOfflineCache = {
     params: unknown,
     response: RuntimeRpcSuccess<unknown>
   ): void
-  lookup(environmentId: string, method: string, params: unknown): OfflineCacheEntry | null
-  entries(environmentId: string, method?: string): OfflineCacheEntry[]
-  forget(environmentId: string): void
+  lookup(environmentId: string, method: string, params: unknown): Promise<OfflineCacheEntry | null>
+  entries(environmentId: string, method?: string): Promise<OfflineCacheEntry[]>
+  forget(environmentId: string): Promise<void>
   /** Drop every environment not in `keep` (removed workspaces). */
-  prune(keep: ReadonlySet<string>): void
+  prune(keep: ReadonlySet<string>): Promise<void>
   /** Delete everything (sign-out, profile switch). */
-  clear(): void
-  flush(): void
+  clear(): Promise<void>
+  /** Writes pending changes; resolves once earlier records and file work have landed. */
+  flush(): Promise<void>
 }
 
 /** Key-order independent, so `{a,b}` and `{b,a}` hit the same entry. */
@@ -105,14 +108,51 @@ export function stableKey(method: string, params: unknown): string {
   return `${method} ${JSON.stringify(sort(params ?? null))}`
 }
 
-export function removeLegacyPlaintextFiles(root: string): void {
+export async function removeLegacyPlaintextFiles(root: string): Promise<void> {
   try {
-    for (const name of readdirSync(root)) {
+    for (const name of await readdir(root)) {
       if (name.endsWith('.json')) {
-        rmSync(join(root, name), { force: true })
+        await rm(join(root, name), { force: true })
       }
     }
   } catch {
     // No cache directory yet.
   }
+}
+
+export const EnvironmentFileSchema = z.object({
+  version: z.literal(2),
+  environmentId: z.string(),
+  updatedAt: z.number(),
+  entries: z.record(
+    z.string(),
+    z.object({
+      method: z.string(),
+      params: z.unknown(),
+      resultJson: z.string(),
+      runtimeId: z.string(),
+      at: z.number(),
+      bytes: z.number()
+    })
+  )
+})
+
+export function fileName(environmentId: string): string {
+  return `${createHash('sha256').update(environmentId).digest('hex').slice(0, 32)}.bin`
+}
+
+export function decode(entry: StoredEntry): OfflineCacheEntry {
+  const { resultJson, ...rest } = entry
+  const result: unknown = JSON.parse(resultJson)
+  return { ...rest, result }
+}
+
+export const DISABLED_OFFLINE_CACHE: CloudOfflineCache = {
+  record: () => {},
+  lookup: async () => null,
+  entries: async () => [],
+  forget: async () => {},
+  prune: async () => {},
+  clear: async () => {},
+  flush: async () => {}
 }

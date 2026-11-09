@@ -9,7 +9,10 @@ export type PlanHealth = { label: string; dot: 'destructive' | 'warning' | null 
 /** Names what is actually wrong (not just Stripe's status) so the badge never says "Active" in red. */
 export function planHealth(entitlement: OrcaBillingEntitlement, t: Translate): PlanHealth {
   if (entitlement.reason === 'payment_grace_expired' || entitlement.payment.suspendRunning) {
-    return { label: t('auto.components.billing.health.suspended', 'Suspended'), dot: 'destructive' }
+    return {
+      label: t('auto.components.billing.paymentFailed', 'Payment failed'),
+      dot: 'destructive'
+    }
   }
   if (entitlement.payment.pastDueSince !== null || entitlement.status === 'past_due') {
     return {
@@ -18,10 +21,16 @@ export function planHealth(entitlement: OrcaBillingEntitlement, t: Translate): P
     }
   }
   if (entitlement.reason === 'overage_cap_reached') {
-    return { label: t('auto.components.billing.health.capReached', 'Cap reached'), dot: 'warning' }
+    return {
+      label: t('auto.components.billing.health.spendCapReached', 'Spend cap reached'),
+      dot: 'warning'
+    }
   }
   if (entitlement.reason === 'included_hours_exhausted') {
-    return { label: t('auto.components.billing.health.outOfHours', 'Out of hours'), dot: 'warning' }
+    return {
+      label: t('auto.components.billing.health.outOfSandboxHours', 'Out of sandbox hours'),
+      dot: 'warning'
+    }
   }
   if (entitlement.cancelAtPeriodEnd) {
     return { label: t('auto.components.billing.health.ending', 'Ending'), dot: 'warning' }

@@ -77,7 +77,7 @@ export function SetLocationButton({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="xs"
           className="ml-auto shrink-0 self-center"
           aria-label={t(

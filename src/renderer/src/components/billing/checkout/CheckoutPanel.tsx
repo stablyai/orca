@@ -68,7 +68,9 @@ function OrderSummary({
       </div>
       <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-2">
         <dt className="font-medium">
-          {t('auto.components.billing.checkout.dueToday', 'Due today')}
+          {phase.kind === 'paid'
+            ? t('auto.components.billing.checkout.paidRow', 'Paid')
+            : t('auto.components.billing.checkout.dueToday', 'Due today')}
         </dt>
         <dd className="text-base font-semibold tabular-nums">
           {total === null ? '—' : formatCents(total, locale)}
@@ -160,16 +162,16 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
     case 'paid':
       title = t('auto.components.billing.checkout.paid', 'Payment confirmed')
       body = t(
-        'auto.components.billing.checkout.paidBody',
-        'You’re on {{value0}}. Opening your team…',
+        'auto.components.billing.checkout.paidBody2',
+        '{{value0}} plan is active. Opening your team…',
         { value0: props.team.label }
       )
       break
     case 'canceled':
       title = t('auto.components.billing.checkout.canceled', 'Checkout canceled')
       body = t(
-        'auto.components.billing.checkout.canceledBody',
-        'Nothing was charged. You can pick up where you left off any time.'
+        'auto.components.billing.checkout.canceledBody2',
+        'Nothing was charged. You can choose a plan again any time.'
       )
       break
     case 'needs-attention':
@@ -253,8 +255,8 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
       <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Lock className="size-3" />
         {t(
-          'auto.components.billing.checkout.secured',
-          'Payments by Stripe · Cards, Apple Pay and Link · 3-D Secure'
+          'auto.components.billing.checkout.secured2',
+          'Payments by Stripe · Cards, Apple Pay and Link · Bank verification'
         )}
       </p>
     </div>

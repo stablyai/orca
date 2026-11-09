@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import { Send, X } from 'lucide-react'
+import { CircleAlert, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -182,7 +182,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
         <div
           className={cn(
             'flex min-h-8 min-w-[16rem] flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-0.5 shadow-xs transition-[color,box-shadow] dark:bg-input/30',
-            'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50'
+            'focus-within:border-ring focus-within:ring-2 focus-within:ring-focus-ring'
           )}
           onClick={() => localInput.current?.focus()}
         >
@@ -195,7 +195,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                 className={cn(
                   'inline-flex max-w-full items-center gap-1 rounded-full border py-0.5 pr-0.5 pl-2 text-xs animate-in fade-in-0 zoom-in-95 duration-150 motion-reduce:animate-none',
                   bad
-                    ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                    ? 'border-destructive bg-destructive/10 text-foreground'
                     : 'border-border bg-secondary text-secondary-foreground'
                 )}
                 title={
@@ -205,10 +205,18 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                     : t('auto.components.billing.team.notAnEmail', 'Not an email address'))
                 }
               >
+                {bad ? (
+                  <CircleAlert aria-hidden className="size-3 shrink-0 text-destructive" />
+                ) : null}
                 <span className="truncate">{candidate.email}</span>
+                {bad ? (
+                  <span className="sr-only">
+                    {error ?? t('auto.components.billing.team.notAnEmail', 'Not an email address')}
+                  </span>
+                ) : null}
                 <button
                   type="button"
-                  className="flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="-my-1 -mr-1 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:outline-none"
                   aria-label={t('auto.components.billing.team.removeChip', 'Remove {{value0}}', {
                     value0: candidate.email
                   })}
@@ -311,13 +319,21 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                 : undefined
             }
           >
-            <Button type="submit" size="sm" disabled={sending || valid.length === 0}>
+            <Button
+              type="submit"
+              size="sm"
+              // aria-disabled keeps focus here while sending; submit ignores it meanwhile.
+              disabled={!sending && valid.length === 0}
+              aria-disabled={sending || undefined}
+            >
               {sending ? <LoadingSpinner className="size-3.5" /> : <Send />}
-              {valid.length > 1
-                ? t('auto.components.billing.team.sendN', 'Send {{value0}} invites', {
-                    value0: String(valid.length)
-                  })
-                : t('auto.components.billing.team.send', 'Send invite')}
+              {valid.length === 0
+                ? // Nothing to count yet: a plain verb, not "Send 1 invite".
+                  t('auto.components.billing.team.send', 'Send invite')
+                : t('auto.components.billing.team.sendInvites', 'Send {{count}} invites', {
+                    count: valid.length,
+                    defaultValue_one: 'Send {{count}} invite'
+                  })}
             </Button>
           </SettingsDisabledControlTooltip>
         </div>
@@ -326,17 +342,20 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
         {impactCopy(impact, committedValid, locale, t)}
         {paymentFailed && committedValid.length > 0
           ? ` ${t(
-              'auto.components.billing.team.invitePaymentFailed',
-              'New seats are charged once the payment issue is fixed.'
+              'auto.components.billing.team.invitePaymentFailed2',
+              'New seats are charged once the failed payment is fixed.'
             )}`
           : null}
-        {invalidCount === 1
-          ? ` ${t('auto.components.billing.team.skipOne', 'Skipping 1 invalid entry.')}`
-          : invalidCount > 1
-            ? ` ${t('auto.components.billing.team.skipN', 'Skipping {{value0}} invalid entries.', {
-                value0: String(invalidCount)
-              })}`
-            : null}
+        {invalidCount > 0
+          ? ` ${t(
+              'auto.components.billing.team.skipInvalid',
+              'Skipping {{count}} invalid entries.',
+              {
+                count: invalidCount,
+                defaultValue_one: 'Skipping {{count}} invalid entry.'
+              }
+            )}`
+          : null}
       </p>
       {describedErrors.length > 0 ? (
         <ul role="alert" className="space-y-0.5 text-xs text-destructive">

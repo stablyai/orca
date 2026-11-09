@@ -1,6 +1,8 @@
 import { app, type BrowserWindow } from 'electron'
 import { registerAgentApiKeyHandlers } from '../agent-api-keys/agent-api-key-ipc'
 import { registerCloudWorkspacesHandlers } from '../ipc/cloud-workspaces'
+import { registerCloudApiHandlers } from '../cloud-api/cloud-api-ipc'
+import { registerCloudSecretsHandlers } from '../cloud-secrets/cloud-secrets-ipc'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
 import { initTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'
@@ -69,6 +71,8 @@ export function attachMainWindowCoreServices(
   holdLaunchReconnectOptOuts(store.getSshTargets())
   registerAgentApiKeyHandlers(app.getPath('userData'))
   registerCloudWorkspacesHandlers()
+  registerCloudApiHandlers()
+  registerCloudSecretsHandlers(app.getPath('userData'))
   registerCoreHandlers(
     store,
     runtime,

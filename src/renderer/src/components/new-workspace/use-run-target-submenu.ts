@@ -16,6 +16,8 @@ export function useRunTargetSubmenu(
   armItem: (key: string | null) => void
   /** Moves the arm by `step`, wrapping like a native menu. */
   moveItemArm: (step: number) => void
+  /** Home/End inside the submenu. */
+  armItemEdge: (edge: 'first' | 'last') => void
 } {
   const [state, setState] = useState<{ submenu: RunTargetSubmenu | null; armed: string | null }>({
     submenu: null,
@@ -62,5 +64,18 @@ export function useRunTargetSubmenu(
     [armItem, armedItemKey, keys]
   )
 
-  return { submenu: state.submenu, armedItemKey, openSubmenu, closeSubmenu, armItem, moveItemArm }
+  const armItemEdge = useCallback(
+    (edge: 'first' | 'last'): void => armItem((edge === 'first' ? keys[0] : keys.at(-1)) ?? null),
+    [armItem, keys]
+  )
+
+  return {
+    submenu: state.submenu,
+    armedItemKey,
+    openSubmenu,
+    closeSubmenu,
+    armItem,
+    moveItemArm,
+    armItemEdge
+  }
 }

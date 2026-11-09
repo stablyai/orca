@@ -20,6 +20,8 @@ export type Env = {
   GOLDEN_SNAPSHOT_OVERRIDE?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
   MEMBER_GIT_IDENTITY?: string
+  /** How long after a member's own send their GitHub identity stays usable (default 30). */
+  MEMBER_GIT_WINDOW_MINUTES?: string
   /** `release:latest` | `release:v1.2.3`: build golden images from Orca's released orca-server tarball. */
   GOLDEN_IMAGE_SOURCE?: string
   /** TTL for Worker-built golden images; unset/0 keeps them until rotated out. */

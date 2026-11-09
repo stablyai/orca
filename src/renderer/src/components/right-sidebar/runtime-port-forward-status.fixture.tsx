@@ -144,3 +144,19 @@ export const unreachable = defineFixture({
     </div>
   )
 })
+
+export const sandboxAsleep = defineFixture({
+  width: 300,
+  render: () => (
+    <div className="w-[280px] bg-background p-3">
+      <RuntimePortForwardStatus
+        remotePort={5173}
+        isSandbox
+        state={{ kind: 'forwarded', forward: forward(5173), hostOffline: true }}
+        onForward={() => {}}
+        onOpenLocal={() => {}}
+        onReconnect={() => {}}
+      />
+    </div>
+  )
+})

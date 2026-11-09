@@ -40,7 +40,7 @@ function QueuedPromptRow({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             aria-label={t('components.orcaCloud.offline.editQueued', 'Edit queued message')}
-            className="min-h-16 text-sm"
+            variant="compact"
           />
           <div className="flex justify-end gap-2">
             <Button size="xs" variant="ghost" onClick={() => setEditing(false)}>
@@ -237,14 +237,15 @@ export function ChatPanel({
           }}
           placeholder={t('components.orcaCloud.offline.composerPlaceholder', 'Message the agent')}
           aria-label={t('components.orcaCloud.offline.composerLabel', 'Message to queue')}
-          className="min-h-14 resize-none border-0 bg-transparent p-1 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+          variant="bare"
+          className="min-h-14"
         />
         <div className="flex items-center justify-end gap-2">
           <Button
             size="xs"
+            variant="default-held"
             aria-disabled={!draft.trim() || busy || undefined}
             aria-busy={busy || undefined}
-            className="aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:hover:bg-muted"
             onClick={send}
           >
             {busy ? <Loader2 className="motion-safe:animate-spin" /> : null}

@@ -6,16 +6,54 @@ import type {
   OrcaProfileOrgMemberMutationResult
 } from '../../../../../shared/orca-profiles'
 
+// i18next plurals (`_one` / `_other` in the catalogs), never ternaries.
 export function seatCountLabel(count: number, t: Translate): string {
-  return count === 1
-    ? t('auto.components.billing.team.oneSeat', '1 seat')
-    : t('auto.components.billing.team.seatsN', '{{value0}} seats', { value0: String(count) })
+  return t('auto.components.billing.team.seatCount', '{{count}} seats', {
+    count,
+    defaultValue_one: '{{count}} seat'
+  })
 }
 
 export function memberCountLabel(count: number, t: Translate): string {
-  return count === 1
-    ? t('auto.components.billing.team.oneMember', '1 member')
-    : t('auto.components.billing.team.membersN', '{{value0}} members', { value0: String(count) })
+  return t('auto.components.billing.team.memberCount', '{{count}} members', {
+    count,
+    defaultValue_one: '{{count}} member'
+  })
+}
+
+/** "Invited 2 days ago as an admin": one key per role, so no lowercased labels in sentences. */
+export function invitedAsCopy(role: OrcaOrgRole, when: string, t: Translate): string {
+  switch (role) {
+    case 'owner':
+      return t('auto.components.billing.team.invitedAsOwner', 'Invited {{value0}} as an owner', {
+        value0: when
+      })
+    case 'admin':
+      return t('auto.components.billing.team.invitedAsAdmin', 'Invited {{value0}} as an admin', {
+        value0: when
+      })
+    case 'member':
+      return t('auto.components.billing.team.invitedAsMember', 'Invited {{value0}} as a member', {
+        value0: when
+      })
+  }
+}
+
+export function roleChangedCopy(name: string, role: OrcaOrgRole, t: Translate): string {
+  switch (role) {
+    case 'owner':
+      return t('auto.components.billing.team.nowOwner', '{{value0}} is now an owner', {
+        value0: name
+      })
+    case 'admin':
+      return t('auto.components.billing.team.nowAdmin', '{{value0}} is now an admin', {
+        value0: name
+      })
+    case 'member':
+      return t('auto.components.billing.team.nowMember', '{{value0}} is now a member', {
+        value0: name
+      })
+  }
 }
 
 export function roleDescription(role: OrcaOrgRole, t: Translate): string {
@@ -94,7 +132,10 @@ export function mutationFailureCopy(
         'Too many team changes at once. Wait a minute and try again.'
       )
     case 'reconnect-required':
-      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+      return t(
+        'auto.components.billing.openSignedOut2',
+        'Sign in to Orca again to manage your team.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':
@@ -110,7 +151,12 @@ export function createTeamFailureCopy(
     case 'created':
       return null
     case 'invalid':
-      return t('auto.components.billing.team.createInvalid', 'Choose a different team name.')
+      return t(
+        'auto.components.billing.team.createInvalid2',
+        'Use letters, numbers, spaces or underscores (up to 64).'
+      )
+    case 'name-taken':
+      return t('auto.components.billing.team.nameTaken', 'That team name is taken. Try another.')
     case 'unsupported':
       return t(
         'auto.components.billing.team.createUnavailable',
@@ -122,7 +168,10 @@ export function createTeamFailureCopy(
         'Too many team changes at once. Wait a minute and try again.'
       )
     case 'reconnect-required':
-      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+      return t(
+        'auto.components.billing.openSignedOut2',
+        'Sign in to Orca again to manage your team.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':

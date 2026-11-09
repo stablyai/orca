@@ -1,7 +1,5 @@
 import React from 'react'
-import { Box, Boxes, ChevronDown, Network, Plus, Server, Sparkles } from 'lucide-react'
-import { useBillingSummary } from '@/components/billing/billing-summary-store'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { Box, Boxes, ChevronDown, Network, Plus, Server } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,19 +22,28 @@ export type RunTargetSubmenuArm = {
   /** The submenu listbox id, so the input can list it in `aria-controls`. */
   listId: string
   armedItemKey: string | null
-  armedItemId: string
+  optionIdFor: (key: string) => string
   onArmItem: (key: string | null) => void
 }
 
-function itemId(arm: RunTargetSubmenuArm, key: string): string | undefined {
-  return arm.armedItemKey === key ? arm.armedItemId : undefined
+/** Keeps the keyboard-armed submenu row visible in a long list. */
+function useScrollArmedIntoView(arm: RunTargetSubmenuArm): void {
+  const { armedItemKey, optionIdFor } = arm
+  React.useEffect(() => {
+    if (armedItemKey) {
+      document.getElementById(optionIdFor(armedItemKey))?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [armedItemKey, optionIdFor])
 }
+
+const SUBMENU_LIST = 'max-h-72 overflow-y-auto scrollbar-sleek'
 
 /** The "Per-Workspace Environment" row and its nested recipe list. */
 export function RecipesSubmenuRow({
   open,
   onOpenChange,
   armed,
+  armedInSubmenu,
   optionId,
   recipes,
   selectedRecipeId,
@@ -47,7 +54,9 @@ export function RecipesSubmenuRow({
   open: boolean
   onOpenChange: (open: boolean) => void
   armed: boolean
-  optionId: string | undefined
+  /** Keyboard focus is inside this submenu; the parent keeps a lighter fill. */
+  armedInSubmenu: boolean
+  optionId: string
   recipes: readonly EphemeralVmRecipeOption[]
   selectedRecipeId: string | null
   submenuArm: RunTargetSubmenuArm
@@ -55,7 +64,7 @@ export function RecipesSubmenuRow({
   onSelectRecipe: (recipeId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const billing = useBillingSummary()
+  useScrollArmedIntoView(submenuArm)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
@@ -68,6 +77,7 @@ export function RecipesSubmenuRow({
               'Create a workspace from an orca.yaml recipe'
             )}
             armed={armed}
+            armedInSubmenu={armedInSubmenu}
             current={selectedRecipeId !== null && recipes.some((r) => r.id === selectedRecipeId)}
             optionId={optionId}
             submenu
@@ -84,49 +94,25 @@ export function RecipesSubmenuRow({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         {/* Hover arms like a native menu; leaving keeps the arm so keyboard users keep their place. */}
-        <div id={submenuArm.listId} role="listbox" aria-label={getEphemeralVmLabel(t)}>
+        <div
+          id={submenuArm.listId}
+          role="listbox"
+          aria-label={getEphemeralVmLabel(t)}
+          className={SUBMENU_LIST}
+        >
           {recipes.map((recipe) => {
             const key = getRecipeSubmenuItemKey(recipe.id)
-            // Orca Cloud without a plan: the row explains and leads to plans instead of failing later.
-            const needsPlan = recipe.provider === 'orca-cloud' && billing.subscribed === false
             return (
               <RunTargetRow
                 key={recipe.id}
                 icon={<Box className="size-3.5 shrink-0 text-muted-foreground" />}
                 label={recipe.name}
-                detail={
-                  needsPlan
-                    ? billing.canManageBilling
-                      ? t(
-                          'auto.components.NewWorkspaceComposerCard.orcaCloudUpgrade',
-                          'Upgrade to run agents in the cloud'
-                        )
-                      : t(
-                          'auto.components.NewWorkspaceComposerCard.orcaCloudAskAdmin',
-                          'Needs a plan. Ask an owner or admin to upgrade.'
-                        )
-                    : getRecipeDetail(recipe, t)
-                }
+                detail={getRecipeDetail(recipe, t)}
                 armed={submenuArm.armedItemKey === key}
                 current={recipe.id === selectedRecipeId}
-                optionId={itemId(submenuArm, key)}
+                optionId={submenuArm.optionIdFor(key)}
                 onArm={() => submenuArm.onArmItem(key)}
-                onCommit={() => {
-                  if (needsPlan) {
-                    onOpenChange(false)
-                    openPlansPage('run-on')
-                  } else {
-                    onSelectRecipe(recipe.id)
-                  }
-                }}
-                trailing={
-                  needsPlan ? (
-                    <span className="ml-auto inline-flex shrink-0 items-center gap-1 self-center rounded-full border border-border bg-background px-1.5 py-px text-[10px] font-medium text-foreground">
-                      <Sparkles className="size-2.5" />
-                      {t('auto.components.NewWorkspaceComposerCard.upgradePill', 'Upgrade')}
-                    </span>
-                  ) : undefined
-                }
+                onCommit={() => onSelectRecipe(recipe.id)}
               />
             )
           })}
@@ -141,6 +127,7 @@ export function AddHostSubmenuRow({
   open,
   onOpenChange,
   armed,
+  armedInSubmenu,
   optionId,
   submenuArm,
   onArm,
@@ -150,7 +137,8 @@ export function AddHostSubmenuRow({
   open: boolean
   onOpenChange: (open: boolean) => void
   armed: boolean
-  optionId: string | undefined
+  armedInSubmenu: boolean
+  optionId: string
   submenuArm: RunTargetSubmenuArm
   onArm: () => void
   onAddSshHost?: () => void
@@ -158,6 +146,7 @@ export function AddHostSubmenuRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const addHostLabel = t('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
+  useScrollArmedIntoView(submenuArm)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
@@ -174,7 +163,10 @@ export function AddHostSubmenuRow({
           onClick={() => onOpenChange(true)}
           className={cn(
             'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-3 text-sm',
-            armed && 'bg-accent text-accent-foreground'
+            armed &&
+              (armedInSubmenu
+                ? 'bg-accent/30 ring-1 ring-inset ring-border'
+                : 'bg-accent text-accent-foreground')
           )}
         >
           <span className="flex w-4 shrink-0 items-center justify-center">
@@ -193,7 +185,12 @@ export function AddHostSubmenuRow({
         className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div id={submenuArm.listId} role="listbox" aria-label={addHostLabel}>
+        <div
+          id={submenuArm.listId}
+          role="listbox"
+          aria-label={addHostLabel}
+          className={SUBMENU_LIST}
+        >
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -205,7 +202,7 @@ export function AddHostSubmenuRow({
               armed={submenuArm.armedItemKey === RUN_TARGET_ADD_SSH_HOST_ITEM}
               current={false}
               stacked
-              optionId={itemId(submenuArm, RUN_TARGET_ADD_SSH_HOST_ITEM)}
+              optionId={submenuArm.optionIdFor(RUN_TARGET_ADD_SSH_HOST_ITEM)}
               onArm={() => submenuArm.onArmItem(RUN_TARGET_ADD_SSH_HOST_ITEM)}
               onCommit={onAddSshHost}
             />
@@ -218,13 +215,13 @@ export function AddHostSubmenuRow({
                 'Add remote Orca server'
               )}
               detail={t(
-                'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServerHint',
-                'Pair another Orca runtime'
+                'auto.components.NewWorkspaceComposerCard.connectOrcaOnAnotherComputer',
+                'Connect to Orca on another computer'
               )}
               armed={submenuArm.armedItemKey === RUN_TARGET_ADD_REMOTE_SERVER_ITEM}
               current={false}
               stacked
-              optionId={itemId(submenuArm, RUN_TARGET_ADD_REMOTE_SERVER_ITEM)}
+              optionId={submenuArm.optionIdFor(RUN_TARGET_ADD_REMOTE_SERVER_ITEM)}
               onArm={() => submenuArm.onArmItem(RUN_TARGET_ADD_REMOTE_SERVER_ITEM)}
               onCommit={onAddRemoteServer}
             />

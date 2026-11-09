@@ -139,6 +139,7 @@ export function createCloudWorkspacesService(deps: {
     putOrgPrompts: (document: OrgPrompts['document'], revision: number) =>
       wrap(() => client.putOrgPrompts(document, revision)),
     localWorkspaces: () => localWorkspaces(),
+    noteSent: (id: string) => wrap(() => client.noteSent(id)),
 
     /**
      * A per-device credential for a workspace this desktop does not own: a fresh X25519 key lives
@@ -193,6 +194,7 @@ export function createCloudWorkspacesService(deps: {
         return
       }
       const changed = active?.sandboxId !== args.sandboxId
+      const previousChatId = active?.chatId ?? null
       if (changed && active) {
         void client
           .presence(active.sandboxId, { clientId: deps.clientId, state: 'left' })
@@ -200,7 +202,8 @@ export function createCloudWorkspacesService(deps: {
       }
       active = {
         sandboxId: args.sandboxId,
-        chatId: args.chatId ?? active?.chatId ?? null,
+        // undefined keeps the chat (typing beats); null means no chat is in front any more.
+        chatId: args.chatId !== undefined ? args.chatId : changed ? null : (active?.chatId ?? null),
         typingUntil: args.typing
           ? Date.now() + TYPING_HOLD_MS
           : changed
@@ -208,7 +211,7 @@ export function createCloudWorkspacesService(deps: {
             : (active?.typingUntil ?? 0),
         leased: args.leased ?? active?.leased ?? false
       }
-      if (changed || args.typing) {
+      if (changed || args.typing || active.chatId !== previousChatId) {
         void beat()
       }
       renewLeaseIfDue()

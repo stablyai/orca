@@ -264,5 +264,19 @@
     "text": "text-[13px] leading-5",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/cloud-environment/cloud-environment-fixture-data.ts",
+    "kind": "object-property:error",
+    "text": "install_failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/cloud-environment/cloud-environment-fixture-data.ts",
+    "kind": "object-property:error",
+    "text": "canceled",
+    "dynamic": false,
+    "count": 1
   }
 ]

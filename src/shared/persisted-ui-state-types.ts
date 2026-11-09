@@ -184,6 +184,8 @@ export type PersistedUIState = {
   mobileEmulatorTabIntroDismissed?: boolean
   /** User deferred the in-pane Mobile Emulator CLI + skill setup guide. */
   mobileEmulatorAgentSetupDismissed?: boolean
+  /** The "Add an agent" step before the first Orca Cloud workspace ran (set up or skipped); Settings reopens it. */
+  cloudAgentSetupDone?: boolean
   /** One-shot rollout notice for manual project ordering default; absent or true keeps the sidebar callout hidden. */
   projectOrderManualDefaultNoticeDismissed?: boolean
   /** One-shot notice that usage meters show percent used, not remaining; absent resolves on load (new profiles dismissed, upgraded see it once). */

@@ -18,7 +18,8 @@ import {
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 
-export type OpenOutcome = { ok: true } | { ok: false; message: string }
+/** On success, the worktree that was revealed (null when its projects are still syncing). */
+export type OpenOutcome = { ok: true; worktreeId: string | null } | { ok: false; message: string }
 
 // Rejections that mean this device's pairing is no longer accepted (revoked grant, rebuilt VM).
 const PAIRING_REJECTED_CODES = new Set(['unauthorized', 'device_revoked', 'forbidden'])
@@ -69,7 +70,7 @@ async function connectAndReveal(environmentId: string, name: string): Promise<Op
       ok: false,
       message: translate(
         'auto.components.cloudWorkspaces.serverNotSaved',
-        'The workspace server was not saved.'
+        "Couldn't add the workspace to this computer. Your files are safe. Try again."
       )
     }
   }
@@ -100,7 +101,7 @@ async function connectAndReveal(environmentId: string, name: string): Promise<Op
       )
     )
   }
-  return { ok: true }
+  return { ok: true, worktreeId }
 }
 
 /** Drops this device's previous pairing so re-pairing does not leave a dead server and grant. */
@@ -155,7 +156,7 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
       ok: false,
       message: translate(
         'auto.components.cloudWorkspaces.verifyFailed',
-        'Could not verify the workspace server. Try again.'
+        "Couldn't connect this computer to the workspace. Your files are safe. Try again."
       )
     }
   }
@@ -189,7 +190,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
             ? { executionHostId: toRuntimeExecutionHostId(local.runtimeEnvironmentId) }
             : undefined
         )
-        return { ok: true }
+        return { ok: true, worktreeId: local.worktreeId }
       }
       // Owned but created on another device (or reassigned to me): pair this device like a teammate.
     }
@@ -198,7 +199,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
         ok: false,
         message: translate(
           'auto.components.cloudWorkspaces.noAccess',
-          'You do not have access to this workspace.'
+          "You don't have access to this workspace. Ask its owner to share it with the team."
         )
       }
     }
@@ -210,7 +211,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
       ok: false,
       message: translate(
         'auto.components.cloudWorkspaces.openFailed',
-        'Could not open the workspace.'
+        "Couldn't open the workspace. Your files are safe. Try again."
       )
     }
   }
@@ -235,7 +236,9 @@ export async function copyCloudWorkspaceLink(id: string, chatId?: string | null)
     await navigator.clipboard.writeText(cloudWorkspaceLink(id, chatId))
   } catch (error) {
     console.warn('[cloud-workspaces] copy link failed', error)
-    toast.error(translate('auto.components.cloudWorkspaces.copyFailed', 'Could not copy the link.'))
+    toast.error(
+      translate('auto.components.cloudWorkspaces.copyFailed', "Couldn't copy the link. Try again.")
+    )
     return
   }
   toast.success(

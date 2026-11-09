@@ -1,6 +1,7 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
@@ -11,6 +12,39 @@ import type {
 } from '../../../../shared/orca-billing'
 import { formatHours, includedUsagePercent } from './plan-billing-format'
 import { formatCents } from './plans/plans-pricing'
+import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
+
+/** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
+function resetLine(
+  entitlement: OrcaBillingEntitlement,
+  date: (ms: number) => string,
+  t: ReturnType<typeof useTranslate>
+): string | null {
+  const resets = entitlement.usageWindow ? date(entitlement.usageWindow.end) : null
+  const ends = entitlement.period ? date(entitlement.period.end) : null
+  if (ends && entitlement.cancelAtPeriodEnd) {
+    return resets
+      ? t('auto.components.billing.resetsEnds', 'Hours reset {{value0}} · Plan ends {{value1}}', {
+          value0: resets,
+          value1: ends
+        })
+      : t('auto.components.billing.endsOn', 'Plan ends {{value0}}', { value0: ends })
+  }
+  if (resets && ends) {
+    return resets === ends
+      ? t('auto.components.billing.resetsAndRenews', 'Resets and renews {{value0}}', {
+          value0: ends
+        })
+      : t('auto.components.billing.resetsRenews', 'Hours reset {{value0}} · Renews {{value1}}', {
+          value0: resets,
+          value1: ends
+        })
+  }
+  if (resets) {
+    return t('auto.components.billing.resets', 'Hours reset {{value0}}', { value0: resets })
+  }
+  return ends ? t('auto.components.billing.renewsOn', 'Renews {{value0}}', { value0: ends }) : null
+}
 
 export function UsageSummary({
   entitlement
@@ -26,8 +60,8 @@ export function UsageSummary({
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="font-medium">
           {t(
-            'auto.components.billing.hoursUsedMonth',
-            '{{value0}} of {{value1}} hours used this month',
+            'auto.components.billing.sandboxHoursUsedMonth',
+            '{{value0}} of {{value1}} sandbox hours used this month',
             {
               value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
@@ -35,68 +69,51 @@ export function UsageSummary({
           )}
         </span>
         <span className="text-muted-foreground">
-          {t('auto.components.billing.hoursLeft', '{{value0}} hours left', {
+          {t('auto.components.billing.sandboxHoursLeft', '{{value0}} sandbox hours left', {
             value0: formatHours(entitlement.remainingIncludedSeconds)
           })}
         </span>
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
-        aria-label={t('auto.components.billing.usageLabel', 'Included hours used')}
+        tone={
+          includedUsagePercent(entitlement) >= 100 && !entitlement.overage.optedIn
+            ? 'warning'
+            : 'default'
+        }
+        aria-label={t('auto.components.billing.sandboxHoursUsedLabel', 'Sandbox hours used')}
       />
       {entitlement.overageSeconds === 0 &&
       entitlement.usedSeconds > entitlement.includedSeconds &&
       entitlement.includedSeconds > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {t('auto.components.billing.overBy', 'Over by {{value0}} h this month', {
-            value0: formatHours(entitlement.usedSeconds - entitlement.includedSeconds)
+          {t('auto.components.billing.sandboxHoursOver', '{{count}} sandbox hours over', {
+            count: Math.round((entitlement.usedSeconds - entitlement.includedSeconds) / 360) / 10,
+            defaultValue_one: '{{count}} sandbox hour over'
           })}
         </p>
       ) : null}
       {entitlement.overageSeconds > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {t(
-            'auto.components.billing.overageHours',
-            '{{value0}} overage hours · {{value1}} of {{value2}} cap',
-            {
-              value0: formatHours(entitlement.overageSeconds),
-              value1: formatCents(entitlement.overage.spentCents, locale),
-              value2: formatCents(entitlement.overage.spendCapCents, locale)
-            }
-          )}
+          {t('auto.components.billing.overageHoursOnly', '{{value0}} overage hours this month', {
+            value0: formatHours(entitlement.overageSeconds)
+          })}
         </p>
       ) : null}
-      {entitlement.usageWarningPercent !== null ? (
+      {entitlement.usageWarningPercent !== null && entitlement.usageWarningPercent < 100 ? (
         <p className="text-xs font-medium">
           {entitlement.usageWarningPercent >= 100
-            ? t('auto.components.billing.warn100', 'All included hours for this month are used.')
+            ? t('auto.components.billing.warn100b', 'All of this month’s sandbox hours are used.')
             : t(
-                'auto.components.billing.warnPercent',
-                'You have used {{value0}}% of this month’s included hours.',
+                'auto.components.billing.warnPercent2',
+                'You’ve used {{value0}}% of this month’s sandbox hours.',
                 {
                   value0: String(entitlement.usageWarningPercent)
                 }
               )}
         </p>
       ) : null}
-      <p className="text-xs text-muted-foreground">
-        {entitlement.usageWindow
-          ? t('auto.components.billing.resets', 'Hours reset {{value0}}', {
-              value0: date(entitlement.usageWindow.end)
-            })
-          : null}
-        {entitlement.period
-          ? ` · ${
-              entitlement.cancelAtPeriodEnd
-                ? t('auto.components.billing.endsOn', 'Plan ends {{value0}}', {
-                    value0: date(entitlement.period.end)
-                  })
-                : t('auto.components.billing.renewsOn', 'Renews {{value0}}', {
-                    value0: date(entitlement.period.end)
-                  })
-            }`
-          : null}
-      </p>
+      <p className="text-xs text-muted-foreground">{resetLine(entitlement, date, t)}</p>
     </div>
   )
 }
@@ -104,113 +121,218 @@ export function UsageSummary({
 export function OverageControls({
   entitlement,
   busy,
+  failures = 0,
   onSetOverage
 }: {
   entitlement: OrcaBillingEntitlement
   busy: boolean
+  /** Bumped by the parent each time a change fails, to roll back the optimistic state. */
+  failures?: number
   onSetOverage: (args: OrcaBillingOverageArgs) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
   const capId = useId()
+  const descriptionId = useId()
+  const capErrorId = useId()
+  const savedRef = useRef<HTMLSpanElement>(null)
   const { overage } = entitlement
   const savedDollars = String(Math.round(overage.spendCapCents / 100))
   const [capDollars, setCapDollars] = useState(savedDollars)
   // Shows "Saved" after a successful cap change until the field is edited again (review M13).
   const [savedFlash, setSavedFlash] = useState(false)
-  // Re-seed the field when the saved cap changes (render-time adjustment, no effect).
-  const [seededFrom, setSeededFrom] = useState(savedDollars)
-  if (seededFrom !== savedDollars) {
-    setSeededFrom(savedDollars)
+  // The switch flips at once; the saved value takes over when billing answers.
+  const [optimisticOn, setOptimisticOn] = useState<boolean | null>(null)
+  // Re-seed from the server whenever the saved values change (render-time adjustment, no effect).
+  const [seededFrom, setSeededFrom] = useState(`${savedDollars}:${overage.optedIn}`)
+  if (seededFrom !== `${savedDollars}:${overage.optedIn}`) {
+    setSeededFrom(`${savedDollars}:${overage.optedIn}`)
     setCapDollars(savedDollars)
+    setOptimisticOn(null)
   }
+  const [seenFailures, setSeenFailures] = useState(failures)
+  if (seenFailures !== failures) {
+    setSeenFailures(failures)
+    setOptimisticOn(null)
+    setSavedFlash(false)
+  }
+  const optedIn = optimisticOn ?? overage.optedIn
   const parsedCap = Number(capDollars)
   const capValid = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
   const changed = capValid && capDollars.trim() !== savedDollars
   const largeWeight = entitlement.offers?.team.largeMachineWeight ?? 2
-  const suspended = entitlement.payment.suspendRunning || entitlement.payment.pastDueSince !== null
-  const canEdit = entitlement.canManageBilling && !suspended
+  const paymentFailed = entitlement.payment.pastDueSince !== null
+  const description = t(
+    'auto.components.billing.overageDescription4',
+    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set ({{value2}} by default).',
+    {
+      value0: formatCents(overage.centsPerHour, locale),
+      value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale),
+      value2: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
+    }
+  )
+  const descriptionOn = t(
+    'auto.components.billing.overageDescriptionOn',
+    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set.',
+    {
+      value0: formatCents(overage.centsPerHour, locale),
+      value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale)
+    }
+  )
+  const capPercent =
+    overage.spendCapCents > 0
+      ? Math.min(100, Math.round((overage.spentCents / overage.spendCapCents) * 100))
+      : 0
+  const spent = (
+    <div className="space-y-1.5">
+      <Progress
+        value={capPercent}
+        tone={capPercent >= 100 ? 'warning' : 'default'}
+        aria-label={t('auto.components.billing.capUsedLabel', 'Overage spend cap used')}
+      />
+      <p className="text-xs text-muted-foreground tabular-nums">
+        {t('auto.components.billing.overageSpent', '{{value0}} of {{value1}} monthly cap spent', {
+          value0: formatCents(overage.spentCents, locale),
+          value1: formatCents(overage.spendCapCents, locale)
+        })}
+      </p>
+    </div>
+  )
+
+  // Members see the setting as plain text: a switch they can't use only invites clicks.
+  if (!entitlement.canManageBilling) {
+    return (
+      <div className="space-y-2 rounded-md border border-border/60 p-3">
+        <p className="text-sm">
+          <span className="font-medium">
+            {t('auto.components.billing.overageTitle', 'Overage')}
+          </span>
+          <span className="text-muted-foreground">
+            {' · '}
+            {overage.optedIn
+              ? t('auto.components.billing.overageOnRead', 'On')
+              : t('auto.components.billing.overageOffRead', 'Off')}
+          </span>
+        </p>
+        {overage.optedIn ? spent : null}
+        <p className="text-xs text-muted-foreground">
+          {t('auto.components.billing.overageMemberHint', 'Owners and admins can change overage.')}
+        </p>
+      </div>
+    )
+  }
+
+  const toggleBlocked = busy || paymentFailed
   return (
-    <div className="space-y-3 rounded-md border border-border/60 p-3">
+    // Deep-link target: the Run-on picker's "Turn on overage" / "Raise cap" lands here.
+    <div
+      id={ORCA_BILLING_OVERAGE_SECTION_ID}
+      className="space-y-3 rounded-md border border-border/60 p-3"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-sm font-medium">
             {t('auto.components.billing.overageTitle', 'Overage')}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.billing.overageDescription',
-              'Keep starting sandboxes after included hours at {{value0}}/hr Standard ({{value1}}/hr Large).',
-              {
-                value0: formatCents(overage.centsPerHour, locale),
-                value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale)
-              }
-            )}
+          <p id={descriptionId} className="text-xs text-muted-foreground">
+            {optedIn ? descriptionOn : description}
           </p>
         </div>
-        <Switch
-          checked={overage.optedIn}
-          disabled={busy || !canEdit}
-          onCheckedChange={(enabled) => onSetOverage({ enabled })}
-          aria-label={t('auto.components.billing.overageToggle', 'Allow overage')}
-        />
-      </div>
-      {overage.optedIn ? (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {t(
-              'auto.components.billing.overageSpent',
-              '{{value0}} of {{value1}} monthly cap spent',
-              {
-                value0: formatCents(overage.spentCents, locale),
-                value1: formatCents(overage.spendCapCents, locale)
+        <SettingsDisabledControlTooltip
+          reason={
+            paymentFailed
+              ? t(
+                  'auto.components.billing.overagePaymentFailed',
+                  'Update the payment method before changing overage.'
+                )
+              : undefined
+          }
+        >
+          <Switch
+            checked={optedIn}
+            // aria-disabled keeps focus on the switch while a change saves.
+            aria-disabled={toggleBlocked || undefined}
+            aria-describedby={descriptionId}
+            onCheckedChange={(enabled) => {
+              if (toggleBlocked) {
+                return
               }
-            )}
-          </p>
-          {canEdit ? (
+              setOptimisticOn(enabled)
+              onSetOverage({ enabled })
+            }}
+            aria-label={t('auto.components.billing.overageToggle', 'Allow overage')}
+          />
+        </SettingsDisabledControlTooltip>
+      </div>
+      {optedIn ? (
+        <div className="space-y-3">
+          {spent}
+          {paymentFailed ? null : (
             <form
-              className="flex flex-wrap items-center gap-2"
+              className="flex flex-wrap items-start gap-2"
               onSubmit={(event) => {
                 event.preventDefault()
-                if (changed) {
+                if (changed && !busy) {
                   onSetOverage({ enabled: true, spendCapCents: parsedCap * 100 })
                   setSavedFlash(true)
+                  // Save turns into "Saving…" in place; move focus onto it.
+                  window.requestAnimationFrame(() => savedRef.current?.focus())
                 }
               }}
             >
-              <label htmlFor={capId} className="text-xs font-medium">
+              <label htmlFor={capId} className="flex h-9 items-center text-xs font-medium">
                 {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
               </label>
-              <div className="flex w-28 items-center gap-1.5">
-                <span aria-hidden className="text-sm text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  id={capId}
-                  inputMode="numeric"
-                  value={capDollars}
-                  aria-invalid={!capValid || undefined}
-                  onChange={(event) => {
-                    setCapDollars(event.target.value)
-                    setSavedFlash(false)
-                  }}
-                />
+              <div className="space-y-1">
+                <div className="flex w-32 items-center gap-1.5">
+                  <span aria-hidden className="text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id={capId}
+                    inputMode="numeric"
+                    value={capDollars}
+                    aria-invalid={!capValid || undefined}
+                    aria-describedby={capValid ? undefined : capErrorId}
+                    onChange={(event) => {
+                      setCapDollars(event.target.value)
+                      setSavedFlash(false)
+                    }}
+                  />
+                </div>
+                {capValid ? null : (
+                  <p id={capErrorId} className="text-xs text-destructive">
+                    {t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
+                  </p>
+                )}
               </div>
-              {changed ? (
-                <Button type="submit" size="sm" variant="outline" disabled={busy}>
-                  {t('auto.components.billing.saveCap', 'Save')}
-                </Button>
-              ) : savedFlash && !busy ? (
+              {savedFlash ? (
                 <span
+                  ref={savedRef}
+                  tabIndex={-1}
                   role="status"
-                  className="flex items-center gap-1 text-xs text-muted-foreground"
+                  className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
                 >
                   <Check className="size-3.5" />
-                  {t('auto.components.billing.capSaved', 'Saved')}
+                  {busy || changed
+                    ? t('auto.components.billing.capSaving', 'Saving…')
+                    : t('auto.components.billing.capSaved', 'Saved')}
                 </span>
+              ) : changed ? (
+                <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
+                  {t('auto.components.billing.saveCap', 'Save')}
+                </Button>
+              ) : null}
+              {capValid && entitlement.reason === 'overage_cap_reached' ? (
+                <p className="basis-full text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.billing.capReachedHint',
+                    'Raise the cap to keep starting sandboxes. Your files are safe.'
+                  )}
+                </p>
               ) : null}
             </form>
-          ) : null}
+          )}
         </div>
       ) : null}
     </div>

@@ -25,6 +25,10 @@ import {
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
+import {
+  registerOrcaCloudEnvironmentHandlers,
+  type OrcaCloudEnvironmentRepoSource
+} from '../ipc/cloud-environments/orca-cloud-environment-handlers'
 import { installCloudTransferHandlers } from './cloud-transfer'
 import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
 import {
@@ -46,7 +50,10 @@ export function getHostedSandboxControlPlaneClient(): HostedSandboxControlPlaneC
   return controlPlaneClient
 }
 
-export function installHostedSandbox(): void {
+/** `repos` is main's repo store: org-environment repo imports only read checkouts listed there. */
+export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): void {
+  // Idempotent; answers isConfigured() = false itself when this build has no control plane.
+  registerOrcaCloudEnvironmentHandlers(repos ? { repos } : {})
   if (installed) {
     return
   }

@@ -5,11 +5,11 @@
 // prepare: pack in the VM → download in chunks → fetch the branch into the local repo.
 // finish (after the window created the local worktree): apply staged/unstaged diffs, untracked
 // files, and install Claude/Codex sessions remapped to the new path so native resume works.
-import { execFile } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { cp, lstat, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { promisify } from 'node:util'
+import { z } from 'zod'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import {
   CLOUD_TRANSFER_DIR,
   CLOUD_TRANSFER_LOG,
@@ -24,7 +24,6 @@ import {
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
 import type { RuntimeCall } from './hosted-agent-auto-resume'
 
-const run = promisify(execFile)
 const CHUNK_BYTES = 512 * 1024
 const PACK_TIMEOUT_MS = 10 * 60_000
 
@@ -36,8 +35,31 @@ export type Prepared = {
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await run('git', args, { cwd, maxBuffer: 64 * 1024 * 1024 })
+  const { stdout } = await gitExecFileAsync(args, {
+    cwd,
+    maxBuffer: 64 * 1024 * 1024,
+    // Fetching a large bundle can outlast the default read deadline.
+    timeout: PACK_TIMEOUT_MS
+  })
   return stdout.trim()
+}
+
+// orcad RPC replies, validated instead of trusted: the VM side is not this process.
+const TerminalCreatedSchema = z.looseObject({
+  terminal: z.union([z.string(), z.looseObject({ handle: z.string().optional() })]).optional()
+})
+const FileStatSchema = z.looseObject({ size: z.number().optional() })
+const FileChunkSchema = z.looseObject({
+  contentBase64: z.string(),
+  bytesRead: z.number().optional(),
+  eof: z.boolean().optional()
+})
+
+async function readChunk(
+  call: RuntimeCall,
+  params: { worktree: string; relativePath: string; offset: number; length: number }
+): Promise<z.infer<typeof FileChunkSchema>> {
+  return FileChunkSchema.parse(await call('files.readChunk', params))
 }
 
 export async function fileSize(path: string): Promise<number> {
@@ -47,6 +69,14 @@ export async function fileSize(path: string): Promise<number> {
 }
 
 export type WorktreeRow = { id?: unknown; path?: unknown }
+
+/** `worktree.list` reply: rows stay loose and pickCloudWorktree checks their fields. */
+export const WorktreeListingSchema = z.looseObject({
+  worktrees: z
+    .array(z.looseObject({ id: z.unknown(), path: z.unknown() }))
+    .optional()
+    .catch(undefined)
+})
 
 /** The orcad-side worktree for this workspace: its id, else the VM project root, else the only one. */
 export function pickCloudWorktree(
@@ -75,14 +105,16 @@ async function runInCloud(
   commandLine: string,
   title: string
 ): Promise<void> {
-  const created = (await call('terminal.create', {
-    worktree,
-    command: commandLine,
-    title,
-    presentation: 'background',
-    focus: false,
-    activate: false
-  })) as { terminal?: { handle?: string } | string }
+  const created = TerminalCreatedSchema.parse(
+    await call('terminal.create', {
+      worktree,
+      command: commandLine,
+      title,
+      presentation: 'background',
+      focus: false,
+      activate: false
+    })
+  )
   const handle = typeof created.terminal === 'string' ? created.terminal : created.terminal?.handle
   if (!handle) {
     throw new Error('Could not run a command in the cloud workspace.')
@@ -127,16 +159,9 @@ async function readCloudTail(
   worktree: string,
   relativePath: string
 ): Promise<string> {
-  const stat = (await call('files.stat', { worktree, relativePath })) as { size?: number }
+  const stat = FileStatSchema.parse(await call('files.stat', { worktree, relativePath }))
   const offset = Math.max(0, (stat.size ?? 0) - 8192)
-  const page = (await call('files.readChunk', {
-    worktree,
-    relativePath,
-    offset,
-    length: 8192
-  })) as {
-    contentBase64: string
-  }
+  const page = await readChunk(call, { worktree, relativePath, offset, length: 8192 })
   return Buffer.from(page.contentBase64, 'base64').toString('utf8')
 }
 
@@ -155,14 +180,7 @@ async function readCloudText(
   worktree: string,
   relativePath: string
 ): Promise<string> {
-  const page = (await call('files.readChunk', {
-    worktree,
-    relativePath,
-    offset: 0,
-    length: CHUNK_BYTES
-  })) as {
-    contentBase64: string
-  }
+  const page = await readChunk(call, { worktree, relativePath, offset: 0, length: CHUNK_BYTES })
   return Buffer.from(page.contentBase64, 'base64').toString('utf8')
 }
 
@@ -178,16 +196,7 @@ export async function downloadCloudFile(
   let offset = 0
   try {
     for (;;) {
-      const page = (await call('files.readChunk', {
-        worktree,
-        relativePath,
-        offset,
-        length: CHUNK_BYTES
-      })) as {
-        contentBase64: string
-        bytesRead: number
-        eof: boolean
-      }
+      const page = await readChunk(call, { worktree, relativePath, offset, length: CHUNK_BYTES })
       const bytes = Buffer.from(page.contentBase64, 'base64')
       if (!out.write(bytes)) {
         await new Promise<void>((resolve) => out.once('drain', () => resolve()))

@@ -77,9 +77,9 @@ function MeterSkeleton(): React.JSX.Element {
     <div className="flex flex-col gap-1.5" aria-hidden="true">
       {Array.from({ length: METER_ROWS }, (_, row) => (
         <div key={row} className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-2">
-          <Skeleton className="h-3 w-10 rounded" />
-          <Skeleton className="h-1 rounded-full animate-none" />
-          <Skeleton className="h-3 w-20 rounded" />
+          <Skeleton shape="small" className="h-3 w-10" />
+          <Skeleton shape="circle" motion="still" className="h-1" />
+          <Skeleton shape="small" className="h-3 w-20" />
         </div>
       ))}
     </div>
@@ -200,7 +200,7 @@ export function CloudWorkspaceStatusPanel({
           retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}
-          className="text-xs"
+          density="compact"
         />
       ) : firstLoad ? (
         <div
@@ -286,8 +286,7 @@ export function CloudWorkspaceStatusPanel({
             {canArchive && !restarting ? (
               <Button
                 size="xs"
-                variant="ghost"
-                className="text-muted-foreground"
+                variant="quiet"
                 {...busyProps(pending === 'archive', anyBusy, actions.onArchive)}
               >
                 {pending === 'archive' ? <Loader2 className="animate-spin" /> : <Archive />}

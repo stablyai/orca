@@ -285,6 +285,9 @@ export async function createOrcaProfileOrg(
       if (result.error.statusCode === 429) {
         return { status: 'rate-limited' }
       }
+      if (result.error.statusCode === 409) {
+        return { status: 'name-taken' }
+      }
       return result.error.statusCode === 400
         ? { status: 'invalid' }
         : { status: 'failed', error: result.error.message }

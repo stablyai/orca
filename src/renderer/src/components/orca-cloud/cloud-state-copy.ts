@@ -30,7 +30,7 @@ export function cloudStateDetail(state: CloudDotState, t: Translate = translate)
         'Files and chats are saved. Opening it wakes it.'
       )
     case 'waking':
-      return t('orcaCloudWorkspace.detail.starting', 'Starting…')
+      return t('orcaCloudWorkspace.detail.waking', 'Waking…')
     case 'unresponsive':
       return t('orcaCloudWorkspace.detail.restartKeeps', 'Restart keeps your files; agents resume.')
     case 'archived':

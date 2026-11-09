@@ -204,12 +204,44 @@
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
         }
       },
+      "billing": {
+        "plans": {
+          "seatsPerMember_one": "{{count}} seat, one per team member",
+          "seatsPerMember_other": "{{count}} seats, one per team member"
+        },
+        "sandboxHoursOver_one": "{{count}} sandbox hour over",
+        "sandboxHoursOver_other": "{{count}} sandbox hours over",
+        "seatsAnnual_one": "{{count}} seat · Annual",
+        "seatsAnnual_other": "{{count}} seats · Annual",
+        "seatsMonthly_one": "{{count}} seat · Monthly",
+        "seatsMonthly_other": "{{count}} seats · Monthly",
+        "team": {
+          "invitedCount_one": "{{count}} invited",
+          "invitedCount_other": "{{count}} invited",
+          "memberCount_one": "{{count}} member",
+          "memberCount_other": "{{count}} members",
+          "seatCount_one": "{{count}} seat",
+          "seatCount_other": "{{count}} seats",
+          "sendInvites_one": "Send {{count}} invite",
+          "sendInvites_other": "Send {{count}} invites",
+          "skipInvalid_one": "Skipping {{count}} invalid entry.",
+          "skipInvalid_other": "Skipping {{count}} invalid entries."
+        }
+      },
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",
           "errorCapture": "Could not capture the page to draw on.",
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
+      },
+      "cloudWorkspaces": {
+        "listMeta_one": "{{count}} workspace · {{cost}}",
+        "listMeta_other": "{{count}} workspaces · {{cost}}",
+        "sandboxHoursCost_one": "{{hours}} sandbox hour × {{rate}}/hour = {{cost}}",
+        "sandboxHoursCost_other": "{{hours}} sandbox hours × {{rate}}/hour = {{cost}}",
+        "sectionCount_one": "{{count}} workspace",
+        "sectionCount_other": "{{count}} workspaces"
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
@@ -341,6 +373,16 @@
           "selector": {
             "teamCount_one": "{{count}} team",
             "teamCount_other": "{{count}} teams"
+          }
+        }
+      },
+      "new": {
+        "workspace": {
+          "RunTargetCombobox": {
+            "orcaCloudIdleSleep_one": "Sleeps after {{count}} minute idle",
+            "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
+            "orcaCloudSandboxHoursLeft_one": "{{hours}} sandbox hour left",
+            "orcaCloudSandboxHoursLeft_other": "{{hours}} sandbox hours left"
           }
         }
       },
@@ -782,6 +824,16 @@
             "plugin": "plugin",
             "shortcut": "shortcut",
             "subagent": "subagent"
+          }
+        },
+        "cloudApi": {
+          "keys": {
+            "customScopeCount_one": "Custom · {{count}} scope",
+            "customScopeCount_other": "Custom · {{count}} scopes"
+          },
+          "revoke": {
+            "appsCount_one": "An app approved with this key is disconnected too.",
+            "appsCount_other": "{{count}} apps approved with this key are disconnected too."
           }
         },
         "computerUseSummary": {
@@ -1260,6 +1312,10 @@
         "permissionDenied": "Permission denied.",
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
+      },
+      "orcaCloudSession": {
+        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes"
       }
     },
     "runtime": {
@@ -1376,6 +1432,32 @@
     "permission": {
       "manyOtherSites_one": "Read and change your data on {{hosts}} and {{count}} other site",
       "manyOtherSites_other": "Read and change your data on {{hosts}} and {{count}} other sites"
+    }
+  },
+  "cloudEnvironment": {
+    "staleness": {
+      "branchMovedInRepo_one": "{{branch}} in {{repo}} is {{count}} commit ahead of build #{{number}}",
+      "branchMovedInRepo_other": "{{branch}} in {{repo}} is {{count}} commits ahead of build #{{number}}",
+      "branchMoved_one": "{{branch}} is {{count}} commit ahead of build #{{number}}",
+      "branchMoved_other": "{{branch}} is {{count}} commits ahead of build #{{number}}"
+    }
+  },
+  "cloudSecrets": {
+    "paste": {
+      "blocked": "{{count}} need a fix and will be skipped",
+      "blocked_one": "{{count}} needs a fix and will be skipped",
+      "blocked_other": "{{count}} need a fix and will be skipped",
+      "duplicates": "{{count}} duplicates ignored",
+      "duplicates_one": "{{count}} duplicate ignored",
+      "duplicates_other": "{{count}} duplicates ignored",
+      "save": "Save {{count}} secrets",
+      "save_one": "Save {{count}} secret",
+      "save_other": "Save {{count}} secrets"
+    },
+    "value": {
+      "lines": "Multi-line value · {{count}} lines",
+      "lines_one": "Multi-line value · {{count}} line",
+      "lines_other": "Multi-line value · {{count}} lines"
     }
   },
   "codeHost": {

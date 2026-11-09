@@ -13,34 +13,34 @@ export function describeError(error: string, reason?: string, t: Translate = tra
     return reason === 'concurrency_limit'
       ? t(
           'auto.components.cloudWorkspaces.errorConcurrencyLimit',
-          'Your team is running as many cloud workspaces as its plan allows.'
+          "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again."
         )
       : t(
           'auto.components.cloudWorkspaces.errorEntitlementDenied',
-          'Your plan does not allow starting this workspace right now.'
+          "Your team's plan can't start this workspace right now. Your files are safe. Ask an owner or admin to check the plan."
         )
   }
   if (error === 'forbidden') {
     return t(
       'auto.components.cloudWorkspaces.errorForbidden',
-      'Only the owner or an org admin can do that.'
+      'Only the workspace owner or a team admin can do that. Ask an owner or admin to make the change.'
     )
   }
   if (error === 'conflict') {
     return reason === 'too_many_devices'
       ? t(
           'auto.components.cloudWorkspaces.errorTooManyDevices',
-          'Too many of your devices are paired with this workspace. Remove one first.'
+          'Too many of your computers are connected to this workspace. Disconnect one, then try again.'
         )
       : t(
           'auto.components.cloudWorkspaces.errorConflict',
-          'The workspace is busy changing state. Try again in a moment.'
+          'This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.'
         )
   }
   if (error === 'timeout' || error === 'unavailable' || error === 'provider_unavailable') {
     return t(
       'auto.components.cloudWorkspaces.errorUnreachable',
-      'Orca Cloud is not reachable right now. Try again.'
+      "Orca Cloud isn't reachable right now. Nothing was changed. Try again."
     )
   }
   if (error === 'unauthorized') {
@@ -49,5 +49,49 @@ export function describeError(error: string, reason?: string, t: Translate = tra
       'Your Orca Cloud session expired. Sign in again.'
     )
   }
-  return t('auto.components.cloudWorkspaces.errorUnknown', 'Something went wrong. Try again.')
+  return t(
+    'auto.components.cloudWorkspaces.errorUnknown',
+    'Something went wrong. Nothing was changed. Try again.'
+  )
+}
+
+/**
+ * The same messages for an inline error that already carries the action button (Retry or Sign
+ * in), so the body does not repeat "Try again." or "Sign in again.".
+ */
+export function describeInlineError(
+  error: string,
+  reason?: string,
+  t: Translate = translate
+): string {
+  if (error === 'unauthorized') {
+    return t(
+      'auto.components.cloudWorkspaces.errorUnauthorizedInline',
+      'Your Orca Cloud session expired.'
+    )
+  }
+  if (error === 'timeout' || error === 'unavailable' || error === 'provider_unavailable') {
+    return t(
+      'auto.components.cloudWorkspaces.errorUnreachableInline',
+      "Orca Cloud isn't reachable right now. Nothing was changed."
+    )
+  }
+  if (error === 'conflict' && reason !== 'too_many_devices') {
+    return t(
+      'auto.components.cloudWorkspaces.errorConflictInline',
+      'This workspace is still starting or going to sleep. Nothing was changed.'
+    )
+  }
+  if (
+    error === 'not_found' ||
+    error === 'entitlement_denied' ||
+    error === 'forbidden' ||
+    error === 'conflict'
+  ) {
+    return describeError(error, reason, t)
+  }
+  return t(
+    'auto.components.cloudWorkspaces.errorUnknownInline',
+    'Something went wrong. Nothing was changed.'
+  )
 }

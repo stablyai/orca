@@ -40,10 +40,29 @@ function pickEnvironmentSetupWorktree(repoId: string): Worktree | null {
 }
 
 /** Start the default agent in a new tab with the per-workspace environment skill and doctor loop. */
-export async function launchEnvironmentSetupAgent(args: {
+export function launchEnvironmentSetupAgent(args: {
   repoId: string
   recipeId?: string
   failure?: EnvironmentSetupFailureContext
+}): Promise<boolean> {
+  return launchSetupAgentWithPrompt({
+    repoId: args.repoId,
+    prompt: buildEnvironmentSetupAgentPrompt({
+      ...(args.recipeId ? { recipeId: args.recipeId } : {}),
+      ...(args.failure ? { failure: args.failure } : {})
+    })
+  })
+}
+
+/** Start the default agent in a new tab in the repo's workspace and submit `prompt` once it is ready. */
+export async function launchSetupAgentWithPrompt(args: {
+  repoId: string
+  prompt: string
+  /**
+   * Default `submit-after-ready`. `auto-submit` hands the prompt to the agent at launch (CLI
+   * argument), so a first-run folder-trust dialog cannot swallow the pasted Enter (found live).
+   */
+  promptDelivery?: 'submit-after-ready' | 'auto-submit'
 }): Promise<boolean> {
   let worktree = pickEnvironmentSetupWorktree(args.repoId)
   if (!worktree) {
@@ -81,11 +100,8 @@ export async function launchEnvironmentSetupAgent(args: {
     ...captureAgentTabLaunchContext(worktreeId),
     agent,
     worktreeId,
-    prompt: buildEnvironmentSetupAgentPrompt({
-      ...(args.recipeId ? { recipeId: args.recipeId } : {}),
-      ...(args.failure ? { failure: args.failure } : {})
-    }),
-    promptDelivery: 'submit-after-ready',
+    prompt: args.prompt,
+    promptDelivery: args.promptDelivery ?? 'submit-after-ready',
     launchSource: 'unknown',
     beforeSurfaceOpen: () =>
       reportAgentWorkspaceActivation(

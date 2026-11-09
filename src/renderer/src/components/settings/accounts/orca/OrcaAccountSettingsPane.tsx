@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,8 @@ import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProf
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
 import { PlanBillingSection } from '../../../billing/PlanBillingSection'
 import { TeamSettingsLink } from '../../../billing/team/TeamSettingsLink'
+import { CloudSecretsSection } from '../../cloud-secrets/CloudSecretsSection'
+import { CloudEnvironmentSection } from '../../../cloud-environment/CloudEnvironmentSection'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -137,11 +140,22 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
             orgName={authStatus.cloud?.activeOrgName ?? null}
           />
         ) : null}
+        {connected ? <CloudSecretsSection orgId={authStatus?.cloud?.activeOrgId ?? null} /> : null}
+        {connected ? (
+          <CloudEnvironmentSection
+            orgId={authStatus?.cloud?.activeOrgId ?? null}
+            viewerUserId={authStatus?.cloud?.userId ?? null}
+          />
+        ) : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {t('auto.components.settings.orcaAccount.benefitsTitle', 'Included with your account')}
-          </p>
+          <SettingsGroupHeader
+            className="px-0"
+            title={t(
+              'auto.components.settings.orcaAccount.benefitsTitle',
+              'Included with your account'
+            )}
+          />
           <div className="space-y-5">
             <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
               <AccountBenefit

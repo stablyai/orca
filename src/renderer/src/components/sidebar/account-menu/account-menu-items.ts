@@ -12,6 +12,8 @@ export type AccountMenuItem = {
   order?: number
   /** Hide the item unless the signed-in account reports this capability flag as true. */
   requiredCapability?: string
+  /** Show only to signed-in (connected) accounts, with no capability flag needed. */
+  requiresSignIn?: boolean
   /** 'accent' marks a call to action (e.g. upgrade); default rows stay neutral. */
   tone?: 'accent'
   onSelect: () => void
@@ -55,6 +57,7 @@ export function selectVisibleAccountMenuItems(
   const flags = authStatus?.state === 'connected' ? authStatus.capabilities?.flags : undefined
   return registered
     .filter((item) => !item.requiredCapability || flags?.[item.requiredCapability] === true)
+    .filter((item) => !item.requiresSignIn || authStatus?.state === 'connected')
     .map((item, index) => ({ item, index }))
     .sort((a, b) => (a.item.order ?? 0) - (b.item.order ?? 0) || a.index - b.index)
     .map(({ item }) => item)

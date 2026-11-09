@@ -18,5 +18,19 @@ export const getOrcaAccountSettingsSearchEntries = createLocalizedCatalog(() => 
       ...translateSearchKeyword('auto.components.settings.orcaAccount.keywordRelay', 'relay'),
       ...translateSearchKeyword('auto.components.settings.orcaAccount.keywordCloud', 'cloud')
     ]
+  },
+  {
+    title: translate('cloudSecrets.title', 'Cloud secrets'),
+    description: translate(
+      'cloudSecrets.searchDescription',
+      'Environment variables and agent keys for Orca Cloud workspaces: personal, shared with your team, or per repository.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('cloudSecrets.keywordSecret', 'secret'),
+      ...translateSearchKeyword('cloudSecrets.keywordEnv', 'environment variable'),
+      ...translateSearchKeyword('cloudSecrets.keywordDotenv', '.env'),
+      ...translateSearchKeyword('cloudSecrets.keywordApiKey', 'api key'),
+      ...translateSearchKeyword('cloudSecrets.keywordGateway', 'ai gateway')
+    ]
   }
 ])

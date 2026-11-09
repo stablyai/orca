@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type Server, type ServerResponse } from 'node:http'
-import { shell } from 'electron'
+import { appendFile } from 'node:fs/promises'
+import { app, shell } from 'electron'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import {
   ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
@@ -149,7 +150,15 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
       options.onAuthorizeUrl?.(authorizeUrl.toString())
-      void shell.openExternal(authorizeUrl.toString()).catch((error) => {
+      // Dev automation only (unpackaged): hand the sign-in URL to a test driver instead of
+      // opening the developer's own browser. Same pattern as ORCA_BILLING_DEV_OPEN_URL_FILE.
+      const devUrlFile = app.isPackaged
+        ? ''
+        : (process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE?.trim() ?? '')
+      const open = devUrlFile
+        ? appendFile(devUrlFile, `${authorizeUrl.toString()}\n`, { mode: 0o600 })
+        : shell.openExternal(authorizeUrl.toString())
+      void open.catch((error) => {
         rejectFlow(
           error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed')
         )

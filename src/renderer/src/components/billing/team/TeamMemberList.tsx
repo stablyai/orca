@@ -1,5 +1,7 @@
 import { Crown, LogOut, MailPlus, MoreHorizontal, UserMinus, XCircle } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +21,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { OrcaOrgMember, OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { PersonAvatar } from './TeamAvatar'
-import { memberStatusLabel, roleDescription } from './team-copy'
+import { invitedAsCopy, memberStatusLabel, roleDescription } from './team-copy'
 import { assignableRoles, roleLabel } from './team-roles'
 import type { TeamRow } from './team-roster-rows'
 
@@ -68,7 +70,7 @@ function RoleControl({
   const member = row.member
   if (!row.manageable) {
     return (
-      <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
+      <span className="w-28 shrink-0 pl-3 text-left text-sm text-muted-foreground">
         {roleLabel(member.role, t)}
       </span>
     )
@@ -214,10 +216,11 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
             ? row.member.displayName
               ? row.member.email
               : null
-            : t('auto.components.billing.team.invitedAgo', 'Invited {{value0}} as {{value1}}', {
-                value0: relativeSince(row.invite.createdAt, props.now, locale),
-                value1: roleLabel(row.invite.role, t).toLowerCase()
-              })
+            : invitedAsCopy(
+                row.invite.role,
+                relativeSince(row.invite.createdAt, props.now, locale),
+                t
+              )
         return (
           <li
             key={row.key}
@@ -239,16 +242,11 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                     </span>
                   ) : null}
                   {row.status === 'active' ? null : (
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium leading-4',
-                        row.status === 'invited'
-                          ? 'border-callout-note/40 bg-callout-note/10 text-callout-note'
-                          : 'border-border text-muted-foreground'
-                      )}
-                    >
-                      {memberStatusLabel(row.status, t)}
-                    </span>
+                    <Badge variant="outline" className="shrink-0">
+                      <span className="text-muted-foreground">
+                        {memberStatusLabel(row.status, t)}
+                      </span>
+                    </Badge>
                   )}
                 </p>
                 {secondary ? (
@@ -264,17 +262,13 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                   onChange={(role) => props.onChangeRole(row.member, role)}
                 />
               ) : (
-                <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
+                <span className="w-28 shrink-0 pl-3 text-left text-sm text-muted-foreground">
                   {roleLabel(row.invite.role, t)}
                 </span>
               )}
               <RowMenu row={row} props={props} />
             </div>
-            {state.error ? (
-              <p role="alert" className="mt-1 pl-9 text-xs text-destructive">
-                {state.error}
-              </p>
-            ) : null}
+            {state.error ? <InlineError className="mt-2 ml-9" title={state.error} /> : null}
           </li>
         )
       })}

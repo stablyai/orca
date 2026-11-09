@@ -72,7 +72,11 @@ export default function ProjectCombobox({
     inputRef,
     listId,
     setListNode
-  } = useTypeAheadCombobox(deriveRowKeys)
+  } = useTypeAheadCombobox(
+    deriveRowKeys,
+    // Opening arms the committed project, matching the Run-on picker.
+    value ?? null
+  )
 
   const matches = useMemo(
     () => rankProjectOptions(options, query, recentIds),

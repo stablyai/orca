@@ -234,6 +234,17 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
   },
   {
+    name: 'cloud-env',
+    keys: [
+      'cloud env show',
+      'cloud env set-install-script',
+      'cloud env build',
+      'cloud env builds',
+      'cloud env logs'
+    ],
+    load: async () => (await import('./handlers/cloud-env.js')).CLOUD_ENV_HANDLERS
+  },
+  {
     name: 'speech',
     keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
     load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS

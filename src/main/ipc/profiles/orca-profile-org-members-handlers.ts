@@ -1,4 +1,4 @@
-import { ORCA_ORG_NAME_MAX_LENGTH } from '../../../shared/orca-org-management'
+import { isValidOrgName, ORCA_ORG_NAME_MAX_LENGTH } from '../../../shared/orca-org-management'
 import type { OrcaProfileOrgCreateResult } from '../../../shared/orca-org-management'
 import { ipcMain } from 'electron'
 import type {
@@ -85,7 +85,7 @@ function orgMemberRemoveArgsFromUnknown(args: unknown): OrcaProfileOrgMemberRemo
 function orgCreateNameFromUnknown(args: unknown): string {
   const record = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
   const name = typeof record.name === 'string' ? record.name.trim() : ''
-  if (!name || name.length > ORCA_ORG_NAME_MAX_LENGTH) {
+  if (!name || name.length > ORCA_ORG_NAME_MAX_LENGTH || !isValidOrgName(name)) {
     throw new Error('invalid_orca_org_name')
   }
   return name

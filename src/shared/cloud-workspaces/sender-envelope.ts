@@ -54,5 +54,5 @@ export function parseSenderEnvelope(text: string): { sender: MessageSender | nul
 /** One-time instruction for agents in shared workspaces (appended to org PR instructions). */
 export const SENDER_AGENT_INSTRUCTIONS =
   'Messages in this shared workspace start with an [orca-sender name="…" id="…"] line naming the teammate who sent them. ' +
-  'Address that person, and when you commit or push for them run git through `orca-git-as <id> <git args>` ' +
-  '(for example `orca-git-as <id> push origin HEAD`) so the work is attributed to them.'
+  'Address that person. Your commits and pushes are attributed to them automatically: Orca checks which ' +
+  "teammate's device sent the message, so there is nothing to pass (`orca sender` shows it)."

@@ -78,6 +78,9 @@ if [ -n "${ORCA_GIT_EXTRAHEADER:-}" ]; then
   # Every github.com request carries the placeholder; the egress policy swaps in a 1h repo token.
   git config --global http.https://github.com/.extraheader "$ORCA_GIT_EXTRAHEADER"
 fi
+# Commits outside a teammate's turn (or before any member connected GitHub) need an author too.
+git config --global user.email >/dev/null 2>&1 || git config --global user.email 'cloud@users.noreply.onorca.dev'
+git config --global user.name >/dev/null 2>&1 || git config --global user.name 'Orca Cloud'
 # First boot clones while orcad starts (orcad only needs the directory to exist); ready waits for both.
 clone_pid=''
 if [ ! -d "$PROJECT" ]; then
