@@ -68,6 +68,7 @@ import '../../../src/shared/execution-host'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 import { NewWorktreeModal } from './NewWorktreeModal'
+import { NewWorktreeFormSheet } from './NewWorktreeFormSheet'
 
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
@@ -129,6 +130,56 @@ describe('NewWorktreeModal project targets', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+  })
+
+  it('submits the typed branch for a workspace without a selected source', async () => {
+    const creates: unknown[] = []
+    const client = requestsOnly(
+      vi.fn((method, params) => {
+        if (method === 'repo.list') {
+          return replied({ repos })
+        }
+        if (method === 'worktree.create') {
+          creates.push(params)
+          if (creates.length === 1) {
+            return Promise.resolve({
+              id: 'conflict',
+              ok: false,
+              error: { code: 'branch_conflict', message: 'Branch "review/parity" already exists.' }
+            })
+          }
+          return replied({ worktree: { id: 'worktree-1', displayName: 'release-draft' } })
+        }
+        return replied({})
+      })
+    )
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+    const form = () => renderer.root.findByType(NewWorktreeFormSheet)
+    act(() => form().props.onShowAdvancedChange(true))
+    const branchField = findAllByHostType(renderer.root, 'TextInput').find(
+      (input) => input.props.placeholder === 'Derived from name'
+    )!
+    act(() => sourceInputs(renderer)[0]!.props.onChangeText('release-draft'))
+    act(() => branchField.props.onChangeText('review/parity'))
+    await act(async () => form().props.onCreate())
+    await flushUpdates()
+
+    expect(creates).toEqual([
+      expect.objectContaining({ name: 'release-draft', branchNameOverride: 'review/parity' }),
+      expect.objectContaining({ name: 'release-draft-2', branchNameOverride: 'review/parity-2' })
+    ])
   })
 
   it("lists the desktop's repos at once while a server has not answered", async () => {
