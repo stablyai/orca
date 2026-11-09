@@ -27,7 +27,7 @@ export type SessionSearchDiscovery = {
 /** Infinity sweeps every candidate; finite limits use the sidebar’s newest-per-root rule. */
 export async function discoverSessionSearchCandidates(
   roots: SessionSearchScanRoots,
-  args: { limitPerAgent: number; signal?: AbortSignal }
+  args: { limitPerAgent: number; signal?: AbortSignal; raw?: boolean }
 ): Promise<SessionSearchDiscovery> {
   const issues: AiVaultScanIssue[] = []
   const options: AiVaultScanOptions = { ...roots, signal: args.signal }
@@ -36,7 +36,7 @@ export async function discoverSessionSearchCandidates(
     limitPerAgent: args.limitPerAgent,
     issues
   })
-  const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
+  const candidates = args.raw ? [] : await sessionCandidatesFromDiscoveries(discoveries, options)
   return { candidates, discoveries, issues }
 }
 

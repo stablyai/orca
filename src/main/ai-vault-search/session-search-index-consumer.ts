@@ -45,7 +45,10 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
 
 /** Proven index gaps need whole reads; declined transfers leave committed coverage unchanged. */
 export class SessionSearchIndexConsumer implements TranscriptConsumer {
-  constructor(private readonly store: SessionSearchIndexStore) {}
+  constructor(
+    private readonly store: SessionSearchIndexStore,
+    private readonly onCommitted?: (write: SessionSearchFileWrite) => void
+  ) {}
 
   resumableOffset(candidate: SessionFileCandidate): number | null {
     return this.store.resumableCursor(candidate)?.byteOffset ?? null
@@ -104,7 +107,7 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
     if (!write) {
       return null
     }
-    return new SessionSearchReadConsumer(this.store, start, write, resume)
+    return new SessionSearchReadConsumer(this.store, start, write, resume, this.onCommitted)
   }
 
   private provableCursor(start: TranscriptReadStart): SessionSearchResumableCursor | null {
@@ -124,7 +127,8 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     private readonly store: SessionSearchIndexStore,
     private readonly start: TranscriptReadStart,
     private readonly write: SessionSearchFileWrite,
-    private readonly resume: SessionSearchResumableCursor | null = null
+    private readonly resume: SessionSearchResumableCursor | null = null,
+    private readonly onCommitted?: (write: SessionSearchFileWrite) => void
   ) {}
 
   async drain(): Promise<void> {
@@ -181,6 +185,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     }
     if (committed) {
       this.store.writeCommitted(candidate)
+      this.onCommitted?.(this.write)
       return
     }
     // Stamp and count repeated read failures so unchanged unreadable files can be held out.

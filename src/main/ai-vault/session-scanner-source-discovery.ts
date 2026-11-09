@@ -68,6 +68,7 @@ function agentDiscoveries(
       extensions: [...source.extensions],
       filePredicate: source.filePredicate,
       contentDependencyPath: source.contentDependencyPath,
+      searchDependencies: source.searchDependencies?.(rootDir),
       directoryPredicate: source.directoryPredicate,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
       signal: options.signal

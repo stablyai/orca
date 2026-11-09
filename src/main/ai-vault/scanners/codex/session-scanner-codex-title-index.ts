@@ -1,3 +1,4 @@
+import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import type { Stats } from 'node:fs'
@@ -179,3 +180,16 @@ function storeCodexSessionIndexTitleCacheEntry(
     }
   }
 }
+
+export const codexSearchDependencies: (root: string) => readonly SessionDiscoveryDependency[] = (
+  root
+) => [
+  {
+    path: dirname(root),
+    eventKey: (path) => (basename(path) === 'session_index.jsonl' ? 'titles' : null),
+    fileKey: (path) =>
+      /([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\.jsonl$/i.exec(path)?.[1] ?? '*',
+    snapshot: () => readCodexSessionIndexTitles(dirname(root)),
+    metadata: true
+  }
+]

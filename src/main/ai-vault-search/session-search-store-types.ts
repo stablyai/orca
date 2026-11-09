@@ -6,6 +6,9 @@ export type SessionSearchFileState = 'current' | 'due' | 'failed'
 
 export type SessionSearchFileRow = {
   path: string
+  byteOffset?: number | null
+  prefixHash?: string | null
+  agent?: string | null
   identity: SessionSearchFileIdentity
   mtimeMs: number
   sizeBytes: number | null
@@ -34,6 +37,8 @@ export type SessionSearchIndexStore = Pick<
   | 'writeCommitted'
   | 'reportWriteFailure'
   | 'files'
+  | 'fileRow'
+  | 'fileRows'
   | 'setFileState'
   | 'stateCounts'
   | 'removeFile'

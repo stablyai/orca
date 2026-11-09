@@ -1,3 +1,7 @@
+import {
+  currentSessionDiscovery,
+  discoverSessionContainer
+} from '../../../session-discovery-context'
 import { basename, extname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { discoverFiles } from '../../../session-scanner-discovery'
@@ -28,27 +32,47 @@ export async function discoverOpenCodeSessions(args: {
       scopePaths,
       signal: args.signal
     })
-  const [fileDiscovery, sqliteCandidates, sqliteScopeCandidates] = await Promise.all([
+  const containerKey = `opencode:${args.dbPaths.join('|')}`
+  const [fileDiscovery, sqliteDiscovery, sqliteScopeCandidates] = await Promise.all([
     discoverFiles({
       rootDir: join(args.storageDir, 'session'),
       limit: args.limitPerAgent,
       agent: 'opencode',
       issues: args.issues,
       extensions: ['.json'],
+      searchDependencies: [
+        {
+          path: join(args.storageDir, 'message'),
+          fileKey: (path) => sessionIdFromLegacyFilePath(path),
+          eventKey: (path) =>
+            path.slice(join(args.storageDir, 'message').length + 1).split(/[\\/]/)[0] ?? null
+        }
+      ],
       keepScopeFiles: walksScope,
       signal: args.signal
     }),
-    listSqlite(),
+    discoverSessionContainer(containerKey, args.dbPaths, async () => {
+      const before = args.issues.length
+      const candidates = await listSqlite()
+      return {
+        agent: 'opencode',
+        rootDir: args.storageDir,
+        files: candidates.map((candidate) => candidate.file),
+        complete: !args.issues.slice(before).some((issue) => issue.kind !== 'notice')
+      }
+    }),
     walksScope ? listSqlite(args.scopePaths) : undefined
   ])
 
-  const sqliteFiles = sqliteCandidates.map((c) => c.file)
+  const sqliteFiles = sqliteDiscovery.files
   const sqliteScopeFiles = sqliteScopeCandidates?.map((c) => c.file)
-  const sqliteSessionIds = new Set<string>()
+  const sqliteSessionIds = currentSessionDiscovery()?.membership(containerKey) ?? new Set<string>()
   for (const file of [...sqliteFiles, ...(sqliteScopeFiles ?? [])]) {
     const parsed = splitOpenCodeSqliteCandidate(file.path)
     if (parsed) {
-      sqliteSessionIds.add(parsed.sessionId)
+      if (sqliteSessionIds instanceof Set) {
+        sqliteSessionIds.add(parsed.sessionId)
+      }
     }
   }
   const withoutSqliteDuplicates = (files: readonly FileWithMtime[]): FileWithMtime[] =>
@@ -60,7 +84,12 @@ export async function discoverOpenCodeSessions(args: {
   return {
     agent: 'opencode' as const,
     rootDir: fileDiscovery.rootDir,
-    files: [...withoutSqliteDuplicates(fileDiscovery.files), ...sqliteFiles],
+    files: [
+      ...(currentSessionDiscovery()
+        ? fileDiscovery.files
+        : withoutSqliteDuplicates(fileDiscovery.files)),
+      ...sqliteFiles
+    ],
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path'
 import { setActiveSink } from '../../observability/tracer'
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
 import { aiVaultScanWork, trackAiVaultScanProgress } from '../ai-vault-scan-progress'
@@ -47,7 +48,10 @@ const cancelled = new Set<number>()
 const pending = new Set<number>()
 const titleIndex = new Map<string, CachedAiVaultSessionTitle>()
 const invalidatedPaths = new Set<string>()
-const sessionSearch = new SessionScannerServiceSearch(requestSessionSearchRoots)
+const sessionSearch = new SessionScannerServiceSearch(
+  requestSessionSearchRoots,
+  join(dirname(process.argv[1]), 'parcel-watcher-process-entry.js')
+)
 let initialized = false
 let shuttingDown = false
 let cacheLane = Promise.resolve()

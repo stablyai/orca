@@ -1,59 +1,116 @@
+import {
+  getSessionParseCacheEntry,
+  sessionParseCacheKey
+} from '../ai-vault/parse-cache/session-parse-cache-store'
+import { SessionSearchIndexConsumer } from './session-search-index-consumer'
+import type { SessionSearchFileWrite } from './session-search-index-writer'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   type SessionParseStats
 } from '../ai-vault/parse-cache/session-scanner-parse-cache'
-import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
-import type { SessionSearchFileRow, SessionSearchIndexStore } from './session-search-store'
+import type { SessionSearchIndexStore } from './session-search-store'
+import type { SessionSearchWorkQueue } from './session-search-work-queue'
 
-export type SessionSearchIndexPassOptions = {
-  signal?: AbortSignal
-  /** Snapshot of indexed rows; a missing key means the path has no row. */
-  rows: ReadonlyMap<string, SessionSearchFileRow>
-  /** Stop between files once overdue, but always read one file to avoid starving large transcripts. */
-  overdue?: () => boolean
-}
-
-/** Deferred candidates stay owed by their stored state; left counts backlog outside the due-row count. */
 export async function runSessionSearchIndexPass(
   store: SessionSearchIndexStore,
-  candidates: readonly SessionFileCandidate[],
-  options: SessionSearchIndexPassOptions
+  queue: SessionSearchWorkQueue,
+  options: { signal?: AbortSignal; overdue?: () => boolean }
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
   const stats = createSessionParseStats()
-  const cutoffMs = store.retentionCutoff
-  let read = 0
+  // Retry once per cycle; rotating the failed path cannot monopolize a pass.
+  const available = queue.size
+  let consumed = 0
   let outOfTime = false
-  let left = 0
-  for (const candidate of candidates) {
+  while (consumed < available && queue.size) {
     throwIfAiVaultScanCancelled(options.signal)
+    if (consumed > 0 && options.overdue?.()) {
+      outOfTime = true
+      break
+    }
+    const work = queue.next()
+    if (!work) {
+      break
+    }
+    const { candidate } = work
     const path = candidate.file.path
-    const row = options.rows.get(path)
+    let row = store.fileRow(path)
+    const cursor = row ? store.indexedFile(path, fileIdentity(candidate.file)) : null
+    const entry = work.metadata
+      ? getSessionParseCacheEntry(sessionParseCacheKey(candidate.agent, path))
+      : undefined
+    if (
+      work.metadata &&
+      row?.agent &&
+      row.prefixHash &&
+      row.byteOffset !== undefined &&
+      row.byteOffset !== null &&
+      row.state === 'current' &&
+      row.mtimeMs === candidate.file.mtimeMs &&
+      row.sizeBytes === candidate.file.sizeBytes &&
+      entry?.foldSession !== undefined &&
+      entry.platform === process.platform &&
+      entry.mtimeMs === candidate.file.mtimeMs &&
+      entry.sizeBytes === candidate.file.sizeBytes
+    ) {
+      const session = await parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        stats,
+        undefined,
+        options.signal,
+        true
+      )
+      let published: SessionSearchFileWrite | undefined
+      const consumer = new SessionSearchIndexConsumer(store, (write) => {
+        published = write
+      }).beginRead({
+        candidate,
+        mode: 'append',
+        previousByteOffset: row.byteOffset,
+        indexing: true,
+        signal: options.signal
+      })
+      if (consumer) {
+        consumer.finish({
+          session,
+          byteOffset: row.byteOffset,
+          prefixHash: row.prefixHash,
+          incomplete: false
+        })
+        await store.flush?.()
+        if (
+          published &&
+          !published.failed?.() &&
+          !published.cancelled?.() &&
+          store.fileRow(path)?.state === 'current'
+        ) {
+          queue.acknowledge(work, false)
+          consumed++
+          continue
+        }
+      }
+    }
+    // Equal-stat writes and dependency edits cannot use coverage of the old input as a skip gate.
+    if (work.force && row) {
+      store.setFileState(path, 'due')
+      await store.flush?.()
+      row = store.fileRow(path)
+    }
     const decision = sessionSearchReadDecision({
       candidate,
       row,
-      // New paths already require reading; avoid a redundant cursor query per file.
-      cursor: row ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
-      cutoffMs
+      cursor,
+      cutoffMs: store.retentionCutoff
     })
+    consumed++
     if (decision === 'skip') {
+      queue.acknowledge(work, false)
       continue
     }
-    // Continue decisions after the read deadline to count remaining backlog.
-    outOfTime ||= read > 0 && options.overdue?.() === true
-    if (outOfTime) {
-      // Status adds left to due-row counts; exclude due rows here to avoid double counting.
-      if (row?.state !== 'due') {
-        left += 1
-      }
-      continue
-    }
-    // Deadline callbacks may close the owner; recheck cancellation before touching the store.
-    throwIfAiVaultScanCancelled(options.signal)
-    read += 1
     try {
       await parseAgentSessionFileCached(
         candidate,
@@ -71,7 +128,19 @@ export async function runSessionSearchIndexPass(
         candidate.agent,
         error instanceof Error ? error.name : 'ParseError'
       )
+      store.setFileState(path, 'failed', candidate.file.mtimeMs)
+      await store.flush?.()
     }
+    const committed = store.fileRow(path)
+    const remaining = sessionSearchReadDecision({
+      candidate,
+      row: committed,
+      cursor: committed ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
+      cutoffMs: store.retentionCutoff
+    })
+    work.force = false
+    queue.acknowledge(work, remaining !== 'skip')
+    queue.rowChanged(path, committed)
   }
-  return { stats, outOfTime, left }
+  return { stats, outOfTime, left: queue.left }
 }

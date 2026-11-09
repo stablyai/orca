@@ -4,6 +4,7 @@ import { expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
+import { SessionSearchWorkQueue } from './session-search-work-queue'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import { openSessionSearchIndexFile } from './session-search-index-test-fixture'
 import { SessionSearchStore } from './session-search-store'
@@ -26,9 +27,9 @@ it('recovers a declined append through its proven prefix while the transcript ke
     unregister = registerSessionSearchIndexConsumer(store)
     const pass = async () => {
       const candidate = await sessionCandidate('claude', path)
-      await runSessionSearchIndexPass(store, [candidate], {
-        rows: new Map(store.files().map((row) => [row.path, row]))
-      })
+      const queue = new SessionSearchWorkQueue()
+      queue.enqueue(candidate, store)
+      await runSessionSearchIndexPass(store, queue, {})
       return candidate
     }
     await appendFile(path, `${userRecord(2, 'stillgrowingneedle')}\n`)

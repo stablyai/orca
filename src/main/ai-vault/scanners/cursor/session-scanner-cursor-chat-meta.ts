@@ -1,3 +1,4 @@
+import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
@@ -282,3 +283,14 @@ function storeCursorChatMetaIndexEntry(
     }
   }
 }
+
+export const cursorSearchDependencies: (root: string) => readonly SessionDiscoveryDependency[] = (
+  root
+) => [
+  {
+    path: join(dirname(root), 'chats'),
+    fileKey: (path) => basename(dirname(path)),
+    eventKey: (path) => (basename(path) === 'meta.json' ? basename(dirname(path)) : null),
+    metadata: true
+  }
+]

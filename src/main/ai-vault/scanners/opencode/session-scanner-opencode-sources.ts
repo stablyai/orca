@@ -1,3 +1,4 @@
+import { discoverSessionContainer } from '../../session-discovery-context'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
@@ -102,14 +103,22 @@ async function discoverOpenCode2Sessions(
       scopePaths,
       signal: options.signal
     }).then((candidates) => candidates.map((candidate) => candidate.file))
-  const [files, scopeFiles] = await Promise.all([
-    list(),
+  const [discovery, scopeFiles] = await Promise.all([
+    discoverSessionContainer(`opencode2:${dbPaths.join('|')}`, dbPaths, async () => {
+      const before = issues.length
+      return {
+        agent: 'opencode2',
+        rootDir: storageDir,
+        files: await list(),
+        complete: !issues.slice(before).some((issue) => issue.kind !== 'notice')
+      }
+    }),
     scopeWalksAgentFiles('opencode2', options.scopePaths) ? list(options.scopePaths) : undefined
   ])
   return {
     agent: 'opencode2' as const,
     rootDir: storageDir,
-    files,
+    files: discovery.files,
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

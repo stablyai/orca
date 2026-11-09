@@ -1,3 +1,4 @@
+import { discoverSessionContainer } from '../../session-discovery-context'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -30,14 +31,22 @@ export function zcodeDiscoveries(
         scopePaths,
         signal: options.signal
       }).then((candidates) => candidates.map((candidate) => candidate.file))
-    const [files, scopeFiles] = await Promise.all([
-      list(),
+    const [discovery, scopeFiles] = await Promise.all([
+      discoverSessionContainer(`zcode:${dbPath}`, [dbPath], async () => {
+        const before = issues.length
+        return {
+          agent: 'zcode',
+          rootDir: dbPath,
+          files: await list(),
+          complete: !issues.slice(before).some((issue) => issue.kind !== 'notice')
+        }
+      }),
       scopeWalksAgentFiles('zcode', options.scopePaths) ? list(options.scopePaths) : undefined
     ])
     return {
       agent: 'zcode' as const,
       rootDir: dbPath,
-      files,
+      files: discovery.files,
       ...(scopeFiles ? { scopeFiles } : {})
     }
   })

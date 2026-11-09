@@ -6,6 +6,12 @@ export abstract class SessionSearchCursorSnapshot {
   protected readonly committed = new Map<string, SessionSearchSnapshotRow>()
   protected readonly speculative = new Map<string, SessionSearchSnapshotRow>()
   abstract get acceptingReads(): boolean
+  fileRow(path: string) {
+    return this.committed.get(path)
+  }
+  fileRows(): IterableIterator<SessionSearchSnapshotRow> {
+    return this.committed.values()
+  }
   files() {
     return [...this.committed.values()]
   }

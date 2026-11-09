@@ -8,6 +8,7 @@ type CachedSessionList = {
   depth: AiVaultSessionDepth
   result: AiVaultListResult
   expiresAt: number
+  revision?: number
 }
 
 const MAX_SCOPE_CACHE_BYTES = 32 * 1024 * 1024
@@ -36,7 +37,19 @@ export class SessionListScopeCache {
     if (old && old.key !== entry.key) {
       this.previous.set(old.key, old)
     }
-    this.latest = { ...entry, revision: ++this.revision }
+    this.latest = { ...entry, revision: entry.revision ?? ++this.revision }
+    this.scheduleExpiry()
+  }
+
+  discardBefore(revision: number): void {
+    if (this.latest && this.latest.revision < revision) {
+      this.latest = null
+    }
+    for (const [key, entry] of this.previous.entries()) {
+      if (entry.revision < revision) {
+        this.previous.delete(key)
+      }
+    }
     this.scheduleExpiry()
   }
 

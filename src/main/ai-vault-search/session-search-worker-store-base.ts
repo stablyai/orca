@@ -36,7 +36,8 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   constructor(
     protected readonly path: string,
     protected readonly onError: (error: unknown) => void,
-    private readonly onInvalidated: () => void = () => undefined
+    private readonly onInvalidated: () => void = () => undefined,
+    private readonly onFileChanged: (path: string) => void = () => undefined
   ) {
     super()
     this.client = new SessionSearchWorkerClient(
@@ -99,6 +100,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       } else {
         this.committed.delete(path)
       }
+      this.onFileChanged(path)
     }
     if (response.generation !== undefined) {
       this.generation = response.generation

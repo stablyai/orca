@@ -1,3 +1,16 @@
+import {
+  kimiSearchDependencies,
+  resolveKimiSessionsDir
+} from './scanners/kimi/session-scanner-kimi-paths'
+import {
+  devinSearchDependencies,
+  devinSessionsDbDependencyPath
+} from './scanners/devin/session-scanner-devin-db'
+import {
+  cursorSearchDependencies,
+  cursorChatMetaPath
+} from './scanners/cursor/session-scanner-cursor-chat-meta'
+import { codexSearchDependencies } from './scanners/codex/session-scanner-codex-title-index'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
@@ -9,12 +22,10 @@ import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
+  grokTranscriptPathForMetadata,
   kiroTranscriptPathForMetadata
 } from '../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { isClineSessionMetadataPath } from './scanners/cline/session-scanner-cline-parser'
-import { cursorChatMetaPath } from './scanners/cursor/session-scanner-cursor-chat-meta'
-import { devinSessionsDbDependencyPath } from './scanners/devin/session-scanner-devin-db'
-import { resolveKimiSessionsDir } from './scanners/kimi/session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from '../../shared/muse-session-log'
 import { isKiroSessionMetadataPath } from './scanners/kiro/session-scanner-kiro-parser'
 
@@ -30,7 +41,7 @@ import {
 import { getHermesHome } from '../hermes/hermes-default-home'
 import { isClaudeProjectBucketDirectory } from './scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
-import type { AiVaultScanOptions } from './session-scanner-types'
+import type { AiVaultScanOptions, AiVaultAgentSource } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -41,7 +52,6 @@ const COPILOT_SESSIONS_DIR = join(
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
-const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 export function piSessionHistorySessionsDir(): string {
   return normalizeAgentSessionsDir(
     process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
@@ -68,25 +78,9 @@ const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
 
-/** Shared discovery rules constrain which paths the delete validator accepts. */
-export type AiVaultAgentSource = {
-  // Resolve lazily: module-time Grok resolution breaks cross-chunk initialization ordering.
-  rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
-  extensions: readonly string[]
-  filePredicate?: (filePath: string) => boolean
-  // Sidecar stats affect freshness and recency; async resolution supports non-derived paths.
-  contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
-  // Return false to skip a directory; depth 0 is a child of the root.
-  directoryPredicate?: (name: string, depth: number) => boolean
-  // Share the per-agent limit across alternate roots for one install.
-  mergeRootDiscoveries?: boolean
-}
-
-type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
-  Partial<Record<AiVaultAgent, AiVaultAgentSource>>
-
 // OpenCode and Antigravity use dedicated discovery for their storage layouts.
-export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
+export const AI_VAULT_AGENT_SOURCES: Record<AiVaultDeletableAgent, AiVaultAgentSource> &
+  Partial<Record<AiVaultAgent, AiVaultAgentSource>> = {
   claude: {
     rootDirs: (options, wslHomeDirs) =>
       claudeProjectsRootDirs({
@@ -124,7 +118,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
-    extensions: ['.jsonl']
+    extensions: ['.jsonl'],
+    searchDependencies: codexSearchDependencies
   },
   gemini: {
     rootDirs: (options, wslHomeDirs) =>
@@ -150,7 +145,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ]),
     extensions: ['.jsonl'],
     filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts'),
-    contentDependencyPath: cursorChatMetaPath
+    contentDependencyPath: cursorChatMetaPath,
+    searchDependencies: cursorSearchDependencies
   },
   grok: {
     rootDirs: (options, wslHomeDirs) => [
@@ -158,7 +154,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ...wslHomeSessionDirs('grok', wslHomeDirs)
     ],
     extensions: ['.json'],
-    filePredicate: (filePath) => basename(filePath) === 'summary.json'
+    filePredicate: (filePath) => basename(filePath) === 'summary.json',
+    contentDependencyPath: grokTranscriptPathForMetadata
   },
   devin: {
     rootDirs: (options, wslHomeDirs) => [
@@ -178,7 +175,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     mergeRootDiscoveries: true,
     extensions: ['.json'],
     // Database-only title or visibility changes must refresh sessions without rereading transcripts.
-    contentDependencyPath: devinSessionsDbDependencyPath
+    contentDependencyPath: devinSessionsDbDependencyPath,
+    searchDependencies: devinSearchDependencies
   },
   hermes: {
     rootDirs: (options, wslHomeDirs) =>
@@ -217,12 +215,14 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.rovoSessionsDir ?? ROVO_SESSIONS_DIR, wslHomeDirs, [
-        '.rovodev',
-        'sessions'
-      ]),
+      sessionRootDirs(
+        options.rovoSessionsDir ?? join(homedir(), '.rovodev', 'sessions'),
+        wslHomeDirs,
+        ['.rovodev', 'sessions']
+      ),
     extensions: ['.json'],
-    filePredicate: (filePath) => basename(filePath) === 'metadata.json'
+    filePredicate: (filePath) => basename(filePath) === 'metadata.json',
+    contentDependencyPath: (path) => join(dirname(path), 'session_context.json')
   },
   pi: {
     rootDirs: (options, wslHomeDirs) =>
@@ -286,7 +286,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.json'],
     // Match session state files rather than sibling agent wire transcripts.
     filePredicate: (filePath) =>
-      basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
+      basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_'),
+    searchDependencies: kimiSearchDependencies
   },
   muse: {
     rootDirs: (options, wslHomeDirs) =>

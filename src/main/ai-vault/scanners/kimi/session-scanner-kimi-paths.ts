@@ -1,3 +1,4 @@
+import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -133,3 +134,19 @@ async function parseKimiSessionIndex(
   }
   return { map, refused: false }
 }
+
+export const kimiSearchDependencies: (root: string) => readonly SessionDiscoveryDependency[] = (
+  root
+) => [
+  {
+    path: root,
+    fileKey: (path) => basename(dirname(path)),
+    eventKey: (path) =>
+      path.split(/[\\/]/).find((segment) => segment.startsWith('session_')) ?? null
+  },
+  {
+    path: dirname(root),
+    fileKey: () => 'index',
+    eventKey: (path) => (basename(path) === 'session_index.jsonl' ? 'index' : null)
+  }
+]

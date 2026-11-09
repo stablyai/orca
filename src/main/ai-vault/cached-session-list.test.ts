@@ -76,3 +76,60 @@ it.each([250, 500])(
     ])
   }
 )
+
+it('caches a later All refresh after overlapping Project refresh completes first', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'orca-review-cache-race-'))
+  root = tempRoot
+  const roots = isolatedScanRoots(tempRoot)
+  const projectStarted = Promise.withResolvers<void>()
+  const allStarted = Promise.withResolvers<void>()
+  const projectGate = Promise.withResolvers<void>()
+  const allGate = Promise.withResolvers<void>()
+  scan.mockImplementation(async (options: AiVaultScanOptions, signal: AbortSignal) => {
+    const result = await scanAiVaultSessions({
+      ...options,
+      ...roots,
+      additionalCodexSessionsDirs: [],
+      wslHomeDirs: [],
+      claudeProfileProjectsDirs: [],
+      opencodeAccountDataDirs: [],
+      antigravityChatBrainDir: join(tempRoot, 'chat-brain'),
+      signal
+    })
+    if (options.scopeOnly) {
+      projectStarted.resolve()
+      await projectGate.promise
+    } else {
+      allStarted.resolve()
+      await allGate.promise
+    }
+    return result
+  })
+  const writeSession = (id: string) =>
+    writeJsonlFile(join(roots.claudeProjectsDir, '-repo', `${id}.jsonl`), [
+      {
+        type: 'user',
+        sessionId: id,
+        cwd: '/repo',
+        timestamp: '2026-11-09T11:00:00.000Z',
+        message: { role: 'user', content: id }
+      }
+    ])
+  await writeSession('initial')
+  const project = listAiVaultSessions({
+    scopePaths: ['/repo'],
+    scopeOnly: true,
+    limit: 500,
+    force: true
+  })
+  await projectStarted.promise
+  await writeSession('newer')
+  const all = listAiVaultSessions({ scopePaths: ['/repo'], limit: 500, force: true })
+  await allStarted.promise
+  projectGate.resolve()
+  await project
+  allGate.resolve()
+  expect((await all).sessions.map((s) => s.sessionId).sort()).toEqual(['initial', 'newer'])
+  const cached = await listAiVaultSessions({ scopePaths: ['/repo'], scopeOnly: true, limit: 500 })
+  expect(cached.sessions.map((s) => s.sessionId).sort()).toEqual(['initial', 'newer'])
+})

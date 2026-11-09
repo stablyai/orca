@@ -8,7 +8,7 @@ import {
 } from './session-search-indexer-options'
 import { SessionSearchDirectoryListings } from './session-search-directory-listings'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
-import { runSessionSearchPass } from './session-search-pass'
+import { runSessionSearchPass, SessionSearchPassState } from './session-search-pass'
 import { sessionSearchHistoryCutoffMs } from './session-search-retention-policy'
 import type { SessionSearchStateCounts } from './session-search-store'
 import { SessionSearchWorkerStore } from './session-search-worker-store'
@@ -60,8 +60,11 @@ export class SessionSearchIndexer {
   private lastCounts: SessionSearchStateCounts | null = null
   private cyclesSinceSweep = 0
   private sweepNext = false
-  /** The queued sweep only resumes a deferred backlog, so retention needs no new purge. */
-  private resumingBacklog = false
+  /** Retention/root maintenance is independent of unfinished discovery and reads. */
+  private maintenanceNext = false
+  private sweepInProgress = false
+  private retirement: Promise<void> | null = null
+  private readonly work: SessionSearchPassState
   private started = false
   private closed = false
 
@@ -91,22 +94,28 @@ export class SessionSearchIndexer {
       )
     }
     // Claim ownership before async initialization so another indexer cannot race the writer open.
-    this.store = new SessionSearchWorkerStore(options.databasePath, onError, () => {
-      this.sweepNext = true
-      this.resumingBacklog = false
-    })
+    this.work = new SessionSearchPassState(options.watcherEntryPath)
+    this.store = new SessionSearchWorkerStore(
+      options.databasePath,
+      onError,
+      () => {
+        this.sweepNext = true
+      },
+      (path) => this.work.queue.rowChanged(path, this.store.fileRow(path))
+    )
     liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
     this.unregister = registerSessionSearchIndexConsumer(this.store)
   }
 
-  /** Begin with a full sweep; subsequent ticks reconcile recent files and sweep periodically. */
+  /** Begin inventory capture, then consume changes and retained debt at the normal cadence. */
   start(): Promise<void> {
     if (this.closed || this.started) {
       return this.loop.settled
     }
     this.started = true
     this.sweepNext = true
+    this.maintenanceNext = true
     return this.tick()
   }
 
@@ -120,7 +129,7 @@ export class SessionSearchIndexer {
     }
     if (options.full === true) {
       this.sweepNext = true
-      this.resumingBacklog = false
+      this.maintenanceNext = true
     }
     return this.tick()
   }
@@ -153,7 +162,7 @@ export class SessionSearchIndexer {
 
   close(): Promise<void> {
     if (this.closed) {
-      return this.store.retired()
+      return this.retired()
     }
     // Preserve final counts for status calls after the store closes.
     this.lastCounts = this.readCounts() ?? this.lastCounts
@@ -162,8 +171,14 @@ export class SessionSearchIndexer {
     this.loop.close()
     this.unregister()
     this.store.close()
-    liveIndexerPaths.delete(this.ownershipPath)
-    return this.store.retired()
+    this.retirement = Promise.all([
+      this.store.retired(),
+      this.work.close(),
+      this.loop.settled
+    ]).then(() => {
+      liveIndexerPaths.delete(this.ownershipPath)
+    })
+    return this.retirement
   }
 
   async initialize(): Promise<void> {
@@ -176,7 +191,7 @@ export class SessionSearchIndexer {
   }
 
   retired(): Promise<void> {
-    return this.store.retired()
+    return this.retirement ?? this.store.retired()
   }
 
   settled(): Promise<void> {
@@ -205,7 +220,7 @@ export class SessionSearchIndexer {
       return 'degraded'
     }
     // Deferred candidates may have no rows, so due-row counts alone cannot prove completion.
-    if (this.left > 0) {
+    if (this.left > 0 || this.work.pending) {
       return 'indexing'
     }
     return counts.due === 0 && this.lastSweepCompletedAt !== null ? 'current' : 'indexing'
@@ -219,28 +234,35 @@ export class SessionSearchIndexer {
   }
 
   private async pass(signal: AbortSignal): Promise<void> {
-    // Refresh the cutoff each pass so purged transcripts cannot immediately be re-indexed.
     this.store.setRetentionCutoffMs(this.cutoffMs())
     const full = this.sweepNext
-    const purge = full && !this.resumingBacklog
-    // Consume the flags before awaiting so requests arriving during this pass survive.
+    const maintenance = this.maintenanceNext || full
     this.sweepNext = false
-    this.resumingBacklog = false
+    this.maintenanceNext = maintenance
+    this.sweepInProgress ||= full
     try {
-      if (full && this.options.resolveRoots) {
+      if (maintenance && this.options.resolveRoots) {
         const roots = await this.options.resolveRoots(signal)
         if (signal.aborted) {
           return
         }
         this.roots = roots
       }
+      const discoveryStarted = this.clock.now()
       const result = await runSessionSearchPass({
         store: this.store,
+        state: this.work,
         roots: this.roots,
         full,
-        purge,
+        purge: maintenance,
+        onPurged: () => {
+          this.maintenanceNext = false
+        },
         recentPerAgent: this.recentPerAgent,
         previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
+        discoveryOverdue: () =>
+          this.clock.now() - discoveryStarted >=
+          (this.options.discoveryDeadlineMs ?? this.passDeadlineMs),
         startReadDeadline: () => {
           const readsStartedAt = this.clock.now()
           return () => this.clock.now() - readsStartedAt >= this.passDeadlineMs
@@ -249,44 +271,27 @@ export class SessionSearchIndexer {
         signal
       })
       if (!result.completed) {
-        // Preserve previous health findings and retry the sweep after an incomplete pass.
-        this.retrySweep(full, purge)
         return
       }
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
       this.left = result.left
-      if (full) {
-        // Repeat discovery while a sweep's backlog remains; recent cycles revisit their own deferred reads.
-        if (result.outOfTime && !this.sweepNext) {
-          this.sweepNext = true
-          this.resumingBacklog = true
-        }
-        // Deferred reads prevent a sweep from establishing that the index is current.
-        if (!result.outOfTime) {
-          this.lastSweepCompletedAt = this.lastReconcileAt
-        }
-        this.cyclesSinceSweep = 0
-        return
+      if (this.sweepInProgress && !result.pending) {
+        this.lastSweepCompletedAt = this.lastReconcileAt
+        this.sweepInProgress = false
       }
-      this.cyclesSinceSweep += 1
+      this.cyclesSinceSweep++
       if (this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
-        this.sweepNext = true
+        this.maintenanceNext = true
+        this.cyclesSinceSweep = 0
       }
     } catch (error) {
-      // Retry a failed sweep rather than waiting for the periodic cadence.
-      this.retrySweep(full, purge)
-      throw error
+      // The owned frontiers retain progress; a failure never promotes continuation into discovery.
+      if (!signal.aborted) {
+        throw error
+      }
     }
-  }
-
-  private retrySweep(full: boolean, purged: boolean): void {
-    if (!full || this.sweepNext) {
-      return
-    }
-    this.sweepNext = true
-    this.resumingBacklog = !purged
   }
 
   private cutoffMs(): number | null {

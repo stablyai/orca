@@ -28,7 +28,10 @@ export class SessionScannerServiceSearch {
   private databasePath: string | null = null
   private roots: SessionSearchScanRoots | null = null
 
-  constructor(private readonly resolveRoots?: SessionSearchIndexerOptions['resolveRoots']) {}
+  constructor(
+    private readonly resolveRoots?: SessionSearchIndexerOptions['resolveRoots'],
+    private readonly watcherEntryPath?: string
+  ) {}
 
   apply(init: AiVaultSessionSearchInit): Promise<void> {
     this.enabled = init.settings.enabled
@@ -56,6 +59,7 @@ export class SessionScannerServiceSearch {
     this.databasePath = init.databasePath
     this.roots = init.roots
     this.instance ??= new SessionSearchInstance({
+      watcherEntryPath: this.watcherEntryPath,
       databasePath: init.databasePath,
       roots: init.roots,
       resolveRoots: this.resolveRoots

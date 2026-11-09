@@ -1,4 +1,5 @@
 import './session-search-worker.test-fixture'
+import { notifySessionSearchFileChange } from './session-search-watcher.test-fixture'
 import { mkdir, mkdtemp, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -100,6 +101,7 @@ export async function writeClaudeTranscript(
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, `${claudeLines(turns, sessionId, 0).join('\n')}\n`)
+  notifySessionSearchFileChange(path)
 }
 
 export function claudeLines(
