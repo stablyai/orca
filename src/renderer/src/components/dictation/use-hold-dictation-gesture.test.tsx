@@ -13,6 +13,7 @@ let root: Root | null = null
 let container: HTMLDivElement | null = null
 let dictationState: DictationState
 let dictationMode: 'auto' | 'hold'
+let terminalShortcutPolicy: 'orca-first' | 'terminal-first'
 let startDictation: ReturnType<typeof vi.fn<() => void>>
 let stopDictation: ReturnType<typeof vi.fn<() => void>>
 
@@ -25,6 +26,7 @@ function setUserAgent(userAgent: string): void {
 
 function holdSettings(): GlobalSettings {
   return {
+    terminalShortcutPolicy,
     voice: {
       enabled: true,
       sttModel: 'test-model',
@@ -76,6 +78,7 @@ beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
   dictationState = 'idle'
   dictationMode = 'hold'
+  terminalShortcutPolicy = 'orca-first'
   startDictation = vi.fn<() => void>()
   stopDictation = vi.fn<() => void>()
 })
@@ -202,6 +205,29 @@ describe('useHoldDictationGesture in Auto mode', () => {
     await renderProbe()
 
     const event = dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, isComposing: true })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(startDictation).not.toHaveBeenCalled()
+  })
+
+  it('leaves the shortcut to a terminal that owns its keys', async () => {
+    terminalShortcutPolicy = 'terminal-first'
+    await renderProbe()
+    const terminalInput = document.createElement('textarea')
+    terminalInput.className = 'xterm-helper-textarea'
+    document.body.appendChild(terminalInput)
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'e',
+      code: 'KeyE',
+      metaKey: true
+    })
+    act(() => {
+      terminalInput.dispatchEvent(event)
+    })
+    terminalInput.remove()
 
     expect(event.defaultPrevented).toBe(false)
     expect(startDictation).not.toHaveBeenCalled()

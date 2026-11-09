@@ -3,6 +3,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 
 type HoldDictationGestureOptions = {
   canStartDictation: () => boolean
@@ -106,6 +107,10 @@ function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationR
   }
 }
 
+function isTerminalInputTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
+}
+
 export function useHoldDictationGesture({
   canStartDictation,
   keybindings,
@@ -120,8 +125,19 @@ export function useHoldDictationGesture({
   const start = useEffectEvent(() => void startDictation())
   const stop = useEffectEvent(() => void stopDictation())
   const canStart = useEffectEvent(() => canStartDictation())
+  // Main forwards Hold and Auto presses, so the terminal shortcut policy it would apply is applied here.
   const matchesShortcut = useEffectEvent((e: KeyboardEvent) =>
-    keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)
+    keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings, {
+      context: isTerminalInputTarget(e.target) ? 'terminal' : 'app',
+      terminalShortcutPolicy: settings?.terminalShortcutPolicy
+    })
+  )
+  const notifyTerminalCapture = useEffectEvent(() =>
+    showTerminalShortcutCaptureNotification({
+      actionId: 'voice.dictation',
+      platform: getShortcutPlatform(),
+      keybindings
+    })
   )
 
   // Hold and Auto own DOM press/release events; main before-input-event suppresses keyup after preventDefault.
@@ -156,6 +172,9 @@ export function useHoldDictationGesture({
       e.preventDefault()
       e.stopPropagation()
       if (!e.repeat) {
+        if (isTerminalInputTarget(e.target)) {
+          notifyTerminalCapture()
+        }
         // macOS drops the shortcut key's keyup while Cmd is held, so every fresh press starts over.
         activeHoldRef.current = null
         if (mode === 'auto' && !canStart()) {
