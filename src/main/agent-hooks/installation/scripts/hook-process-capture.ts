@@ -1,7 +1,10 @@
 /** Capture before Orca inserts its managed-script shell. */
 export const HOOK_PARENT_CAPTURE = 'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
 
-// Uncached, as no builtin tells a reused PID from its old process: Linux reads /proc, macOS runs only ps.
+/**
+ * Builds the POSIX shell lines that capture the owning agent process PID and start time.
+ * Uncached, as no builtin tells a reused PID from its old process: Linux reads /proc, macOS runs only ps.
+ */
 export function buildHookProcessCapture(): string[] {
   return [
     'orca_agent_process= orca_agent_pid="${ORCA_HOOK_AGENT_PID:-}"',

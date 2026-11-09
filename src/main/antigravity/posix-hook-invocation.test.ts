@@ -35,6 +35,10 @@ const hooksSchema = z.object({
   )
 })
 
+/**
+ * Installs the Antigravity hook configuration into a temporary home directory
+ * and returns the configured shell command for the requested hook event.
+ */
 function installedCommand(home: string, event: string): string {
   homeMock.mockReturnValue(home)
   expect(new AntigravityHookService().install().state).toBe('installed')
@@ -49,6 +53,10 @@ function installedCommand(home: string, event: string): string {
   return command
 }
 
+/**
+ * Executes an installed POSIX hook command either by tokenizing argv directly ('direct')
+ * or through an outer '/bin/sh -c' wrapper ('shell', matching Antigravity CLI hook execution).
+ */
 function invoke(
   command: string,
   input: string,
@@ -152,11 +160,40 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
         if (version === 'current') {
           const observed = await readAgentProcess(process.pid)
           expect(observed.verdict).toBe('live')
-          expect(JSON.parse(posts[0]?.get('agentProcess') || '{}')).toEqual({
+          const expectedProcess = {
             pid: process.pid,
             platform: process.platform,
             startTime: observed.verdict === 'live' ? observed.startTime : undefined
-          })
+          }
+          expect(JSON.parse(posts[0]?.get('agentProcess') || '{}')).toEqual(expectedProcess)
+          if (mode === 'shell') {
+            for (const event of ['PostToolUse', 'PostInvocation'] as const) {
+              const followUp = await invoke(
+                installedCommand(home, event),
+                payload,
+                {
+                  ...process.env,
+                  ORCA_AGENT_HOOK_ENDPOINT: '',
+                  ORCA_AGENT_HOOK_PORT: String(address.port),
+                  ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
+                  ORCA_PANE_KEY: 'test-pane',
+                  ORCA_HOOK_AGENT_PID: '2',
+                  TMUX: '/tmp/agy-test.sock,123,0',
+                  TMUX_PANE: '%4'
+                },
+                'shell'
+              )
+              expect(followUp.code).toBe(0)
+            }
+            expect(posts.map((post) => post.get('hook_event_name'))).toEqual([
+              'PreToolUse',
+              'PostToolUse',
+              'PostInvocation'
+            ])
+            for (const post of posts) {
+              expect(JSON.parse(post.get('agentProcess') || '{}')).toEqual(expectedProcess)
+            }
+          }
         } else {
           expect(posts[0]?.get('agentProcess')).toBe('')
         }
