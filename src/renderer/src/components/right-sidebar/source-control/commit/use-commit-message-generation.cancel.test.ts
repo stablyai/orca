@@ -4,6 +4,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../../shared/constants'
+import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   getWorktreeOperationStore,
   writeWorktreeCommitDraft
@@ -13,12 +15,14 @@ const host = vi.hoisted(() => {
   const held: {
     succeed: ((message: string) => void) | null
     cancel: Mock<() => void>
-  } = { succeed: null, cancel: vi.fn<() => void>() }
+    overrides: unknown
+  } = { succeed: null, cancel: vi.fn<() => void>(), overrides: undefined }
   return held
 })
 vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
-  generateRuntimeCommitMessage: () =>
+  generateRuntimeCommitMessage: (_context: unknown, overrides: unknown) =>
     new Promise((resolve) => {
+      host.overrides = overrides
       host.succeed = (message) => resolve({ success: true, message })
     }),
   cancelRuntimeGenerateCommitMessage: () => host.cancel()
@@ -74,6 +78,7 @@ afterEach(() => {
   root = null
   latest = null
   host.succeed = null
+  host.overrides = undefined
   host.cancel.mockClear()
   useAppStore.setState(initialAppState, true)
 })
@@ -88,5 +93,29 @@ describe('a commit message generation that was canceled', () => {
       await pending
     })
     expect(operationStore.getState().draft).toBe('')
+  })
+})
+
+describe('a commit message generated from a local repo', () => {
+  it('runs the model picked for this machine', async () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/user'),
+        sourceControlAi: {
+          ...normalizeSourceControlAiSettings(undefined),
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' }
+        }
+      }
+    })
+    await act(async () => {
+      root = createRoot(document.createElement('div'))
+      root.render(createElement(Probe))
+    })
+    act(() => latest?.handleGenerateCommitMessageClick())
+    expect(host.overrides).toMatchObject({
+      sourceControlAiResolvedParams: { agentId: 'codex', model: 'gpt-5.5' }
+    })
   })
 })

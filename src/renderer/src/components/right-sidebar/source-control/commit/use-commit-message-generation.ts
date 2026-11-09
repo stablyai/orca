@@ -6,8 +6,7 @@ import {
 } from '../panel/worktree-scope'
 import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
+import { getRuntimeGitRepoDiscoveryHostKey } from '@/runtime/source-control/git/runtime-git-client-context'
 import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { useStore } from 'zustand'
@@ -82,15 +81,13 @@ export function useSourceControlCommitMessageGeneration({
           settings,
           repo: activeRepo,
           operation: 'commitMessage',
-          discoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(
-            getRuntimeGitScope(
-              activeRepoTarget ?? { kind: 'local' },
-              sourceControlConnectionId(scope, activeWorktreeId)
-            )
+          discoveryHostKey: getRuntimeGitRepoDiscoveryHostKey(
+            activeRepoTarget ?? { kind: 'local' },
+            activeRepo
           )
         })
       : null
-  }, [activeRepo, activeRepoTarget, activeWorktreeId, scope])
+  }, [activeRepo, activeRepoTarget])
 
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
