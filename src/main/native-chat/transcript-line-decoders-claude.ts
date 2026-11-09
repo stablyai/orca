@@ -209,3 +209,13 @@ function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
 }
+
+/** A user or assistant record, decodable or not: what a transcript nothing was sent in lacks. */
+export function isClaudeConversationRecord(line: string): boolean {
+  try {
+    const type = (JSON.parse(line) as { type?: unknown } | null)?.type
+    return type === 'user' || type === 'assistant'
+  } catch {
+    return false
+  }
+}

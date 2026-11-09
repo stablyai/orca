@@ -20,7 +20,7 @@ import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import {
-  conversationNeverSaved,
+  canRestartMissingConversation,
   reportCliChatResumeFailure,
   reportCliChatResumeFailureInChat,
   reportCliChatResumeTerminalChanged
@@ -276,13 +276,13 @@ export async function runCliChatResume(
       return
     }
     if (closed) {
-      // The terminal is gone and the agent never saved this conversation, so the chat starts it anew.
+      // The terminal is gone and the host has no history for it, so the chat starts a new conversation.
       const chatSessionId = (
         useAppStore.getState().unifiedTabsByWorktree[source.workspaceId] ?? []
       ).find((tab) => tab.id === chatTabId)?.entityId
       if (
         chatSessionId &&
-        conversationNeverSaved(result.error) &&
+        canRestartMissingConversation(result.error) &&
         retryStructuredAgentSessionLaunch(source.workspaceId, chatSessionId, { fresh: true })
       ) {
         return

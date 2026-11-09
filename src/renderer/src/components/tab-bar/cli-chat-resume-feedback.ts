@@ -56,8 +56,8 @@ export async function reportCliChatResumeFailureInChat(
   }
 }
 
-/** The agent never saved the conversation: nothing sent yet, so there is no history to open. */
-export function conversationNeverSaved(error: unknown): boolean {
+/** The host found no history to open for the conversation: none saved, or none it can reach. */
+export function canRestartMissingConversation(error: unknown): boolean {
   const refusal = structuredLaunchFailure(error)
   return (
     refusal?.code === 'agent_session_identity_required' &&

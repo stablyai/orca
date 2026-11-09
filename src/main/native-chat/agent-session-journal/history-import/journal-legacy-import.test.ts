@@ -73,3 +73,23 @@ it.each([true, false])(
     })
   }
 )
+
+it.each([
+  { records: [], sourceEmpty: true },
+  { records: [{ type: 'user', uuid: 'u1' }], sourceEmpty: false }
+])(
+  'reads a Claude file nothing was sent in as empty, unlike one with an undecodable turn: %j',
+  async ({ records, sourceEmpty }) => {
+    const filePath = await writeFixture('claude-unused.jsonl', [
+      { type: 'file-history-snapshot', messageId: 'm1', snapshot: { trackedFileBackups: {} } },
+      { type: 'summary', summary: 'New session', leafUuid: 'l1' },
+      ...records
+    ])
+    const prepared = await prepareLegacyTranscriptImport({
+      agent: 'claude',
+      sessionId: 'claude-unused',
+      options: { filePath }
+    })
+    expect(prepared).toMatchObject({ ok: true, items: [], sourceEmpty })
+  }
+)
