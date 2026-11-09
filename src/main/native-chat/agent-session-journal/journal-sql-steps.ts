@@ -1,3 +1,4 @@
+import { checkpointJournalRequestEvents } from './journal-writer-request-events'
 import type { JournalSqlMessage } from './journal-sql-message-commit'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -44,6 +45,7 @@ export function runJournalSqlSteps(
   }
   const deleted = new Set<string>()
   for (const step of steps) {
+    const restoreRequestEvents = checkpointJournalRequestEvents(db)
     db.exec('SAVEPOINT journal_step')
     try {
       const { commit, outcome } = writeStep(db, command, step, savedAt)
@@ -77,6 +79,7 @@ export function runJournalSqlSteps(
       result.value.outcomes.push(outcome)
     } catch (error) {
       db.exec('ROLLBACK TO journal_step; RELEASE journal_step')
+      restoreRequestEvents()
       result.value.failure = journalSqlFailure(error)
       break
     }

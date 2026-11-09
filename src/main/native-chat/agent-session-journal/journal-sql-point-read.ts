@@ -1,3 +1,8 @@
+import type { JournalRequestFailureRead } from './journal-request-failure'
+import {
+  readJournalSqlRequestFailure,
+  type JournalRequestFailureResult
+} from './journal-sql-request-failure-read'
 import {
   readJournalDomainConsumer,
   type JournalConsumerRead,
@@ -95,9 +100,11 @@ export type JournalSqlPointRead = {
     | JournalSqlItemRead
     | JournalPublicationRead
     | JournalConsumerRead
+    | JournalRequestFailureRead
 }
 
 export type JournalSqlPointReadResult =
+  | JournalRequestFailureResult
   | { kind: 'rewind-target'; target: JournalRewindTarget }
   | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }
   | { kind: 'provider-turn-in-namespace'; present: boolean }
@@ -154,6 +161,9 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'request-failure':
+    case 'running-request':
+      return readJournalSqlRequestFailure(scope, operation)
     case 'rewind-target':
       return {
         kind: operation.kind,

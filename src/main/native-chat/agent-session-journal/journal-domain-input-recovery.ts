@@ -1,3 +1,4 @@
+import { checkpointJournalRequestEvents } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -122,6 +123,7 @@ export function applyJournalDomainInputRecovery(
         )
   let failure: unknown
   for (const input of resolutions) {
+    const restoreRecoveryEvents = checkpointJournalRequestEvents(db)
     db.exec('SAVEPOINT journal_recovery_send')
     try {
       const commit = applyJournalDomainDispatch(db, target, { kind: 'dispatch', input }, savedAt)
@@ -129,6 +131,7 @@ export function applyJournalDomainInputRecovery(
       appendJournalDomainInputCommit(result, commit)
     } catch (error) {
       db.exec('ROLLBACK TO journal_recovery_send; RELEASE journal_recovery_send')
+      restoreRecoveryEvents()
       failure ??= error
       // Queued withdrawals were issued together; pending recovery awaited each send in order.
       if (operation.kind !== 'queued-reject') {
@@ -182,6 +185,7 @@ function holdUnsent(
   })
   const failures: unknown[] = []
   for (const { submission } of batch) {
+    const restoreUnsentEvents = checkpointJournalRequestEvents(db)
     db.exec('SAVEPOINT journal_unsent_send')
     try {
       const attempt = readJournalDomainSubmissionAttempt(db, target, submission.clientMessageId)
@@ -265,6 +269,7 @@ function holdUnsent(
       appendJournalDomainInputCommit(result, step)
     } catch (error) {
       db.exec('ROLLBACK TO journal_unsent_send; RELEASE journal_unsent_send')
+      restoreUnsentEvents()
       failures.push(error)
     }
   }

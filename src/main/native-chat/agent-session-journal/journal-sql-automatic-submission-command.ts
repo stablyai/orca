@@ -1,3 +1,4 @@
+import { checkpointJournalRequestEvents } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
 import { structuredMessageSteeringOptionsDiffer } from '../../../shared/agent-session/options/codex-message-compiler'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -76,6 +77,7 @@ export function applyJournalSqlAutomaticSubmissionCommand(
   ) {
     return empty({ kind: 'waiting' })
   }
+  const restoreRequestEvents = checkpointJournalRequestEvents(db)
   db.exec('SAVEPOINT journal_automatic_submission')
   try {
     const result = applyJournalDomainSubmission(
@@ -118,6 +120,7 @@ export function applyJournalSqlAutomaticSubmissionCommand(
     return commit
   } catch (error) {
     db.exec('ROLLBACK TO journal_automatic_submission')
+    restoreRequestEvents()
     db.exec('RELEASE journal_automatic_submission')
     return queueChange(
       {

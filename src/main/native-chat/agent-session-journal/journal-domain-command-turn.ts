@@ -1,3 +1,4 @@
+import { checkpointJournalRequestEvents } from './journal-writer-request-events'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -63,6 +64,7 @@ export function applyJournalDomainCommandTurn(
     operation.kind === 'command-open'
       ? { ...operation.input, state: 'pending' as const }
       : operation.input.dispatch
+  const restoreDispatchEvents = checkpointJournalRequestEvents(db)
   db.exec('SAVEPOINT journal_command_dispatch')
   try {
     const commit = applyJournalDomainDispatch(
@@ -75,9 +77,11 @@ export function applyJournalDomainCommandTurn(
     appendJournalDomainInputCommit(result, commit)
   } catch (error) {
     db.exec('ROLLBACK TO journal_command_dispatch; RELEASE journal_command_dispatch')
+    restoreDispatchEvents()
     result.value = { failure: journalSqlFailure(error) }
     return result
   }
+  const restoreTurnEvents = checkpointJournalRequestEvents(db)
   db.exec('SAVEPOINT journal_command_turn')
   try {
     const turn = structuredAgentSessionCommandTurn(dispatch.clientMessageId)
@@ -234,6 +238,7 @@ export function applyJournalDomainCommandTurn(
     }
   } catch (error) {
     db.exec('ROLLBACK TO journal_command_turn; RELEASE journal_command_turn')
+    restoreTurnEvents()
     result.value = { failure: journalSqlFailure(error) }
   }
   return result

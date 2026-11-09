@@ -1,3 +1,4 @@
+import { appendJournalRequestEvent } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
@@ -37,6 +38,7 @@ export function appendJournalSqlEvent(
     savedAt,
     oversized ? '{"items":[],"submissions":[],"cards":[]}' : json
   )
+  appendJournalRequestEvent(db, target, sequence)
   // One append creates at most one obsolete row; a reset can leave at most one bounded tail of debt.
   db.prepare(`DELETE FROM journal_events WHERE session_id=? AND epoch=? AND sequence IN (
     SELECT sequence FROM journal_events WHERE session_id=? AND epoch=?

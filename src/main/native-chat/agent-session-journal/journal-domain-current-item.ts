@@ -1,3 +1,5 @@
+import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { beforeJournalRequestWrite } from './journal-writer-request-events'
 import {
   JOURNAL_DOMAIN_ITEM_COLUMNS,
   journalDomainItemColumns
@@ -59,6 +61,13 @@ export function writeJournalDomainCurrentItem(
 ): AgentJournalRenderItem[] {
   if (!db.isTransaction) {
     throw new Error('journal item persistence requires its writer transaction')
+  }
+  if (
+    readAgentJournalTurn(input.item.body) ||
+    readAgentJournalTurn(input.previous?.item.body) ||
+    isAgentSessionContextClear(input.item.body)
+  ) {
+    beforeJournalRequestWrite(db, target, 'turn', input.item.itemId)
   }
   const prefix = [target.sessionId, target.epoch] as const
   const ordinal =

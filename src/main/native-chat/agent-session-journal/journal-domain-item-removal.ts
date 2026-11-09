@@ -1,3 +1,4 @@
+import { beforeJournalRequestWrite } from './journal-writer-request-events'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -47,6 +48,9 @@ export function removeJournalDomainItem(
     .prepare(`SELECT payload_json, revision, sequence, sequence_index, turn_marker,prompt,command_entry,
       queue_failure_report_turn_item_id FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(...prefix, itemId)
+  if (row?.turn_marker) {
+    beforeJournalRequestWrite(db, target, 'turn', itemId)
+  }
   const tombstone = db
     .prepare(
       'SELECT revision FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'

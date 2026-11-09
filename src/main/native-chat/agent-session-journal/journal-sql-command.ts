@@ -1,3 +1,4 @@
+import { beginJournalRequestEvents } from './journal-writer-request-events'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
@@ -27,48 +28,61 @@ export class JournalSqlCommand {
   ) {}
 
   async apply(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
+    const finish = beginJournalRequestEvents(this.db, command.facts?.stopSettle)
+    try {
+      const commit = await this.run(command, now)
+      const requestEvents = finish()
+      return {
+        ...commit,
+        requestEvents:
+          command.operation.kind === 'epoch-replace' || command.operation.kind === 'context-rewind'
+            ? []
+            : requestEvents
+      }
+    } finally {
+      finish()
+    }
+  }
+
+  private async run(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
+    const { db, stateDirectory } = this
     const savedAt = command.savedAt ?? now
     command = { ...command, savedAt }
     const { operation, target } = command
     switch (operation.kind) {
       case 'automatic-submission':
         return applyJournalSqlAutomaticSubmissionCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           { ...command, operation },
           savedAt
         )
       case 'open':
       case 'edit-lease':
         return applyJournalSqlEditLeaseCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           { ...command, operation },
           savedAt
         )
       case 'item':
       case 'item-claiming':
-        return applyJournalSqlItemCommand(
-          this.db,
-          this.stateDirectory,
-          { ...command, operation },
-          savedAt
-        )
+        return applyJournalSqlItemCommand(db, stateDirectory, { ...command, operation }, savedAt)
       case 'submission': {
         if (!command.facts) {
           throw new Error('journal submission omitted its identity facts')
         }
         const result = applyJournalDomainSubmission(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           target,
           operation,
           command.facts,
           savedAt
         )
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.value,
@@ -79,10 +93,10 @@ export class JournalSqlCommand {
       case 'dispatch':
       case 'accept-late':
       case 'late-dispatch': {
-        const result = applyJournalDomainDispatch(this.db, target, operation, savedAt)
+        const result = applyJournalDomainDispatch(db, target, operation, savedAt)
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.value,
@@ -99,22 +113,16 @@ export class JournalSqlCommand {
         const result =
           operation.kind === 'command-open' || operation.kind === 'command-settle'
             ? applyJournalDomainCommandTurn(
-                this.db,
+                db,
                 target,
                 operation,
                 savedAt,
                 command.facts?.stopSettle
               )
-            : applyJournalDomainInputRecovery(
-                this.db,
-                target,
-                operation,
-                command.facts ?? {},
-                savedAt
-              )
+            : applyJournalDomainInputRecovery(db, target, operation, command.facts ?? {}, savedAt)
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.value,
@@ -138,7 +146,7 @@ export class JournalSqlCommand {
           throw new Error('journal context replacement omitted its identity facts')
         }
         const result = applyJournalDomainContextCommand(
-          this.db,
+          db,
           target,
           operation.kind === 'epoch-replace'
             ? {
@@ -152,8 +160,8 @@ export class JournalSqlCommand {
           command.facts?.stopSettle
         )
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.cursor,
@@ -171,8 +179,8 @@ export class JournalSqlCommand {
       case 'tombstone':
       case 'goal-withdraw':
         return applyJournalSqlTombstoneCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           { ...command, operation },
           savedAt
         )
@@ -182,8 +190,8 @@ export class JournalSqlCommand {
       case 'queue-withdraw':
       case 'queue-move': {
         const result = applyJournalDomainQueueCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           target,
           operation,
           savedAt
@@ -199,8 +207,8 @@ export class JournalSqlCommand {
                   ? result.result.cards
                   : undefined
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           { ...result, items: [], receipts: [] },
           value,
@@ -220,22 +228,22 @@ export class JournalSqlCommand {
         const result =
           operation.kind === 'lifecycle'
             ? applyJournalDomainLifecycleOperation(
-                this.db,
+                db,
                 target,
                 operation,
                 savedAt,
                 command.facts?.stopSettle
               )
             : applyJournalDomainGenerationSettlement(
-                this.db,
+                db,
                 target,
                 operation,
                 savedAt,
                 command.facts?.stopSettle
               )
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.value,
@@ -245,15 +253,15 @@ export class JournalSqlCommand {
       }
       case 'prompt-mutate': {
         const result = applyJournalDomainPromptMutation(
-          this.db,
+          db,
           target,
           operation.input,
           savedAt,
           command.facts?.stopSettle
         )
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.value,
@@ -268,15 +276,15 @@ export class JournalSqlCommand {
       case 'queue-reopen-mark':
       case 'shutdown-cut': {
         const result = applyJournalDomainControlCommand(
-          this.db,
+          db,
           target,
           operation,
           command.facts ?? {},
           savedAt
         )
         return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
+          db,
+          stateDirectory,
           command,
           result,
           result.value,
@@ -285,12 +293,7 @@ export class JournalSqlCommand {
         )
       }
       case 'steps':
-        return applyJournalSqlStepCommand(
-          this.db,
-          this.stateDirectory,
-          { ...command, operation },
-          savedAt
-        )
+        return applyJournalSqlStepCommand(db, stateDirectory, { ...command, operation }, savedAt)
       default:
         throw new Error(`journal command ${operation.kind} is not migrated`)
     }

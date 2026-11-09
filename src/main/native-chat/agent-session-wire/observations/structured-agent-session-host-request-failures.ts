@@ -11,6 +11,8 @@ export function createStructuredAgentSessionHostRequestFailures(
 ): StructuredAgentSessionRequestFailures {
   return new StructuredAgentSessionRequestFailures({
     sessions,
+    onError: (error) =>
+      deps().logger.warn('observing ended requests failed', { scope: 'request-outcomes', error }),
     onFailure: (failure) => deps().onRequestFailure?.(failure),
     capturePendingOutput: (input) => deps().adapter.capturePendingOutput?.(input),
     wordsContext: (sessionId) =>

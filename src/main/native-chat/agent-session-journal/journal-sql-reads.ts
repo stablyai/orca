@@ -1,3 +1,5 @@
+import type { JournalRequestMark } from './journal-request-failure'
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalGenerationRead, JournalGenerationResult } from './journal-generation-read'
 import type { JournalRewindTarget } from './journal-domain-rewind-target'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
@@ -19,6 +21,8 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  requestFailure(kind: JournalRequestMark['kind'], id: string): Promise<AgentJournalSnapshot>
+  runningRequest(stopSettle?: JournalStopSettleFact): Promise<JournalRequestMark | null>
   rewindTarget(itemId: string): Promise<JournalRewindTarget>
   namingPrompt(hostStartedAt?: number): Promise<string>
   automationRun(messageId: string, inputIds: readonly string[]): Promise<AgentJournalSnapshot>
@@ -86,6 +90,10 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    requestFailure: async (requestKind, id) =>
+      (await read({ kind: 'request-failure', requestKind, id })).snapshot,
+    runningRequest: async (stopSettle) =>
+      (await read({ kind: 'running-request', stopSettle })).request,
     rewindTarget: async (itemId) => (await read({ kind: 'rewind-target', itemId })).target,
     namingPrompt: async (hostStartedAt) =>
       (await read({ kind: 'naming-prompt', hostStartedAt })).prompt,
