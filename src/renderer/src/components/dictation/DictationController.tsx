@@ -6,6 +6,8 @@ import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isPlainEscapeKeyEvent } from '../terminal-pane/input/keyboard/agent-interrupt-key-event'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
@@ -59,6 +61,7 @@ export function DictationController() {
   // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const [captureLive, setCaptureLive] = useState(false)
+  // Holds the target pane only while the pill shows, so a closed pane isn't kept alive.
   const [pillAnchor, setPillAnchor] = useState<DictationPillAnchor | null>(null)
 
   const dispatch = useCallback(
@@ -73,6 +76,7 @@ export function DictationController() {
         setDictationState(next.phase)
         if (next.phase === 'idle') {
           setPartialTranscript('')
+          setPillAnchor(null)
         }
       }
       return next
@@ -311,12 +315,8 @@ export function DictationController() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (
-        event.key !== 'Escape' ||
-        event.isComposing ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey ||
+        !isPlainEscapeKeyEvent(event) ||
+        isImeOwnedKeyboardEvent(event) ||
         !isDictationPillShown(sessionRef.current.phase)
       ) {
         return

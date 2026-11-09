@@ -17,7 +17,7 @@ type TerminalInsert = (text: string, paneId: number) => Promise<boolean>
 
 export type DictationInsertionTarget =
   | { kind: 'composer'; insert: ComposerInsert; root: HTMLElement }
-  | { kind: 'terminal'; tabId: string; paneId: number }
+  | { kind: 'terminal'; tabId: string; paneId: number; pane: HTMLElement }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
 
@@ -75,8 +75,8 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
     const tabElement = activeElement.closest('[data-terminal-tab-id]') as HTMLElement | null
     const paneId = Number(paneElement?.dataset.paneId)
     const tabId = tabElement?.dataset.terminalTabId
-    if (tabId && Number.isFinite(paneId)) {
-      return { kind: 'terminal', tabId, paneId }
+    if (paneElement && tabId && Number.isFinite(paneId)) {
+      return { kind: 'terminal', tabId, paneId, pane: paneElement }
     }
     return null
   }

@@ -5,7 +5,7 @@ import type { DictationInsertionTarget } from './dictation-insertion-target'
 export type DictationPillAnchor = { element: HTMLElement; placement: 'over' | 'above' }
 
 /** Fixed-position box: `left` is the pill's centre, `bottom` its distance from the window's bottom edge. */
-export type DictationPillBox = { left: number; bottom: number; width: number }
+type DictationPillBox = { left: number; bottom: number; width: number }
 
 const PILL_MAX_WIDTH = 440
 const PANE_INSET = 16
@@ -19,9 +19,7 @@ export function dictationPillAnchorFor(
     return { element: target.root, placement: 'above' }
   }
   if (target?.kind === 'terminal') {
-    const tab = document.querySelector(`[data-terminal-tab-id="${CSS.escape(target.tabId)}"]`)
-    const pane = tab?.querySelector<HTMLElement>(`.pane[data-pane-id="${target.paneId}"]`)
-    return pane ? { element: pane, placement: 'over' } : null
+    return { element: target.pane, placement: 'over' }
   }
   return null
 }

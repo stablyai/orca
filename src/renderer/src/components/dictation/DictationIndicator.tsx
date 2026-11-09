@@ -63,6 +63,27 @@ function useDelayedFlag(on: boolean, delayMs: number): boolean {
   return delayed
 }
 
+// Only this re-renders per meter tick, not the whole pill.
+function DictationPillMeter({ recording, status }: { recording: boolean; status: string }) {
+  const t = useTranslate()
+  const meter = useDictationMeter()
+  const clipping = recording && meter.isClipping
+  return (
+    <>
+      <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {clipping
+          ? t('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
+          : status}
+      </span>
+      <DictationGrapes
+        level={meter.level}
+        active={recording}
+        className={cn(clipping && 'text-destructive')}
+      />
+    </>
+  )
+}
+
 // Presses on the pill keep focus where the words are going.
 const keepFocus = (event: React.MouseEvent): void => event.preventDefault()
 const keepFocusProps = { [KEEPS_FOCUS_ATTRIBUTE]: '', onMouseDown: keepFocus }
@@ -72,13 +93,11 @@ function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
   const dictationState = useAppStore((state) => state.dictationState)
   const partialTranscript = useAppStore((state) => state.partialTranscript)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
-  const meter = useDictationMeter()
   const shortcut = useShortcutKeyDetails('voice.dictation')
   const box = useDictationPillBox(anchor)
 
   const finishing = dictationState === 'stopping'
   const recording = dictationState === 'listening' || (dictationState === 'starting' && captureLive)
-  const clipping = recording && meter.isClipping
   // Counts recorded time, so it waits for the mic to open.
   const seconds = useElapsedSeconds(recording)
   const showSpinner = useDelayedFlag(finishing, FINISH_SPINNER_DELAY_MS)
@@ -86,9 +105,6 @@ function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
   const status = finishing
     ? t('auto.components.dictation.DictationIndicator.finishing', 'Finishing…')
     : t('auto.components.dictation.DictationIndicator.listening', 'Listening…')
-  const announced = clipping
-    ? t('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
-    : status
   const cancelLabel = t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 
@@ -104,9 +120,6 @@ function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
       style={box ? { left: box.left, bottom: box.bottom, width: box.width } : undefined}
       {...keepFocusProps}
     >
-      <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {announced}
-      </span>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -123,12 +136,7 @@ function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
           {cancelLabel}
         </TooltipContent>
       </Tooltip>
-      <DictationGrapes
-        level={meter.level}
-        active={recording}
-        transitioning={!recording}
-        className={cn(clipping && 'text-destructive')}
-      />
+      <DictationPillMeter recording={recording} status={status} />
       {transcript ? (
         <span
           aria-hidden

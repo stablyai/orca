@@ -42,7 +42,7 @@ export function isDictationUnderway(phase: DictationState): boolean {
 
 /** The pill shows from start until the last words land, including while a dropped session tears down. */
 export function isDictationPillShown(phase: DictationState): boolean {
-  return phase === 'starting' || phase === 'listening' || phase === 'stopping'
+  return isDictationUnderway(phase) || phase === 'stopping'
 }
 
 /** Returns the same object when the event does not apply, so callers can skip its effects. */
