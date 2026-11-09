@@ -25,6 +25,8 @@ import type {
 /** Desktop only: Orca Cloud API keys, org settings, audit and routines. The session token stays in main. */
 export type CloudApiBridge = {
   availability: () => Promise<CloudApiAvailability>
+  /** The desktop workspace running on this Orca Cloud sandbox, if this computer has it. */
+  localWorkspaceFor: (sandboxId: string) => Promise<string | null>
   me: () => Promise<CloudApiResult<CloudApiMe>>
   listApiKeys: () => Promise<CloudApiResult<CloudApiKeyList>>
   createApiKey: (input: CreateCloudApiKeyInput) => Promise<CloudApiResult<CloudApiCreatedKey>>
@@ -56,6 +58,7 @@ const invoke =
 
 export const cloudApiBridge: CloudApiBridge = {
   availability: invoke('cloudApi:availability'),
+  localWorkspaceFor: invoke('cloudApi:localWorkspaceFor'),
   me: invoke('cloudApi:me'),
   listApiKeys: invoke('cloudApi:listApiKeys'),
   createApiKey: invoke('cloudApi:createApiKey'),

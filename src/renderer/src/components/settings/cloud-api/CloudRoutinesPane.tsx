@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { useAppStore } from '@/store'
 import type {
   CloudApiInstallation,
   CloudApiProject,
@@ -14,6 +18,21 @@ import { useOrcaCloudApiAvailability } from '@/hooks/useOrcaCloudApiAvailability
 import { useRequestGeneration } from './use-request-generation'
 
 const RUNS_PAGE_SIZE = 20
+
+/** Jump from a run to its workspace when this computer has it; otherwise say how to get there. */
+async function openRunWorkspace(sandboxId: string): Promise<void> {
+  const worktreeId = await window.api.cloudApi?.localWorkspaceFor(sandboxId)
+  if (worktreeId && activateAndRevealWorktree(worktreeId)) {
+    useAppStore.getState().closeSettingsPage()
+    return
+  }
+  toast.info(
+    translate(
+      'auto.components.settings.cloudRoutines.runs.workspaceElsewhere',
+      'This run’s workspace isn’t on this computer yet. It shows up in your Orca Cloud workspaces once it syncs.'
+    )
+  )
+}
 
 export function CloudRoutinesPane(): React.JSX.Element | null {
   const t = useTranslate()
@@ -103,6 +122,7 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
       localTimezone={timezone}
       onRefresh={() => void load()}
       refreshing={refreshing}
+      onOpenWorkspace={(sandboxId) => void openRunWorkspace(sandboxId)}
       onLatestRun={(routine, run) => {
         // Keep the row's pill in step with the newest run its open history just fetched.
         const lastRun = run ? { id: run.id, status: run.status, finishedAt: run.finishedAt } : null

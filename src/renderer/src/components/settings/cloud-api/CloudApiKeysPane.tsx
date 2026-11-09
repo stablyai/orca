@@ -157,7 +157,7 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
       grants={grants}
       onRefreshGrants={() => {
         const isCurrent = begin('grants')
-        setGrants({ status: 'loading' })
+        setGrants((current) => (current.status === 'ok' ? current : { status: 'loading' }))
         void api.listGrants().then((apps) => {
           if (isCurrent()) {
             setGrants(toCloudLoadState(apps.ok ? { ok: true, data: apps.data.grants } : apps, word))

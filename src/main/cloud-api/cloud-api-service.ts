@@ -10,6 +10,8 @@ import type {
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
+import { findCloudRuntime } from '../hosted-sandbox/hosted-workspace-runtime'
+import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { CloudApiError, createCloudApiClient, type CloudApiClient } from './cloud-api-client'
 
@@ -80,4 +82,21 @@ export async function callCloudApi<T>(
     // Unknown failures stay generic: their messages could carry request internals.
     return { ok: false, error: 'server' }
   }
+}
+
+/**
+ * The desktop workspace (worktree) that runs on a given Orca Cloud sandbox, if this computer
+ * has it (e.g. a routine run's workspace that was opened here before). Null otherwise.
+ */
+export function findLocalWorkspaceForSandbox(sandboxId: string): string | null {
+  const userDataPath = app.getPath('userData')
+  for (const runtime of listEphemeralVmRuntimes(userDataPath)) {
+    if (runtime.recipe?.provider !== 'orca-cloud' || !runtime.workspaceId) {
+      continue
+    }
+    if (findCloudRuntime(userDataPath, runtime.workspaceId)?.sandboxId === sandboxId) {
+      return runtime.workspaceId
+    }
+  }
+  return null
 }

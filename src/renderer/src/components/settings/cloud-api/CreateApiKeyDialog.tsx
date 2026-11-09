@@ -41,6 +41,8 @@ export type CreateApiKeyDialogProps = {
   /** Scopes this viewer may grant (members cannot grant admin-only scopes). */
   availableScopes: readonly CloudApiScope[]
   onCreate: (input: CreateCloudApiKeyInput) => Promise<CloudApiResult<CloudApiCreatedKey>>
+  /** Where focus goes when the dialog closes (the trigger may have unmounted). */
+  returnFocusTo?: () => HTMLElement | null
   /** Fixtures: open straight on the one-time secret. */
   initialCreated?: CloudApiCreatedKey
 }
@@ -70,6 +72,13 @@ export function CreateApiKeyDialog(props: CreateApiKeyDialogProps): React.JSX.El
         showCloseButton={!created}
         onInteractOutside={created ? (event) => event.preventDefault() : undefined}
         onEscapeKeyDown={created ? (event) => event.preventDefault() : undefined}
+        onCloseAutoFocus={(event) => {
+          const target = props.returnFocusTo?.()
+          if (target) {
+            event.preventDefault()
+            target.focus()
+          }
+        }}
       >
         {created ? (
           <SecretStep created={created} onDone={() => handleOpenChange(false)} />

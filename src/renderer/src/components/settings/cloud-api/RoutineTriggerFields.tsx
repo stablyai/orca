@@ -25,7 +25,12 @@ import { getUiWeekdayNames } from '@/i18n/weekday-names'
 import { cn } from '@/lib/utils'
 import { isValidAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { ROUTINE_GITHUB_EVENTS } from '../../../../../shared/cloud-api/cloud-api-types'
-import { githubEventLabel, shortTimeZoneName, timeZoneOptions } from './cloud-api-format'
+import {
+  friendlyTimeZone,
+  githubEventLabel,
+  shortTimeZoneName,
+  timeZoneOptions
+} from './cloud-api-format'
 import { FormField } from './cloud-api-parts'
 import {
   routineDraftCron,
@@ -103,7 +108,7 @@ export function RoutineScheduleFields({
             <SelectContent position="popper" className="max-h-72">
               {zones.map((zone) => (
                 <SelectItem key={zone} value={zone}>
-                  {zone}
+                  {friendlyTimeZone(zone)}
                   <span className="ml-1.5 text-muted-foreground">
                     ({shortTimeZoneName(zone, locale)})
                   </span>

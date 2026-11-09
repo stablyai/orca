@@ -285,7 +285,14 @@ function RunRow({
       {run.result?.summary ? (
         <p className="line-clamp-2 text-xs text-muted-foreground">{run.result.summary}</p>
       ) : null}
-      {run.error ? <p className="text-xs text-destructive">{run.error}</p> : null}
+      {run.error ? (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-destructive">
+            {t('auto.components.settings.cloudRoutines.runs.why', 'Why:')}
+          </span>{' '}
+          {run.error}
+        </p>
+      ) : null}
     </li>
   )
 }

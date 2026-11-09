@@ -18,7 +18,7 @@ export function renderCloudApiSettingsSections(
     <>
       <SettingsSection
         id="cloud-api-keys"
-        title={t('auto.components.settings.cloudApi.sectionTitle', 'Orca API Keys')}
+        title={t('auto.components.settings.cloudApi.sectionTitle', 'Orca API keys')}
         badge="Beta"
         description={t(
           'auto.components.settings.cloudApi.sectionDescription',

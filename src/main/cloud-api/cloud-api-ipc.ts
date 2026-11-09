@@ -9,7 +9,11 @@ import {
   type CloudApiResult
 } from '../../shared/cloud-api/cloud-api-types'
 import type { CloudApiClient } from './cloud-api-client'
-import { callCloudApi, getCloudApiAvailability } from './cloud-api-service'
+import {
+  callCloudApi,
+  findLocalWorkspaceForSandbox,
+  getCloudApiAvailability
+} from './cloud-api-service'
 
 const Id = z.string().min(1).max(128)
 const AuditQuery = z
@@ -70,7 +74,11 @@ const HANDLERS: Record<string, Handler> = {
   )
 }
 
-export const CLOUD_API_CHANNELS = ['cloudApi:availability', ...Object.keys(HANDLERS)]
+export const CLOUD_API_CHANNELS = [
+  'cloudApi:availability',
+  'cloudApi:localWorkspaceFor',
+  ...Object.keys(HANDLERS)
+]
 
 /** Exposed for tests: the validated handler behind a channel. */
 export function cloudApiHandlerFor(channel: string): Handler | undefined {
@@ -82,6 +90,10 @@ export function registerCloudApiHandlers(): void {
     ipcMain.removeHandler(channel)
   }
   ipcMain.handle('cloudApi:availability', () => getCloudApiAvailability())
+  ipcMain.handle('cloudApi:localWorkspaceFor', (_event, sandboxId: unknown) => {
+    const parsed = Id.safeParse(sandboxId)
+    return parsed.success ? findLocalWorkspaceForSandbox(parsed.data) : null
+  })
   for (const [channel, handler] of Object.entries(HANDLERS)) {
     ipcMain.handle(channel, (_event, ...args: unknown[]) => handler(...args))
   }

@@ -218,11 +218,17 @@ export function ApproveAppDialog({
                 variant="ghost"
                 size="sm"
                 onClick={() => change(false)}
-                disabled={busy}
+                aria-disabled={busy}
               >
                 {t('auto.components.settings.cloudApi.cancel', 'Cancel')}
               </Button>
-              <Button type="button" size="sm" onClick={() => void generate()} disabled={busy}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={busy ? undefined : () => void generate()}
+                aria-disabled={busy}
+                aria-busy={busy}
+              >
                 {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
                 {expired
                   ? t('auto.components.settings.cloudApi.approve.regenerate', 'Generate a new code')

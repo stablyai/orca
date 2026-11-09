@@ -169,7 +169,7 @@ export function buildSetupSettingsSections(
       ? [
           {
             id: 'cloud-api-keys',
-            title: t('auto.components.settings.cloudApi.sectionTitle', 'Orca API Keys'),
+            title: t('auto.components.settings.cloudApi.sectionTitle', 'Orca API keys'),
             description: t(
               'auto.components.settings.cloudApi.sectionDescription',
               'For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets.'

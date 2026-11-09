@@ -215,6 +215,9 @@ function EditorForm({
 
   const submit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault()
+    if (submitting) {
+      return
+    }
     const validation = validateRoutineDraft(draft)
     if (!validation.ok) {
       setErrors(validation.errors)
@@ -339,6 +342,7 @@ function EditorForm({
             <WebhookTriggerInfo
               routine={routine}
               rotating={rotating}
+              dirty={dirty}
               onAskRotate={() => setRotating('confirm')}
               onCancelRotate={() => setRotating('idle')}
               onRotate={() => void rotate()}
@@ -352,12 +356,18 @@ function EditorForm({
       {failure ? <CloudApiErrorNotice message={failure} /> : null}
 
       {/* Sticky so Save stays in reach however long the form scrolls. */}
-      <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-border bg-dialog-surface px-6 py-3">
+      <div className="sticky -bottom-6 z-10 -mx-6 -mb-6 border-t border-border bg-dialog-surface px-6 py-3">
         <DialogFooter>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={submitting ? undefined : onCancel}
+            aria-disabled={submitting}
+          >
             {t('auto.components.settings.cloudApi.cancel', 'Cancel')}
           </Button>
-          <Button type="submit" size="sm" disabled={submitting}>
+          <Button type="submit" size="sm" aria-disabled={submitting} aria-busy={submitting}>
             {submitting ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
             {routine
               ? t('auto.components.settings.cloudRoutines.editor.save', 'Save changes')

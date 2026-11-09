@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AlertCircle } from 'lucide-react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -77,7 +77,13 @@ export function CopyValueButton({
         autoFocus={autoFocus}
         onClick={() => void copy()}
       >
-        {state === 'copied' ? <Check className="text-status-success" /> : <Copy />}
+        {state === 'failed' ? (
+          <X className="text-destructive" />
+        ) : state === 'copied' ? (
+          <Check className="text-status-success" />
+        ) : (
+          <Copy />
+        )}
         {state === 'copied'
           ? t('auto.components.settings.cloudApi.copied', 'Copied')
           : state === 'failed'

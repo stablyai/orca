@@ -229,6 +229,9 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
         availableScopes={available}
         onCreate={props.onCreate}
         initialCreated={initial?.created}
+        returnFocusTo={() =>
+          listRef.current?.querySelector<HTMLElement>('button[data-revoke]') ?? createRef.current
+        }
       />
       <ApproveAppDialog
         open={approveOpen}

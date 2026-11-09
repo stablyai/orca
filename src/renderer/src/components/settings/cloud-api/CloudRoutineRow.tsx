@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CalendarClock,
   Github,
@@ -88,6 +88,13 @@ export function RoutineRow({
     routine.repo?.url.replace(/^https:\/\/(www\.)?(github\.com\/)?/, '') ??
     null
   const isOn = enabled ?? routine.enabled
+  useEffect(() => {
+    if (notice?.tone !== 'ok') {
+      return
+    }
+    const timer = setTimeout(() => setNotice(null), 6000)
+    return () => clearTimeout(timer)
+  }, [notice])
   const lastRun = routine.lastRun
   const active = lastRun !== null && isActiveRunStatus(lastRun.status)
 

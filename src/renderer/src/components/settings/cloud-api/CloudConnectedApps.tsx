@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Plug, ShieldCheck, Unplug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -44,6 +44,9 @@ export function CloudConnectedApps({
       : null
   )
   const [confirmOpen, setConfirmOpen] = useState(target !== null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const groupRef = useRef<HTMLDivElement>(null)
+  const targetIndex = useRef(0)
 
   // Older control planes have no MCP server: say nothing rather than show an error.
   if (grants.status === 'error' && grants.code === 'not-available') {
@@ -51,7 +54,7 @@ export function CloudConnectedApps({
   }
 
   return (
-    <>
+    <div ref={groupRef}>
       <SettingsGroup
         title={t('auto.components.settings.cloudApi.apps.title', 'Connected apps')}
         description={
@@ -91,9 +94,17 @@ export function CloudConnectedApps({
             }
           />
         ) : (
-          <ul aria-label={t('auto.components.settings.cloudApi.apps.listLabel', 'Connected apps')}>
-            {grants.data.map((grant) => (
-              <li key={grant.id} data-settings-row="" className="flex items-start gap-3 py-3.5">
+          <ul
+            ref={listRef}
+            aria-label={t('auto.components.settings.cloudApi.apps.listLabel', 'Connected apps')}
+          >
+            {grants.data.map((grant, index) => (
+              <li
+                key={grant.id}
+                data-grant-id={grant.id}
+                data-settings-row=""
+                className="flex items-start gap-3 py-3.5"
+              >
                 <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/40 text-muted-foreground">
                   <Plug className="size-3.5" aria-hidden />
                 </div>
@@ -169,7 +180,9 @@ export function CloudConnectedApps({
                       value0: appName(grant, t)
                     }
                   )}
+                  data-disconnect=""
                   onClick={() => {
+                    targetIndex.current = index
                     setTarget(grant)
                     setConfirmOpen(true)
                   }}
@@ -210,8 +223,22 @@ export function CloudConnectedApps({
           </>
         }
         confirmLabel={t('auto.components.settings.cloudApi.apps.confirm', 'Disconnect')}
+        returnFocusTo={() => {
+          if (!target || listRef.current?.querySelector(`[data-grant-id="${target.id}"]`)) {
+            return null
+          }
+          const rows = [
+            ...(listRef.current?.querySelectorAll<HTMLElement>('[data-grant-id]') ?? [])
+          ]
+          const next = rows[targetIndex.current] ?? rows[targetIndex.current - 1]
+          return (
+            next?.querySelector<HTMLElement>('button[data-disconnect]') ??
+            groupRef.current?.querySelector<HTMLElement>('button') ??
+            null
+          )
+        }}
         onConfirm={async () => (target ? onRevoke(target) : null)}
       />
-    </>
+    </div>
   )
 }

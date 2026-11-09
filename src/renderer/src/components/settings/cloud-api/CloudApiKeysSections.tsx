@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, History, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -157,7 +158,7 @@ export function OrgSettings({
             ) : null}
           </p>
           {settings.status === 'error' ? (
-            <p className="text-xs text-destructive">{settings.message}</p>
+            <InlineError tone="neutral" title={settings.message} className="mt-2" />
           ) : null}
           {error ? (
             <p role="alert" className="text-xs text-destructive">
@@ -278,7 +279,7 @@ export function AuditLog({
       title={t('auto.components.settings.cloudApi.audit.title', 'Recent activity')}
       description={t(
         'auto.components.settings.cloudApi.audit.description',
-        'Key, workspace and settings changes across the account. Visible to admins only.'
+        'Key, workspace and settings changes across your team. Visible to admins only.'
       )}
       action={
         <Button

@@ -165,3 +165,9 @@ export function shortTimeZoneName(
     return timeZone
   }
 }
+
+/** "America/New_York" → "New York"; "UTC" stays "UTC". */
+export function friendlyTimeZone(timeZone: string): string {
+  const city = timeZone.split('/').pop() ?? timeZone
+  return city.replaceAll('_', ' ')
+}

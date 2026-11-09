@@ -36,12 +36,14 @@ export function GithubAppHint({
 export function WebhookTriggerInfo({
   routine,
   rotating,
+  dirty,
   onAskRotate,
   onCancelRotate,
   onRotate
 }: {
   routine: Routine | null
   rotating: 'idle' | 'confirm' | 'busy'
+  dirty: boolean
   onAskRotate: () => void
   onCancelRotate: () => void
   onRotate: () => void
@@ -93,8 +95,18 @@ export function WebhookTriggerInfo({
             type="button"
             variant="outline"
             size="xs"
-            onClick={onAskRotate}
-            disabled={rotating === 'busy'}
+            onClick={rotating === 'busy' || dirty ? undefined : onAskRotate}
+            // Rotating opens the one-time URL step, which would drop unsaved edits.
+            aria-disabled={rotating === 'busy' || dirty}
+            aria-busy={rotating === 'busy'}
+            title={
+              dirty
+                ? t(
+                    'auto.components.settings.cloudRoutines.editor.rotateSaveFirst',
+                    'Save or discard your changes before rotating the URL.'
+                  )
+                : undefined
+            }
           >
             {rotating === 'busy' ? (
               <Loader2 className="animate-spin motion-reduce:animate-none" />
