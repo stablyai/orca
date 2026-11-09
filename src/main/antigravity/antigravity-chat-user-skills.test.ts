@@ -47,8 +47,12 @@ it('replaces the empty placeholder with a link to the user skills', async () => 
 
 it('removes a link whose target is gone', async () => {
   const link = join(chatHome, 'antigravity-cli', 'skills')
+  const target = join(userHome, '.gemini', 'antigravity-cli', 'skills')
   await mkdir(join(chatHome, 'antigravity-cli'), { recursive: true })
-  await symlink(join(userHome, '.gemini', 'antigravity-cli', 'skills'), link, 'dir')
+  await mkdir(target, { recursive: true })
+  // Windows creates directory links without extra rights only as junctions, to a target that exists.
+  await symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir')
+  await rm(target, { recursive: true })
 
   await linkAntigravityUserSkills(chatHome, userHome)
 
