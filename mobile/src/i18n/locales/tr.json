@@ -1302,6 +1302,28 @@
       "sessionLimit": "Bu bilgisayarda çok fazla cihaz dikte ediyor. Biri bitince tekrar deneyin.",
       "sessionLost": "Diktenin bilgisayarla bağlantısı kesildi. Yeniden deneyin.",
       "updateFailed": "Dikte ayarları güncellenemedi"
+    },
+    "controls": {
+      "start": "Dikte et",
+      "starting": "Dikte başlatılıyor",
+      "stop": "Durdur ve ekle",
+      "finishing": "Dikte tamamlanıyor",
+      "cancel": "Dikteyi iptal et",
+      "meterOnPhone": "Kaydediliyor, {{duration}}, bu telefonda",
+      "meterOn": "Kaydediliyor, {{duration}}, {{computer}} üzerinde",
+      "meterOnComputer": "Kaydediliyor, {{duration}}, bilgisayarda",
+      "meter": "Kaydediliyor, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} saniye",
+      "durationSeconds_other": "{{count}} saniye",
+      "durationMinutes_one": "{{count}} dakika",
+      "durationMinutes_other": "{{count}} dakika"
+    },
+    "status": {
+      "finishingOn": "{{computer}} üzerinde tamamlanıyor",
+      "finishingOnComputer": "Bilgisayarda tamamlanıyor",
+      "movedTo": "{{computer}} cihazına geçildi",
+      "movedToComputer": "Bilgisayara geçildi"
     }
   },
   "files": {
@@ -2402,11 +2424,7 @@
     "terminalInputActions": {
       "attachFileHint": "Fotoğraf yerine dosya eklemek için basılı tutun",
       "attachPhoto": "Fotoğraf ekle",
-      "sendingImage": "Görsel gönderiliyor",
-      "startDictation": "Sesli dikteyi başlat",
-      "startingDictation": "Sesli dikte başlatılıyor",
-      "stopDictation": "Sesli dikteyi durdur",
-      "transcribingDictation": "Sesli dikte yazıya dökülüyor"
+      "sendingImage": "Görsel gönderiliyor"
     },
     "terminalLiveInputStatus": {
       "listening": "Dinliyor",
@@ -2415,8 +2433,6 @@
       "processing": "İşleniyor",
       "releaseMicHint": "Durdurmak için mikrofonu bırakın",
       "startingMic": "Mikrofon başlatılıyor",
-      "stopHint": "Durdurmak için mikrofona dokunun",
-      "transcribing": "Masaüstünde yazıya dökülüyor",
       "uploadingImage": "Görsel sunucuya yükleniyor",
       "uploadingImageTitle": "Görsel yükleniyor"
     },

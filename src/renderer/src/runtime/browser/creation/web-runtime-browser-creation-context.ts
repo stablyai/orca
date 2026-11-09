@@ -1,6 +1,6 @@
 import { subscribeLinkOpenRequests } from '../../../lib/link-open-request'
 import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
-import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../../../lib/client-creation-action-policy'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '../../../store/index'

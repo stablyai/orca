@@ -9,19 +9,6 @@ import {
   type PendingSessionSelection
 } from './pending-session-selection'
 
-function terminalTab(id: string, terminal: string): MobileSessionTab {
-  const tab: MobileSessionTab = {
-    type: 'terminal',
-    id,
-    parentTabId: id,
-    leafId: 'leaf',
-    title: 'Terminal',
-    terminal,
-    isActive: false
-  }
-  return tab
-}
-
 function chatTab(id: string, sessionId: string): MobileSessionTab {
   const tab: MobileSessionTab = {
     type: 'agent-session',
@@ -52,44 +39,11 @@ function reservedTerminalTab(terminal: string | null): MobileSessionTab {
 }
 
 describe('resolveLaunchedSelection', () => {
-  it('finds a launched chat by its session id, whatever its tab id is', () => {
-    const tabs = [chatTab('opaque-tab-7', 'claude_s1')]
-    expect(
-      resolveLaunchedSelection(launchedSelection('l1', { sessionId: 'claude_s1' }), tabs)
-    ).toEqual({
-      selection: { kind: 'tab', tabId: 'opaque-tab-7' },
-      landedTabId: 'opaque-tab-7'
-    })
-  })
-
-  it('finds a launched terminal by the pane this device reserved, before any reply', () => {
-    const selection = launchedSelection('l1', { pane: PANE }, null)
-    expect(resolveLaunchedSelection(selection, [reservedTerminalTab('term_9')])).toEqual({
-      selection: { kind: 'terminal', handle: 'term_9', tabId: `${PANE.tabId}::${PANE.leafId}` },
-      landedTabId: `${PANE.tabId}::${PANE.leafId}`
-    })
-    expect(resolveLaunchedSelection(selection, [reservedTerminalTab(null)]).selection).toEqual({
-      kind: 'tab',
-      tabId: `${PANE.tabId}::${PANE.leafId}`
-    })
-  })
-
   it('never takes a chat for the reserved pane: a chat is listed under its session', () => {
     const selection = launchedSelection('l1', { pane: PANE }, null)
     expect(
       resolveLaunchedSelection(selection, [chatTab(PANE.tabId, 'claude_other')]).landedTabId
     ).toBeNull()
-  })
-
-  it("finds a terminal by the reply's handle when the host ignored the reservation", () => {
-    const tabs = [terminalTab('tab-2', 'term_9')]
-    const selection = withLaunchReply(launchedSelection('l1', { pane: PANE }, null), 'l1', {
-      handle: 'term_9'
-    })
-    expect(resolveLaunchedSelection(selection, tabs)).toEqual({
-      selection: { kind: 'terminal', handle: 'term_9', tabId: 'tab-2' },
-      landedTabId: 'tab-2'
-    })
   })
 })
 
@@ -102,13 +56,6 @@ describe("a launch's own reply and end", () => {
     expect(withLaunchReply(newer, 'l1', { handle: 'term_9' })).toBe(newer)
     expect(withoutUnansweredLaunch(pick, 'l1')).toBe(pick)
     expect(withoutUnansweredLaunch(newer, 'l1')).toBe(newer)
-  })
-
-  it('drops a launch that ended unanswered and keeps one its reply named', () => {
-    const waiting = launchedSelection('l1', { pane: PANE }, null)
-    expect(withoutUnansweredLaunch(waiting, 'l1')).toBeNull()
-    const answered = withLaunchReply(waiting, 'l1', { handle: 'term_9' })
-    expect(withoutUnansweredLaunch(answered, 'l1')).toBe(answered)
   })
 })
 

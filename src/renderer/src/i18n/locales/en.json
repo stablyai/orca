@@ -1156,8 +1156,7 @@
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gpt4oMiniTranscribe": "Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.",
-        "gpt4oTranscribe": "Cloud transcription with higher accuracy. Requires an OpenAI API key."
+        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key."
       }
     },
     "diagnostics": {
@@ -2139,6 +2138,10 @@
         "title": "Add Windows drive folders on this computer",
         "descriptionWithPath": "{{value0}} is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly.",
         "description": "This folder is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly."
+      },
+      "environmentSetupAgentLaunch": {
+        "noAgent": "No enabled AI agent was detected for this workspace.",
+        "noWorkspace": "Open a workspace for this project first, then try again."
       }
     },
     "hooks": {
@@ -4561,7 +4564,6 @@
             "4f327c8b3d": "Open Markdown...",
             "3d5d6c960d": "New Markdown",
             "fd2b42aaa3": "New Mobile Emulator",
-            "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
             "d364f3c8d4": "New Terminal",
@@ -5310,6 +5312,9 @@
             "accounts": "Saved Antigravity Accounts",
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Resets {{when}}"
           }
         }
       },
@@ -6438,15 +6443,19 @@
           "b0a7bfc34c": "Hide from sidebar",
           "88d402b71d": "Onboarding checklist"
         },
+        "SetupScriptCodeBlock": {
+          "showLess": "Show less",
+          "showMore_one": "Show {{count}} more line",
+          "showMore_other": "Show {{count}} more lines"
+        },
         "SetupScriptPromptCard": {
           "ff1e819a11": "Add a setup script",
           "70715947fb": "Setup script cannot be empty",
           "888b83bf78": "Failed to save setup script",
           "a49196d538": "Runs when Orca creates a new worktree.",
           "savedSetupCommand": "Saved the setup command.",
-          "savedWithSkippedFields_one": "{{count}} unsupported field skipped. Saved the setup command.",
-          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command.",
-          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
+          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>",
+          "importTitle": "Import setup script"
         },
         "SetupScriptPromptCardViews": {
           "3933401d28": "Configure",
@@ -6458,20 +6467,23 @@
           "eefa756190": "Configure manually",
           "ca4efcbc25": "Save",
           "fdbc6cb064": "Detected setup script",
-          "7275f674cc": "Detected setup",
           "822ff300ad": "Dismiss",
           "5bfd5c8779": "Dismiss setup scripts",
-          "detectedFromSource": "Detected from <source>{{source}}</source>",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
-          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.",
-          "reviewSetupScript": "Review setup script"
+          "reviewSetupScript": "Review setup script",
+          "foundSetupScriptIn": "Found a setup script in <file>{{source}}</file>.",
+          "7275f674cc": "Detected setup",
+          "detectedFromSource": "Detected from <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Review setup script",
           "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "setupScript": "Setup script",
           "archiveScript": "Archive script",
-          "save": "Save local setup"
+          "save": "Save local setup",
+          "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
+          "notImported": "Not imported",
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -8877,7 +8889,6 @@
           "f828e1de19": "- shared with your team",
           "673a7fd10e": "Checking...",
           "5426ecbdcb": "Local scripts will not run",
-          "b2b06c7ce8": "Available environment variables (hover for details):",
           "95a0411b3e": "template",
           "175daba180": "Example",
           "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
@@ -9773,7 +9784,8 @@
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
-          "dictationModesDescription": "Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held."
+          "dictationModeAuto": "Auto",
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -11616,7 +11628,10 @@
               "modelUnloadTitle": "Unload Speech Model",
               "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
               "modelUnloadKeyword": "unload",
-              "modelMemoryKeyword": "memory"
+              "modelMemoryKeyword": "memory",
+              "fillerWordsTitle": "Remove Filler Words",
+              "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
+              "fillerWordsKeyword": "filler words"
             }
           }
         },
@@ -12040,7 +12055,10 @@
           "checking": "Checking recipes...",
           "none": "No recipes found yet.",
           "cloudVmSkillTitle": "Cloud VM setup skill",
-          "cloudVmRefresh": "Refresh Cloud VM recipes"
+          "cloudVmRefresh": "Refresh Cloud VM recipes",
+          "setUpWithAgent": "Set up with an agent",
+          "setUpWithAgentHint": "Starts your default agent in {{repo}}. It edits orca.yaml, runs the doctors until they pass, and opens a PR.",
+          "setUpWithAgentNoRepo": "Add a project first."
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
@@ -17394,7 +17412,8 @@
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
-          "stoppedAfterSilence": "Stopped after a minute of silence"
+          "stoppedAfterSilence": "Stopped after a minute of silence",
+          "retryUnmatched": "Retry couldn't tell which words were already typed, so it inserted them all."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",
@@ -17402,13 +17421,19 @@
           "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation",
-          "7f3660a7ba": "Starting mic…",
-          "f082d0cb9d": "Processing…",
-          "3de5a129e7": "Listening",
           "4977162383": "Too loud",
-          "25f2b7a6a5": "Speaking",
-          "loadingModel": "Loading speech model…"
+          "finishing": "Finishing…",
+          "listening": "Listening…",
+          "cancel": "Cancel",
+          "finish": "Finish",
+          "oneMinuteLeft": "One minute left."
+        },
+        "DictationPillFailure": {
+          "discard": "Discard recording",
+          "modelFailed": "Speech model couldn't load.",
+          "transcribeFailed": "Couldn't transcribe. Recording kept.",
+          "openSettings": "Open settings",
+          "retry": "Retry"
         }
       },
       "dashboard": {
@@ -20774,6 +20799,7 @@
       "composerWorkspace": {
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
+        "detachedCommit": "Commit {{head}} (not a branch)",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
@@ -21320,7 +21346,14 @@
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
           "immediately": "Immediately"
+        },
+        "fillerWords": {
+          "title": "Remove Filler Words",
+          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Available environment variables"
       }
     },
     "agentChildRow": {
@@ -21538,7 +21571,16 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "New Agent"
+        "browser": "Browser",
+        "chooseAgent": "Choose agent",
+        "closePane": "Close pane",
+        "goToFile": "Go to file",
+        "heading": "Open in this pane",
+        "markdown": "Markdown",
+        "mobileEmulator": "Mobile emulator",
+        "newAgent": "New Agent",
+        "reopenClosedTab": "Reopen closed tab",
+        "terminal": "Terminal"
       }
     }
   },
@@ -22612,11 +22654,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
     "alwaysForceDelete": "Always force delete",
+    "alwaysForceDeleteDescription": "Applies to all future workspace deletions.",
     "moreActions": "More force delete options",
-    "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions.",
+    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions.",
     "moreDeleteOptions": "More delete options",
     "alwaysDelete": "Always delete",
     "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
@@ -23337,7 +23379,8 @@
     "refresh": "Refresh",
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
-    "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+    "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
+    "metricDetails": "Metric details"
   },
   "browserExtensions": {
     "permission": {

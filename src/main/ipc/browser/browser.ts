@@ -11,6 +11,7 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
   disposeGrabModeStateForPage,
   registerBrowserGrabHandlers,
@@ -26,7 +27,7 @@ import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser-web
 import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../shared/browser-page-prompt'
+} from '../../../shared/browser/prompts/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'
@@ -250,6 +251,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()
 

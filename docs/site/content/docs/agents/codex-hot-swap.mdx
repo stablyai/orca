@@ -14,11 +14,11 @@ Accounts are optional: without any, Orca uses your normal Codex login (**System 
 
 ## Swap accounts
 
-Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. Any new Codex session launched after that uses it. Sessions already running keep their original account until restarted.
+Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. Any new Codex session launched after that uses it, and open Codex chats move to it before their next message (a reply already running finishes first). Terminal sessions already running keep their original account until restarted.
 
 ## Running accounts side by side
 
-Because each added account has its own isolated home, two Codex sessions can run under different accounts at the same time: start one, switch accounts, start the next. Each session keeps the account it launched with. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
+Because each added account has its own isolated home, two Codex terminal sessions can run under different accounts at the same time: start one, switch accounts, start the next. Each terminal session keeps the account it launched with; chats always follow the selected account. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
 
 ## System default
 
@@ -31,7 +31,7 @@ For managed Codex accounts, Orca mirrors settings from your real `~/.codex/confi
 ## Rules & gotchas
 
 - Swapping does not re-authenticate; Orca launches new sessions in the selected account's home.
-- Existing Codex processes keep their current account until restart.
+- Existing Codex terminal processes keep their current account until restart. Chats switch on their next message.
 - Usage readouts in the status bar follow the currently-active account.
 - The restart chip preserves the active account at the time of restart.
 - Accounts belong to the machine that runs the agent. On a [Remote Orca Server](/docs/remote-servers), add them on that server.

@@ -109,7 +109,7 @@ feedback, Vitest can select tests affected by your edits:
 ```bash
 pnpm test:changed src/main/runtime --maxWorkers=2
 pnpm test --changed=origin/main --maxWorkers=2
-pnpm test src/shared/automations/scheduling/automation-cron-dialect.test.ts --maxWorkers=2
+pnpm test src/shared/automations/scheduling/automation-cron-input-validation.test.ts --maxWorkers=2
 ```
 
 `test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`

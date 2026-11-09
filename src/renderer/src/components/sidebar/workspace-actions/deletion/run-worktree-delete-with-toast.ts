@@ -77,7 +77,7 @@ export function runWorktreeDeleteWithToast(
       worktreeId,
       executionHostId: target.executionHostId,
       worktreeName,
-      nestedRemovalTarget: route && !route.runtimeEnvironmentId ? target : undefined,
+      nestedRemovalTarget: route ? target : undefined,
       onNestedDeleted: () => options.onForceDeleted?.(target)
     })
   }
