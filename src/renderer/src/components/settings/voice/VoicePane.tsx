@@ -255,7 +255,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     // Select and download first, so the download runs while the OS asks for the microphone.
     const selection = { sttModel: suggestedModel.id }
     updateVoiceSettings(selection)
-    startSpeechModelDownload(suggestedModel.id, refreshModelStates)
+    startSpeechModelDownload(suggestedModel.id, () => void refreshModelStates())
     if (!voiceSettings.enabled) {
       // The enable write repeats the selection: it can land before the first write's reply refreshes the ref.
       void toggleVoiceDictation(selection)
