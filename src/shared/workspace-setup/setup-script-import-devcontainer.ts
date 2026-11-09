@@ -107,10 +107,14 @@ function singleCommandToShell(value: unknown): string {
     return ''
   }
   // argv skips the shell; only join it when no argument would need quoting to survive one.
-  if (!value.every((arg) => typeof arg === 'string' && SHELL_SAFE_ARG.test(arg))) {
-    return ''
+  const args: string[] = []
+  for (const arg of value) {
+    if (typeof arg !== 'string' || !SHELL_SAFE_ARG.test(arg)) {
+      return ''
+    }
+    args.push(arg)
   }
-  return normalizeSetupScriptImportCommand((value as string[]).join(' '))
+  return normalizeSetupScriptImportCommand(args.join(' '))
 }
 
 function rewriteDevcontainerVariables(command: string): string {

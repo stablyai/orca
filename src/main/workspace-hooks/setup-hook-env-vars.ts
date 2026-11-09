@@ -11,7 +11,10 @@ export const SETUP_RUNNER_PATH_ENV_KEYS = [
   'GHOSTX_ROOT_PATH'
 ] as const
 
-export function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
+export function getSetupEnvVars(
+  repo: Pick<Repo, 'path'>,
+  worktreePath: string
+): Record<string, string> {
   return {
     ORCA_ROOT_PATH: repo.path,
     ORCA_WORKTREE_PATH: worktreePath,
