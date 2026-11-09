@@ -57,7 +57,7 @@ export function portsPanelHostForOwnerKey(key: HostAuthorityKey | null): PortsPa
   return { kind: 'host-scoped', route, executionHostId: authority.at }
 }
 
-/** The Ports tab shows for a workspace on an SSH host, dialed directly or through its managed server. */
+/** The Ports tab shows for a workspace on another machine: an SSH host or a paired Orca server. */
 export function portsPanelReachesSshHost(
   host: PortsPanelHost,
   environments: readonly { id: string; orcadDeployment?: unknown }[]
@@ -68,12 +68,10 @@ export function portsPanelReachesSshHost(
       return true
     case 'endpoint': {
       const { target } = host
+      // Paired hosts scan their own ports and forward them to this computer over the runtime connection.
       return (
         target.kind === 'environment' &&
-        environments.some(
-          (environment) =>
-            environment.id === target.environmentId && environment.orcadDeployment !== undefined
-        )
+        environments.some((environment) => environment.id === target.environmentId)
       )
     }
     case 'unknown':

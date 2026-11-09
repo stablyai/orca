@@ -40,7 +40,13 @@ export async function scanWorkspacePorts(
       worktrees,
       options.requireMetadata
     )
-    const attributedPorts = attributePortsToWorkspaces(rawPorts, normalizedWorktrees)
+    // Orca's own listeners (runtime socket, hook server) run with a workspace in their command line but are not its servers.
+    const attributedPorts = attributePortsToWorkspaces(
+      rawPorts.map((port) =>
+        port.pid === process.pid ? { ...port, cwd: undefined, commandLine: undefined } : port
+      ),
+      normalizedWorktrees
+    )
     // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
     if (metadataAvailable && complete) {
       reconcileAdvertisedUrls(attributedPorts, normalizedWorktrees, urlWatcher)

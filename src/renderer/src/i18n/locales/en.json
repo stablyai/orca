@@ -2155,6 +2155,13 @@
         "restartSoonDetail": "{{name}} reaches its 24-hour session limit. Files stay; running agents pick up where they left off.",
         "thisWorkspace": "This workspace",
         "seePlans": "See plans"
+      },
+      "runtimePortForwards": {
+        "busy": "localhost:{{value0}} busy",
+        "unsupported": "Host needs an Orca update",
+        "listenFailed": "Could not listen here",
+        "tunnelFailed": "Host unreachable",
+        "desktopOnly": "Port forwarding needs the desktop app."
       }
     },
     "hooks": {
@@ -2278,7 +2285,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "portsTitle": "Ports",
+        "portsDescription": "Forward dev servers on remote hosts to localhost on this computer."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -9297,7 +9306,9 @@
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
           "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
           "remoteServersDescription": "Run Orca on another machine and work on it from here.",
-          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\""
+          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
+          "portsTitle": "Ports",
+          "portsDescription": "Forward dev servers on remote hosts to localhost on this computer."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -13919,6 +13930,26 @@
           },
           "title": "Agent API Keys",
           "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."
+        },
+        "ports": {
+          "autoForward": "Auto-forward ports",
+          "autoForwardDescription": "Forward dev servers on remote hosts to localhost here.",
+          "exclusive": "Same port number only",
+          "exclusiveDescription": "If the port is taken here, skip it instead of remapping.",
+          "range": "Auto-forward port range",
+          "rangeDescription": "Ports outside this range aren't auto-forwarded.",
+          "rangeStart": "Lowest port",
+          "rangeEnd": "Highest port",
+          "notify": "Notify when a port is forwarded",
+          "search": {
+            "title": "Port Forwarding",
+            "description": "Forward dev servers on remote hosts to localhost on this computer.",
+            "ports": "ports",
+            "forward": "forward",
+            "localhost": "localhost",
+            "tunnel": "tunnel",
+            "devServer": "dev server"
+          }
         }
       },
       "right": {
@@ -14148,7 +14179,10 @@
             "remotePortOutOfRange": "Remote port must be 1–65535",
             "localPortOutOfRange": "Local port must be 1–65535",
             "localPortInUse": "Port {{port}} is already in use. Choose a different local port.",
-            "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024."
+            "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024.",
+            "remoteEmpty": "No ports yet. Dev servers started here are forwarded to localhost.",
+            "remoteEmptyOff": "No ports yet. Auto-forward is off.",
+            "portsSettings": "Ports settings"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -15470,6 +15504,28 @@
             "createInProgress": "Create PR in progress...",
             "workspaceHostUnresolved": "The workspace host is unresolved. Refresh the workspace and retry.",
             "branchDiscoveryFailed": "Branch discovery failed."
+          },
+          "RuntimeForwardedPorts": {
+            "title": "Other forwards",
+            "connections": "in use ({{value0}})",
+            "ssh": "SSH access",
+            "stopped": "stopped",
+            "stopLabel": "Stop forwarding port {{value0}}"
+          },
+          "RuntimePortForward": {
+            "stop": "Stop Forwarding",
+            "noResponse": "no response on host",
+            "remapped": "({{value0}} taken)",
+            "unreachableLabel": "Port {{value0}} is forwarded to localhost:{{value1}}, but nothing answers on the host. Open in browser",
+            "forwardedLabel": "Port {{value0}} is forwarded to localhost:{{value1}}. Open in browser",
+            "pending": "Forwarding…",
+            "useAnother": "Use another port",
+            "retry": "Retry",
+            "forward": "Forward to localhost",
+            "copied": "Copied {{value0}}",
+            "copyLocal": "Copy Local URL",
+            "stopAuto": "Stop and Don't Auto-Forward :{{value0}}",
+            "localAddress": "localhost:{{value0}}"
           }
         }
       },
@@ -19715,6 +19771,16 @@
           "seatsFollow2": "Seats follow your team: new members add a seat now; removed seats drop off at renewal."
         },
         "teamFrom": "Team starts at {{value0}} per seat per month, billed annually."
+      },
+      "ports": {
+        "RuntimePortAutoForwarder": {
+          "ready": "localhost:{{value0}} is ready",
+          "remapped": "{{value0}} · :{{value1}} was taken here",
+          "open": "Open",
+          "busy": "localhost:{{value0}} is in use here",
+          "busyDescription": "\"Same port number only\" is on, so :{{value0}} was not forwarded.",
+          "useAnother": "Use another port"
+        }
       }
     },
     "i18n": {

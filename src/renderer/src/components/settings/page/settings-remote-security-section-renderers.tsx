@@ -4,6 +4,7 @@ import { RuntimeEnvironmentsPane } from '../runtime-environments/catalog/Runtime
 import { RuntimeServersHeaderActions } from '../runtime-environments/runtime-servers-header-actions'
 import { RuntimeServersPageProvider } from '../runtime-environments/runtime-servers-page-context'
 import { SshPane } from '../ssh/SshPane'
+import { PortsPane } from '../ports/PortsPane'
 import { SshHostsHeaderSlot, SshHostsHeaderSlotProvider } from '../ssh/ssh-hosts-header-slot'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
@@ -78,6 +79,26 @@ export function renderSshSettingsSection(
         {mounted ? <SshPane addTargetIntentSignal={model.sshHostAddIntentSignal} /> : null}
       </SettingsSection>
     </SshHostsHeaderSlotProvider>
+  ) : null
+}
+
+export function renderPortsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.showDesktopOnlySettings ? (
+    <SettingsSection
+      id="ports"
+      title={t('auto.components.settings.Settings.portsTitle', 'Ports')}
+      description={t(
+        'auto.components.settings.Settings.portsDescription',
+        'Forward dev servers on remote hosts to localhost on this computer.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('ports')}
+    >
+      {view.isSectionMounted('ports') ? <PortsPane settings={model.settings} /> : null}
+    </SettingsSection>
   ) : null
 }
 

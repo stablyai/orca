@@ -49,7 +49,8 @@ import {
   renderDeveloperPermissionsSettingsSection,
   renderPrivacySettingsSection,
   renderServersSettingsSection,
-  renderSshSettingsSection
+  renderSshSettingsSection,
+  renderPortsSettingsSection
 } from './settings-remote-security-section-renderers'
 import {
   renderAdvancedSettingsSection,
@@ -169,6 +170,7 @@ export function renderSettingsPage(
                   {renderStatsSettingsSection(context, t)}
                   {renderServersSettingsSection(context, t)}
                   {renderSshSettingsSection(context, t)}
+                  {renderPortsSettingsSection(context, t)}
                   {renderDeveloperPermissionsSettingsSection(context, t)}
                   {renderPrivacySettingsSection(context, t)}
                   {renderAdvancedSettingsSection(context, t)}

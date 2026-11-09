@@ -4,6 +4,13 @@ import { cn } from '@/lib/utils'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { LocalPortRow } from './local-port-row'
 
+export type PortRowForwarding = {
+  status: (port: WorkspacePort) => React.ReactNode
+  menuItems: (port: WorkspacePort) => React.ReactNode
+  actions: (port: WorkspacePort) => React.ReactNode
+  copyAddress: (port: WorkspacePort) => string | undefined
+}
+
 export function LocalPortSection({
   id,
   title,
@@ -13,17 +20,20 @@ export function LocalPortSection({
   onToggle,
   onStopPort,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  forwarding
 }: {
   id: string
   title: string
   ports: WorkspacePort[]
-  emptyText?: string
+  emptyText?: React.ReactNode
   collapsed: boolean
   onToggle: () => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  /** Per-row forwarding UI for a remote host's ports. */
+  forwarding?: PortRowForwarding
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null
@@ -59,6 +69,10 @@ export function LocalPortSection({
                   onStop={onStopPort}
                   onShowDetails={onShowDetails}
                   onOpenInBrowser={onOpenInBrowser}
+                  forwardStatus={forwarding?.status(port)}
+                  forwardMenuItems={forwarding?.menuItems(port)}
+                  forwardActions={forwarding?.actions(port)}
+                  copyAddress={forwarding?.copyAddress(port)}
                 />
               ))
             : emptyText && <div className="py-1 text-xs text-muted-foreground">{emptyText}</div>}

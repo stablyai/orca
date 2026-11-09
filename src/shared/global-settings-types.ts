@@ -18,6 +18,7 @@ import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runti
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
+import type { RuntimePortForwardSettings } from './runtime-port-forwards'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
 import type {
@@ -198,6 +199,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   electronHttp1CompatibilityMode?: boolean
   /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */
   openLinksInApp: boolean
+  /** Settings → Ports: forwarding remote hosts' listeners to this computer; absent means defaults. */
+  runtimePortForwarding?: Partial<RuntimePortForwardSettings>
   /** Worktree-scoped localhost hostnames to distinguish tabs; opt-in since a non-localhost host can break apps binding cookies/sessions to localhost. */
   localhostWorktreeLabelsEnabled?: boolean
   /** Tracks the one-time first-use prompt for terminal link routing (avoid silently changing where links open). */

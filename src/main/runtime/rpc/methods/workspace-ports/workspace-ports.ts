@@ -7,6 +7,7 @@ import {
   WorkspacePortScanParams
 } from '../../../../../shared/rpc-contract/workspace-ports-params'
 import { probeWorkspacePortPage } from '../../../../ports/workspace-port-page-probe'
+import { createWorkspacePortForwardTunnelMethod } from './workspace-port-forward-tunnel'
 
 export const WORKSPACE_PORT_METHODS = [
   defineMethod({
@@ -49,5 +50,6 @@ export const WORKSPACE_PORT_METHODS = [
         pid: params.pid,
         port: params.port
       })
-  })
+  }),
+  createWorkspacePortForwardTunnelMethod()
 ]
