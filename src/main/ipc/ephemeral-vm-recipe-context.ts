@@ -64,6 +64,15 @@ export function listRecipes(
   }
 }
 
+// Glossary: an Orca Cloud machine is a sandbox; "VM" stays only for bring-your-own recipes.
+export function buildEphemeralEnvironmentName(
+  repo: string,
+  runtimeId: string,
+  recipe: { provider?: string }
+): string {
+  return `${repo} ${recipe.provider === 'orca-cloud' ? 'sandbox' : 'VM'} ${runtimeId.slice(-8)}`
+}
+
 /** The Run-on picker's list, plus Orca Cloud availability so it can offer sign-in or an upsell. */
 export async function listPickerRecipes(
   store: Store,

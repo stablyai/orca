@@ -13,6 +13,7 @@ export type RunTargetKeyboardActions = {
   setOpen: (open: boolean) => void
   moveArm: (step: number) => void
   moveItemArm: (step: number) => void
+  armItemEdge: (edge: 'first' | 'last') => void
   activate: (key: string | null) => void
   commitSubmenuItem: (key: string) => void
   closeSubmenu: () => void
@@ -39,6 +40,18 @@ export function handleRunTargetKeyDown(
     }
     actions.setOpen(true)
     actions.moveArm(step)
+    actions.closeSubmenu()
+    return
+  }
+  // Home/End jump within whichever list holds the arm; with a query typed they move the caret.
+  if ((event.key === 'Home' || event.key === 'End') && open && query === '') {
+    event.preventDefault()
+    const first = event.key === 'Home'
+    if (inSubmenu) {
+      actions.armItemEdge(first ? 'first' : 'last')
+      return
+    }
+    actions.moveArm(first ? -Infinity : Infinity)
     actions.closeSubmenu()
     return
   }

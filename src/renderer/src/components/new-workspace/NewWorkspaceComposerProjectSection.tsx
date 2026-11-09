@@ -16,7 +16,8 @@ import type {
 } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
 import { OrcaCloudSelectionHint } from './OrcaCloudSelectionHint'
-import { isOrcaCloudSelection } from './run-target-options'
+import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
+import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
@@ -96,6 +97,9 @@ export function NewWorkspaceComposerProjectSection({
   orcaCloudAccess
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const orcaCloudOffered = shouldShowRunTargetPicker && ephemeralVmRecipes.some(isOrcaCloudRecipe)
+  // Shared with the picker; mounting the composer prefetches it so the row rarely shows a skeleton.
+  const fetchedOrcaCloudAccess = useOrcaCloudRunTargetAccess(orcaCloudOffered && !orcaCloudAccess)
   return (
     <fieldset disabled={disabled} className="space-y-1">
       <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
@@ -186,8 +190,11 @@ export function NewWorkspaceComposerProjectSection({
               <p className="whitespace-pre-line text-[11px] text-destructive">
                 {ephemeralVmRecipeError}
               </p>
-            ) : isOrcaCloudSelection({ ephemeralVmRecipes, selectedEphemeralVmRecipeId }) ? (
-              <OrcaCloudSelectionHint access={orcaCloudAccess} />
+            ) : orcaCloudOffered ? (
+              <OrcaCloudSelectionHint
+                access={orcaCloudAccess ?? fetchedOrcaCloudAccess}
+                visible={isOrcaCloudSelection({ ephemeralVmRecipes, selectedEphemeralVmRecipeId })}
+              />
             ) : null}
           </div>
         ) : null}

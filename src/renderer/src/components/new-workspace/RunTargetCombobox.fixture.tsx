@@ -127,14 +127,20 @@ export const orcaCloudNotEntitled = defineFixture({
 export const orcaCloudOutOfHours = defineFixture({
   width: 420,
   render: () => (
-    <Preview recipes={withCloud} access={{ state: 'out-of-hours', canManageBilling: true }} />
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
+    />
   ),
   interact: open
 })
 export const orcaCloudOutOfHoursMember = defineFixture({
   width: 420,
   render: () => (
-    <Preview recipes={withCloud} access={{ state: 'out-of-hours', canManageBilling: false }} />
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: false }}
+    />
   ),
   interact: open
 })
@@ -184,4 +190,46 @@ export const orcaCloudNoCapability = defineFixture({
   width: 420,
   render: () => <Preview recipes={[devboxRecipe]} access={{ state: 'no-plan', lapsed: false }} />,
   interact: open
+})
+export const orcaCloudCapReached = defineFixture({
+  width: 420,
+  render: () => (
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'out-of-hours', cause: 'cap', canManageBilling: true }}
+    />
+  ),
+  interact: open
+})
+export const orcaCloudPaymentIssueAdmin = defineFixture({
+  width: 420,
+  render: () => (
+    <Preview recipes={withCloud} access={{ state: 'payment-issue', canManageBilling: true }} />
+  ),
+  interact: open
+})
+// First billing read still in flight: a skeleton stands in for the hours.
+export const orcaCloudLoading = defineFixture({
+  width: 420,
+  render: () => <Preview recipes={withCloud} access={{ state: 'loading' }} />,
+  interact: open
+})
+// Below ~20rem the specs drop out of the detail line.
+export const orcaCloudNarrow = defineFixture({
+  width: 300,
+  render: () => (
+    <Preview recipes={withCloud} access={{ state: 'entitled', remainingSeconds: 41 * 3600 }} />
+  ),
+  interact: open
+})
+// Nothing committed yet: the placeholder shows.
+export const nothingSelected = defineFixture({
+  width: 420,
+  render: () => <Preview vmSelected recipes={withCloud} />
+})
+// Pointer on an unready host: its ghost "Set project location" appears only while armed.
+export const needsSetupArmed = defineFixture({
+  width: 420,
+  render: () => <Preview />,
+  interact: pressKeys('ArrowDown', 'ArrowDown')
 })

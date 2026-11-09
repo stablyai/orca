@@ -17,6 +17,7 @@ import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
 import { PlanStatusBadge } from './PlanStatusBadge'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
+import { invalidateOrcaCloudBilling } from '../new-workspace/orca-cloud-billing-cache'
 
 export function PlanBillingSection(): React.JSX.Element | null {
   const t = useTranslate()
@@ -54,6 +55,8 @@ export function PlanBillingSection(): React.JSX.Element | null {
     setBusy(false)
     if (outcome.status === 'ok') {
       refresh()
+      // The Run-on picker's Orca Cloud row reads a shared copy; overage/cap just changed it.
+      invalidateOrcaCloudBilling()
     } else {
       setNotice(overageFailureCopy(outcome, t))
     }

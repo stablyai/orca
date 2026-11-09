@@ -2,11 +2,12 @@
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import RunTargetCombobox from './RunTargetCombobox'
 import { useAppStore } from '@/store/index'
+import { resetOrcaCloudBillingCache } from './orca-cloud-billing-cache'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type { EphemeralVmRecipeOption } from './run-target-options'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
@@ -100,6 +101,7 @@ function render(
 
 beforeEach(() => {
   openPlansPage.mockClear()
+  resetOrcaCloudBillingCache()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -182,9 +184,78 @@ describe('RunTargetCombobox', () => {
       availability: 'needs-sign-in'
     })
     press('ArrowDown')
-    expect(activeText()).toContain('Sign in to use Orca Cloud')
+    expect(activeText()).toContain('Sign in to start a sandbox')
     press('Enter')
     expect(connect).toHaveBeenCalledTimes(1)
     expect(onRecipeChange).not.toHaveBeenCalled()
+  })
+
+  function deferBilling(): (value: unknown) => void {
+    let answer!: (value: unknown) => void
+    const previous = window.api
+    window.api = {
+      ...previous,
+      orcaProfiles: {
+        ...previous?.orcaProfiles,
+        billingStatus: vi.fn(() => new Promise((resolve) => (answer = resolve)))
+      }
+    } as never
+    onTestFinished(() => {
+      window.api = previous
+    })
+    return (value) => answer(value)
+  }
+  const NO_PLAN = {
+    status: 'ok',
+    entitlement: { canStartSandbox: false, reason: 'no_subscription', canManageBilling: true }
+  }
+
+  it('holds a pick made while billing loads, then routes a no-plan account to plans', async () => {
+    const answer = deferBilling()
+    const onRecipeChange = vi.fn()
+    render(undefined, onRecipeChange)
+    press('ArrowDown')
+    press('Enter')
+    expect(onRecipeChange).not.toHaveBeenCalled()
+    expect(openPlansPage).not.toHaveBeenCalled()
+
+    await act(async () => answer(NO_PLAN))
+
+    expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+    expect(onRecipeChange).not.toHaveBeenCalled()
+  })
+
+  it('drops a held pick once the user backs out before billing answers', async () => {
+    const answer = deferBilling()
+    render(undefined)
+    press('ArrowDown')
+    press('Enter')
+    press('Escape')
+
+    await act(async () => answer(NO_PLAN))
+
+    expect(openPlansPage).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when a member who cannot fix the block picks Orca Cloud', () => {
+    const onRecipeChange = vi.fn()
+    render({ state: 'out-of-hours', cause: 'hours', canManageBilling: false }, onRecipeChange)
+    press('ArrowDown')
+    expect(
+      document
+        .getElementById(input().getAttribute('aria-activedescendant') ?? '')
+        ?.getAttribute('aria-disabled')
+    ).toBe('true')
+    press('Enter')
+    expect(onRecipeChange).not.toHaveBeenCalled()
+    expect(openPlansPage).not.toHaveBeenCalled()
+  })
+
+  it('jumps to the ends of the list with Home and End', () => {
+    render({ state: 'unknown' })
+    press('End')
+    expect(activeText()).toContain('Add host')
+    press('Home')
+    expect(activeText()).toContain('Local Mac')
   })
 })

@@ -2,6 +2,7 @@ import React from 'react'
 import { Check, FolderOpen } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import { splitPathHeadForElision } from '@/lib/path-head-elision'
 
@@ -75,7 +76,8 @@ export function ProjectOptionDetail({
   return (
     <span className={cn('flex min-w-0 items-baseline overflow-hidden', className)} title={detail}>
       <span className="min-w-0 shrink-[999] truncate">{split.head}</span>
-      <span className="min-w-0 shrink truncate">
+      {/* Middle elision only: the head gives way entirely before the tail would get a second ellipsis. */}
+      <span className="min-w-0 shrink-[0.001] truncate">
         {split.tailRanges.length > 0 ? (
           <MatchedText text={split.tail} hits={split.tailRanges.map((range) => range.start)} />
         ) : (
@@ -107,6 +109,7 @@ export function ProjectOptionRow({
   onArm: () => void
   onCommit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       role="option"
@@ -140,7 +143,11 @@ export function ProjectOptionRow({
       {/* The committed row gets a check, not a second fill, so only the armed row is shaded. */}
       {current ? (
         <span className="flex h-5 shrink-0 items-center">
-          <Check className="size-3.5 text-muted-foreground" />
+          <Check aria-hidden className="size-3.5 text-muted-foreground" />
+          {/* aria-selected follows the arm, so the committed choice is announced in its name. */}
+          <span className="sr-only">
+            {t('auto.components.new.workspace.RunTargetCombobox.currentSuffix', '(current)')}
+          </span>
         </span>
       ) : null}
     </div>

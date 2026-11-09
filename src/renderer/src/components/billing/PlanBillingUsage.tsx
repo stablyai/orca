@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/orca-billing'
 import { formatHours, includedUsagePercent } from './plan-billing-format'
 import { formatCents } from './plans/plans-pricing'
+import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
 
 export function UsageSummary({
   entitlement
@@ -131,7 +132,11 @@ export function OverageControls({
   const suspended = entitlement.payment.suspendRunning || entitlement.payment.pastDueSince !== null
   const canEdit = entitlement.canManageBilling && !suspended
   return (
-    <div className="space-y-3 rounded-md border border-border/60 p-3">
+    // Deep-link target: the Run-on picker's "Turn on overage" / "Raise cap" lands here.
+    <div
+      id={ORCA_BILLING_OVERAGE_SECTION_ID}
+      className="space-y-3 rounded-md border border-border/60 p-3"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-sm font-medium">
