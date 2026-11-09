@@ -1,3 +1,4 @@
+import { isProjectRuntimeRepairRefusal } from '../../../../shared/project-runtime-repair-message'
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
@@ -237,10 +238,16 @@ export class RuntimeGitGenerationCommands {
     agentId: string,
     settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
   ): Promise<DiscoverCommitMessageModelsResult> {
-    const target = await (this.host.resolveRuntimeModelDiscoveryTarget?.(
-      worktreeSelector,
-      agentId
-    ) ?? this.host.resolveRuntimeGitTarget(worktreeSelector))
+    let target: Awaited<ReturnType<RuntimeGitCommandHost['resolveRuntimeGitTarget']>>
+    try {
+      target = await (this.host.resolveRuntimeModelDiscoveryTarget?.(worktreeSelector) ??
+        this.host.resolveRuntimeGitTarget(worktreeSelector))
+    } catch (error) {
+      if (isProjectRuntimeRepairRefusal(error)) {
+        return { success: false, error: error.message }
+      }
+      throw error
+    }
     const typedAgentId = agentId as TuiAgent
     const agentCommandOverride =
       settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
@@ -252,19 +259,20 @@ export class RuntimeGitGenerationCommands {
         error: `No git provider for connection "${route.connectionId}"`
       }
     }
-    const agentRuntime = target.agentRuntime ?? localAgentRuntimeTargetForTarget(target)
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       typedAgentId,
       this.host.getCommitMessageAgentEnvironment?.(),
-      agentRuntime
+      localAgentRuntimeTargetForTarget(target)
     )
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    const { wslDistro } = agentRuntime
-    return discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-      cwd: target.worktree.path,
-      ...(wslDistro ? { wslDistro } : {})
-    })
+    const { wslDistro } = localGitOptionsForTarget(target)
+    return discoverCommitMessageModelsLocal(
+      typedAgentId,
+      localEnv.env,
+      agentCommandOverride,
+      wslDistro ? { cwd: target.worktree.path, wslDistro } : undefined
+    )
   }
 }

@@ -32,3 +32,5 @@ export function selectEffectiveTerminalExecutionContext(args: {
     ? { kind: 'wsl', context: { distro, treatPosixCwdAsWsl: true } }
     : { kind: 'unresolved-wsl' }
 }
+
+export const TERMINAL_EXECUTION_CONTEXT_UNRESOLVED = 'terminal_execution_context_unresolved'

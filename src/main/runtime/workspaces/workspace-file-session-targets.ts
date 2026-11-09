@@ -1,5 +1,6 @@
-import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { agentLaunchWslDistro } from '../terminal/launch/agent-launch-scope-runtime'
+import { discoverTerminalModels } from '../terminal/catalog/runtime-terminal-model-discovery'
+import type { ResolvedTerminalWorkspaceLaunchTarget } from '../terminal/launch/terminal-workspace-launch-target'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
@@ -38,13 +39,21 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
     OrcaRuntimeWithTransitionGraphReloadToTerminalState['resolveFolderWorkspaceLaunchScope']
   >
 
-  abstract resolveTerminalWorkspaceLaunchScope(
-    ...args: Parameters<
-      OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchScope']
-    >
-  ): ReturnType<
-    OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchScope']
-  >
+  abstract resolveTerminalWorkspaceReadTarget(
+    selector: string
+  ): Promise<ResolvedTerminalWorkspaceLaunchTarget>
+
+  async discoverTerminalModels(worktree?: string, agentId = '') {
+    return discoverTerminalModels(
+      {
+        store: this.requireStore(),
+        resolveTarget: () => this.resolveTerminalWorkspaceReadTarget(worktree ?? 'floating'),
+        ...(worktree ? {} : { hostGlobal: true }),
+        environment: this.accounts.getCommitMessageAgentEnvironment()
+      },
+      agentId
+    )
+  }
 
   // Route by worktree host before repo id: same-id host twins and runtime-nested targets cannot use this client's arbitrary repo row (#11163).
   protected async resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
@@ -70,21 +79,16 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
     return { worktree, repo, executionHostId, localGitOptions }
   }
 
-  protected async resolveRuntimeModelDiscoveryTarget(worktreeSelector: string, agent: string) {
-    const scope = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery uses the same agent ID admitted by the existing command boundary.
-    const wslDistro = scope.connectionId
-      ? undefined
-      : agentLaunchWslDistro(this.requireStore(), scope, agent as TuiAgent)
+  protected async resolveRuntimeModelDiscoveryTarget(worktreeSelector: string) {
+    const scope = await this.resolveFolderWorkspaceLaunchScope(worktreeSelector)
+    if (!scope?.folderWorkspace) {
+      return this.resolveRuntimeGitTarget(worktreeSelector)
+    }
+    const wsl = parseWslUncPath(scope.path)
     return {
-      worktree: scope.folderWorkspace
-        ? this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace)
-        : await this.resolveGitWorktreeSelector(worktreeSelector),
-      ...(scope.repo ? { repo: scope.repo } : {}),
+      worktree: this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace),
       executionHostId: getConnectionExecutionHostId(scope.connectionId),
-      agentRuntime: wslDistro
-        ? { runtime: 'wsl' as const, wslDistro }
-        : { runtime: 'host' as const }
+      ...(wsl ? { localGitOptions: { wslDistro: wsl.distro } } : {})
     }
   }
 

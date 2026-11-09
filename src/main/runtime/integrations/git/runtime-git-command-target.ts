@@ -13,10 +13,7 @@ import type {
   LocalGitProvider
 } from '../../../providers/local-git-provider'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
-import type {
-  CommitMessageAgentEnvironmentResolvers,
-  CommitMessageAgentRuntimeTarget
-} from '../../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
 import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative-paths'
 
@@ -30,13 +27,11 @@ export type RuntimeGitTarget = {
   executionHostId: ExecutionHostId
   /** Only consulted when `executionHostId` is `local`; see `localGitOptionsForTarget`. */
   localGitOptions?: GitRuntimeOptions
-  /** Discovery uses terminal execution policy, independently of Git. */
-  agentRuntime?: CommitMessageAgentRuntimeTarget
 }
 
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
-  resolveRuntimeModelDiscoveryTarget?(selector: string, agent: string): Promise<RuntimeGitTarget>
+  resolveRuntimeModelDiscoveryTarget?(selector: string): Promise<RuntimeGitTarget>
   getRuntimeSettings(): SourceControlAiSettingsInput
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
