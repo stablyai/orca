@@ -93,8 +93,12 @@ const models = [
       export { installRuntime } from 'orca-diagnostic-runtime'
       import { classifyConnection, verdictDisplayLabel } from './mobile/src/transport/connection/connection-health'
       import { RelayHostReachabilityLatch } from './mobile/src/transport/relay/relay-host-reachability-latch'
-      import { withTranslation } from 'orca-diagnostic-translation'
+      import { troubleshootCommonIssues } from './mobile/src/diagnostics/troubleshoot-common-issues'
+      import { translate, withTranslation } from 'orca-diagnostic-translation'
       export const createRelayHostReachability = () => new RelayHostReachabilityLatch()
+      export function getTroubleshootCommonIssues(endpoints, translator) {
+        return withTranslation(translator, () => troubleshootCommonIssues(translate, endpoints))
+      }
       export function describeDesktopConnection(args, translator) {
         return withTranslation(translator, () => {
           const verdict = classifyConnection(args)
