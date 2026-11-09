@@ -18,6 +18,7 @@ import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../shared/remote-r
 import { classifyNetworkSource, type NetworkSourceClass } from './network-source-class'
 import { UnauthenticatedSourceCap } from './ws-unauthenticated-source-cap'
 import type { WebSocketSourceGuard } from './ws-network-source-guard'
+import { reserveBrowserTunnelOrcaListenerPort } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 
 export const WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
 // Allow many remote-desktop streams so stale ones cannot starve control RPCs.
@@ -67,6 +68,7 @@ export class WebSocketTransport implements RpcTransport {
   private persistedFallbackBindFailed = false
   private httpServer: HttpServer | null = null
   private wss: WebSocketServer | null = null
+  private releaseTunnelReservation = (): void => {}
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler: WebSocketConnectionCloseHandler | null = null
   // Track authenticated device ids so close can attribute disconnects.
@@ -259,6 +261,7 @@ export class WebSocketTransport implements RpcTransport {
 
     this.httpServer = httpServer
     this.wss = wss
+    this.releaseTunnelReservation = reserveBrowserTunnelOrcaListenerPort(this.resolvedPort)
   }
 
   async stop(): Promise<void> {
@@ -266,12 +269,18 @@ export class WebSocketTransport implements RpcTransport {
     const httpServer = this.httpServer
     this.wss = null
     this.httpServer = null
-    await stopNodeWebSocketTransport({
-      wss,
-      httpServer,
-      heartbeat: this.heartbeat,
-      heartbeatConnections: this.heartbeatConnections
-    })
+    const releaseTunnelReservation = this.releaseTunnelReservation
+    this.releaseTunnelReservation = () => {}
+    try {
+      await stopNodeWebSocketTransport({
+        wss,
+        httpServer,
+        heartbeat: this.heartbeat,
+        heartbeatConnections: this.heartbeatConnections
+      })
+    } finally {
+      releaseTunnelReservation()
+    }
   }
 
   private handleConnection(ws: WebSocket): void {
