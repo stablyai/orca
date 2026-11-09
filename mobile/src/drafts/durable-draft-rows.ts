@@ -74,6 +74,11 @@ function fnv1a(text: string, seed: number): string {
   return hash.toString(16).padStart(8, '0')
 }
 
+/** A 64-bit fingerprint of `text`, for keys and for telling whether text a draft was typed against changed. */
+export function draftTextHash(text: string): string {
+  return `${fnv1a(text, 0x811c9dc5)}${fnv1a(text, 0x01000193)}`
+}
+
 /** `draft:<namespace>:<worktree or ''>:<id>`; the shell binds the host. */
 export function durableDraftRowKey(namespace: string, worktreeId: string, id: string): string {
   const key = `draft:${namespace}:${worktreeId}:${id}`
@@ -81,7 +86,7 @@ export function durableDraftRowKey(namespace: string, worktreeId: string, id: st
     return key
   }
   const rest = `${worktreeId}:${id}`
-  return `draft:${namespace}:#${fnv1a(rest, 0x811c9dc5)}${fnv1a(rest, 0x01000193)}`
+  return `draft:${namespace}:#${draftTextHash(rest)}`
 }
 
 /** The host and remote runtime a worktree lives on, so two hosts' same-named worktrees never share a draft. */

@@ -22,7 +22,7 @@ import {
 } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
-import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { draftTextHash, workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
 import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
@@ -189,8 +189,8 @@ function PrEditTextSheet({
   const [keptText, setKeptText] = useDurableDraftField(keptKey, 'text')
   // An edit typed against text the PR still has comes back; once the PR text changes it would revert someone's edit.
   const [base] = useState(current)
-  // Quoted, so an empty PR description still marks an edit (an empty field is no field).
-  const against = JSON.stringify(base)
+  // A fingerprint, never empty, so an emptied PR description still marks an edit (an empty field is no field).
+  const [against] = useState(() => draftTextHash(base))
   const draft = keptAgainst === against ? keptText : base
   const setDraft = (text: string) => {
     const edited = text !== base
