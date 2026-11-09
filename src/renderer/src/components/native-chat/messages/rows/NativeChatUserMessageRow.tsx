@@ -18,6 +18,7 @@ import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatDetailsDisclosure } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { parseSenderEnvelope } from '../../../../../../shared/cloud-workspaces/sender-envelope'
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
@@ -63,7 +64,7 @@ function UserMessageMeta({
 
 export function NativeChatUserMessageRow({
   message,
-  markdown,
+  markdown: rawMarkdown,
   prose,
   rowRef,
   onRefolded,
@@ -86,6 +87,10 @@ export function NativeChatUserMessageRow({
   // Agent-authored input belongs to the turn but uses a left-aligned sender row instead of the person’s bubble.
   const from = message.from
   const sending = deliveryNotice?.sending === true
+  // Shared cloud workspaces prefix each message with a machine-readable sender line; show it as a
+  // "From …" chip and keep the raw line out of the bubble, the copy text and find.
+  const envelope = from ? null : parseSenderEnvelope(rawMarkdown)
+  const markdown = envelope ? envelope.body : rawMarkdown
   return (
     <div
       ref={rowRef}
@@ -94,6 +99,13 @@ export function NativeChatUserMessageRow({
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
+      {envelope?.sender ? (
+        <span className="text-xs text-chat-foreground-faint">
+          {t('components.native-chat.fromSender', 'From {{value0}}', {
+            value0: envelope.sender.name
+          })}
+        </span>
+      ) : null}
       {from ? (
         <NativeChatAgentMessageCard
           message={message}

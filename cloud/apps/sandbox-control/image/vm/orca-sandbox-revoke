@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Revokes member devices from orcad's device registry. orcad adopts on-disk removals at every auth
+# (an admin revoke, device-registry-store.ts), so this works whether or not orcad is running; the
+# control plane also runs it at boot, before orcad starts, for revokes queued while suspended.
+# Env: ORCA_REVOKE_DEVICE_IDS (comma list of orcad device ids). Prints {"revoked":<n>,"live":<n whose open sockets were closed>}.
+set -euo pipefail
+umask 077
+STATE="$HOME/.orca-sandbox"
+REGISTRY="$HOME/.orcad-data/orca-devices.json"
+mkdir -p "$STATE"
+exec 9>"$STATE/grant.lock"
+flock -w 30 9
+
+ids="${ORCA_REVOKE_DEVICE_IDS:-}"
+case "$ids" in '' | *[!A-Za-z0-9,_-]*) echo 'bad device ids' >&2; exit 2 ;; esac
+# Live orcad first: `orca pair --revoke` also closes the device's open sockets now. Older orcad
+# builds lack it; the on-disk removal below still blocks their next sign-in.
+ORCA_HOME=/opt/orca
+node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node 2>/dev/null | head -n 1)"
+cli="$ORCA_HOME/runtime/orcad/out/cli/index.js"
+live=0
+if [ -n "$node" ] && [ -f "$cli" ] && [ -s "$HOME/.orcad-data/orca-runtime.json" ]; then
+  for id in ${ids//,/ }; do
+    if ORCA_USER_DATA_PATH="$HOME/.orcad-data" timeout 15 "$node" "$cli" pair --revoke "$id" --json 2>/dev/null \
+      | jq -e '.ok == true and .result.revoked == true' >/dev/null 2>&1; then
+      live=$((live + 1))
+    fi
+  done
+fi
+if [ ! -s "$REGISTRY" ]; then
+  echo "{\"revoked\":$live,\"live\":$live}"
+  exit 0
+fi
+ids_json="$(jq -cn --arg ids "$ids" '$ids | split(",") | map(select(length > 0))')"
+before="$(jq 'length' "$REGISTRY")"
+tmp="$(mktemp "$REGISTRY.revoke.XXXXXX")"
+# Removes the rows and any phones delegated through them (parentDeviceId), like orcad's own revoke.
+jq --argjson ids "$ids_json" \
+  '[.[] | select((.deviceId as $d | $ids | index($d)) == null and ((.parentDeviceId // "") as $p | $ids | index($p)) == null)]' \
+  "$REGISTRY" >"$tmp"
+chmod 0600 "$tmp"
+sync "$tmp" 2>/dev/null || true
+mv -f "$tmp" "$REGISTRY"
+after="$(jq 'length' "$REGISTRY")"
+echo "{\"revoked\":$((live + before - after)),\"live\":$live}"

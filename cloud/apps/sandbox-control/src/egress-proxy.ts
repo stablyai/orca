@@ -7,7 +7,7 @@ import type { SandboxRow } from './store'
 
 const VERCEL_OIDC_HOSTNAME = 'oidc.vercel.com'
 /** Hosts whose clients are Node (undici); git/curl hosts use transform rules instead. Model hosts are per session. */
-export const PROXIED_HOSTS: ReadonlySet<string> = new Set(['api.github.com'])
+export const PROXIED_HOSTS: ReadonlySet<string> = new Set(['api.github.com', 'github.com'])
 const PROXY_HOST = /^([a-z0-9-]+\.)+[a-z]{2,63}$/
 const DROP_HEADERS = [
   'vercel-forwarded-host',
@@ -36,6 +36,8 @@ export type ProxiedRoute = {
   header: string
   placeholders: readonly string[]
   credential: () => Promise<string | null>
+  /** Narrows where this credential may be used (member tokens: the workspace repository only). */
+  pathAllowed?: (method: string, path: string) => boolean
 }
 
 export type EgressProxyDeps = {
@@ -43,7 +45,7 @@ export type EgressProxyDeps = {
   projectId: string
   findSandbox: (providerName: string) => Promise<SandboxRow | null>
   /** Placeholder routes for `host` on this sandbox; empty means every request to it is refused. */
-  routesFor: (row: SandboxRow, host: string) => readonly ProxiedRoute[]
+  routesFor: (row: SandboxRow, host: string) => readonly ProxiedRoute[] | Promise<readonly ProxiedRoute[]>
   fetch?: typeof fetch
   /** Tests inject a local key set; production fetches `<issuer>/.well-known/jwks`. */
   keysForIssuer?: (issuer: string) => JWTVerifyGetKey
@@ -112,7 +114,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (!row || row.status !== 'running') {
     return deny('sandbox_not_running')
   }
-  const routes = deps.routesFor(row, host)
+  const routes = await deps.routesFor(row, host)
   if (routes.length === 0) {
     return deny('host_not_proxied')
   }
@@ -120,6 +122,9 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     .find((candidate) => candidate.placeholders.includes(request.headers.get(candidate.header) ?? ''))
   if (!route) {
     return deny('placeholder_missing')
+  }
+  if (route.pathAllowed && !route.pathAllowed(request.method, path)) {
+    return deny('path_not_allowed')
   }
   const credential = await route.credential()
   if (!credential) {

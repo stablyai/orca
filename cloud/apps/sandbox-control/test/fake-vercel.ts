@@ -1,5 +1,8 @@
 // In-memory Vercel Sandbox with the behaviours the bake-off measured: stop = reboot from an automatic
 // snapshot, resume keeps the name and route, and delete leaves automatic snapshots behind.
+import { createCipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from 'node:crypto'
+import { GRANT_COMMAND } from '../src/grants'
+import { REVOKE_COMMAND } from '../src/grant-revokes'
 import type { NetworkPolicy } from '../src/network-policy'
 import {
   ProviderError,
@@ -26,11 +29,30 @@ type FakeBox = {
   orcadReady?: string
   /** Files in the VM, as the files API would read them. */
   files: Map<string, string>
+  /** orcad's device registry on the sandbox disk (survives stop/resume). */
+  devices: string[]
 }
 
 export type FakeBuildCommand = { sessionId: string; env: Record<string, string>; args: string[]; exitCode: number | null; logs: string }
 
 export const READY_PATH = '/home/vercel-sandbox/.orca-sandbox/ready.json'
+
+/** Same sealing as image/vm/orca-sandbox-grant (node:crypto here; the opener under test is portable). */
+export function sealLikeVm(recipientB64: string, grantId: string, plaintext: string) {
+  const recipient = Buffer.from(recipientB64, 'base64')
+  const recipientKey = createPublicKey({ key: { kty: 'OKP', crv: 'X25519', x: recipient.toString('base64url') }, format: 'jwk' })
+  const eph = generateKeyPairSync('x25519')
+  const ephRaw = Buffer.from(eph.publicKey.export({ format: 'jwk' }).x!, 'base64url')
+  const shared = diffieHellman({ privateKey: eph.privateKey, publicKey: recipientKey })
+  const key = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([ephRaw, recipient]), 'orca-cloud-grant-v1', 32))
+  const nonce = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, nonce)
+  cipher.setAAD(Buffer.from(`orca-cloud-grant-v1:${grantId}`))
+  const ct = Buffer.concat([cipher.update(Buffer.from(plaintext)), cipher.final(), cipher.getAuthTag()])
+  return { v: 1, ephemeralPublicKeyB64: ephRaw.toString('base64'), nonceB64: nonce.toString('base64'), ciphertextB64: ct.toString('base64') }
+}
+
+const b64url = (text: string) => Buffer.from(text).toString('base64url')
 
 export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   /** Environment build commands (startCommand), settable by tests. */
@@ -170,7 +192,8 @@ export function createFakeVercel(now: () => number): FakeVercel {
         route: `https://sb-${counter}.vercel.run`,
         ports: params.ports,
         policy: params.networkPolicy,
-        files: new Map()
+        files: new Map(),
+        devices: []
       }
       boxes.set(params.name, box)
       return state(box)
@@ -238,7 +261,12 @@ export function createFakeVercel(now: () => number): FakeVercel {
         if (fake.failStart) {
           return { exitCode: 1, stdout: '', stderr: 'orcad crashed' }
         }
-        const ready = { schemaVersion: 1, pairingCode: `orca://pair?code=${box.params.name}`, projectRoot: '/vercel/sandbox/project' }
+        const ownerDevice = `dev-owner-${box.params.name}`
+        if (!box.devices.includes(ownerDevice)) {
+          box.devices.push(ownerDevice)
+        }
+        const code = b64url(JSON.stringify({ v: 2, endpoint: box.route, deviceToken: 'fake', publicKeyB64: 'fake', pairedDeviceId: ownerDevice }))
+        const ready = { schemaVersion: 1, pairingCode: `orca://pair?code=${code}`, projectRoot: '/vercel/sandbox/project' }
         box.orcadReady = JSON.stringify(ready)
         if (params.env?.ORCA_READY_VIA === 'file') {
           // Like the image: the offer stays in the VM, stdout only says where.
@@ -267,6 +295,24 @@ export function createFakeVercel(now: () => number): FakeVercel {
           throw new ProviderError(400, 'command_failed')
         }
         return { ...fake.desktop, stderr: '' }
+      }
+      if (params.command === GRANT_COMMAND) {
+        const env = params.env ?? {}
+        const deviceId = next('dev-grant')
+        box.devices.push(deviceId)
+        const pairingUrl = `orca://pair?code=${b64url(JSON.stringify({ v: 2, endpoint: env.ORCA_PUBLIC_WSS, deviceToken: `tok-${deviceId}`, publicKeyB64: 'fake', pairedDeviceId: deviceId }))}`
+        const scope = env.ORCA_GRANT_KIND === 'mobile' ? 'mobile' : 'runtime'
+        const sealed = sealLikeVm(env.ORCA_GRANT_RECIPIENT_KEY!, env.ORCA_GRANT_ID!, JSON.stringify({ pairingUrl, deviceId, scope }))
+        return { exitCode: 0, stdout: `${JSON.stringify({ deviceId, sealed })}\n`, stderr: '' }
+      }
+      if (params.command === REVOKE_COMMAND) {
+        const ids = (params.env?.ORCA_REVOKE_DEVICE_IDS ?? '').split(',')
+        const before = box.devices.length
+        box.devices = box.devices.filter((d) => !ids.includes(d))
+        return { exitCode: 0, stdout: `{"revoked":${before - box.devices.length}}\n`, stderr: '' }
+      }
+      if (params.command === 'bash' && params.args?.join(' ').includes('echo synced')) {
+        return { exitCode: 0, stdout: 'synced\n', stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {
         return { exitCode: 0, stdout: '', stderr: '' }

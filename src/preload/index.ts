@@ -23,6 +23,7 @@ import { workspaceCleanupApi } from './api/workspace-cleanup-bridge'
 import { workspaceSpaceApi } from './api/workspace-space-bridge'
 import { workspacePortsApi } from './api/workspace-ports-bridge'
 import { linkPreviewApi } from './api/link-preview-bridge'
+import { cloudWorkspacesApi } from './api/cloud-workspaces-bridge'
 import { ptyApi } from './api/pty-bridge'
 import { feedbackApi } from './api/feedback-bridge'
 import { crashReportsApi } from './api/crash-reports-bridge'
@@ -128,6 +129,7 @@ const api = {
   workspaceSpace: workspaceSpaceApi,
   workspacePorts: workspacePortsApi,
   linkPreview: linkPreviewApi,
+  cloudWorkspaces: cloudWorkspacesApi,
   pty: ptyApi,
   feedback: feedbackApi,
   crashReports: crashReportsApi,

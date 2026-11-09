@@ -1,4 +1,5 @@
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import { withCloudSenderBody } from '@/lib/cloud-message-sender'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
@@ -105,12 +106,15 @@ export async function attemptStructuredAgentSessionSend(args: {
   reconcile: (uncertain: boolean) => void
 }): Promise<StructuredAgentSessionSendAttempt | null> {
   const { entry, target } = args
+  // Shared cloud workspaces: the agent learns which teammate sent this message. Applied before
+  // the size check so the sender line counts toward the limit the host enforces.
+  let body =
+    target.kind === 'environment' ? withCloudSenderBody(target.environmentId, entry.body) : entry.body
   // Measured as the host measures it, so a message it would refuse comes back saying why.
-  if (structuredAgentSessionBlocksTooLarge(entry.body.blocks)) {
+  if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
     return { kind: 'not-sent', parts: [...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS] }
   }
   let fence: number | null
-  let body = entry.body
   try {
     if (target.kind === 'environment') {
       await ensureRuntimeEnvironmentCompatible(target.environmentId)
