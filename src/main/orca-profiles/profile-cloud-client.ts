@@ -254,7 +254,8 @@ export async function createOrcaCloudProfile(
 export async function selectOrcaCloudOrg(
   config: OrcaCloudAuthConfig,
   session: OrcaCloudSession,
-  orgId: string
+  /** null asks auth to clear the active team (personal account). */
+  orgId: string | null
 ): Promise<SelectOrgResponse> {
   const response = await postJson<{
     cloud: unknown

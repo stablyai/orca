@@ -99,11 +99,16 @@ function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjec
   }
 }
 
-function orgIdFromUnknown(args: unknown): string {
+function orgIdFromUnknown(args: unknown): string | null {
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_org_selection')
   }
-  const orgId = (args as SelectOrcaProfileOrgArgs).orgId?.trim()
+  const raw = (args as SelectOrcaProfileOrgArgs).orgId
+  // Explicit null = the personal account.
+  if (raw === null) {
+    return null
+  }
+  const orgId = raw?.trim()
   if (!orgId) {
     throw new Error('invalid_orca_profile_org_selection')
   }

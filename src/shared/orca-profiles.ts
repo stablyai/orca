@@ -206,7 +206,8 @@ export type SignOutCurrentOrcaProfileResult = {
 }
 
 export type SelectOrcaProfileOrgArgs = {
-  orgId: string
+  /** null switches to the personal account (no active team). */
+  orgId: string | null
 }
 
 export type SelectOrcaProfileOrgResult =

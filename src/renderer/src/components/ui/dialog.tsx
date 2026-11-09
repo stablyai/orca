@@ -98,6 +98,7 @@ function DialogContent({
   surface,
   size,
   scrollable = false,
+  exitMotion = 'default',
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
   VariantProps<typeof dialogContentSurfaceVariants> & {
@@ -108,11 +109,18 @@ function DialogContent({
     size?: 'default' | 'compact'
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
+    /** 'none' when another dialog takes over at once (a hand-off), so only one animation plays. */
+    exitMotion?: 'default' | 'none'
   }) {
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay className={overlayClassName} />
+      <DialogOverlay
+        className={cn(
+          exitMotion === 'none' && 'data-[state=closed]:animate-none',
+          overlayClassName
+        )}
+      />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-size={size}
@@ -121,6 +129,7 @@ function DialogContent({
           'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
           dialogContentSurfaceVariants({ surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
+          exitMotion === 'none' && 'data-[state=closed]:animate-none',
           className
         )}
         {...props}

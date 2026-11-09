@@ -20514,7 +20514,9 @@
           "paidBody2": "{{value0}} plan is active. Opening your team…",
           "paidRow": "Paid",
           "secured2": "Payments by Stripe · Cards, Apple Pay and Link · Bank verification",
-          "canceledBody2": "Nothing was charged. You can choose a plan again any time."
+          "canceledBody2": "Nothing was charged. You can choose a plan again any time.",
+          "titleCanceled": "Checkout canceled",
+          "titlePaid": "Welcome to Orca Cloud"
         },
         "health": {
           "ending": "Ending",

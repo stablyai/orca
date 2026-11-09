@@ -86,6 +86,14 @@ export function PlansDialogHost(): React.JSX.Element {
           onManage={() => void openPortal()}
           onContactSales={(url) => void window.api.shell.openUrl(url)}
           onRetry={billing.refresh}
+          checkoutState={
+            checkout.phase.kind === 'paid'
+              ? 'paid'
+              : checkout.phase.kind === 'canceled'
+                ? 'canceled'
+                : 'other'
+          }
+          handingOff={checkout.phase.kind === 'paid'}
           checkout={
             checkout.phase.kind !== 'idle' && team ? (
               <CheckoutPanel

@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import { Send, X } from 'lucide-react'
+import { CircleAlert, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -195,7 +195,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                 className={cn(
                   'inline-flex max-w-full items-center gap-1 rounded-full border py-0.5 pr-0.5 pl-2 text-xs animate-in fade-in-0 zoom-in-95 duration-150 motion-reduce:animate-none',
                   bad
-                    ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                    ? 'border-destructive bg-destructive/10 text-foreground'
                     : 'border-border bg-secondary text-secondary-foreground'
                 )}
                 title={
@@ -205,7 +205,15 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                     : t('auto.components.billing.team.notAnEmail', 'Not an email address'))
                 }
               >
+                {bad ? (
+                  <CircleAlert aria-hidden className="size-3 shrink-0 text-destructive" />
+                ) : null}
                 <span className="truncate">{candidate.email}</span>
+                {bad ? (
+                  <span className="sr-only">
+                    {error ?? t('auto.components.billing.team.notAnEmail', 'Not an email address')}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   className="-my-1 -mr-1 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:outline-none"

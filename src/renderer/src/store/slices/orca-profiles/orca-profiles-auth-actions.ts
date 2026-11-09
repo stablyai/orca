@@ -18,7 +18,7 @@ export type OrcaProfilesAuthActions = {
   connectCurrentOrcaProfile: () => Promise<ConnectCurrentOrcaProfileResult | null>
   refreshCurrentOrcaProfileAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult | null>
   signOutCurrentOrcaProfile: () => Promise<SignOutCurrentOrcaProfileResult | null>
-  selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
+  selectOrcaProfileOrg: (orgId: string | null) => Promise<SelectOrcaProfileOrgResult | null>
 }
 
 export const createOrcaProfilesAuthActions: StateCreator<
