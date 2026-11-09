@@ -6,7 +6,7 @@ import type { FsChangeEvent } from '../../../../../../shared/file-watch/filesyst
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
-import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerResolution from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 
 const runtime = vi.hoisted(() => ({ list: vi.fn(), stat: vi.fn() }))
@@ -21,8 +21,10 @@ vi.mock('@/store/index', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdFromState: () => null
+}))
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return { ...actual, getConnectionIdFromState: () => null }
 })

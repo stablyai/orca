@@ -12,7 +12,7 @@ import type {
 import { openLocalBrowserLink } from './browser/navigation/browser-link-open'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import { createBrowserLinkHostMatcher } from './browser/navigation/browser-link-owner'
-import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import { resolveWorktreeOperationRoute } from './workspace/ownership/worktree-operation-route'
 import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { hasIndexedDetectedWorktree } from './workspace/ownership/worktree-runtime-owner-index'
 

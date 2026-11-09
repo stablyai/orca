@@ -6,7 +6,7 @@ import {
   getRepoSshConnectionId,
   parseExecutionHostId
 } from '../../../shared/execution-host'
-import { getFolderFileConnectionOwnerFromState } from './connection-owner-resolution'
+import { getFolderFileConnectionOwnerFromState } from './workspace/ownership/connection-owner-resolution'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   assertEditorFileOperationCurrent,
@@ -17,8 +17,8 @@ import {
 import {
   assertWorktreeOperationGenerationSnapshotCurrent,
   captureWorktreeOperationGenerationSnapshot
-} from './worktree-operation-generation'
-import type { WorktreeOperationRoute } from './worktree-operation-route'
+} from './workspace/ownership/worktree-operation-generation'
+import type { WorktreeOperationRoute } from './workspace/ownership/worktree-operation-route'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 /** A tab retains its owner; a new operation uses that paired host's current session. */

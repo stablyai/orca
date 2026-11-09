@@ -4,7 +4,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { getTerminalFileOpenHint } from '../terminal-link-open-hints'
 
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   collectLinks,
@@ -39,7 +39,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 

@@ -6,7 +6,7 @@ import type {
   BrowserProfileClearDefaultCookiesResult
 } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import {
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,

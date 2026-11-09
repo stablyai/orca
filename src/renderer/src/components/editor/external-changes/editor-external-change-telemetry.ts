@@ -1,6 +1,6 @@
 // Share path-free conflict enums across marking and banner actions so false-banner rates remain comparable by transport.
 import { track } from '@/lib/telemetry'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 type ConflictSurface = 'edit' | 'unstaged-diff'

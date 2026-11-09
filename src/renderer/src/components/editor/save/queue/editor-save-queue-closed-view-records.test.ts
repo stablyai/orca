@@ -6,7 +6,9 @@ import {
   type ClosedViewHarness
 } from './editor-save-closed-view.test-fixture'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
 // A view opened before a reconnect: its captured connection generation no longer matches.
 
