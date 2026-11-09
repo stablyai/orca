@@ -1,5 +1,5 @@
 /** Production wiring for the E9 automation wake: host automations over runtime RPC, a userData file. */
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-automation-wake'
 import {
   readWslHostAutomationWakes,

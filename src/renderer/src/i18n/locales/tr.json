@@ -4178,6 +4178,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aç"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Başka bir pencereye göre boyutlandı",
+            "fitHere": "Buraya sığdır"
           }
         }
       },
@@ -5953,7 +5957,10 @@
           "69f5b5380d": "Klonlanıyor...",
           "cloneOnHostDescription": "Git URL'sini girin ve {{value0}} üzerinde nereye klonlanacağını seçin.",
           "cloneParentFolder": "Üst klasör",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Klasör adı",
+          "cloneFolderTakenByRepo": "Bu klasördeki \"{{value0}}\" zaten farklı bir depo, bu yüzden bu klonun kendi klasörü olmalı.",
+          "cloneFolderNotEmpty": "Bu klasörde \"{{value0}}\" zaten var, bu yüzden bu klonun kendi klasörü olmalı."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Kapat",
@@ -5988,25 +5995,25 @@
           "removeBatchMixed_other": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeBatchGit_one": "git'ten <target>{{count}} çalışma alanı</target> kaldır ve çalışma alanı klasörünü sil.",
           "removeBatchGit_other": "git'ten <target>{{count}} çalışma alanı</target> kaldır ve ilgili çalışma alanı klasörlerini sil.",
-          "removeSingleFolder": "Orca'dan <target/> öğesini kaldır. Diskteki proje klasörü silinmeyecek.",
-          "removeSingleGit": "git'ten <target/> öğesini kaldır ve çalışma alanı klasörünü sil.",
           "removeWithChildrenFolder_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenFolder_other": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenMixed_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeWithChildrenMixed_other": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeWithChildrenGit_one": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil.",
-          "removeWithChildrenGit_other": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil."
+          "removeWithChildrenGit_other": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil.",
+          "removeSingleFolderFromOrca": "Orca'dan kaldırır. Diskteki klasör korunur.",
+          "deleteSingleWorktreeAndBranch": "Worktree'yi ve branch'ini siler (birleştirilmemişse branch korunur)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Yüklenen yolları göster",
           "loadedPathsNotice": "Yüklenen yollar eksik veya güncelliğini yitirmiş olabilir.",
           "loadedChangedPaths": "Yüklenen değişmiş yollar",
           "unresolvedConflict": "Çözülmemiş çakışma",
-          "changeCount_one": "{{count}} commit'lenmemiş veya izlenmeyen değişiklik",
-          "changeCount_other": "{{count}} commit'lenmemiş veya izlenmeyen değişiklik",
-          "changes": "Commit'lenmemiş veya izlenmeyen değişiklikler",
           "moreLoadedPaths_other": "ve yüklenmiş {{count}} yol daha",
-          "moreLoadedPaths_one": "ve yüklenmiş {{count}} yol daha"
+          "moreLoadedPaths_one": "ve yüklenmiş {{count}} yol daha",
+          "changesLost_one": "{{count}} commit'lenmemiş değişiklik kaybolacak",
+          "changesLost_other": "{{count}} commit'lenmemiş değişiklik kaybolacak",
+          "uncountedChangesLost": "Commit'lenmemiş değişiklikler kaybolacak"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Alt çalışma alanları silinecek",
@@ -6014,9 +6021,6 @@
           "alsoDeletesChildren_one": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
           "moreChildren_other": "+{{count}} tane daha",
           "moreChildren_one": "+{{count}} tane daha"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Tekrar sorma"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Bu, <strong>ana worktree</strong> (ilk klonlama dizini)."
@@ -8952,16 +8956,9 @@
           "b661b034ec": "· Varsayılan:",
           "builtin_themes": "Yerleşik",
           "ceefb9d7f1": "Tema bulunamadı.",
-          "imported_from": "{{value0}} konumundan içe aktarıldı",
           "imported_themes": "İçe Aktarılan",
-          "9119fb2268": "Geçerli",
-          "4e11f87ca6": "Gösteriliyor",
-          "fbb428db98": "Seçili:",
           "search_terminal_themes": "Terminal temalarında ara",
-          "cb330ef7f8": " / {{value0}}",
-          "c822571b2e": " \"{{value0}}\" ile eşleşen",
-          "plugin_themes": "Eklentiler",
-          "from_plugin": "{{value0}} kaynağından"
+          "plugin_themes": "Eklentiler"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -12433,6 +12430,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "Repository, proje ve çalışma alanı erişim belirteçleri ilgili Bitbucket ayarlar sayfasından oluşturulur ve pull request'ler için okuma izni gerektirir.",
               "basicHint": "Hesabınız için bir Atlassian API belirteci oluşturun, ardından bunu sahibi olan e-posta adresiyle eşleştirin.",
+              "scopesTitle": "Şu Bitbucket API belirteci kapsamlarını seçin:",
+              "scopeUser": "Hesabınızı doğrulama",
+              "scopeRepository": "Derleme durumlarını okuma",
+              "scopeReadPullRequest": "Pull request'leri okuma",
+              "scopeWritePullRequest": "Pull request oluşturma",
+              "scopesWriteNote": "Salt okunur kullanım için yazma kapsamını atlayın. Yazma, okumayı içermez; her kapsamı ayrı ayrı seçin.",
               "docsLink": "Bitbucket API belirteci belgeleri",
               "storageNote": "İşletim sistemi anahtarlığı (keychain) kullanılabildiğinde şifrelenmiş depolamayla bu makinede saklanır. ORCA_BITBUCKET_* ortam değişkenleri burada kaydettiklerinizden her zaman önceliklidir.",
               "cancel": "İptal",
@@ -16290,6 +16293,7 @@
           "kernelStartFailed": "Çekirdek başlatılamadı.",
           "noPython": "Bu bilgisayarda Python bulunamadı. [python.org](https://www.python.org/downloads/) adresinden yükleyin, ardından hücreyi yeniden çalıştırın.",
           "kernelDied": "Çekirdek sonlandı.",
+          "outputTruncated": "Çıktı kısaltıldı: Orca bu hücrenin çıktısının başını tuttu ve gerisini attı. Tamamını korumak için çıktıyı bir dosyaya yazın.",
           "localOnly": "Not defteri hücreleri yalnızca bu bilgisayardaki dosyalar için çalıştırılabilir.",
           "pythonOnly": "Orca'da yalnızca Python not defterleri çalıştırılabilir.",
           "ownerUnresolved": "Orca bu not defterinin hangi bilgisayarda olduğunu henüz belirleyemediği için hücreleri çalıştırılamıyor.",
@@ -19468,6 +19472,7 @@
         "noCommands": "Eşleşen komut yok",
         "commands": "Komutlar",
         "skills": "Beceriler",
+        "checkingSkills": "Yeni beceriler denetleniyor…",
         "loadingSkills": "Beceriler yükleniyor...",
         "skillsLoaded": "Beceriler yüklendi",
         "clearDescription": "Konuşma bağlamını temizle",
@@ -20177,6 +20182,7 @@
         "copyIdentity": "{{value0}} kopyala",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
+        "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın.",
@@ -20202,7 +20208,9 @@
         "hidden": "Orca artık oluşturulan pull request’leri göstermeyecek",
         "many_one": "{{count}} pull request oluşturuldu",
         "many_other": "{{count}} pull request oluşturuldu"
-      }
+      },
+      "splitRight": "Sağa Böl",
+      "splitDown": "Aşağı Böl"
     },
     "tab": {
       "bar": {
@@ -20484,11 +20492,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Git çalışma alanlarındaki commit edilmemiş veya izlenmeyen tüm değişiklikler kalıcı olarak silinecek.",
-          "clean": "Commit edilmemiş veya izlenmeyen değişiklik yok",
           "unavailable": "Değişiklikler kontrol edilemedi",
           "checking": "Değişiklikler kontrol ediliyor…",
           "checkingDetails": "Kontrol ediliyor…",
-          "unavailableDetails": "Ayrıntılar mevcut değil"
+          "unavailableDetails": "Ayrıntılar mevcut değil",
+          "none": "Commit'lenmemiş değişiklik yok"
         },
         "unsavedEdits": {
           "discarded_one": "{{count}} dosyadaki kaydedilmemiş değişiklikler atılacak:",
@@ -20787,6 +20795,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}} biçimlendirilemedi. Biçimlendirilmeden kaydediliyor: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "Yeni Ajan"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Sohbetin yanında bir bölme açın",
+          "action": "Bölmeyi böl"
+        }
       }
     }
   },
@@ -21270,6 +21291,7 @@
       "switch": "Dal değiştir: {{branch}}",
       "search": "Dallarda ara",
       "recover": "{{branch}} dalına geç",
+      "copy": "Dal adını kopyala",
       "create": "{{branch}} dalından {{name}} dalını oluştur",
       "open": "Çalışma alanını aç",
       "occupied": "{{path}} konumunda kullanımda",
@@ -21360,7 +21382,6 @@
       "sortRelevance": "En alakalı",
       "sortNewest": "En yeni",
       "sortResultsAriaLabel": "Sonuçları sırala: {{value0}}",
-      "consent": "Tam metin arama etkinleştirilsin mi? Orca, tam konuşmalar ve araç çıktısı başına 3.072 karaktere kadar dahil olmak üzere yerel ajan dökümlerinden bu bilgisayarda bir dizin oluşturur. İçerik sansürlenmez. Kimliği doğrulanmış eşlenmiş istemciler bu dizinde arama yapabilir.",
       "remoteDisabled": "Arama bu bilgisayarda devre dışı. Oturumlarında arama yapmak için o bilgisayarda döküm dizinlemeyi etkinleştirin.",
       "titleOnly": "Bu bilgisayarda tam metin araması kapalı olduğu için yalnızca oturum başlıklarında eşleşme aranır.",
       "notReady": "Arama dizini henüz hazır değil. Birazdan tekrar deneyin.",
@@ -21420,7 +21441,6 @@
       "description": "Bu bilgisayarda ve eşlenmiş herhangi bir Orca sunucusunda ajanlarınızın söylediği ve yaptığı her şeyi arayın.",
       "searchDescription": "Bu bilgisayar ve eşlenmiş sunucular için oturum aramasını açın veya arama verilerini temizleyin.",
       "indexComputers": "Oturumların içinde ara",
-      "computersConsent": "Her bilgisayar, kendi ajan konuşmalarının ve araç çıktısının aranabilir bir kopyasını tutar. Hiçbir şey o bilgisayardan dışarı çıkmaz.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} üzerindeki oturumları ara",
       "serverOffline": "Çevrimdışı",
@@ -21825,7 +21845,10 @@
     "alwaysForceDeleteTooltip": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreBranchActions": "Diğer branch silme seçenekleri",
     "alwaysForceDeleteBranches": "Korunan branch'leri her zaman sil",
-    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır."
+    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
+    "moreDeleteOptions": "Diğer silme seçenekleri",
+    "alwaysDelete": "Her zaman sil",
+    "alwaysDeleteTooltip": "Bundan sonraki silme işlemlerinde bu onayı atla."
   },
   "worktree": {
     "nestedRemoval": {
@@ -23491,6 +23514,41 @@
     "historyChanged": "Geçmiş yeniden değişti. Tekrar denemek için Git grafiğini yenileyin.",
     "loadFailed": "Git geçmişi yüklenemedi",
     "updateHost": "Git grafiğini açmak için {{host}} üzerindeki Orca’yı güncelleyin",
-    "title": "Git Grafiği"
+    "title": "Git Grafiği",
+    "revertConflicts": "Geri alma çakışmaları",
+    "revertInProgress": "Geri alma sürüyor",
+    "abortOperationTitle": "{{operation}} iptal edilsin mi?",
+    "abortOperationDescription": "Bu, devam eden işlemi iptal eder ve işlem sırasında yapılan çakışma çözümlerini silebilir.",
+    "abortOperation": "{{operation}} işlemini iptal et",
+    "recoveryFailed": "İşlem tamamlanamadı. Kaynak denetimini yenileyip tekrar deneyin.",
+    "continueOperation": "{{operation}} işlemine devam et",
+    "reverting": "Geri alınıyor",
+    "updateActionsHost": "Commit işlemleri için {{host}} üzerindeki Orca’yı güncelleyin",
+    "thisHost": "bu makine",
+    "cannotApplyMerge": "Buradan bir birleştirme commit’i cherry-pick yapılamaz veya geri alınamaz",
+    "confirmCommitAction": "{{action}} {{commit}}?",
+    "cancelAction": "İptal",
+    "checkoutCommit": "Commit’e geç",
+    "cherryPick": "Cherry-pick",
+    "revert": "Geri al",
+    "actionLanded": "Şimdi {{branch}} üzerinde {{commit}} konumunda",
+    "detachedHead": "ayrık HEAD",
+    "actionWarning": "İşlem tamamlandı ancak Git bir sorun bildirdi.",
+    "actionConflicted": "Kaynak denetimindeki çakışmaları çözün, ardından işleme devam edin veya işlemi iptal edin.",
+    "alreadyApplied": "Zaten uygulanmış, cherry-pick yapılacak bir şey yok",
+    "nothingToRevert": "Geri alınacak bir şey yok; değişiklikler zaten geri alındı.",
+    "actionRefused": "İşlem tamamlanmadı.",
+    "actionUnavailable": "Bu çalışma alanı artık işlem için kullanılamıyor. Git grafiğini yeniden açıp tekrar deneyin.",
+    "ownerChanged": "Çalışma alanının makinesi değişti. Git grafiğini yeniden açıp tekrar deneyin.",
+    "showAllBranches": "Tüm dalları göster",
+    "actionDirty": "Değişikliklerinizi commit edin veya stash’e alın, ardından yeniden deneyin.",
+    "actionFailed": "Git bir commit oluşturmadı. Çalışma kopyasını kontrol edip yeniden deneyin.",
+    "operationInProgress": "Yeniden denemeden önce devam eden {{operation}} işlemini tamamlayın veya iptal edin.",
+    "checkoutBranch": "Dalı kullan",
+    "createBranch": "Burada dal oluştur",
+    "branchCreated": "{{commit}} üzerinde {{branch}} oluşturuldu",
+    "branchName": "Dal adı",
+    "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
+    "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   }
 }

@@ -4,6 +4,9 @@ import { BlockList, isIP } from 'node:net'
 export const ORCAD_LOOPBACK_BIND_HOST = '127.0.0.1'
 const ALL_INTERFACES_V4 = '0.0.0.0'
 const ALL_INTERFACES_V6 = '::'
+const ALL_INTERFACES_ADDRESSES = new BlockList()
+ALL_INTERFACES_ADDRESSES.addAddress(ALL_INTERFACES_V4, 'ipv4')
+ALL_INTERFACES_ADDRESSES.addAddress(ALL_INTERFACES_V6, 'ipv6')
 
 export class OrcadBindAddressError extends Error {
   readonly code = 'orcad_invalid_bind_address'
@@ -52,7 +55,9 @@ export function isLoopbackBindHost(host: string): boolean {
 }
 
 export function isAllInterfacesBindHost(host: string): boolean {
-  return host === ALL_INTERFACES_V4 || host === ALL_INTERFACES_V6
+  const value = host.trim()
+  const family = isIP(value)
+  return family !== 0 && ALL_INTERFACES_ADDRESSES.check(value, family === 6 ? 'ipv6' : 'ipv4')
 }
 
 export function bindHostIsNetworkExposed(host: string): boolean {

@@ -14,7 +14,7 @@ import { successResponse } from './errors'
 import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
+import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,

@@ -26,6 +26,7 @@ export type SharedControlTestServer = {
 }
 
 type ServerOptions = {
+  onClientClose?: () => void
   resultForRequest?: (method: string) => unknown
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
@@ -78,6 +79,9 @@ export async function createSharedControlTestServer(
   servers.push(wss)
 
   wss.on('connection', (ws) => {
+    if (options.onClientClose) {
+      ws.once('close', options.onClientClose)
+    }
     let sharedKey: Uint8Array | null = null
     let authenticated = false
     ws.on('message', (data, isBinary) => {

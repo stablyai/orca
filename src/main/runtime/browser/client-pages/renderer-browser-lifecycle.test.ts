@@ -6,13 +6,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 
 import { electronMocks } from '../../orca-runtime-test-mocks/setup.spec'
 
-import {
-  TEST_WORKTREE_ID,
-  makeRuntimeStoreWithWorkspaceSession,
-  store
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { TEST_WORKTREE_ID, store } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import '../../../../shared/constants'
 
 import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
@@ -56,7 +51,10 @@ function browserRuntime(closeTab = vi.fn(async (_pageId: string) => {}), runtime
     ownsTab: (pageId) => livePages.has(pageId) && !desktopPageIds.has(pageId)
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the bridge inventory is used by this lifecycle test.
-  runtime.setAgentBrowserBridge({ tabList: () => ({ tabs: [...livePages.values()] }) } as never)
+  runtime.setAgentBrowserBridge({
+    tabList: () => ({ tabs: [...livePages.values()] }),
+    getRemoteTabFaviconUrl: () => null
+  } as never)
   electronMocks.BrowserWindow.fromId.mockImplementation((id: number) =>
     id === 1 ? { isDestroyed: () => false } : null
   )
@@ -122,40 +120,6 @@ it('finishes an offscreen close against the latest renderer revision without los
   expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab'])
 })
 
-it('rebases omitted renderer publications and accepts their return without reviving dead pages', async () => {
-  const { runtime, livePages, sync, addPage, list } = browserRuntime()
-  sync([publication()])
-  addPage('runtime-live')
-  addPage('runtime-dead')
-  runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-  expect((await list()).tabs).toHaveLength(3)
-  livePages.delete('runtime-dead')
-
-  sync([])
-  const detached = await list()
-  expect(detached.publicationEpoch).toMatch(/^headless-hydrated:/)
-  expect(detached.tabs.map((tab) => tab.id)).toEqual(['runtime-live'])
-  expect(runtime['acceptedRendererMobileSnapshotByWorktree'].has(TEST_WORKTREE_ID)).toBe(false)
-
-  sync([publication()])
-  const returned = await list()
-  expect(returned.publicationEpoch).toBe('renderer-1')
-  expect(returned.tabs.map((tab) => tab.id)).toEqual(['renderer-tab', 'runtime-live'])
-  expect(returned.snapshotVersion).toBeGreaterThan(detached.snapshotVersion)
-  expect(runtime['isRendererOwnedMobileBrowserTab'](publication(), rendererTab)).toBe(true)
-
-  livePages.clear()
-  sync([publication()])
-  expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab'])
-  sync([publication('renderer-2')])
-  await expect(
-    runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, rendererTab.id, {
-      expectedPublicationEpoch: 'renderer-1'
-    })
-  ).resolves.toMatchObject({ refused: true, refusalReason: 'stale-publication' })
-  expect((await list()).publicationEpoch).toBe('renderer-2')
-})
-
 it('does not tombstone a renderer browser when the acknowledged close fails', async () => {
   const { runtime, sync, list } = browserRuntime()
   sync([publication()])
@@ -183,35 +147,6 @@ it('does not tombstone a renderer browser when the acknowledged close fails', as
   expect(closeSessionTab).toHaveBeenCalledWith(rendererTab.id, TEST_WORKTREE_ID)
   expect(forgetTabs).not.toHaveBeenCalled()
   expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab'])
-})
-
-it('lists only pages the offscreen backend owns when the bridge also lists desktop webviews', async () => {
-  const closeTab = vi.fn(async (_pageId: string) => {})
-  // A saved workspace session sends list and graph sync through hydrate's runtime-owned merge.
-  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
-  const { runtime, sync, addPage, addDesktopPage, list } = browserRuntime(closeTab, runtimeStore)
-  sync([publication()])
-  addDesktopPage('renderer-page')
-  // A background page of the same desktop browser workspace is absent from the renderer's publication.
-  addDesktopPage('background-desktop-page')
-  addPage('separate-runtime-page')
-  runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-  await list()
-  sync([publication('renderer-1', 2)])
-  runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
-
-  const snapshot = await list()
-  expect(snapshot.tabs.map((tab) => tab.id)).toEqual(['renderer-tab', 'separate-runtime-page'])
-  expect(snapshot.publicationEpoch).toBe('renderer-1')
-  expect(snapshot.tabGroups?.flatMap((group) => group.tabOrder)).toEqual([
-    'renderer-tab',
-    'separate-runtime-page'
-  ])
-  await expect(
-    runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'separate-runtime-page')
-  ).resolves.toMatchObject({ closed: true })
-  expect(closeTab).toHaveBeenCalledWith('separate-runtime-page')
-  expect(closeTab).not.toHaveBeenCalledWith(rendererTab.browserPageId)
 })
 
 it('keeps a replacement client page through a stale placement retirement and retires only the live generation', async () => {

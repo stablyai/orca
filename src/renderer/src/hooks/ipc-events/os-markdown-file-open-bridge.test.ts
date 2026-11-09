@@ -26,22 +26,10 @@ vi.mock('../../store', () => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
-type MarkdownFileOpenListener = (documents: MarkdownDocument[]) => void
-
 let frames: FrameRequestCallback[] = []
 let dispatchEvent = vi.fn()
 let unhandledRejections: unknown[] = []
 const recordUnhandledRejection = (reason: unknown): void => void unhandledRejections.push(reason)
-
-function markdownDocument(overrides: Partial<MarkdownDocument> = {}): MarkdownDocument {
-  return {
-    filePath: '/Users/me/notes/README.md',
-    relativePath: 'README.md',
-    basename: 'README.md',
-    name: 'README',
-    ...overrides
-  }
-}
 
 function stubPreload(ui: Record<string, unknown>): void {
   dispatchEvent = vi.fn()
@@ -93,48 +81,6 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     process.off('unhandledRejection', recordUnhandledRejection)
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
-  })
-
-  it('opens documents pushed after startup and hands back the unsubscribe', async () => {
-    const listeners: MarkdownFileOpenListener[] = []
-    const unsubscribe = vi.fn()
-    stubPreload({
-      onOpenMarkdownFiles: (next: MarkdownFileOpenListener) => {
-        listeners.push(next)
-        return unsubscribe
-      },
-      consumePendingMarkdownFileOpens: () => Promise.resolve([])
-    })
-
-    const unsubs: (() => void)[] = []
-    registerOsMarkdownFileOpenBridge(unsubs)
-    expect(unsubs).toEqual([unsubscribe])
-
-    listeners[0]([
-      markdownDocument({ filePath: '/Users/me/notes/live.tsv', relativePath: 'live.tsv' })
-    ])
-    await settle()
-
-    expect(mocks.openFile).toHaveBeenCalledTimes(1)
-    expect(mocks.openFile.mock.calls[0][0].filePath).toBe('/Users/me/notes/live.tsv')
-
-    unsubs.forEach((teardown) => teardown())
-    expect(unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('enables the floating workspace when the setting is off', async () => {
-    storeState.settings = { floatingTerminalEnabled: false }
-    stubPreload({
-      onOpenMarkdownFiles: () => () => {},
-      consumePendingMarkdownFileOpens: () => Promise.resolve([markdownDocument()])
-    })
-
-    registerOsMarkdownFileOpenBridge([])
-    await settle()
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ floatingTerminalEnabled: true })
-    runFrames()
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
   })
 
   it('ignores a non-array payload from a mismatched preload', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isAllInterfacesBindHost,
   isLoopbackBindHost,
   OrcadBindAddressError,
   resolveOrcadBindHost
@@ -14,6 +15,22 @@ describe('resolveOrcadBindHost', () => {
       'does not support scoped IPv6 addresses'
     )
   })
+})
+
+describe('isAllInterfacesBindHost', () => {
+  it.each(['0.0.0.0', '::', '::0', '0:0:0:0:0:0:0:0', '::ffff:0.0.0.0'])(
+    'recognizes %s as a wildcard rather than a pinned pairing address',
+    (host) => {
+      expect(isAllInterfacesBindHost(resolveOrcadBindHost(host))).toBe(true)
+    }
+  )
+
+  it.each(['127.0.0.1', '::1', '100.64.1.20', 'fd7a:115c:a1e0::1', 'invalid'])(
+    'does not classify %s as a wildcard',
+    (host) => {
+      expect(isAllInterfacesBindHost(host)).toBe(false)
+    }
+  )
 })
 
 describe('isLoopbackBindHost', () => {

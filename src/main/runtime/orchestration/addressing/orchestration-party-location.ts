@@ -1,9 +1,9 @@
-import type { OrchestrationPartyLocationResult } from '../../../../shared/orchestration-caller-status'
+import type { OrchestrationPartyLocationResult } from '../../../../shared/orchestration/orchestration-caller-status'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { resolveOrchestrationParty } from './orchestration-party'
 import { OrchestrationError } from '../orchestration-error'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   lineageLiveSession,
   type AgentSessionRecordReader

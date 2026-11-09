@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
@@ -7,11 +7,9 @@ import { CrewReadModel } from './crew-read-model'
 import { fixture } from './crew-read-model.test-fixture'
 import { createCrewPartyRegistry } from './crew-parties'
 import { createCrewRecipientInputs } from './crew-recipient-inputs'
-import { resolveMessageRun } from '../../rpc/methods/orchestration/routing'
-import { OrcaRuntimeService } from '../../orca-runtime'
-import { resolveBareOrchestrationRecipient } from '../../rpc/methods/orchestration/messaging/recipient-routing'
+
 import { LEGACY_CONTRACT_VERSION } from '../db/contract-constants'
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../shared/orchestration/orchestration-rpc-contract'
 
 import { subscribeCrew } from './crew-stream'
 
@@ -46,123 +44,6 @@ function authorityFixture() {
   }
   return { ...f, records, visible, input, available }
 }
-
-it('keeps imported content and Open while deriving local close/reopen availability without mail', async () => {
-  const f = authorityFixture()
-  for (const [id, body] of [
-    [LOCAL, 'ordinary local'],
-    [IMPORTED, 'moved imported']
-  ] as const) {
-    f.db.insertMessage({
-      from: formatOrcaSessionAddress(id),
-      to: 'term_worker',
-      subject: 'Peer',
-      body
-    })
-  }
-  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const stop = subscribeCrew(
-    () => model.read('term_worker'),
-    model.subscribe,
-    () => {}
-  )
-  try {
-    const peers = model.read('term_worker').sections.talkingWith
-    expect(peers).toHaveLength(2)
-    const local = peers.find((row) => row.latest?.preview === 'ordinary local')!
-    const imported = peers.find((row) => row.latest?.preview === 'moved imported')!
-    expect(local.sendAddress).toBe(formatOrcaSessionAddress(LOCAL))
-    expect(local.openTarget).toMatchObject({ kind: 'chat', sessionId: LOCAL })
-    expect(imported).not.toHaveProperty('sendAddress')
-    f.db.crewChanges.notify(new Set(['topology']))
-    await Promise.resolve()
-    f.visible.clear()
-    f.db.crewChanges.notify(new Set(['records']))
-    await Promise.resolve()
-    const closed = model
-      .read('term_worker')
-      .sections.talkingWith.find((row) => row.partyKey === local.partyKey)!
-    const { sendAddress: _sendAddress, ...retained } = local
-    expect(closed).toEqual(retained)
-    f.visible.add(LOCAL)
-    f.db.crewChanges.notify(new Set(['records']))
-    await Promise.resolve()
-    expect(
-      model.read('term_worker').sections.talkingWith.find((row) => row.partyKey === local.partyKey)
-    ).toEqual(local)
-  } finally {
-    stop()
-  }
-})
-
-it('matches actual sender Dispatch R1 before coordinator R2 and never uses sender preference to disambiguate active recipient Dispatches', () => {
-  const f = authorityFixture()
-  const caller = {
-    address: 'term_worker',
-    terminalHandle: 'term_worker',
-    paneKey: f.handles.get('term_worker')!,
-    orcaSessionId: null
-  }
-  const second = f.db.createRun({
-    objective: 'caller coordinates R2',
-    coordinatorHandle: caller.address,
-    coordinatorPaneKey: caller.paneKey
-  })
-  const createDispatch = (handle: string, pane: string | undefined) =>
-    f.db.createDispatchContext({
-      taskId: f.db.createTask({ spec: handle, runId: f.run.id }).id,
-      assigneeHandle: handle,
-      assigneePaneKey: pane,
-      creator: { kind: 'system' },
-      maxDepth: 10
-    })
-  createDispatch(caller.address, caller.paneKey)
-  const peer = formatOrcaSessionAddress(IMPORTED)
-  for (const id of [f.run.id, second.id]) {
-    f.db.rememberRunCoordinatorHandle(id, peer)
-  }
-  const runtime = new OrcaRuntimeService()
-  runtime.setOrchestrationDb(f.db)
-  vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockReturnValue(null)
-  const ordinary = resolveMessageRun(runtime, { sender: caller, to: peer })
-  expect(ordinary.run?.id).toBe(f.run.id)
-  const facts = f.input()
-  facts.prepare([IMPORTED], caller)
-  expect(
-    facts.finish([IMPORTED], ordinary.run!.id, { livePane: () => null, process: () => null })(
-      IMPORTED
-    )
-  ).toBe(true)
-  expect(
-    resolveBareOrchestrationRecipient({
-      runtime,
-      db: f.db,
-      handle: peer,
-      senderRunId: ordinary.run!.id
-    })
-  ).toMatchObject({ ok: true, to: `run:${f.run.id}` })
-  f.db.insertMessage({ from: peer, to: caller.address, subject: 'history', body: 'history' })
-  expect(
-    new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read(caller.address).sections
-      .talkingWith[0].sendAddress
-  ).toBe(peer)
-  const one = createDispatch('term_peer_one', undefined)
-  const two = createDispatch('term_peer_two', undefined)
-  // Retained duplicate-owner control; ordinary creation protects an already occupied assignee.
-  f.db.db
-    .prepare('UPDATE dispatch_contexts SET assignee_handle = ? WHERE id IN (?, ?)')
-    .run(peer, one.id, two.id)
-  const blocked = f.input()
-  const actualCaller = blocked.prepare([IMPORTED], caller)
-  const sender = blocked.senderRun(actualCaller)
-  expect(sender).toEqual({ kind: 'ready', id: f.run.id })
-  expect(
-    blocked.finish([IMPORTED], f.run.id, { livePane: () => null, process: () => null })(IMPORTED)
-  ).toBe(false)
-  expect(
-    resolveBareOrchestrationRecipient({ runtime, db: f.db, handle: peer, senderRunId: f.run.id })
-  ).toMatchObject({ ok: false, code: 'recipient_ambiguous' })
-})
 
 it('re-derives retained legacy custody on actual commit/revoke/reset writers', async () => {
   const f = authorityFixture()

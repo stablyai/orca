@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   resolveWorktreeExecutionHost,
   type ExecutionHostOwnerRow
-} from '../../../shared/worktree-execution-host-resolution'
+} from '../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   findIndexedWorktreeOwnerForHost,
   resolveIndexedWorktreeOwner

@@ -1,8 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as z from 'zod'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { RpcClient } from '../transport/rpc-client'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 const sendRecordedRead = bindDeferredRpcOperation(

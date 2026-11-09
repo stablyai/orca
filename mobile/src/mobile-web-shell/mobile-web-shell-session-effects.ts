@@ -5,8 +5,8 @@ import type {
   MobileWebBundleManifestReply
 } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebBundleCompatManifest } from '../transport/web-bundle/mobile-web-bundle-compat'
-import { runRpcOperation } from '../transport/rpc-operation'
-import type { RpcClient } from '../transport/rpc-client'
+import { runRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { GenerationStore, StagedGeneration } from './generation-store'
 import type { createShellPageDeadline } from './shell-page-deadline'
 import {
@@ -264,17 +264,20 @@ export async function runShellEffect(
       context.manifest.current = null
       await (effect.kind === 'download' ? download : stageUpdate)({ ...context, opened })
       return
-    case 'open-generation':
+    case 'open-generation': {
+      // A remount mints its own id below; only a first open adopts a page Home booted.
+      const spare = await runtime.claimSpareSessionId(effect.directory)
       send({
         type: 'activated',
         flow,
         generationDirectory: effect.directory,
-        sessionId: runtime.mintSessionId(),
+        sessionId: spare ?? runtime.mintSessionId(),
         buildId: effect.buildId,
         totalBytes: effect.totalBytes,
         elapsedMs: runtime.now() - context.startedAt
       })
       return
+    }
     case 'remount': {
       const remount = (): void =>
         send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })

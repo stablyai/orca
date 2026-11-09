@@ -5,7 +5,7 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { KeyLike } from 'jose'
-import { EPOCH, ORIGIN, adminCall, assign, control, mint, newHost, record, sleep, waitFor } from './harness-mvp-object'
+import { EPOCH, ORIGIN, SHIPPED_CAPS, adminCall, assign, control, mint, newHost, record, sleep, waitFor } from './harness-mvp-object'
 
 // Local timing (mvp-object.ts): ping every 3 s, silence timeout 9 s.
 const SILENCE_MS = 9_000
@@ -44,6 +44,87 @@ export async function heartbeatCheck(key: KeyLike): Promise<void> {
     clearInterval(refresher)
     chatty.client.closeNow()
     silent.client.closeNow()
+  }
+}
+
+// K1: host-sent keepalive. A host advertising client-keepalive-v1 gets the offer, then sends the
+// keepalive, which the runtime answers: the edge sends it no pings and it stays up. One that goes
+// silent is not watched by any alarm while idle, but is closed 4408 the moment the director needs
+// the host (export), and a live one is not. A host without the capability is pinged as before.
+export async function keepaliveCheck(key: KeyLike): Promise<void> {
+  const caps = `${SHIPPED_CAPS},client-keepalive-v1`
+  const liveHost = newHost()
+  const silentHost = newHost()
+  const legacyHost = newHost()
+  await Promise.all([liveHost, silentHost, legacyHost].map((h) => assign(h.relayHostId, 'edge', EPOCH, [])))
+  let muted = false
+  const live = control(liveHost, await mint(key, liveHost.relayHostId), EPOCH, { caps })
+  const silent = control(silentHost, await mint(key, silentHost.relayHostId), EPOCH, { caps, drop: () => muted })
+  const legacy = control(legacyHost, await mint(key, legacyHost.relayHostId))
+  // Its keepalive timer stalls (a throttled app) but it still answers relay pings from socket I/O.
+  const nappingHost = newHost()
+  await assign(nappingHost.relayHostId, 'edge', EPOCH, [])
+  const napping = control(nappingHost, await mint(key, nappingHost.relayHostId), EPOCH, { caps, drop: (f) => muted && f === '{"type":"keepalive"}' })
+  await Promise.all([live.client.connect(), silent.client.connect(), legacy.client.connect(), napping.client.connect()])
+  try {
+    await sleep(1_000)
+    muted = true
+    await sleep(SILENCE_MS + 4_000)
+    record(
+      'K1 keepalive host: offered, answered, no edge pings, up past the silence timeout',
+      live.events.offers === 1 && live.events.acks >= 3 && live.events.pings === 0 && live.client.isLive() && live.events.closes.length === 0,
+      `offers=${live.events.offers} acks=${live.events.acks} pings=${live.events.pings} closes=${live.events.closes}`
+    )
+    record(
+      'K1 host without the capability: no offer, pinged as before',
+      legacy.events.offers === 0 && legacy.events.pings >= 3 && legacy.client.isLive(),
+      `offers=${legacy.events.offers} pings=${legacy.events.pings}`
+    )
+    // Local sweep alarm every 3 s: it finds the napping host silent and probes it with a relay ping.
+    record(
+      'K2 keepalive host with a stalled timer: probed with a relay ping, answers, stays up',
+      napping.events.pings >= 1 && napping.client.isLive() && napping.events.closes.length === 0,
+      `pings=${napping.events.pings} dropped=${napping.events.dropped} closes=${napping.events.closes}`
+    )
+    const nappingExport = await adminCall('export', { relayHostId: nappingHost.relayHostId })
+    record('K2 export of the probed, answering host: busy', nappingExport.json?.outcome === 'busy', JSON.stringify(nappingExport.json?.outcome))
+    const liveExport = await adminCall('export', { relayHostId: liveHost.relayHostId })
+    const silentExport = await adminCall('export', { relayHostId: silentHost.relayHostId })
+    await waitFor(() => silent.events.closes.length > 0, 3_000)
+    record(
+      'K1 export: live keepalive host busy; silent one closed 4408 and exported',
+      liveExport.json?.outcome === 'busy' && silentExport.json?.outcome === 'exported' && silent.events.closes.includes(4408) && live.events.closes.length === 0,
+      `live=${JSON.stringify(liveExport.json?.outcome)} silent=${JSON.stringify(silentExport.json?.outcome)} closes=${silent.events.closes}`
+    )
+  } finally {
+    live.client.closeNow()
+    silent.client.closeNow()
+    legacy.client.closeNow()
+    napping.client.closeNow()
+  }
+}
+
+// K3: a keepalive host that goes fully silent is probed when an alarm runs (here the local 3 s
+// sweep; in production the silence check armed while phones are attached), and closed 4408 when
+// the probe goes unanswered: silence timeout plus the 10 s probe.
+export async function keepaliveProbeCheck(key: KeyLike): Promise<void> {
+  const host = newHost()
+  await assign(host.relayHostId, 'edge', EPOCH, [])
+  let muted = false
+  const c = control(host, await mint(key, host.relayHostId), EPOCH, { caps: `${SHIPPED_CAPS},client-keepalive-v1`, drop: () => muted })
+  await c.client.connect()
+  muted = true
+  const started = Date.now()
+  try {
+    const closed = await waitFor(() => c.events.closes.length > 0, SILENCE_MS + 10_000 + 8_000)
+    const after = Date.now() - started
+    record(
+      'K3 silent keepalive host: probed, then closed 4408 after the silence timeout plus the probe',
+      closed && c.events.closes.includes(4408) && c.events.pings >= 1 && after >= SILENCE_MS + 10_000 - 500,
+      `closedAfter=${after}ms pings=${c.events.pings} closes=${c.events.closes}`
+    )
+  } finally {
+    c.client.closeNow()
   }
 }
 

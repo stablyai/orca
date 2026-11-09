@@ -4,7 +4,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
 import {
   getManagedOrcadCrashLoopBrake,
   wakeManagedOrcadUnlessCrashLooping

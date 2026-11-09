@@ -1,9 +1,7 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import {
-  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
-  normalizeGlobalWindowsRuntimeDefault
-} from '../../../shared/project-execution-runtime'
+import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/execution-host/project-runtime-legacy-migration'
+import { normalizeGlobalWindowsRuntimeDefault } from '../../../shared/execution-host/project-runtime-preference'
 import {
   quotePowerShellLiteral,
   quotePowerShellNativeArgument

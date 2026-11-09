@@ -8,7 +8,7 @@ import {
   pushMobileHostedReviewBranch
 } from './mobile-hosted-review-git-preparation'
 import { readBranchCompareOutcome } from './mobile-branch-compare-outcome'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 type RemotePrerequisiteInput = {
   status: MobileGitStatusResult | null

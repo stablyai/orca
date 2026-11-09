@@ -1,7 +1,10 @@
 import { mobileFileMedia, type MobileFileMedia } from './mobile-file-media'
 import { buildImageDataUri } from '../../../src/shared/file-preview/image-data-uri'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
-import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
+import {
+  buildMobileDiffLines,
+  type MobileDiffLine
+} from '../source-control/review/mobile-diff-lines'
 import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 import {
   fileTabDiffRead,

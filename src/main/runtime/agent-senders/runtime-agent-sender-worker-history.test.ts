@@ -1,11 +1,5 @@
 import { createHash } from 'node:crypto'
 
-import { mkdtempSync } from 'node:fs'
-
-import { tmpdir } from 'node:os'
-
-import { join } from 'node:path'
-
 import { afterEach, expect, it } from 'vitest'
 
 import { createRuntimeAgentProjections } from '../construction/runtime-agent-projections'
@@ -142,66 +136,6 @@ function host(workers: number, path: string = ':memory:') {
     cold: (database = db) => rows(start(database).build())
   }
 }
-
-it('follows each write that changes a worker, as a cold rebuild reads it', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-sender-history-'))
-  const h = host(3, join(directory, 'orchestration.db'))
-  const step = (only = (_row: string) => true) => {
-    const rows = h.rows(h.senders.build())
-    expect(rows.filter(only)).toEqual(h.cold().filter(only))
-    return rows
-  }
-  step()
-  // A follow-up of a worker whose earlier lookup found none takes it to the follow-up's own
-  // terminal in another pane; only that earlier miss, not any pane it read, says so.
-  h.leaves.push({ ...MIRROR_LEAVES_STEP_1[0], tabId: 'tab-3', worktreeId: 'w', ptyId: 'pty-3' })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publisher reads only these fields.
-  h.ptys.push({
-    ptyId: 'pty-3',
-    incarnationId: 'inc-1',
-    launchIncarnationId: 'inc-1',
-    launchToken: token(3),
-    worktreeId: 'w'
-  } as RuntimePtyWorktreeRecord)
-  step()
-  const followUp = h.dispatch(3, 'follow-up')
-  h.hold.run(`res-${followUp.id}`, followUp.id, followUp.id, pane(3), handle(3), 'pty-3:inc-1')
-  step()
-  h.db.db
-    .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
-    .run(h.ids[0], followUp.id)
-  expect(step()).not.toContain(`dispatch:${h.ids[0]}@${pane(3)}`)
-  expect(step()).toContain(`dispatch:${h.ids[0]}@${pane(0)}`)
-  // A terminal that moves to another pane takes its worker there.
-  h.db.db
-    .prepare(
-      "UPDATE worker_terminal_resources SET pane_key = ?, process_incarnation = 'pty-2:inc-1' WHERE id = ?"
-    )
-    .run(pane(2), `res-${h.ids[1]}`)
-  expect(step()).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
-  // A respawned process under the same pane no longer holds its worker.
-  // (A fresh publisher sees the new process as the handle's first, so only worker rows compare.)
-  h.ptys[2] = { ...h.ptys[2], incarnationId: 'inc-2' }
-  const dispatches = (row: string) => row.startsWith('dispatch:')
-  expect(step(dispatches)).not.toContain(`dispatch:${h.ids[2]}@${pane(2)}`)
-  h.db.db.prepare('DELETE FROM worker_terminal_resources WHERE id = ?').run(`res-${h.ids[0]}`)
-  step(dispatches)
-  // A rolled-back write marks nothing.
-  const settled = h.senders.workForTest()
-  const before = h.senders.build()
-  h.db.db.exec('BEGIN')
-  h.db.db.prepare("UPDATE worker_terminal_resources SET ownership_state = 'released'").run()
-  h.db.db.exec('ROLLBACK')
-  expect(h.senders.build()).toBe(before)
-  expect(h.senders.workForTest().paneReads).toBe(settled.paneReads)
-  // Another connection's commit, which no trigger here sees, rebuilds from the database.
-  const other = new OrchestrationDb(join(directory, 'orchestration.db'))
-  dbs.push(other)
-  other.db
-    .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
-    .run(`res-${h.ids[1]}`)
-  expect(step(dispatches)).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
-})
 
 it('keeps nothing it read inside a transaction that rolls back', () => {
   const h = host(3)

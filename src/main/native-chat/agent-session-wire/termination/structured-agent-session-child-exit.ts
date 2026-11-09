@@ -1,10 +1,7 @@
 // First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
-import {
-  agentSessionFailureFact,
-  type SubmissionRejectionFact
-} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
@@ -33,20 +30,12 @@ import {
 } from './structured-agent-session-unfinished-work'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { evictStructuredAgentSession } from './structured-agent-session-eviction'
+import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit-record'
+import { structuredAgentSessionEndedEventExit } from './structured-agent-session-child-exit-record'
+import { logExitFailure, logProviderChildExit } from './structured-agent-session-provider-exit-log'
 import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
-
-export type StructuredAgentSessionChildExit = {
-  deathEvidenceKind?: 'kill-delivered'
-  heldSends?: ReadonlySet<string>
-  expected: boolean
-  /** Log only; failure supplies user-facing wording. */
-  reason: string
-  failure?: SubmissionRejectionFact
-  observedAt?: number
-  startupUnanswered?: true
-}
 
 export type StructuredAgentSessionChildExitSession = Pick<
   StructuredAgentSessionHostSession,
@@ -117,18 +106,7 @@ export function settleStructuredAgentSessionChildExit<
   })
 }
 
-export function structuredAgentSessionEndedEventExit(
-  event: StructuredAgentSessionEndedEvent
-): StructuredAgentSessionChildExit {
-  return {
-    expected: event.cause === 'requested-close',
-    ...(event.deathEvidenceKind ? { deathEvidenceKind: event.deathEvidenceKind } : {}),
-    reason: event.reason,
-    ...(event.failure ? { failure: event.failure } : {}),
-    ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
-    ...(event.startupUnanswered ? { startupUnanswered: event.startupUnanswered } : {})
-  }
-}
+export { structuredAgentSessionEndedEventExit, type StructuredAgentSessionChildExit }
 
 export async function endExitedStructuredAgentSessionChildUnderSerialize<
   TSession extends StructuredAgentSessionChildExitSession
@@ -188,6 +166,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     rootGone: true,
     ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
+  })
+  logProviderChildExit(context.logger, sessionId, child, {
+    expected,
+    failure,
+    exit,
+    duringStartup: exitedDuringStartup
   })
   context.generationEnded(sessionId)
   const endChild = (): void => {
@@ -320,13 +304,4 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     context.generationEnded(sessionId, { restate: released && !expected })
     wakeQueuedDelivery()
   }
-}
-
-function logExitFailure(
-  context: Pick<StructuredAgentSessionChildExitContext, 'logger'>,
-  sessionId: string,
-  scope: string,
-  error: unknown
-): void {
-  context.logger.warn('settling a provider exit did not finish', { scope, sessionId, error })
 }

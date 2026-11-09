@@ -21,8 +21,8 @@ import {
 } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export type CmdJLinearIssuePreview = {
@@ -41,9 +41,15 @@ export type CmdJGitHubWorkItemPreview = {
   sourceContext: TaskSourceContext | null
 }
 
+/** The target New workspace would default to, used to scope task-link lookups to the same checkout. */
 function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.getState>) {
   const eligibleRepos = getComposerEligibleRepos(state.repos)
-  const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
+  const activeRepoId = resolveComposerActiveRepoId(
+    state.repos,
+    eligibleRepos,
+    state.activeRepoId,
+    state.runtimeEnvironments
+  )
   const resolution = resolveWorkspaceCreationTarget({
     eligibleRepos,
     projects: state.projects,

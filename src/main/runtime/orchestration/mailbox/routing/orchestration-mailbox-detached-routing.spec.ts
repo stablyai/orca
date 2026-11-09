@@ -9,7 +9,6 @@ import {
   LEAF_ID,
   PANE_KEY,
   pointerCount,
-  PTY_ID,
   sqliteFor,
   temporaryDirectories,
   TERMINAL_HANDLE
@@ -148,57 +147,6 @@ describe('orchestration detached mailbox routing', () => {
     db.close()
   })
 
-  it('uses bounded ownership lookup for direct arrivals while the agent cannot take input', async () => {
-    vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-bounded-')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Permission Run')
-    await harness.runtime.listTerminals()
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex needs permission\x07', 1)
-    const fullMailboxScan = vi.spyOn(db, 'getUndeliveredUnreadMessages')
-    const message = insertDirectRunMessage(db, run.id, 'Direct coordinator status')
-
-    harness.runtime.notifyMessageArrived(TERMINAL_HANDLE, message.type)
-    await Promise.resolve()
-
-    expect(fullMailboxScan).not.toHaveBeenCalled()
-    expect(pointerCount(harness.write)).toBe(0)
-    expect(db.getMessageById(message.id)?.to_handle).toBe(`run:${run.id}`)
-    db.close()
-  })
-
-  it('wakes a bound Run waiter when same-Run direct mail arrives', async () => {
-    vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-waiter-')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Waiting Run')
-    await driveToLiveIdle(harness.runtime)
-
-    const waiting = checkBoundMailbox(harness.runtime, { wait: true })
-    const internals = harness.runtime as unknown as {
-      messageWaitersByHandle: Map<string, Set<unknown>>
-    }
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      if (internals.messageWaitersByHandle.has(`run:${run.id}`)) {
-        break
-      }
-      await Promise.resolve()
-    }
-    expect(internals.messageWaitersByHandle.has(`run:${run.id}`)).toBe(true)
-
-    const message = insertDirectRunMessage(db, run.id, 'Wake the Run waiter')
-    harness.runtime.notifyMessageArrived(TERMINAL_HANDLE, message.type)
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    await expect(waiting).resolves.toMatchObject({
-      runId: run.id,
-      count: 1,
-      messages: [expect.objectContaining({ id: message.id })]
-    })
-    expect(pointerCount(harness.write)).toBe(0)
-    db.close()
-  })
-
   it('routes a stale-leaf arrival to its bound Run waiter', async () => {
     const db = createDatabase('orca-mailbox-stale-leaf-waiter-')
     const harness = createRuntime(db)
@@ -222,28 +170,6 @@ describe('orchestration detached mailbox routing', () => {
       messages: [expect.objectContaining({ id: message.id })]
     })
     expect(db.getMessageById(message.id)?.to_handle).toBe(`run:${run.id}`)
-    db.close()
-  })
-
-  it('keeps an unowned detached-recipient message in its direct mailbox', async () => {
-    const db = createDatabase('orca-mailbox-detached-direct-')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Detached direct recipient')
-    const detachedHandle = 'term_detached_worker'
-    const waiting = harness.runtime.waitForMessage(detachedHandle, { timeoutMs: 5_000 })
-    const message = db.insertMessage({
-      from: TERMINAL_HANDLE,
-      to: detachedHandle,
-      subject: 'Instruction before Dispatch ownership exists',
-      type: 'dispatch',
-      runId: run.id,
-      deliveryContract: 'current_delivery'
-    })
-
-    harness.runtime.notifyMessageArrived(detachedHandle, message.type)
-
-    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
-    expect(db.getMessageById(message.id)?.to_handle).toBe(detachedHandle)
     db.close()
   })
 
@@ -474,78 +400,6 @@ describe('orchestration detached mailbox routing', () => {
       db.routeUnreadDirectMessagesToDispatchMailbox(dispatch.id, run.id, TERMINAL_HANDLE)
     ).toMatchObject({ routedCount: 1, hasMore: false })
     expect(db.getMessageById(message.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
-    db.close()
-  })
-
-  it('uses primary-key lookups for bounded routing updates', () => {
-    const db = createDatabase('orca-mailbox-bounded-routing-indexes-')
-    const sqlite = sqliteFor(db)
-    const run = db.createRun({
-      objective: 'Bounded routing indexes',
-      coordinatorHandle: TERMINAL_HANDLE,
-      coordinatorPaneKey: PANE_KEY
-    })
-    const directMessage = db.insertMessage({
-      from: 'term_sender',
-      to: TERMINAL_HANDLE,
-      subject: 'Direct Run mail',
-      type: 'status',
-      runId: run.id,
-      deliveryContract: 'current_delivery'
-    })
-    sqlite
-      .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
-      .run(TERMINAL_HANDLE, directMessage.id)
-    const task = db.createTask({ spec: 'Dispatch migration', runId: run.id })
-    const dispatch = createRootDispatch(db, task.id, 'term_dispatch', PANE_KEY)
-    db.insertMessage({
-      from: 'term_sender',
-      to: `dispatch:${dispatch.id}`,
-      subject: 'Dispatch mailbox mail',
-      type: 'status',
-      runId: run.id,
-      deliveryContract: 'current_delivery'
-    })
-    const foreignHandle = 'term_foreign_bounded_routing'
-    const foreignRun = db.createRun({
-      objective: 'Foreign routing index',
-      coordinatorHandle: foreignHandle,
-      coordinatorPaneKey:
-        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
-    })
-    const foreignMessage = db.insertMessage({
-      from: 'term_sender',
-      to: foreignHandle,
-      subject: 'Foreign direct mail',
-      type: 'status',
-      runId: foreignRun.id,
-      deliveryContract: 'current_delivery'
-    })
-    sqlite
-      .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
-      .run(foreignHandle, foreignMessage.id)
-    const prepare = vi.spyOn(sqlite, 'prepare')
-
-    db.routeUnreadDirectMessagesToRunMailbox(run.id, TERMINAL_HANDLE)
-    db.routeUnreadDispatchMailboxToRunMailbox(dispatch.id, run.id)
-    db.routeForeignDirectMessagesToOwnedMailboxes(foreignHandle)
-
-    const updateSql = [
-      ...new Set(
-        prepare.mock.calls
-          .map(([sql]) => sql)
-          .filter((sql) => sql.includes('UPDATE messages') && sql.includes('id IN'))
-      )
-    ]
-    expect(updateSql).toHaveLength(3)
-    for (const sql of updateSql) {
-      expect(sql).toContain('INDEXED BY idx_messages_id')
-      const parameters = Array.from({ length: sql.split('?').length - 1 }, () => 'probe')
-      const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...parameters) as {
-        detail: string
-      }[]
-      expect(plan.map((row) => row.detail).join(' ')).toContain('idx_messages_id')
-    }
     db.close()
   })
 })

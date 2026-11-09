@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.rpc
 }))
-vi.mock('@/lib/claude-account-switch-sessions', () => ({
+vi.mock('@/lib/provider-accounts/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn()
 }))
 vi.mock('@/lib/windows-terminal-capabilities', () => ({

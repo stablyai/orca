@@ -195,7 +195,7 @@ export function createRemoveWorktree(
             options?.ignoreWorkspaceCleanupScanSurvivors === true
           )
           if (sameIdStillSurvives) {
-            return completeSameIdHostScopedRemoval({
+            return await completeSameIdHostScopedRemoval({
               set,
               get,
               worktreeId,

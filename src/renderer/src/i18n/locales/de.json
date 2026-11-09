@@ -4205,6 +4205,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aktivieren"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Für ein anderes Fenster angepasst",
+            "fitHere": "Hier anpassen"
           }
         }
       },
@@ -5969,7 +5973,10 @@
           "69f5b5380d": "Wird geklont…",
           "cloneOnHostDescription": "Die Git-URL eingeben und einen Speicherort zum Klonen auf {{value0}} auswählen.",
           "cloneParentFolder": "Übergeordneter Ordner",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Ordnername",
+          "cloneFolderTakenByRepo": "„{{value0}}“ in diesem Ordner ist bereits ein anderes Repository, daher braucht dieser Klon einen eigenen Ordner.",
+          "cloneFolderNotEmpty": "„{{value0}}“ existiert in diesem Ordner bereits, daher braucht dieser Klon einen eigenen Ordner."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Schließen",
@@ -6004,25 +6011,25 @@
           "removeBatchMixed_other": "<target>{{count}} Arbeitsbereiche</target> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeBatchGit_one": "<target>{{count}} Arbeitsbereich</target> aus git entfernen und seinen Arbeitsbereichsordner löschen.",
           "removeBatchGit_other": "<target>{{count}} Arbeitsbereiche</target> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
-          "removeSingleFolder": "<target/> aus Orca entfernen. Der Projektordner auf dem Datenträger wird nicht gelöscht.",
-          "removeSingleGit": "<target/> aus git entfernen und seinen Arbeitsbereichsordner löschen.",
           "removeWithChildrenFolder_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenFolder_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenMixed_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeWithChildrenMixed_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeWithChildrenGit_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
-          "removeWithChildrenGit_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen."
+          "removeWithChildrenGit_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
+          "removeSingleFolderFromOrca": "Entfernt ihn aus Orca. Der Ordner auf der Festplatte bleibt erhalten.",
+          "deleteSingleWorktreeAndBranch": "Löscht den Worktree und seinen Branch (bleibt erhalten, falls nicht gemergt)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Geladene Pfade anzeigen",
           "loadedPathsNotice": "Geladene Pfade sind möglicherweise unvollständig oder veraltet.",
           "loadedChangedPaths": "Geladene geänderte Pfade",
           "unresolvedConflict": "Ungelöster Konflikt",
-          "changeCount_one": "{{count}} nicht committete oder nicht verfolgte Änderung",
-          "changeCount_other": "{{count}} nicht committete oder nicht verfolgte Änderungen",
-          "changes": "Nicht committete oder nicht verfolgte Änderungen",
           "moreLoadedPaths_one": "und {{count}} weiterer geladener Pfad",
-          "moreLoadedPaths_other": "und {{count}} weitere geladene Pfade"
+          "moreLoadedPaths_other": "und {{count}} weitere geladene Pfade",
+          "changesLost_one": "{{count}} nicht committete Änderung geht verloren",
+          "changesLost_other": "{{count}} nicht committete Änderungen gehen verloren",
+          "uncountedChangesLost": "Nicht committete Änderungen gehen verloren"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Untergeordnete Arbeitsbereiche werden gelöscht",
@@ -6030,9 +6037,6 @@
           "alsoDeletesChildren_other": "Beim Löschen dieses Arbeitsbereichs werden auch {{count}} untergeordnete Arbeitsbereiche gelöscht.",
           "moreChildren_one": "+{{count}} weiterer",
           "moreChildren_other": "+{{count}} weitere"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Nicht erneut fragen"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Dies ist der <strong>Haupt-Worktree</strong> (das ursprüngliche Klonverzeichnis)."
@@ -8968,16 +8972,9 @@
           "b661b034ec": "· Standard:",
           "builtin_themes": "Integriert",
           "ceefb9d7f1": "Keine Designs gefunden.",
-          "imported_from": "Aus {{value0}} importiert",
           "imported_themes": "Importiert",
-          "9119fb2268": "Aktuell",
-          "4e11f87ca6": "Angezeigt",
-          "fbb428db98": "Ausgewählt:",
           "search_terminal_themes": "Terminal-Designs suchen",
-          "cb330ef7f8": " von {{value0}}",
-          "c822571b2e": " passend zu „{{value0}}“",
-          "plugin_themes": "Plugins",
-          "from_plugin": "Von {{value0}}"
+          "plugin_themes": "Plugins"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -12449,6 +12446,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "Zugriffstoken für Repositorys, Projekte und Arbeitsbereiche werden auf der jeweiligen Bitbucket-Einstellungsseite erstellt und benötigen Lesezugriff auf Pull Requests.",
               "basicHint": "Einen Atlassian-API-Token für das Konto erstellen und mit der zugehörigen E-Mail-Adresse kombinieren.",
+              "scopesTitle": "Diese Bitbucket-API-Token-Bereiche auswählen:",
+              "scopeUser": "Konto bestätigen",
+              "scopeRepository": "Build-Status lesen",
+              "scopeReadPullRequest": "Pull Requests lesen",
+              "scopeWritePullRequest": "Pull Requests erstellen",
+              "scopesWriteNote": "Für reinen Lesezugriff den Schreibbereich weglassen. Schreiben umfasst kein Lesen; jeden Bereich einzeln auswählen.",
               "docsLink": "Dokumentation zu Bitbucket-API-Token",
               "storageNote": "Auf diesem Computer gespeichert, mit Verschlüsselung, wenn der Betriebssystem-Schlüsselbund verfügbar ist. ORCA_BITBUCKET_*-Umgebungsvariablen haben immer Vorrang vor den hier gespeicherten Zugangsdaten.",
               "cancel": "Abbrechen",
@@ -16306,6 +16309,7 @@
           "kernelStartFailed": "Der Kernel konnte nicht gestartet werden.",
           "noPython": "Python wurde auf diesem Computer nicht gefunden. Python von [python.org](https://www.python.org/downloads/) installieren und die Zelle dann erneut ausführen.",
           "kernelDied": "Der Kernel ist abgestürzt.",
+          "outputTruncated": "Ausgabe gekürzt: Orca hat den Anfang der Ausgabe dieser Zelle behalten und den Rest verworfen. Um alles zu behalten, schreibe sie stattdessen in eine Datei.",
           "localOnly": "Notebook-Zellen können nur für Dateien auf diesem Computer ausgeführt werden.",
           "pythonOnly": "In Orca können nur Python-Notebooks ausgeführt werden.",
           "ownerUnresolved": "Orca kann noch nicht feststellen, auf welchem Computer sich dieses Notebook befindet. Daher können seine Zellen nicht ausgeführt werden.",
@@ -19483,6 +19487,7 @@
         "noCommands": "Keine passenden Befehle",
         "commands": "Befehle",
         "skills": "Skills",
+        "checkingSkills": "Nach neuen Skills wird gesucht…",
         "loadingSkills": "Skills werden geladen…",
         "skillsLoaded": "Skills geladen",
         "clearDescription": "Unterhaltungskontext leeren",
@@ -20195,6 +20200,7 @@
         "copyIdentity": "{{value0}} kopieren",
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
+        "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal.",
@@ -20220,7 +20226,9 @@
         "hidden": "Orca zeigt keine erstellten Pull Requests mehr an",
         "many_one": "{{count}} Pull Request erstellt",
         "many_other": "{{count}} Pull Requests erstellt"
-      }
+      },
+      "splitRight": "Rechts teilen",
+      "splitDown": "Unten teilen"
     },
     "tab": {
       "bar": {
@@ -20502,11 +20510,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Alle nicht committeten oder nicht versionierten Änderungen in Git-Arbeitsbereichen werden endgültig gelöscht.",
-          "clean": "Keine nicht committeten oder nicht versionierten Änderungen",
           "unavailable": "Änderungen konnten nicht geprüft werden",
           "checking": "Änderungen werden geprüft…",
           "checkingDetails": "Wird geprüft…",
-          "unavailableDetails": "Details nicht verfügbar"
+          "unavailableDetails": "Details nicht verfügbar",
+          "none": "Keine nicht committeten Änderungen"
         },
         "unsavedEdits": {
           "discarded_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen:",
@@ -20805,6 +20813,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}} konnte nicht formatiert werden. Wird ohne Formatierung gespeichert: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "Neuer Agent"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Einen Bereich neben dem Chat öffnen",
+          "action": "Bereich teilen"
+        }
       }
     }
   },
@@ -21289,6 +21310,7 @@
       "switch": "Branch wechseln: {{branch}}",
       "search": "Branches suchen",
       "recover": "Zu {{branch}} wechseln",
+      "copy": "Branch-Namen kopieren",
       "create": "Branch {{name}} aus {{branch}} erstellen",
       "open": "Arbeitsbereich öffnen",
       "occupied": "Ausgecheckt in {{path}}",
@@ -21379,7 +21401,6 @@
       "sortRelevance": "Relevanteste",
       "sortNewest": "Neueste",
       "sortResultsAriaLabel": "Ergebnisse sortieren: {{value0}}",
-      "consent": "Volltextsuche aktivieren? Orca erstellt auf diesem Computer einen Index aus lokalen Agentenprotokollen, einschließlich vollständiger Unterhaltungen und bis zu 3.072 Zeichen pro Tool-Ausgabe. Inhalte werden nicht geschwärzt. Authentifizierte, gekoppelte Clients können den Index durchsuchen.",
       "remoteDisabled": "Die Suche ist auf diesem Computer deaktiviert. Dort die Indexierung von Protokollen aktivieren, um seine Sitzungen zu durchsuchen.",
       "titleOnly": "Die Volltextsuche ist auf diesem Computer deaktiviert. Daher werden nur Sitzungstitel durchsucht.",
       "notReady": "Der Suchindex ist noch nicht bereit. In Kürze erneut versuchen.",
@@ -21439,7 +21460,6 @@
       "description": "Alles durchsuchen, was Agenten auf diesem Computer und auf gekoppelten Orca-Servern gesagt und getan haben.",
       "searchDescription": "Die Sitzungssuche für diesen Computer und gekoppelte Server aktivieren oder Suchdaten löschen.",
       "indexComputers": "Innerhalb von Sitzungen suchen",
-      "computersConsent": "Jeder Computer speichert eine durchsuchbare Kopie seiner eigenen Agentenunterhaltungen und Tool-Ausgaben. Nichts verlässt diesen Computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Sitzungen auf {{host}} durchsuchen",
       "serverOffline": "Offline",
@@ -21844,7 +21864,10 @@
     "alwaysForceDeleteTooltip": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreBranchActions": "Weitere Optionen zum Löschen von Branches",
     "alwaysForceDeleteBranches": "Beibehaltene Branches immer löschen",
-    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden."
+    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden.",
+    "moreDeleteOptions": "Weitere Löschoptionen",
+    "alwaysDelete": "Immer löschen",
+    "alwaysDeleteTooltip": "Diese Bestätigung bei zukünftigen Löschvorgängen überspringen."
   },
   "worktree": {
     "nestedRemoval": {
@@ -23510,6 +23533,41 @@
     "historyChanged": "Der Verlauf hat sich erneut geändert. Aktualisiere den Git-Graphen, um es erneut zu versuchen.",
     "loadFailed": "Git-Verlauf konnte nicht geladen werden",
     "updateHost": "Aktualisiere Orca auf {{host}}, um den Git-Graphen zu öffnen",
-    "title": "Git-Graph"
+    "title": "Git-Graph",
+    "revertConflicts": "Konflikte beim Rückgängigmachen",
+    "revertInProgress": "Rückgängigmachen läuft",
+    "abortOperationTitle": "{{operation}} abbrechen?",
+    "abortOperationDescription": "Dies bricht den laufenden Vorgang ab und kann dabei vorgenommene Konfliktlösungen verwerfen.",
+    "abortOperation": "{{operation}} abbrechen",
+    "recoveryFailed": "Der Vorgang konnte nicht abgeschlossen werden. Aktualisiere die Quellcodeverwaltung und versuche es erneut.",
+    "continueOperation": "{{operation}} fortsetzen",
+    "reverting": "Wird rückgängig gemacht",
+    "updateActionsHost": "Aktualisiere Orca auf {{host}}, um Commit-Aktionen auszuführen",
+    "thisHost": "diesem Host",
+    "cannotApplyMerge": "Merge-Commits können hier nicht per Cherry-pick übernommen oder rückgängig gemacht werden",
+    "confirmCommitAction": "{{action}} {{commit}}?",
+    "cancelAction": "Abbrechen",
+    "checkoutCommit": "Commit auschecken",
+    "cherryPick": "Cherry-pick",
+    "revert": "Rückgängig machen",
+    "actionLanded": "Jetzt bei {{commit}} auf {{branch}}",
+    "detachedHead": "losgelöstem HEAD",
+    "actionWarning": "Die Aktion wurde abgeschlossen, aber Git hat ein Problem gemeldet.",
+    "actionConflicted": "Löse die Konflikte in der Quellcodeverwaltung und setze den Vorgang fort oder brich ihn ab.",
+    "alreadyApplied": "Bereits angewendet, nichts für Cherry-pick",
+    "nothingToRevert": "Nichts rückgängig zu machen; die Änderungen sind bereits rückgängig gemacht.",
+    "actionRefused": "Die Aktion wurde nicht abgeschlossen.",
+    "actionUnavailable": "Dieser Arbeitsbereich ist für die Aktion nicht mehr verfügbar. Öffne den Git Graph erneut und versuche es noch einmal.",
+    "ownerChanged": "Der Host des Arbeitsbereichs hat sich geändert. Öffne den Git Graph erneut und versuche es noch einmal.",
+    "showAllBranches": "Alle Branches anzeigen",
+    "actionDirty": "Committe oder sichere deine Änderungen im Stash und versuche es erneut.",
+    "actionFailed": "Git hat keinen Commit erstellt. Prüfe den Arbeitsstand und versuche es erneut.",
+    "operationInProgress": "Schließe den laufenden Vorgang {{operation}} ab oder brich ihn ab, bevor du es erneut versuchst.",
+    "checkoutBranch": "Branch auschecken",
+    "createBranch": "Branch hier erstellen",
+    "branchCreated": "{{branch}} bei {{commit}} erstellt",
+    "branchName": "Branch-Name",
+    "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
+    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
   }
 }

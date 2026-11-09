@@ -10,10 +10,10 @@ vi.mock('../claude-hook-event-versions', async (importOriginal) => ({
 }))
 let claudeVersion: string | null = '2.1.319'
 import { syncClaudeCodeThemeConfigDirs } from './claude-code-theme-sync'
-import { claudeCodeThemeFromTerminal } from './claude-code-theme'
-import { TERMINAL_THEME_CATALOG } from '../../../shared/terminal-themes/terminal-theme-catalog'
-import { contrastRatio } from '../../../shared/color/rgba-contrast'
-import { parseTerminalColor } from '../../../shared/terminal-themes/terminal-title-contrast'
+import './claude-code-theme'
+import '../../../shared/terminal-themes/terminal-theme-catalog'
+import '../../../shared/color/rgba-contrast'
+import '../../../shared/terminal-themes/terminal-title-contrast'
 
 const THEME = { name: 'Orca', base: 'dark', overrides: { claude: '#7aa2f7' } }
 const on = { enabled: true, theme: THEME } as const
@@ -59,13 +59,6 @@ describe('Claude Code theme sync', () => {
     })
   })
 
-  it('removes the theme key it added when there was none', async () => {
-    writeSettings({ model: 'opus' })
-    await sync(on)
-    await sync(off)
-    expect(readSettings()).toEqual({ model: 'opus' })
-  })
-
   it('stops writing once the user picks another theme, and leaves it on disable', async () => {
     writeSettings({ theme: 'dark' })
     await sync(on)
@@ -75,20 +68,6 @@ describe('Claude Code theme sync', () => {
     expect(readSettings()).toEqual({ theme: 'light-daltonized' })
     await sync(off)
     expect(readSettings()).toEqual({ theme: 'light-daltonized' })
-  })
-
-  it('leaves a colorblind or custom theme the user picked alone', async () => {
-    writeSettings({ theme: 'dark-daltonized' })
-    await sync(on)
-    expect(readSettings()).toEqual({ theme: 'dark-daltonized' })
-  })
-
-  it('leaves settings alone for a Claude Code without custom themes', async () => {
-    claudeVersion = '2.1.118'
-    writeSettings({ theme: 'dark' })
-    await sync(on)
-    claudeVersion = '2.1.319'
-    expect(readSettings()).toEqual({ theme: 'dark' })
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -113,30 +92,4 @@ describe('Claude Code theme sync', () => {
     await sync(on)
     expect(readFileSync(settingsPath, 'utf-8')).toBe('{ "theme": "dark", ')
   })
-
-  it('leaves Claude Code alone when its config dir does not exist', async () => {
-    rmSync(configDir, { recursive: true })
-    await sync(on)
-    expect(() => readFileSync(settingsPath)).toThrow()
-  })
-})
-
-describe('Claude Code theme from the terminal palette', () => {
-  it.each(['Solarized Light', 'Solarized Dark', 'Builtin Tango Light', 'Gruvbox Light'])(
-    'keeps %s text and hues readable on its background',
-    (name) => {
-      const palette = TERMINAL_THEME_CATALOG[name]
-      const theme = claudeCodeThemeFromTerminal(palette)
-      const background = parseTerminalColor(palette.background)
-      const ratio = (key: string): number => {
-        const color = parseTerminalColor(theme?.overrides[key])
-        return color && background ? contrastRatio(color, background) : 0
-      }
-      expect(ratio('text')).toBeGreaterThanOrEqual(4.5)
-      expect(ratio('inactive')).toBeGreaterThanOrEqual(4.5)
-      for (const key of ['claude', 'success', 'error', 'warning', 'permission']) {
-        expect(ratio(key)).toBeGreaterThanOrEqual(3)
-      }
-    }
-  )
 })

@@ -3667,6 +3667,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "켜기"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "다른 창에 맞춘 크기",
+            "fitHere": "여기에 맞추기"
           }
         }
       },
@@ -5337,7 +5341,10 @@
           "69f5b5380d": "복제 중...",
           "cloneOnHostDescription": "Git URL을 입력하고 {{value0}}에서 클론할 위치를 선택하세요.",
           "cloneParentFolder": "상위 폴더",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "폴더 이름",
+          "cloneFolderTakenByRepo": "이 폴더의 \"{{value0}}\"은(는) 이미 다른 저장소이므로 이 클론에는 별도의 폴더가 필요합니다.",
+          "cloneFolderNotEmpty": "이 폴더에 \"{{value0}}\"이(가) 이미 있으므로 이 클론에는 별도의 폴더가 필요합니다."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "닫기",
@@ -5369,29 +5376,26 @@
           "removeBatchFolder_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeBatchMixed_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
           "removeBatchGit_other": "git에서 <target>워크스페이스 {{count}}개</target>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
-          "removeSingleFolder": "Orca에서 <target/>을(를) 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
-          "removeSingleGit": "git에서 <target/>을(를) 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
           "removeWithChildrenFolder_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeWithChildrenMixed_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
-          "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다."
+          "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
+          "removeSingleFolderFromOrca": "Orca에서 제거합니다. 디스크의 폴더는 유지됩니다.",
+          "deleteSingleWorktreeAndBranch": "워크트리와 해당 브랜치를 삭제합니다(병합되지 않은 브랜치는 유지)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "불러온 경로 표시",
           "loadedPathsNotice": "불러온 경로가 일부 누락되었거나 오래되었을 수 있습니다.",
           "loadedChangedPaths": "불러온 변경된 경로",
           "unresolvedConflict": "해결되지 않은 충돌",
-          "changeCount_one": "커밋되지 않았거나 추적되지 않는 변경 {{count}}개",
-          "changeCount_other": "커밋되지 않았거나 추적되지 않는 변경 {{count}}개",
-          "changes": "커밋되지 않았거나 추적되지 않는 변경 사항",
-          "moreLoadedPaths_other": "그 외 로드된 경로 {{count}}개"
+          "moreLoadedPaths_other": "그 외 로드된 경로 {{count}}개",
+          "changesLost_one": "커밋되지 않은 변경 사항 {{count}}개가 손실됩니다",
+          "changesLost_other": "커밋되지 않은 변경 사항 {{count}}개가 손실됩니다",
+          "uncountedChangesLost": "커밋되지 않은 변경 사항이 손실됩니다"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "하위 워크스페이스가 삭제됩니다.",
           "alsoDeletesChildren_other": "이 워크스페이스를 삭제하면 하위 워크스페이스 {{count}}개도 삭제됩니다.",
           "moreChildren_other": "+{{count}}개 더"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "다시 묻지 마세요"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "이 워크트리는 <strong>메인 워크트리</strong>(원래 복제 디렉터리)입니다."
@@ -8275,17 +8279,10 @@
           "a4ff6143f8": "글꼴 선택 지우기",
           "b661b034ec": "· 기본:",
           "ceefb9d7f1": "테마를 찾을 수 없습니다.",
-          "9119fb2268": "현재",
-          "4e11f87ca6": "표시 중",
-          "fbb428db98": "선택됨:",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " \"{{value0}}\"과(와) 일치",
           "builtin_themes": "기본 제공",
-          "imported_from": "{{value0}}에서 가져옴",
           "imported_themes": "가져옴",
           "search_terminal_themes": "터미널 테마 검색",
-          "plugin_themes": "플러그인",
-          "from_plugin": "{{value0}}에서"
+          "plugin_themes": "플러그인"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -11875,6 +11872,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "리포지토리, 프로젝트 및 워크스페이스 액세스 토큰은 일치하는 Bitbucket 설정 페이지에서 생성되며 PR에 대한 읽기 액세스 권한이 필요합니다.",
               "basicHint": "귀하의 계정에 대한 Atlassian API 토큰을 생성한 다음 이를 소유한 이메일 주소와 페어링하세요.",
+              "scopesTitle": "다음 Bitbucket API 토큰 범위를 선택하세요:",
+              "scopeUser": "계정 확인",
+              "scopeRepository": "빌드 상태 읽기",
+              "scopeReadPullRequest": "PR 읽기",
+              "scopeWritePullRequest": "PR 생성",
+              "scopesWriteNote": "읽기 전용으로 사용하려면 쓰기 범위를 생략하세요. 쓰기에는 읽기가 포함되지 않으므로 각 범위를 따로 선택하세요.",
               "docsLink": "Bitbucket API 토큰 문서",
               "storageNote": "OS 키체인을 사용할 수 있는 경우 암호화된 저장소와 함께 이 시스템에 저장됩니다. ORCA_BITBUCKET_* 환경 변수는 항상 여기에 저장한 것보다 우선합니다.",
               "cancel": "취소",
@@ -15617,6 +15620,7 @@
           "kernelStartFailed": "커널을 시작하지 못했습니다.",
           "noPython": "이 컴퓨터에서 Python을 찾을 수 없습니다. [python.org](https://www.python.org/downloads/)에서 설치한 뒤 셀을 다시 실행하세요.",
           "kernelDied": "커널이 종료되었습니다.",
+          "outputTruncated": "출력이 잘렸습니다: Orca가 이 셀 출력의 앞부분만 보관하고 나머지는 버렸습니다. 전부 보관하려면 파일에 기록하세요.",
           "localOnly": "노트북 셀은 이 컴퓨터의 파일에 대해서만 실행할 수 있습니다.",
           "pythonOnly": "Orca에서는 Python 노트북만 실행할 수 있습니다.",
           "commandCopied": "명령이 복사되었습니다.",
@@ -18807,6 +18811,7 @@
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
         "skills": "스킬",
+        "checkingSkills": "새 스킬을 확인하는 중…",
         "loadingSkills": "스킬 로딩 중…",
         "clearDescription": "대화 컨텍스트 지우기",
         "skillsUnavailableHost": "SSH 채팅에서는 스킬 목록을 표시할 수 없습니다",
@@ -19489,6 +19494,7 @@
         "copyIdentity": "{{value0}} 복사",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
+        "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"
       },
       "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요.",
@@ -19514,7 +19520,9 @@
         "hidden": "Orca에서 더 이상 열린 풀 리퀘스트를 표시하지 않습니다",
         "many_one": "풀 리퀘스트 {{count}}개 열림",
         "many_other": "풀 리퀘스트 {{count}}개 열림"
-      }
+      },
+      "splitRight": "오른쪽으로 분할",
+      "splitDown": "아래로 분할"
     },
     "tab": {
       "bar": {
@@ -19789,11 +19797,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
-          "clean": "커밋되지 않았거나 추적되지 않은 변경 사항 없음",
           "unavailable": "변경 사항을 확인할 수 없습니다",
           "checking": "변경 사항 확인 중…",
           "checkingDetails": "확인 중…",
-          "unavailableDetails": "세부 정보를 사용할 수 없음"
+          "unavailableDetails": "세부 정보를 사용할 수 없음",
+          "none": "커밋되지 않은 변경 사항 없음"
         },
         "unsavedEdits": {
           "discarded_one": "파일 {{count}}개의 저장되지 않은 편집 내용이 버려집니다:",
@@ -20109,6 +20117,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}}을(를) 포맷할 수 없습니다. 포맷하지 않고 저장합니다: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "새 에이전트"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "채팅 옆에 창 열기",
+          "action": "창 분할"
+        }
       }
     }
   },
@@ -21001,6 +21022,7 @@
       "switch": "브랜치 전환: {{branch}}",
       "search": "브랜치 검색",
       "recover": "{{branch}}(으)로 전환",
+      "copy": "브랜치 이름 복사",
       "create": "{{branch}}에서 {{name}} 브랜치 만들기",
       "open": "작업 공간 열기",
       "occupied": "{{path}}에서 체크아웃됨",
@@ -21050,7 +21072,6 @@
       "sortRelevance": "관련성이 가장 높은",
       "sortNewest": "최신",
       "sortResultsAriaLabel": "결과 정렬: {{value0}}",
-      "consent": "전체 텍스트 검색을 활성화하시겠습니까? Orca는 전체 대화와 도구 출력당 최대 3,072자를 포함하여 로컬 에이전트 기록에서 이 컴퓨터에 인덱스를 구축합니다. 내용은 편집되지 않습니다. 인증된 페어링 클라이언트는 검색이 가능합니다.",
       "remoteDisabled": "이 컴퓨터에서는 검색이 비활성화되어 있습니다. 세션을 검색하려면 해당 컴퓨터에서 기록 색인화를 활성화하십시오.",
       "titleOnly": "이 컴퓨터에서는 전체 텍스트 검색이 꺼져 있어 세션 제목만 일치시킵니다.",
       "notReady": "검색 색인이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
@@ -21107,7 +21128,6 @@
       "description": "이 컴퓨터와 페어링된 Orca 서버에서 에이전트가 말하고 행한 모든 내용을 검색하세요.",
       "searchDescription": "이 컴퓨터와 페어링된 서버에 대한 세션 검색을 켜거나 검색 데이터를 지웁니다.",
       "indexComputers": "세션 내부 검색",
-      "computersConsent": "각 컴퓨터는 자체 에이전트 대화와 도구 출력의 검색 가능한 사본을 보관합니다. 이 데이터는 해당 컴퓨터 밖으로 전송되지 않습니다.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}}의 세션 검색",
       "serverOffline": "오프라인",
@@ -21681,7 +21701,10 @@
     "alwaysForceDeleteTooltip": "이후 모든 워크스페이스 삭제에 적용됩니다.",
     "alwaysForceDeleteBranchesTooltip": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
     "moreBranchActions": "브랜치 삭제 옵션 더 보기",
-    "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제"
+    "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제",
+    "moreDeleteOptions": "추가 삭제 옵션",
+    "alwaysDelete": "항상 삭제",
+    "alwaysDeleteTooltip": "이후 삭제 시 이 확인을 건너뜁니다."
   },
   "workspace": {
     "branchChoice": {
@@ -23227,6 +23250,41 @@
     "historyChanged": "기록이 다시 변경되었습니다. Git 그래프를 새로 고친 후 다시 시도하세요.",
     "loadFailed": "Git 기록을 불러오지 못했습니다",
     "updateHost": "Git 그래프를 열려면 {{host}}의 Orca를 업데이트하세요",
-    "title": "Git 그래프"
+    "title": "Git 그래프",
+    "revertConflicts": "되돌리기 충돌",
+    "revertInProgress": "되돌리기 진행 중",
+    "abortOperationTitle": "{{operation}} 작업을 중단할까요?",
+    "abortOperationDescription": "진행 중인 작업을 취소합니다. 이 작업 중에 해결한 충돌 내용이 삭제될 수 있습니다.",
+    "abortOperation": "{{operation}} 중단",
+    "recoveryFailed": "작업을 완료하지 못했습니다. 소스 제어를 새로 고친 후 다시 시도하세요.",
+    "continueOperation": "{{operation}} 계속",
+    "reverting": "되돌리는 중",
+    "updateActionsHost": "커밋 작업을 하려면 {{host}}의 Orca를 업데이트하세요",
+    "thisHost": "이 호스트",
+    "cannotApplyMerge": "여기서는 병합 커밋을 체리픽하거나 되돌릴 수 없습니다",
+    "confirmCommitAction": "{{commit}}에 {{action}} 작업을 실행할까요?",
+    "cancelAction": "취소",
+    "checkoutCommit": "커밋 체크아웃",
+    "cherryPick": "체리픽",
+    "revert": "되돌리기",
+    "actionLanded": "현재 {{branch}}의 {{commit}}에 있습니다",
+    "detachedHead": "분리된 HEAD",
+    "actionWarning": "작업은 완료되었지만 Git에서 문제를 보고했습니다.",
+    "actionConflicted": "소스 제어에서 충돌을 해결한 다음 작업을 계속하거나 중단하세요.",
+    "alreadyApplied": "이미 적용되어 체리픽할 내용이 없습니다",
+    "nothingToRevert": "되돌릴 내용이 없습니다. 변경 사항이 이미 취소되었습니다.",
+    "actionRefused": "작업이 완료되지 않았습니다.",
+    "actionUnavailable": "이 워크스페이스에서는 더 이상 작업할 수 없습니다. Git 그래프를 다시 열고 재시도하세요.",
+    "ownerChanged": "워크스페이스 호스트가 변경되었습니다. Git 그래프를 다시 열고 재시도하세요.",
+    "showAllBranches": "모든 브랜치 표시",
+    "actionDirty": "변경 사항을 커밋하거나 스태시한 후 다시 시도하세요.",
+    "actionFailed": "Git이 커밋을 만들지 못했습니다. 작업 트리를 확인한 후 다시 시도하세요.",
+    "operationInProgress": "진행 중인 {{operation}} 작업을 완료하거나 중단한 후 다시 시도하세요.",
+    "checkoutBranch": "브랜치 체크아웃",
+    "createBranch": "여기에 브랜치 만들기",
+    "branchCreated": "{{commit}}에 {{branch}} 생성됨",
+    "branchName": "브랜치 이름",
+    "invalidBranchName": "이 브랜치 이름은 유효하지 않습니다. 다른 이름을 선택하세요.",
+    "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
   }
 }

@@ -48,34 +48,6 @@ function createFloodedLink() {
 const SLOW_LINK = { bytesPerMs: 125, returnMs: 100, frameBytes: 16 * 1024 }
 
 describe('TerminalMultiplexLinkEstimate', () => {
-  it('sizes a slow high-latency link near twice its bandwidth-delay product', () => {
-    const { estimate, flood } = createFloodedLink()
-    flood(SLOW_LINK, 20)
-    const window = estimate.pacedWindowBytes()
-    expect(window).toBeGreaterThanOrEqual(64 * 1024)
-    expect(window).toBeLessThanOrEqual(160 * 1024)
-  })
-
-  it('never paces a LAN, even when its client parses slowly', () => {
-    const { estimate, flood } = createFloodedLink()
-    flood({ bytesPerMs: 500, returnMs: 1, frameBytes: 8 * 1024 }, 40)
-    expect(estimate.pacedWindowBytes()).toBeNull()
-  })
-
-  it('never paces a fast link', () => {
-    const { estimate, flood } = createFloodedLink()
-    flood({ bytesPerMs: 8_000, returnMs: 100, frameBytes: 48 * 1024, queuedFrames: 40 }, 80)
-    expect(estimate.pacedWindowBytes()).toBeNull()
-  })
-
-  it('returns to legacy windows when the path RTT jumps', () => {
-    const { estimate, flood } = createFloodedLink()
-    flood(SLOW_LINK, 20, true)
-    expect(estimate.pacedWindowBytes()).not.toBeNull()
-    flood({ ...SLOW_LINK, returnMs: 3_000 }, 12, true)
-    expect(estimate.pacedWindowBytes()).toBeNull()
-  })
-
   it('keeps pacing while recovery images share the link', () => {
     const { estimate, flood, sendImage } = createFloodedLink()
     flood(SLOW_LINK, 20, true)

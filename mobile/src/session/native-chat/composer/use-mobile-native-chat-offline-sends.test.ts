@@ -116,6 +116,41 @@ describe('useMobileNativeChatOfflineQueue', () => {
     expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
   })
 
+  it('keeps a pending send single across remounts and drains later messages when it settles', async () => {
+    const delivered: string[] = []
+    let finishFirst: ((sent: boolean) => void) | undefined
+    const send: Send = async (text) => {
+      delivered.push(text)
+      return text === 'first'
+        ? new Promise<boolean>((resolve) => {
+            finishFirst = resolve
+          })
+        : true
+    }
+    await mount('disconnected', send)
+    await act(async () => {
+      await queue?.send('first')
+      await queue?.send('second')
+    })
+    await reconnect(send)
+    await act(async () => renderer?.unmount())
+    await mount(null, send)
+
+    expect(delivered).toEqual(['first'])
+    const [pending, later] = readMobileNativeChatOfflineSends(SCOPE)
+    expect(pending.text).toBe('first')
+    let resent: (boolean | undefined)[] = []
+    await act(async () => {
+      resent = [await queue?.sendNow(pending.id), await queue?.sendNow(later.id)]
+    })
+    expect(resent).toEqual([false, false])
+
+    await act(async () => finishFirst?.(true))
+
+    expect(delivered).toEqual(['first', 'second'])
+    expect(queue?.sends).toEqual([])
+  })
+
   it('keeps a queued message paused when its send hands it back before returning', async () => {
     const send = vi.fn<Send>(async (_text, intent) => {
       intent?.onHandBack?.()

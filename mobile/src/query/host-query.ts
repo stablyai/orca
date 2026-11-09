@@ -12,8 +12,9 @@ import {
   type UseQueryResult
 } from '@tanstack/react-query'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
+import { useHostEventRouter } from './host-event-router'
 import {
   hostQueryKey,
   type HostQueryKey,
@@ -33,7 +34,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   fetch?: HostQueryFetch<TInput, TData>
   staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
-  // Only for families the desktop sends no change signal for.
+  // Reads a stale answer on foreground: one with no change signal, or one an event marked while hidden.
   refetchOnWindowFocus?: boolean
   // For a screen that offers its own Retry, so a lost read is reported instead of sent again.
   retry?: false
@@ -45,9 +46,13 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   persist?: HostQueryPersist<TData>
 }
 
+export type HostSignalEvent = Exclude<RuntimeClientEventStreamMessage, { type: 'ready' | 'end' }>
+
 export type HostQuerySignal = {
-  events: readonly Exclude<RuntimeClientEventStreamMessage['type'], 'ready' | 'end'>[]
+  events: readonly HostSignalEvent['type'][]
   floorMs?: number
+  // Narrows a listed event to the queries it names; without it every query in the family is stale.
+  matches?: (event: HostSignalEvent, target: HostQueryTarget) => boolean
 }
 
 type HostQueryFetch<TInput extends HostQueryParams, TData> = (
@@ -136,6 +141,28 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   return data
 }
 
+// A cached read through the screen's `read`: reuses a fresh answer and joins a read already out. An answer
+// an event marked stale as it landed predates that change, so it is read again.
+export async function fetchHostQuery<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient },
+  target: HostQueryTarget,
+  input: TInput,
+  read: () => Promise<TData>
+): Promise<TData> {
+  const options = {
+    ...hostQueryOptions(query, host.client, host.hostId, target, input),
+    queryFn: read
+  }
+  let data = await queryClient.fetchQuery(options)
+  // Each pass needs a newer event, so this ends with the event burst.
+  while (queryClient.getQueryState(options.queryKey)?.isInvalidated) {
+    data = await queryClient.fetchQuery(options)
+  }
+  return data
+}
+
 // A read ahead of the user: skipped while the key holds current data, joins a read already out.
 export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
   queryClient: QueryClient,
@@ -172,11 +199,19 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   host: { hostId: string; client: RpcClient | null },
   target: HostQueryTarget,
   input: TInput,
-  options?: { enabled?: boolean; subscribed?: boolean; refetchInterval?: number | false }
+  options?: {
+    enabled?: boolean
+    subscribed?: boolean
+    refetchInterval?: number | false
+    // Replaces the family's own, e.g. once the host is known to signal every change.
+    staleTime?: number
+  }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
   useHostConnectionInvalidation(hostId, enabled ? client : null)
+  // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
+  useHostEventRouter(hostId, enabled && query.signal ? client : null)
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
@@ -187,6 +222,7 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({
     ...queryOptions,
+    ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     subscribed: options?.subscribed,
     refetchInterval: options?.refetchInterval
   })
@@ -202,6 +238,7 @@ export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>
 ): TCombined {
   const { hostId, client } = host
   useHostConnectionInvalidation(hostId, client)
+  useHostEventRouter(hostId, query.signal ? client : null)
   const keyHash = hashKey([target, inputs])
   const queries = useMemo(
     () => inputs.map((input) => observerOptions(query, client, hostId, target, input)),

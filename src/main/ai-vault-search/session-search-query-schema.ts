@@ -3,13 +3,22 @@ import {
   SESSION_SEARCH_GENERATION_SQL,
   SESSION_SEARCH_GENERATION_TRIGGERS
 } from './session-search-index-generation'
+import {
+  SESSION_SEARCH_TOOL_PURGE_SQL,
+  SESSION_SEARCH_TOOL_PURGE_TRIGGER
+} from './session-search-tool-purge'
 
 const QUERY_SCHEMA_SQL = `
 -- Use indexed vocabulary so typo repair suggests only terms the index holds.
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_vocab USING fts5vocab(messages_fts, 'row');
-${SESSION_SEARCH_GENERATION_SQL}`
+${SESSION_SEARCH_GENERATION_SQL}
+${SESSION_SEARCH_TOOL_PURGE_SQL}`
 
-const OWNED = ['messages_vocab', ...SESSION_SEARCH_GENERATION_TRIGGERS]
+const OWNED = [
+  'messages_vocab',
+  ...SESSION_SEARCH_GENERATION_TRIGGERS,
+  SESSION_SEARCH_TOOL_PURGE_TRIGGER
+]
 
 // fts5vocab creation succeeds without its source table, so check that source explicitly.
 const VOCABULARY_SOURCE = 'messages_fts'

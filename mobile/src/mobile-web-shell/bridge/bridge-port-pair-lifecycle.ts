@@ -1,6 +1,6 @@
 import { createBridgePortPair } from './bridge-port-pair-test-harness'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { BridgePortPair, BridgePortPairOptions } from './bridge-port-pair-contract'
 
 export function createFakeBridgePortPair(

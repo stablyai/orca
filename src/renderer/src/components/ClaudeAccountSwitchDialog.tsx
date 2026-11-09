@@ -18,7 +18,7 @@ import {
   getClaudeAccountSwitchPrompt,
   subscribeClaudeAccountSwitchPrompt,
   type ClaudeAccountSwitchPrompt
-} from '@/lib/claude-account-switch-sessions'
+} from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 export default function ClaudeAccountSwitchDialog(): React.JSX.Element | null {
   const prompt = useSyncExternalStore(

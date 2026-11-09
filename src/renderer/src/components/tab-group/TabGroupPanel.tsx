@@ -25,6 +25,8 @@ import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 import { useWindowBackdropActive } from '@/lib/window-backdrop'
 import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
+import { SplitPaneLanding } from './SplitPaneLanding'
+import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -84,6 +86,9 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+  const showsSplitLanding = useAppStore((state) =>
+    isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
+  )
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -378,6 +383,15 @@ export default function TabGroupPanel({
               <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
+
+        {showsSplitLanding ? (
+          <SplitPaneLanding
+            worktreeId={worktreeId}
+            groupId={groupId}
+            autoFocus={isFocused}
+            onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
+          />
+        ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

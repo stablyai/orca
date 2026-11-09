@@ -1,3 +1,7 @@
+import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/use-pr-bot-author-overrides'
+import type * as UseNewWorkspaceRuntimeContextModule from '../../../components/use-new-workspace-runtime-context'
+import type * as UseHostRepoMetadataModule from '../../../host-screen/use-host-repo-metadata'
+import type * as UseMobileTasksRuntimeHydrationModule from '../../../tasks/use-mobile-tasks-runtime-hydration'
 import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type * as HostListQueries from '../../../host-screen/host-list-queries'
 import type * as ResumeMetadata from '../../../agent-history/mobile-agent-history-resume-metadata'
@@ -18,9 +22,9 @@ export function settingsMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'settings.bot-overrides': ({ client }) => {
-      const useOverrides = modules.load<
-        typeof import('../../../session/use-pr-bot-author-overrides')
-      >('mobile/src/session/use-pr-bot-author-overrides.ts').usePRBotAuthorOverrides
+      const useOverrides = modules.load<typeof UsePrBotAuthorOverridesModule>(
+        'mobile/src/source-control/review/use-pr-bot-author-overrides.ts'
+      ).usePRBotAuthorOverrides
       let state: ReadonlySet<string> = new Set()
       let revision = 1
       const hook = hookMount(() => {
@@ -48,9 +52,9 @@ export function settingsMountAdapters(
       }
     },
     'settings.workspace-context': ({ client }) => {
-      const useContext = modules.load<
-        typeof import('../../../components/use-new-workspace-runtime-context')
-      >('mobile/src/components/use-new-workspace-runtime-context.ts').useNewWorkspaceRuntimeContext
+      const useContext = modules.load<typeof UseNewWorkspaceRuntimeContextModule>(
+        'mobile/src/components/use-new-workspace-runtime-context.ts'
+      ).useNewWorkspaceRuntimeContext
       let state: ReturnType<typeof useContext>
       let visible = true
       const hook = hookMount(() => {
@@ -89,9 +93,9 @@ export function settingsMountAdapters(
       return { action: () => load(client), state: () => ({}), dispose: () => {} }
     },
     'settings.repo-metadata': (context) => {
-      const useMetadata = modules.load<
-        typeof import('../../../host-screen/use-host-repo-metadata')
-      >('mobile/src/host-screen/use-host-repo-metadata.ts').useHostRepoMetadata
+      const useMetadata = modules.load<typeof UseHostRepoMetadataModule>(
+        'mobile/src/host-screen/use-host-repo-metadata.ts'
+      ).useHostRepoMetadata
       const queries = modules.load<typeof HostListQueries>(
         'mobile/src/host-screen/host-list-queries.ts'
       )
@@ -164,9 +168,9 @@ export function settingsMountAdapters(
       }
     },
     'settings.task-hydration': (context) => {
-      const useHydration = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-runtime-hydration')
-      >('mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx').useMobileTasksRuntimeHydration
+      const useHydration = modules.load<typeof UseMobileTasksRuntimeHydrationModule>(
+        'mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx'
+      ).useMobileTasksRuntimeHydration
       const model = observableModel(context, {
         client: context.client,
         connState: 'connected',

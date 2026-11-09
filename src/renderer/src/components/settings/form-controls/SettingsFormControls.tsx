@@ -10,32 +10,6 @@ import { normalizeColor } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 
-type SettingsSwitchProps = {
-  checked: boolean
-  onChange: () => void
-  ariaLabel?: string
-  ariaLabelledBy?: string
-  disabled?: boolean
-}
-
-export function SettingsSwitch({
-  checked,
-  onChange,
-  ariaLabel,
-  ariaLabelledBy,
-  disabled
-}: SettingsSwitchProps): React.JSX.Element {
-  return (
-    <Switch
-      checked={checked}
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      disabled={disabled}
-      onCheckedChange={onChange}
-    />
-  )
-}
-
 type SettingsRowProps = {
   label: React.ReactNode
   description?: React.ReactNode
@@ -101,11 +75,11 @@ export function SettingsSwitchRow({
       description={description}
       className={className}
       control={
-        <SettingsSwitch
+        <Switch
           checked={checked}
-          onChange={onChange}
+          onCheckedChange={onChange}
           disabled={disabled}
-          ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
+          aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
       }
     />

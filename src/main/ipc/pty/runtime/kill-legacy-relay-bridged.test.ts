@@ -4,7 +4,7 @@ import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
 import {
   closeLegacyRelayPane,
   installLegacyRelayBridge
-} from '../../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 import { stopRendererOwnedPty, type PtyKillIpcDeps } from '../ipc/renderer-kill'
 
 const TARGET = 'ssh-box'

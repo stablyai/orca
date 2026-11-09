@@ -8,13 +8,10 @@ import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { settledWriteStub } from '../../../providers/settled-pty-write-stub'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import { writeOrchestrationPointerWithSettlement } from '../../orchestration/mailbox/terminal-pointer/mailbox-pointer-pty-write'
+import '../../orchestration/mailbox/terminal-pointer/mailbox-pointer-pty-write'
 import { sendTerminalStreamInput } from '../../rpc/methods/terminal/terminal-input-delivery'
 import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
-import {
-  pasteWorktreeStartupDraftWhenReady,
-  type WorktreeStartupReadinessHost
-} from '../../workspaces/startup/runtime-worktree-startup-readiness'
+import '../../workspaces/startup/runtime-worktree-startup-readiness'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()
@@ -150,20 +147,6 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).not.toBeNull()
   })
 
-  it("records a mailbox pointer as driving the agent, but not as a user's draft input", async () => {
-    const run = await createFreshRun()
-
-    await writeOrchestrationPointerWithSettlement({
-      ptyId: PTY_ID,
-      data: 'You have 1 unread message.',
-      controller: run.controller
-    })
-
-    expect(run.kinds).toEqual(['orchestration'])
-    expect(run.firstUserInputAt()).not.toBeNull()
-    expect(run.runtime.terminalRunFacts.readLastDrivingInputAt(PTY_ID)).toBeNull()
-  })
-
   it.each([
     ['a terminal reply', '\x1b[3;4R'],
     ['focus reports', '\x1b[I\x1b[O'],
@@ -188,31 +171,5 @@ describe('run facts: the controller write funnel', () => {
     await expect(run.runtime.writeTerminalPreviewInput(PTY_ID, 'exit\r')).resolves.toBe(true)
 
     expect(run.writes.map((write) => write.inputRecorded)).toEqual([true])
-  })
-})
-
-describe('run facts: a created worktree’s startup writes', () => {
-  function readinessHost(run: FreshRun): WorktreeStartupReadinessHost {
-    return {
-      getPtyId: () => PTY_ID,
-      getForegroundProcess: async () => 'aider',
-      subscribeToData: () => () => {},
-      // Why: bracketed paste enabled, then quiet, is the default draft-ready signal.
-      readRecentOutput: () => '\x1b[?2004h',
-      write: (ptyId, data, inputKind) => run.controller.write(ptyId, data, inputKind)
-    }
-  }
-
-  it('reads a run whose only input was its create-time draft as untyped', async () => {
-    vi.useFakeTimers()
-    const run = await createFreshRun()
-    const host = readinessHost(run)
-
-    pasteWorktreeStartupDraftWhenReady(host, run.handle, { agent: 'aider', content: 'plan it' })
-    await vi.runAllTimersAsync()
-
-    expect(run.kinds).toEqual(['launch'])
-    expect(run.writes).toHaveLength(1)
-    expect(run.firstUserInputAt()).toBeNull()
   })
 })

@@ -80,7 +80,7 @@ export type MRComment = {
   startLine?: number
   /** True when GitLab marks the author as a bot. Mirrors GitHub PRComment.isBot. */
   isBot?: boolean
-  /** True only when the author is the glab account that read the thread (not looked up by Checks polling). Mirrors GitHub PRComment.viewerDidAuthor. */
+  /** True only when the author is the glab account that read the thread; not looked up by Checks polling or desktop detail reads. Mirrors GitHub PRComment.viewerDidAuthor. */
   viewerDidAuthor?: boolean
 }
 

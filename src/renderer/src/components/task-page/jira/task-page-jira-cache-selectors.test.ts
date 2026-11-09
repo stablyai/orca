@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import { findTaskPageJiraIssue } from './task-page-jira-cache-selectors'
 

@@ -7,8 +7,11 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import { getGitHubPRReviewerRows } from '../../../../src/shared/github/pr-reviewer-display'
-import { useCalmConnectionState } from '../../transport/calm-connection-state'
-import { classifyConnection, verdictDisplayLabel } from '../../transport/connection-health'
+import { useCalmConnectionState } from '../../transport/connection/calm-connection-state'
+import {
+  classifyConnection,
+  verdictDisplayLabel
+} from '../../transport/connection/connection-health'
 import { useReviewerPeople } from './use-reviewer-people'
 import { SheetHeader } from '../nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../list/ListGroup'
