@@ -1,14 +1,6 @@
-// 4a process-lifecycle rows: first launch on the seeded profile (the candidate's one-time conversion), cold/warm open, and rewind.
-import { readdirSync } from 'node:fs'
-import path from 'node:path'
-import {
-  markerSeenAt,
-  rendererNow,
-  rpc,
-  samplePressure,
-  storageBytes,
-  watchMarkers
-} from './native-chat-4a-probes'
+// 4a process-lifecycle rows: cold/warm open and rewind; first launch on the seeded profile lives in the conversion module.
+import { unconvertedOpenTarget } from './native-chat-4a-fixture'
+import { markerSeenAt, rendererNow, rpc, watchMarkers } from './native-chat-4a-probes'
 import type { Sample } from './native-chat-4a-report'
 import {
   addRow,
@@ -30,19 +22,25 @@ import {
 } from './native-chat-4a-session'
 import { replyPrompt } from './native-chat-4a-workloads'
 
-type Chat = { sessionId: string; worktreeId: string }
+export type Chat = { sessionId: string; worktreeId: string }
 
-/** Open a chat and time it to its known tail marker visible plus controls known. */
-async function openTo(ctx: RunContext, chat: Chat, marker: string): Promise<Sample> {
+/** Open a chat and time it to its known tail marker visible plus controls known; `issued` runs once the open is requested. */
+export async function openTo(
+  ctx: RunContext,
+  chat: Chat,
+  marker: string,
+  issued?: () => Record<string, number>
+): Promise<Sample> {
   return measured(ctx, async () => {
     await watchMarkers(page(ctx), [marker])
     const startedAt = await rendererNow(page(ctx))
     await openChatTab(page(ctx), chat.worktreeId, chat.sessionId)
+    const observed = issued?.() ?? {}
     const tailAt = await markerSeenAt(page(ctx), marker, 600_000)
     await waitForControls(page(ctx), 600_000)
     return {
       e2eMs: (await rendererNow(page(ctx))) - startedAt,
-      extra: { tailVisibleMs: tailAt - startedAt }
+      extra: { tailVisibleMs: tailAt - startedAt, ...observed }
     }
   })
 }
@@ -55,106 +53,6 @@ async function markTail(ctx: RunContext, chat: Chat): Promise<string> {
   await waitForIdle(page(ctx), chat.sessionId)
   return `4A-TAIL-${tag}`
 }
-
-const dbFiles = (dir: string): string[] =>
-  readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter(
-      (entry) =>
-        entry.isFile() &&
-        /\.(db|sqlite)$/.test(entry.name) &&
-        !entry.parentPath.includes(`${path.sep}home`)
-    )
-    .map((entry) => path.relative(dir, path.join(entry.parentPath, entry.name)))
-
-/**
- * The arm's first launch on the seeded profile. On the candidate this is the accepted one-time conversion; on main it is a
- * cold open of the same data, so the rows line up but are reported apart from steady state.
- */
-export async function firstLaunchRows(
-  ctx: RunContext,
-  seedDbFiles: string[],
-  label: string
-): Promise<void> {
-  const { workspace, largeSessionId, fillerSessionIds } = ctx.manifest
-  const context = {
-    profile: label,
-    largeItems: ctx.manifest.largeItems,
-    seededBytes: ctx.manifest.storageBytes,
-    chats: fillerSessionIds.length + 1
-  }
-  const init = addRow(ctx, {
-    family: 'conversion',
-    operation: 'launch to session ready',
-    variant: label,
-    context
-  })
-  init.samples.push({ e2eMs: ctx.launch.readyEpochMs - ctx.launch.launchedAtEpochMs })
-  const stopPressure = samplePressure(ctx.launch.app, ctx.launch.userDataDir, 500)
-  const small: Chat = { sessionId: fillerSessionIds[0]!, worktreeId: workspace.worktreeIds[1] }
-  const smallOpen = addRow(ctx, {
-    family: 'conversion',
-    operation: 'first open, small chat',
-    variant: label,
-    context
-  })
-  await sampled(ctx, smallOpen, 1, () =>
-    openTo(ctx, small, `4A-TAIL-filler-0-${ctx.workload.history.fillerTurns - 1}`)
-  )
-  const largeOpen = addRow(ctx, {
-    family: 'conversion',
-    operation: 'first open, large chat, with sends to the opened small chat',
-    variant: label,
-    context: { ...context, concurrent: 'sends to the already-opened small chat every 250 ms' }
-  })
-  let opening = true
-  const concurrent: number[] = []
-  const sends = (async () => {
-    while (opening) {
-      concurrent.push(
-        (await send(page(ctx), ctx.arm, small.sessionId, replyPrompt(tagFor('during')))).hostMs
-      )
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
-  })()
-  await sampled(ctx, largeOpen, 1, () =>
-    openTo(
-      ctx,
-      { sessionId: largeSessionId, worktreeId: workspace.worktreeIds[0] },
-      `4A-TAIL-large-${ctx.workload.history.largeTurns - 1}`
-    )
-  )
-  opening = false
-  await sends
-  const during = addRow(ctx, {
-    family: 'conversion',
-    operation: 'small-chat send during large first open',
-    variant: label,
-    context
-  })
-  during.samples.push(...concurrent.map((hostMs) => ({ hostMs })))
-  const pressure = await stopPressure()
-  const remaining = dbFiles(ctx.launch.userDataDir)
-  const disk = addRow(ctx, {
-    family: 'conversion',
-    operation: 'disk',
-    variant: label,
-    context: {
-      retainedOriginalFiles:
-        seedDbFiles.filter((file) => remaining.includes(file)).join(' ') || 'none',
-      newFiles: remaining.filter((file) => !seedDbFiles.includes(file)).join(' ') || 'none'
-    }
-  })
-  disk.samples.push({
-    extra: {
-      peakTotalBytes: pressure.peakTotalBytes,
-      afterTotalBytes: storageBytes(ctx.launch.userDataDir).total,
-      peakMainRssBytes: pressure.peakMainRssBytes
-    }
-  })
-  await waitForIdle(page(ctx), small.sessionId)
-}
-
-export const seededDbFiles = dbFiles
 
 export async function openRows(ctx: RunContext): Promise<void> {
   const { workspace, largeSessionId, fillerSessionIds } = ctx.manifest
@@ -217,7 +115,9 @@ export async function openRows(ctx: RunContext): Promise<void> {
     variant: 'small chat',
     context
   })
-  const untouched = fillerSessionIds.slice(3, -1)
+  // The conversion family's unconverted-open target is already open.
+  const target = unconvertedOpenTarget(ctx.manifest)
+  const untouched = fillerSessionIds.slice(3, -1).filter((id) => id !== target)
   if (untouched.length === 0) {
     unopened.skipped = 'profile has no filler chat left untouched by earlier families'
   }

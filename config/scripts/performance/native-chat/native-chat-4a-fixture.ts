@@ -1,6 +1,8 @@
 // Seed the retained-history profile once through the seed arm's own host, so every arm starts from the same logical data.
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import type { Page } from '@stablyai/playwright-test'
 import {
   launchArm,
   prepareWorkspace,
@@ -10,22 +12,22 @@ import {
 } from './native-chat-4a-arm'
 import { rpc, storageBytes } from './native-chat-4a-probes'
 import { createChat, history, send, waitForDurable, waitForIdle } from './native-chat-4a-session'
-import {
-  fillerTurn,
-  largeHistoryTurns,
-  expectedLargeItems,
-  type Workload
-} from './native-chat-4a-workloads'
+import { expectedItems, fillerTurn, historyTurns, type Workload } from './native-chat-4a-workloads'
 
 export type Manifest = {
   seedArm: string
   seedSha: string
   workload: Workload['profile']
+  /** Digest of the seeded history recipe; a cached seed from another recipe is refused, never reused. */
+  recipe: string
   toolOutputBytes: number
   workspace: Workspace
   largeSessionId: string
+  /** Null when the recipe seeds no medium chat (the large-source profile). */
+  mediumSessionId: string | null
   fillerSessionIds: string[]
   largeItems: number
+  mediumItems: number
   storageBytes: number
   seedMs: number
 }
@@ -33,10 +35,7 @@ export type Manifest = {
 const SLEEP_FILLERS_EVERY = 20
 
 /** Count the large chat's rows by paging back from the tail; refuses a fixture that seeded fewer rows than its recipe. */
-async function countItems(
-  page: Awaited<ReturnType<typeof launchArm>>['page'],
-  sessionId: string
-): Promise<number> {
+async function countItems(page: Page, sessionId: string): Promise<number> {
   let count = 0
   let cursor: unknown
   for (;;) {
@@ -47,6 +46,49 @@ async function countItems(
     }
     cursor = read.page.window.nextCursor
   }
+}
+
+const recipeOf = (workload: Workload, toolOutputBytes: number): string =>
+  createHash('sha256')
+    .update(JSON.stringify({ history: workload.history, toolOutputBytes }))
+    .digest('hex')
+    .slice(0, 16)
+
+/** Send a recipe chat's turns; a queued turn goes while its predecessor still runs, leaving released queue history behind. */
+async function seedRecipeChat(
+  page: Page,
+  arm: Arm,
+  worktreeId: string,
+  workload: Workload,
+  chat: 'large' | 'medium',
+  log: (line: string) => void
+): Promise<{ sessionId: string; items: number }> {
+  const created = await createChat(page, arm, worktreeId)
+  const turns = chat === 'large' ? workload.history.largeTurns : workload.history.mediumTurns
+  let turn = 0
+  for (const next of historyTurns(workload, chat)) {
+    if (turn > 0 && !next.queued) {
+      await waitForDurable(page, created.sessionId, `4A-TAIL-${chat}-${turn - 1}`)
+    }
+    await send(page, arm, created.sessionId, next.prompt)
+    turn += 1
+    if (turn % 250 === 0) {
+      log(`seed: ${chat} chat ${turn}/${turns} turns`)
+    }
+  }
+  await waitForDurable(page, created.sessionId, `4A-TAIL-${chat}-${turn - 1}`, 600_000)
+  await waitForIdle(page, created.sessionId, 600_000)
+  const items = await countItems(page, created.sessionId)
+  // Hosts may group a call with its result; fewer than prompt+reply per turn means turns were lost.
+  if (items < turns * 2) {
+    throw new Error(`seed: ${chat} chat holds ${items} rows for ${turns} turns`)
+  }
+  if (items < expectedItems(turns, workload)) {
+    log(
+      `seed: ${chat} chat holds ${items} visible rows; recipe writes ${expectedItems(turns, workload)}`
+    )
+  }
+  return { sessionId: created.sessionId, items }
 }
 
 export async function seedProfile(input: {
@@ -61,32 +103,44 @@ export async function seedProfile(input: {
 }): Promise<Manifest> {
   const seedDir = path.join(input.runDir, `seed-${input.workload.profile}-${input.toolOutputBytes}`)
   const manifestPath = `${seedDir}.json`
+  const recipe = recipeOf(input.workload, input.toolOutputBytes)
   if (existsSync(manifestPath) && existsSync(seedDir)) {
-    return JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
+    const cached = JSON.parse(readFileSync(manifestPath, 'utf8')) as Partial<Manifest>
+    if (cached.recipe !== recipe) {
+      throw new Error(
+        `${manifestPath} was seeded from another recipe (${cached.recipe ?? 'none recorded'}, now ${recipe}); move it and ${seedDir} aside or use a new --out`
+      )
+    }
+    return cached as Manifest
   }
   const started = Date.now()
   const launch = await launchArm(input.arm, input.profileDir, input.stubCommand)
   try {
     const { page } = launch
     const workspace = await prepareWorkspace(page, input.repoPath, input.stubCommand)
-    const large = await createChat(page, input.arm, workspace.worktreeIds[0])
-    let turn = 0
-    for (const next of largeHistoryTurns({
+    const recipeWorkload = {
       ...input.workload,
       history: { ...input.workload.history, toolOutputBytes: input.toolOutputBytes }
-    })) {
-      // A queued turn is sent while its predecessor still runs, leaving released queue history behind.
-      if (turn > 0 && !next.queued) {
-        await waitForDurable(page, large.sessionId, `4A-TAIL-large-${turn - 1}`)
-      }
-      await send(page, input.arm, large.sessionId, next.prompt)
-      turn += 1
-      if (turn % 250 === 0) {
-        input.log(`seed: large chat ${turn}/${input.workload.history.largeTurns} turns`)
-      }
     }
-    await waitForDurable(page, large.sessionId, `4A-TAIL-large-${turn - 1}`, 600_000)
-    await waitForIdle(page, large.sessionId, 600_000)
+    const large = await seedRecipeChat(
+      page,
+      input.arm,
+      workspace.worktreeIds[0],
+      recipeWorkload,
+      'large',
+      input.log
+    )
+    const medium =
+      input.workload.history.mediumTurns > 0
+        ? await seedRecipeChat(
+            page,
+            input.arm,
+            workspace.worktreeIds[0],
+            recipeWorkload,
+            'medium',
+            input.log
+          )
+        : null
     const fillerSessionIds: string[] = []
     const workspaceId = workspace.worktreeIds[1]
     for (let chat = 0; chat < input.workload.history.fillerChats; chat += 1) {
@@ -111,27 +165,18 @@ export async function seedProfile(input: {
         input.log(`seed: ${chat + 1}/${input.workload.history.fillerChats} filler chats`)
       }
     }
-    const largeItems = await countItems(page, large.sessionId)
-    // Hosts may group a call with its result; fewer than prompt+reply per turn means turns were lost.
-    if (largeItems < input.workload.history.largeTurns * 2) {
-      throw new Error(
-        `seed: large chat holds ${largeItems} rows for ${input.workload.history.largeTurns} turns`
-      )
-    }
-    if (largeItems < expectedLargeItems(input.workload)) {
-      input.log(
-        `seed: large chat holds ${largeItems} visible rows; recipe writes ${expectedLargeItems(input.workload)}`
-      )
-    }
     const manifest: Manifest = {
       seedArm: input.arm.name,
       seedSha: input.arm.sha,
       workload: input.workload.profile,
+      recipe,
       toolOutputBytes: input.toolOutputBytes,
       workspace,
       largeSessionId: large.sessionId,
+      mediumSessionId: medium?.sessionId ?? null,
       fillerSessionIds,
-      largeItems,
+      largeItems: large.items,
+      mediumItems: medium?.items ?? 0,
       storageBytes: 0,
       seedMs: 0
     }
@@ -149,3 +194,12 @@ export async function seedProfile(input: {
 
 export const seedDirFor = (runDir: string, manifest: Manifest): string =>
   path.join(runDir, `seed-${manifest.workload}-${manifest.toolOutputBytes}`)
+
+/** The untouched filler the background sweep reaches last (it converts in ascending session_id order). */
+export function unconvertedOpenTarget(manifest: Manifest): string | null {
+  return manifest.fillerSessionIds.slice(3, -1).sort().at(-1) ?? null
+}
+
+/** Every chat the seed made, in the sweep's order. */
+export const seededChats = (manifest: Manifest): string[] =>
+  [manifest.largeSessionId, manifest.mediumSessionId ?? [], manifest.fillerSessionIds].flat().sort()

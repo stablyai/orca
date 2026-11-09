@@ -17,7 +17,7 @@ const bytesOf = (value: unknown): number => Buffer.byteLength(JSON.stringify(val
 
 type Item = { itemId: string; body?: { kind?: string } }
 
-async function read(
+export async function read(
   ctx: RunContext,
   method: string,
   params: unknown,
@@ -63,16 +63,8 @@ export async function historyRows(ctx: RunContext): Promise<void> {
       read(ctx, 'agentSession.history', { sessionId, ...params }, true)
     )
   }
-  addRow(ctx, {
-    family: 'history',
-    operation: 'sparse/interleaved subagent grouping',
-    variant: 'tail 200',
-    context,
-    skipped:
-      'the 4a provider stub emits no subagent frames; covered by the Claude/Codex functional QA run'
-  })
 
-  // Huge originals come from the streaming rows that ran first; the smallest seeded tool item is the ordinary case.
+  // Whatever the streaming rows left on the tail; named shapes are verified rows of their own (native-chat-4a-ops-shapes.ts).
   const items = [...tail.page.items, ...older.page.items] as Item[]
   const sized = items
     .map((item) => ({ item, bytes: bytesOf(item) }))

@@ -1,5 +1,9 @@
 // 4a rows, percentiles and the PR-body table: main vs candidate per row, keyed by each arm's head SHA.
+import { writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { HostWork } from './native-chat-4a-probes'
+import type { Workload } from './native-chat-4a-workloads'
 
 export type Sample = {
   /** Action to user-visible (or durably readable, when the row says so) result. */
@@ -130,7 +134,7 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
   }
   lines.push(
     '',
-    'Primary latency is action → visible result where the row has a rendered end point, else the RPC host span. Off-main CPU is process CPU minus main-thread event-loop active time (storage workers). Conversion rows are one-time import cost, reported separately from steady state; per-row spans, WAL/file growth, event-loop lag and peak memory are in the JSON.'
+    'Primary latency is action → visible result where the row has a rendered end point, else the RPC host span. Off-main CPU is process CPU minus main-thread event-loop active time (storage workers). Conversion rows are one-time import cost, reported separately from steady state; steady-state families start only after every chat is seen ready. Rows whose Shape names `observedDatabase` end at an outside read-only SQLite observation and carry its resolution. Per-row spans, WAL/file growth, event-loop lag and peak memory are in the JSON.'
   )
   return `${lines.join('\n')}\n`
 }
@@ -149,4 +153,35 @@ export function armMarkdown(result: ArmResult): string {
     )
   }
   return `${lines.join('\n')}\n`
+}
+
+/** The comparison JSON (every sample and summary, the workload and machine) beside its table. */
+export function writeComparison(
+  out: string,
+  workload: Workload,
+  results: ArmResult[],
+  log: (line: string) => void
+): void {
+  const [base, next] = results
+  if (!base || !next) {
+    return
+  }
+  const name = `4a-${base.sha.slice(0, 8)}-vs-${next.sha.slice(0, 8)}`
+  const summaries = results.map((result) => ({
+    ...result,
+    summaries: result.rows.map((row: Row) => ({ ...row, summary: summarizeRow(row) }))
+  }))
+  const machine = {
+    platform: process.platform,
+    release: os.release(),
+    cpu: os.cpus()[0]?.model,
+    cpus: os.cpus().length,
+    memoryBytes: os.totalmem()
+  }
+  writeFileSync(
+    path.join(out, `${name}.json`),
+    `${JSON.stringify({ workload, machine, arms: summaries }, null, 2)}\n`
+  )
+  writeFileSync(path.join(out, `${name}.md`), comparisonMarkdown(base, next))
+  log(`wrote ${path.join(out, `${name}.md`)}`)
 }
