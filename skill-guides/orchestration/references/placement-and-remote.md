@@ -35,3 +35,24 @@ workspace, and the start output names the workspace it created.
 
 After start, address a remote worker only by Dispatch ID, never by a terminal
 handle.
+
+## Agents on another server
+
+To message an agent that already runs on a paired server, send with `--on`,
+using the same server names as `worker-start --on`:
+
+```bash
+ORCA orchestration send --on <server> --to <term_…|orca_session_id:…> --subject "<text>" --body "<text>"
+```
+
+Your own Orca carries the mail and keeps the conversation. Replies come back to
+your own `check`, and they wake you like local mail. The other agent answers
+with a plain `reply --id <msg_id> --body <text>`; no flag is needed on either
+side. Mail from another server names its sender as `<sender> on <server name>`.
+
+`--server <server>` runs one command on that server and delivers nothing back
+to you, so an agent never mails with it. Your mailbox stays on your own Orca:
+`check` takes no server flag. Read-only commands such as `inbox` or
+`worker-list` with `--server` show that server's records. A server whose Orca
+is too old answers `peer_mail_unsupported` and nothing is sent. Pair servers
+with `orca pair` or in Settings.

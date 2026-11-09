@@ -69,10 +69,16 @@ export const ORCHESTRATION_CALLER_METHODS = [
     permission: 'workspace',
     params: null,
     // Dispatch already admitted the environment's session; do not resolve another caller from params.
-    handler: (_params, { orchestrationCaller }): OrchestrationCallerShowResult => ({
+    handler: (
+      _params,
+      { orchestrationCaller, orchestrationCompatibilityEvidence, runtime }
+    ): OrchestrationCallerShowResult => ({
       caller: orchestrationCaller
         ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
-        : null
+        : null,
+      terminal:
+        !orchestrationCaller &&
+        runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence) !== null
     })
   }),
   defineMethod({
