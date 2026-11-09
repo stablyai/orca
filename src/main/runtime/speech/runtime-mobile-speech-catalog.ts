@@ -119,7 +119,10 @@ export class RuntimeMobileSpeechCatalog {
       ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
       ...(params.dictationHoldToRecord !== undefined
         ? { dictationHoldToRecord: params.dictationHoldToRecord }
-        : {})
+        : // A phone without Auto that picks Hold leaves no hold-to-record behind for a later Toggle.
+          params.dictationMode === 'hold'
+          ? { dictationHoldToRecord: false }
+          : {})
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
     return this.list()

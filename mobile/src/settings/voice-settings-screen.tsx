@@ -28,10 +28,13 @@ const POLL_INTERVAL_MS = 1500
 
 // Hosts that report hold-to-record have Auto; older ones only Toggle and Hold.
 function dictationModes(t: Translate, offersAuto: boolean) {
-  const toggle = { value: 'toggle', label: t('settings.voiceSettingsScreen.toggleMode', 'Toggle') }
-  const hold = { value: 'hold', label: t('settings.voiceSettingsScreen.holdMode', 'Hold') }
-  const auto = { value: 'auto', label: t('settings.voiceSettingsScreen.autoMode', 'Auto') }
-  return offersAuto ? ([auto, hold, toggle] as const) : ([toggle, hold] as const)
+  const toggle = {
+    value: 'toggle',
+    label: t('settings.voiceSettingsScreen.toggleMode', 'Toggle')
+  } as const
+  const hold = { value: 'hold', label: t('settings.voiceSettingsScreen.holdMode', 'Hold') } as const
+  const auto = { value: 'auto', label: t('settings.voiceSettingsScreen.autoMode', 'Auto') } as const
+  return offersAuto ? [auto, hold, toggle] : [toggle, hold]
 }
 
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
