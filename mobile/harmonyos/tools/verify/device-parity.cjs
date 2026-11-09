@@ -357,6 +357,40 @@ test('image chunks must continue the staged image before it can be copied', asyn
   actions.dispose()
 })
 
+test('saving an image rejects a partial write to the authorized photo asset', async () => {
+  const { actions } = imageHarness({
+    fs: {
+      OpenMode: { CREATE: 1, TRUNC: 2, READ_WRITE: 4, WRITE_ONLY: 8 },
+      mkdirSync() {},
+      rmdirSync() {},
+      openSync: () => ({ fd: 1 }),
+      writeSync: () => 4,
+      closeSync() {},
+      open: async () => ({ fd: 2 }),
+      write: async () => 2,
+      close: async () => {}
+    },
+    fileUri: { getUriFromPath: (path) => `file://${path}` },
+    photoAccessHelper: {
+      PhotoType: { IMAGE: 1 },
+      getPhotoAccessHelper: () => ({
+        showAssetsCreationDialog: async () => ['file://media/Photo/1/image.png'],
+        release: async () => {}
+      })
+    }
+  })
+  await actions.serve({ action: 'stage', offset: 0, base64: 'iVBORw==' })
+  await assert.rejects(
+    actions.serve({
+      action: 'run',
+      operation: 'save',
+      source: { kind: 'staged', mime: 'image/png', byteLength: 4 }
+    }),
+    /Image save failed/
+  )
+  actions.dispose()
+})
+
 test('leaving an image page during download prevents a later clipboard write', async () => {
   const download = deferred()
   const { actions, copied } = imageHarness({

@@ -20,7 +20,7 @@ export class NativeImageActions {
   private closed = false;
   private running = false;
   private sequence = 0;
-  private paths: string[] = [];
+  private exportDirectory = '';
   private download: http.HttpRequest | null = null;
 
   constructor(context: common.UIAbilityContext) { this.context = context; }
@@ -80,12 +80,22 @@ export class NativeImageActions {
           pixel = await imageSource.createPixelMap(); this.assertLive(generation);
           await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_PIXELMAP, pixel));
         } else {
-          this.clearFiles(); this.sequence++;
+          this.clearExportDirectory(); this.sequence++;
           let extension = mime === 'image/jpeg' ? 'jpg' : mime.split('/')[1];
-          let path = `${this.context.cacheDir}/orca-image-${this.documentId}-${this.sequence}.${extension}`;
-          let file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.TRUNC | fs.OpenMode.READ_WRITE);
-          try { if (fs.writeSync(file.fd, bytes.buffer) !== bytes.length) { throw new Error('Image write failed'); } } finally { fs.closeSync(file); }
-          this.paths.push(path); let uri = fileUri.getUriFromPath(path);
+          let directory = `${this.context.cacheDir}/orca-image-${this.documentId}-${this.sequence}`;
+          fs.mkdirSync(directory);
+          this.exportDirectory = directory;
+          let path = `${directory}/image.${extension}`;
+          try {
+            let file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.TRUNC | fs.OpenMode.READ_WRITE);
+            try {
+              if (fs.writeSync(file.fd, bytes.buffer) !== bytes.length) { throw new Error('Image write failed'); }
+            } finally { fs.closeSync(file); }
+          } catch (e) {
+            this.clearExportDirectory();
+            throw new Error((e as Error).message);
+          }
+          let uri = fileUri.getUriFromPath(path);
           this.assertLive(generation);
           if (value['operation'] === 'save') {
             let helper = photoAccessHelper.getPhotoAccessHelper(this.context);
@@ -95,7 +105,9 @@ export class NativeImageActions {
               this.assertLive(generation);
               if (destinations.length !== 1) { throw new Error('Image save cancelled'); }
               let destination = await fs.open(destinations[0], fs.OpenMode.WRITE_ONLY);
-              try { await fs.write(destination.fd, bytes.buffer); } finally { await fs.close(destination); }
+              try {
+                if (await fs.write(destination.fd, bytes.buffer) !== bytes.length) { throw new Error('Image save failed'); }
+              } finally { await fs.close(destination); }
             } finally { await helper.release(); }
           } else {
             let share = new systemShare.ShareController(new systemShare.SharedData({ utd: mime === 'image/png' ? 'general.png'
@@ -108,11 +120,12 @@ export class NativeImageActions {
     } finally { this.running = false; }
   }
 
-  private clearFiles(): void {
-    for (let i = 0; i < this.paths.length; i++) { try { fs.unlinkSync(this.paths[i]); } catch (e) { } }
-    this.paths = [];
+  private clearExportDirectory(): void {
+    if (!this.exportDirectory) { return; }
+    try { fs.rmdirSync(this.exportDirectory); } catch (e) { }
+    this.exportDirectory = '';
   }
 
   pause(): void { this.generation++; this.staged = new Uint8Array(0); try { this.download?.destroy(); } catch (e) { } this.download = null; }
-  dispose(): void { this.closed = true; this.pause(); this.clearFiles(); }
+  dispose(): void { this.closed = true; this.pause(); this.clearExportDirectory(); }
 }
