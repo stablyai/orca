@@ -1,6 +1,7 @@
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  notifyManager,
   queryOptions,
   replaceEqualDeep,
   skipToken,
@@ -17,7 +18,11 @@ import {
 import { useAgentActivityWrites } from '../agents/use-agent-activity-writes'
 import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import type { AccountsSnapshot } from '../components/AccountUsage'
-import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
+import {
+  HOST_LIST_TARGET,
+  homeWorktreeCountsKey,
+  NO_HOST_LIST_INPUT
+} from '../host-screen/host-list-queries'
 import { useNow } from '../hooks/use-now'
 import {
   loadMobileOnboardingSteps,
@@ -30,7 +35,7 @@ import {
 import { loadHostCatalog } from '../transport/hosts/host-store'
 import type { HostCatalogEntry } from '../transport/hosts/host-profile'
 import { awaitFirstPaintRestore } from '../query/host-query-persistence'
-import { hostObserverOptions, readHostQueryLive, type HostQuery } from '../query/host-query'
+import { hostObserverOptions, type HostQuery } from '../query/host-query'
 import type { HostQueryKey } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
@@ -234,21 +239,22 @@ export function useMobileHomeData() {
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
   const now = useNow(30_000, homeFocused)
-  // A fresh read, not one already out: that one may predate the write it must carry.
+  // A fresh read, not one already out: that one may predate the write it must carry. The cached rows stay
+  // its delta base, so the desktop answers with only what changed.
   const refetchHostAgents = useCallback(
     async (hostId: string): Promise<void> => {
       const entry = allClientsRef.current.find((candidate) => candidate.hostId === hostId)
       if (entry?.client.getState() !== 'connected') {
         return
       }
-      await readHostQueryLive(
-        queryClient,
-        homeWorktreeCountsQuery,
-        entry,
-        HOST_LIST_TARGET,
-        NO_HOST_LIST_INPUT,
-        { replace: true }
-      ).catch(() => undefined)
+      await queryClient
+        .refetchQueries(
+          { queryKey: homeWorktreeCountsKey(hostId), exact: true },
+          { cancelRefetch: true, throwOnError: false }
+        )
+        .catch(() => undefined)
+      // Resolves once observers hold the answer, so the write's guess isn't dropped a frame early.
+      await new Promise<void>((resolve) => notifyManager.schedule(resolve))
     },
     [queryClient]
   )

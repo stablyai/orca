@@ -228,8 +228,13 @@ export function createHostQueryPersistence(
     return scope === 'orca' && hostId === store.hostId && typeof family === 'string' ? family : null
   }
 
-  // Applied only to a key still empty: a live answer that landed first always wins.
-  function restoreOne(queryKey: readonly unknown[], persist: HostQueryPersist<unknown>) {
+  // Applied only to a key still empty: a live answer that landed first always wins. `after` is the boot
+  // batch read: the key is claimed now, so an observer arriving meanwhile joins instead of reading again.
+  function restoreOne(
+    queryKey: readonly unknown[],
+    persist: HostQueryPersist<unknown>,
+    after: Promise<void> = Promise.resolve()
+  ) {
     const family = familyOf(queryKey)
     const queryHash = hashKey(queryKey)
     if (family === null) {
@@ -240,22 +245,24 @@ export function createHostQueryPersistence(
       return pending
     }
     const restore = new Promise<void>((settle) => {
-      void persisterFor(family, persist)
-        .retrieveQuery(queryHash, (record) => {
-          if (queryClient.getQueryData(queryKey) === undefined) {
-            const { data, dataUpdatedAt } = record.state
-            settledAt.set(queryHash, dataUpdatedAt)
-            // Marked first: listeners told of this write must already see it as an earlier launch's.
-            restored.add(queryHash)
-            applyingRestore = queryHash
-            try {
-              queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
-            } finally {
-              applyingRestore = null
+      void after
+        .then(() =>
+          persisterFor(family, persist).retrieveQuery(queryHash, (record) => {
+            if (queryClient.getQueryData(queryKey) === undefined) {
+              const { data, dataUpdatedAt } = record.state
+              settledAt.set(queryHash, dataUpdatedAt)
+              // Marked first: listeners told of this write must already see it as an earlier launch's.
+              restored.add(queryHash)
+              applyingRestore = queryHash
+              try {
+                queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
+              } finally {
+                applyingRestore = null
+              }
             }
-          }
-          settle()
-        })
+            settle()
+          })
+        )
         .then(
           (data) => {
             // A restored record settles in the scheduled callback above.
@@ -325,16 +332,17 @@ export function createHostQueryPersistence(
           : []
       })
       // A key already being read joins that read below instead of reading again.
-      await primer.prime(
+      const primed = primer.prime(
         empty.flatMap(({ queryKey, persist, family }) =>
           restoring.has(hashKey(queryKey))
             ? []
             : [orcaQueryStoreKey(`${familyPrefix(family, persist)}-${hashKey(queryKey)}`)]
         )
       )
+      const batchRead = primed.catch(() => undefined)
       await Promise.all(
         empty.map(async ({ queryKey, persist }) => {
-          await restoreOne(queryKey, persist)
+          await restoreOne(queryKey, persist, batchRead)
           if (queryClient.getQueryData(queryKey) === undefined) {
             missedAtBoot.add(hashKey(queryKey))
           }

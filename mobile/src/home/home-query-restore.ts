@@ -7,6 +7,7 @@ import {
   NO_HOST_LIST_INPUT
 } from '../host-screen/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
+import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import { persistedHostQueryKey } from '../query/host-query-persistence'
 import { keepNativeHostQueries, nativeQueryStoreReady } from '../query/native-query-persistence'
 import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
@@ -54,17 +55,11 @@ async function readLegacySnapshot(): Promise<LegacySnapshot | null> {
 
 // Counts nothing stored yet answers; the old key goes once the store holds them. Without a readable host
 // list or a store that can write (web, a key that won't load), the key waits for a later launch.
-async function seedFromLegacySnapshot(
+function seedFromLegacySnapshot(
   queryClient: QueryClient,
-  hostIds: readonly string[] | null
-): Promise<void> {
-  if (hostIds === null || !(await nativeQueryStoreReady())) {
-    return
-  }
-  const snapshot = await readLegacySnapshot()
-  if (!snapshot) {
-    return
-  }
+  snapshot: LegacySnapshot,
+  hostIds: readonly string[]
+): void {
   for (const hostId of hostIds) {
     const info = snapshot.worktreeInfo[hostId]
     const key = homeWorktreeCountsKey(hostId)
@@ -100,20 +95,32 @@ async function seedFromLegacySnapshot(
   ).then(() => AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined))
 }
 
-/** Restores each paired desktop's stored counts and totals; resolves once each is applied or missed. */
+/** Restores each paired desktop's stored Home rows; resolves once each is applied or missed. */
 export async function restoreHomeQueries(queryClient: QueryClient): Promise<void> {
-  const hosts = await loadStoredHostProfiles().catch(() => null)
+  // Independent first reads: the paired hosts, the store's key (keychain) and the old snapshot key.
+  const [hosts, storeReady, legacy] = await Promise.all([
+    loadStoredHostProfiles().catch(() => null),
+    nativeQueryStoreReady(),
+    readLegacySnapshot()
+  ])
   const hostIds = hosts?.map((host) => host.id) ?? null
+  if (!hostIds || !storeReady) {
+    return
+  }
   await Promise.all(
-    (hostIds ?? []).map(
+    hostIds.map(
       (hostId) =>
         keepNativeHostQueries(queryClient, hostId)?.restore(
           [
             persistedHostQueryKey(homeStatsQuery, homeStatsKey(hostId)),
-            persistedHostQueryKey(homeWorktreeCountsQuery, homeWorktreeCountsKey(hostId))
+            persistedHostQueryKey(homeWorktreeCountsQuery, homeWorktreeCountsKey(hostId)),
+            // Stored for the Accounts page; read here so Home's own observer doesn't read it alone.
+            persistedHostQueryKey(accountsSnapshotFamily, accountsSnapshotKey(hostId))
           ].filter((key) => key !== null)
         ) ?? Promise.resolve()
     )
   )
-  await seedFromLegacySnapshot(queryClient, hostIds)
+  if (legacy) {
+    seedFromLegacySnapshot(queryClient, legacy, hostIds)
+  }
 }
