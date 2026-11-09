@@ -29,7 +29,7 @@
     "VERCEL_PROJECT_ID": "prj_SkVtv6zJurF9dUHpfTRy4v9avwPq",
     "VERCEL_REGION": "iad1",
     "BILLING_URL": "https://orca-billing-dev.lovecast.workers.dev",
-    "GOLDEN_SNAPSHOT_ID": "snap_aaJmS6etH8vyrTSxOQxPU7lx02QZ",
+    // GOLDEN_SNAPSHOT_ID: unset until an image is built (image/build-golden-image.ts); lifecycle routes answer 503 meanwhile.
     "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
   }
 }
