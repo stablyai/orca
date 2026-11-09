@@ -59,8 +59,8 @@ function agentDiscoveries(
   ) {
     return rootDirs.map(async (rootDir) => ({ agent, rootDir, files: [] }))
   }
-  const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
-    discoverFiles({
+  const discover = async (rootDir: string): Promise<SessionFileDiscovery> => {
+    const discovery = await discoverFiles({
       rootDir,
       limit,
       agent,
@@ -72,6 +72,8 @@ function agentDiscoveries(
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
       signal: options.signal
     })
+    return agent === 'codex' ? preferPlainCodexRollouts(discovery) : discovery
+  }
   return source.mergeRootDiscoveries
     ? [mergedDiscovery(agent, rootDirs, limit, discover)]
     : rootDirs.map(discover)
@@ -96,5 +98,23 @@ async function mergedDiscovery(
     rootDir: rootDirs.join(delimiter),
     files: files.slice(0, limit),
     ...(scopeFiles ? { scopeFiles } : {})
+  }
+}
+
+// Codex may leave the plain rollout beside a newer compressed copy. History should open the plain file.
+function preferPlainCodexRollouts(discovery: SessionFileDiscovery): SessionFileDiscovery {
+  const plainPaths = new Set(
+    [...discovery.files, ...(discovery.scopeFiles ?? [])]
+      .filter((file) => file.path.endsWith('.jsonl'))
+      .map((file) => file.path)
+  )
+  const keep = (path: string) =>
+    !path.endsWith('.jsonl.zst') || !plainPaths.has(path.slice(0, -'.zst'.length))
+  return {
+    ...discovery,
+    files: discovery.files.filter((file) => keep(file.path)),
+    ...(discovery.scopeFiles
+      ? { scopeFiles: discovery.scopeFiles.filter((file) => keep(file.path)) }
+      : {})
   }
 }

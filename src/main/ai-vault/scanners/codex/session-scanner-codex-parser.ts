@@ -1,5 +1,5 @@
 import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openCodexRolloutReadStream } from './session-scanner-codex-rollout-stream'
 import { createInterface } from 'node:readline'
 import type {
   AiVaultSession,
@@ -54,7 +54,7 @@ export async function parseCodexSessionFile(
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
+    input: openCodexRolloutReadStream(file.path),
     crlfDelay: Infinity
   })
   return parseCodexSessionLines({

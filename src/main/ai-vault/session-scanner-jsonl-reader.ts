@@ -1,6 +1,7 @@
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from './ai-vault-scan-cancellation'
 import type { Hash } from 'node:crypto'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { readDecompressedCodexRollout } from './scanners/codex/session-scanner-codex-rollout-stream'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
@@ -60,7 +61,9 @@ export async function consumeCompleteJsonlLines(args: {
   let discarding = false
   const skippedRecords: SkippedTranscriptRecord[] = []
 
-  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan', args.signal)
+  const stream = args.path.endsWith('.jsonl.zst')
+    ? readDecompressedCodexRollout(args.path, args.start, args.signal)
+    : openTranscriptReadStream(args.path, { start: args.start }, 'scan', args.signal)
   let chunkStart = args.start
   try {
     for await (const chunk of stream as AsyncIterable<Buffer>) {

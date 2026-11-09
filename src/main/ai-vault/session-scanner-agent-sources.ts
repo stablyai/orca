@@ -124,7 +124,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
-    extensions: ['.jsonl']
+    extensions: ['.jsonl', '.zst'],
+    // Idle Codex rollouts are compressed to .jsonl.zst. Other .zst files are not transcripts.
+    filePredicate: (filePath) => filePath.endsWith('.jsonl') || filePath.endsWith('.jsonl.zst')
   },
   gemini: {
     rootDirs: (options, wslHomeDirs) =>
