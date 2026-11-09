@@ -80,6 +80,9 @@ async function prepareEphemeralVmRecipeRequest(
   }
   appendProvisioningWarnings(creationId, preparedTarget.warnings)
   if (preparedTarget.environmentId) {
+    useAppStore
+      .getState()
+      .updatePendingWorktreeCreation(creationId, { vmEnvironmentId: preparedTarget.environmentId })
     // Why: the VM's first connect may have just deployed this server; host badges and removal read it.
     try {
       useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())

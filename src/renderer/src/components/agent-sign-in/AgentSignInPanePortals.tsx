@@ -22,7 +22,7 @@ import { AgentSignInOverlay } from './AgentSignInOverlay'
 const ABANDON_CHECK_MS = 1_000
 const mountedPortals = new Map<string, number>()
 
-function cardActions(key: string): AgentSignInCardActions {
+export function agentSignInCardActions(key: string): AgentSignInCardActions {
   return {
     signIn: () => startAgentSignIn(key),
     retry: () => void retryAgentSignIn(key),
@@ -65,7 +65,7 @@ function AgentSignInPanePortal({
   }
   return createPortal(
     <AgentSignInOverlay>
-      <AgentSignInCard gate={gate} actions={cardActions(key)} />
+      <AgentSignInCard gate={gate} actions={agentSignInCardActions(key)} />
     </AgentSignInOverlay>,
     pane.container,
     `agent-sign-in-${pane.id}`
