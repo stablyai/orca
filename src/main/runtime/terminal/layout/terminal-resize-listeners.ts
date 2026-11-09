@@ -27,6 +27,15 @@ import { reportWorkerTurnStop } from '../../orchestration/workers/turn-stops/wor
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
+function isUnverifiedStopSentinel(payload: Record<string, unknown>): boolean {
+  const cause = payload.exitCause
+  if (cause === null || typeof cause !== 'object') {
+    return false
+  }
+  const record = cause as { kind?: unknown; reason?: unknown }
+  return record.kind === 'unknown' && record.reason === 'stop_unverified'
+}
+
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(
     ptyId: string,
@@ -165,7 +174,8 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     // Only this runtime's in-flight stop claims the outcome; durable stopping rows from a crashed runtime cannot absorb later failures.
     const stopping = db.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      if (failure.processExited) {
+      // Exit code -1 records a stop request, not observed death. Settling here would report stopped when close then fails (#19738).
+      if (failure.processExited && !isUnverifiedStopSentinel(failure.payload)) {
         db.settleWorkerStop(dispatch.id)
       }
       return true
