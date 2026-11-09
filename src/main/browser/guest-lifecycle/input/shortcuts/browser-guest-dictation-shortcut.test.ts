@@ -47,17 +47,13 @@ function pressDictationInPage(isComposing: boolean) {
 }
 
 describe('dictation shortcut from a focused browser page', () => {
-  it('hands the chord to Orca so dictation can target the page', () => {
-    const { prevented, renderer } = pressDictationInPage(false)
-
-    expect(prevented).toBe(true)
-    expect(renderer.send).toHaveBeenCalledWith('ui:dictationKeyDown')
-  })
-
   it('leaves the chord to the page while an IME composition owns it', () => {
-    const { prevented, renderer } = pressDictationInPage(true)
+    const composing = pressDictationInPage(true)
+    expect(composing.prevented).toBe(false)
+    expect(composing.renderer.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
-    expect(prevented).toBe(false)
-    expect(renderer.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+    const typed = pressDictationInPage(false)
+    expect(typed.prevented).toBe(true)
+    expect(typed.renderer.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 })

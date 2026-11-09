@@ -1,4 +1,7 @@
-import { dictationSeparators } from '../../../shared/dictation-transcript-spacing'
+import {
+  DICTATION_TEXT_BLOCK_SELECTOR,
+  dictationSeparators
+} from '../../../shared/dictation-transcript-spacing'
 
 // The focused text field of this frame's document, looking through open shadow roots, or null.
 const FOCUSED_FIELD_EXPRESSION = `(() => {
@@ -27,19 +30,30 @@ const READ_FOCUSED_FIELD_SCRIPT = `(() => {
   const selection = root.getSelection ? root.getSelection() : document.getSelection()
   if (!selection || selection.rangeCount === 0) return { before: '', after: '' }
   const caret = selection.getRangeAt(0)
+  const blockOf = (node) => {
+    const block = (node instanceof Element ? node : node.parentElement)?.closest(${JSON.stringify(DICTATION_TEXT_BLOCK_SELECTOR)})
+    return block && field.contains(block) ? block : field
+  }
   const before = document.createRange()
-  before.selectNodeContents(field)
+  before.selectNodeContents(blockOf(caret.startContainer))
   before.setEnd(caret.startContainer, caret.startOffset)
   const after = document.createRange()
-  after.selectNodeContents(field)
+  after.selectNodeContents(blockOf(caret.endContainer))
   after.setStart(caret.endContainer, caret.endOffset)
   return { before: before.toString().slice(-limit), after: after.toString().slice(0, limit) }
 })()`
 
 // execCommand types into the frame that owns the field; webContents.insertText only reaches the top frame.
+// Rich-text editors that model input themselves take a cancelable beforeinput first, as in Orca's own editors.
 const typeIntoFocusedFieldScript = (text: string): string => `(() => {
+  const text = ${JSON.stringify(text)}
   const field = ${FOCUSED_FIELD_EXPRESSION}
-  return field ? document.execCommand('insertText', false, ${JSON.stringify(text)}) : false
+  if (!field) return false
+  if (field.isContentEditable) {
+    const beforeInput = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })
+    if (!field.dispatchEvent(beforeInput)) return true
+  }
+  return document.execCommand('insertText', false, text)
 })()`
 
 type FocusedFieldText = { before: string; after: string }

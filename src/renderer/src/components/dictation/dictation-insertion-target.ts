@@ -8,7 +8,10 @@ import {
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
 } from '@/lib/text-control-paste'
-import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
+import {
+  DICTATION_TEXT_BLOCK_SELECTOR,
+  dictationSeparators
+} from '../../../../shared/dictation-transcript-spacing'
 import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
@@ -114,9 +117,6 @@ function readSelectionRangeIn(element: HTMLElement): Range | null {
   return range && element.contains(range.commonAncestorContainer) ? range : null
 }
 
-const CONTENT_EDITABLE_BLOCK_SELECTOR =
-  'p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div'
-
 /** The selection's neighbours within its own block, so a new paragraph's start has none. */
 function readContentEditableNeighbours(element: HTMLElement): { before: string; after: string } {
   const range = readSelectionRangeIn(element)
@@ -125,7 +125,7 @@ function readContentEditableNeighbours(element: HTMLElement): { before: string; 
   }
   const blockOf = (node: Node): Node => {
     const block = (node instanceof Element ? node : node.parentElement)?.closest(
-      CONTENT_EDITABLE_BLOCK_SELECTOR
+      DICTATION_TEXT_BLOCK_SELECTOR
     )
     return block && element.contains(block) ? block : element
   }
