@@ -112,29 +112,29 @@ export class AcpChildSessions {
     const placed: ProviderTimelineJoin = { ...join, scope: AGENT_JOURNAL_THREAD_SCOPE }
     const update = notification.update
     let events: ProviderTimelineEvent[]
-    switch (update.sessionUpdate) {
-      case 'agent_message_chunk':
-      case 'agent_thought_chunk': {
-        if (update.content.type !== 'text') {
-          return []
-        }
-        const channel = update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
-        const item = update.messageId
-          ? { id: acpNamedTextKey(update.messageId, channel) }
-          : { stream: `${producer.agentId}:${update.sessionUpdate}` }
-        const open = this.openText.get(producer.agentId) ?? new Map()
-        open.set('id' in item ? item.id : item.stream, item)
-        this.openText.set(producer.agentId, open)
-        events = [{ type: 'text.delta', item, channel, text: update.content.text }]
-        break
-      }
-      case 'tool_call':
-      case 'tool_call_update':
-        // An unscoped join keeps partial tool context between updates.
-        events = this.tools.translate(update, this.dialect, join)
-        break
-      default:
+    if (
+      update.sessionUpdate === 'agent_message_chunk' ||
+      update.sessionUpdate === 'agent_thought_chunk'
+    ) {
+      if (update.content.type !== 'text') {
         return []
+      }
+      const channel = update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
+      const item = update.messageId
+        ? { id: acpNamedTextKey(update.messageId, channel) }
+        : { stream: `${producer.agentId}:${update.sessionUpdate}` }
+      const open = this.openText.get(producer.agentId) ?? new Map()
+      open.set('id' in item ? item.id : item.stream, item)
+      this.openText.set(producer.agentId, open)
+      events = [{ type: 'text.delta', item, channel, text: update.content.text }]
+    } else if (
+      update.sessionUpdate === 'tool_call' ||
+      update.sessionUpdate === 'tool_call_update'
+    ) {
+      // An unscoped join keeps partial tool context between updates.
+      events = this.tools.translate(update, this.dialect, join)
+    } else {
+      return []
     }
     return events.map((event) =>
       event.type === 'item.open' ||

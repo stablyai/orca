@@ -16,11 +16,13 @@ const childSchema = z.looseObject({
   title: z.string().optional().catch(undefined),
   _meta: z.looseObject({ isReplay: z.boolean().optional() }).nullish().catch(undefined)
 })
-const statusSchema = childSchema.extend({ type: z.literal('status'), status: z.string() })
-const frameSchema = childSchema.extend({
-  type: z.literal('update'),
-  update: z.looseObject({ sessionUpdate: z.string() })
-})
+const reportSchema = z.discriminatedUnion('type', [
+  childSchema.extend({ type: z.literal('status'), status: z.string() }),
+  childSchema.extend({
+    type: z.literal('update'),
+    update: z.looseObject({ sessionUpdate: z.string() })
+  })
+])
 
 // Map lookups avoid treating __proto__ as a recognized state.
 const CHILD_STATES: ReadonlyMap<string, NativeChatSubagentState> = new Map([
@@ -51,11 +53,12 @@ export function openCodeChildUpdate(
   if (method.replace(/^_/, '') !== CHILD_UPDATE_METHOD) {
     return undefined
   }
-  const parsed = childSchema.safeParse(params)
+  const parsed = reportSchema.safeParse(params)
   if (!parsed.success) {
     return { disposition: 'ignore' }
   }
-  const { rootSessionId, childSessionId, parentSessionId, title, _meta } = parsed.data
+  const report = parsed.data
+  const { rootSessionId, childSessionId, parentSessionId, title, _meta } = report
   const label = title?.trim()
   const identity = {
     rootSessionId,
@@ -64,18 +67,17 @@ export function openCodeChildUpdate(
     ...(label ? { label } : {})
   }
   const replay = _meta?.isReplay === true ? { replay: true } : {}
-  const status = statusSchema.safeParse(params)
-  if (status.success) {
-    const state = CHILD_STATES.get(status.data.status)
-    const started = status.data.status === 'running' ? { started: true as const } : {}
+  if (report.type === 'status') {
+    const state = CHILD_STATES.get(report.status)
+    const started = report.status === 'running' ? { started: true as const } : {}
     return state
       ? { disposition: 'map', ...replay, child: { ...identity, state, ...started } }
       : { disposition: 'ignore' }
   }
-  const frame = frameSchema.safeParse(params)
-  const event = frame.success
-    ? readAcpSessionEvent({ sessionId: rootSessionId, update: ownTitle(frame.data.update, title) })
-    : null
+  const event = readAcpSessionEvent({
+    sessionId: rootSessionId,
+    update: ownTitle(report.update, title)
+  })
   return event?.kind === 'known'
     ? { disposition: 'map', ...replay, child: { ...identity, update: event.notification } }
     : { disposition: 'ignore' }

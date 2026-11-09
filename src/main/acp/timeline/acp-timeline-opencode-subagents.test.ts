@@ -29,6 +29,14 @@ function tools(rows: AgentJournalRenderItem[]) {
   )
 }
 
+function commands(rows: AgentJournalRenderItem[], agentId: string) {
+  return rows.flatMap((row) =>
+    row.agentId === agentId && row.body.kind === 'tool-call'
+      ? [(row.body.input as { command?: unknown } | null)?.command]
+      : []
+  )
+}
+
 function texts(rows: AgentJournalRenderItem[], agentId: string) {
   return rows.flatMap((row) =>
     row.agentId === agentId && row.body.kind === 'message'
@@ -43,7 +51,7 @@ function through(frames: AcpFixtureFrame[], matches: (text: string) => boolean, 
   return frames.slice(0, ends[index] + 1)
 }
 
-const opened = () => openAcpFixtureRig(OPENCODE_ACP_DIALECT)
+const opened = () => openAcpFixtureRig(OPENCODE_ACP_DIALECT, { journalOwnership: true })
 
 describe('OpenCode subagents through the shared timeline', () => {
   it('a subagent is one record that completes, and its own work is filed under it', async () => {
@@ -72,6 +80,7 @@ describe('OpenCode subagents through the shared timeline', () => {
     expect(tools(rows).filter((tool) => tool.agentId === 'session-2')).toEqual([
       { agentId: 'session-2', name: 'shell', state: 'completed' }
     ])
+    expect(commands(rows, 'session-2')).toEqual(['sleep 20'])
     expect(texts(rows, 'session-2')).toEqual(['DONE'])
   })
 
