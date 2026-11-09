@@ -6,6 +6,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { resolveUnattendedSetupDecision } from '../../../../../workspace-hooks/effective-hook-config'
 import { WORKER_START_VOCABULARY } from '../structured-workers/orchestration-worker-start-mode'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import { resolveWorkerWorktreeName } from '../worker/worker-worktree-creation'
@@ -78,7 +79,10 @@ export async function launchFederatedWorkerAgent(args: {
           dispatchId: params.dispatchId,
           stage: 'worktree_creating'
         })
-        const setupDecision = params.setup ?? 'run'
+        const setupDecision = resolveUnattendedSetupDecision(
+          await runtime.showRepo(repo),
+          params.setup
+        )
         const result = await runtime.createManagedWorktree({
           onStartupTerminalCreated: (terminal) => {
             terminalCreation = terminal
@@ -119,7 +123,7 @@ export async function launchFederatedWorkerAgent(args: {
           name: result.worktree.displayName
         })
         const setup: WorkerSetupReceipt = {
-          requested: setupDecision,
+          requested: params.setup ?? 'inherit',
           effective: setupDecision,
           source: args.setupSource,
           hookFound: result.setupReceipt?.hookFound ?? false,
