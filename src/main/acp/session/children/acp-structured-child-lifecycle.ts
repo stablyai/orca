@@ -62,7 +62,8 @@ export class AcpStructuredChildren {
 
   stopAfterFailure(sessionId: string, reason: string): void {
     const session = this.sessions.get(sessionId)
-    if (session) {
+    // An ending already under way (agent exit, requested close) keeps its own attribution.
+    if (session && !session.ended && !session.closeRequested) {
       session.failureClose ??= reason
     }
     void this.stop(sessionId, false).catch((error: unknown) => {
@@ -233,6 +234,8 @@ export class AcpStructuredChildren {
       return
     }
     const reason = `${session.spec.agent} ACP connection closed: ${error.message || error.name}`
+    // Record the cause first: publishing the close can re-enter cleanup through a refused write.
+    session.failureClose ??= reason
     closeAcpSessionJournal(session, reason, error)
     this.stopAfterFailure(session.sessionId, reason)
   }

@@ -104,3 +104,40 @@ it('holds later controls and prompts until a withdrawn write is answered', async
   await rig.frame('session/prompt')
   expect(rig.ended).toEqual([])
 })
+
+it.each([
+  {
+    end: 'the agent exits on its own',
+    trigger: (rig: AcpAdapterRig) => rig.child().exit(),
+    closedByOrca: undefined,
+    reason: /^grok ACP agent exited/
+  },
+  {
+    end: 'Orca loses its connection to the agent',
+    trigger: (rig: AcpAdapterRig) => rig.child().agent.stdin.destroy(),
+    closedByOrca: true,
+    reason: /^grok ACP connection closed/
+  }
+])(
+  'keeps who ended the agent when its final journal write is refused: $end',
+  async ({ trigger, closedByOrca, reason }) => {
+    const rig = await openAcpAdapterRig()
+    let refusing = false
+    const events = rig.rig.eventSink
+    const append = events.tryAppendTransition?.bind(events)
+    rig.rig.eventSink = {
+      ...events,
+      tryAppendTransition: (transition) =>
+        refusing ? { accepted: false, reason: 'failed' } : append!(transition)
+    }
+    await rig.acquire()
+    refusing = true
+    trigger(rig)
+    const [ended] = await waitFor(() => {
+      expect(rig.ended).toHaveLength(1)
+      return rig.ended
+    })
+    expect(ended?.closedByOrca).toBe(closedByOrca)
+    expect(ended?.reason).toMatch(reason)
+  }
+)
