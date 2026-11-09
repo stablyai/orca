@@ -6,11 +6,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import {
-  GRAB_BUDGET,
-  type BrowserAnnotationIntent,
-  type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+import { GRAB_BUDGET, type BrowserAnnotationIntent } from '../../../../../shared/browser-grab-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   BROWSER_ANNOTATION_INTENT_OPTIONS,
@@ -19,15 +15,25 @@ import {
 import { useBrowserAnnotationImages } from './use-browser-annotation-images'
 import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
 
+/** Design Mode's comment card; other annotate surfaces reuse it by describing their own target. */
 export function PendingBrowserAnnotationCard({
-  payload,
+  title,
+  tag,
+  tooltip,
+  ariaLabel,
   worktreeId,
   resolveAnchor,
   portalContainer,
   onAdd,
   onCancel
 }: {
-  payload: BrowserGrabPayload
+  /** What the note points at, e.g. an element's accessible name. */
+  title: string
+  /** Short kind badge before the title, e.g. a tag name. */
+  tag?: string
+  /** Full locator shown on hover; it reads as noise truncated to the card's width. */
+  tooltip?: string
+  ariaLabel: string
   worktreeId: string
   /** Anchor for a card of the given measured height; null until the card has rendered once. */
   resolveAnchor: (cardHeight: number | null) => BrowserOverlayAnchor
@@ -80,25 +86,19 @@ export function PendingBrowserAnnotationCard({
         collisionPadding={12}
         portalContainer={portalContainer}
         className="z-40 w-[22rem] max-w-[calc(var(--radix-popover-content-available-width)-1rem)] p-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-        aria-label={t(
-          'auto.components.browser.pane.BrowserPane.b472c5fe03',
-          'Add browser annotation'
-        )}
+        aria-label={ariaLabel}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
           onCancel()
         }}
       >
-        {/* Selector lives in the tooltip: truncated to a popover width it reads as noise. */}
-        <div className="mb-2 flex min-w-0 items-center gap-1.5" title={payload.target.selector}>
-          <span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">
-            {payload.target.tagName}
-          </span>
-          <span className="truncate text-xs font-medium text-foreground">
-            {payload.target.accessibility.accessibleName ||
-              payload.target.textSnippet ||
-              payload.target.selector}
-          </span>
+        <div className="mb-2 flex min-w-0 items-center gap-1.5" title={tooltip}>
+          {tag ? (
+            <span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">
+              {tag}
+            </span>
+          ) : null}
+          <span className="truncate text-xs font-medium text-foreground">{title}</span>
         </div>
         <Label htmlFor="browser-annotation-comment" className="sr-only">
           {t('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}

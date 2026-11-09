@@ -8,14 +8,15 @@ export type BrowserAnnotationSendMenuContentProps = {
   worktreeId: string
   groupId: string
   prompt: string
-  includePageDetails: boolean
-  onIncludePageDetailsChange: (include: boolean) => void
+  includePageDetails?: boolean
+  /** Omit to hide the "Include page details" option. */
+  onIncludePageDetailsChange?: (include: boolean) => void
   onPromptDelivered?: () => void
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export function browserAnnotationCopyTooltip(
-  includePageDetails: boolean,
+  includePageDetails: boolean | undefined,
   t: Translate = translate
 ): string {
   return includePageDetails
@@ -51,17 +52,21 @@ export function BrowserAnnotationSendMenuContent({
         onPromptDelivered={onPromptDelivered}
         onPromptHandedOff={onPromptHandedOff}
       />
-      <DropdownMenuSeparator />
-      <DropdownMenuCheckboxItem
-        checked={includePageDetails}
-        onCheckedChange={onIncludePageDetailsChange}
-        onSelect={(event) => event.preventDefault()}
-      >
-        {t(
-          'auto.components.browser.pane.annotate.browser.page.annotation.tray.includePageDetails',
-          'Include page details'
-        )}
-      </DropdownMenuCheckboxItem>
+      {onIncludePageDetailsChange ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem
+            checked={includePageDetails}
+            onCheckedChange={onIncludePageDetailsChange}
+            onSelect={(event) => event.preventDefault()}
+          >
+            {t(
+              'auto.components.browser.pane.annotate.browser.page.annotation.tray.includePageDetails',
+              'Include page details'
+            )}
+          </DropdownMenuCheckboxItem>
+        </>
+      ) : null}
     </>
   )
 }
