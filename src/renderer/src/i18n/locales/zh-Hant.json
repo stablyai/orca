@@ -16747,7 +16747,8 @@
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
           "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
-          "stoppedAfterSilence": "靜音一分鐘後已停止"
+          "stoppedAfterSilence": "靜音一分鐘後已停止",
+          "retryUnmatched": "重試時無法判斷哪些字詞已輸入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",
@@ -16755,7 +16756,21 @@
           "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
-          "4977162383": "聲音太大"
+          "4977162383": "聲音太大",
+          "finishing": "正在完成…",
+          "listening": "正在聆聽…",
+          "cancel": "取消",
+          "finish": "完成",
+          "oneMinuteLeft": "剩下 1 分鐘。",
+          "sendsWhenLanded": "文字送達後傳送",
+          "entersWhenLanded": "文字送達後按 Enter"
+        },
+        "DictationPillFailure": {
+          "discard": "捨棄錄音",
+          "modelFailed": "無法載入語音模型。",
+          "transcribeFailed": "無法轉錄。已保留錄音。",
+          "openSettings": "開啟設定",
+          "retry": "重試"
         }
       },
       "dashboard": {
