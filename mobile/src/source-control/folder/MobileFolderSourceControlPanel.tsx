@@ -80,6 +80,8 @@ export function MobileFolderSourceControlPanel({
     refetch,
     bottomInset: insets.bottom
   })
+  // Rows and repositories under the create form wait; the folder's members stay live so creates still reconcile.
+  const statusObserving = observing && !createFlow.composerOpen
   const refresh = () => {
     refetch()
     for (const refreshNow of refreshers) {
@@ -140,7 +142,7 @@ export function MobileFolderSourceControlPanel({
         folder={folder}
         desktopCapabilities={desktopCapabilities}
         folderHostCapabilities={folderHostGates?.hostCapabilities ?? NO_CAPABILITIES}
-        observing={observing}
+        observing={statusObserving}
         refreshers={refreshers}
         onCreate={(repo, target, client, createName) =>
           void createFlow.onCreate(repo, target, client, createName)
@@ -162,7 +164,7 @@ export function MobileFolderSourceControlPanel({
                 serverHosts.find((server) => server.hostId === worktree.hostId)?.relay ===
                 'update-needed'
               }
-              subscribed={observing}
+              subscribed={statusObserving}
               refreshers={refreshers}
               onOpen={open}
             />

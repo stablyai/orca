@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Repo } from '../../../../src/shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
+import { ConfirmModal } from '../../components/ConfirmModal'
 import { NewWorktreeModalController } from '../../components/NewWorktreeModalController'
 import type { MobileWorkspaceRepo } from '../../components/new-worktree-modal-types'
 import { TransientToast, useTransientToast } from '../../components/TransientToast'
@@ -24,6 +25,13 @@ const NO_LABELS = new Map()
 
 /** What a create reads of a repository: its id, name and host. */
 export type FolderCreateRepo = Pick<Repo, 'id' | 'displayName' | 'connectionId' | 'executionHostId'>
+
+type SetupChoice = {
+  repo: FolderCreateRepo
+  target: FolderRepoTarget
+  client: RpcClient
+  name: string
+}
 
 type ComposerLaunch = {
   target: FolderRepoTarget
@@ -52,6 +60,7 @@ export function useFolderCreateFlow(args: {
   const { client: desktopClient } = useHostClient(hostId)
   const { message, showToast } = useTransientToast()
   const [composer, setComposer] = useState<ComposerLaunch | null>(null)
+  const [setupChoice, setSetupChoice] = useState<SetupChoice | null>(null)
   // Set as forms open and close, not after render, so two refusals landing together can't both open one.
   const composerRef = useRef<ComposerLaunch | null>(null)
   // The newest opening: an older form's late answer shows nothing over it.
@@ -86,8 +95,14 @@ export function useFolderCreateFlow(args: {
   }, [createsVersion, executionHost, folderWorktreeId, hostId, members])
 
   const onCreate = useCallback(
-    async (repo: FolderCreateRepo, target: FolderRepoTarget, client: RpcClient, name: string) => {
-      const outcome = await createFolderRepoWorktree({ target, client, name })
+    async (
+      repo: FolderCreateRepo,
+      target: FolderRepoTarget,
+      client: RpcClient,
+      name: string,
+      setupDecision?: 'skip'
+    ) => {
+      const outcome = await createFolderRepoWorktree({ target, client, name, setupDecision })
       if (outcome.kind === 'created' || outcome.kind === 'maybe-created') {
         refetch()
       }
@@ -108,6 +123,8 @@ export function useFolderCreateFlow(args: {
               repo: repo.displayName
             })
         )
+      } else if (outcome.kind === 'needs-setup-choice') {
+        setSetupChoice({ repo, target, client, name })
       } else if (outcome.kind === 'needs-composer') {
         const launch = {
           target,
@@ -150,12 +167,24 @@ export function useFolderCreateFlow(args: {
               name: launch.name,
               parentWorkspace: folderWorktreeId,
               submit: {
-                begin: (repo: MobileWorkspaceRepo) =>
-                  beginFolderComposerSubmission(
+                begin: (repo: MobileWorkspaceRepo) => {
+                  const submission = beginFolderComposerSubmission(
                     { ...launch.target, repoId: repo.id },
                     launch,
                     () => composerRef.current === launch
-                  ),
+                  )
+                  return (
+                    submission && {
+                      settle: (outcome) => {
+                        submission.settle(outcome)
+                        // A lost reply may have created it: the list shows it, or the form keeps it from being sent twice.
+                        if (outcome === 'uncertain') {
+                          refetch()
+                        }
+                      }
+                    }
+                  )
+                },
                 presenting: () => presentingLaunch(launch)
               }
             }
@@ -184,6 +213,41 @@ export function useFolderCreateFlow(args: {
       }}
     />
   )
+  const setupChoiceElement = (
+    <ConfirmModal
+      visible={setupChoice !== null}
+      title={t('sourceControl.folder.setupChoiceTitle', 'Retry without setup?')}
+      message={t(
+        'sourceControl.folder.setupChoiceMessage',
+        "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
+        { repo: setupChoice?.repo.displayName ?? '' }
+      )}
+      confirmLabel={t('sourceControl.folder.setupChoiceSkip', 'Retry without setup')}
+      onConfirm={() => {
+        if (setupChoice) {
+          setSetupChoice(null)
+          void onCreate(
+            setupChoice.repo,
+            setupChoice.target,
+            setupChoice.client,
+            setupChoice.name,
+            'skip'
+          )
+        }
+      }}
+      onCancel={() => setSetupChoice(null)}
+    />
+  )
   const toastElement = <TransientToast message={message} bottomInset={args.bottomInset} />
-  return { onCreate, composerElement, toastElement }
+  return {
+    onCreate,
+    composerOpen: composer !== null,
+    composerElement: (
+      <>
+        {composerElement}
+        {setupChoiceElement}
+      </>
+    ),
+    toastElement
+  }
 }

@@ -83,14 +83,17 @@ function release(operation: Operation): void {
   }
 }
 
-function hold(operation: Operation): void {
+function hold(operation: Operation, busy = true): void {
   if (!isCurrent(operation)) {
     return
   }
   // A new identity, so an earlier hold's timer can't end this one.
-  const held = { ...operation, id: nextId++, phase: 'held' as const, busy: true }
+  const held = { ...operation, id: nextId++, phase: 'held' as const, busy }
   operations.set(folderRepoCreateKey(held), held)
   notify()
+  if (!busy) {
+    return
+  }
   setTimeout(() => {
     if (isCurrent(held)) {
       operations.set(folderRepoCreateKey(held), { ...held, busy: false })
@@ -133,6 +136,8 @@ export type FolderRepoCreateOutcome =
   | { kind: 'needs-composer'; reservation: number }
   /** The host may have created it: the reply was lost, or a resend was refused as taken. */
   | { kind: 'maybe-created' }
+  /** An unconfirmed create's resend needs a setup choice; it is resent as the same exact name with it. */
+  | { kind: 'needs-setup-choice' }
   | { kind: 'failed'; message: string }
   | { kind: 'already-running' }
 
@@ -145,6 +150,8 @@ export async function createFolderRepoWorktree(args: {
   /** The client that creates: the desktop's own, or scoped to the folder's server. */
   client: RpcClient
   name: string
+  /** Chosen for an unconfirmed create's resend; otherwise the repo's own setup policy. */
+  setupDecision?: 'skip'
 }): Promise<FolderRepoCreateOutcome> {
   const existing = operations.get(folderRepoCreateKey(args.target))
   if (existing && (existing.phase !== 'held' || existing.busy)) {
@@ -174,7 +181,7 @@ export async function createFolderRepoWorktree(args: {
         displayName: name,
         displayNameKind: 'user',
         branchIntent: 'create-exact',
-        setupDecision: 'inherit',
+        setupDecision: args.setupDecision ?? 'inherit',
         parentWorkspace: args.target.folderWorktreeId,
         parentWorkspaceOrigin: 'manual'
       })
@@ -191,10 +198,16 @@ export async function createFolderRepoWorktree(args: {
     if (taken && (result.replayed || unresolved)) {
       return settleUnresolved({ kind: 'maybe-created' })
     }
+    const needsSetup = result.error.includes(SETUP_DECISION_REQUIRED)
+    if (unresolved && needsSetup) {
+      // That refusal did no git work, but says nothing about the earlier create; it stays unconfirmed.
+      hold(operation, false)
+      return { kind: 'needs-setup-choice' }
+    }
     if (unresolved) {
       return settleUnresolved({ kind: 'failed', message: result.error })
     }
-    if (taken || result.error.includes(SETUP_DECISION_REQUIRED)) {
+    if (taken || needsSetup) {
       const reserved = { ...operation, phase: 'composing' as const }
       operations.set(folderRepoCreateKey(reserved), reserved)
       notify()

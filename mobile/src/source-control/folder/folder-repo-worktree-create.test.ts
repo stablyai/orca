@@ -141,6 +141,32 @@ describe('createFolderRepoWorktree', () => {
     await createFolderRepoWorktree({ target: repo, client: retry, name: 'billing' })
     expect(retry.sendRequest.mock.calls[0]?.[1]).toMatchObject({ name: 'payments' })
   })
+
+  it('asks for setup when an unconfirmed create is refused for it, and resends the same exact name', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const repo = target()
+    await create(repo, host(markRpcDeliveryUnknown(new Error('connection lost'))))
+    vi.advanceTimersByTime(60_000)
+
+    const asked = host(refused('Setup decision required for this repository'))
+    await expect(create(repo, asked)).resolves.toEqual({ kind: 'needs-setup-choice' })
+    expect(isFolderRepoCreateBusy(repo)).toBe(false)
+
+    const resent = host(refused(TAKEN))
+    await expect(
+      createFolderRepoWorktree({
+        target: repo,
+        client: resent,
+        name: 'billing',
+        setupDecision: 'skip'
+      })
+    ).resolves.toEqual({ kind: 'maybe-created' })
+    expect(resent.sendRequest.mock.calls[0]?.[1]).toMatchObject({
+      name: 'payments',
+      branchIntent: 'create-exact',
+      setupDecision: 'skip'
+    })
+  })
 })
 
 describe('createFolderRepoWorktree after a lost reply on a host that dedupes', () => {
@@ -247,5 +273,18 @@ describe('beginFolderComposerSubmission', () => {
     releaseFolderComposerReservation(repo, launch.reservation)
     expect(isFolderRepoCreateBusy(repo)).toBe(false)
     expect(isFolderRepoCreateBusy(other)).toBe(true)
+  })
+  it("never sends a form's lost create again: the form is refused and a card tap resends only the exact name", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { repo, launch } = await composing()
+    beginFolderComposerSubmission(repo, launch, () => true)?.settle('uncertain')
+    vi.advanceTimersByTime(60_000)
+
+    expect(beginFolderComposerSubmission(repo, launch, () => true)).toBeNull()
+    const tap = host(refused(TAKEN))
+    await expect(create(repo, tap)).resolves.toEqual({ kind: 'maybe-created' })
+    expect(tap.sendRequest.mock.calls.map(([, params]) => params)).toEqual([
+      expect.objectContaining({ name: 'payments', branchIntent: 'create-exact' })
+    ])
   })
 })

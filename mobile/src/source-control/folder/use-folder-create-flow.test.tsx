@@ -2,6 +2,7 @@ import { createElement, Fragment } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import { markRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { NewWorktreeModalProps } from '../../components/new-worktree-modal-types'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
@@ -9,17 +10,24 @@ import { isFolderRepoCreateBusy, type FolderRepoTarget } from './folder-repo-wor
 import { useFolderCreateFlow, type FolderCreateRepo } from './use-folder-create-flow'
 
 const seen = vi.hoisted(() => {
-  const state: { composer: NewWorktreeModalProps | null; toasts: string[]; haptics: number } = {
-    composer: null,
-    toasts: [],
-    haptics: 0
-  }
+  const state: {
+    composer: NewWorktreeModalProps | null
+    confirm: { visible: boolean; onConfirm?: () => void } | null
+    toasts: string[]
+    haptics: number
+  } = { composer: null, confirm: null, toasts: [], haptics: 0 }
   return state
 })
 vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../../components/NewWorktreeModalController', () => ({
   NewWorktreeModalController: (props: NewWorktreeModalProps) => {
     seen.composer = props
+    return null
+  }
+}))
+vi.mock('../../components/ConfirmModal', () => ({
+  ConfirmModal: (props: { visible: boolean; onConfirm?: () => void }) => {
+    seen.confirm = props
     return null
   }
 }))
@@ -112,9 +120,11 @@ const composer = (): NewWorktreeModalProps => {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   act(() => renderer?.unmount())
   renderer = null
   seen.composer = null
+  seen.confirm = null
   seen.toasts = []
   seen.haptics = 0
 })
@@ -205,5 +215,41 @@ describe('useFolderCreateFlow', () => {
     act(() => renderer?.unmount())
     renderer = null
     expect(isFolderRepoCreateBusy(repo.target)).toBe(false)
+  })
+  it('resends an unconfirmed create without setup once the user agrees', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { flow } = mountFlow(() => {})
+    const a = repoIn()
+    const lost = new FakeSession('connected')
+    lost.sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('connection lost')))
+    await act(() => flow.current!.onCreate(a.repo, a.target, lost, 'payments'))
+    vi.advanceTimersByTime(60_000)
+
+    const retry = new FakeSession('connected')
+    retry.sendRequest
+      .mockResolvedValueOnce({
+        id: '1',
+        ok: false,
+        error: { code: 'x', message: 'Setup decision required for this repository' }
+      })
+      .mockResolvedValueOnce(CREATED)
+    await act(() => flow.current!.onCreate(a.repo, a.target, retry, 'payments'))
+    expect(seen.confirm?.visible).toBe(true)
+
+    await act(async () => seen.confirm?.onConfirm?.())
+    expect(retry.sendRequest.mock.calls[1]?.[1]).toMatchObject({
+      name: 'payments',
+      branchIntent: 'create-exact',
+      setupDecision: 'skip'
+    })
+  })
+  it("refreshes the folder when a form's create may have landed", async () => {
+    const refetch = vi.fn()
+    const { flow } = mountFlow(refetch)
+    const b = repoIn()
+    const form = await openComposer(flow, b)
+
+    form.folderLaunch?.submit.begin({ ...b.repo, path: '/w/b' })?.settle('uncertain')
+    expect(refetch).toHaveBeenCalledTimes(1)
   })
 })

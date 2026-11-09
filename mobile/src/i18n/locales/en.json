@@ -3595,7 +3595,10 @@
       "created": "Created worktree {{name}} in {{repo}}",
       "createdNamed": "Created worktree {{name}}",
       "createFailed": "Could not create a worktree in {{repo}}.",
-      "loadReposRetry": "Load repositories"
+      "loadReposRetry": "Load repositories",
+      "setupChoiceTitle": "Retry without setup?",
+      "setupChoiceMessage": "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
+      "setupChoiceSkip": "Retry without setup"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",

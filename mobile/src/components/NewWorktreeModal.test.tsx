@@ -64,6 +64,7 @@ vi.mock('../host-screen/host-list-queries', () => ({
 
 import '../transport/hosts/host-descriptor-store'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import '../../../src/shared/execution-host'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
@@ -227,14 +228,14 @@ describe('NewWorktreeModal project targets', () => {
     expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
   })
 
-  it('creates from a folder attached to that folder, on its host', async () => {
+  async function submitFromFolder(createReply: () => Promise<RpcResponse>) {
     const serverRepo = { ...repos[0]!, path: '/srv/orca' }
     const server = requestsOnly(
       vi.fn((method: string) =>
         method === 'repo.list'
           ? replied({ repos: [serverRepo] })
           : method === 'worktree.create'
-            ? replied({ worktree: { id: 'repo-1::/srv/w/payments', displayName: 'payments' } })
+            ? createReply()
             : Promise.reject(new Error(`unexpected ${method}`))
       )
     )
@@ -268,7 +269,14 @@ describe('NewWorktreeModal project targets', () => {
     const creates = vi
       .mocked(server.sendRequest)
       .mock.calls.filter(([method]) => method === 'worktree.create')
-    expect(creates.map(([, params]) => params)).toEqual([
+    return { creates: creates.map(([, params]) => params), settle }
+  }
+
+  it('creates from a folder attached to that folder, on its host', async () => {
+    const { creates, settle } = await submitFromFolder(() =>
+      replied({ worktree: { id: 'repo-1::/srv/w/payments', displayName: 'payments' } })
+    )
+    expect(creates).toEqual([
       expect.objectContaining({
         repo: 'id:repo-1',
         parentWorkspace: 'folder:f-1',
@@ -276,6 +284,14 @@ describe('NewWorktreeModal project targets', () => {
       })
     ])
     expect(settle).toHaveBeenCalledWith('created')
+  })
+
+  it("doesn't try another name when a folder create's reply is lost", async () => {
+    const { creates, settle } = await submitFromFolder(() =>
+      Promise.reject(markRpcDeliveryUnknown(new Error('connection lost')))
+    )
+    expect(creates).toHaveLength(1)
+    expect(settle).toHaveBeenCalledWith('uncertain')
   })
 
   it('ignores a stale repo list after the client changes', async () => {

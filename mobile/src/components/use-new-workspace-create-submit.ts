@@ -110,7 +110,9 @@ export function useNewWorkspaceCreateSubmit(args: {
     let outcome: Parameters<NewWorktreeFolderSubmission['settle']>[0] = 'cancelled'
     try {
       if (admission === null) {
-        args.setError('A worktree is already being created in this repository.')
+        args.setError(
+          'A worktree in this repository is still being created or checked. It shows in the folder once it lands.'
+        )
         return
       }
       if (args.sshGate.requiresConnection) {
@@ -236,6 +238,13 @@ export function useNewWorkspaceCreateSubmit(args: {
     } catch (error) {
       // A lost reply may still have created it.
       outcome = isRpcDeliveryUnknown(error) ? 'uncertain' : 'failed'
+      if (folder && outcome === 'uncertain') {
+        // The folder screen refreshes and holds it until its list shows it; sending again could create a second one.
+        args.setError(
+          'This worktree may have been created. Check the folder before creating another.'
+        )
+        return
+      }
       if (presenting()) {
         triggerError()
       }
