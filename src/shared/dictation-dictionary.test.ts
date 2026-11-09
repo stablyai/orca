@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createDictationDictionary, mergeDictationTerms } from './dictation-dictionary'
+import {
+  createDictationDictionary,
+  dictationTermsFor,
+  dictationVocabulary
+} from './dictation-dictionary'
 import { createDictationTextPipeline } from './dictation-text-pipeline'
 
 const spell = (terms: Parameters<typeof createDictationDictionary>[0], text: string): string =>
@@ -55,8 +59,21 @@ describe('createDictationDictionary', () => {
     )
   })
 
+  it('lets the repo name join its spoken words but never recase a single word', () => {
+    const oneWord = dictationTermsFor({}, { displayName: 'orca' })
+    const words = dictationTermsFor({}, { displayName: 'dd-scratch-repo' })
+
+    expect(createDictationDictionary(oneWord)).toBeNull()
+    expect(dictationVocabulary(oneWord)).toEqual(['orca'])
+    expect(spell(words, 'Open dd scratch repo now.')).toBe('Open dd-scratch-repo now.')
+    expect(dictationTermsFor({ dictationRepoNameHint: false }, { displayName: 'orca' })).toEqual([])
+  })
+
   it("prefers a repo's spelling over a personal one", () => {
-    const terms = mergeDictationTerms([{ term: 'RPC' }], [{ term: 'rpc' }])
+    const terms = dictationTermsFor(
+      { dictationTerms: [{ term: 'rpc' }] },
+      { dictationTerms: [{ term: 'RPC' }] }
+    )
     expect(spell(terms, 'Call the rpc.')).toBe('Call the RPC.')
   })
 })

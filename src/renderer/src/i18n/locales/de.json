@@ -11299,7 +11299,10 @@
               "modelMemoryKeyword": "speicher",
               "fillerWordsTitle": "Füllwörter entfernen",
               "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
-              "fillerWordsKeyword": "füllwörter"
+              "fillerWordsKeyword": "füllwörter",
+              "vocabularyTitle": "Wortschatz",
+              "vocabularyDescription": "Namen und Code-Begriffe, die das Diktat auf deine Weise schreibt, für dich oder ein Repo.",
+              "vocabularyKeyword": "wörterbuch"
             }
           }
         },
@@ -20746,6 +20749,24 @@
           "local": "Auf diesem Computer",
           "cloudDescription": "Cloud-Modelle senden deine Audiodaten an den Anbieter. Modelle auf diesem Computer behalten sie hier.",
           "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast."
+        },
+        "vocabulary": {
+          "title": "Wortschatz",
+          "description": "Namen und Code-Begriffe, die du auf deine Weise geschrieben haben willst. Gib an, wie das Modell sie falsch hört, wenn es sie immer wieder verwechselt.",
+          "repoScope": "Nur beim Diktieren in {{repo}}.",
+          "personalScope": "In jedem Repo.",
+          "scope": "Begriffe für",
+          "personal": "Persönlich · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} entfernen",
+          "term": "Wort oder Wendung",
+          "heardAs": "Gehört als (optional)",
+          "heardAsLabel": "Gehört als",
+          "add": "Hinzufügen",
+          "repoNameHint": "Repo-Namen als Hinweis verwenden",
+          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
+          "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
         }
       },
       "repositoryHooks": {
