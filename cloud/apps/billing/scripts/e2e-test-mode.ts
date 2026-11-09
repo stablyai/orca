@@ -150,7 +150,8 @@ async function answer3ds(page: import('playwright-core').Page, action: 'complete
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     for (const frame of page.frames()) {
-      const button = frame.locator(selector)
+      // The test ACS page's button ids aren't always present; its labels are COMPLETE / FAIL.
+      const button = frame.locator(selector).or(frame.getByRole('button', { name: action === 'complete' ? /^complete$/i : /^fail$/i }))
       if (await button.count().catch(() => 0)) {
         await button.first().click()
         return true
@@ -191,23 +192,28 @@ async function completeCheckout(
     await page.locator('[data-testid="hosted-payment-submit-button"], .SubmitButton').first().click()
     const challenged = threeDS ? await answer3ds(page, threeDS) : false
     const succeeded = page
-      .waitForURL((current) => current.searchParams.get('checkout') === 'success', { timeout: 90_000 })
+      // 'commit': /return hands off to orca:// via meta refresh, so "load" may never fire headless.
+      .waitForURL((current) => current.searchParams.get('checkout') === 'success', { timeout: 90_000, waitUntil: 'commit' })
       .then(() => true)
+    // Settles to false on timeout so the decline path never leaves a rejection unhandled.
+    const redirect = succeeded.catch(() => false)
     if (!expectSuccess) {
       // A decline keeps the buyer on Checkout with an inline error; no redirect may follow.
       const error = page.locator('.FieldError, [role="alert"], .ConfirmPaymentButton-error, [data-testid="error-message"]')
       await error.filter({ hasText: /\S/ }).first().waitFor({ timeout: 90_000 }).catch(() => undefined)
-      const redirected = await Promise.race([succeeded.catch(() => false), sleep(10_000).then(() => false)])
+      const redirected = await Promise.race([redirect, sleep(10_000).then(() => false)])
       const text = (await error.allInnerTexts().catch(() => [])).join(' ').replace(/\s+/g, ' ').trim()
+      if (!text && process.env.E2E_SCREENSHOT_DIR) {
+        await page.screenshot({ path: `${process.env.E2E_SCREENSHOT_DIR}/checkout-decline-${card.slice(-4)}.png`, fullPage: true })
+      }
       return { success: redirected, challenged, error: text }
     }
-    try {
-      await succeeded
-    } catch (error) {
+    // A missed redirect fails the caller's checks (and still reaches cleanup) instead of aborting the run.
+    if (!(await redirect)) {
       if (process.env.E2E_SCREENSHOT_DIR) {
         await page.screenshot({ path: `${process.env.E2E_SCREENSHOT_DIR}/checkout-failure.png`, fullPage: true })
       }
-      throw error
+      return { success: false, challenged, error: 'no redirect to /return?checkout=success' }
     }
     return { success: true, challenged, error: '' }
   } finally {
@@ -411,7 +417,7 @@ const threeDsEnt = await until('3DS subscription active', () => entitlement(orgD
 ids.threeDsSession = threeDsSession.id
 ids.threeDsCustomer = threeDsSession.customer ?? ''
 ids.threeDsSubscription = threeDsSession.subscription ?? ''
-check('3DS card (3155): challenge completed in Checkout -> Team active', threeDs.challenged && threeDsSession.status === 'complete' &&
+check('3DS card (3155): challenge completed in Checkout -> Team active', threeDs.success && threeDs.challenged && threeDsSession.status === 'complete' &&
   threeDsSession.payment_status === 'paid' && threeDsEnt.status === 'active' && threeDsEnt.seats === 2, { threeDs, status: threeDsEnt.status })
 if (ids.threeDsSubscription) {
   const sub = await stripe<{ latest_invoice: { payments?: { data: Array<{ payment: { payment_intent?: string } }> } } }>('GET',
