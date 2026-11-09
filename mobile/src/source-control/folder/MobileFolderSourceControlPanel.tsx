@@ -16,7 +16,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
 import { WorkspaceExecutionScope } from '../../navigation/workspace-route'
-import { spacing } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
@@ -127,13 +127,14 @@ export function MobileFolderSourceControlPanel({
         )}
       />
     ) : (
+      // One card per attached worktree, as desktop's cards and the phone's option sheets show them.
       <ScrollView
+        style={styles.surface}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.lg }]}
       >
-        <ListGroup>
-          {worktrees.map((worktree) => (
+        {worktrees.map((worktree) => (
+          <ListGroup key={getWorktreeRowIdentity(worktree)}>
             <MobileFolderWorktreeRow
-              key={getWorktreeRowIdentity(worktree)}
               hostId={hostId}
               desktopCapabilities={desktopCapabilities}
               worktree={worktree}
@@ -145,8 +146,8 @@ export function MobileFolderSourceControlPanel({
               refreshers={refreshers}
               onOpen={open}
             />
-          ))}
-        </ListGroup>
+          </ListGroup>
+        ))}
       </ScrollView>
     )
   const main = (
@@ -193,7 +194,11 @@ export function MobileFolderSourceControlPanel({
 }
 
 const styles = themedStyleSheet(() => ({
+  surface: {
+    backgroundColor: colors.sheetSurface
+  },
   list: {
-    padding: spacing.lg
+    padding: spacing.lg,
+    gap: spacing.sm
   }
 }))
