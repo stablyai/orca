@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { showsAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark

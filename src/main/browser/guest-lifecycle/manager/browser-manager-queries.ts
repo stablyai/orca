@@ -113,6 +113,13 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)
   }
 
+  getBrowserPageRemoteTabFaviconUrl(browserPageId: string): string | null {
+    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    return webContentsId === undefined
+      ? null
+      : (this.remoteTabFaviconUrlByGuestId.get(webContentsId) ?? null)
+  }
+
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
     return this.certificateTrustController?.getFailure(browserPageId) ?? null
   }

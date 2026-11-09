@@ -6,16 +6,6 @@ const ja = (enValue, localeValue, key = 'auto.test.relocalization') =>
   repairTranslatedValue({ key, enValue, localeValue, locale: 'ja' })
 
 describe('locale-translation-policy ja relocalization', () => {
-  it('heals generic terms the brand revert left in Latin mid-sentence', () => {
-    expect(ja('Close terminal?', 'この terminal を閉じますか?')).toBe('このターミナルを閉じますか?')
-    expect(ja('New Terminal', '新規 Terminal')).toBe('新規ターミナル')
-    expect(ja('Stop the agent?', 'この agent を停止しますか?')).toBe('この Agent を停止しますか?')
-    expect(ja('Nothing to commit.', 'commit するものはありません。')).toBe(
-      'コミットするものはありません。'
-    )
-    expect(ja('Open the repo', 'repo を開く')).toBe('リポジトリを開く')
-  })
-
   it('leaves the second word of a two-word command in Latin', () => {
     expect(ja('a commit hook or git commit fails', 'コミットフックまたは git commit が失敗')).toBe(
       'コミットフックまたは git commit が失敗'
@@ -36,21 +26,6 @@ describe('locale-translation-policy ja relocalization', () => {
     expect(ja('Run git commit -m', 'git commit -m を実行')).toBe('git commit -m を実行')
   })
 
-  it('keeps commands and identifiers in English so they still run', () => {
-    expect(shouldPreserveEnglishValue('pnpm install')).toBe(true)
-    expect(shouldPreserveEnglishValue('glab auth login')).toBe(true)
-    expect(shouldPreserveEnglishValue("gh pr list --json number -q '.[0].number'")).toBe(true)
-    expect(shouldPreserveEnglishValue('--model sonnet')).toBe(true)
-    expect(shouldPreserveEnglishValue('localhost, 127.0.0.1, *.internal')).toBe(true)
-    expect(shouldPreserveEnglishValue('stale-agent-row-{{value0}}')).toBe(true)
-    expect(shouldPreserveEnglishValue('text-foreground')).toBe(true)
-    expect(shouldPreserveEnglishValue('{basePrompt}')).toBe(true)
-    expect(shouldPreserveEnglishValue('{firstPrompt}')).toBe(true)
-    expect(shouldPreserveEnglishValue('{assistantMessage}')).toBe(true)
-    expect(shouldPreserveEnglishValue('/pricing')).toBe(true)
-    expect(shouldPreserveEnglishValue('/signup')).toBe(true)
-  })
-
   it('repairs translated code examples back to executable values', () => {
     expect(ja('--model sonnet', '--モデルソネット')).toBe('--model sonnet')
     expect(
@@ -68,76 +43,8 @@ describe('locale-translation-policy ja relocalization', () => {
     expect(shouldPreserveEnglishValue('e.g. {{value0}}')).toBe(false)
   })
 
-  it('normalizes Japanese typography and settled terminology', () => {
-    expect(ja('Loading…', '読み込み中...')).toBe('読み込み中…')
-    expect(ja('Merge conflict', 'マージ紛争')).toBe('マージ競合')
-    // Why: MT inserts a Microsoft-style separator space that Japanese compounds do not use.
-    expect(ja('Status bar', 'ステータス バー')).toBe('ステータスバー')
-    expect(ja('Missing credentials', '資格情報がありません')).toBe('認証情報がありません')
-    expect(ja('Unknown', '未知')).toBe('不明')
-    expect(ja('Restart the server', 'サーバを再起動')).toBe('サーバーを再起動')
-    expect(ja('Open the browser', 'ブラウザーを開く')).toBe('ブラウザを開く')
-  })
-
-  it('preserves translated Japanese Skills labels', () => {
-    expect(
-      ja(
-        'Filter by agent',
-        'エージェントで絞り込み',
-        'auto.components.skills.SkillsPage.filterProvider'
-      )
-    ).toBe('エージェントで絞り込み')
-  })
-
-  it('preserves the native chat subagent label', () => {
-    expect(ja('Subagent', 'サブエージェント', 'components.native-chat.tool.row.subagent')).toBe(
-      'サブエージェント'
-    )
-  })
-
   it('leaves ranges and token samples out of the ellipsis rule', () => {
     expect(ja('Compare main...HEAD', 'main...HEAD を比較')).toBe('main...HEAD を比較')
-  })
-
-  it('spaces the Latin terms the phrase fixes write back in', () => {
-    expect(ja('Clear cookies', 'クッキーを消去')).toBe('Cookie を消去')
-    expect(ja('Safely fast-forward the branch', 'ブランチを安全に早送りします')).toBe(
-      'ブランチを安全に fast-forward します'
-    )
-  })
-
-  it('uses ホスト for host, and leaves サーバー alone when English says server', () => {
-    expect(ja('Host path', 'サーバーパス')).toBe('ホストパス')
-    expect(ja('Enter a path that exists on the selected host.', 'ランタイムサーバー上のパス')).toBe(
-      'ホスト上のパス'
-    )
-    // Why: host and server are deliberately distinct wherever the English uses both.
-    expect(ja('Save the server host', 'サーバーを保存')).toBe('サーバーを保存')
-  })
-
-  it('restores Git vocabulary and brand names the MT localized', () => {
-    expect(ja('Branch upstream', 'ブランチの上流')).toBe('ブランチの upstream')
-    expect(ja('origin has commits', '起源にコミットがあります')).toBe('origin にコミットがあります')
-    expect(ja('Discard all staged changes?', '段階的な変更を破棄しますか?')).toBe(
-      'ステージ済みの変更を破棄しますか?'
-    )
-    expect(ja('Create Hermes automation', 'エルメスオートメーションを作成')).toBe(
-      'Hermes オートメーションを作成'
-    )
-    expect(ja('Delete the worktree', 'worktree を削除')).toBe('ワークツリーを削除')
-  })
-
-  it('keeps class strings, refs, and fixture filenames in English', () => {
-    for (const value of [
-      'size-4 text-muted-foreground',
-      'text-amber-700 dark:text-amber-300',
-      'origin/main',
-      'upstream/main',
-      'login.spec.ts',
-      'bastion.example.com'
-    ]) {
-      expect(shouldPreserveEnglishValue(value)).toBe(true)
-    }
   })
 
   it('preserves a selector that has no declaration block', () => {

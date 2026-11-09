@@ -15,7 +15,7 @@ import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { emulatorErrorText, emulatorMessageText } from '@/lib/emulator-error-copy'
+import { emulatorErrorText, emulatorMessageText } from '@/lib/simulator/launch/emulator-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type SimulatorDeviceRow = {

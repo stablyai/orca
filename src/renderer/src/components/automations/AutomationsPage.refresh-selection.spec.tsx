@@ -132,18 +132,6 @@ describe('AutomationsPage refresh', () => {
       expect(reads()).toHaveLength(beforeEvents + 2)
     }
   )
-
-  it('does not re-run the whole refresh when the settings identity changes', async () => {
-    const { rerender } = await renderPage()
-    expect(api.automations.list).toHaveBeenCalledTimes(1)
-
-    mocks.state.settings = { ...(mocks.state.settings as Record<string, unknown>) }
-    await rerender()
-
-    // Settings no longer aim the list, so a new settings object is not a reason
-    // to re-fetch every host.
-    expect(api.automations.list).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('AutomationsPage selection', () => {

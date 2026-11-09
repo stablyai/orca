@@ -28,7 +28,9 @@ vi.mock('./autosave/editor-autosave', async (original) => ({
   requestEditorSaveQuiesce: renameIO.quiesce,
   requestEditorFileSave: renameIO.save
 }))
-vi.mock('@/lib/execute-open-editor-path-move', () => ({ executeOpenEditorPathMove: renameIO.move }))
+vi.mock('@/lib/editor/file-operations/execute-open-editor-path-move', () => ({
+  executeOpenEditorPathMove: renameIO.move
+}))
 
 vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })

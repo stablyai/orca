@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
-import { SettingsSwitch } from '@/components/settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SetupCommandPreview } from './SetupCommandPreview'
@@ -66,12 +66,12 @@ export function WorkspaceSetupSection({
           {requiresExplicitSetupChoice ? null : (
             <div className="flex items-center justify-between gap-3 p-3">
               <span className="text-xs font-medium text-foreground">{copy.runLabel}</span>
-              <SettingsSwitch
+              <Switch
                 checked={resolvedSetupDecision === 'run'}
-                onChange={() =>
+                onCheckedChange={() =>
                   onSetupDecisionChange(resolvedSetupDecision === 'run' ? 'skip' : 'run')
                 }
-                ariaLabel={copy.runLabel}
+                aria-label={copy.runLabel}
               />
             </div>
           )}
@@ -82,17 +82,17 @@ export function WorkspaceSetupSection({
                   {startupPolicy.label}
                 </span>
               </span>
-              <SettingsSwitch
+              <Switch
                 checked={startupPolicy.value === 'wait-for-setup'}
                 disabled={resolvedSetupDecision !== 'run'}
-                onChange={() =>
+                onCheckedChange={() =>
                   startupPolicy.onChange(
                     startupPolicy.value === 'wait-for-setup'
                       ? 'start-immediately'
                       : 'wait-for-setup'
                   )
                 }
-                ariaLabel={startupPolicy.label}
+                aria-label={startupPolicy.label}
               />
             </div>
           ) : null}

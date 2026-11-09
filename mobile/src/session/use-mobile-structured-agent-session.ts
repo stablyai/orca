@@ -1,6 +1,6 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
+import { structuredChatTranscriptIdentity } from './native-chat/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
-import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
@@ -75,10 +75,10 @@ export function useMobileStructuredAgentSession(
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const hostStopsConversation = hostSupport?.conversationStop ?? null
-  const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
+  const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
-  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
+  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } =
     useMobileStructuredAgentState(stateArgs)
 
   const mutate = useMobileStructuredAgentMutate({
@@ -128,11 +128,8 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const { transcriptItems, messages, receipts } = useMobileStructuredTranscript(
-    agent,
-    state,
-    sends.optimistic
-  )
+  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
+  const { clearing, transcriptItems, messages, receipts } = transcript
   const turnTiming = useMobileStructuredAgentTurnTiming(
     { ...state, items: transcriptItems },
     turnId
@@ -190,6 +187,7 @@ export function useMobileStructuredAgentSession(
     stopping: turnIndicator.stopping,
     ...sends,
     commandPending: commandPendingRef,
+    onClearSent: transcript.onClearSent,
     sendsOut,
     controller: goal.commands,
     sessionCommands: args.sessionCommands,
@@ -270,13 +268,16 @@ export function useMobileStructuredAgentSession(
     session: {
       messages,
       status,
-      transcriptLoading: status === 'loading',
+      // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
+      transcriptLoading: status === 'loading' || savedAt !== null,
       error: state.error,
       readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
-      hasMore: state.hasOlder && olderPages !== 'unavailable',
+      clearing,
+      hasMore: state.hasOlder && olderPages !== 'unavailable' && !clearing,
       loadingEarlier: olderPages === 'loading',
       olderPages,
-      loadEarlier
+      loadEarlier,
+      savedAt
     },
     isWorking: isWorking || queueSendsNext,
     canStop,

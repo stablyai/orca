@@ -1,6 +1,6 @@
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
-import type { BrowserSiteDisplayController } from '../../site-settings/browser-site-display-controller'
+import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
@@ -16,8 +16,8 @@ import type { PopupOwnerContext } from '../popups/browser-popup-ownership'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent
-} from '../../../../shared/browser-guest-events'
-import type { BrowserGrabCancelReason } from '../../../../shared/browser-grab-types'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
 import { BrowserGuestDevToolsDock } from '../devtools/browser-guest-devtools-dock'
 
@@ -164,6 +164,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
+  // Offscreen pages have no renderer to hold their icon for session-tab rows.
+  protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null

@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { linearCreateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { useAppStore } from '@/store'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreationModel) {
   const {

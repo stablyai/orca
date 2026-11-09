@@ -29,7 +29,7 @@ vi.mock('../web-store/browser-extension-webstore-updater', () => ({
   reviewHeldBrowserExtensionUpdate: vi.fn()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [{ id: 'default' }, { id: 'work' }],
     getProfile: (id: string) => ({ id }),

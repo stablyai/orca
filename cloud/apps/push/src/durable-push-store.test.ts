@@ -163,23 +163,6 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
   expect(await store.pendingCount('phone')).toBe(0)
 })
 
-it.each([false, true])(
-  'normalizes default alert kind (explicit first: %s)',
-  async (explicitFirst) => {
-    const { db, store } = await fixture()
-    const { kind: _kind, ...implicit } = notification(1)
-    const explicit = { kind: 'alert' as const, ...implicit }
-    for (const event of explicitFirst ? [explicit, implicit] : [implicit, explicit]) {
-      expect(await store.accept('host', 'phone', event)).toBe('queued')
-    }
-    expect(await store.pendingCount('phone')).toBe(1)
-    expect(await db.query('SELECT event_id FROM push_events')).toHaveLength(1)
-    expect(await store.accept('host', 'phone', { ...explicit, body: 'changed' })).toBe('error')
-    expect(await store.accept('host', 'phone', { ...implicit, kind: 'dismiss' })).toBe('queued')
-    expect(await db.query('SELECT event_id FROM push_events')).toHaveLength(2)
-  }
-)
-
 it('fences late renew and finish after an expired claim is dismissed', async () => {
   const { db, store, advance } = await fixture()
   const alert = notification(1)

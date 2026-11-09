@@ -8,7 +8,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { AntigravityChatAuthAction } from './AntigravityChatAuthForm'
-import type { AntigravityChatSignInControls } from './AntigravityChatSignInRow'
+import type { AntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
 
 export function AntigravityChatSignInBadge({
   signIn

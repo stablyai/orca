@@ -80,7 +80,9 @@ async function startPane({
     startup,
     cwdPromise
   })
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
 
   await connectMockPanePty(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
   await flushAsyncTicks()
@@ -134,7 +136,7 @@ async function heldLaunch({
     install(session)
     captured.session = session
   })
-  const readiness = await import('@/lib/agent-draft-readiness')
+  const readiness = await import('@/lib/agent-session/messaging/paste/agent-draft-readiness')
   vi.spyOn(readiness, 'waitForAgentDraftInputReady').mockReturnValue(new Promise(() => {}))
   const cwd = Promise.withResolvers<string>()
   const key = makePaneKey('tab-1', createPane(1).leafId)
@@ -235,7 +237,9 @@ async function heldLaunch({
       })
     }
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const binding = connectPanePty(
       typedPane,
       typedManager,
@@ -405,7 +409,7 @@ describe('Git Bash console-capacity pane retention', () => {
   })
 
   it('keeps a pre-connect input attempt with the first process while cwd is pending', async () => {
-    const readiness = await import('@/lib/agent-draft-readiness')
+    const readiness = await import('@/lib/agent-session/messaging/paste/agent-draft-readiness')
     vi.spyOn(readiness, 'waitForAgentDraftInputReady').mockReturnValue(new Promise(() => {}))
     const cwd = Promise.withResolvers<string>()
     const started = await startPane({ startup: null, cwdPromise: cwd.promise })

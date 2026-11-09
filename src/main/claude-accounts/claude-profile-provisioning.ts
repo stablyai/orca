@@ -6,7 +6,7 @@ import {
   resolveClaudeGlobalConfigFile,
   updateClaudeGlobalConfig
 } from '../claude/claude-folder-trust-file'
-import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
+import { publishFileWithoutOverwrite } from '../filesystem/atomic-file-publication'
 import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'

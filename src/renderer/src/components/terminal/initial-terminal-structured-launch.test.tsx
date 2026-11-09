@@ -49,7 +49,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-status', () 
 vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: mocks.resume
 }))
-vi.mock('@/lib/workspace-terminal-host-authority', () => ({
+vi.mock('@/lib/workspace/ownership/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => mocks.authority
 }))
 vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({

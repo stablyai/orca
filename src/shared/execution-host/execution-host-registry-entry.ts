@@ -8,7 +8,7 @@ import type { RuntimeStatus } from '../runtime-session-contracts'
 import type { SshConnectionStatus } from '../ssh-types'
 import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadDeploymentSummary } from './managed-orcad-execution-host'
-import type { ExecutionHostHealth } from './execution-host-health'
+import type { ExecutionHostHealth, ExecutionHostVmState } from './execution-host-health'
 
 export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
@@ -20,6 +20,8 @@ export type ExecutionHostRegistryEntry = {
   compatibility?: RuntimeCompatVerdict
   /** Present only while health is blocked; local evidence, never published to peers. */
   blockedReason?: RuntimeHostBlockedReason
+  /** Present only while a VM-backed host's lifecycle, not its transport, explains its health. */
+  vmState?: ExecutionHostVmState
   capabilities?: readonly string[]
   appVersion?: string | null
   protocolVersion?: number | null

@@ -20,6 +20,18 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
+  forkOriginalMissing:
+    '{{agent}} could not find this response in the original chat. Open it and fork from there.',
+  forkOriginalUnavailable:
+    '{{agent}} cannot fork this response in the original chat. Open it and fork from there.',
+  forkOriginalMissingNamed:
+    '{{agent}} could not find this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalUnavailableNamed:
+    '{{agent}} cannot fork this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalLatestOnly:
+    '{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.',
+  forkOriginalLatestOnlyNamed:
+    '{{agent}} can only fork the latest response in "{{detail}}". Open that chat and fork its latest response once it has finished.',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
@@ -258,4 +270,33 @@ export const sayAgentSessionFailureEnglish: AgentSessionFailureSay = (id, values
     /\{\{(\w+)\}\}/g,
     (placeholder, name: string) => filled.get(name) ?? placeholder
   )
+}
+
+/** Translate authored original-chat refusals without changing other fork failures. */
+export function agentSessionForkSourceFailureWords(
+  message: string,
+  agent: string,
+  say: AgentSessionFailureSay
+): string | null {
+  for (const id of [
+    'forkOriginalMissing',
+    'forkOriginalUnavailable',
+    'forkOriginalMissingNamed',
+    'forkOriginalUnavailableNamed',
+    'forkOriginalLatestOnly',
+    'forkOriginalLatestOnlyNamed'
+  ] as const) {
+    const [prefix, suffix] = sayAgentSessionFailureEnglish(id, { agent }).split('{{detail}}')
+    if (
+      suffix === undefined
+        ? message === prefix
+        : message.startsWith(prefix) && message.endsWith(suffix)
+    ) {
+      return say(id, {
+        agent,
+        ...(suffix === undefined ? {} : { detail: message.slice(prefix.length, -suffix.length) })
+      })
+    }
+  }
+  return null
 }

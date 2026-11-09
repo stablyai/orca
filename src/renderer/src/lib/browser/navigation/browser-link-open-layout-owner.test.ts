@@ -18,7 +18,7 @@ import {
 import { captureLinkOpenIntent } from '../../link-open-intent'
 import { beginLinkOpenRequest } from '../../link-open-request'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
-import { openFileInBrowserTab } from '../../file-preview'
+import { openFileInBrowserTab } from '../documents/file-preview'
 import { openEditorHtmlPreview } from '@/components/editor/open-editor-html-preview'
 import type { BrowserOpenOutcome } from './browser-link-destination'
 

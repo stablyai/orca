@@ -19,6 +19,7 @@ type RecipeStepArgs = Pick<
   | 'env'
   | 'maxCaptureBytes'
   | 'signal'
+  | 'onSpawn'
   | 'onStdout'
   | 'onStderr'
   | 'spawnCommand'
@@ -41,6 +42,7 @@ export function runRecipeStep(
     env: args.env,
     maxCaptureBytes: args.maxCaptureBytes,
     signal: args.signal,
+    onSpawn: args.onSpawn,
     timeoutMs: toTimeoutMs(getEphemeralVmRecipeTimeoutSeconds(args.recipe, mode)),
     onStdout: args.onStdout,
     onStderr: args.onStderr,

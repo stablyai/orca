@@ -10,7 +10,7 @@ import {
   GRAB_BUDGET,
   type BrowserAnnotationIntent,
   type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   BROWSER_ANNOTATION_INTENT_OPTIONS,

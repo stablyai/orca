@@ -48,6 +48,8 @@ const COPY: Record<EphemeralVmFailureCode, (params: Params | undefined) => strin
   },
   provisionCancelled: () =>
     translate('ephemeralVm.errors.provisionCancelled', EN.provisionCancelled),
+  provisionInterrupted: () =>
+    translate('ephemeralVm.errors.provisionInterrupted', EN.provisionInterrupted),
   startRefUnresolved: (p) => {
     const ref = text(p, 'ref')
     return ref === null

@@ -33,6 +33,14 @@ export type AgentDashboardMode = 'in-window' | 'popout'
 /** Presentation mode for the experimental Floating Workspace pop-out. */
 export type FloatingWorkspaceMode = 'in-window' | 'popout'
 
+/** Experimental Floating Workspace pop-out settings, composed into GlobalSettings. */
+export type FloatingWorkspacePopoutSettings = {
+  /** Experimental: lets the Floating Workspace's active terminal run in its own window. */
+  experimentalFloatingWorkspacePopout?: boolean
+  /** How the Floating Workspace opens when the pop-out is enabled; absent means in-window. */
+  experimentalFloatingWorkspaceMode?: FloatingWorkspaceMode
+}
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'

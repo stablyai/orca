@@ -23,7 +23,7 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
-import { writeAcpSessionOption } from '../options/acp-session-option-write'
+import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
 import { stopAcpChildren, acpChildStopCapabilities } from '../turns/acp-structured-child-stop'
 import * as childState from './children/acp-structured-child'
@@ -125,6 +125,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       if (!optionsApplied) {
         return rejectedAcpDispatch(session)
       }
+      await acpControlsSettled(session, signal)
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
@@ -141,8 +142,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     })
   }
 
-  compact: NonNullable<SessionAdapter['compact']> = async (input) =>
-    this.live(input.sessionId).turns.compact(input.command)
+  compact: NonNullable<SessionAdapter['compact']> = async (input) => {
+    const session = this.live(input.sessionId)
+    await acpControlsSettled(session)
+    return session.turns.compact(input.command)
+  }
 
   cancelTurn: SessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)

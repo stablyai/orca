@@ -32,7 +32,7 @@ import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'

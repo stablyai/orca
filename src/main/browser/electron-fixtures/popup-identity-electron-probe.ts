@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { build } from 'vite'
-import { waitForBrowserCdpEndpoint } from '../identity/browser-session-ua-cdp-collector'
+import { waitForBrowserCdpEndpoint } from '../identity/wire-probes/browser-session-ua-cdp-collector'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 export function createPopupIdentityProbeRoot(): string {

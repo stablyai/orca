@@ -2,10 +2,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../ui/label'
 import { SearchableSetting } from '../settings/section-layout/SearchableSetting'
-import {
-  SettingsSegmentedControl,
-  SettingsSwitch
-} from '../settings/form-controls/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getExperimentalSearchEntry } from '../settings/advanced/experimental-search'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
 
@@ -52,10 +50,10 @@ export function PopoutExperimentalSetting({
           <Label>{text.title}</Label>
           <p className="text-xs text-muted-foreground">{text.copy}</p>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={enabled}
-          ariaLabel={text.toggleLabel}
-          onChange={() => onEnabledChange(!enabled)}
+          aria-label={text.toggleLabel}
+          onCheckedChange={() => onEnabledChange(!enabled)}
         />
       </div>
       {enabled && canPopout ? (

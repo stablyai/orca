@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/components/settings/browser/use/browser-use-setup-state'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -8,7 +8,8 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../../../store/index'
-import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/constants'
+import '../../../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../../search/settings-search'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
