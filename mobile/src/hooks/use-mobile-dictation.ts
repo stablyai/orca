@@ -8,7 +8,7 @@ import { useMobileDictationMeter } from './mobile-dictation-meter'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import {
   useMobileDictationTranscriptSoFar,
-  subscribeMobileDictationAudioChunks,
+  useMobileDictationAudioChunks,
   type MobileDictationAudioPhase
 } from './mobile-dictation-audio-chunk'
 import { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
@@ -33,7 +33,7 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   useMobileTranslation()
-  const { client, enabled, onTranscript, onError, removeFillerWords } = options
+  const { client, enabled, onTranscript, onError, removeFillerWords, onAudioLimitReached } = options
   // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.
   const capture = useDictationCapture()
   const speech = useOnDeviceSpeech(removeFillerWords)
@@ -50,6 +50,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const enabledRef = useRef(enabled)
   const onTranscriptRef = useRef(onTranscript)
   const onErrorRef = useRef(onError)
+  const onAudioLimitReachedRef = useRef(onAudioLimitReached)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
   const audioPhaseRef = useRef<MobileDictationAudioPhase>('closed')
@@ -66,7 +67,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     enabledRef.current = enabled
     onTranscriptRef.current = onTranscript
     onErrorRef.current = onError
-  }, [client, speech, enabled, onTranscript, onError])
+    onAudioLimitReachedRef.current = onAudioLimitReached
+  }, [client, speech, enabled, onTranscript, onError, onAudioLimitReached])
 
   const applyStatus = useCallback((next: DictationStatus) => {
     statusRef.current = next
@@ -136,6 +138,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       sendHeldAudio: sendHeldAudioRef,
       finish: finishRef,
       onTranscript: onTranscriptRef,
+      onAudioLimitReached: onAudioLimitReachedRef,
       keptTranscript,
       applyStatus,
       closeDictationAudio,
@@ -145,22 +148,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     [applyStatus, closeDictationAudio, failActiveDictation, keptTranscript, reportError]
   )
 
-  useEffect(() => {
-    const source = {
-      getClient: () => clientRef.current,
-      getActiveId: () => activeIdRef.current,
-      audioPhase: () => (enabledRef.current ? audioPhaseRef.current : 'closed')
-    }
-    const sub = subscribeMobileDictationAudioChunks(capture, source, {
-      pendingChunks: pendingChunksRef.current,
-      pendingAudioBudget: pendingAudioBudgetRef.current,
-      failActiveDictation,
-      transcriptSoFar: keptTranscript,
-      heldAudio: heldAudioRef.current
-    })
-    sendHeldAudioRef.current = sub.sendHeld
-    return () => sub.remove()
-  }, [capture, failActiveDictation])
+  useMobileDictationAudioChunks(capture, run)
 
   const finishDictation = useCallback(
     async (emptyTranscriptMessage: string) => {

@@ -13,6 +13,8 @@ export type UseMobileDictationOptions = {
   onError?: (error: Error) => void
   // The computer's filler switch, for text the phone recognizes itself; unknown means on.
   removeFillerWords?: boolean
+  // The host's cloud upload is full; the dictation stops and inserts what was kept.
+  onAudioLimitReached?: () => void
 }
 
 export type UseMobileDictationResult = {

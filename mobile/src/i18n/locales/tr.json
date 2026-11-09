@@ -2510,7 +2510,8 @@
       "insertFailed": "Dikte metni eklenemedi",
       "insertFailedCopied": "Dikte metni eklenemediği için panoya kopyalandı",
       "inserted": "Dikte metni eklendi",
-      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu"
+      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
+      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu."
     },
     "useNativeChatStop": {
       "stopNotSent": "Durdurma isteği gönderilemedi",
