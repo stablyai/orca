@@ -165,7 +165,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const liveness = projection?.liveness.verdict
                 const attention = projection?.attention?.categories.join(',') || 'none'
                 const details = projection
-                  ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
+                  ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.name ?? projection.host.id} workspace=${workspace}`
                   : `]`
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`

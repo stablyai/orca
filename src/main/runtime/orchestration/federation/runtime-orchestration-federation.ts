@@ -22,6 +22,7 @@ import {
   releaseFederationAckCheckpoint
 } from './synchronization/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './synchronization/federation-sync'
+import { resendOwedFederatedStop } from '../../rpc/methods/orchestration/federation/federated-worker-stop'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
 import {
@@ -44,6 +45,7 @@ export class RuntimeOrchestrationFederation {
   })
   private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
   private readonly warnings = new Set<string>()
+  private readonly stopResends = new Set<string>()
   private relayGeneration = 0
   private stopVerifiedWatch: (() => void) | null = null
   /** Worker server -> runtime incarnation that last proved the orchestration contract. */
@@ -186,6 +188,7 @@ export class RuntimeOrchestrationFederation {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
           this.relays.noteSynced(dispatchId)
+          this.resendOwedStop(dispatchId, db)
         }
       })
       .catch((error: unknown) => {
@@ -206,6 +209,32 @@ export class RuntimeOrchestrationFederation {
       })
     this.syncs.set(dispatchId, { db, promise: sync })
     return sync
+  }
+
+  /** The server answered, so a stop it never got is sent now; not awaited, as the stop resyncs this Dispatch. */
+  private resendOwedStop(dispatchId: string, db: OrchestrationDb): void {
+    if (
+      this.stopResends.has(dispatchId) ||
+      db.getWorkerDispatch(dispatchId)?.stage !== 'stop_owed'
+    ) {
+      return
+    }
+    this.stopResends.add(dispatchId)
+    const runtime = this.runtime
+    void resendOwedFederatedStop(
+      {
+        getOrchestrationDb: () => runtime.getOrchestrationDb(),
+        resolveOrchestrationWorkerServer: (selector) =>
+          runtime.resolveOrchestrationWorkerServer(selector),
+        callOrchestrationWorkerServer: (...args) => runtime.callOrchestrationWorkerServer(...args),
+        syncOrchestrationFederatedDispatchAfterCurrent: (id) => this.syncDispatchAfterCurrent(id)
+      },
+      dispatchId
+    )
+      .catch((error: unknown) => {
+        console.warn(`[orchestration] Resending the stop for ${dispatchId} failed:`, error)
+      })
+      .finally(() => this.stopResends.delete(dispatchId))
   }
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {

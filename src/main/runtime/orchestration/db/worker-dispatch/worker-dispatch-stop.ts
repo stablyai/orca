@@ -231,13 +231,14 @@ export function resumeFederatedWorkerForTerminalRelay(
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
-    if (!worker || !dispatch || worker.state !== 'stopping') {
+    // A resent stop that finds the worker already reported resumes from stop_unknown.
+    if (!worker || !dispatch || (worker.state !== 'stopping' && worker.state !== 'stop_unknown')) {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
-      from: 'stopping',
+      from: worker.state,
       to: 'ready',
       projection: { stage: 'remote_report_pending', updated_at: new Date().toISOString() }
     })
@@ -258,13 +259,15 @@ export function resumeFederatedWorkerForTerminalRelay(
   }
 }
 
+/** `stop_owed`: the stop never reached the worker's paired server, so the federation relay sends it when it can. */
 export function markWorkerStopUnknown(
   this: OrchestrationDb,
   dispatchId: string,
-  reason: string
+  reason: string,
+  stage: 'stop_outcome_unknown' | 'stop_owed' = 'stop_outcome_unknown'
 ): WorkerDispatchRow {
   const worker = this.getWorkerDispatch(dispatchId)
-  if (!worker || worker.state !== 'stopping') {
+  if (!worker || (worker.state !== 'stopping' && worker.state !== 'stop_unknown')) {
     throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
   }
   this.db.exec('SAVEPOINT mark_worker_stop_unknown')
@@ -272,10 +275,10 @@ export function markWorkerStopUnknown(
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
-      from: 'stopping',
+      from: worker.state,
       to: 'stop_unknown',
       projection: {
-        stage: 'stop_outcome_unknown',
+        stage,
         last_error: reason,
         updated_at: new Date().toISOString()
       }

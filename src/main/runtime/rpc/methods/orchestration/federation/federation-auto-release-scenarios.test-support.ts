@@ -6,6 +6,7 @@ import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcRequest } from '../../../core'
 import { registerHomeAutoReleaseScenarios } from './federation-home-auto-release-scenarios.test-support'
+import { registerHomeRecordScenarios } from './federation-home-record-scenarios.test-support'
 
 export type AutoReleaseScenarioHarness = {
   startRemoteWorker: () => Promise<string>
@@ -200,6 +201,7 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
   })
 
   registerHomeAutoReleaseScenarios({ harness, settleRemotely, listFromHome, retainFromHome })
+  registerHomeRecordScenarios(harness)
 
   it('keeps worker-retain home-only for a host that predates automatic release', async () => {
     harness.setWorkerAdvertisesAutoRelease(false)

@@ -7,7 +7,7 @@ type WorkerProjection = {
   runId?: string
   outcome?: string | null
   provider?: { id: string; model: string | null } | null
-  host: { id: string }
+  host: { id: string; name?: string }
   workspace?: { id: string } | null
   stage: { activity: string }
   liveness: { verdict: string; detail?: string }
@@ -39,7 +39,9 @@ export type WorkerShowResult = {
     releaseState?: string | null
     terminalHandle?: string | null
   } | null
-  observation?: { agentWait?: { source: string; reason?: string } | null }
+  observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
+  /** A remote worker's server; `reachable: false` when only the home's record answered. */
+  server?: { name: string; reachable?: boolean }
   autoReleaseAt?: string | null
 }
 
@@ -56,6 +58,8 @@ type WorkerShowFields = {
   terminal?: string
   terminalState?: string
   workspace?: string
+  server?: string
+  note?: string
   attention?: string[]
   waitingOnHuman?: string
   lastError?: string
@@ -84,6 +88,8 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
         value.terminalResource?.releaseState ??
         undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
+      server: value.server?.name,
+      note: value.server?.reachable === false ? value.observation?.reason : undefined,
       attention: actionableAttention(value.projection),
       // Silence means checked and clear; an older host or unreadable pane never evaluated it.
       waitingOnHuman:
@@ -167,7 +173,7 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         terminalState: worker.terminalState ?? undefined,
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
-        host: projection?.host.id,
+        host: projection ? (projection.host.name ?? projection.host.id) : undefined,
         attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
         next: projection

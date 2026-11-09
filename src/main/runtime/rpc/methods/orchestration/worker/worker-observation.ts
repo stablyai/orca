@@ -252,7 +252,7 @@ export function exposeFederatedWorkerObservation(
 }
 
 export function resolvePinnedFederatedServer(
-  runtime: WorkerTerminalReleaseRuntime,
+  runtime: Pick<WorkerTerminalReleaseRuntime, 'resolveOrchestrationWorkerServer'>,
   federated: FederatedDispatchRow
 ) {
   const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
@@ -266,7 +266,10 @@ export function resolvePinnedFederatedServer(
 }
 
 export async function callFederatedWorkerShow(
-  runtime: WorkerTerminalReleaseRuntime,
+  runtime: Pick<
+    WorkerTerminalReleaseRuntime,
+    'resolveOrchestrationWorkerServer' | 'callOrchestrationWorkerServer'
+  >,
   federated: FederatedDispatchRow
 ): Promise<{
   runtimeEpoch: string
