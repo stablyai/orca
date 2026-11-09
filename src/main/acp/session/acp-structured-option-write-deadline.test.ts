@@ -3,6 +3,7 @@ import {
   closeProviderTimelineRigs,
   SESSION
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { FakeFrame } from '../process/testing/acp-scripted-agent.test-support'
 import {
   GROK_CONFIG_OPTIONS,
@@ -13,7 +14,11 @@ import {
 
 afterEach(closeProviderTimelineRigs)
 
-const HELLO = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] } as const
+const HELLO: AgentJournalMessageItem = {
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text: 'hello' }]
+}
 
 function send(
   rig: AcpAdapterRig,
@@ -32,10 +37,12 @@ function send(
 }
 
 /** Holds the first model/effort write unanswered; answers every later one. */
-async function openWithHeldFirstWrite(): Promise<{ rig: AcpAdapterRig; held: () => FakeFrame }> {
+async function openWithHeldFirstWrite(
+  optionWriteTimeoutMs: number
+): Promise<{ rig: AcpAdapterRig; held: () => FakeFrame }> {
   let held: FakeFrame | undefined
   const rig = await openAcpAdapterRig({
-    deps: { optionWriteTimeoutMs: 100 },
+    deps: { optionWriteTimeoutMs },
     script: (agent) => {
       agent.on('session/set_config_option', (frame) => {
         if (!held) {
@@ -59,7 +66,7 @@ async function openWithHeldFirstWrite(): Promise<{ rig: AcpAdapterRig; held: () 
 }
 
 it('refuses only the message whose model write went unanswered, keeping the agent running', async () => {
-  const { rig, held } = await openWithHeldFirstWrite()
+  const { rig, held } = await openWithHeldFirstWrite(100)
 
   await expect(send(rig, 'send-1', { model: 'grok-4.6' })).rejects.toThrow()
 
@@ -77,7 +84,8 @@ it('refuses only the message whose model write went unanswered, keeping the agen
 })
 
 it('holds later controls and prompts until a withdrawn write is answered', async () => {
-  const { rig, held } = await openWithHeldFirstWrite()
+  // Long enough that no deadline expires; the held write settles only when answered below.
+  const { rig, held } = await openWithHeldFirstWrite(10_000)
   const withdrawn = new AbortController()
   const first = send(rig, 'send-1', { effort: 'low' }, withdrawn.signal)
   await waitFor(() => held())

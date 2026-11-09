@@ -2,6 +2,7 @@ import type { SubmissionRejectionFact } from '../../../../shared/agent-session/f
 import { startSpan } from '../../../observability/tracer'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
+import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit-record'
 
 /** One record per ended agent process naming who ended it, so a bare exit code is attributable. */
 export function logProviderChildExit(
@@ -10,7 +11,7 @@ export function logProviderChildExit(
   child: Pick<StructuredAgentSessionProviderChild, 'generation' | 'close'>,
   end: {
     expected: boolean
-    reason: string
+    exit: Pick<StructuredAgentSessionChildExit, 'reason' | 'closedByOrca'>
     failure: SubmissionRejectionFact | undefined
     duringStartup: boolean
   }
@@ -20,8 +21,9 @@ export function logProviderChildExit(
     scope: 'provider-exit',
     sessionId,
     generation: child.generation,
-    endedBy: end.expected ? 'orca' : 'agent',
-    reason: end.reason,
+    // A close Orca made after its own failure still reads as unexpected to the turn.
+    endedBy: end.expected || close || end.exit.closedByOrca ? 'orca' : 'agent',
+    reason: end.exit.reason,
     duringStartup: end.duringStartup,
     ...(close ? { closeCause: close.cause, closeReason: close.reason } : {}),
     ...(close?.quit ? { quit: true } : {}),

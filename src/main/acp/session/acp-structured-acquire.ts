@@ -46,7 +46,7 @@ export async function acquireAcpStructuredSession(input: {
   /** Protocol loss may precede process exit; null means startup has not produced a session. */
   onConnectionLost: (session: AcpStructuredChild | null, error: Error) => void
   onSettled: AcpStructuredTurnsDeps['settle']
-  forceClose: (sessionId: string) => void
+  forceClose: (sessionId: string, reason: string) => void
 }): Promise<{
   acquisition: AgentSessionAcquisition
   session: AcpStructuredChild
@@ -214,15 +214,11 @@ export async function acquireAcpStructuredSession(input: {
           session.turns?.accept(clientMessageId)
         }
       },
-      onFailed: (reason) => {
-        // The exit this close causes reads as the agent's, so name Orca's reason here.
-        logger.warn(`Orca stopped ${agentName} after its chat journal refused a write`, {
-          scope: 'acp-lane-refused',
+      onFailed: (reason) =>
+        input.forceClose(
           sessionId,
-          reason
-        })
-        input.forceClose(sessionId)
-      }
+          `Orca stopped ${agentName} after its chat journal refused a write (${reason})`
+        )
     })
     slot.lane = lane
     slot.reattaching = attaching
@@ -268,6 +264,7 @@ export async function acquireAcpStructuredSession(input: {
     prompts,
     childStops: undefined,
     closeRequested: false,
+    failureClose: null,
     journalClosed: null,
     ended: false,
     exitObservedAt: null,

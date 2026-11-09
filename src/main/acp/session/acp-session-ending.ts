@@ -47,7 +47,8 @@ export function endAcpStructuredSession(
   const stderr = session.connection.stderrTail()
   const how = providerExitStatusText(session.connection.exitStatus)
   // Orca's own close (stream loss, refusal) names the cause; the agent's stderr stays beside it.
-  const lead = session.journalClosed ?? `${session.spec.agent} ACP agent exited`
+  const lead =
+    session.failureClose ?? session.journalClosed ?? `${session.spec.agent} ACP agent exited`
   const reason = session.closeRequested
     ? `${session.spec.agent} ACP agent closed by Orca`
     : `${lead}${how ? ` ${how}` : ''}${stderr ? `: ${stderr}` : ''}`
@@ -74,6 +75,9 @@ export function endAcpStructuredSession(
       ? agentSessionFailureFact('hostFault')
       : agentSessionFailureFact('providerExited', detail ? { detail } : {}),
     cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
+    ...(session.failureClose !== null && !session.closeRequested
+      ? { closedByOrca: true as const }
+      : {}),
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt
