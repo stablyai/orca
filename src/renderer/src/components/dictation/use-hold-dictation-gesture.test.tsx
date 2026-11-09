@@ -7,6 +7,7 @@ import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultSettings, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
+import { dictationShortcutModeSettings } from '../../../../shared/dictation-shortcut-mode'
 
 const originalUserAgent = navigator.userAgent
 
@@ -29,7 +30,12 @@ function holdSettings(): GlobalSettings {
   return {
     ...getDefaultSettings('/home/test'),
     terminalShortcutPolicy,
-    voice: { ...getDefaultVoiceSettings(), enabled: true, sttModel: 'test-model', dictationMode }
+    voice: {
+      ...getDefaultVoiceSettings(),
+      enabled: true,
+      sttModel: 'test-model',
+      ...dictationShortcutModeSettings(dictationMode)
+    }
   }
 }
 
