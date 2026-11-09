@@ -28,6 +28,7 @@ import type {
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
+import type { TabSizingSettings } from './tab-sizing'
 import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
@@ -499,6 +500,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   voiceDictationModeDefaultedToAuto?: boolean
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
-}
+} & TabSizingSettings
 
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

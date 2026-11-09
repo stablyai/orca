@@ -11069,7 +11069,14 @@
             "66395fb7ff": "Editor font family",
             "aa1c06eb2c": "Default diff view",
             "8ad175042b": "Rich Markdown spellcheck",
-            "da5c42780e": "Open in apps"
+            "da5c42780e": "Open in apps",
+            "tab_width": "width",
+            "tab_sizing": "sizing",
+            "tab_fit": "fit",
+            "tab_shrink": "shrink",
+            "tab_fixed": "fixed",
+            "tab_compact": "compact",
+            "tab_narrow": "narrow"
           }
         },
         "git": {
@@ -14273,6 +14280,23 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "TabSizingSettings": {
+          "mode_auto": "Auto",
+          "mode_fit": "Fit",
+          "mode_shrink": "Shrink",
+          "mode_fixed": "Fixed",
+          "mode_auto_description": "Terminal and chat tabs keep the max width; file and browser tabs fit their titles up to it.",
+          "mode_fit_description": "Always keep tabs large enough to show the full title. The tab bar scrolls when they do not fit.",
+          "mode_shrink_description": "Tabs fit their titles and get smaller, down to the min width, when space runs out.",
+          "mode_fixed_description": "Make all tabs the same size, between the min and max width.",
+          "min_width": "Tab Min Width",
+          "max_width": "Tab Max Width",
+          "title": "Tab Sizing",
+          "min_width_description": "Tabs never get narrower than this; the tab bar scrolls instead.",
+          "max_width_description": "Tabs never get wider than this.",
+          "max_width_disabled": "Only used when Tab Sizing is Auto or Fixed.",
+          "search_description": "Fit, shrink, or fixed-width tabs."
         }
       },
       "right": {

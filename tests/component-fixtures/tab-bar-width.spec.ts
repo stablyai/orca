@@ -61,3 +61,37 @@ for (const fixture of ['nonAgentTabs', 'nonAgentTabsOverflowing']) {
     }
   })
 }
+
+async function slotWidths(page: Page) {
+  return (await stripLayout(page)).slots.map((item) => Math.round(item.width))
+}
+
+test.describe('tab sizing setting', () => {
+  test('auto honors a custom max width', async ({ page }) => {
+    await openFixture(page, 'sizingAutoMax180')
+    expect(await width(slot(page, 'tab-0'))).toBe(180)
+    expect(await width(slot(page, 'tab-1'))).toBe(180)
+  })
+
+  test('fit sizes every tab to its title', async ({ page }) => {
+    await openFixture(page, 'sizingFit')
+    expect(await width(slot(page, 'tab-1'))).toBeGreaterThan(await width(slot(page, 'tab-0')))
+    expect(await width(slot(page, 'tab-0'))).toBeLessThan(300)
+  })
+
+  test('shrink lets short titles take less than the max width', async ({ page }) => {
+    await openFixture(page, 'sizingShrink')
+    expect(await width(slot(page, 'tab-2'))).toBeLessThan(300)
+    expect(await width(slot(page, 'tab-2'))).toBeGreaterThanOrEqual(144)
+  })
+
+  test('fixed gives every tab the same width up to the max', async ({ page }) => {
+    await openFixture(page, 'sizingFixed')
+    expect(new Set(await slotWidths(page))).toEqual(new Set([300]))
+  })
+
+  test('fixed shrinks tabs equally down to a custom min width', async ({ page }) => {
+    await openFixture(page, 'sizingFixedMin100')
+    expect(new Set(await slotWidths(page))).toEqual(new Set([100]))
+  })
+})
