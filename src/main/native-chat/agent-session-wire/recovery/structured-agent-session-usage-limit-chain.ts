@@ -60,7 +60,12 @@ function openerOf(
 }
 
 /** Whether the turn at `index` was opened by a slash command, read from its opener just before it. */
-function isCommandTurnAt(items: readonly AgentJournalRenderItem[], index: number): boolean {
+function isCommandTurnAt(
+  items: readonly AgentJournalRenderItem[],
+  index: number,
+  turnsRead: string[]
+): boolean {
+  turnsRead.push(items[index]!.itemId)
   const userItemId = readAgentJournalTurn(items[index]!.body)?.userItemId
   for (let before = index - 1; userItemId && before >= 0; before -= 1) {
     const item = items[before]!
@@ -79,7 +84,8 @@ function isCommandTurnAt(items: readonly AgentJournalRenderItem[], index: number
 function previousTurnIndex(
   items: readonly AgentJournalRenderItem[],
   turnIndex: number,
-  openerKeys: ReadonlySet<string>
+  openerKeys: ReadonlySet<string>,
+  turnsRead: string[]
 ): number {
   for (let index = turnIndex - 1; index >= 0; index -= 1) {
     const item = items[index]!
@@ -91,7 +97,7 @@ function previousTurnIndex(
       continue
     }
     if (readAgentJournalTurn(item.body)) {
-      if (isCommandTurnAt(items, index)) {
+      if (isCommandTurnAt(items, index, turnsRead)) {
         continue
       }
       return index
@@ -123,31 +129,44 @@ function usageLimitBetween(
   return null
 }
 
+/** What a chain was read from: the turn rows whose opener it looked up and every submission from
+ *  the oldest it examined, so a reader can tell whether the count still holds. */
+export type UsageLimitContinueChainRead = {
+  chain: number
+  turnsRead: readonly string[]
+  submissionsFrom: number
+}
+
 /** How many automatic continues in a row ended in another usage limit, read from the journal so a
  *  restart or reopen agrees. Each step needs the exact join: the turn opened by a host submission
  *  whose message id names the cut before it. Walks back from the end, so the work is the chain's
  *  own tail, never the conversation's length. */
-export function usageLimitContinueChain(
+export function readUsageLimitContinueChain(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly ChainSubmission[],
   cut: Pick<NativeChatUsageLimitCut, 'turnItemId'>
-): number {
+): UsageLimitContinueChainRead {
   let turnIndex = items.length - 1
   while (turnIndex >= 0 && items[turnIndex]!.itemId !== cut.turnItemId) {
     turnIndex -= 1
   }
+  const turnsRead: string[] = []
   let submissionBound = submissions.length
+  let submissionsFrom = submissions.length
   let chain = 0
   while (chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT && turnIndex >= 0) {
+    turnsRead.push(items[turnIndex]!.itemId)
     const userItemId = readAgentJournalTurn(items[turnIndex]!.body)?.userItemId
     const openerIndex = userItemId ? openerOf(submissions, userItemId, submissionBound) : -1
+    // A missed join searched every earlier submission; a late receipt on any of them can complete it.
+    submissionsFrom = userItemId ? Math.max(openerIndex, 0) : submissionsFrom
     const opener = openerIndex >= 0 ? submissions[openerIndex]! : null
     const tag = opener?.origin === 'host' ? tagOfMessageId(opener.clientMessageId) : null
     if (!opener || !tag || !userItemId) {
       break
     }
     const openerKeys = new Set([userItemId, agentJournalSubmissionKey(opener.clientMessageId)])
-    const previous = previousTurnIndex(items, turnIndex, openerKeys)
+    const previous = previousTurnIndex(items, turnIndex, openerKeys, turnsRead)
     const limit = previous >= 0 ? usageLimitBetween(items, previous, turnIndex) : null
     if (
       limit?.resetsAt === undefined ||
@@ -160,12 +179,19 @@ export function usageLimitContinueChain(
     turnIndex = previous
     submissionBound = openerIndex
   }
-  return chain
+  return { chain, turnsRead, submissionsFrom }
 }
+
+export const usageLimitContinueChain = (
+  ...args: Parameters<typeof readUsageLimitContinueChain>
+): number => readUsageLimitContinueChain(...args).chain
 
 /** A cut as the host's sweep reads it: with the chain that led to it, and what that chain was read
  *  from so a rebuild can tell whether it still holds. */
-export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number; chainKey?: string }
+export type HostUsageLimitCut = NativeChatUsageLimitCut & {
+  chain: number
+  chainRead?: UsageLimitContinueChainRead & { key: string }
+}
 
 export function hostUsageLimitCut(
   snapshot: {

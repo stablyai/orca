@@ -3,9 +3,10 @@ import {
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
-  usageLimitContinueChain,
+  readUsageLimitContinueChain,
   usageLimitContinueIdentity,
-  type HostUsageLimitCut
+  type HostUsageLimitCut,
+  type UsageLimitContinueChainRead
 } from '../recovery/structured-agent-session-usage-limit-chain'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -43,8 +44,25 @@ export type StructuredAgentSessionJournalProjection = {
   stopping: boolean
 }
 
-/** The chain reads only history before the cut, plus the cut turn's opener and its send's acceptance;
- *  a rebuild that changed none of those reuses it instead of walking the journal again. */
+/** Everything a chain read could have seen change: the turn rows it looked up and the join evidence
+ *  of every submission from the oldest it examined. Rows before the cut are otherwise fixed. */
+function usageLimitChainKey(
+  journal: AgentSessionJournal,
+  snapshot: ReturnType<AgentSessionJournal['statusRead']>,
+  cut: NativeChatUsageLimitCut,
+  read: Omit<UsageLimitContinueChainRead, 'chain'>
+): string {
+  return JSON.stringify([
+    usageLimitContinueIdentity(cut),
+    read.turnsRead.map((itemId) => journal.item(itemId)?.revision),
+    snapshot.submissions.length,
+    snapshot.submissions
+      .slice(read.submissionsFrom)
+      .map((entry) => [entry.clientMessageId, entry.dispatchState, entry.providerItemId])
+  ])
+}
+
+/** A rebuild whose chain inputs are unchanged reuses the count instead of walking the journal again. */
 function usageLimitCutWithChain(
   journal: AgentSessionJournal,
   snapshot: ReturnType<AgentSessionJournal['statusRead']>,
@@ -54,21 +72,16 @@ function usageLimitCutWithChain(
   if (!cut) {
     return null
   }
-  // A late receipt can attribute the opener after the turn ended: the turn row or the newest send changes.
-  const newest = snapshot.submissions.at(-1)
-  const chainKey = JSON.stringify([
-    usageLimitContinueIdentity(cut),
-    journal.item(cut.turnItemId)?.revision,
-    snapshot.submissions.length,
-    newest?.clientMessageId,
-    newest?.dispatchState,
-    newest?.providerItemId
-  ])
-  const chain =
-    previous?.chainKey === chainKey
-      ? previous.chain
-      : usageLimitContinueChain(snapshot.items, snapshot.submissions, cut)
-  return { ...cut, chain, chainKey }
+  const reused = previous?.chainRead
+  if (reused && usageLimitChainKey(journal, snapshot, cut, reused) === reused.key) {
+    return { ...cut, chain: previous.chain, chainRead: reused }
+  }
+  const read = readUsageLimitContinueChain(snapshot.items, snapshot.submissions, cut)
+  return {
+    ...cut,
+    chain: read.chain,
+    chainRead: { ...read, key: usageLimitChainKey(journal, snapshot, cut, read) }
+  }
 }
 
 export class StructuredAgentSessionJournalProjections {

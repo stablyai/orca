@@ -4,10 +4,13 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { createFixture } from '../../agent-session-journal/store-lifecycle/journal-store-contract-test-fixture'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type * as UsageLimitChain from '../recovery/structured-agent-session-usage-limit-chain'
 import {
-  usageLimitContinueChain,
+  readUsageLimitContinueChain,
   usageLimitContinueMessageId,
   usageLimitContinueTag
 } from '../recovery/structured-agent-session-usage-limit-chain'
@@ -15,13 +18,13 @@ import { StructuredAgentSessionJournalProjections } from './structured-agent-ses
 
 vi.mock('../recovery/structured-agent-session-usage-limit-chain', async (importOriginal) => {
   const actual = await importOriginal<typeof UsageLimitChain>()
-  return { ...actual, usageLimitContinueChain: vi.fn(actual.usageLimitContinueChain) }
+  return { ...actual, readUsageLimitContinueChain: vi.fn(actual.readUsageLimitContinueChain) }
 })
 
 const fixture = createFixture()
-const derivations = () => vi.mocked(usageLimitContinueChain).mock.calls.length
+const derivations = () => vi.mocked(readUsageLimitContinueChain).mock.calls.length
 beforeEach(() => {
-  vi.mocked(usageLimitContinueChain).mockClear()
+  vi.mocked(readUsageLimitContinueChain).mockClear()
 })
 
 async function limitedTurn(
@@ -100,20 +103,20 @@ it.each([100, 1_000])(
   }
 )
 
-it('counts an automatic continue whose receipt attributes its opener after the turn ended', async () => {
-  const journal = await fixture.open()
-  const projections = new StructuredAgentSessionJournalProjections()
-  const first = await limitedTurn(journal, 'first', 0)
+async function hostContinue(
+  journal: AgentSessionJournal,
+  cut: { turnItemId: string; resetsAt: number },
+  at: number
+) {
   const clientMessageId = usageLimitContinueMessageId(
-    2_000,
-    usageLimitContinueTag({ turnItemId: first.turnScope.turnItemId, resetsAt: 60_000 }),
+    at,
+    usageLimitContinueTag(cut),
     '0123456789abcdef'
   )
-  const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
   await journal.appendSubmission({
     clientMessageId,
-    payloadFingerprint: 'continue',
-    body,
+    payloadFingerprint: `continue-${at}`,
+    body: { kind: 'message', role: 'user', blocks: [] },
     origin: 'host',
     fence: 1
   })
@@ -123,15 +126,59 @@ it('counts an automatic continue whose receipt attributes its opener after the t
     turnScope: AGENT_JOURNAL_THREAD_SCOPE,
     fence: 1
   })
-  await journal.markPendingSubmissionsUnknown(1)
-  // The provider's echo opens the turn before any receipt names it.
-  const echo = { provider: 'orca' as const, clientMessageId: 'provider-echo' }
-  await journal.appendItem(echo, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-  await limitedTurn(journal, 'second', 0, {
-    userItemId: agentJournalItemKey(echo),
-    resetsAt: 120_000
-  })
-  expect(projections.read(journal, null).usageLimitCut?.chain).toBe(0)
-  await journal.acceptLate({ clientMessageId, state: 'accepted', providerIdentity: echo, fence: 1 })
-  expect(projections.read(journal, null).usageLimitCut?.chain).toBe(1)
-})
+  return clientMessageId
+}
+
+it.each([
+  ['the newest link', 0],
+  ['an older link', 1]
+])(
+  'recounts when a late receipt attributes the opener of %s after its turn ended',
+  async (_, laterLinks) => {
+    const journal = await fixture.open()
+    const projections = new StructuredAgentSessionJournalProjections()
+    const first = await limitedTurn(journal, 'first', 0)
+    const late = await hostContinue(
+      journal,
+      { turnItemId: first.turnScope.turnItemId, resetsAt: 60_000 },
+      2_000
+    )
+    await journal.markPendingSubmissionsUnknown(1)
+    // The provider's echo opens the turn before any receipt names it.
+    const echo = { provider: 'orca' as const, clientMessageId: 'provider-echo' }
+    await journal.appendItem(
+      echo,
+      { kind: 'message', role: 'user', blocks: [] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    let cut = await limitedTurn(journal, 'second', 0, {
+      userItemId: agentJournalItemKey(echo),
+      resetsAt: 120_000
+    })
+    for (let link = 0; link < laterLinks; link += 1) {
+      const sent = await hostContinue(
+        journal,
+        { turnItemId: cut.turnScope.turnItemId, resetsAt: 120_000 + link * 60_000 },
+        3_000 + link
+      )
+      await journal.resolveDispatch({
+        clientMessageId: sent,
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 1
+      })
+      cut = await limitedTurn(journal, `later-${link}`, 0, {
+        userItemId: agentJournalSubmissionKey(sent),
+        resetsAt: 180_000 + link * 60_000
+      })
+    }
+    expect(projections.read(journal, null).usageLimitCut?.chain).toBe(laterLinks)
+    await journal.acceptLate({
+      clientMessageId: late,
+      state: 'accepted',
+      providerIdentity: echo,
+      fence: 1
+    })
+    expect(projections.read(journal, null).usageLimitCut?.chain).toBe(laterLinks + 1)
+  }
+)
