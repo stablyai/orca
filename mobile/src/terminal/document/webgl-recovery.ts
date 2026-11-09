@@ -1,4 +1,5 @@
 import { flog } from './viewport-transform'
+import { reportLaidOutCellBox } from './laid-out-cell-box'
 import { applyTerminalTheme } from './terminal-theme'
 import type { TerminalDocumentScope, TerminalDocumentWebglAddon } from './document-scope'
 
@@ -107,6 +108,7 @@ export function setWebglShown(scope: TerminalDocumentScope, shown: boolean) {
     if (!scope.webglAddon) {
       attachWebglAddon(scope, true)
     }
+    reportLaidOutCellBox(scope)
     return
   }
   cancelWebglContextRecovery(scope)
