@@ -11,8 +11,15 @@ export const WATCHER_IGNORE_DIRS: string[] = [
   '__pycache__',
   '.dart_tool',
   '.gradle',
-  '.turbo'
+  '.turbo',
+  // Home-level folder workspaces otherwise watch all AppData install and temp churn (#40204).
+  'AppData'
 ]
+
+// Installers stage under suffixed dirs (Docker Desktop: DockerDesktop.staging) and extract Electron
+// archives into them; Electron's asar fs integration opens and caches a handle on any *.asar path the
+// main process stats, locking installers out of their staged files (#40204).
+const WATCHER_IGNORE_DIR_SUFFIXES = ['.staging', '.asar']
 
 // FSEvents rejects all exclusions above eight paths; regex filtering covers the remaining names at every depth.
 export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8
@@ -27,29 +34,34 @@ function escapeRegex(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
 }
 
-function buildNestedDirectoryRegex(ignoreDirs: readonly string[]): string {
-  const alternatives = ignoreDirs.map(escapeRegex).join('|')
-  if (process.platform === 'win32') {
-    return `^(?:[^\\\\/]+[\\\\/])*(?:${alternatives})(?:[\\\\/][\\s\\S]*)?$`
-  }
-  // Backslash is a valid POSIX filename character.
-  return `^(?:[^/]+/)*(?:${alternatives})(?:/[\\s\\S]*)?$`
+function buildNestedDirectoryRegex(
+  ignoreDirs: readonly string[],
+  ignoreDirSuffixes: readonly string[]
+): string {
+  // Backslash is a valid POSIX filename character, so only the Windows dialect excludes it.
+  const componentChar = process.platform === 'win32' ? '[^\\\\/]' : '[^/]'
+  const componentSep = process.platform === 'win32' ? '[\\\\/]' : '/'
+  const alternatives = [
+    ...ignoreDirs.map(escapeRegex),
+    ...ignoreDirSuffixes.map((suffix) => `${componentChar}+${escapeRegex(suffix)}`)
+  ].join('|')
+  return `^(?:${componentChar}+${componentSep})*(?:${alternatives})(?:${componentSep}[\\s\\S]*)?$`
 }
 
 export function buildParcelWatcherIgnoreOptions(
   ignoreDirs: readonly string[]
 ): ParcelWatcherIgnoreOptions {
-  if (ignoreDirs.length === 0) {
+  if (ignoreDirs.length === 0 && WATCHER_IGNORE_DIR_SUFFIXES.length === 0) {
     return {}
   }
   if (process.platform !== 'darwin') {
     // Parcel 2.5.6 leading-** globs cause pathological std::regex lookaheads; one component regex avoids that cost.
-    return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
+    return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs, WATCHER_IGNORE_DIR_SUFFIXES)] }
   }
   const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
   return {
     ignore: [...daemonExcludedDirs],
     // Plain exclusions cover only the root; regex also prunes nested generated directories.
-    ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)]
+    ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs, WATCHER_IGNORE_DIR_SUFFIXES)]
   }
 }
