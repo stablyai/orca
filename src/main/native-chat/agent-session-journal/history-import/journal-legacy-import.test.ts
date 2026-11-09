@@ -75,21 +75,26 @@ it.each([true, false])(
 )
 
 it.each([
-  { records: [], sourceEmpty: true },
-  { records: [{ type: 'user', uuid: 'u1' }], sourceEmpty: false }
+  { tail: '', sourceEmpty: true },
+  { tail: JSON.stringify({ type: 'user', uuid: 'u1' }), sourceEmpty: false },
+  { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false }
 ])(
-  'reads a Claude file nothing was sent in as empty, unlike one with an undecodable turn: %j',
-  async ({ records, sourceEmpty }) => {
-    const filePath = await writeFixture('claude-unused.jsonl', [
+  'reads a Claude file nothing was sent in as empty, unlike one with a turn it cannot decode: %j',
+  async ({ tail, sourceEmpty }) => {
+    const filePath = join(root, 'claude-unused.jsonl')
+    const metadata = [
       { type: 'file-history-snapshot', messageId: 'm1', snapshot: { trackedFileBackups: {} } },
-      { type: 'summary', summary: 'New session', leafUuid: 'l1' },
-      ...records
-    ])
+      { type: 'summary', summary: 'New session', leafUuid: 'l1' }
+    ]
+    await writeFile(filePath, `${[...metadata.map((m) => JSON.stringify(m)), tail].join('\n')}\n`)
+    // Adoption always names the conversation it expects, as Continue in Chat's create does.
+    const source = { providerSessionId: 'claude-unused', workspaceCwd: root }
     const prepared = await prepareLegacyTranscriptImport({
       agent: 'claude',
       sessionId: 'claude-unused',
-      options: { filePath }
+      options: { filePath, source }
     })
-    expect(prepared).toMatchObject({ ok: true, items: [], sourceEmpty })
+    // Only an empty file reads as nothing saved; any turn keeps the history's own answer.
+    expect(prepared.ok && prepared.items.length === 0 && prepared.sourceEmpty).toBe(sourceEmpty)
   }
 )

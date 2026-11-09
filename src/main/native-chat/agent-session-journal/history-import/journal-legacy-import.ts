@@ -16,7 +16,7 @@ import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../session-file-resolver'
 import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-opencode'
-import { isClaudeConversationRecord } from '../../transcript-line-decoders-claude'
+import { mayBeClaudeConversationRecord } from '../../transcript-line-decoders-claude'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
@@ -264,7 +264,7 @@ async function decodeReplacementItems(input: {
           return null
         }
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
-        conversation ||= !!message || isClaudeConversationRecord(line)
+        conversation ||= !!message || mayBeClaudeConversationRecord(line)
         if (message) {
           const identity =
             recordId || input.decodedMessageIdentities
@@ -289,7 +289,8 @@ async function decodeReplacementItems(input: {
           }
         : undefined
     )
-    if (consumedBytes > 0) {
+    // A file with no conversation adopts nothing, so it has no identity to prove.
+    if (consumedBytes > 0 && conversation) {
       await source?.validate()
     }
     if (pi) {
