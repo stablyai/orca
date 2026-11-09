@@ -15,6 +15,12 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 import { agentPickerModelCatalogReads } from './agent-launch-picker-host-reads'
 import { cliModelCatalogAnswer } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  subscribeHostModelCatalogSnapshot
+} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { projectAgentLaunchProfile } from '../../../../shared/agent-launch/choices/agent-launch-profile'
+import { agentPickerModels } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { cliResult, sourceEntry } from './agent-launch-picker-sources.test-fixture'
 
 beforeEach(() => {
@@ -142,4 +148,60 @@ it('settles unsupported terminal source routes without leaving a listing placeho
   )
   expect(agentPickerCatalogJobs([global])).toEqual([{ index: 0, source: 'structured' }])
   expect(agentPickerModelMenu(global, 'terminal')).toMatchObject({ status: 'builtin', rows: [] })
+})
+
+it('does not promote the legacy Config default fallback into a terminal operand', () => {
+  const answer = cliModelCatalogAnswer({
+    ...cliResult,
+    catalogOrigin: undefined,
+    models: [{ id: 'default', label: 'Config default' }],
+    defaultModelId: 'default'
+  })
+  expect(answer).toBeUndefined()
+  const entry = sourceEntry('terminal')
+  entry.sourceCatalogs = {
+    cli: { catalog: answer ?? { origin: 'unknown' }, catalogRead: 'settled', coherentCatalog: true }
+  }
+  expect(agentPickerModels(entry, 'terminal')).toEqual([])
+  expect(
+    projectAgentLaunchProfile('antigravity', {}, { target: 'terminal', choices: {}, userArgs: '' })
+      .args
+  ).toBe('')
+})
+
+it('publishes only changed CLI rows, independent of the clock', () => {
+  const target = { kind: 'local' } as const
+  const notices = vi.fn()
+  const stop = subscribeHostModelCatalogSnapshot(target, 'antigravity', notices, 'cli')
+  const now = vi.spyOn(Date, 'now').mockReturnValue(100)
+  try {
+    recordHostModelCatalogSnapshot(
+      target,
+      'antigravity',
+      'id:x',
+      cliModelCatalogAnswer(cliResult)!,
+      'cli'
+    )
+    notices.mockClear()
+    now.mockReturnValue(200)
+    recordHostModelCatalogSnapshot(
+      target,
+      'antigravity',
+      'id:x',
+      cliModelCatalogAnswer(cliResult)!,
+      'cli'
+    )
+    expect(notices).not.toHaveBeenCalled()
+    recordHostModelCatalogSnapshot(
+      target,
+      'antigravity',
+      'id:x',
+      cliModelCatalogAnswer({ ...cliResult, models: [{ id: 'new-model', label: 'New model' }] })!,
+      'cli'
+    )
+    expect(notices).toHaveBeenCalledTimes(1)
+  } finally {
+    now.mockRestore()
+    stop()
+  }
 })

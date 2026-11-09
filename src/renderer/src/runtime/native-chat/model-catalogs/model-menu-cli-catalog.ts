@@ -12,13 +12,15 @@ export function cliModelCatalogAnswer(
   if (
     !result.success ||
     result.catalogOrigin === 'spec' ||
-    (!result.catalogOrigin && !result.models.length)
+    (!result.catalogOrigin && !result.models.length) ||
+    result.models.some(({ id, label }) => id === 'default' && label === 'Config default')
   ) {
     return undefined
   }
   return {
     origin: 'probe',
-    fetchedAt: Date.now(),
+    // This transport has no catalog timestamp; identical listings retain identical values.
+    fetchedAt: 0,
     listingNamesConfiguredModel: false,
     modelsDifferByWorkspace: true,
     models: result.models.map(({ id, label }) => ({ id, label, isDefault: false, efforts: [] }))
