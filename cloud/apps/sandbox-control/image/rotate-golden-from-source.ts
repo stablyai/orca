@@ -87,14 +87,29 @@ async function main(): Promise<void> {
       timeoutMs: 40 * 60_000
     })
     let exitCode: number | null = null
+    const marker = async (): Promise<number | null> => {
+      const r = await api.runCommand(sid, { command: 'bash', args: ['-c', 'cat /tmp/source-build.exit 2>/dev/null'], timeoutMs: 20_000 }).catch(() => null)
+      const code = r?.stdout.trim()
+      return code && /^\d+$/.test(code) ? Number(code) : null
+    }
     while (exitCode === null) {
       await new Promise((resolve) => setTimeout(resolve, 15_000))
       ;({ exitCode } = await api.getCommand(sid, commandId))
+      // The command status can stay "running" after the script exited; the marker file is the truth.
+      exitCode ??= await marker()
+      if (exitCode === null && Math.round((Date.now() - started) / 15_000) % 8 === 0) {
+        // Every ~2 min: which build step is running (the newest step log's tail).
+        const step = await api.runCommand(sid, { command: 'bash', args: ['-c', 'f=$(ls -t /tmp/src-*.log 2>/dev/null | head -1); echo "${f:-provisioning}: $(tail -c 160 "$f" 2>/dev/null | tr "\\n" " ")"'], timeoutMs: 20_000 }).catch(() => null)
+        log(`${Math.round((Date.now() - started) / 1000)} s ${step?.stdout.trim() ?? ''}`)
+      }
       if (Date.now() - started > 45 * 60_000) {
         throw new Error('build deadline')
       }
     }
-    const logs = await new Response(await api.streamCommandLogs(sid, commandId)).text()
+    // Not the command log stream: it never ends while Vercel thinks the command is running.
+    const logs = (
+      await api.runCommand(sid, { command: 'bash', args: ['-c', 'cat /tmp/source-build.report 2>/dev/null | tail -c 4000'], timeoutMs: 20_000 })
+    ).stdout
     log(`build+provision exit ${exitCode} in ${Math.round((Date.now() - started) / 1000)} s`)
     if (exitCode !== 0) {
       throw new Error(`source build failed:\n${logs.slice(-3000)}`)
