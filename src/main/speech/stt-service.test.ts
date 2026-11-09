@@ -356,6 +356,24 @@ describe('SttService', () => {
     expect(getCreatedWorkerCount()).toBe(1)
   })
 
+  it('keeps a recognizer marked for unload until its dictation ends, then unloads it', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    const worker = getLastWorker()!
+    let unloaded = false
+    const unload = service.unloadModelWhenIdle().then(() => {
+      unloaded = true
+    })
+    await Promise.resolve()
+    expect(worker.terminated).toBe(false)
+    expect(unloaded).toBe(false)
+
+    await service.stopDictation('desktop')
+    await unload
+    expect(worker.terminated).toBe(true)
+  })
+
   it('kills a worker stuck in a decode instead of making a cancel wait for it', async () => {
     vi.useFakeTimers()
     try {

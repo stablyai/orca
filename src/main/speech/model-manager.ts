@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import type {
@@ -14,6 +14,7 @@ import {
   type SpeechModelCacheDir
 } from './model-cache-path'
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
+import { hasSpeechModelFiles } from './speech-model-files'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
@@ -109,10 +110,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.downloadFiles, modelDir)) {
       const state: SpeechModelState = { id: modelId, status: 'ready' }
       this.modelStates.set(modelId, state)
       return state
+    }
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.legacyDownloadFiles, modelDir)) {
+      return { id: modelId, status: 'not-downloaded', needsUpdate: true }
     }
 
     return { id: modelId, status: 'not-downloaded' }
@@ -136,19 +140,6 @@ export class ModelManager extends SpeechModelDownloadTransport {
     return modelDir
   }
 
-  private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
-    if (!manifest.downloadFiles) {
-      return false
-    }
-    return manifest.downloadFiles.every(({ name, sizeBytes }) => {
-      try {
-        return statSync(join(modelDir, name)).size === sizeBytes
-      } catch {
-        return false
-      }
-    })
-  }
-
   async downloadModel(modelId: string): Promise<void> {
     // Do not await migration: downloads cannot race it, and cancellation needs synchronous setup.
     if (this.activeDownloads.has(modelId)) {
@@ -167,7 +158,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.downloadFiles, modelDir)) {
       this.updateState(modelId, 'ready')
       return
     }
@@ -331,7 +322,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       completedBytes += file.sizeBytes
     }
 
-    if (!this.validateModelFiles(manifest, stagingDir)) {
+    if (!hasSpeechModelFiles(manifest.downloadFiles, stagingDir)) {
       throw new Error('Model files missing after download')
     }
   }

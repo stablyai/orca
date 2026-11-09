@@ -728,15 +728,13 @@
       "modelDescriptions": {
         "parakeetV3": "Précision maximale pour 25 langues européennes. Ponctuation, majuscules et minuscules, et horodatage par mot.",
         "parakeetV2": "Anglais uniquement. Plus rapide que v3 avec une précision similaire. Ponctuation, majuscules et minuscules.",
-        "zipformerBilingual": "Chinois + anglais avec alternance de langues. Streaming en temps réel à faible latence.",
-        "paraformerBilingual": "Chinois (mandarin + dialectes) + anglais. Performant avec les accents et les variantes régionales du chinois.",
         "zipformerStreamingEnRetired": "N’est plus proposé : il omet le début des phrases. Supprimez-le pour libérer de l’espace.",
-        "zipformerStreamingZh": "Chinois uniquement. Modèle ultraléger de 14 millions de paramètres, idéal pour les appareils aux ressources limitées.",
-        "zipformerStreamingKo": "Coréen uniquement. Streaming en temps réel à faible latence.",
-        "parakeetJa": "Japonais uniquement. Entraîné sur plus de 35 000 heures de parole naturelle. Ponctuation incluse.",
         "whisperTiny": "Plus de 90 langues. Moins précis que Parakeet, mais offre la plus large couverture linguistique.",
         "senseVoice": "Chinois, anglais, japonais, coréen et cantonais avec détection automatique de la langue.",
-        "gptTranscribe": "Transcription dans le cloud avec une grande précision. Nécessite une clé API OpenAI."
+        "gptTranscribe": "Transcription dans le cloud avec une grande précision. Nécessite une clé API OpenAI.",
+        "whisperLargeV3Turbo": "Meilleure précision pour le japonais, le coréen et le chinois, et plus de 90 langues. Plus lent que Parakeet.",
+        "retiredForEngine": "N’est plus proposé : le moteur vocal ne peut plus l’exécuter. Supprimez-le pour libérer de l’espace.",
+        "nemotron": "Anglais, espagnol, allemand et bien d’autres langues, avec détection automatique de la langue."
       }
     },
     "diagnostics": {
@@ -9337,7 +9335,10 @@
           "openAiKeyName": "Votre clé de transcription OpenAI",
           "dictationShortcutDescription": "Appuyez sur {{shortcut}} pour dicter du texte dans n'importe quel volet actif.",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto : maintenez {{shortcut}} pour dicter jusqu’à ce que vous relâchiez, ou appuyez brièvement pour démarrer et arrêter. Maintien : dictez tant que {{shortcut}} est maintenu. Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter."
+          "dictationModesWithAutoDescription": "Auto : maintenez {{shortcut}} pour dicter jusqu’à ce que vous relâchiez, ou appuyez brièvement pour démarrer et arrêter. Maintien : dictez tant que {{shortcut}} est maintenu. Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter.",
+          "speechGpuLabel": "Utiliser le GPU",
+          "speechGpuDescription": "Reconnaît la parole sur la carte graphique quand elle fonctionne, et sur le processeur en cas d’échec. Désactivez-le si la dictée fige ou redémarre votre ordinateur.",
+          "updateToFasterVersion": "Passer à la version plus rapide ({{value0}} Mo)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
@@ -16920,6 +16921,7 @@
           "noModel": "Aucun modèle vocal sélectionné. Téléchargez-en un dans Paramètres > Voix.",
           "disabled": "La dictée vocale est désactivée. Activez-la dans Paramètres > Voix.",
           "notReady": "Le modèle vocal n'est pas prêt. Téléchargez-le dans Paramètres > Voix.",
+          "modelNeedsUpdate": "Votre modèle vocal doit être mis à jour pour continuer à fonctionner. Passez à la version plus rapide dans Paramètres > Voix.",
           "unknownModel": "Le modèle sélectionné n'est plus disponible. Choisissez-en un autre dans Paramètres > Voix.",
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
@@ -23999,5 +24001,31 @@
   },
   "checks": {
     "gitlabAllowedFailure": "Échec autorisé"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Mettez à jour votre modèle vocal",
+    "updateDescription": "La dictée utilise désormais un moteur plus rapide. {{model}} doit être téléchargé une seule fois ({{size}} Mo) avant que vous puissiez dicter à nouveau.",
+    "update": "Mettre à jour",
+    "replacedTitle": "Votre modèle vocal a été remplacé",
+    "replacedDescription": "{{old}} ne fonctionne pas avec le nouveau moteur vocal. {{model}} le remplace ({{size}} Mo).",
+    "downloadReplacement": "Télécharger {{model}}",
+    "later": "Plus tard",
+    "dismiss": "Fermer",
+    "updatingTitle": "Mise à jour de {{model}}",
+    "downloadingTitle": "Téléchargement de {{model}}",
+    "downloadingDescription": "Vous pouvez continuer à travailler. La dictée revient une fois l’opération terminée.",
+    "progress": "{{done}} sur {{total}} Mo",
+    "cancel": "Annuler",
+    "doneTitle": "La dictée est prête",
+    "doneDescription": "{{model}} est à jour. Les anciens fichiers ont été supprimés.",
+    "doneRetiredDescription": "{{model}} est prêt. Les anciens fichiers de {{old}} sont toujours sur le disque.",
+    "keep": "Conserver",
+    "deleteOld": "Supprimer l’ancien modèle",
+    "deleteFailed": "Impossible de supprimer {{model}}.",
+    "updateFailedTitle": "Impossible de mettre à jour {{model}}",
+    "downloadFailedTitle": "Impossible de télécharger {{model}}",
+    "failedAtDescription": "Le téléchargement s’est arrêté à {{mb}} Mo. Vérifiez votre connexion et réessayez.",
+    "failedDescription": "Le téléchargement s’est arrêté. Vérifiez votre connexion et réessayez.",
+    "tryAgain": "Réessayer"
   }
 }

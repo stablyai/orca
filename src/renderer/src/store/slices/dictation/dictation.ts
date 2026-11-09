@@ -21,7 +21,13 @@ export type DictationSlice = {
 }
 
 function sameSpeechModelState(a: SpeechModelState, b: SpeechModelState): boolean {
-  return a.id === b.id && a.status === b.status && a.progress === b.progress && a.error === b.error
+  return (
+    a.id === b.id &&
+    a.status === b.status &&
+    a.progress === b.progress &&
+    a.error === b.error &&
+    a.needsUpdate === b.needsUpdate
+  )
 }
 
 // Replies allocate fresh arrays; preserve unchanged identity or every model refresh rerenders subscribers/menu.

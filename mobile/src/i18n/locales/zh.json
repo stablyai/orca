@@ -1332,6 +1332,19 @@
       "phoneStopped": "已在此手机上停止",
       "stopped": "听写已停止",
       "recordingKept": "录音已保留"
+    },
+    "announce": {
+      "typedInto": "已输入到 {{target}}",
+      "insertedIn": "已插入到 {{target}}"
+    },
+    "pill": {
+      "open": "打开",
+      "listening": "正在听",
+      "starting": "正在开始",
+      "finishing": "正在完成",
+      "stopped": "听写已停止",
+      "label": "听写到 {{target}}，{{duration}}",
+      "hint": "轻点两下返回"
     }
   },
   "files": {

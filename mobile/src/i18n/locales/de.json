@@ -1336,6 +1336,19 @@
       "phoneStopped": "Auf diesem Telefon gestoppt",
       "stopped": "Diktat gestoppt",
       "recordingKept": "Aufnahme behalten"
+    },
+    "announce": {
+      "typedInto": "Eingetippt in {{target}}",
+      "insertedIn": "Eingefügt in {{target}}"
+    },
+    "pill": {
+      "open": "Öffnen",
+      "listening": "Hört zu",
+      "starting": "Startet",
+      "finishing": "Wird abgeschlossen",
+      "stopped": "Diktat gestoppt",
+      "label": "Diktat in {{target}}, {{duration}}",
+      "hint": "Doppeltippen, um zurückzukehren"
     }
   },
   "files": {

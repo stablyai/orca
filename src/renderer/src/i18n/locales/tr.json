@@ -934,15 +934,13 @@
       "modelDescriptions": {
         "parakeetV3": "25 Avrupa dili için en yüksek doğruluk. Noktalama, büyük/küçük harf kullanımı ve sözcük düzeyinde zaman damgaları.",
         "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
-        "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
-        "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
         "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
-        "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
-        "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
-        "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
         "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
         "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
-        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
+        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir.",
+        "whisperLargeV3Turbo": "Japonca, Korece ve Çince için en iyi doğruluk, ayrıca 90'dan fazla dil. Parakeet'ten daha yavaş.",
+        "retiredForEngine": "Artık sunulmuyor: konuşma motoru bu modeli artık çalıştıramıyor. Yer açmak için silin.",
+        "nemotron": "İngilizce, İspanyolca, Almanca ve daha birçok dil; dil otomatik algılanır."
       }
     },
     "diagnostics": {
@@ -9453,7 +9451,10 @@
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
           "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
           "dictationModeAuto": "Otomatik",
-          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın."
+          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın.",
+          "speechGpuLabel": "GPU kullan",
+          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın.",
+          "updateToFasterVersion": "Daha hızlı sürüme güncelle ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -16953,6 +16954,7 @@
           "noModel": "Konuşma modeli seçilmedi. Ayarlar > Ses bölümünden bir model indirin.",
           "disabled": "Sesli dikte devre dışı. Ayarlar > Ses bölümünden etkinleştirin.",
           "notReady": "Konuşma modeli hazır değil. Ayarlar > Ses bölümünden indirin.",
+          "modelNeedsUpdate": "Konuşma modelinizin çalışmaya devam etmesi için güncellenmesi gerekiyor. Ayarlar > Ses bölümünden daha hızlı sürüme güncelleyin.",
           "unknownModel": "Seçili model artık kullanılamıyor. Ayarlar > Ses bölümünden başka bir model seçin.",
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
@@ -23570,5 +23572,31 @@
     "branchName": "Dal adı",
     "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Konuşma modelinizi güncelleyin",
+    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
+    "update": "Güncelle",
+    "replacedTitle": "Konuşma modeliniz değiştirildi",
+    "replacedDescription": "{{old}} yeni konuşma motorunda çalışamıyor. Yerine {{model}} kullanılacak ({{size}} MB).",
+    "downloadReplacement": "{{model}} indir",
+    "later": "Daha sonra",
+    "dismiss": "Kapat",
+    "updatingTitle": "{{model}} güncelleniyor",
+    "downloadingTitle": "{{model}} indiriliyor",
+    "downloadingDescription": "Çalışmaya devam edebilirsiniz. Bu bittiğinde dikte geri gelir.",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "İptal",
+    "doneTitle": "Dikte hazır",
+    "doneDescription": "{{model}} güncellendi. Eski dosyalar kaldırıldı.",
+    "doneRetiredDescription": "{{model}} kuruldu. Eski {{old}} dosyaları hâlâ diskte.",
+    "keep": "Sakla",
+    "deleteOld": "Eski modeli sil",
+    "deleteFailed": "{{model}} silinemedi.",
+    "updateFailedTitle": "{{model}} güncellenemedi",
+    "downloadFailedTitle": "{{model}} indirilemedi",
+    "failedAtDescription": "İndirme {{mb}} MB'de durdu. Bağlantınızı kontrol edip yeniden deneyin.",
+    "failedDescription": "İndirme durdu. Bağlantınızı kontrol edip yeniden deneyin.",
+    "tryAgain": "Yeniden dene"
   }
 }

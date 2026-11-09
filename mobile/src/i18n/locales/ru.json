@@ -1418,6 +1418,19 @@
       "phoneStopped": "Остановлено на этом телефоне",
       "stopped": "Диктовка остановлена",
       "recordingKept": "Запись сохранена"
+    },
+    "announce": {
+      "typedInto": "Введено в {{target}}",
+      "insertedIn": "Вставлено в {{target}}"
+    },
+    "pill": {
+      "open": "Открыть",
+      "listening": "Слушаю",
+      "starting": "Запуск",
+      "finishing": "Завершение",
+      "stopped": "Диктовка остановлена",
+      "label": "Диктовка в {{target}}, {{duration}}",
+      "hint": "Дважды коснитесь, чтобы вернуться"
     }
   },
   "files": {
