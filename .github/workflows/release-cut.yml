@@ -2263,7 +2263,7 @@ jobs:
       - cut
       - publish-release
       - orca-server-artifact
-    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.orca-server-artifact.result == 'success' && needs.cut.outputs.tag != '' }}
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.orca-server-artifact.result == 'success' && needs.orca-server-artifact.outputs.packed == 'true' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

@@ -205,7 +205,7 @@ sudo tar -xzf "orca-server-linux-$arch.tar.gz" -C /opt/orca-server --strip-compo
 
 To pin a release, replace `latest/download` with `download/v<version>`, and keep that release's checksum in your script rather than downloading it next to the archive. The server needs glibc 2.28 or newer (Ubuntu 20.04, Debian 10, RHEL 8 and later).
 
-`orca-ide serve` takes the same flags as above, including `--supervise` under a service manager and `--recipe-json`. To update, stop the server, replace `/opt/orca-server` with a newer release, and start it again; paired clients cannot update it for you. A server-only install has no browser panes or dictation, because both need the desktop app.
+`orca-ide serve` takes the same flags as above, including `--supervise` under a service manager and `--recipe-json`. To update, stop the server, replace `/opt/orca-server` with a newer release, and start it again; paired clients cannot update it for you. For `orca-ide serve service install`, pass `--command /opt/orca-server/bin/orca-ide` or put `/opt/orca-server/bin` on `PATH`. A server-only install has no browser panes, dictation or paired web client, because those come with the desktop app.
 
 ### Limit terminal memory on a Linux server
 

@@ -29,9 +29,16 @@ import {
 import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../../../src/shared/orcad-local-serve-selection.ts'
 import {
   NODE_RUNTIME_PIN,
+  nodeRuntimeExecutablePath,
+  nodeRuntimeReleaseUrl,
   pinnedNodeRuntimeAsset
 } from '../../../../src/shared/node-runtime-pin.ts'
-import { ensurePinnedNodeExecutable } from '../prebuilds/pinned-node-downloads.mjs'
+import {
+  ensurePinnedNodeExecutable,
+  fetchPinnedFile,
+  pinnedNodeCacheDir
+} from '../prebuilds/pinned-node-downloads.mjs'
+import { extract } from '../../node-runtime/archive-identity/update-node-runtime-pin.mjs'
 import { computeOrcadFullVersion } from '../server-bundle/orcad-artifact-version.mjs'
 import { assertNotDarkBuild } from '../../../dark-build-switches.cjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
@@ -109,14 +116,15 @@ function stageSlot(templateDir, target, slotDir) {
       isExecutable(filename)
     )
   }
-  // The same identity the desktop gives this slot when it materializes the template.
+  // Hashed like a desktop slot without the optional browser, which this tarball omits.
   const version = computeOrcadFullVersion(slotDir, { target, agentBrowserFilename: null })
   writeFileSync(join(slotDir, ORCAD_VERSION_FILENAME), `${version}\n`)
   return version
 }
 
-// Why sh: it must run before any Node exists on the host. ORCA_APP_EXECUTABLE makes the bundled CLI
-// start servers itself, as the desktop's dev launcher does.
+// Why sh: it must run before any Node exists on the host. ELECTRON_RUN_AS_NODE=1 is how the packaged
+// app's CLI runs, and the CLI strips it from the server's environment; the other two would point
+// `serve` at a desktop app this install does not have.
 function launcherScript(nodeRelativePath) {
   return `#!/bin/sh
 # Orca server-only launcher: runs the bundled Orca CLI under the bundled Node.
@@ -127,8 +135,9 @@ if command -v readlink >/dev/null 2>&1 && resolved=$(readlink -f -- "$self" 2>/d
 fi
 root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd -P)
 node="$root/${nodeRelativePath}"
-ORCA_APP_EXECUTABLE="$node"
-export ORCA_APP_EXECUTABLE
+unset ORCA_APP_EXECUTABLE ORCA_SERVE_RUNTIME
+ELECTRON_RUN_AS_NODE=1
+export ELECTRON_RUN_AS_NODE
 exec "$node" "$root/${SLOT_DIR}/${ORCAD_CLI_ENTRY_FILENAME}" "$@"
 `
 }
@@ -152,6 +161,21 @@ try {
 }
 process.stdout.write('ORCA_SERVE_RUNTIME ' + JSON.stringify(selection) + '\\n')
 `
+}
+
+/** Node's notice ships with its binary; it comes from the same hash-checked archive. */
+async function copyNodeLicense(target, destination) {
+  const asset = pinnedNodeRuntimeAsset(target)
+  const cacheDir = pinnedNodeCacheDir()
+  const archive = await fetchPinnedFile({
+    url: nodeRuntimeReleaseUrl(asset.source, asset.archive),
+    destination: join(cacheDir, asset.archive),
+    sha256: asset.archiveSha256
+  })
+  const topLevel = nodeRuntimeExecutablePath(target, asset.archive).replace(/\/bin\/node$/, '')
+  const extractDir = join(cacheDir, `license-${asset.archiveSha256.slice(0, 12)}`)
+  extract(archive, extractDir, `${topLevel}/LICENSE`)
+  copyFileSync(join(extractDir, topLevel, 'LICENSE'), destination)
 }
 
 function listEntries(dir, base = dir) {
@@ -204,6 +228,7 @@ export async function packOrcaServerArtifact({ templateDir, target, outDir }) {
     `orca ${appVersion}\norcad ${orcadVersion}\nnode ${NODE_RUNTIME_PIN.version}\ntarget ${target}\n`
   )
   copyFileSync(join(root, 'LICENSE'), join(staging, 'LICENSE'))
+  await copyNodeLicense(target, join(staging, ORCAD_RUNTIMES_DIRNAME, 'NODE-LICENSE'))
 
   const archive = join(outDir, `${name}.tar.gz`)
   rmSync(archive, { force: true })
