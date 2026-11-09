@@ -14,6 +14,8 @@ const savedFieldsSchema = z.record(z.string(), z.string())
 
 type Slot = {
   fields: DraftFields
+  // Fields set on this page, cleared ones included; a read that lands later never overwrites them.
+  touched: Set<string>
   listeners: Set<() => void>
   row: DurableDraftRow
 }
@@ -34,6 +36,7 @@ function slotFor(key: string): Slot {
   }
   const slot: Slot = {
     fields: {},
+    touched: new Set(),
     listeners: new Set(),
     row: durableDraftRow(key, {
       backend: () => pageDraftRowBackend(key),
@@ -43,9 +46,14 @@ function slotFor(key: string): Slot {
         if (!parsed.success) {
           return
         }
-        // Text typed before the read landed wins over the saved copy.
-        const restored = Object.fromEntries(Object.entries(parsed.data).filter(([, text]) => text))
-        slot.fields = { ...restored, ...slot.fields }
+        // Text typed or cleared before the read landed wins over the saved copy.
+        const restored = Object.entries(parsed.data).filter(
+          ([field, text]) => text && !slot.touched.has(field)
+        )
+        if (restored.length === 0) {
+          return
+        }
+        slot.fields = { ...Object.fromEntries(restored), ...slot.fields }
         notify(slot)
       }
     })
@@ -66,6 +74,7 @@ export function updateDurableDraftField(
   if (next === current) {
     return
   }
+  slot.touched.add(field)
   const rest = Object.fromEntries(Object.entries(slot.fields).filter(([name]) => name !== field))
   slot.fields = next ? { ...rest, [field]: next } : rest
   notify(slot)

@@ -39,9 +39,6 @@ import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-conte
 import { useNewWorkspaceSetupScript } from './use-new-workspace-setup-script'
 import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 
-// Host-scoped (`''` worktree part): one New workspace form per paired desktop; the shell binds the host.
-const WORKSPACE_CREATE_DRAFT_KEY = durableDraftRowKey('workspaceCreate', '', '')
-
 /** The server a repo runs on; undefined for the desktop's own (local, SSH, folder). */
 function serverOf(repo: MobileWorkspaceRepo): `runtime:${string}` | undefined {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -87,8 +84,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
-  // Kept until a create succeeds, so a closed or killed form gets its note back.
-  const [note, setNote] = useDurableDraftField(WORKSPACE_CREATE_DRAFT_KEY, 'note')
+  // Kept per desktop until a create succeeds. The host is in the key because the tablet sidebar's
+  // native host list has no shell to bind it.
+  const [note, setNote] = useDurableDraftField(
+    durableDraftRowKey('workspaceCreate', '', hostId ?? ''),
+    'note'
+  )
   const [error, setError] = useState('')
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
   const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
@@ -109,9 +110,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     visible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
-  // A kept note holds Options open until the user folds them, so it isn't sent unseen.
-  const [noteFolded, setNoteFolded] = useState(false)
-  const showOptions = setupScript.showAdvanced || (note !== '' && !noteFolded)
+  // A kept note opens Options until the user folds them, so it isn't sent unseen.
+  const [noteOptions, setNoteOptions] = useState<'closed' | 'open' | 'folded'>('closed')
+  if (note && noteOptions === 'closed') {
+    setNoteOptions('open')
+  }
+  const showOptions = setupScript.showAdvanced || noteOptions === 'open'
   const selectedRepoWorktreeBranches = useMemo(
     () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
     [existingWorktrees, selectedRepo]
@@ -285,7 +289,9 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onConnect={() => void executionTarget.connect()}
         onOpenAgent={() => openPicker('agent')}
         onShowAdvancedChange={(show) => {
-          setNoteFolded(!show)
+          if (!show) {
+            setNoteOptions('folded')
+          }
           setupScript.setShowAdvanced(show)
         }}
         onNoteChange={setNote}
