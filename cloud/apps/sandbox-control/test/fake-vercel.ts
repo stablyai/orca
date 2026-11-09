@@ -9,7 +9,7 @@ import {
   type RunCommandParams,
   type SandboxProviderApi
 } from '../src/sandbox-provider'
-import { DRAIN_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
+import { DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 
 type FakeBox = {
   params: CreateSandboxParams
@@ -21,7 +21,11 @@ type FakeBox = {
   policy: NetworkPolicy
   /** orcad's recipe line for the current boot, once the start command ran. */
   orcadReady?: string
+  /** Files in the VM, as the files API would read them. */
+  files: Map<string, string>
 }
+
+export const READY_PATH = '/home/vercel-sandbox/.orca-sandbox/ready.json'
 
 export type FakeVercel = SandboxProviderApi & {
   boxes: Map<string, FakeBox>
@@ -30,6 +34,7 @@ export type FakeVercel = SandboxProviderApi & {
   /** Answers commands the fake does not know (in-VM orca CLI, routine runners); undefined falls through. */
   commandHandler?: (params: RunCommandParams, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
   failStart: boolean
+  failEnvRefresh: boolean
   failCreate: boolean
   /** Simulates the provider ending a session at its timeout. */
   expire(name: string): void
@@ -72,6 +77,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
     snapshots,
     commands,
     failStart: false,
+    failEnvRefresh: false,
     failCreate: false,
     expire(name) {
       const box = boxes.get(name)
@@ -93,7 +99,8 @@ export function createFakeVercel(now: () => number): FakeVercel {
         startedAt: now(),
         timeoutMs: params.timeoutMs,
         route: `https://sb-${counter}.vercel.run`,
-        policy: params.networkPolicy
+        policy: params.networkPolicy,
+        files: new Map()
       }
       boxes.set(params.name, box)
       return state(box)
@@ -141,10 +148,20 @@ export function createFakeVercel(now: () => number): FakeVercel {
         }
         const ready = { schemaVersion: 1, pairingCode: `orca://pair?code=${box.params.name}`, projectRoot: '/vercel/sandbox/project' }
         box.orcadReady = JSON.stringify(ready)
+        if (params.env?.ORCA_READY_VIA === 'file') {
+          // Like the image: the offer stays in the VM, stdout only says where.
+          box.files.set(READY_PATH, `booting\n${box.orcadReady}\n`)
+          return { exitCode: 0, stdout: `booting\n${JSON.stringify({ schemaVersion: 1, readyFile: READY_PATH })}\n`, stderr: '' }
+        }
         return { exitCode: 0, stdout: `booting\n${box.orcadReady}\n`, stderr: '' }
       }
       if (params.command === 'bash' && params.args?.join(' ').includes('ready.json')) {
-        return box.orcadReady ? { exitCode: 0, stdout: `${box.orcadReady}\n`, stderr: '' } : { exitCode: 3, stdout: '', stderr: '' }
+        if (!box.orcadReady) {
+          return { exitCode: 3, stdout: '', stderr: '' }
+        }
+        // Like the image: the offer stays in the VM, stdout only says where.
+        box.files.set(READY_PATH, `${box.orcadReady}\n`)
+        return { exitCode: 0, stdout: `${JSON.stringify({ schemaVersion: 1, readyFile: READY_PATH })}\n`, stderr: '' }
       }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }
@@ -152,10 +169,16 @@ export function createFakeVercel(now: () => number): FakeVercel {
       if (params.command === DRAIN_COMMAND) {
         return { exitCode: 0, stdout: '', stderr: '' }
       }
+      if (params.command === ENV_COMMAND) {
+        return { exitCode: fake.failEnvRefresh ? 3 : 0, stdout: '{"names":0}\n', stderr: '' }
+      }
       if (params.command === '/bin/sh' && params.args?.[1]?.includes('credentials.json')) {
         return { exitCode: 0, stdout: '', stderr: '' }
       }
       return { exitCode: 127, stdout: '', stderr: 'not found' }
+    },
+    async readFile(sessionId, path) {
+      return bySession(sessionId).files.get(path) ?? null
     },
     async deleteSandbox(name) {
       const box = boxes.get(name)
