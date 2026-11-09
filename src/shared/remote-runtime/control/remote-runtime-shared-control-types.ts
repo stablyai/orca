@@ -7,6 +7,7 @@ import type {
   RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
 import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
+import type { SharedControlAppHeartbeatOptions } from './remote-runtime-shared-control-app-heartbeat'
 
 /** Text, or binary that may carry compressed text; nothing else reaches the shared control socket. */
 export type SharedControlFrame = RemoteRuntimeSealedFrame
@@ -73,6 +74,8 @@ export type RemoteRuntimeSharedConnectionDiagnostics = {
   lastCloseCause?: SharedControlSocketCloseCause
   /** Last keepalive ping round trip; absent until one is measured. Not a publish trigger. */
   lastRttMs?: number
+  /** When the runtime first missed an app-level heartbeat; kept across reconnects until it answers again. */
+  unresponsiveSince?: number
 }
 
 export type SharedControlSocketCloseCause =
@@ -81,6 +84,8 @@ export type SharedControlSocketCloseCause =
   | 'socket_error'
   | 'protocol_error'
   | 'ready_timeout'
+  /** The socket stayed open but the runtime missed an app-level heartbeat. */
+  | 'runtime_unresponsive'
   | 'local'
 
 export type SharedControlSocketClosed = (
@@ -129,6 +134,8 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   /** Every socket close with its cause, e.g. for the diagnostics trace. */
   onSocketClosed?: (record: SharedControlSocketCloseRecord) => void
   liveness?: RemoteRuntimeSocketLivenessOptions
+  /** Opt-in app-level heartbeat on ready sockets; absent keeps transport-only liveness. */
+  appHeartbeat?: SharedControlAppHeartbeatOptions
   /** Null uses normal retry; a promise owns token recovery and decides whether this connection retries. */
   onAuthenticationRejected?: () => Promise<'retry' | 'stop'> | null
 }
