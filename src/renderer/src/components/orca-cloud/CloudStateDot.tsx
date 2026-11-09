@@ -8,12 +8,12 @@ import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
  * reads without color; every hollow variant uses a strong enough stroke for light mode.
  */
 export const CLOUD_DOT_CLASS: Record<CloudDotState, string> = {
-  running: 'rounded-full bg-emerald-500',
+  running: 'rounded-full bg-muted-foreground',
   sleeping: 'rounded-full border-[1.5px] border-muted-foreground bg-transparent',
-  waking: 'rounded-full bg-sky-500 motion-safe:animate-pulse',
-  unresponsive: 'rounded-full bg-amber-500',
+  waking: 'rounded-full bg-foreground/70 motion-safe:animate-pulse',
+  unresponsive: 'rounded-full bg-status-warning',
   archived: 'rounded-[2px] bg-muted-foreground',
-  failed: 'rounded-full bg-red-500',
+  failed: 'rounded-full bg-destructive',
   unknown: 'rounded-full border-[1.5px] border-dashed border-muted-foreground bg-transparent'
 }
 

@@ -4,14 +4,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { CloudStateDot } from './CloudStateDot'
+import { FOCUS_RING } from './cloud-focus'
 import { cloudStateLabel } from './cloud-state-copy'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import { useCloudStatusPolling, useCloudWorkspaceView } from './use-cloud-workspace-view'
-import {
-  runArchiveCloudWorkspace,
-  runRestartCloudWorkspace,
-  runUnarchiveCloudWorkspace
-} from './cloud-workspace-actions'
+import { useCloudPanelActions } from './use-cloud-panel-actions'
 
 const PANEL_POLL_MS = 5_000
 const HOVER_OPEN_MS = 250
@@ -71,6 +68,8 @@ function CloudWorkspaceMarkInner({
     }
   }
   useCloudStatusPolling(workspaceId, PANEL_POLL_MS, open !== null)
+  const close = useCallback(() => setOpen(null), [])
+  const actions = useCloudPanelActions(workspaceId, close)
   const label = t('orcaCloudWorkspace.markLabel', 'Orca Cloud: {{state}}', {
     state: cloudStateLabel(view.state, t)
   })
@@ -107,8 +106,10 @@ function CloudWorkspaceMarkInner({
           onPointerEnter={hoverIn}
           onPointerLeave={hoverOut}
           className={cn(
-            'inline-flex h-4 shrink-0 items-center gap-[3px] rounded px-px text-muted-foreground',
-            'hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
+            // 24px hit area around the 16px mark, without changing the row's layout.
+            "relative inline-flex h-4 shrink-0 items-center gap-[3px] rounded px-px text-muted-foreground after:absolute after:-inset-1 after:content-['']",
+            'hover:text-foreground',
+            FOCUS_RING
           )}
         >
           <Cloud className="size-3" aria-hidden="true" />
@@ -127,7 +128,7 @@ function CloudWorkspaceMarkInner({
         onPointerLeave={hoverOut}
         onOpenAutoFocus={(event) => {
           // Hover previews keep focus in the sidebar; a pinned panel takes focus itself (not
-          // its first action, so Enter can't archive by accident).
+          // its first action, so Enter can't act by accident).
           event.preventDefault()
           if (open !== 'hover') {
             content.current?.focus()
@@ -140,11 +141,7 @@ function CloudWorkspaceMarkInner({
           state={view.state}
           entry={view.entry}
           pending={view.pending}
-          actions={{
-            onRestart: () => void runRestartCloudWorkspace(workspaceId),
-            onArchive: () => void runArchiveCloudWorkspace(workspaceId),
-            onUnarchive: () => void runUnarchiveCloudWorkspace(workspaceId)
-          }}
+          actions={actions}
         />
       </PopoverContent>
     </Popover>

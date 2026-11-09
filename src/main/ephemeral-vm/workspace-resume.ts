@@ -10,6 +10,8 @@ import {
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
+import { getHostedWorkspaceService } from '../hosted-sandbox/hosted-workspace-runtime'
+import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
 import { applyResumedRuntimePairing } from './runtime-resume-pairing'
@@ -61,6 +63,15 @@ export async function resumeEphemeralVmWorkspace(
     if (lostContact) {
       updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, { status: runtime.status })
     }
+  }
+  // An archived Orca Cloud workspace is browsed from its archive; only Unarchive wakes it, so a
+  // stale window (or a cold start before its status loaded) can never wake it by opening it.
+  if (
+    runtime.recipe?.provider === 'orca-cloud' &&
+    (await getHostedWorkspaceService()?.isArchived(workspaceId))
+  ) {
+    restoreAfterFailedRecovery()
+    throw new Error(CLOUD_WORKSPACE_ARCHIVED_ERROR)
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   if (lostContact && runtime.connectionMode === 'orca-server' && !recipeContext.recipe.resume) {

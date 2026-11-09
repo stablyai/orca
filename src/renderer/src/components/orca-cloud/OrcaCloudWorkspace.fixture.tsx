@@ -1,9 +1,17 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { Toaster } from '@/components/ui/sonner'
+import { showIdleSleepNotice } from '@/lib/orca-cloud-session-events'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import { seedCloudWorkspaceSnapshot, type CloudStatusEntry } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import {
+  seedCloudWorkspaceSnapshot,
+  type CloudStatusEntry
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
-import type { CloudArchiveInfo, CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+import type {
+  CloudArchiveInfo,
+  CloudWakeProgressEvent
+} from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { CloudArchivedWorkspaceView } from './CloudArchivedWorkspaceView'
 import { CloudStateDot } from './CloudStateDot'
 import { cloudStateLabel } from './cloud-state-copy'
@@ -14,7 +22,7 @@ import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 
 const NOW = Date.now()
 const noop = (): void => {}
-const actions = { onRestart: noop, onArchive: noop, onUnarchive: noop }
+const actions = { onWake: noop, onRestart: noop, onArchive: noop, onUnarchive: noop }
 
 const running: HostedWorkspaceStatus = {
   state: 'ready',
@@ -36,44 +44,69 @@ const running: HostedWorkspaceStatus = {
   archive: null,
   checkedAt: NOW
 }
-const entry = (status: HostedWorkspaceStatus | null, over: Partial<CloudStatusEntry> = {}): CloudStatusEntry => ({
+const asleep: HostedWorkspaceStatus = { ...running, state: 'sleeping', metrics: null, uptimeMs: null }
+const entry = (
+  status: HostedWorkspaceStatus | null,
+  over: Partial<CloudStatusEntry> = {}
+): CloudStatusEntry => ({
   status,
   loading: false,
   error: null,
-  fetchedAt: NOW - 4_000,
+  fetchedAt: NOW - 42_000,
   ...over
 })
 
-function Panel({ state, value, pending }: { state: CloudDotState; value: CloudStatusEntry | undefined; pending?: 'restart' }) {
+function Panel({
+  state,
+  value,
+  pending
+}: {
+  state: CloudDotState
+  value: CloudStatusEntry | undefined
+  pending?: 'restart'
+}): React.JSX.Element {
   return (
     <div className="rounded-md border border-border bg-floating-surface p-3">
-      <CloudWorkspaceStatusPanel workspaceId="ws" state={state} entry={value} pending={pending} actions={actions} />
+      <CloudWorkspaceStatusPanel
+        workspaceId="ws"
+        state={state}
+        entry={value}
+        pending={pending}
+        actions={actions}
+      />
     </div>
   )
 }
 
-export const panelRunning = defineFixture({ width: 300, render: () => <Panel state="running" value={entry(running)} /> })
+export const panelRunning = defineFixture({
+  width: 300,
+  render: () => <Panel state="running" value={entry(running)} />
+})
 
 export const panelUnresponsive = defineFixture({
   width: 300,
   render: () => (
     <Panel
       state="unresponsive"
-      value={entry({ ...running, state: 'unresponsive', metrics: { ...running.metrics!, cpuPercent: 99, orcadAlive: false } })}
+      value={entry({
+        ...running,
+        state: 'unresponsive',
+        metrics: { ...running.metrics!, cpuPercent: 99, orcadAlive: false }
+      })}
     />
   )
 })
 
 export const panelRestarting = defineFixture({
   width: 300,
-  render: () => <Panel state="unresponsive" value={entry({ ...running, state: 'unresponsive' })} pending="restart" />
+  render: () => (
+    <Panel state="unresponsive" value={entry({ ...running, state: 'unresponsive' })} pending="restart" />
+  )
 })
 
 export const panelSleeping = defineFixture({
   width: 300,
-  render: () => (
-    <Panel state="sleeping" value={entry({ ...running, state: 'sleeping', metrics: null, uptimeMs: null })} />
-  )
+  render: () => <Panel state="sleeping" value={entry(asleep)} />
 })
 
 export const panelArchived = defineFixture({
@@ -82,10 +115,8 @@ export const panelArchived = defineFixture({
     <Panel
       state="archived"
       value={entry({
-        ...running,
+        ...asleep,
         state: 'archived',
-        metrics: null,
-        uptimeMs: null,
         archive: { archivedAt: NOW - 86_400_000, expiresAt: NOW + 29 * 86_400_000 }
       })}
     />
@@ -99,18 +130,29 @@ export const panelLoading = defineFixture({
 
 export const panelError = defineFixture({
   width: 300,
-  render: () => <Panel state="unknown" value={entry(null, { error: 'unreachable', fetchedAt: null })} />
+  render: () => (
+    <Panel state="unknown" value={entry(null, { error: 'unreachable', fetchedAt: null })} />
+  )
 })
 
-const DOT_STATES: CloudDotState[] = ['running', 'sleeping', 'waking', 'unresponsive', 'archived', 'failed', 'unknown']
+const DOT_STATES: CloudDotState[] = [
+  'running',
+  'sleeping',
+  'waking',
+  'unresponsive',
+  'archived',
+  'failed',
+  'unknown'
+]
 
+/** Every state as it sits in a sidebar row (glyph + dot), next to its label. */
 export const dotStates = defineFixture({
-  width: 240,
+  width: 260,
   render: () => (
     <ul className="flex flex-col gap-2 bg-worktree-sidebar p-3 text-xs text-worktree-sidebar-foreground">
       {DOT_STATES.map((state) => (
         <li key={state} className="flex items-center gap-2">
-          <CloudStateDot state={state} />
+          <CloudStateDot state={state} size="md" />
           {cloudStateLabel(state)}
         </li>
       ))}
@@ -118,28 +160,49 @@ export const dotStates = defineFixture({
   )
 })
 
-/** The sidebar mark with its status panel open. */
-export const sidebarMarkOpen = defineFixture({
-  width: 420,
-  setup: () => {
-    seedCloudWorkspaceSnapshot({ ids: new Set(['ws']), status: { ws: entry(running) } })
+function seedSidebar(status: HostedWorkspaceStatus): () => void {
+  return () => {
+    seedCloudWorkspaceSnapshot({
+      ids: new Set(['ws']),
+      idsLoaded: true,
+      status: { ws: entry(status) }
+    })
     window.api.orcaCloudWorkspace = {
       ...window.api.orcaCloudWorkspace,
-      getStatus: async () => ({ ok: true, value: running })
+      getStatus: async () => ({ ok: true, value: status })
     }
-  },
-  render: () => (
-    <div className="h-72 bg-worktree-sidebar p-3 text-worktree-sidebar-foreground">
+  }
+}
+
+function SidebarRow(): React.JSX.Element {
+  return (
+    <div className="h-80 bg-worktree-sidebar p-3 text-worktree-sidebar-foreground">
       <div className="flex w-56 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px]">
         <CloudWorkspaceMark workspaceId="ws" />
         <span className="truncate">fix-auth-redirect</span>
       </div>
     </div>
-  ),
-  interact: async (frame) => {
-    frame.querySelector<HTMLButtonElement>('[data-cloud-workspace-mark]')?.click()
-    await new Promise((resolve) => setTimeout(resolve, 300))
-  }
+  )
+}
+
+const openMark = async (frame: HTMLElement): Promise<void> => {
+  frame.querySelector<HTMLButtonElement>('[data-cloud-workspace-mark]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+
+/** The sidebar mark with its status popover pinned open. */
+export const sidebarMarkOpen = defineFixture({
+  width: 420,
+  setup: seedSidebar(running),
+  render: () => <SidebarRow />,
+  interact: openMark
+})
+
+export const sidebarMarkAsleep = defineFixture({
+  width: 420,
+  setup: seedSidebar(asleep),
+  render: () => <SidebarRow />,
+  interact: openMark
 })
 
 const wake = (over: Partial<CloudWakeProgressEvent> = {}): CloudWakeProgressEvent => ({
@@ -151,39 +214,57 @@ const wake = (over: Partial<CloudWakeProgressEvent> = {}): CloudWakeProgressEven
   ...over
 })
 
-function Pane({ children }: { children: React.ReactNode }) {
-  return <div className="relative h-[340px] overflow-hidden rounded-md border border-border bg-background">{children}</div>
+function Pane({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="relative h-[340px] overflow-hidden rounded-md border border-border bg-background">
+      {children}
+    </div>
+  )
 }
 
-export const wakingOverlay = defineFixture({
-  width: 640,
-  render: () => (
+function Overlay({ value }: { value: CloudWakeProgressEvent }): React.JSX.Element {
+  return (
     <Pane>
-      <CloudWakingOverlay wake={wake()} workspaceName="fix-auth-redirect" onRetry={noop} onRestart={noop} />
+      <CloudWakingOverlay
+        wake={value}
+        workspaceName="fix-auth-redirect"
+        autoFocus={false}
+        onRetry={noop}
+        onRestart={noop}
+        onDismiss={noop}
+      />
     </Pane>
   )
+}
+
+export const wakingOverlay = defineFixture({ width: 640, render: () => <Overlay value={wake()} /> })
+
+export const wakingFromMessage = defineFixture({
+  width: 640,
+  render: () => <Overlay value={wake({ source: 'message' })} />
+})
+
+export const wakingSlow = defineFixture({
+  width: 640,
+  render: () => <Overlay value={wake({ startedAt: NOW - 24_000 })} />
+})
+
+export const wakingStuck = defineFixture({
+  width: 640,
+  render: () => <Overlay value={wake({ startedAt: NOW - 71_000 })} />
 })
 
 export const wakingRestart = defineFixture({
   width: 640,
-  render: () => (
-    <Pane>
-      <CloudWakingOverlay wake={wake({ source: 'restart' })} workspaceName="fix-auth-redirect" onRetry={noop} onRestart={noop} />
-    </Pane>
-  )
+  render: () => <Overlay value={wake({ source: 'restart' })} />
 })
 
 export const wakingFailed = defineFixture({
   width: 640,
   render: () => (
-    <Pane>
-      <CloudWakingOverlay
-        wake={wake({ phase: 'failed', message: 'Orca Cloud did not answer in time.' })}
-        workspaceName="fix-auth-redirect"
-        onRetry={noop}
-        onRestart={noop}
-      />
-    </Pane>
+    <Overlay
+      value={wake({ phase: 'failed', message: 'Orca Cloud stopped responding while waking.' })}
+    />
   )
 })
 
@@ -210,13 +291,44 @@ export const noticeOom = defineFixture({
   )
 })
 
+function IdleToast(): React.JSX.Element {
+  useEffect(() => {
+    showIdleSleepNotice('ws', 'fix-auth-redirect', 20 * 60_000)
+  }, [])
+  return (
+    <>
+      <div className="h-[160px] bg-background" />
+      <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm' }} />
+    </>
+  )
+}
+
+/** "<name> slept after 20 min idle" with Wake. */
+export const idleSleepToast = defineFixture({
+  width: 460,
+  render: () => <IdleToast />,
+  interact: async () => {
+    await new Promise((resolve) => setTimeout(resolve, 600))
+  }
+})
+
 const archive: CloudArchiveInfo = {
   capturedAt: NOW - 86_400_000,
   source: 'vm',
   metadata: {
     pullRequests: [
-      { number: 482, title: 'Fix OAuth redirect loop on expired sessions', state: 'open', url: 'https://github.com/acme/web/pull/482' },
-      { number: 477, title: 'Add session refresh telemetry', state: 'merged', url: 'https://github.com/acme/web/pull/477' }
+      {
+        number: 482,
+        title: 'Fix OAuth redirect loop on expired sessions',
+        state: 'open',
+        url: 'https://github.com/acme/web/pull/482'
+      },
+      {
+        number: 477,
+        title: 'Add session refresh telemetry',
+        state: 'merged',
+        url: 'https://github.com/acme/web/pull/477'
+      }
     ],
     checkouts: [
       {
@@ -227,9 +339,24 @@ const archive: CloudArchiveInfo = {
         ahead: 2,
         behind: 0,
         commits: [
-          { sha: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2', author: 'Ada', at: NOW - 26 * 3_600_000, subject: 'Refresh the session before redirecting' },
-          { sha: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3', author: 'Ada', at: NOW - 28 * 3_600_000, subject: 'Reproduce the redirect loop in a test' },
-          { sha: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4', author: 'Grace', at: NOW - 5 * 86_400_000, subject: 'Bump next to 16.2' }
+          {
+            sha: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+            author: 'Ada',
+            at: NOW - 26 * 3_600_000,
+            subject: 'Refresh the session before redirecting'
+          },
+          {
+            sha: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3',
+            author: 'Ada',
+            at: NOW - 28 * 3_600_000,
+            subject: 'Reproduce the redirect loop in a test'
+          },
+          {
+            sha: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
+            author: 'Grace',
+            at: NOW - 5 * 86_400_000,
+            subject: 'Bump next to 16.2'
+          }
         ],
         changes: [
           { status: 'M', path: 'src/auth/session.ts' },
@@ -237,13 +364,26 @@ const archive: CloudArchiveInfo = {
         ],
         diffStat: '2 files changed, 41 insertions(+), 6 deletions(-)',
         fileCount: 2412,
-        files: ['README.md', 'package.json', 'src/auth/session.ts', 'src/auth/session.test.ts', 'src/auth/redirect.ts', 'src/app/page.tsx', 'src/app/layout.tsx', 'tsconfig.json']
+        files: [
+          'README.md',
+          'package.json',
+          'src/auth/session.ts',
+          'src/auth/session.test.ts',
+          'src/auth/redirect.ts',
+          'src/app/page.tsx',
+          'src/app/layout.tsx',
+          'tsconfig.json'
+        ]
       }
     ]
   }
 }
 
-function Archived({ load }: { load: React.ComponentProps<typeof CloudArchivedWorkspaceView>['load'] }) {
+function Archived({
+  load
+}: {
+  load: React.ComponentProps<typeof CloudArchivedWorkspaceView>['load']
+}): React.JSX.Element {
   return (
     <div className="relative h-[620px]">
       <CloudArchivedWorkspaceView
@@ -261,7 +401,19 @@ function Archived({ load }: { load: React.ComponentProps<typeof CloudArchivedWor
   )
 }
 
-export const archivedView = defineFixture({ width: 820, render: () => <Archived load={{ status: 'ready', archive }} /> })
-export const archivedEmpty = defineFixture({ width: 820, render: () => <Archived load={{ status: 'ready', archive: null }} /> })
-export const archivedLoading = defineFixture({ width: 820, render: () => <Archived load={{ status: 'loading' }} /> })
-export const archivedError = defineFixture({ width: 820, render: () => <Archived load={{ status: 'error', message: 'x' }} /> })
+export const archivedView = defineFixture({
+  width: 820,
+  render: () => <Archived load={{ status: 'ready', archive }} />
+})
+export const archivedEmpty = defineFixture({
+  width: 820,
+  render: () => <Archived load={{ status: 'ready', archive: null }} />
+})
+export const archivedLoading = defineFixture({
+  width: 820,
+  render: () => <Archived load={{ status: 'loading' }} />
+})
+export const archivedError = defineFixture({
+  width: 820,
+  render: () => <Archived load={{ status: 'error', message: 'x' }} />
+})

@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils'
 import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
+/** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
+export const WAKE_SLOW_S = 20
+export const WAKE_STUCK_S = 60
+
 // Prompt lines and output lines of varied length: reads as "a terminal is coming".
 const SKELETON: { prompt: boolean; width: number }[] = [
   { prompt: true, width: 28 },
@@ -23,17 +27,23 @@ const SKELETON: { prompt: boolean; width: number }[] = [
   { prompt: true, width: 12 }
 ]
 
-function TerminalSkeleton(): React.JSX.Element {
+function TerminalSkeleton({ still }: { still: boolean }): React.JSX.Element {
   return (
     <div
-      className="absolute inset-0 flex flex-col gap-2 overflow-hidden px-4 py-3 font-mono text-xs text-muted-foreground/40"
+      className={cn(
+        'absolute inset-0 flex flex-col gap-2 overflow-hidden px-4 py-3 font-mono text-xs text-muted-foreground/40',
+        still && 'opacity-40'
+      )}
       aria-hidden="true"
     >
       {SKELETON.map((line, index) => (
         <span key={index} className="flex h-3 items-center gap-2">
-          {line.prompt ? <span className="w-2 leading-none">$</span> : <span className="w-2" />}
+          <span className="w-2 leading-none">{line.prompt ? '$' : ''}</span>
           <span
-            className="h-2 rounded-sm bg-muted-foreground/15 motion-safe:animate-pulse [animation-duration:2.4s]"
+            className={cn(
+              'h-2 rounded-sm bg-muted-foreground/15',
+              !still && 'motion-safe:animate-pulse [animation-duration:2.4s]'
+            )}
             style={{ width: `${line.width}%`, animationDelay: `${index * 140}ms` }}
           />
         </span>
@@ -43,15 +53,16 @@ function TerminalSkeleton(): React.JSX.Element {
 }
 
 /**
- * Covers the workspace while its Orca Cloud workspace wakes: a terminal-shaped skeleton (never a
- * blank pane) with a live "Waking… Ns" pill. The same overlay for every wake source (open,
- * message, Wake button, restart, unarchive). `leaving` fades it out over the live terminal
- * without moving layout; reduced motion swaps instantly.
+ * Covers the workspace while it wakes: a terminal-shaped skeleton (never a blank pane) with a
+ * live "Waking… Ns" pill. The same overlay for every wake source (open, message, Wake, restart,
+ * unarchive). Slow wakes say so at 20 s and offer recovery at 60 s; a failed wake becomes a
+ * dismissible card. `leaving` fades it out over the live terminal without moving layout.
  */
 export function CloudWakingOverlay({
   wake,
   workspaceName,
   leaving = false,
+  autoFocus = true,
   onRetry,
   onRestart,
   onDismiss
@@ -59,25 +70,30 @@ export function CloudWakingOverlay({
   wake: CloudWakeProgressEvent
   workspaceName: string | null
   leaving?: boolean
+  /** Move focus into the overlay (only when it covers the pane that had focus). */
+  autoFocus?: boolean
   onRetry: () => void
   onRestart: () => void
   onDismiss: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const failed = wake.phase === 'failed'
-  const ticking = !failed && !leaving
-  const now = useNow(1_000, ticking)
+  const now = useNow(1_000, !failed && !leaving)
   const seconds = wakeElapsedSeconds(wake.startedAt, Math.max(now, wake.at))
+  const slow = !failed && seconds >= WAKE_SLOW_S
+  const stuck = !failed && seconds >= WAKE_STUCK_S
   const retryRef = useRef<HTMLButtonElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    // The overlay covers a live pane that may hold focus: move focus to the overlay itself.
+    if (!autoFocus) {
+      return
+    }
     if (failed) {
       retryRef.current?.focus()
     } else {
       rootRef.current?.focus()
     }
-  }, [failed])
+  }, [failed, autoFocus])
   const name = workspaceName ?? t('orcaCloudWorkspace.thisWorkspace', 'this workspace')
   const title =
     wake.source === 'restart'
@@ -85,20 +101,27 @@ export function CloudWakingOverlay({
       : wake.source === 'unarchive'
         ? t('orcaCloudWorkspace.overlay.unarchiving', 'Restoring from archive…')
         : t('orcaCloudWorkspace.overlay.waking', 'Waking…')
+  const hint = stuck
+    ? t('orcaCloudWorkspace.overlay.stuck', 'This is taking much longer than usual.')
+    : slow
+      ? t('orcaCloudWorkspace.overlay.slow', 'Taking longer than usual…')
+      : wake.source === 'message'
+        ? t('orcaCloudWorkspace.overlay.messageQueued', 'Your message sends as soon as it’s up.')
+        : t('orcaCloudWorkspace.overlay.usually', 'Usually about 5 seconds.')
   return (
     <div
       ref={rootRef}
       tabIndex={-1}
       className={cn(
-        'absolute inset-0 z-30 bg-background outline-none',
+        'absolute inset-0 bg-background outline-none',
+        'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150',
         'motion-safe:transition-opacity motion-safe:duration-200',
         leaving ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
       data-cloud-waking-overlay={wake.phase}
-      data-cloud-overlay="cover"
       aria-label={failed ? undefined : t('orcaCloudWorkspace.overlay.label', '{{name}} is waking', { name })}
     >
-      <TerminalSkeleton />
+      <TerminalSkeleton still={failed} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
         {failed ? (
           <div
@@ -107,13 +130,16 @@ export function CloudWakingOverlay({
           >
             <div className="flex items-start gap-3">
               <AlertTriangle
-                className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
+                className="mt-0.5 size-4 shrink-0 text-status-warning"
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="text-sm font-medium">
                   {t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', { name })}
                 </div>
+                {wake.message ? (
+                  <p className="break-words text-xs text-foreground">{wake.message}</p>
+                ) : null}
                 <p className="text-xs text-muted-foreground">
                   {t('orcaCloudWorkspace.overlay.failedDetail', 'Your files and chats are saved.')}
                 </p>
@@ -130,35 +156,35 @@ export function CloudWakingOverlay({
             </div>
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="ghost" onClick={onRestart}>
-                {t('orcaCloudWorkspace.restartWorkspace', 'Restart workspace')}
+                {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
               </Button>
               <Button ref={retryRef} size="sm" onClick={onRetry}>
                 {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
               </Button>
             </div>
-            {wake.message ? (
-              <p className="break-words text-[11px] text-muted-foreground/80">{wake.message}</p>
-            ) : null}
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <div
-              role="status"
-              className="flex items-center gap-2.5 rounded-full border border-border bg-card/95 py-1.5 pr-3.5 pl-2.5 text-sm text-card-foreground shadow-xs backdrop-blur"
-            >
-              <span className="flex size-5 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
+            <div className="flex items-center gap-2.5 rounded-full border border-border bg-card/95 py-1.5 pr-3.5 pl-2.5 text-sm text-card-foreground shadow-xs backdrop-blur">
+              <span className="flex size-5 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Cloud className="size-3" aria-hidden="true" />
               </span>
               <span className="font-medium">{title}</span>
-              {/* Ticks every second; only the phase is announced, not each tick. */}
+              {/* Ticks every second; the surface's status region announces phases, not ticks. */}
               <span className="tabular-nums text-muted-foreground" aria-hidden="true">
                 {t('orcaCloudWorkspace.duration.seconds', '{{s}}s', { s: seconds })}
               </span>
             </div>
-            {wake.source === 'message' ? (
-              <p className="text-xs text-muted-foreground">
-                {t('orcaCloudWorkspace.overlay.messageQueued', 'Your message sends as soon as it’s up.')}
-              </p>
+            <p className="text-xs text-muted-foreground">{hint}</p>
+            {stuck ? (
+              <div className="flex gap-2">
+                <Button size="xs" variant="ghost" onClick={onRestart}>
+                  {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
+                </Button>
+                <Button size="xs" variant="outline" onClick={onRetry}>
+                  {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
+                </Button>
+              </div>
             ) : null}
           </div>
         )}

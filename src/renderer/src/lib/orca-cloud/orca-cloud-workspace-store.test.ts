@@ -6,6 +6,10 @@ import type {
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
   archiveCloudWorkspace,
+  restartCloudWorkspace,
+  unarchiveCloudWorkspace
+} from './orca-cloud-workspace-actions'
+import {
   dismissCloudOom,
   getCloudWorkspaceSnapshot,
   isCloudWorkspaceArchived,
@@ -13,9 +17,7 @@ import {
   noteCloudWakeProgress,
   refreshCloudWorkspaceIds,
   refreshCloudWorkspaceStatus,
-  restartCloudWorkspace,
-  seedCloudWorkspaceSnapshot,
-  unarchiveCloudWorkspace
+  seedCloudWorkspaceSnapshot
 } from './orca-cloud-workspace-store'
 
 const ready: HostedWorkspaceStatus = {
@@ -55,7 +57,6 @@ describe('orca cloud workspace store', () => {
   it('learns cloud ids and reads each new workspace once', async () => {
     const bridge = stubApi()
     await refreshCloudWorkspaceIds()
-    await Promise.all(['a', 'b'].map((id) => refreshCloudWorkspaceStatus(id)))
     expect([...getCloudWorkspaceSnapshot().ids]).toEqual(['a', 'b'])
     expect(getCloudWorkspaceSnapshot().status.a?.status?.state).toBe('ready')
     expect(bridge.getStatus).toHaveBeenCalledTimes(2)

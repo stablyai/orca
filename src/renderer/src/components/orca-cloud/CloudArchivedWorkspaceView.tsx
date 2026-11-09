@@ -241,7 +241,7 @@ export function CloudArchivedWorkspaceView({
           </div>
         ) : nothing ? (
           <p className="max-w-[60ch] text-sm text-muted-foreground">
-            {t('orcaCloudWorkspace.archived.nothing', 'Nothing was captured when this was archived.')}
+            {t('orcaCloudWorkspace.archived.nothing', 'Nothing was captured for this workspace. Unarchive to open it.')}
           </p>
         ) : (
           <>

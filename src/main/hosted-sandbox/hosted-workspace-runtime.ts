@@ -1,6 +1,7 @@
 // Orca Cloud workspace lookups shared by the workspace service and its IPC: workspace id → runtime
 // record → sandbox id, error mapping for the window, and OOM-notice dedupe.
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import type {
   CloudOomEvent,
@@ -162,4 +163,22 @@ export function setHostedWorkspaceService(next: HostedWorkspaceService | null): 
 /** Null when Orca Cloud is not configured in this build. */
 export function getHostedWorkspaceService(): HostedWorkspaceService | null {
   return current
+}
+
+/** Whether the control plane says this workspace is archived; unknown counts as not archived. */
+export async function isArchivedOnControlPlane(
+  userDataPath: string,
+  client: Pick<HostedSandboxControlPlaneClient, 'get'>,
+  workspaceId: string
+): Promise<boolean> {
+  const found = findCloudRuntime(userDataPath, workspaceId)
+  if (!found) {
+    return false
+  }
+  try {
+    return (await client.get(found.sandboxId)).status === 'archived'
+  } catch {
+    // The control plane refuses to resume an archive anyway.
+    return false
+  }
 }

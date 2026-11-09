@@ -74,7 +74,7 @@ const snapshot: CloudOfflineSnapshot = {
         {
           itemId: 'm2',
           role: 'assistant',
-          text: 'Done. Read-only answers (chat history, terminal output, git status) are kept per workspace on this computer and served while the VM sleeps. Tests pass.',
+          text: 'Done. Read-only answers (chat history, terminal output, git status) are kept per workspace on this computer and served while the sandbox sleeps. Tests pass.',
           at: NOW - 15 * MIN
         }
       ]
@@ -108,7 +108,7 @@ export const asleepWithChat = defineFixture({
       <CloudWorkspaceOfflineView
         snapshot={snapshot}
         queued={queued}
-        waking={false}
+        workspaceName="fix-auth-redirect"
         now={NOW}
         onWake={noop}
         onQueue={yes}
@@ -118,14 +118,14 @@ export const asleepWithChat = defineFixture({
     )
 })
 
-export const wakingAfterSend = defineFixture({
+export const deliveringAfterWake = defineFixture({
   width: 900,
   render: () =>
     frame(
       <CloudWorkspaceOfflineView
         snapshot={snapshot}
         queued={[{ ...queued[0]!, state: 'sending' }]}
-        waking
+        workspaceName="fix-auth-redirect"
         now={NOW}
         onWake={noop}
         onQueue={yes}
@@ -142,7 +142,7 @@ export const terminalsTab = defineFixture({
       <CloudWorkspaceOfflineView
         snapshot={{ ...snapshot, chats: [] }}
         queued={[]}
-        waking={false}
+        workspaceName="fix-auth-redirect"
         now={NOW}
         onWake={noop}
         onQueue={yes}
@@ -159,7 +159,7 @@ export const changesTab = defineFixture({
       <CloudWorkspaceOfflineView
         snapshot={{ ...snapshot, chats: [], terminals: [] }}
         queued={[]}
-        waking={false}
+        workspaceName="fix-auth-redirect"
         now={NOW}
         onWake={noop}
         onQueue={yes}
@@ -183,7 +183,7 @@ export const nothingCachedYet = defineFixture({
           chats: []
         }}
         queued={[]}
-        waking={false}
+        workspaceName="fix-auth-redirect"
         now={NOW}
         onWake={noop}
         onQueue={yes}
@@ -200,7 +200,7 @@ export const deliveryFailed = defineFixture({
       <CloudWorkspaceOfflineView
         snapshot={snapshot}
         queued={[{ ...queued[0]!, state: 'failed', error: 'The agent session was closed.' }]}
-        waking={false}
+        workspaceName="fix-auth-redirect"
         now={NOW}
         onWake={noop}
         onQueue={yes}

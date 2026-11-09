@@ -10,10 +10,7 @@ import type {
   CloudWorkspaceResult,
   OrcaCloudWorkspaceApi
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
-import type {
-  HostedArchivePullRequest,
-  HostedWorkspaceStatus
-} from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { WAKE_FAILED_STALE_MS } from './orca-cloud-workspace-state'
 
 export type CloudStatusEntry = {
@@ -50,7 +47,10 @@ const EMPTY: CloudWorkspaceSnapshot = {
 let snapshot: CloudWorkspaceSnapshot = EMPTY
 const listeners = new Set<() => void>()
 
-function set(patch: (current: CloudWorkspaceSnapshot) => Partial<CloudWorkspaceSnapshot>): void {
+/** Store writes; exported for the lifecycle actions module only. */
+export function updateCloudWorkspaceSnapshot(
+  patch: (current: CloudWorkspaceSnapshot) => Partial<CloudWorkspaceSnapshot>
+): void {
   snapshot = { ...snapshot, ...patch(snapshot) }
   for (const listener of listeners) {
     listener()
@@ -79,7 +79,7 @@ export function useIsCloudWorkspace(workspaceId: string | null | undefined): boo
   return useCloudWorkspace((state) => (workspaceId ? state.ids.has(workspaceId) : false))
 }
 
-function api(): OrcaCloudWorkspaceApi | null {
+export function cloudWorkspaceApi(): OrcaCloudWorkspaceApi | null {
   return typeof window !== 'undefined' ? (window.api?.orcaCloudWorkspace ?? null) : null
 }
 
@@ -96,11 +96,11 @@ export function refreshCloudWorkspaceStatus(workspaceId: string): Promise<void> 
   if (existing) {
     return existing
   }
-  const bridge = api()
+  const bridge = cloudWorkspaceApi()
   if (!bridge) {
     return Promise.resolve()
   }
-  set((s) => ({
+  updateCloudWorkspaceSnapshot((s) => ({
     status: {
       ...s.status,
       [workspaceId]: {
@@ -154,7 +154,7 @@ export async function isCloudWorkspaceArchivedFresh(
 }
 
 function applyStatus(workspaceId: string, result: CloudWorkspaceResult<HostedWorkspaceStatus>): void {
-  set((s) => {
+  updateCloudWorkspaceSnapshot((s) => {
     const previous = s.status[workspaceId]
     if (!result.ok && result.code === 'not_cloud') {
       const ids = new Set(s.ids)
@@ -194,7 +194,7 @@ async function eachLimited<T>(items: readonly T[], limit: number, work: (item: T
 }
 
 export async function refreshCloudWorkspaceIds(): Promise<void> {
-  const bridge = api()
+  const bridge = cloudWorkspaceApi()
   if (!bridge) {
     return
   }
@@ -204,7 +204,7 @@ export async function refreshCloudWorkspaceIds(): Promise<void> {
     ids.size === snapshot.ids.size &&
     [...ids].every((id) => snapshot.ids.has(id))
   if (!same) {
-    set(() => ({ ids, idsLoaded: true }))
+    updateCloudWorkspaceSnapshot(() => ({ ids, idsLoaded: true }))
   }
   // A new id needs one status read so archived workspaces show as archived before anyone opens
   // them; capped so a large list doesn't fan out into dozens of VM probes at startup.
@@ -215,110 +215,16 @@ export async function refreshCloudWorkspaceIds(): Promise<void> {
   )
 }
 
-function withPending<T>(
-  workspaceId: string,
-  kind: 'restart' | 'archive' | 'unarchive',
-  work: () => Promise<T>
-): Promise<T> {
-  set((s) => ({ pending: { ...s.pending, [workspaceId]: kind } }))
-  return work().finally(() => {
-    set((s) => {
-      const pending = { ...s.pending }
-      delete pending[workspaceId]
-      return { pending }
-    })
-    void refreshCloudWorkspaceStatus(workspaceId)
-  })
-}
-
-const UNAVAILABLE = {
-  ok: false,
-  code: 'not_cloud',
-  message: 'Orca Cloud is unavailable.'
-} as const
-
-export function restartCloudWorkspace(workspaceId: string): Promise<CloudWorkspaceResult<null>> {
-  const bridge = api()
-  if (!bridge) {
-    return Promise.resolve(UNAVAILABLE)
-  }
-  return withPending(workspaceId, 'restart', async () => {
-    const result = await bridge.restart({ workspaceId })
-    if (result.ok) {
-      dismissCloudOom(workspaceId)
-    }
-    return result
-  })
-}
-
-/**
- * Archive = the ordinary Sleep (terminals and chats saved, VM stopped) and then archive with a
- * snapshot TTL. `sleep` is injected so this module does not pull the sidebar sleep flow into tests.
- */
-export function archiveCloudWorkspace(
-  workspaceId: string,
-  deps: {
-    sleep: (workspaceId: string) => Promise<unknown>
-    pullRequests?: HostedArchivePullRequest[]
-  }
-): Promise<CloudWorkspaceResult<null>> {
-  const bridge = api()
-  if (!bridge) {
-    return Promise.resolve(UNAVAILABLE)
-  }
-  return withPending(workspaceId, 'archive', async () => {
-    await deps.sleep(workspaceId)
-    return bridge.archive({
-      workspaceId,
-      ...(deps.pullRequests?.length ? { pullRequests: deps.pullRequests } : {})
-    })
-  })
-}
-
-/** Unarchive resumes the disk on the control plane; `wake` then runs the ordinary open-and-wake path. */
-export function unarchiveCloudWorkspace(
-  workspaceId: string,
-  deps: { wake: (workspaceId: string) => Promise<unknown> }
-): Promise<CloudWorkspaceResult<null>> {
-  const bridge = api()
-  if (!bridge) {
-    return Promise.resolve(UNAVAILABLE)
-  }
-  return withPending(workspaceId, 'unarchive', async () => {
-    const result = await bridge.unarchive({ workspaceId })
-    if (result.ok) {
-      // Mark it unarchived so the wake path's archive guard lets the wake through.
-      set((s) => {
-        const entry = s.status[workspaceId]
-        return entry?.status
-          ? {
-              status: {
-                ...s.status,
-                [workspaceId]: {
-                  ...entry,
-                  status: { ...entry.status, state: 'waking', archive: null },
-                  fetchedAt: Date.now()
-                }
-              }
-            }
-          : {}
-      })
-      await deps.wake(workspaceId)
-    }
-    return result
-  })
-}
-
 export function dismissCloudOom(workspaceId: string): void {
   const kills = snapshot.oom[workspaceId]?.oomKills
   if (kills === undefined) {
     return
   }
-  set((s) => ({ oomDismissed: { ...s.oomDismissed, [workspaceId]: kills } }))
+  updateCloudWorkspaceSnapshot((s) => ({ oomDismissed: { ...s.oomDismissed, [workspaceId]: kills } }))
 }
 
 function dropWake(workspaceId: string, only?: CloudWakeProgressEvent): void {
-  set((s) => {
+  updateCloudWorkspaceSnapshot((s) => {
     if (!s.wake[workspaceId] || (only && s.wake[workspaceId] !== only)) {
       return {}
     }
@@ -340,7 +246,7 @@ export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
     started && event.phase !== 'waking' && started.startedAt === event.startedAt
       ? { ...event, source: started.source }
       : event
-  set((s) => ({
+  updateCloudWorkspaceSnapshot((s) => ({
     ids: s.ids.has(event.workspaceId) ? s.ids : new Set([...s.ids, event.workspaceId]),
     wake: { ...s.wake, [event.workspaceId]: next }
   }))
@@ -356,13 +262,13 @@ export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
 }
 
 export function noteCloudOom(event: CloudOomEvent): void {
-  set((s) => ({ oom: { ...s.oom, [event.workspaceId]: event } }))
+  updateCloudWorkspaceSnapshot((s) => ({ oom: { ...s.oom, [event.workspaceId]: event } }))
 }
 
 /** Test/fixture seam: replace the whole snapshot. */
 export function seedCloudWorkspaceSnapshot(next: Partial<CloudWorkspaceSnapshot>): void {
   inflight.clear()
-  set(() => ({ ...EMPTY, ...next }))
+  updateCloudWorkspaceSnapshot(() => ({ ...EMPTY, ...next }))
 }
 
 const STATUS_POLL_MS = 60_000
@@ -374,7 +280,7 @@ const IDS_POLL_MS = 30_000
  * Both cadences stretch while the window is unfocused and stop while hidden.
  */
 export function installOrcaCloudWorkspaceStore(): () => void {
-  const bridge = api()
+  const bridge = cloudWorkspaceApi()
   if (!bridge?.onWakeProgress || !bridge.onOom) {
     return () => {}
   }

@@ -8,9 +8,11 @@ import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   getCloudWorkspaceSnapshot,
-  isCloudWorkspaceArchived,
-  noteCloudWakeProgress
+  isCloudWorkspaceArchivedFresh,
+  noteCloudWakeProgress,
+  refreshCloudWorkspaceStatus
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
 export async function activateWorktreeFromSidebar(
@@ -43,40 +45,46 @@ async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<void> {
     return
   }
   // An archived Orca Cloud workspace opens its read-only archive view; only Unarchive wakes it.
-  if (isCloudWorkspaceArchived(worktreeId)) {
+  // A cold start or a stale read must not wake it, so a cloud workspace re-reads its status first.
+  const cloud = getCloudWorkspaceSnapshot()
+  const maybeCloud = !cloud.idsLoaded || cloud.ids.has(worktreeId)
+  if (maybeCloud && (await isCloudWorkspaceArchivedFresh(worktreeId))) {
     return
   }
   try {
     const runtime = await window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
-    settleCloudWake(worktreeId, 'ready')
     if (runtime?.runtimeEnvironmentId) {
       const store = (await import('@/store/index')).useAppStore
       store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
       await store.getState().refreshRuntimeEnvironmentStatus(runtime.runtimeEnvironmentId)
     }
   } catch (error) {
-    settleCloudWake(worktreeId, 'failed', error instanceof Error ? error.message : String(error))
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes(CLOUD_WORKSPACE_ARCHIVED_ERROR)) {
+      // Archived elsewhere since this window last looked: show the archive instead of failing.
+      void refreshCloudWorkspaceStatus(worktreeId)
+      return
+    }
+    if (getCloudWorkspaceSnapshot().ids.has(worktreeId)) {
+      // The cloud waking overlay turns into its own failure card; no second toast.
+      failCloudWake(worktreeId, message)
+      return
+    }
     toast.error(
       translate(
         'auto.lib.sidebarWorktreeActivation.wakeEphemeralVmFailed',
         'Failed to wake ephemeral VM workspace'
       ),
-      {
-        description: error instanceof Error ? error.message : String(error)
-      }
+      { description: message }
     )
   }
 }
 
-/** Main reports waking/connecting; the window knows when the workspace is usable again. */
-function settleCloudWake(
-  worktreeId: string,
-  phase: 'ready' | 'failed',
-  message?: string
-): void {
+/** Main reports a step failure itself; this covers failures after the step (re-pairing). */
+function failCloudWake(worktreeId: string, message: string): void {
   const wake = getCloudWorkspaceSnapshot().wake[worktreeId]
   if (!wake || !isWakeActive(wake, Date.now())) {
     return
   }
-  noteCloudWakeProgress({ ...wake, phase, at: Date.now(), ...(message ? { message } : {}) })
+  noteCloudWakeProgress({ ...wake, phase: 'failed', at: Date.now(), message })
 }

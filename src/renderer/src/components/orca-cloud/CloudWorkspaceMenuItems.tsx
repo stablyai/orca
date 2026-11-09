@@ -1,31 +1,38 @@
-import React, { useContext } from 'react'
+import React from 'react'
 import { Archive, ArchiveRestore, RotateCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
-import {
-  runArchiveCloudWorkspace,
-  runRestartCloudWorkspace,
-  runUnarchiveCloudWorkspace
-} from './cloud-workspace-actions'
+import { useCloudPanelActions } from './use-cloud-panel-actions'
 
-/** Workspace menu rows for Orca Cloud: Restart, Archive… (asks first) or Unarchive. */
+const noop = (): void => {}
+
+/** Workspace menu rows for Orca Cloud: Restart sandbox, Archive (with undo) or Unarchive. */
 export function CloudWorkspaceMenuItems({
   worktreeId
 }: {
   worktreeId: string
 }): React.JSX.Element | null {
-  const t = useTranslate()
-  const confirm = useContext(ConfirmationDialogContext)
   const view = useCloudWorkspaceView(worktreeId)
   if (!view.isCloud) {
     return null
   }
+  return <CloudMenuRows worktreeId={worktreeId} view={view} />
+}
+
+function CloudMenuRows({
+  worktreeId,
+  view
+}: {
+  worktreeId: string
+  view: ReturnType<typeof useCloudWorkspaceView>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const actions = useCloudPanelActions(worktreeId, noop)
   const busy = view.pending !== undefined
   if (view.state === 'archived') {
     return (
-      <DropdownMenuItem disabled={busy} onSelect={() => void runUnarchiveCloudWorkspace(worktreeId)}>
+      <DropdownMenuItem disabled={busy} onSelect={actions.onUnarchive}>
         <ArchiveRestore className="size-3.5" />
         {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
       </DropdownMenuItem>
@@ -33,36 +40,17 @@ export function CloudWorkspaceMenuItems({
   }
   const canRestart =
     view.state === 'running' || view.state === 'unresponsive' || view.state === 'failed'
-  const archive = async (): Promise<void> => {
-    const ok = confirm
-      ? await confirm({
-          title: t('orcaCloudWorkspace.archiveTitle', 'Archive this workspace?'),
-          description: t(
-            'orcaCloudWorkspace.archiveDescription',
-            'It stops and is kept as a snapshot. Its PRs, last changes and files stay browsable, and you can unarchive it.'
-          ),
-          confirmLabel: t('orcaCloudWorkspace.archive', 'Archive'),
-          icon: Archive
-        })
-      : true
-    if (ok) {
-      await runArchiveCloudWorkspace(worktreeId)
-    }
-  }
   return (
     <>
       {canRestart ? (
-        <DropdownMenuItem
-          disabled={busy}
-          onSelect={() => void runRestartCloudWorkspace(worktreeId)}
-        >
+        <DropdownMenuItem disabled={busy} onSelect={actions.onRestart}>
           <RotateCw className="size-3.5" />
-          {t('orcaCloudWorkspace.restartWorkspace', 'Restart workspace')}
+          {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
         </DropdownMenuItem>
       ) : null}
-      <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={() => void archive()}>
+      <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
         <Archive className="size-3.5" />
-        {t('orcaCloudWorkspace.archiveEllipsis', 'Archive…')}
+        {t('orcaCloudWorkspace.archive', 'Archive')}
       </DropdownMenuItem>
     </>
   )

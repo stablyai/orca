@@ -26,6 +26,7 @@ import {
   createOomTracker,
   failure,
   findCloudRuntime,
+  isArchivedOnControlPlane,
   readCachedCheckouts,
   type CloudRuntime
 } from './hosted-workspace-runtime'
@@ -44,6 +45,8 @@ export type HostedWorkspaceService = {
   takeWakeSource(workspaceId: string): CloudWakeSource
   /** One OOM check for every running cloud workspace (the install beat calls it). */
   pollOom(): Promise<void>
+  /** Archived on the control plane (only Unarchive may wake it). */
+  isArchived(workspaceId: string): Promise<boolean>
   dispose(): void
 }
 
@@ -107,6 +110,7 @@ export function installHostedWorkspaceService(deps: {
   }
 
   const service: HostedWorkspaceService = {
+    isArchived: (workspaceId) => isArchivedOnControlPlane(deps.userDataPath, deps.client, workspaceId),
     emitWakeProgress(event) {
       if (event.phase === 'waking') {
         wakes.set(event.workspaceId, { source: event.source, startedAt: event.startedAt })
