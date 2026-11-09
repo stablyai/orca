@@ -21432,7 +21432,10 @@
           "onCloud": "Press {{shortcut}} in any pane. {{model}} runs in the cloud.",
           "offTitle": "Dictation is off",
           "offDescription": "Turn it on to dictate with {{shortcut}} in any pane.",
-          "savedMicrophone": "Your microphone"
+          "savedMicrophone": "Your microphone",
+          "description": "Talk instead of typing in any pane. Speech is recognized on this computer, so your audio stays here.",
+          "setUp": "Set up",
+          "asksForMicrophone": "Orca will ask for microphone access."
         },
         "quality": {
           "unsupported": "Doesn’t support your language",

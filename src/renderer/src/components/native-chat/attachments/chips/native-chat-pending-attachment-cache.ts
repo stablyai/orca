@@ -20,21 +20,18 @@ import {
   structuredAgentSessionIdOfDraftScope
 } from '../../drafts/native-chat-draft-scope'
 import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
+import {
+  chipScopes,
+  hasNativeChatPendingAttachment,
+  nativeChatPendingAttachmentScope
+} from './native-chat-pending-attachment-scopes'
+
+export { hasNativeChatPendingAttachment, nativeChatPendingAttachmentScope }
 
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
 const pendingCache = new Map<string, readonly NativeChatComposerImageAttachment[]>()
-// Capture ownership before tab removal can erase it.
-const chipScopes = new Map<string, string>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
-
-export function nativeChatPendingAttachmentScope(scope: string, id: string): string {
-  return currentDraftScope(chipScopes.get(id) ?? scope)
-}
-
-export function hasNativeChatPendingAttachment(id: string): boolean {
-  return chipScopes.has(id)
-}
 
 /** Keep snapshot identity stable until pending chips change. */
 export function nativeChatPendingAttachmentSnapshot(

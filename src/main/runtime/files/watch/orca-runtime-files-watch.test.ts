@@ -69,7 +69,8 @@ function createWindowsWatcher(close: () => void) {
 }
 
 function createRuntimeFileWatches(rootPath: string) {
-  const store = { getRepo: vi.fn(() => undefined) }
+  // getSettings: file authorization reads the floating cwd; this store trusts none.
+  const store = { getRepo: vi.fn(() => undefined), getSettings: () => ({}) }
   const commands = new RuntimeFileWatches({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,

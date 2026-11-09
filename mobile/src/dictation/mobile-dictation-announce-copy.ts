@@ -28,12 +28,15 @@ export const dictationAnnounceCopy = {
           'dictation.announce.movedToComputer',
           'This phone stopped transcribing. Continuing on the computer.'
         ),
-  stoppedKept: (reason: string) =>
-    translate(
-      'dictation.announce.stoppedKept',
-      'Dictation stopped. {{reason}}. Your recording is kept.',
-      {
-        reason
-      }
-    )
+  stoppedKept: (reason: string | null) =>
+    reason
+      ? translate(
+          'dictation.announce.stoppedKept',
+          'Dictation stopped. {{reason}}. Your recording is kept.',
+          { reason }
+        )
+      : translate(
+          'dictation.announce.stoppedKeptGeneric',
+          'Dictation stopped. Your recording is kept.'
+        )
 }
