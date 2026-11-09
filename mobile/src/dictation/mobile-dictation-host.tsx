@@ -20,11 +20,7 @@ import {
   type MobileDictationScreen
 } from './mobile-dictation-host-context'
 
-export {
-  useMobileDictationHost,
-  type MobileDictationOwner,
-  type MobileDictationScreen
-} from './mobile-dictation-host-context'
+export { useMobileDictationHost } from './mobile-dictation-host-context'
 
 // The owner's screen; startingOnly asks only for the screen that started it.
 function screenFor(

@@ -54,6 +54,7 @@ export function useMobileSessionDictation(
   } = scope
   const { showNativeChat, showNativeChatRef } = nativeChatController
   const host = useMobileDictationHost()
+  const { start: startHost } = host
   const executionHost = useWorkspaceExecutionHost()
   const sessionKey = JSON.stringify([hostId, executionHost ?? null, worktreeId])
   const [instance] = useState(() => ({}))
@@ -193,7 +194,8 @@ export function useMobileSessionDictation(
     ? connState === 'connected' || phoneDictation.ready
     : canSend
 
-  const dictationLeaveHold = useMobileDictationLeaveHold(dictation, () => router.canGoBack())
+  const leaveKeepsPage = useCallback(() => router.canGoBack(), [router])
+  const dictationLeaveHold = useMobileDictationLeaveHold(dictation, leaveKeepsPage)
   const previews = useMobileDictationPreviews(destination, dictation, activeHandle)
 
   const startDictation = useCallback(() => {
@@ -215,7 +217,7 @@ export function useMobileSessionDictation(
     const target = destination.captureDestination(showNativeChat, activeHandle)
     const paneKey = mobileSessionTabPaneKey(activeSessionTab)
     // A refused start comes back through this screen's reportFailure while it is shown, or the host's toast.
-    void host.start({
+    void startHost({
       instance,
       sessionKey,
       client,
@@ -243,12 +245,11 @@ export function useMobileSessionDictation(
     dictationCanStart,
     dictationRouteContextRef,
     executionHost,
-    host,
     hostId,
+    startHost,
     instance,
     phoneDictation.readyRef,
     removeFillerWords,
-    reportDictationFailure,
     scope.dictationMode,
     sessionKey,
     setShowDictationSetup,

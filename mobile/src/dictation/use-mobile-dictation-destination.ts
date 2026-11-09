@@ -7,7 +7,7 @@ import {
 } from '../session/native-chat/composer/mobile-native-chat-draft-inputs'
 import { editMobileNativeChatDraft } from '../session/native-chat/composer/mobile-native-chat-draft-store'
 
-export type MobileDictationTarget =
+type MobileDictationTarget =
   | { field: 'chat'; scope: string | null; anchor: MobileDictationAnchor | null }
   // Live terminal input: the words show on that terminal's status row.
   | { field: 'live'; handle: string }

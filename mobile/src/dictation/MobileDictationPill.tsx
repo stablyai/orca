@@ -36,8 +36,13 @@ const TOAST_MS = 4000
 const TOAST_WITH_OPEN_MS = 6000
 
 // The meter needs a live recording; finishing and failures show words instead.
-function PillStatus({ dictation }: { dictation: UseMobileDictationResult }) {
-  const { elapsedSeconds } = useMobileDictationElapsed(dictation.meter)
+function PillStatus({
+  dictation,
+  elapsedSeconds
+}: {
+  dictation: UseMobileDictationResult
+  elapsedSeconds: number
+}) {
   if (dictation.failure) {
     return (
       <Text style={styles.sub} numberOfLines={1}>
@@ -74,16 +79,16 @@ function PillStatus({ dictation }: { dictation: UseMobileDictationResult }) {
 
 // The dictation whose target is off screen: tap to go back, ✕ and Stop work from here; a failure stays until Retry or ✕.
 function MobileDictationPill({
-  dictation,
   title,
   onOpen,
   onStop
 }: {
-  dictation: UseMobileDictationResult
   title: string
   onOpen: () => void
   onStop: () => void
 }) {
+  // Subscribed only while the pill shows, so a hidden pill never re-renders on the dictation's ticks.
+  const dictation = useMobileDictationHostLive(useMobileDictationHost())
   const { elapsedSeconds } = useMobileDictationElapsed(dictation.meter)
   const failed = dictation.failure !== null
   return (
@@ -108,7 +113,7 @@ function MobileDictationPill({
           <Text style={styles.title} numberOfLines={1}>
             {failed ? dictationAwayCopy.stopped() : title}
           </Text>
-          <PillStatus dictation={dictation} />
+          <PillStatus dictation={dictation} elapsedSeconds={elapsedSeconds} />
         </View>
       </Pressable>
       <MobileDictationCancelButton onCancel={() => void dictation.cancel()} discards={failed} />
@@ -193,9 +198,7 @@ export function MobileDictationPillLayer(): React.JSX.Element | null {
   useMobileColorScheme()
   useMobileTranslation()
   const insets = useSafeAreaInsets()
-  const host = useMobileDictationHost()
-  const dictation = useMobileDictationHostLive(host)
-  const { stop } = host
+  const { stop } = useMobileDictationHost()
   const pill = useContext(MobileDictationPillContext)
   if (!pill) {
     return null
@@ -206,12 +209,7 @@ export function MobileDictationPillLayer(): React.JSX.Element | null {
     <>
       {pill.away ? (
         <View style={[styles.layer, { bottom: pillBottom }]} pointerEvents="box-none">
-          <MobileDictationPill
-            dictation={dictation}
-            title={pill.title}
-            onOpen={pill.open}
-            onStop={stop}
-          />
+          <MobileDictationPill title={pill.title} onOpen={pill.open} onStop={stop} />
         </View>
       ) : null}
       <MobileDictationToast
