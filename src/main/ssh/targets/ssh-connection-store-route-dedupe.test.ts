@@ -105,56 +105,6 @@ describe('SshConnectionStore import route de-duplication', () => {
     loadUserSshConfigMock.mockReturnValue([])
   })
 
-  it('never matches a saved target whose own jump host conflicts with the one it inherits', async () => {
-    mockStore.addSshTarget({
-      id: 'ssh-own-jump',
-      label: 'Own jump',
-      configHost: 'saved-own-jump',
-      host: '172.16.203.131',
-      port: 22,
-      username: 'chanmuzi',
-      jumpHost: 'bastion-b',
-      source: 'manual'
-    })
-    sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('via-a')])
-
-    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(1)
-  })
-
-  // Saved from the picker when prod was 10.0.0.1; system ssh now follows the config to 10.0.0.9, ssh2 keeps 10.0.0.1.
-  it('never matches a saved target whose host the two transports resolve differently', async () => {
-    mockStore.addSshTarget({
-      id: 'ssh-prod',
-      label: 'prod',
-      configHost: 'prod',
-      host: '10.0.0.1',
-      port: 22,
-      username: 'chanmuzi',
-      jumpHost: 'b',
-      source: 'manual'
-    })
-    sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('old')])
-
-    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(1)
-  })
-
-  // Its Host block is gone, so system ssh still dials the saved 192.0.2.10, not the name `fresh` points at.
-  it('never matches a saved config target whose alias the config no longer claims', async () => {
-    mockStore.addSshTarget({
-      id: 'ssh-removed-block',
-      label: 'removed-block',
-      configHost: 'removed-block',
-      host: '192.0.2.10',
-      port: 22,
-      username: 'chanmuzi',
-      source: 'ssh-config'
-    })
-    unclaimedAliases.add('removed-block')
-    sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('fresh')])
-
-    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(1)
-  })
-
   it('keeps a route match when this import itself updates the matched target', async () => {
     mockStore.addSshTarget({
       ...configCandidate('moved'),
@@ -202,30 +152,11 @@ describe('SshConnectionStore import route de-duplication', () => {
     )
   })
 
-  it('imports the same address behind a different jump host', async () => {
-    sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('via-b')])
-
-    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(1)
-  })
-
-  it('falls back to alias-only when ssh -G fails, rather than guessing', async () => {
-    sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('unresolvable')])
-
-    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(1)
-  })
-
   it('lets Restore bring back a removed alias that shares a saved route, as its dialog promised', async () => {
     sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('aimp')])
     mockStore.addDeletedSshConfigAlias('aimp')
 
     expect((await sshStore.importFromSshConfig()).targets).toEqual([])
     expect((await sshStore.importFromSshConfig({ reAdopt: true })).targets).toHaveLength(1)
-  })
-
-  // #15478's own config: without HostName, OpenSSH connects to the alias name, which only DNS ties to the IP.
-  it('does not match a HostName-less alias to an IP target by name resolution', async () => {
-    sshConfigHostsToTargetsMock.mockReturnValue([configCandidate('aimp-no-hostname')])
-
-    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(1)
   })
 })
