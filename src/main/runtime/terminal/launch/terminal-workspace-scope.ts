@@ -178,7 +178,16 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceReadTarget(
     selector: string
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
-    return this.resolveTerminalWorkspaceTarget(selector)
+    return resolveTerminalWorkspaceTarget(
+      {
+        store: this.store,
+        resolveFolder: (selector, options, folder, check) =>
+          this.resolveFolderWorkspaceLaunchScope(selector, options, folder, check),
+        folderWorktree: (folder) => this.folderWorkspaceToResolvedWorktree(folder),
+        resolveWorktree: (selector) => this.resolveGitWorktreeReadSelector(selector)
+      },
+      selector
+    )
   }
 
   private resolveTerminalWorkspaceTarget(
