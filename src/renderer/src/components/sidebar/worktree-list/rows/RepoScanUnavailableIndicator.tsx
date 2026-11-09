@@ -59,7 +59,7 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
   ].join('\n')
   return (
     <TooltipProvider disableHoverableContent={false}>
-      <Tooltip delayDuration={400}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"

@@ -10,7 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'

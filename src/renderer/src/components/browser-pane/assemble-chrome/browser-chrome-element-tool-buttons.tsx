@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 
 /** The in-guest element picker, driving both Grab (copy) and Annotate (comment). */
 export type BrowserChromeElementTools = {

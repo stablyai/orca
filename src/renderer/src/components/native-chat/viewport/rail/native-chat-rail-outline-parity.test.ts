@@ -1,8 +1,8 @@
-import { readAgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import { readAgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
 import {
   ORCHESTRATION_NOTICE_SOURCE,
   ORCHESTRATION_NOTICE_TEXT
-} from '../../../../shared/native-chat-orchestration-notice.test-fixture'
+} from '../../../../../../shared/native-chat-orchestration-notice.test-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   nativeChatTurnReplyPreviews,

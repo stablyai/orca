@@ -7,7 +7,7 @@ import { resolveConfiguredTerminalColors } from '../../../../../shared/terminal-
 import { MATCH_TERMINAL_APP_THEME } from '../../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import { resolveEditorFontStack } from '@/lib/editor-typography'
+import { resolveEditorFontStack } from '@/lib/editor/appearance/editor-typography'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { isTerminalBackgroundLight } from '../../../../../shared/terminal-themes/terminal-title-contrast'
 import { useSystemPrefersDark } from '../../../hooks/theme/use-system-prefers-dark'

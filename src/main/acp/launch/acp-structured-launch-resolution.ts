@@ -1,4 +1,5 @@
 import { checkAcpLaunchVersion } from './acp-launch-version'
+import { overlayEnvironmentVariables } from '../../../shared/environment-overlay'
 
 import {
   assertStructuredAgentResolutionCurrent,
@@ -116,10 +117,10 @@ async function readAcpLaunchInvocation(
   assertStructuredAgentResolutionCurrent(deps.operation)
   const base = await deps.resolveEnvironment()
   assertStructuredAgentResolutionCurrent(deps.operation)
-  const env: Record<string, string> = spec.account.environment(accountHome, {
-    ...base,
-    ...deps.resolveLaunchEnv?.(spec.agent)
-  })
+  const env: Record<string, string> = spec.account.environment(
+    accountHome,
+    overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
+  )
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
   Object.assign(env, spec.env)
   const commandSettings = deps.resolveCommandSettings?.()

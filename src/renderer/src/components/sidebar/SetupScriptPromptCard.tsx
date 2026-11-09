@@ -238,24 +238,13 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         }
         if (mountedRef.current) {
           setPromptState((current) => markSetupScriptPromptSaved(current, importedRepoHostIdentity))
-          const skippedCount = candidate.unsupportedFields?.length ?? 0
+          // Skipped fields were listed in the review dialog before saving; the toast only confirms.
           showSavedInProjectSettingsToast({
             onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
-            description:
-              skippedCount > 0
-                ? translate(
-                    'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields',
-                    '{{count}} unsupported fields skipped. Saved the setup command.',
-                    {
-                      count: skippedCount,
-                      defaultValue_one:
-                        '{{count}} unsupported field skipped. Saved the setup command.'
-                    }
-                  )
-                : translate(
-                    'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
-                    'Saved the setup command.'
-                  )
+            description: translate(
+              'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
+              'Saved the setup command.'
+            )
           })
         }
       } catch (error) {

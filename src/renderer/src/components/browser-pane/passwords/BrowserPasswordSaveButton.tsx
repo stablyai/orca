@@ -115,7 +115,7 @@ function BrowserPasswordSavePopover({
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {isUpdate ? (
               <span />
             ) : (
@@ -123,7 +123,7 @@ function BrowserPasswordSavePopover({
                 {t('browser.passwords.savePrompt.never', 'Never for this site')}
               </Button>
             )}
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"

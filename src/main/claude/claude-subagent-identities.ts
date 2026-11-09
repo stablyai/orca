@@ -1,3 +1,4 @@
+import { ClaudeTaskInvocations } from './claude-task-invocations'
 import { BoundedMap } from '../../shared/bounded-map'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
@@ -19,6 +20,7 @@ export type ClaudeSubagentIdentitiesDeps = {
   /** Resolve grandchildren through the child that journaled their spawn call. */
   childOwnerRefOf?: (toolUseId: string) => string | null
   journaled?: ClaudeJournaledSubagents
+  taskInvocations?: ClaudeTaskInvocations
 }
 
 export class ClaudeSubagentIdentities {
@@ -26,9 +28,11 @@ export class ClaudeSubagentIdentities {
   private readonly known = new BoundedMap<string, KnownSubagent>({
     maxEntries: MAX_KNOWN_SUBAGENTS
   })
+  readonly taskInvocations: ClaudeTaskInvocations
   readonly linkage: ClaudeSubagentLinkageSource & ClaudeAgentLinkageSource
 
   constructor(private readonly deps: ClaudeSubagentIdentitiesDeps) {
+    this.taskInvocations = deps.taskInvocations ?? new ClaudeTaskInvocations(deps.journaled)
     this.ids = new ClaudeSubagentIds(deps.journaled?.canonical)
     this.linkage = new ClaudeSubagentLinkage({
       ids: this.ids,
@@ -39,11 +43,16 @@ export class ClaudeSubagentIdentities {
       },
       isForwardedParentTool: deps.isForwardedParentTool,
       childOwnerRefOf: deps.childOwnerRefOf,
+      parentTaskOf: this.parentOf,
       spawnRefOf: (canonicalId) => this.known.get(canonicalId)?.run ?? null
     })
   }
 
+  parentOf = (id: string, run?: string): string | undefined =>
+    this.taskInvocations.parentOf(id, run)
+
   observeSystemFrame(message: Record<string, unknown>): boolean {
+    this.taskInvocations.observe(message)
     const frame = readClaudeSubagentTaskFrame(message)
     if (!frame) {
       return false
@@ -62,7 +71,10 @@ export class ClaudeSubagentIdentities {
     if (frame.toolUseId) {
       this.ids.alias(frame.toolUseId, frame.taskId)
     }
-    if (frame.announcesSubagent) {
+    if (
+      frame.announcesSubagent &&
+      this.taskInvocations.selection(message, frame.taskId)?.acceptsStart !== false
+    ) {
       this.announce(frame.taskId, frame.toolUseId)
     }
     return true

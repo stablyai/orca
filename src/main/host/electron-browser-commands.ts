@@ -1,3 +1,4 @@
+import { desktopBrowserExtensions } from '../browser/extensions/browser-extension-commands'
 import { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/browser/installation/runtime-browser-commands-factory'
 import { setBrowserHostClientProfileResolver } from '../runtime/browser-host/profiles/browser-host-client-profile-metadata'
@@ -9,7 +10,8 @@ import { deleteManagedBrowserProfile } from '../browser/sessions/profiles/browse
 export function installElectronBrowserCommands(): void {
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
     supportsGoogleCookieClear: () => true,
-    clientHosting: true
+    clientHosting: true,
+    extensions: desktopBrowserExtensions
   })
   setBrowserHostClientProfileResolver((browserProfileId) => {
     const profile = browserSessionRegistry.getProfile(browserProfileId)

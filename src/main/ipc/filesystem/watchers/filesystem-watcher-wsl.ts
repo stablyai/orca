@@ -1,5 +1,5 @@
 /** Poll inside WSL so distro shutdown kills the watcher instead of Windows UNC polling repeatedly waking it. */
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
@@ -234,7 +234,7 @@ export async function createWslWatcher(
     }
   }
 
-  let child: PipedChildProcess
+  let child: ChildProcessWithoutNullStreams
   const releaseChildReservation = watcherChildRegistry.reserveWatcherChild()
   if (!releaseChildReservation) {
     throw new watcherChildRegistry.WatcherChildCapacityError()

@@ -37,7 +37,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
   getRuntimeGitScope: vi.fn(() => null)
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null),
   getConnectionIdForFile: vi.fn(() => null),
   isWorktreeConnectionResolved: vi.fn(() => true)

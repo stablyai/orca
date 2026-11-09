@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEffect, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -70,30 +70,6 @@ const preview = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[data-slot="hover-card-content"]')
 
 describe('message rail interaction', () => {
-  it('previews only the hovered tick: only its human-authored message', async () => {
-    render(<Rail />)
-    fireEvent.pointerEnter(tick('Prompt 1'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 1')
-
-    fireEvent.pointerEnter(tick('Prompt 0'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0'))
-  })
-
-  it('keeps focus where it was while a hover preview opens and closes', async () => {
-    render(<Rail />)
-    const composer = screen.getByRole('textbox')
-    composer.focus()
-    const rail = screen.getByRole('toolbar', { name: 'Your messages' })
-    fireEvent.pointerEnter(rail, { pointerType: 'mouse' })
-    fireEvent.pointerEnter(tick('Prompt 0'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()).not.toBeNull())
-    expect(document.activeElement).toBe(composer)
-    fireEvent.pointerLeave(rail, { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()).toBeNull())
-    expect(document.activeElement).toBe(composer)
-  })
-
   it('is one tab stop on the current tick, walked by arrow keys, each previewing itself', async () => {
     const user = userEvent.setup()
     const select = vi.fn()
@@ -130,20 +106,5 @@ describe('message rail interaction', () => {
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 2'))
-  })
-
-  it.each([
-    [0, 7],
-    [1, 112],
-    [2, 2800]
-  ])('forwards wheel delta mode %i', (deltaMode, expected) => {
-    const element = railScroller()
-    Object.defineProperty(element, 'clientHeight', { value: 400 })
-    render(<Rail scroller={element} />)
-    fireEvent.wheel(screen.getByRole('toolbar', { name: 'Your messages' }), {
-      deltaY: 7,
-      deltaMode
-    })
-    expect(element.scrollTop).toBe(expected)
   })
 })

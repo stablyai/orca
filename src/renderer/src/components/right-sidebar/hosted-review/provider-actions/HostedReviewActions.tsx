@@ -196,7 +196,7 @@ export default function HostedReviewActions({
   if (review.state === 'open') {
     return (
       <div className="space-y-1.5">
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>
               <TooltipTrigger asChild>

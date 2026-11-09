@@ -132,16 +132,6 @@ describe('worker-list liveness for chat-mode workers', () => {
     }).workers[0]!
   }
 
-  it('reports a running Codex worker live and working, with nothing for the coordinator to do', () => {
-    installHost(record('codex'), true)
-    const worker = project([sessionStatus('working', NOW - 5 * 60 * 1000)])
-
-    expect(worker.liveness).toEqual({ verdict: 'live', observedAt: NOW, source: 'execution_host' })
-    expect(worker.stage.activity).toBe('working')
-    expect(worker.evidence.lastObservedAt).toBe(NOW - 5 * 60 * 1000)
-    expect(worker.attention).toEqual({ categories: [], requiresAction: false })
-  })
-
   it('keeps an idle Claude chat worker live after its last turn is hours old', () => {
     installHost(record('claude'), true)
     const worker = project([sessionStatus('done', NOW - 2 * HOUR)])

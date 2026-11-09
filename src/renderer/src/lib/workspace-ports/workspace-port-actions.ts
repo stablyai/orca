@@ -15,7 +15,7 @@ import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-w
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser-runtime-capabilities'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../client-creation-action-policy'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500

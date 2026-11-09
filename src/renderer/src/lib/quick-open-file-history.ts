@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import { resolveWorktreeOperationRoute } from './workspace/ownership/worktree-operation-route'
 
 const STORAGE_KEY = 'orca.quick-open-history.v1'
 const EMPTY_HISTORY: readonly string[] = []

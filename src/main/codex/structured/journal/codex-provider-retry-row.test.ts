@@ -166,14 +166,16 @@ describe('a Codex stream error it is about to retry', () => {
       'stream disconnected before completion: error sending request for url (http://127.0.0.1:9/v1/responses)'
     const errorFrameRows = reduced(rows).flatMap((row) =>
       row.body.kind === 'status' && row.body.providerFrame?.kind === 'notification:error'
-        ? [{ tone: row.body.tone, text: row.body.text }]
+        ? [row.body]
         : []
     )
-    expect(errorFrameRows).toEqual([
-      { tone: 'warning', text: `Codex is retrying: Reconnecting... 1/2.\n${cause}` },
-      { tone: 'warning', text: `Codex is retrying: Reconnecting... 2/2.\n${cause}` },
-      { tone: 'error', text: cause }
+    expect(errorFrameRows).toMatchObject([
+      { tone: 'warning', failure: { kind: 'providerRetrying' } },
+      { tone: 'warning', failure: { kind: 'providerRetrying' } },
+      { tone: 'error', failure: { kind: 'providerResponseFailed' } }
     ])
+    expect(errorFrameRows[2]?.text).not.toContain(cause)
+    expect(errorFrameRows[2]?.providerFrame?.payload.head).toContain(cause)
     expect(reduced(rows).map((row) => row.body)).toContainEqual(
       expect.objectContaining({ kind: 'turn', state: 'completed', outcome: 'failure' })
     )

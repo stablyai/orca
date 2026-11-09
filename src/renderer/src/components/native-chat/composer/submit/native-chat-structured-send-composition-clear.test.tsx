@@ -173,7 +173,7 @@ describe('structured send racing the next IME composition', () => {
 
     changePrompt(input, '/goal 안녕')
     pressEnter(input)
-    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕')
+    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕', expect.any(Function))
 
     fireEvent.compositionStart(input)
     changePrompt(input, '/goal 안녕하')

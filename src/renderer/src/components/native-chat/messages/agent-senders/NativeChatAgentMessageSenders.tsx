@@ -42,7 +42,7 @@ export function NativeChatAgentMessageSenders({
     >
       <span>{queued ? t('components.native-chat.queuedMessages.fromSender', 'From') : null}</span>
       {shown.length === 0 ? (
-        <span className={compact ? 'min-w-0 truncate' : queued ? 'px-2' : 'px-2.5'}>
+        <span className={compact ? 'min-w-0 truncate px-1.5' : queued ? 'px-2' : 'px-2.5'}>
           {unnamedSenderLabel(t)}
         </span>
       ) : null}
@@ -57,9 +57,9 @@ export function NativeChatAgentMessageSenders({
             queued={queued}
             compact={compact}
           />
-          {/* Pulled back over the name's padding, so it reads "A, B". */}
+          {/* Outside compact, pulled back over the name's padding so it reads "A, B". */}
           {index < shown.length - 1 ? (
-            <span aria-hidden className={compact ? 'mr-1' : queued ? '-ml-2' : '-ml-2.5'}>
+            <span aria-hidden className={compact ? undefined : queued ? '-ml-2' : '-ml-2.5'}>
               ,
             </span>
           ) : null}
@@ -93,7 +93,7 @@ function SenderName({
   if (!opens || !chatWorktreeId) {
     return (
       <span
-        className={`min-w-0 truncate ${compact ? 'max-w-fit flex-1 basis-0' : queued ? 'max-w-full px-2' : 'max-w-full px-2.5'}`}
+        className={`min-w-0 truncate ${compact ? 'max-w-fit flex-1 basis-0 px-1.5' : queued ? 'max-w-full px-2' : 'max-w-full px-2.5'}`}
         title={label}
       >
         {label}
@@ -104,7 +104,7 @@ function SenderName({
     <Button
       type="button"
       variant={queued ? 'link' : 'ghost'}
-      size={compact ? 'inline' : queued ? 'xs' : 'sm'}
+      size={compact ? 'inlineChip' : queued ? 'xs' : 'sm'}
       className={`min-w-0 ${compact ? 'max-w-fit flex-1 basis-0' : 'max-w-full'}`}
       title={
         queued || compact

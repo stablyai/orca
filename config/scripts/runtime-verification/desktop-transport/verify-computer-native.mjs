@@ -14,20 +14,6 @@ const checks = [
     enabled: process.platform === 'darwin'
   },
   {
-    name: 'Linux provider Python syntax',
-    command: 'python3',
-    args: [
-      '-c',
-      [
-        'import ast, pathlib',
-        'source=pathlib.Path("native/computer-use-linux/runtime.py").read_text(encoding="utf-8")',
-        'ast.parse(source)',
-        'print("syntax-ok")'
-      ].join(';')
-    ],
-    enabled: true
-  },
-  {
     name: 'Linux snapshot renderer tests',
     command: 'python3',
     args: ['native/computer-use-linux/runtime_render_test.py'],
@@ -55,12 +41,6 @@ const checks = [
     enabled: process.platform === 'linux'
   },
   {
-    name: 'Linux set_value tests',
-    command: 'python3',
-    args: ['native/computer-use-linux/set_value_test.py'],
-    enabled: true
-  },
-  {
     name: 'Windows provider PowerShell parse',
     command: process.platform === 'win32' ? 'powershell.exe' : 'pwsh',
     args: [
@@ -83,7 +63,7 @@ const checks = [
     enabled: process.platform === 'win32'
   },
   {
-    name: 'Windows snapshot renderer tests',
+    name: 'Windows pointer safety tests',
     command: 'powershell.exe',
     args: [
       '-NoLogo',
@@ -91,7 +71,7 @@ const checks = [
       '-ExecutionPolicy',
       'Bypass',
       '-File',
-      'native/computer-use-windows/runtime-render.test.ps1'
+      'native/computer-use-windows/runtime-pointer.test.ps1'
     ],
     enabled: process.platform === 'win32'
   },

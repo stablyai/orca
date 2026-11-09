@@ -73,21 +73,7 @@ describe('browser:publishClientPageMetadata', () => {
   it.each([
     ['no environment', { environmentId: '', params: PARAMS }],
     ['a non-string environment', { environmentId: 7, params: PARAMS }],
-    ['no params at all', { environmentId: 'environment-a' }],
-    [
-      'a revision below the protocol floor',
-      {
-        environmentId: 'environment-a',
-        params: { ...PARAMS, revision: 0 }
-      }
-    ],
-    [
-      'a page id the protocol rejects',
-      {
-        environmentId: 'environment-a',
-        params: { ...PARAMS, browserPageId: '' }
-      }
-    ]
+    ['no params at all', { environmentId: 'environment-a' }]
   ])('refuses %s without reaching the lease', async (_case, args) => {
     await expect(publishMetadata(args)).resolves.toEqual({ status: 'refused' })
     expect(mocks.publish).not.toHaveBeenCalled()

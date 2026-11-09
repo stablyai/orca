@@ -63,7 +63,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -225,7 +225,9 @@ async function connectPane(visible: boolean): Promise<PaneDrive> {
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: visible }
   })
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
 
   const binding = await connectMockPanePty(
     pane,
