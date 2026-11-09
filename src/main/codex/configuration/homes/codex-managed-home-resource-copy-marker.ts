@@ -1,4 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 // Mark fallback copies so sync can refresh/remove them without touching user-created resources.
@@ -19,11 +20,9 @@ export function markCopiedResource(
   })
 }
 
-function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
+function parseCopiedResourceSourcePath(text: string): string | null {
   try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
-    )
+    const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
@@ -32,6 +31,27 @@ function readCopiedResourceSourcePath(managedHomePath: string, entryName: string
   } catch {
     return null
   }
+}
+
+function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
+  try {
+    return parseCopiedResourceSourcePath(
+      readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
+    )
+  } catch {
+    return null
+  }
+}
+
+/** The source an Orca fallback copy mirrors; null when the entry is a link or the user's own. */
+export async function readCopiedResourceSource(
+  managedHomePath: string,
+  entryName: string
+): Promise<string | null> {
+  const text = await readFile(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8').catch(
+    () => null
+  )
+  return text === null ? null : parseCopiedResourceSourcePath(text)
 }
 
 export function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {

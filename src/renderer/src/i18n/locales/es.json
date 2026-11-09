@@ -19231,6 +19231,7 @@
         "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
         "commands": "Comandos",
         "skills": "Habilidades",
+        "checkingSkills": "Buscando habilidades nuevas…",
         "loadingSkills": "Cargando habilidades…",
         "clearDescription": "Borrar el contexto de la conversación",
         "skillsUnavailableHost": "Las habilidades no se pueden listar en los chats SSH",

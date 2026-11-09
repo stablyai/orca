@@ -20062,6 +20062,7 @@
         "noCommands": "Подходящих команд нет",
         "commands": "Команды",
         "skills": "Навыки",
+        "checkingSkills": "Поиск новых навыков…",
         "loadingSkills": "Загрузка навыков…",
         "skillsLoaded": "Навыки загружены",
         "clearDescription": "Очистить контекст разговора",
