@@ -163,64 +163,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       : () => {}
     try {
       const requestId = randomUUID()
-      const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
-          reject(new Error('Terminal creation timed out'))
-        }, 10_000)
-        // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
-        const onAbort = (): void => {
-          clearTimeout(timer)
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          reject(new Error('client_disconnected'))
-        }
-
-        const handler = (
-          event: IpcMainEvent,
-          r: { requestId: string; tabId?: string; title?: string; error?: string }
-        ): void => {
-          if (event.sender !== rendererWebContents || r.requestId !== requestId) {
-            return
-          }
-          clearTimeout(timer)
-          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-          opts.signal?.removeEventListener('abort', onAbort)
-          if (r.error) {
-            reject(new Error(r.error))
-          } else {
-            resolve({ tabId: r.tabId!, title: r.title ?? '' })
-          }
-        }
-        opts.signal?.addEventListener('abort', onAbort, { once: true })
-        getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
-        rendererWebContents.send('terminal:requestTabCreate', {
-          requestId,
-          worktreeId,
-          afterTabId: afterDesktopTabId,
-          targetGroupId: opts.targetGroupId,
-          command: startupCommand.command,
-          ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
-          cwd,
-          ...(startupCommand.env ? { env: startupCommand.env } : {}),
-          ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
-          ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
-          ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
-          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
-          ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
-          startupCommandDelivery: startupCommand.startupCommandDelivery,
-          source: 'runtime-session',
-          activate: opts.activate
-        })
-      })
-
-      if (opts.activate !== false) {
-        this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
-      }
-      // Register before spawn arrival so registerPty can publish despite stalled graph sync; remove in finally (#7587).
-      const pendingCreateKey = `${worktreeId}::${reply.tabId}`
+      // Mint the tab id here so the pending create (and its viewer env) exists before the renderer's pane can spawn (#39852).
+      const requestedTabId = randomUUID()
+      const requestedPendingCreateKey = `${worktreeId}::${requestedTabId}`
       // Rescue uses the active group; renderer reconciliation later moves the tab into its requested group.
-      this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
+      const pendingCreate = {
         activate: opts.activate !== false,
         paired: pairedCreate,
         selectIfNoActiveTab: true,
@@ -228,7 +175,76 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         // The renderer drops a command-less create's env, but its pane's spawn still owes the viewer that env (#39852).
         ...(startupCommand.env ? { remoteViewerEnv: startupCommand.env } : {})
-      })
+      }
+      this.pendingMobileTerminalCreatesByKey.set(requestedPendingCreateKey, pendingCreate)
+      let reply: { tabId: string; title: string }
+      try {
+        reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+            opts.signal?.removeEventListener('abort', onAbort)
+            reject(new Error('Terminal creation timed out'))
+          }, 10_000)
+          // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
+          const onAbort = (): void => {
+            clearTimeout(timer)
+            getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+            reject(new Error('client_disconnected'))
+          }
+
+          const handler = (
+            event: IpcMainEvent,
+            r: { requestId: string; tabId?: string; title?: string; error?: string }
+          ): void => {
+            if (event.sender !== rendererWebContents || r.requestId !== requestId) {
+              return
+            }
+            clearTimeout(timer)
+            getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+            opts.signal?.removeEventListener('abort', onAbort)
+            if (r.error) {
+              reject(new Error(r.error))
+            } else {
+              resolve({ tabId: r.tabId!, title: r.title ?? '' })
+            }
+          }
+          opts.signal?.addEventListener('abort', onAbort, { once: true })
+          getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
+          rendererWebContents.send('terminal:requestTabCreate', {
+            requestId,
+            tabId: requestedTabId,
+            worktreeId,
+            afterTabId: afterDesktopTabId,
+            targetGroupId: opts.targetGroupId,
+            command: startupCommand.command,
+            ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
+            cwd,
+            ...(startupCommand.env ? { env: startupCommand.env } : {}),
+            ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
+            ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
+            ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+            ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
+            ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+            startupCommandDelivery: startupCommand.startupCommandDelivery,
+            source: 'runtime-session',
+            activate: opts.activate
+          })
+        })
+      } catch (error) {
+        this.pendingMobileTerminalCreatesByKey.delete(requestedPendingCreateKey)
+        throw error
+      }
+      if (reply.tabId !== requestedTabId) {
+        // The renderer did not take the hint (e.g. an id collision); the tab it did create carries the env.
+        this.pendingMobileTerminalCreatesByKey.delete(requestedPendingCreateKey)
+      }
+
+      if (opts.activate !== false) {
+        this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
+      }
+      // Register before spawn arrival so registerPty can publish despite stalled graph sync; remove in finally (#7587).
+      const pendingCreateKey = `${worktreeId}::${reply.tabId}`
+      this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, pendingCreate)
       try {
         // Spawn and tabCreate replies race across IPC channels; publish already-registered PTYs without waiting for graph sync.
         this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)

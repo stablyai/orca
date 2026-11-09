@@ -79,11 +79,13 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 : {})
             }
           : undefined
+        // Why: a host-minted tab id lets main register the create's env before this pane can spawn (#39852).
+        const tabOptionsWithId = data.tabId ? { ...tabOptions, id: data.tabId } : tabOptions
         const tab = store.createTab(
           worktreeId,
           data.targetGroupId,
           data.shellOverride,
-          pendingStartup ? { ...tabOptions, pendingStartup } : tabOptions
+          pendingStartup ? { ...tabOptionsWithId, pendingStartup } : tabOptionsWithId
         )
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.

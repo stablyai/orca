@@ -251,6 +251,8 @@ export type RuntimeTerminalPresentation = 'background' | 'focused'
 
 type RuntimeTerminalCreateBaseRequestPayload = {
   requestId: string
+  /** Host-minted tab id, so a pending create's env exists before the pane can spawn. */
+  tabId?: string
   worktreeId?: string
   afterTabId?: string
   targetGroupId?: string
