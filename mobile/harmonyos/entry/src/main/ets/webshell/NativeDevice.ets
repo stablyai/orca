@@ -248,7 +248,10 @@ export class NativeDevice {
         if (max <= 0) { throw new Error('Too many selected files'); }
         if (source === 'library') {
           let options = new photoAccessHelper.PhotoSelectOptions();
-          options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE; options.maxSelectNumber = max;
+          options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
+          options.maxSelectNumber = max;
+          options.isSelectionNumberVisible = multiple;
+          options.preferredCompatibleMode = photoAccessHelper.PreferredCompatibleMode.COMPATIBLE;
           let selected = await new photoAccessHelper.PhotoViewPicker().select(options); uris = selected.photoUris;
         } else {
           let options = new picker.DocumentSelectOptions(); options.maxSelectNumber = max;

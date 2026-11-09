@@ -672,6 +672,7 @@ test('a media picker returning after the page is paused cannot publish staged me
     photoAccessHelper: {
       PhotoSelectOptions: class {},
       PhotoViewMIMETypes: { IMAGE_TYPE: 'image' },
+      PreferredCompatibleMode: { COMPATIBLE: 2 },
       PhotoViewPicker: class {
         select() {
           return selected.promise
