@@ -6,8 +6,8 @@ import {
 import { agentPickerModelMenu } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ discover: vi.fn(), structured: vi.fn() }))
-vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
-  discoverRuntimeCommitMessageModels: mocks.discover
+vi.mock('@/runtime/native-chat/model-catalogs/terminal-model-discovery-client', () => ({
+  discoverRuntimeTerminalModels: mocks.discover
 }))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.structured
@@ -31,7 +31,9 @@ beforeEach(() => {
 })
 
 it('consumes legacy rows without claiming a configured default and separates fallback from verified empty', () => {
-  expect(cliModelCatalogAnswer({ ...cliResult, catalogOrigin: undefined })).toMatchObject({
+  expect(
+    cliModelCatalogAnswer('antigravity', { ...cliResult, catalogOrigin: undefined })
+  ).toMatchObject({
     origin: 'probe',
     listingNamesConfiguredModel: false,
     models: [
@@ -41,14 +43,18 @@ it('consumes legacy rows without claiming a configured default and separates fal
       { id: 'claude-sonnet-4-6' }
     ]
   })
-  expect(cliModelCatalogAnswer({ ...cliResult, catalogOrigin: 'spec' })).toBeUndefined()
-  expect(cliModelCatalogAnswer({ success: false, error: 'unsupported' })).toBeUndefined()
-  expect(cliModelCatalogAnswer({ ...cliResult, models: [] })).toMatchObject({
+  expect(
+    cliModelCatalogAnswer('antigravity', { ...cliResult, catalogOrigin: 'spec' })
+  ).toBeUndefined()
+  expect(
+    cliModelCatalogAnswer('antigravity', { success: false, error: 'unsupported' })
+  ).toBeUndefined()
+  expect(cliModelCatalogAnswer('antigravity', { ...cliResult, models: [] })).toMatchObject({
     origin: 'probe',
     models: []
   })
   expect(
-    cliModelCatalogAnswer({ ...cliResult, catalogOrigin: undefined, models: [] })
+    cliModelCatalogAnswer('antigravity', { ...cliResult, catalogOrigin: undefined, models: [] })
   ).toBeUndefined()
 })
 
@@ -152,10 +158,10 @@ it('settles unsupported terminal source routes without leaving a listing placeho
 })
 
 it('does not promote the legacy Config default fallback into a terminal operand', () => {
-  const answer = cliModelCatalogAnswer({
+  const answer = cliModelCatalogAnswer('antigravity', {
     ...cliResult,
     catalogOrigin: undefined,
-    models: [{ id: 'default', label: 'Config default' }],
+    models: [{ id: 'default', label: 'Changed or translated label' }],
     defaultModelId: 'default'
   })
   expect(answer).toBeUndefined()
@@ -180,7 +186,7 @@ it('publishes only changed CLI rows, independent of the clock', () => {
       target,
       'antigravity',
       'id:x',
-      cliModelCatalogAnswer(cliResult)!,
+      cliModelCatalogAnswer('antigravity', cliResult)!,
       'cli'
     )
     notices.mockClear()
@@ -189,7 +195,7 @@ it('publishes only changed CLI rows, independent of the clock', () => {
       target,
       'antigravity',
       'id:x',
-      cliModelCatalogAnswer(cliResult)!,
+      cliModelCatalogAnswer('antigravity', cliResult)!,
       'cli'
     )
     expect(notices).not.toHaveBeenCalled()
@@ -197,7 +203,10 @@ it('publishes only changed CLI rows, independent of the clock', () => {
       target,
       'antigravity',
       'id:x',
-      cliModelCatalogAnswer({ ...cliResult, models: [{ id: 'new-model', label: 'New model' }] })!,
+      cliModelCatalogAnswer('antigravity', {
+        ...cliResult,
+        models: [{ id: 'new-model', label: 'New model' }]
+      })!,
       'cli'
     )
     expect(notices).toHaveBeenCalledTimes(1)
@@ -227,4 +236,18 @@ it('reuses a held CLI answer on reopen until account invalidation', async () => 
   await reads.catalog(entry, false, 'cli')
   expect(mocks.discover).toHaveBeenCalledTimes(2)
   stopReopened()
+})
+
+it('consumes explicit probe provenance even for empty lists and the literal default ID', () => {
+  expect(
+    cliModelCatalogAnswer('antigravity', { ...cliResult, models: [], catalogOrigin: 'probe' })
+  ).toMatchObject({ origin: 'probe', models: [] })
+  expect(
+    cliModelCatalogAnswer('antigravity', {
+      ...cliResult,
+      catalogOrigin: 'probe',
+      defaultModelId: 'default',
+      models: [{ id: 'default', label: 'Config default' }]
+    })
+  ).toMatchObject({ origin: 'probe', models: [{ id: 'default' }] })
 })

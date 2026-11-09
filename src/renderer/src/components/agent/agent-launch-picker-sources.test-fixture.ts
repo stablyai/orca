@@ -38,7 +38,7 @@ export function sourceEntry(
     catalogRead: 'settled',
     sourceCatalogs: {
       cli: {
-        catalog: cliModelCatalogAnswer(cliResult)!,
+        catalog: cliModelCatalogAnswer('antigravity', cliResult)!,
         coherentCatalog: true,
         catalogRead: 'settled'
       }
