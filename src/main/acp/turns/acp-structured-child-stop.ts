@@ -92,16 +92,17 @@ async function closeAcpChildSession(
   const { children } = session.lane.translator
   // Closing a child that has not started running interrupts nothing, so Stop stays available.
   const started = children.started(id)
+  let answered = true
   try {
     await session.connection.closeSession(id)
   } catch (error) {
-    if (error instanceof AcpAgentError || error instanceof AcpRequestTimeoutError) {
-      return { cancelled: false, stillRunning: true }
+    if (!(error instanceof AcpAgentError || error instanceof AcpRequestTimeoutError)) {
+      throw error
     }
-    throw error
+    answered = false
   }
   // An ending the child reported while the request was out also confirms the Stop.
-  return started || !children.live().includes(id)
+  return (answered && started) || !children.live().includes(id)
     ? { cancelled: true }
     : { cancelled: false, stillRunning: true }
 }

@@ -183,6 +183,8 @@ describe('OpenCode 2 recordings through the adapter', () => {
           if (closeLate) {
             notify('running', 'child-2')
             notify('interrupted', 'child-2')
+            agent.fail(frame, -32603, 'session already closed')
+            return
           }
           agent.reply(frame, {})
         })
@@ -201,7 +203,7 @@ describe('OpenCode 2 recordings through the adapter', () => {
     await expect(stop()).resolves.toEqual({ cancelled: false, stillRunning: true })
     notify('running')
     await waitFor(() => expect(stop()).resolves.toEqual({ cancelled: true }))
-    // A child that starts and reports itself interrupted while the close is out was stopped.
+    // A child that reports itself interrupted while the close is out was stopped, even if the close fails.
     notify('created', 'child-2')
     closeLate = true
     await waitFor(() =>
