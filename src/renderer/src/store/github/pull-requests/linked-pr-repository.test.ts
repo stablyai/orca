@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
@@ -327,10 +327,15 @@ describe('repository identity in renderer review caches', () => {
   })
 
   it('never serves a fresh review of the same number from another repository', async () => {
+    // Only Date is faked: the cached entry must read as fresh, and the store's requests stay async.
+    vi.useFakeTimers({ toFake: ['Date'], now: 1_000_000 })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const cached = (repository: typeof FRONTEND) => ({
       [cacheKey]: {
         data: reviewFrom(`${repository.owner}/${repository.repo}`),
-        fetchedAt: Date.now(),
+        fetchedAt: 1_000_000,
         linkedReviewHintKey: linkedReviewHintKey({
           linkedGitHubPR: 2383,
           linkedGitHubPRRepository: repository
