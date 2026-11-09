@@ -22,7 +22,10 @@ import {
   subscribeHostAgentSignInReports
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import { signOutAgentOnHost } from '@/lib/agent-sign-in/host-agent-sign-out'
-import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../../../shared/host-agent-sign-in-status'
+import {
+  HOST_AGENT_SIGN_IN_AGENT_NAME,
+  type HostAgentSignInAgent
+} from '../../../../../../shared/host-agent-sign-in-status'
 
 const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 
