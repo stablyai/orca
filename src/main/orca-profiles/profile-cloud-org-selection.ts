@@ -52,5 +52,17 @@ export async function selectCloudOrg(input: {
   if (!list) {
     throw new Error('stale_cloud_session_mutation')
   }
+  // /auth/org updates the stored selection but not the access token, and some services read the
+  // team from the token. Refresh now so they follow the switch (best effort; the next refresh
+  // would pick it up anyway).
+  const current = readCloudSession(profileId, input.userDataPath)
+  if (current.status === 'found') {
+    await forceRefreshOrcaCloudSession(
+      input.config,
+      input.active,
+      input.userDataPath,
+      current.session
+    ).catch(() => undefined)
+  }
   return list
 }
