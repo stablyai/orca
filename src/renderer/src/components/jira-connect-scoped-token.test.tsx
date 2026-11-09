@@ -3,7 +3,7 @@ import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraConnectionStatus } from '../../../shared/jira/jira-types'
 import { JiraConnectDialog } from './jira-connect-dialog'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 
 type FixtureState = {
   settings: { activeRuntimeEnvironmentId: string | null }

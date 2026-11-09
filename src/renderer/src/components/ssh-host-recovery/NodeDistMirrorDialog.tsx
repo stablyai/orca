@@ -9,7 +9,7 @@ import {
   saveNodeDistMirrorAndRetry
 } from '@/ssh/node-dist-mirror-recovery'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
-import { Button } from '../../../ui/button'
+import { Button } from '../ui/button'
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from '../../../ui/dialog'
-import { Input } from '../../../ui/input'
-import { Label } from '../../../ui/label'
+} from '../ui/dialog'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
 
 const INPUT_ID = 'node-dist-mirror-dialog-url'
 const HINT_ID = 'node-dist-mirror-dialog-hint'

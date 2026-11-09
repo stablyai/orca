@@ -1,7 +1,7 @@
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
   resolveRuntimeHostTerminalWindowsShell,
@@ -13,21 +13,21 @@ import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktre
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
-import { isSessionHeldByAnotherPane } from '@/lib/claude-session-pane-holders'
-import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
-} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+} from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import { resolveAgentLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command'
-import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import { resolveAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
   command: string

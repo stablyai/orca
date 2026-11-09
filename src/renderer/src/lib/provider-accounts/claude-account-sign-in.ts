@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getClaudeAccountErrorDescription,
   isClaudeAccountCancellation
-} from './provider-accounts/provider-account-action-errors'
+} from './provider-account-action-errors'
 
 /** Sign in again via hidden claude auth login in the account folder; toast failures and keep cancellation silent. */
 export async function signInToClaudeAccount(accountId: string): Promise<boolean> {

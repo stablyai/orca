@@ -1,5 +1,5 @@
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 type AccountOwnerEnvironments = readonly Pick<
   PublicKnownRuntimeEnvironment,

@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type SystemNotificationSettingsCopy = {
@@ -7,7 +7,7 @@ type SystemNotificationSettingsCopy = {
   failureDescription: string
 }
 
-export function getSystemNotificationSettingsCopy(
+function getSystemNotificationSettingsCopy(
   platform: NodeJS.Platform
 ): SystemNotificationSettingsCopy | null {
   if (platform === 'darwin') {
@@ -39,30 +39,7 @@ export function getSystemNotificationSettingsCopy(
   return null
 }
 
-export type NotificationVolumeDraftState = {
-  sourceVolume: number
-  draft: number
-}
-
-export function createNotificationVolumeDraftState(
-  sourceVolume: number
-): NotificationVolumeDraftState {
-  return {
-    sourceVolume,
-    draft: sourceVolume
-  }
-}
-
-export function resolveNotificationVolumeDraftState(
-  state: NotificationVolumeDraftState,
-  sourceVolume: number
-): NotificationVolumeDraftState {
-  return state.sourceVolume === sourceVolume
-    ? state
-    : createNotificationVolumeDraftState(sourceVolume)
-}
-
-export type NotificationTestOutcome = 'delivered' | 'not-displayed' | 'not-sent'
+type NotificationTestOutcome = 'delivered' | 'not-displayed' | 'not-sent'
 
 type SendTestNotificationOptions = {
   /** Inline delivery cards replace ambiguous macOS banner-check toasts that could contradict them. */
