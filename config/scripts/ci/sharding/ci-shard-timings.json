@@ -5689,7 +5689,6 @@
       "src/renderer/src/components/sidebar/worktree-list/rows/repo-header-ssh-isolation.test.tsx": 2945,
       "src/renderer/src/components/sidebar/worktree-list/rows/section-header-create-host.test.tsx": 2393,
       "src/renderer/src/components/sidebar/worktree-list/viewport/hard-scroll-up.test.ts": 66,
-      "src/renderer/src/components/sidebar/worktree-list/viewport/header-folder-composition.test.tsx": 3725,
       "src/renderer/src/components/sidebar/worktree-list/viewport/use-scroll-to-top.test.ts": 293,
       "src/renderer/src/components/sidebar/worktree-list/viewport/use-scroll-to-top.test.tsx": 269,
       "src/renderer/src/components/sidebar/worktree-list/drag/worktree-manual-order-store-write.test.ts": 2144,
