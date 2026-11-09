@@ -23,7 +23,12 @@ export type HostedSessionLeasePorts = {
   warn: (minutesLeft: HostedLeaseWarning) => void
   /** Re-pairs with the rebooted orcad; resolves once the runtime answers again. */
   reconnect: (ready: HostedEnvironmentReady) => Promise<void>
-  resumeAgents: (drainStartedAt: number) => Promise<HostedAgentAutoResumeOutcome>
+  resumeAgents: (
+    drainStartedAt: number,
+    offersBeforeDrain: ReadonlySet<string> | null
+  ) => Promise<HostedAgentAutoResumeOutcome>
+  /** The host's restart offers before the drain, so only the drain's own are continued. */
+  snapshotOffers?: () => Promise<ReadonlySet<string> | null>
   onSuspended: () => void
   /** Replaces the driver suspend, e.g. to run the window's ordinary Sleep for the workspace. */
   suspend?: () => Promise<void>
@@ -117,6 +122,7 @@ export class HostedSessionLeaseScheduler {
 
   private async rollover(reason: 'opportunistic' | 'forced'): Promise<void> {
     const { driver, handle } = this.ports
+    const offersBeforeDrain = (await this.ports.snapshotOffers?.().catch(() => null)) ?? null
     const drainStartedAt = this.now()
     this.log(`[orca-cloud] ${reason} rollover`)
     const ready = await driver.rollover(handle)
@@ -124,7 +130,7 @@ export class HostedSessionLeaseScheduler {
     this.warned.clear()
     await this.ports.reconnect(ready)
     try {
-      const outcome = await this.ports.resumeAgents(drainStartedAt)
+      const outcome = await this.ports.resumeAgents(drainStartedAt, offersBeforeDrain)
       this.log(
         `[orca-cloud] continued ${outcome.continued}/${outcome.offered} agents after rollover`
       )

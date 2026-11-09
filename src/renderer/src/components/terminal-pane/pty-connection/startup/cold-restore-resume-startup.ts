@@ -27,6 +27,7 @@ import {
   normalizeAgentProviderSession
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
@@ -34,13 +35,32 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
 
-/** A cold-restored agent on a remote host whose last status was working lost its turn when the
- *  host restarted; local panes are left alone (their PTYs outlive app restarts). */
+/** Interrupted turns already continued, so a retried cold restore never sends `continue` twice. */
+const continuedInterruptedTurns = new Set<string>()
+
+/**
+ * A cold-restored agent on a remote host whose last status was working lost its turn when the host
+ * restarted (reboot, crash, rollover): carry it on. Only with fresh evidence (a recent working
+ * status), never after a deliberate sleep (that leaves a sleeping record), once per interrupted turn.
+ * Local panes are left alone: their PTYs outlive app restarts.
+ */
 export function shouldContinueInterruptedTurn(
-  entry: { state: string } | null | undefined,
-  runtimeEnvironmentId: string | null
+  entry: { state: string; updatedAt: number; stateStartedAt?: number } | null | undefined,
+  runtimeEnvironmentId: string | null,
+  context: { paneKey: string; hasSleepingRecord: boolean; now?: number }
 ): boolean {
-  return Boolean(runtimeEnvironmentId) && entry?.state === 'working'
+  if (!runtimeEnvironmentId || context.hasSleepingRecord || entry?.state !== 'working') {
+    return false
+  }
+  if ((context.now ?? Date.now()) - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+    return false
+  }
+  const turn = `${context.paneKey}\u0000${entry.stateStartedAt ?? entry.updatedAt}`
+  if (continuedInterruptedTurns.has(turn)) {
+    return false
+  }
+  continuedInterruptedTurns.add(turn)
+  return true
 }
 
 type AppState = ReturnType<typeof useAppStore.getState>
@@ -134,7 +154,8 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       // mid-turn; its last status still says working. Carry the turn on instead of waiting.
       continuePrompt: shouldContinueInterruptedTurn(
         entry,
-        session.transport.getRuntimeEnvironmentId?.() ?? null
+        session.transport.getRuntimeEnvironmentId?.() ?? null,
+        { paneKey: session.cacheKey, hasSleepingRecord: Boolean(sleepingRecord) }
       )
         ? INTERRUPTED_TURN_CONTINUE_PROMPT
         : null

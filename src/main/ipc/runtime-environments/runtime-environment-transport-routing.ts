@@ -23,6 +23,7 @@ import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeRuntimeEnvironmentSubscriptionEvents } from './runtime-environment-subscription-events'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { holdForInFlightRecipeVmWake } from './runtime-environment-recipe-vm-wake'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
@@ -80,6 +81,7 @@ export async function callRuntimeEnvironment(
     )
   }
   const environment = resolveEnvironment(userDataPath, selector)
+  await holdForInFlightRecipeVmWake(userDataPath, environment, method, timeoutMs, options)
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {

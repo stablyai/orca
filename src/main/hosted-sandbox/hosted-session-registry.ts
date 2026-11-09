@@ -18,7 +18,7 @@ import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings
 import { getEphemeralVmRecipeResultPairingCode } from '../../shared/ephemeral-vm-recipes'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import type { HostedEnvironmentProviderDriver } from './hosted-environment-provider'
-import { autoResumeAgentsAfterRollover } from './hosted-agent-auto-resume'
+import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import type { HostedActivitySample } from './hosted-session-lease-policy'
@@ -112,7 +112,9 @@ export function createHostedSessionRegistry(deps: {
           true
         )
       },
-      resumeAgents: (drainStartedAt) => autoResumeAgentsAfterRollover(call, drainStartedAt),
+      snapshotOffers: () => listRestartOfferIds(call),
+      resumeAgents: (drainStartedAt, offersBeforeDrain) =>
+        autoResumeAgentsAfterRollover(call, drainStartedAt, offersBeforeDrain),
       // The window runs its ordinary Sleep, so the sidebar, chats and VM suspend stay one path.
       onSuspended: () =>
         log(`[orca-cloud] idle sleep requested for ${runtime.workspaceName ?? runtime.id}`),

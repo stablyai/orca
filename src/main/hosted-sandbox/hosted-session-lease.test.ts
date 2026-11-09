@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostedEnvironmentReady } from './hosted-environment-provider'
-import { autoResumeAgentsAfterRollover } from './hosted-agent-auto-resume'
+import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { createHostedSandboxDriver, HOSTED_SANDBOX_CAPABILITIES } from './hosted-sandbox-driver'
 import { decideHostedLeaseAction, type HostedActivitySample } from './hosted-session-lease-policy'
@@ -98,7 +98,7 @@ describe('hosted session lease scheduler', () => {
     expect(await scheduler.tick()).toEqual({ kind: 'rollover', reason: 'forced' })
     expect(reconnect).toHaveBeenCalledTimes(1)
     expect(reconnect.mock.calls[0]?.[0].session.startedAt).toBe(now)
-    expect(resumeAgents).toHaveBeenCalledWith(created.session.deadlineAt)
+    expect(resumeAgents).toHaveBeenCalledWith(created.session.deadlineAt, null)
     // The new session is far from its cap, so the next tick does nothing drastic.
     expect((await scheduler.tick()).kind).not.toBe('rollover')
   })
@@ -139,5 +139,35 @@ describe('agent auto-resume after rollover', () => {
       unsupported: true
     })
     expect(call).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('agent auto-resume with a pre-drain offer snapshot', () => {
+  it('continues only offers the host did not already hold, whatever the clocks say', async () => {
+    const offers = [
+      { sessionId: 'left-for-user', recordedAt: T0 + 5_000 },
+      { sessionId: 'this-drain', recordedAt: T0 - 9 * MIN }
+    ]
+    const calls: unknown[] = []
+    const call = async (method: string, params?: Record<string, unknown>) => {
+      calls.push({ method, params })
+      return method === 'agentSession.restartResumable' ? { sessions: offers } : { continued: [{}] }
+    }
+    const before = await listRestartOfferIds(async () => ({ sessions: [offers[0]] }))
+    expect(before).toEqual(new Set(['left-for-user']))
+    const outcome = await autoResumeAgentsAfterRollover(call, T0, before)
+    expect(calls).toContainEqual({
+      method: 'agentSession.restartContinue',
+      params: { sessionIds: ['this-drain'] }
+    })
+    expect(outcome.offered).toBe(1)
+  })
+
+  it('answers null when the host cannot list its offers', async () => {
+    await expect(
+      listRestartOfferIds(async () => {
+        throw new Error('down')
+      })
+    ).resolves.toBeNull()
   })
 })
