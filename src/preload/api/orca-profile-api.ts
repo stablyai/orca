@@ -1,4 +1,9 @@
 import type {
+  OrcaProfileOrgCreateArgs,
+  OrcaProfileOrgCreateResult,
+  OrcaProfileOrgLeaveArgs
+} from '../../shared/orca-org-management'
+import type {
   OrcaCloudSignInProgress,
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -30,6 +35,7 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
+  OrcaBillingReturn,
   OrcaBillingStatusResult
 } from '../../shared/orca-billing'
 
@@ -71,6 +77,16 @@ export type OrcaProfileApi = {
   orgMemberRemove: (
     args: OrcaProfileOrgMemberRemoveArgs
   ) => Promise<OrcaProfileOrgMemberMutationResult>
+  /** Revokes and re-sends a pending invite with the same role. */
+  orgInviteResend: (
+    args: OrcaProfileOrgMemberInviteArgs
+  ) => Promise<OrcaProfileOrgMemberMutationResult>
+  /** Leaves the org as the signed-in user; the last owner is refused. */
+  orgLeave: (args: OrcaProfileOrgLeaveArgs) => Promise<OrcaProfileOrgMemberMutationResult>
+  /** Creates a team owned by the signed-in user. */
+  orgCreate: (args: OrcaProfileOrgCreateArgs) => Promise<OrcaProfileOrgCreateResult>
+  /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
+  onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
   /** Plan & billing for the signed-in account (Orca Cloud billing service). */
   billingStatus: () => Promise<OrcaBillingStatusResult>
   /** Opens hosted Stripe Checkout in the browser. */
