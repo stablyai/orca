@@ -43,4 +43,25 @@ describe('gitlab project ref parsing', () => {
       parseGitLabProjectRef('http://gitea.example.com:3030/team/api.git', knownHosts)
     ).toBeNull()
   })
+
+  it.each([
+    ['https://github.com:8443/team/project.git', 'github.com:8443'],
+    ['git@SSH.GITHUB.COM:team/project.git', 'ssh.github.com'],
+    ['git@acme.ghe.com:team/project.git', 'acme.ghe.com'],
+    ['git@ssh.bitbucket.org:team/project.git', 'ssh.bitbucket.org'],
+    ['https://dev.azure.com/acme/project/_git/repo', 'dev.azure.com'],
+    ['git@ssh.dev.azure.com:v3/acme/project/repo', 'ssh.dev.azure.com'],
+    ['https://acme.visualstudio.com/project/_git/repo', 'acme.visualstudio.com'],
+    ['https://codeberg.org/team/project.git', 'codeberg.org']
+  ])('never admits another public forge from a supplied inventory: %s', (remote, host) => {
+    expect(parseGitLabProjectRef(remote, [host])).toBeNull()
+  })
+
+  it('does not infer custom forge ownership from words in a hostname', () => {
+    expect(
+      parseGitLabProjectRef('https://git.bitbucket.acme.com/team/project.git', [
+        'git.bitbucket.acme.com'
+      ])
+    ).toEqual({ host: 'git.bitbucket.acme.com', path: 'team/project' })
+  })
 })

@@ -71,3 +71,13 @@ it('keeps a participating metadata failure unavailable instead of selecting a si
     resolve(['git@gitlab.corp:team/app.git', 'git@gitlab.corp:other/app.git'])
   ).rejects.toThrow('offline')
 })
+
+it('keeps a valid GitLab source beside canonical public-forge mirrors', async () => {
+  await expect(
+    resolve([
+      'git@github.com:team/app.git',
+      'git@gitlab.corp:team/app.git',
+      'https://bitbucket.org/team/app.git'
+    ])
+  ).resolves.toEqual({ id: 1, project: { host: 'gitlab.corp:8443', path: 'team/app' } })
+})

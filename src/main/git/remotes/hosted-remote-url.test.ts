@@ -38,6 +38,9 @@ describe('hosted remote URLs', () => {
 
   it('rejects unsupported hosts and incomplete repo paths', () => {
     expect(parseHostedRemote('git@example.com:team/repo.git')).toBeNull()
+    expect(parseHostedRemote('git@acme.ghe.com:team/repo.git')).toBeNull()
+    expect(parseHostedRemote('https://codeberg.org/team/repo.git')).toBeNull()
+    expect(parseHostedRemote('https://dev.azure.com/org/project/_git/repo')).toBeNull()
     expect(parseHostedRemote('git@github.com:repo.git')).toBeNull()
     expect(parseHostedRemote('ftp://github.com/Org/Repo.git')).toBeNull()
     expect(parseHostedRemote('git@ssh.bitbucket.org.example.com:team/repo.git')).toBeNull()
