@@ -76,6 +76,7 @@ describe('Kiro V3 recordings through the adapter', () => {
     if (diff?.kind !== 'diff') {
       throw new Error('Missing diff')
     }
+    // Recorded on Windows; POSIX decodes the same drive-letter URI to this rooted path.
     expect(diff.path).toBe(
       process.platform === 'win32'
         ? 'c:\\work\\kiro-fixture\\probe.txt'
