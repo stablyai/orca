@@ -6,6 +6,7 @@ const WAV_HEADER_BYTES = 44
 const CLOUD_RESPONSE_ALLOWANCE_MS = 30_000
 const UPLOAD_BYTES_PER_MS = 125
 
+// A finishing on-device dictation fails once the engine goes this long without text for it.
 export const LOCAL_DICTATION_STOP_TIMEOUT_MS = 60_000
 // How long an on-device model may take to load before its dictation fails.
 export const START_DICTATION_TIMEOUT_MS = 60_000
@@ -18,7 +19,7 @@ export function cloudTranscriptionTimeoutMs(audioSamples: number): number {
   return CLOUD_RESPONSE_ALLOWANCE_MS + Math.ceil(wavBytes / UPLOAD_BYTES_PER_MS)
 }
 
-/** A paired phone or browser waits out whichever deadline the host applies to this much audio. */
+/** A paired phone or browser waits out the host's cloud deadline for this much audio, or at least one local stop window. */
 export function pairedDictationFinishTimeoutMs(audioSeconds: number): number {
   const seconds = Math.min(audioSeconds, MAX_CLOUD_TRANSCRIPTION_SECONDS)
   const cloudMs = cloudTranscriptionTimeoutMs(Math.ceil(seconds * CLOUD_TRANSCRIPTION_SAMPLE_RATE))

@@ -47,10 +47,16 @@ export function waitForSttWorkerStop(args: {
       resolve()
     }
     const onStopped = (message: SttWorkerEvent): void => {
-      if (message.type === 'stopped' && message.streamId === args.streamId) {
+      if (message.streamId !== args.streamId) {
+        return
+      }
+      if (message.type === 'stopped') {
         receivedStopped = true
         finish('stopped')
+        return
       }
+      // Text for this stream means the engine is still working through it, however long its backlog is.
+      timeout?.refresh()
     }
     const onError = (error: Error): void => finish('error', error)
     const onExit = (): void => finish('exit')
