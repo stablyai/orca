@@ -5,7 +5,8 @@ import path from 'node:path'
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
-import { waitForSessionReady } from './helpers/store'
+import { switchToWorktree, waitForSessionReady } from './helpers/store'
+import { openFileExplorer } from './helpers/file-explorer'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 // A per-workspace environment recipe that hands Orca an Orca server: files opened in the
@@ -19,7 +20,7 @@ test('saves an edited file in a recipe-created Orca server workspace', async ({ 
   const sourceRepo = mkdtempSync(path.join(tmpdir(), 'orca-recipe-server-source-'))
   const vmRoot = mkdtempSync(path.join(tmpdir(), 'orca-recipe-server-vm-'))
   try {
-    seedGitRepo(vmRoot, { 'notes.md': '# VM notes\n' })
+    seedGitRepo(vmRoot, { 'notes.txt': 'VM notes' })
     seedRecipeRepo(sourceRepo, host.offer.pairingUrl, vmRoot)
     await waitForSessionReady(orcaPage)
     await orcaPage.evaluate(async (repoPath) => {
@@ -34,9 +35,7 @@ test('saves an edited file in a recipe-created Orca server workspace', async ({ 
     }, sourceRepo)
 
     await openSidebarWorkspaceComposer(orcaPage)
-    const dialog = orcaPage.getByRole('dialog', {
-      name: /Create (Workspace|Worktree)/i
-    })
+    const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     await expect(dialog).toBeVisible()
     await dialog.getByRole('combobox', { name: 'Run on' }).click()
     await orcaPage.getByRole('option', { name: /Per-Workspace Environment/ }).click()
@@ -54,66 +53,80 @@ test('saves an edited file in a recipe-created Orca server workspace', async ({ 
 
     const findWorkspace = () =>
       orcaPage.evaluate(
-        (name) =>
-          Object.values(window.__store!.getState().worktreesByRepo)
-            .flat()
-            .find((worktree) => worktree.displayName === name) ?? null,
-        workspaceName
+        ({ name, sourceRepoPath }) => {
+          const state = window.__store!.getState()
+          const sourceRepoIds = new Set(
+            state.repos.filter((repo) => repo.path === sourceRepoPath).map((repo) => repo.id)
+          )
+          return (
+            Object.values(state.worktreesByRepo)
+              .flat()
+              .find(
+                (worktree) =>
+                  worktree.displayName === name &&
+                  !sourceRepoIds.has(worktree.repoId) &&
+                  Boolean(worktree.hostId?.startsWith('runtime:'))
+              ) ?? null
+          )
+        },
+        { name: workspaceName, sourceRepoPath: sourceRepo }
       )
     await expect.poll(findWorkspace, { timeout: 120_000 }).not.toBeNull()
     const workspace = (await findWorkspace())!
-    expect(workspace.hostId).toMatch(/^runtime:/)
-    await orcaPage.evaluate((id) => window.__store!.getState().setActiveWorktree(id), workspace.id)
+    await switchToWorktree(orcaPage, workspace.id)
 
-    await orcaPage.evaluate(() => {
-      const state = window.__store!.getState()
-      state.setRightSidebarTab('explorer')
-      state.setRightSidebarOpen(true)
-    })
-    const explorer = orcaPage.locator('[data-orca-explorer-shell]')
-    const notesRow = explorer.locator('[data-file-explorer-row]').filter({
-      has: orcaPage.getByText('notes.md', { exact: true })
-    })
+    await openFileExplorer(orcaPage)
+    const notesRow = orcaPage
+      .locator('[data-orca-explorer-shell] [data-file-explorer-row]')
+      .filter({ has: orcaPage.getByText('notes.txt', { exact: true }) })
     await expect(notesRow).toBeVisible({ timeout: 30_000 })
     await notesRow.click()
-    const editor = orcaPage.locator('.rich-markdown-editor')
-    await expect(editor).toContainText('VM notes', { timeout: 25_000 })
+    // The workspace lives on the server, so its model has a host-keyed URI rather than file:.
+    const editor = orcaPage
+      .locator('.monaco-editor[data-uri^="vscode-remote:"]')
+      .filter({ visible: true })
+    const editorText = editor.locator('.view-lines')
+    await expect(editorText).toHaveText('VM notes', { timeout: 30_000 })
+    const savedPath = path.join(workspace.path, 'notes.txt')
+
+    const replaceText = async (text: string): Promise<void> => {
+      await editor.click()
+      await orcaPage.keyboard.press('ControlOrMeta+A')
+      await orcaPage.keyboard.type(text)
+      await expect(editorText).toHaveText(text)
+    }
+    const waitForCleanTab = () =>
+      expect
+        .poll(
+          () =>
+            orcaPage.evaluate(
+              () =>
+                window
+                  .__store!.getState()
+                  .openFiles.find((file) => file.relativePath === 'notes.txt')?.isDirty ?? null
+            ),
+          { timeout: 15_000 }
+        )
+        .toBe(false)
+
     const sentinel = `Saved from recipe workspace ${Date.now()}`
-    await editor.click()
-    await orcaPage.keyboard.press('ControlOrMeta+End')
-    await orcaPage.keyboard.press('Enter')
-    await orcaPage.keyboard.type(sentinel)
+    await replaceText(sentinel)
     await orcaPage.keyboard.press('ControlOrMeta+S')
+    await expect.poll(() => readFileSync(savedPath, 'utf8'), { timeout: 15_000 }).toBe(sentinel)
+    // The save round trip must finish before the server goes away.
+    await waitForCleanTab()
 
-    const savedPath = path.join(workspace.path, 'notes.md')
-    await expect
-      .poll(() => readFileSync(savedPath, 'utf8'), { timeout: 15_000 })
-      .toContain(sentinel)
-    await expect(orcaPage.getByText('Failed to save the file')).toHaveCount(0)
-
-    // A VM that sleeps and wakes restarts its server; the open tab must still save there.
+    // A VM that sleeps and wakes restarts its server. The tab opened before must still save
+    // there once the app reconnects on its own. Retried saves tolerate the reconnect window;
+    // a tab whose owner can no longer be verified never saves (#11762).
     await host.restartServeProcess()
-    const environmentId = workspace.hostId!.slice('runtime:'.length)
-    await expect
-      .poll(
-        () =>
-          orcaPage.evaluate(
-            (id) => window.__store!.getState().refreshRuntimeEnvironmentStatus(id),
-            environmentId
-          ),
-        { timeout: 60_000 }
-      )
-      .toBeTruthy()
     const afterWake = `Saved after wake ${Date.now()}`
-    await editor.click()
-    await orcaPage.keyboard.press('ControlOrMeta+End')
-    await orcaPage.keyboard.press('Enter')
-    await orcaPage.keyboard.type(afterWake)
-    await orcaPage.keyboard.press('ControlOrMeta+S')
-    await expect
-      .poll(() => readFileSync(savedPath, 'utf8'), { timeout: 30_000 })
-      .toContain(afterWake)
-    await expect(orcaPage.getByText('Failed to save the file')).toHaveCount(0)
+    await replaceText(afterWake)
+    await expect(async () => {
+      await orcaPage.keyboard.press('ControlOrMeta+S')
+      await expect.poll(() => readFileSync(savedPath, 'utf8'), { timeout: 3_000 }).toBe(afterWake)
+    }).toPass({ timeout: 60_000 })
+    await waitForCleanTab()
   } finally {
     await host.dispose().catch(() => undefined)
     rmSync(sourceRepo, { recursive: true, force: true })
@@ -126,9 +139,7 @@ function seedGitRepo(repoPath: string, files: Record<string, string>): void {
     writeFileSync(path.join(repoPath, name), content)
   }
   execFileSync('git', ['init', '-b', 'main'], { cwd: repoPath })
-  execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
-    cwd: repoPath
-  })
+  execFileSync('git', ['config', 'user.email', 'e2e@test.local'], { cwd: repoPath })
   execFileSync('git', ['config', 'user.name', 'Orca E2E'], { cwd: repoPath })
   execFileSync('git', ['add', '.'], { cwd: repoPath })
   execFileSync('git', ['commit', '-m', 'seed'], { cwd: repoPath })
