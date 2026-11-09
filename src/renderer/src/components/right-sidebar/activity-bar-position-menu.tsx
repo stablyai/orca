@@ -17,7 +17,7 @@ export function ActivityBarPositionMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <ContextMenuContent>
+    <ContextMenuContent data-right-sidebar-menu>
       <ContextMenuLabel>
         {t('auto.components.right.sidebar.index.864111caa2', 'Activity Bar Position')}
       </ContextMenuLabel>
