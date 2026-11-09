@@ -15,7 +15,9 @@ import {
   settleWorkspaceUnreadFlag,
   noteWorkspaceRead
 } from './workspace-unread-flag'
-import { workspaceMarkerTabIds } from './workspace-live-markers'
+import { workspaceMarkerTabIds, workspaceMarkerTabs, paneKeyTabId } from './workspace-live-markers'
+import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import { resolveAgentStatusWorktreeId } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
@@ -152,8 +154,19 @@ export const createWorkspaceAttentionSlice: StateCreator<
         ...(removed?.paneKeys ?? []),
         ...workspaceAgentPaneKeys(get(), worktreeId)
       ])
-      if (paneKeys.size > 0) {
-        get().acknowledgeAgents([...paneKeys], undefined, 'explicit')
+      const state = get()
+      const hostPaneKeys = [...paneKeys].filter((paneKey) => {
+        const retained = state.retainedAgentsByPaneKey[paneKey]
+        const entry = state.agentStatusByPaneKey[paneKey] ?? retained?.entry
+        const tabId = paneKeyTabId(paneKey)
+        const tab = state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+        return (
+          getAgentPaneExecutionHost(state, paneKey, entry, tab?.ptyId ?? retained?.tab.ptyId) ===
+          executionHostId
+        )
+      })
+      if (hostPaneKeys.length > 0) {
+        get().acknowledgeAgents(hostPaneKeys, undefined, 'explicit')
       }
     }
   }
@@ -162,8 +175,17 @@ export const createWorkspaceAttentionSlice: StateCreator<
 /** Every agent pane, live or retained, that belongs to the workspace. */
 function workspaceAgentPaneKeys(state: AppState, worktreeId: string): string[] {
   const keys: string[] = []
+  const tabOwners = new Map<string, string>()
+  for (const id of new Set([
+    ...Object.keys(state.tabsByWorktree),
+    ...Object.keys(state.unifiedTabsByWorktree)
+  ])) {
+    for (const tab of workspaceMarkerTabs(state, id)) {
+      tabOwners.set(tab.id, id)
+    }
+  }
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    if (entry.worktreeId === worktreeId) {
+    if (resolveAgentStatusWorktreeId(entry, tabOwners) === worktreeId) {
       keys.push(paneKey)
     }
   }

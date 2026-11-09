@@ -1,11 +1,13 @@
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { selectTabBarAgentProjections } from '../tab-bar/tab-agent-types-by-tab-id'
-import { orderWorktreeLeadingTabs } from './worktree-card-leading-tab-order'
+import {
+  orderWorktreeLeadingTabs,
+  worktreeLeadingTabOrderInputs
+} from './worktree-card-leading-tab-order'
 
 /** The card's leading icon shows this many tabs: the front one and up to three layered behind it. */
 export const LEADING_TAB_LIMIT = 4
@@ -90,10 +92,11 @@ export function selectWorktreeLeadingTabs(state: AppState, worktreeId: string): 
 
 /** Keep ordering and icon projection out of unrelated store notifications. */
 export function createWorktreeLeadingTabsSelector(worktreeId: string) {
+  let previousSources: readonly unknown[] = []
   let previous: readonly unknown[] = []
   let result: string[] = []
   return (state: AppState): string[] => {
-    const inputs = [
+    const sources = [
       state.unifiedTabsByWorktree[worktreeId],
       state.tabsByWorktree[worktreeId],
       state.browserTabsByWorktree[worktreeId],
@@ -104,11 +107,24 @@ export function createWorktreeLeadingTabsSelector(worktreeId: string) {
       state.runtimePaneTitlesByTabId,
       state.terminalLayoutsByTabId,
       state.sortBy,
-      state.sortBy === 'smart'
-        ? getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)[0]?.lastActivityAt
-        : undefined
+      state.sortBy === 'smart' ? selectWorktreesByRepo(state) : undefined
     ]
-    if (!inputs.every((value, index) => value === previous[index])) {
+    if (sources.every((value, index) => value === previousSources[index])) {
+      return result
+    }
+    previousSources = sources
+    const agents = selectTabBarAgentProjections(state).tabAgentTypesByTabId
+    const inputs = [
+      ...worktreeLeadingTabOrderInputs(state, worktreeId),
+      state.browserTabsByWorktree[worktreeId],
+      ...(state.unifiedTabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.contentType === 'terminal')
+        .map((tab) => agents[tab.entityId])
+    ]
+    if (
+      inputs.length !== previous.length ||
+      !inputs.every((value, index) => value === previous[index])
+    ) {
       previous = inputs
       result = selectWorktreeLeadingTabs(state, worktreeId)
     }

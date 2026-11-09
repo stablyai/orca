@@ -12,7 +12,7 @@ vi.mock('./agent-generation-request', () => ({ runGenerationRequest: mocks.gener
 vi.mock('./source-control-generation-lanes', () => ({ cancelLocalGeneration: mocks.cancel }))
 vi.mock('./source-control-agent-launch', () => ({ spawnSourceControlAgent: vi.fn() }))
 vi.mock('./commit-message-text-generation', () => ({
-  resolveTextGenerationParams: () => ({ ok: false })
+  resolveTextGenerationParams: () => ({ ok: true, params: { agentId: 'claude', model: 'haiku' } })
 }))
 
 let directory: string
@@ -84,4 +84,22 @@ it('keeps shared generation alive for another consumer and allows reacquiring a 
   const renewed = request('renewed', new AbortController())
   preparation.resolve({ ok: true })
   expect(await renewed).toMatchObject({ success: true })
+})
+
+it('draws icons requested together in one agent run, matched by icon number', async () => {
+  const request = await setup()
+  mocks.generate.mockResolvedValue({
+    success: true,
+    rawOutput: [
+      '<svg id="icon-2" viewBox="0 0 18 15"><path d="M2 2h2"/></svg>',
+      '<svg id="icon-1" viewBox="0 0 18 15"><path d="M1 1h1"/></svg>'
+    ].join('\n')
+  })
+  const [alpha, beta] = await Promise.all([
+    request('alpha', new AbortController()),
+    request('beta', new AbortController())
+  ])
+  expect(mocks.generate).toHaveBeenCalledTimes(1)
+  expect(alpha).toMatchObject({ success: true, svg: expect.stringContaining('M1 1h1') })
+  expect(beta).toMatchObject({ success: true, svg: expect.stringContaining('M2 2h2') })
 })

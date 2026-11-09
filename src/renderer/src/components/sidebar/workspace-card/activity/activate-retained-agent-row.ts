@@ -1,3 +1,4 @@
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -19,23 +20,28 @@ export function activateRetainedAgentRow(
   executionHostId?: ExecutionHostId
 ): void {
   const parsed = parsePaneKey(paneKey)
-  if (!parsed || parsed.tabId !== tabId) {
-    return
-  }
   const state = useAppStore.getState()
   const nativeTab = state.unifiedTabsByWorktree[worktreeId]?.find(
     (tab) =>
       tab.id === tabId && tab.worktreeId === worktreeId && tab.contentType === 'agent-session'
   )
+  if (
+    parsed
+      ? parsed.tabId !== tabId
+      : !nativeTab || structuredAgentSessionPaneKey(nativeTab.id, nativeTab.entityId) !== paneKey
+  ) {
+    return
+  }
   const target = nativeTab ? structuredAgentSessionTargetForTab(state, nativeTab) : null
   const layout = state.terminalLayoutsByTabId[tabId]
   const hasLiveTerminal =
+    parsed &&
     state.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) &&
     stablePaneHasLivePty(tabId, parsed.leafId, state.ptyIdsByTabId, layout)
   const owner = nativeTab
     ? structuredAgentSessionOwnerForTab(state, nativeTab)
     : getPtyExecutionHost(
-        layout?.ptyIdsByLeafId?.[parsed.leafId] ?? state.ptyIdsByTabId[tabId]?.[0]
+        (parsed && layout?.ptyIdsByLeafId?.[parsed.leafId]) ?? state.ptyIdsByTabId[tabId]?.[0]
       )
   if (
     (nativeTab ? !target : !hasLiveTerminal) ||
@@ -54,7 +60,7 @@ export function activateRetainedAgentRow(
   }
   if (nativeTab && target) {
     activateStructuredAgentSessionTab({ worktreeId, tabId, target })
-  } else {
+  } else if (parsed) {
     activateTabAndFocusPane(tabId, parsed.leafId, {
       ackPaneKeyOnSuccess: paneKey,
       flashFocusedPane: true,

@@ -103,3 +103,58 @@ it('updates shared review keys, removes old representatives, and excludes review
   expect(select(closed).open.count).toBe(0)
   expect(select(closed).closed.count).toBe(2)
 })
+
+it('retains a hidden linked review until its state loads, including an unavailable response', () => {
+  const repo = { id: 'repo', path: '/repo', displayName: 'repo', badgeColor: 'gray', addedAt: 1 }
+  const parent = makeWorktree({ id: 'parent', repoId: 'repo' })
+  const child = makeWorktree({ id: 'child', repoId: 'repo', linkedGitLabMR: 42 })
+  const plan = buildWorktreeOccurrencePlan({
+    rows: [parent, child],
+    identityOf: getWorktreeHostIdentity,
+    childrenByParentIdentity: new Map([[getWorktreeHostIdentity(parent), [child]]]),
+    isPinned: () => false,
+    duplicatePinned: false,
+    sectionsOf: ({ natural }) => [{ key: 'all', items: natural }]
+  })
+  const range = [...buildWorktreeLineageRanges(plan).values()].find((range) => range.length === 1)!
+  const state = {
+    ...useAppStore.getState(),
+    repos: [repo],
+    worktreesByRepo: { repo: [parent, child] },
+    prCache: {},
+    hostedReviewCache: {}
+  }
+  const select = createHiddenReviewStatesSelector(range)
+  expect(select(state).unknown.count).toBe(1)
+  expect(select(state).unknown.review?.number).toBe(42)
+  const { hostedReviewCacheKey } = getWorktreeReviewCacheKeys(child, repo, state.settings)
+  const unavailable = {
+    ...state,
+    hostedReviewCache: { [hostedReviewCacheKey]: { data: null, fetchedAt: 1 } }
+  }
+  expect(select(unavailable).unknown.count).toBe(1)
+  expect(
+    selectHiddenReviewStates(unavailable, [getWorktreeHostIdentity(child)]).unknown.review?.number
+  ).toBe(42)
+  const loaded = {
+    ...state,
+    hostedReviewCache: {
+      [hostedReviewCacheKey]: {
+        data: {
+          provider: 'gitlab' as const,
+          number: 42,
+          title: 'MR',
+          state: 'merged' as const,
+          url: 'https://example.test/42',
+          status: 'success' as const,
+          mergeable: 'UNKNOWN' as const,
+          updatedAt: ''
+        },
+        fetchedAt: 2
+      }
+    }
+  }
+  expect(select(loaded).unknown.count).toBe(0)
+  expect(select(loaded).merged.count).toBe(1)
+  expect(select(loaded).merged.review?.number).toBe(42)
+})

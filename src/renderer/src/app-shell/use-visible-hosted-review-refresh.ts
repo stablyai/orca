@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/index'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
-import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
+import { createWorkspaceReferenceRefreshTargetsSelector } from '@/components/sidebar/workspace-card/review/workspace-reference-refresh-targets'
 import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged
@@ -16,28 +16,36 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       return
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
-    const update = (): void => {
+    const selectedOnly = isWebClientLocation()
+    const selectReferences = createWorkspaceReferenceRefreshTargetsSelector({ selectedOnly })
+    let hostedTargets: ReturnType<typeof getVisibleHostedReviewRefreshTargets> = []
+    let referenceTargets: ReturnType<typeof selectReferences> = []
+    const update = (reviewInputsChanged: boolean): void => {
       const state = useAppStore.getState()
-      const selectedOnly = isWebClientLocation()
+      const references = selectReferences(state, reviewInputsChanged)
+      if (!reviewInputsChanged && references === referenceTargets) {
+        return
+      }
+      referenceTargets = references
+      if (reviewInputsChanged) {
+        hostedTargets = getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, {
+          selectedOnly: selectedOnly && getWorktreeCardStyle(state.settings) !== 'experimental-2'
+        })
+      }
       scheduler.update([
         // Collapsed review rollups also need background reads on paired clients; this shared queue bounds them.
-        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, {
-          selectedOnly: selectedOnly && getWorktreeCardStyle(state.settings) !== 'experimental-2'
-        }),
-        ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
+        ...hostedTargets,
+        ...referenceTargets
       ])
     }
     const visibilityChanged = (): void => {
       scheduler.setVisible(false)
-      update()
+      update(true)
       scheduler.setVisible(isWindowVisible())
     }
     const unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (visibleHostedReviewRefreshInputsChanged(state, previous)) {
-        update()
-      }
+      update(visibleHostedReviewRefreshInputsChanged(state, previous))
     })
-    update()
     visibilityChanged()
     document.addEventListener('visibilitychange', visibilityChanged)
     return () => {

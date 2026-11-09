@@ -64,6 +64,11 @@ export function sourceControlVariableDescription(
         'sourceControl.variables.assistantMessage',
         'The initial agent response, when Orca has one available.'
       )
+    case 'workspaces':
+      return t(
+        'sourceControl.variables.workspaces',
+        'The numbered workspace names in this icon batch. Each reply SVG must start with <svg id="icon-N"> for its number.'
+      )
     case 'linkedIssue':
       return t(
         'sourceControl.variables.linkedIssue',

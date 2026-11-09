@@ -87,8 +87,11 @@ export function createLineageSlotReader(
     tree: WorktreeLineageTree,
     index: number
   ): SlotAggregate {
-    const slots = slotsForTree(state, tree)
-    return slots.aggregate.read(index + 1, tree.ends[index]!)
+    const end = tree.ends[index]!
+    if (end <= index + 1) {
+      return emptyAggregate()
+    }
+    return slotsForTree(state, tree).aggregate.read(index + 1, end)
   }
 
   return { slotsForTree, descendantSlot }

@@ -108,7 +108,8 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
         success: false,
         error: 'AI workspace icons are unavailable in the web client.'
       }),
-      cancel: async () => {}
+      cancel: async () => {},
+      clearCache: async () => {}
     },
     hooks: createHooksApi(),
     stats: {

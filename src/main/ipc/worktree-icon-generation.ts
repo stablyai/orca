@@ -3,7 +3,10 @@ import path from 'node:path'
 import { z } from 'zod'
 import type { Store } from '../persistence/loading-store/store'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import { generateWorktreeIconRequest } from '../text-generation/worktree-icon-requests'
+import {
+  clearWorktreeIconCache,
+  generateWorktreeIconRequest
+} from '../text-generation/worktree-icon-requests'
 import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
 const CancelWorktreeIcon = z.object({ requestId: z.string().min(1).max(128) })
@@ -47,4 +50,5 @@ export function registerWorktreeIconGenerationHandlers(
   ipcMain.handle('worktreeIcons:cancel', (event, args: unknown) => {
     requests.get(event.sender)?.get(CancelWorktreeIcon.parse(args).requestId)?.abort()
   })
+  ipcMain.handle('worktreeIcons:clearCache', () => clearWorktreeIconCache(host))
 }

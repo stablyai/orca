@@ -5,7 +5,6 @@ import {
   lineageIdentities,
   type WorktreeLineageSource
 } from '../../../../shared/sidebar-list/worktree-lineage-range'
-import type { HostedReviewState } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -33,12 +32,13 @@ import {
   addReview as add,
   ownWorktreeReview as ownReview,
   createHiddenReviewStatesSelector,
-  type PrStates
+  type PrStates,
+  type ReviewRollupState
 } from './worktree-card-review-range'
 
 type ReviewTarget = { worktree: Worktree; review: WorktreeCardPrDisplay }
 
-function stateLabel(state: HostedReviewState, count: number, t: Translate): string {
+function stateLabel(state: ReviewRollupState, count: number, t: Translate): string {
   switch (state) {
     case 'open':
       return t('sidebar.cardSlot.prOpen', '{{count}} open', { count })
@@ -48,6 +48,8 @@ function stateLabel(state: HostedReviewState, count: number, t: Translate): stri
       return t('sidebar.cardSlot.prMerged', '{{count}} merged', { count })
     case 'closed':
       return t('sidebar.cardSlot.prClosed', '{{count}} closed', { count })
+    case 'unknown':
+      return t('workspace.links.reviews', 'Reviews')
   }
 }
 
@@ -73,11 +75,13 @@ export function WorktreeCardPrRollup({
     open: { ...hidden.open },
     draft: { ...hidden.draft },
     merged: { ...hidden.merged },
-    closed: { ...hidden.closed }
+    closed: { ...hidden.closed },
+    unknown: { ...hidden.unknown }
   }
   const hasHidden = STATE_ORDER.some((key) => hidden[key].count > 0)
-  if (ownRepresentsDescendant && own?.state && hidden[own.state].count > 0) {
-    merge(states[own.state], { count: 0, review: own })
+  const ownState = own?.state ?? 'unknown'
+  if (ownRepresentsDescendant && own && hidden[ownState].count > 0) {
+    merge(states[ownState], { count: 0, review: own })
   } else {
     add(states, own)
   }
@@ -102,7 +106,6 @@ export function WorktreeCardPrRollup({
           ) : null}
         </span>
       ))}
-      {own && !own.state ? <ReviewIcon review={own} className="size-3 shrink-0" /> : null}
     </>
   )
   const buttonClass =

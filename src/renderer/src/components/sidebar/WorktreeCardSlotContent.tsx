@@ -214,6 +214,7 @@ export function WorktreeCardSlotContent({
   const agentLines = showLines ? (
     <WorktreeCardSlotAgentLines
       worktreeId={worktree.id}
+      executionHostId={worktree.hostId}
       agents={agents}
       signals={signals}
       now={now}
@@ -268,10 +269,10 @@ export function WorktreeCardSlotContent({
         <div
           className="group/worktree-card flex min-w-0 flex-col"
           data-worktree-card-hover-trigger=""
-          // The chevron is a small target; a plain click anywhere on the header toggles too.
           onClick={(event) => {
             if (
               canOpen &&
+              !open &&
               !pickingSendTarget &&
               !event.defaultPrevented &&
               event.detail <= 1 &&

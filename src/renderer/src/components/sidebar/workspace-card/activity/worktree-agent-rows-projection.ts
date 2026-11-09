@@ -22,12 +22,8 @@ import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForW
 import { EMPTY_TABS } from './worktree-card-empty-inputs'
 import { createWorktreeAgentFreshnessSelector } from './worktree-agent-freshness-selector'
 
-import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import {
-  getConnectionExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pane-execution-host'
 
 export const EMPTY_AGENT_ROWS: DashboardAgentRow[] = []
 
@@ -37,22 +33,11 @@ function rowBelongsToHost(
   hostId: ExecutionHostId
 ): boolean {
   const paneKey = row.activationPaneKey ?? row.paneKey
-  const tab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
-  if (tab?.executionHostId) {
-    return tab.executionHostId === hostId
-  }
   const entry =
     state.agentStatusByPaneKey[paneKey] ??
     state.retainedAgentsByPaneKey[paneKey]?.entry ??
     row.entry
-  const parsed = parsePaneKey(paneKey)
-  const ptyId =
-    (parsed && state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]) ??
-    entry.terminalHandle ??
-    row.tab.ptyId ??
-    (parsed ? state.ptyIdsByTabId[parsed.tabId]?.[0] : undefined)
-  const ptyHost = getPtyExecutionHost(ptyId)
-  return (ptyHost ?? getConnectionExecutionHostId(entry.connectionId)) === hostId
+  return getAgentPaneExecutionHost(state, paneKey, entry, row.tab.ptyId) === hostId
 }
 
 /** The row model shared by mounted cards and hidden-workspace summaries. */
@@ -73,7 +58,9 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       worktreeId
     )
     const paneForegroundAgentByPaneKey = selectPaneForegroundAgentsForWorktree(state, worktreeId)
-    const representedTabs = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+    const representedTabs = getStructuredAgentSessionTabsByPaneKey(
+      state.unifiedTabsByWorktree[worktreeId]
+    )
     const inputs = [
       tabs,
       liveEntries,

@@ -1,3 +1,4 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { setWorktreeCardDisclosure } from './workspace-card/surface/worktree-card-open-state'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -149,26 +150,21 @@ export function openSlotTarget(target: SlotTarget): void {
     activateUnreadTab(target.worktreeId, target.tabId, target.executionHostId)
     return
   }
-  const parsed = target.paneKey ? parsePaneKey(target.paneKey) : null
-  if (!target.paneKey || !parsed) {
+  const representedTab = target.paneKey
+    ? getStructuredAgentSessionTabsByPaneKey(useAppStore.getState().unifiedTabsByWorktree).get(
+        target.paneKey
+      )
+    : undefined
+  const tabId = representedTab?.id ?? (target.paneKey ? parsePaneKey(target.paneKey)?.tabId : null)
+  if (!target.paneKey || !tabId) {
     activateAndRevealWorkspace(target.worktreeId, { executionHostId: target.executionHostId })
     return
   }
   expandWorktreeAgentList(target.worktreeId)
   if (target.retained) {
-    activateRetainedAgentRow(
-      target.worktreeId,
-      parsed.tabId,
-      target.paneKey,
-      target.executionHostId
-    )
+    activateRetainedAgentRow(target.worktreeId, tabId, target.paneKey, target.executionHostId)
   } else {
-    activateWorktreeAgentPane(
-      target.worktreeId,
-      parsed.tabId,
-      target.paneKey,
-      target.executionHostId
-    )
+    activateWorktreeAgentPane(target.worktreeId, tabId, target.paneKey, target.executionHostId)
   }
 }
 

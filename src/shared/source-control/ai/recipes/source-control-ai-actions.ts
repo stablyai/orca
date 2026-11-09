@@ -18,8 +18,9 @@ import {
 
 export type SourceControlTextActionId = 'commitMessage' | 'pullRequest' | 'branchName'
 /** Text actions outside any repository: they read global settings only, never a repo's overrides. */
-export type GlobalAiTextActionId = 'conversationName' | 'dictationCleanup'
+export type GlobalAiTextActionId = 'conversationName' | 'dictationCleanup' | 'workspaceIcon'
 export type AiTextActionId = SourceControlTextActionId | GlobalAiTextActionId
+export type GlobalOnlyAiTextActionId = GlobalAiTextActionId
 
 export type SourceControlLaunchActionId =
   | 'fixCommitFailure'
@@ -97,12 +98,18 @@ export const SOURCE_CONTROL_ACTION_IDS = [
 export const AI_TEXT_ACTION_IDS = [
   ...SOURCE_CONTROL_TEXT_ACTION_IDS,
   'conversationName',
-  'dictationCleanup'
+  'dictationCleanup',
+  'workspaceIcon'
 ] as const satisfies readonly AiTextActionId[]
 
-export function isGlobalAiTextAction(actionId: AiActionId): actionId is GlobalAiTextActionId {
-  return actionId === 'conversationName' || actionId === 'dictationCleanup'
+export function isGlobalAiTextAction(actionId: string): actionId is GlobalAiTextActionId {
+  return actionId === 'conversationName' || actionId === 'dictationCleanup' || actionId === 'workspaceIcon'
 }
+
+export const isGlobalOnlyAiTextAction = isGlobalAiTextAction
+// Icons are batch work where per-call overhead dominates, so they default to a small tool-light model.
+export const WORKSPACE_ICON_DEFAULT_AGENT = 'claude' satisfies TuiAgent
+export const WORKSPACE_ICON_DEFAULT_MODEL = 'haiku'
 
 export const AI_ACTION_IDS = [
   ...AI_TEXT_ACTION_IDS,
@@ -134,6 +141,7 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<AiActionId,
   branchName: '{basePrompt}',
   conversationName: '{basePrompt}',
   dictationCleanup: '{basePrompt}',
+  workspaceIcon: '{basePrompt}',
   fixCommitFailure: '{basePrompt}',
   fixPushFailure: '{basePrompt}',
   fixChecks: '{basePrompt}',

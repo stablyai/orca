@@ -26,19 +26,22 @@ import {
   type ReviewSnapshot
 } from './worktree-card-review-snapshot'
 
-export const REVIEW_STATE_ORDER: readonly HostedReviewState[] = [
+export type ReviewRollupState = HostedReviewState | 'unknown'
+export const REVIEW_STATE_ORDER: readonly ReviewRollupState[] = [
   'open',
   'draft',
   'merged',
-  'closed'
+  'closed',
+  'unknown'
 ]
 type PrSummary = { count: number; review: WorktreeCardPrDisplay | null; rank?: number }
-export type PrStates = Record<HostedReviewState, PrSummary>
+export type PrStates = Record<ReviewRollupState, PrSummary>
 export const emptyReviewStates = (): PrStates => ({
   open: { count: 0, review: null },
   draft: { count: 0, review: null },
   merged: { count: 0, review: null },
-  closed: { count: 0, review: null }
+  closed: { count: 0, review: null },
+  unknown: { count: 0, review: null }
 })
 
 function priority(review: WorktreeCardPrDisplay): number {
@@ -63,8 +66,8 @@ export function addReview(
   review: WorktreeCardPrDisplay | null,
   rank?: number
 ): void {
-  if (review?.state) {
-    mergeReviewSummary(states[review.state], { count: 1, review, rank })
+  if (review) {
+    mergeReviewSummary(states[review.state ?? 'unknown'], { count: 1, review, rank })
   }
 }
 function combine(left: PrStates, right: PrStates): PrStates {
@@ -192,6 +195,9 @@ function reviewsForTree(state: AppState, tree: WorktreeLineageTree): TreeReviews
 }
 
 export function selectHiddenReviewStates(state: AppState, source: WorktreeLineageSource): PrStates {
+  if (source.length === 0) {
+    return emptyReviewStates()
+  }
   if (isLineageRange(source)) {
     return reviewsForTree(state, source.tree).aggregate.read(
       source.index + 1,

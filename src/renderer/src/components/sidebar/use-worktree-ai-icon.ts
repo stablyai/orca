@@ -46,6 +46,22 @@ export function retryFailedWorktreeAiIcons(): void {
   notify()
 }
 
+/** Forget every saved icon, here and on disk, and redraw the mounted cards with the current recipe. */
+export async function regenerateWorktreeAiIcons(): Promise<void> {
+  await window.api.worktreeIcons.clearCache()
+  failureToastShown = false
+  for (const [name, entry] of entries) {
+    // A running batch settles into the new recipe's cache anyway; respawning it would double the cost.
+    if (entry.status !== 'pending') {
+      entries.delete(name)
+    }
+  }
+  for (const name of consumers.keys()) {
+    request(name)
+  }
+  notify()
+}
+
 function request(name: string): void {
   const entry = entries.get(name)
   // Failures retry after a while; cards remount on scroll, so an immediate retry would respawn agents.

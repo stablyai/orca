@@ -142,6 +142,9 @@ export function collectLineageSlotTargets(
   source: WorktreeLineageSource
 ): SlotTarget[] {
   if (isLineageRange(source)) {
+    if (source.length === 0) {
+      return []
+    }
     const slots = slotsForTree(state, source.tree)
     const result: SlotTarget[] = []
     for (let i = source.index + 1; i < source.tree.ends[source.index]!; i++) {

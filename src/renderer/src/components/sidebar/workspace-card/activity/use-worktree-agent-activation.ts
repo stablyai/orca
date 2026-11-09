@@ -1,4 +1,6 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -8,10 +10,11 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 
-export function useWorktreeAgentActivation(worktreeId: string) {
+export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
-    (tabId: string, paneKey: string) => activateWorktreeAgentPane(worktreeId, tabId, paneKey),
-    [worktreeId]
+    (tabId: string, paneKey: string) =>
+      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId),
+    [worktreeId, executionHostId]
   )
 }
 
@@ -22,6 +25,12 @@ export function activateWorktreeAgentPane(
   paneKey: string,
   executionHostId?: ExecutionHostId
 ): void {
+  const state = useAppStore.getState()
+  const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
+  if (nativeTab?.worktreeId === worktreeId && nativeTab.id === tabId) {
+    activateRetainedAgentRow(worktreeId, tabId, paneKey, executionHostId)
+    return
+  }
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     // Legacy/malformed pane keys cannot resolve after replay; discard stale rows rather than guessing.

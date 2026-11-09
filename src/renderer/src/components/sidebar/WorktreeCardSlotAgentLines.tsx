@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { translate } from '@/i18n/i18n'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
@@ -14,6 +15,7 @@ function stopPropagation(event: React.SyntheticEvent): void {
 /** Experimental 2.0 agent lines: lead agents, their subagents on demand, and the shared picking/unread/focus model. */
 export function WorktreeCardSlotAgentLines({
   worktreeId,
+  executionHostId,
   agents,
   signals,
   now,
@@ -21,6 +23,7 @@ export function WorktreeCardSlotAgentLines({
   cacheTimersActive
 }: {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   agents: DashboardAgentRow[]
   signals: SlotAgentSignals
   now: number
@@ -28,7 +31,7 @@ export function WorktreeCardSlotAgentLines({
   /** False while the list is folded away, so hidden rows don't run countdowns. */
   cacheTimersActive: boolean
 }): React.JSX.Element | null {
-  const model = useWorktreeAgentListModel(worktreeId, agents)
+  const model = useWorktreeAgentListModel(worktreeId, agents, executionHostId)
   const {
     showAgentModels,
     isAgentSendTargetModeActive,

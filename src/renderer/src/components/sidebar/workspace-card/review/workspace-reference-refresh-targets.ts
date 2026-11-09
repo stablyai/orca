@@ -16,15 +16,54 @@ import { readWorkspaceReferenceDetails } from './workspace-reference-detail-read
 import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
 import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
-export function getWorkspaceReferenceRefreshTargets(
+function workspaceReferenceWorkspaces(state: AppState, options?: { selectedOnly?: boolean }) {
+  return [...getVisibleHostedReviewWorkspaces(state, options)].filter(({ worktree }) =>
+    getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue')
+  )
+}
+
+export function createWorkspaceReferenceRefreshTargetsSelector(options?: {
+  selectedOnly?: boolean
+}) {
+  let workspaces: ReturnType<typeof workspaceReferenceWorkspaces> = []
+  let inputs: readonly unknown[] = []
+  let sleeping: boolean[] = []
+  let result: VisibleHostedReviewRefreshTarget[] = []
+  return (state: AppState, reviewInputsChanged: boolean): VisibleHostedReviewRefreshTarget[] => {
+    const reset = inputs.length === 0 || reviewInputsChanged
+    if (reset) {
+      workspaces = workspaceReferenceWorkspaces(state, options)
+    }
+    const next = [
+      state.tabsByWorktree,
+      state.ptyIdsByTabId,
+      state.browserTabsByWorktree,
+      state.unifiedTabsByWorktree,
+      state.structuredChatSleptAtByPaneKey,
+      state.agentStatusByPaneKey,
+      state.agentStatusEpoch
+    ]
+    if (!reset && next.every((value, index) => value === inputs[index])) {
+      return result
+    }
+    inputs = next
+    const nextSleeping = workspaces.map(({ worktree }) =>
+      selectIsSleepingWorktree(state, worktree.id)
+    )
+    if (reset || nextSleeping.some((value, index) => value !== sleeping[index])) {
+      result = referenceRefreshTargets(state, workspaces)
+    }
+    sleeping = nextSleeping
+    return result
+  }
+}
+
+function referenceRefreshTargets(
   state: AppState,
-  options?: { selectedOnly?: boolean }
+  workspaces: ReturnType<typeof workspaceReferenceWorkspaces>
 ): VisibleHostedReviewRefreshTarget[] {
   const targets = new Map<string, VisibleHostedReviewRefreshTarget>()
-  for (const { worktree, repo, candidate, selected } of getVisibleHostedReviewWorkspaces(
-    state,
-    options
-  )) {
+  for (const { worktree, repo, candidate, selected } of workspaces) {
     if (selectIsSleepingWorktree(state, worktree.id)) {
       continue
     }

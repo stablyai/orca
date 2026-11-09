@@ -1,165 +1,38 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
-import path from 'node:path'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
-  buildWorktreeIconPrompt,
-  extractWorktreeIconSvg,
+  MAX_WORKTREE_ICON_BATCH,
   normalizeWorktreeIconName,
   type WorktreeIconGenerationResult
 } from '../../shared/worktree/worktree-icon-generation'
-import { runGenerationRequest } from './agent-generation-request'
-import {
-  prepareLocalCommitMessageAgentEnv,
-  type CommitMessageAgentEnvironmentResolvers
-} from './commit-message-agent-environment'
-import { resolveTextGenerationParams } from './commit-message-text-generation'
-import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { cancelLocalGeneration } from './source-control-generation-lanes'
+import {
+  canceledIconResult as canceledResult,
+  generateWorktreeIconBatch,
+  type WorktreeIconGenerationHost
+} from './worktree-icon-batch-generation'
+import { clearWorktreeIconCache as clearCacheFile, loadCache } from './worktree-icon-cache'
 
-export type WorktreeIconGenerationHost = {
-  getSettings: () => Parameters<typeof resolveTextGenerationParams>[0]
-  getAgentEnvironment: () => CommitMessageAgentEnvironmentResolvers | undefined
-  cacheFile: string
-}
+export type { WorktreeIconGenerationHost }
 
-const MAX_CACHED_ICONS = 500
+// Cards mounting in one render send their requests within a few ms; wait briefly so they share a batch.
+const BATCH_COLLECT_MS = 100
 
-let cache: Map<string, string> | null = null
 type IconRequest = {
   host: WorktreeIconGenerationHost
   name: string
-  controller: AbortController
   consumers: number
   settled: boolean
   result: ReturnType<typeof Promise.withResolvers<WorktreeIconGenerationResult>>
 }
+type IconBatch = { members: IconRequest[]; controller: AbortController }
 const inFlight = new Map<string, IconRequest>()
 const queued = new Set<IconRequest>()
-let active: IconRequest | undefined
-const canceledResult = (): WorktreeIconGenerationResult => ({
-  success: false,
-  canceled: true,
-  error: 'Generation canceled.'
-})
+let active: IconBatch | undefined
+let collectTimer: ReturnType<typeof setTimeout> | undefined
 
-function loadCache(file: string): Map<string, string> {
-  if (cache) {
-    return cache
-  }
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
-    cache = new Map(
-      parsed && typeof parsed === 'object'
-        ? Object.entries(parsed).filter(
-            (entry): entry is [string, string] => typeof entry[1] === 'string'
-          )
-        : []
-    )
-  } catch {
-    cache = new Map()
-  }
-  return cache
-}
-
-function remember(file: string, name: string, svg: string): void {
-  const icons = loadCache(file)
-  icons.delete(name)
-  icons.set(name, svg)
-  while (icons.size > MAX_CACHED_ICONS) {
-    const oldest = icons.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    icons.delete(oldest)
-  }
-  try {
-    mkdirSync(path.dirname(file), { recursive: true })
-    writeFileSync(file, JSON.stringify(Object.fromEntries(icons)))
-  } catch {
-    // The in-memory copy still serves this session.
-  }
-}
-
-// Icons want a fast model that draws well; the user's naming agent is the fallback.
-const PREFERRED_ICON_PARAMS: ResolvedSourceControlAiGenerationParams = {
-  agentId: 'codex',
-  model: 'gpt-6.1-terra',
-  thinkingLevel: 'low'
-}
-
-async function generateWith(
-  host: WorktreeIconGenerationHost,
-  params: ResolvedSourceControlAiGenerationParams,
-  name: string,
-  signal: AbortSignal
-): Promise<WorktreeIconGenerationResult> {
-  if (signal.aborted) {
-    return canceledResult()
-  }
-  const localEnv = await prepareLocalCommitMessageAgentEnv(
-    params.agentId,
-    host.getAgentEnvironment()
-  )
-  if (signal.aborted) {
-    return canceledResult()
-  }
-  if (!localEnv.ok) {
-    return { success: false, error: localEnv.error }
-  }
-  const result = await runGenerationRequest({
-    params,
-    prompt: buildWorktreeIconPrompt(name),
-    target: { kind: 'local', cwd: os.homedir(), ...(localEnv.env ? { env: localEnv.env } : {}) },
-    spawnAgent: spawnSourceControlAgent,
-    operation: 'worktree-icon',
-    shouldExecute: () => !signal.aborted
-  })
-  if (!result.success) {
-    return { success: false, error: result.error, canceled: result.canceled }
-  }
-  const svg = extractWorktreeIconSvg(result.rawOutput)
-  return svg
-    ? { success: true, svg }
-    : { success: false, error: `${result.agentLabel ?? 'The agent'} did not return an SVG icon.` }
-}
-
-async function generate(
-  host: WorktreeIconGenerationHost,
-  name: string,
-  signal: AbortSignal
-): Promise<WorktreeIconGenerationResult> {
-  const preferred = await generateWith(host, PREFERRED_ICON_PARAMS, name, signal)
-  if (signal.aborted) {
-    return canceledResult()
-  }
-  let result = preferred
-  if (!preferred.success && !preferred.canceled) {
-    const configured = resolveTextGenerationParams(
-      host.getSettings(),
-      LOCAL_COMMIT_MESSAGE_HOST_KEY,
-      'branchName',
-      null
-    )
-    if (
-      configured.ok &&
-      (configured.params.agentId !== PREFERRED_ICON_PARAMS.agentId ||
-        configured.params.model !== PREFERRED_ICON_PARAMS.model)
-    ) {
-      const fallback = await generateWith(host, configured.params, name, signal)
-      result = fallback.success
-        ? fallback
-        : { ...fallback, error: `${preferred.error}\n${fallback.error}` }
-    }
-  }
-  if (signal.aborted) {
-    return canceledResult()
-  }
-  if (result.success) {
-    remember(host.cacheFile, name, result.svg)
-  }
-  return result
+/** Drops every cached icon so the next render regenerates with the current recipe. */
+export function clearWorktreeIconCache(host: WorktreeIconGenerationHost): void {
+  clearCacheFile(host.cacheFile)
 }
 
 function forget(request: IconRequest): void {
@@ -168,32 +41,92 @@ function forget(request: IconRequest): void {
   }
 }
 
-// One agent at a time; canceled waiting cards are removed before they can acquire a process lane.
-function drainQueue(): void {
-  if (active) {
+function settle(request: IconRequest, result: WorktreeIconGenerationResult): void {
+  if (request.settled) {
     return
   }
-  const request = queued.values().next().value
-  if (!request) {
-    return
-  }
-  queued.delete(request)
-  active = request
-  void generate(request.host, request.name, request.controller.signal)
-    .catch((error: unknown): WorktreeIconGenerationResult => ({
-      success: false,
-      error: error instanceof Error ? error.message : String(error)
-    }))
-    .then((result) => {
-      request.settled = true
-      forget(request)
-      request.result.resolve(result)
-      active = undefined
-      drainQueue()
-    })
+  request.settled = true
+  forget(request)
+  request.result.resolve(result)
 }
 
-/** The cached icon for this name, or a queued generation that caches its result. */
+function takeBatch(): IconRequest[] {
+  const first = queued.values().next().value
+  if (!first) {
+    return []
+  }
+  const members: IconRequest[] = []
+  for (const request of queued) {
+    if (members.length >= MAX_WORKTREE_ICON_BATCH) {
+      break
+    }
+    if (request.host !== first.host) {
+      continue
+    }
+    queued.delete(request)
+    // A name an earlier batch finished after its cards left needs no second agent run.
+    const cached = loadCache(request.host.cacheFile).get(request.name)
+    if (cached) {
+      settle(request, { success: true, svg: cached })
+      continue
+    }
+    members.push(request)
+  }
+  return members
+}
+
+// One agent at a time, many names per agent: the CLI's fixed prompt overhead dominates icon cost.
+function drainQueue(): void {
+  if (active || collectTimer) {
+    return
+  }
+  collectTimer = setTimeout(() => {
+    collectTimer = undefined
+    if (active) {
+      return
+    }
+    const members = takeBatch()
+    if (members.length === 0) {
+      if (queued.size > 0) {
+        drainQueue()
+      }
+      return
+    }
+    const batch: IconBatch = { members, controller: new AbortController() }
+    active = batch
+    void generateWorktreeIconBatch(
+      members[0].host,
+      members.map((member) => member.name),
+      batch.controller.signal
+    )
+      .catch((error: unknown): WorktreeIconGenerationResult[] =>
+        members.map(() => ({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }))
+      )
+      .then((results) => {
+        members.forEach((member, index) => settle(member, results[index]))
+        active = undefined
+        drainQueue()
+      })
+  }, BATCH_COLLECT_MS)
+}
+
+function abandon(request: IconRequest): void {
+  forget(request)
+  if (queued.delete(request)) {
+    settle(request, canceledResult())
+    return
+  }
+  const batch = active
+  if (batch?.members.includes(request) && batch.members.every((member) => !member.consumers)) {
+    batch.controller.abort()
+    cancelLocalGeneration('worktree-icon', os.homedir())
+  }
+}
+
+/** The cached icon for this name, or a batched generation that caches its result. */
 export function generateWorktreeIconRequest(
   host: WorktreeIconGenerationHost,
   rawName: string,
@@ -215,7 +148,6 @@ export function generateWorktreeIconRequest(
     request = {
       host,
       name,
-      controller: new AbortController(),
       consumers: 0,
       settled: false,
       result: Promise.withResolvers<WorktreeIconGenerationResult>()
@@ -235,15 +167,7 @@ export function generateWorktreeIconRequest(
       signal.removeEventListener('abort', cancel)
       owned.consumers--
       if (!owned.consumers && !owned.settled) {
-        owned.controller.abort()
-        queued.delete(owned)
-        forget(owned)
-        if (active === owned) {
-          cancelLocalGeneration('worktree-icon', os.homedir())
-        } else {
-          owned.settled = true
-          owned.result.resolve(canceledResult())
-        }
+        abandon(owned)
       }
       resolve(result)
     }

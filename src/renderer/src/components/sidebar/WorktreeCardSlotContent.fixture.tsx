@@ -332,6 +332,18 @@ export const nesting = defineFixture({
   )
 })
 
+export const nestingNoIcon = defineFixture({
+  ...nesting,
+  setup: () => {
+    nesting.setup?.()
+    useAppStore.setState(({ settings }) => ({
+      settings: settings ? { ...settings, worktreeCardIcon: 'none' } : settings
+    }))
+  }
+})
+
+export const nestingNoIconNarrow = defineFixture({ ...nestingNoIcon, width: 220 })
+
 const PR_FAMILY: WorkspaceSeed[] = [
   {
     id: 'wt-pr-parent',

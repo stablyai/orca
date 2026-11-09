@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -34,7 +35,11 @@ export function dispatchSuppressScrollAdjustment(): void {
 }
 
 /** Everything a worktree card's agent list needs besides presentation: lineage, unread, picking, focus, disclosure. */
-export function useWorktreeAgentListModel(worktreeId: string, agents: DashboardAgentRowData[]) {
+export function useWorktreeAgentListModel(
+  worktreeId: string,
+  agents: DashboardAgentRowData[],
+  executionHostId?: ExecutionHostId
+) {
   const languageRevision = useUiLanguageRevision()
   const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
@@ -115,10 +120,11 @@ export function useWorktreeAgentListModel(worktreeId: string, agents: DashboardA
     [sendPromptToSidebarAgentTarget]
   )
 
-  const handleActivateAgentTab = useWorktreeAgentActivation(worktreeId)
+  const handleActivateAgentTab = useWorktreeAgentActivation(worktreeId, executionHostId)
   const handleActivateRetainedAgent = useCallback(
-    (tabId: string, paneKey: string) => activateRetainedAgentRow(worktreeId, tabId, paneKey),
-    [worktreeId]
+    (tabId: string, paneKey: string) =>
+      activateRetainedAgentRow(worktreeId, tabId, paneKey, executionHostId),
+    [worktreeId, executionHostId]
   )
 
   const lineageTree = useMemo(() => buildAgentRowLineageTree(agents), [agents])

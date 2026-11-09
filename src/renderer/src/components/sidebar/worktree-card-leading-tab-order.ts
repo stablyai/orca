@@ -3,7 +3,11 @@ import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktr
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   IDLE,
@@ -26,6 +30,48 @@ function entriesByTabId(state: AppState): ReadonlyMap<string, AgentStatusEntry[]
     cachedEntriesInputs = [statuses, unsupported]
   }
   return cachedEntriesByTabId
+}
+
+/** Only this card's inputs invalidate its ranking; epoch ticks matter when freshness changes. */
+export function worktreeLeadingTabOrderInputs(state: AppState, worktreeId: string): unknown[] {
+  const tabs = state.unifiedTabsByWorktree[worktreeId]
+  const smart = state.sortBy === 'smart'
+  const inputs: unknown[] = [
+    tabs,
+    state.tabsByWorktree[worktreeId],
+    state.sortBy,
+    smart
+      ? getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)[0]?.lastActivityAt
+      : undefined
+  ]
+  const byTabId = entriesByTabId(state)
+  const now = Date.now()
+  const addEntries = (entries: readonly AgentStatusEntry[]): void => {
+    for (const entry of entries) {
+      inputs.push(entry, isAgentStatusFresh(entry, now))
+      if (smart && entry.state === 'done') {
+        const completedAt = agentEntryCompletionAt(entry)
+        inputs.push(completedAt !== null && now - completedAt <= AGENT_STATUS_STALE_AFTER_MS)
+      }
+    }
+  }
+  for (const tab of tabs ?? []) {
+    if (tab.contentType === 'terminal') {
+      const entries = byTabId.get(tab.entityId) ?? []
+      inputs.push(entries.length, state.terminalLayoutsByTabId[tab.entityId])
+      addEntries(entries)
+      if (smart) {
+        inputs.push(state.ptyIdsByTabId[tab.entityId], state.runtimePaneTitlesByTabId[tab.entityId])
+      }
+    } else if (tab.contentType === 'agent-session') {
+      const entry = state.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
+      inputs.push(entry)
+      if (entry) {
+        addEntries([entry])
+      }
+    }
+  }
+  return inputs
 }
 
 /** Newest human focus or agent state change; tool pings move `updatedAt`, not `stateStartedAt`. */

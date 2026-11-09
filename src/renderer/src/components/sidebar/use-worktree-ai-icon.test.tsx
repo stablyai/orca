@@ -31,7 +31,8 @@ it('releases the last enabled card and ignores the abandoned attempt after remou
     generate: vi.fn().mockReturnValueOnce(abandoned.promise).mockReturnValueOnce(renewed.promise),
     cancel: async ({ requestId }) => {
       canceled.push(requestId)
-    }
+    },
+    clearCache: async () => {}
   }
   vi.stubGlobal('api', { worktreeIcons: api })
   const first = renderHook(() => useWorktreeAiIcon('shared mounted icon', true))
