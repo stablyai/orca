@@ -66,8 +66,6 @@ export function createAgentModelCatalogRefreshes(context: {
 }) {
   const { deps, lifetime, admission, bindings, requestKey, tasks } = context
   const refreshes = new Map<string, Held>()
-  // By workspace id ('' without one): what holds listings past a refresh's setup budget.
-  const contexts = new Map<string, AbortController>()
   const start = (key: string, launch: AgentModelCatalogLaunch): Held => {
     const { agent } = launch
     const retirement = deps.store.retirementRevision(agent)
@@ -96,10 +94,6 @@ export function createAgentModelCatalogRefreshes(context: {
     const listing = Promise.withResolvers<void>()
     const defaults = Promise.withResolvers<void>()
     const targets = new Set<string>()
-    const contextKey = launch.records.record?.location.workspaceId ?? ''
-    const context = contexts.get(contextKey) ?? new AbortController()
-    contexts.set(contextKey, context)
-    const interest = AbortSignal.any([lifetime, context.signal])
     let list: ((model: string | undefined) => void) | undefined
     let projecting: Promise<void> | undefined
     const run = async (): Promise<void> => {
@@ -182,7 +176,7 @@ export function createAgentModelCatalogRefreshes(context: {
               deps.store.efforts.due(fingerprint, model) ||
               deps.store.isListing(fingerprint))
           ) {
-            // The workspace context, not this setup budget, holds the shared listing.
+            // This refresh holds the listing while it runs; once admitted, the listing runs on.
             void deps.store
               .refresh(
                 fingerprint,
@@ -194,7 +188,7 @@ export function createAgentModelCatalogRefreshes(context: {
                   return task
                 },
                 {
-                  signal: interest,
+                  signal,
                   ...(launch.legacy
                     ? { deadline }
                     : { admission, timeoutMs: AGENT_MODEL_CATALOG_REFRESH_MS })
@@ -269,12 +263,6 @@ export function createAgentModelCatalogRefreshes(context: {
       for (const held of refreshes.values()) {
         if (workspaceId === undefined || held.workspaceId === workspaceId) {
           held.end()
-        }
-      }
-      for (const [key, context] of contexts) {
-        if (workspaceId === undefined || key === workspaceId) {
-          contexts.delete(key)
-          context.abort()
         }
       }
     }

@@ -131,7 +131,7 @@ it.each(['retired', 'stopped'] as const)(
   }
 )
 
-it('never starts a queued listing once the workspace context that wanted it has retired', async () => {
+it('keeps a queued listing only while a refresh or reader still waits on it', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
@@ -142,13 +142,44 @@ it('never starts a queued listing once the workspace context that wanted it has 
     void h.service.demand({ agent: 'codex', workspacePath: busy })
   }
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledTimes(2))
-  void h.service.demand({ agent: 'codex', workspacePath: '/own-queued' })
-  await vi.advanceTimersByTimeAsync(0)
-  h.service.retireContext()
+  void h.service.demand({ agent: 'codex', workspacePath: '/own-dropped' })
+  void h.service.demand({ agent: 'codex', workspacePath: '/own-waited' })
+  await vi.advanceTimersByTimeAsync(25_000)
+  void h.service.read({ agent: 'codex', workspacePath: '/own-waited', waitForListing: true })
+  await vi.advanceTimersByTimeAsync(15_000)
   h.listingFor('/busy-1').resolve(listing('busy'))
   h.listingFor('/busy-2').resolve(listing('busy'))
   await vi.advanceTimersByTimeAsync(60_000)
-  expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2'])
+  expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2', '/own-waited'])
+})
+
+it('reports an expired captured wait and lets the next reader finish its queued listing', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = sharedListingHarness()
+  for (const workspacePath of ['/busy-1', '/busy-2']) {
+    void h.service.demand({ agent: 'codex', workspacePath })
+  }
+  await vi.advanceTimersByTimeAsync(0)
+  const params = { agent: 'codex', workspacePath: '/own-waited', waitForListing: true }
+  const operation = h.service.captureRead(params)
+  const request = { ...params, operation, deadline: operation.deadline }
+  const first = h.service.read(request)
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(await first).toEqual({ origin: 'unknown', waitExpired: true })
+
+  operation.controller.abort()
+  expect(await h.service.read(request)).toEqual({ origin: 'unknown' })
+
+  const next = h.service.read(params)
+  await vi.advanceTimersByTimeAsync(0)
+  h.listingFor('/busy-1').resolve(listing('busy'))
+  h.listingFor('/own-waited').resolve(listing('fresh'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await next).toMatchObject({ origin: 'probe', models: [{ id: 'fresh' }] })
+  expect(await next).not.toHaveProperty('waitExpired')
 })
 
 it("never answers a newly picked folder with the previous folder's late listing", async () => {

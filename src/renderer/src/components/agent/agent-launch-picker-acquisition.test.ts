@@ -103,37 +103,32 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
   expect(currentAgentPickerAcquisition('closed-catalog')).toBeUndefined()
 })
 
-it('keeps following a listing that outlasts the waiting read while the picker is open', async () => {
+it('waits again only when a wait outlasted its budget, then stops once the listing has ended', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
   })
-  let landed = false
-  let published: AgentPickerEntry[] = []
   const saved = { origin: 'probe' as const, fetchedAt: 1, models: [model('saved')] }
+  // A floating folder's quick read always reports a listing; only waiting reads know it ended.
+  const waits = [{ ...saved, waitExpired: true as const }, saved]
+  const reads: boolean[] = []
+  let published: AgentPickerEntry[] = []
   const stop = observeAgentPickerAcquisition(
     'outlasting-listing',
     [codex],
     {
-      // The waiting read ends at its deadline before the listing lands, reporting it final.
-      catalog: async (_entry, waitForListing) =>
-        waitForListing
-          ? saved
-          : landed
-            ? { origin: 'probe', fetchedAt: 2, models: [model('fresh')] }
-            : { ...saved, listingInProgress: true },
+      catalog: async (_entry, waitForListing) => {
+        reads.push(waitForListing)
+        return waitForListing ? (waits.shift() ?? saved) : { ...saved, listingInProgress: true }
+      },
       support: async () => undefined
     },
     { selected: () => undefined, publish: (entries) => (published = entries) }
   )
   try {
-    await vi.advanceTimersByTimeAsync(0)
-    landed = true
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(published[0]).toMatchObject({
-      catalogRead: 'settled',
-      catalog: { models: [{ id: 'fresh' }] }
-    })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(reads).toEqual([false, true, true])
+    expect(published[0]).toMatchObject({ catalogRead: 'settled', catalog: saved })
   } finally {
     stop()
   }

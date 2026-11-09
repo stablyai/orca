@@ -31,11 +31,14 @@ export type AgentModelCatalogListModels = (
   owner: StructuredAgentResolutionOperation
 ) => Promise<AgentModelCatalogSuccess>
 
+/** Covers the gap between one waiting read and the next, so a following reader keeps its place. */
+const AGENT_MODEL_CATALOG_RELEASE_GRACE_MS = 5_000
+
 /** A listing runs while any holder's `signal` is live; its timeout only bounds the probe. */
 export type AgentModelCatalogListingBudget = {
   /** Expiry withdraws it from admission, stops its process and drops its late answer. */
   deadline?: number
-  /** This caller's interest; a queued listing is withdrawn once every holder's signal aborted. */
+  /** This caller's interest; a queued listing is withdrawn a grace after no holder is left. */
   signal?: AbortSignal
   admission?: PrioritySemaphore
   /** Execution time after admission. */
@@ -46,7 +49,7 @@ export type InFlightListing = {
   agent: string
   targets: Set<string>
   current: () => boolean
-  /** Adds a holder; without a signal the listing is held until it is admitted. */
+  /** Adds a holder until its signal aborts; no signal adds none. */
   hold: (signal: AbortSignal | undefined) => void
   promise: Promise<AgentModelCatalogEntry | null>
   finish: (entry: AgentModelCatalogEntry | null) => void
@@ -112,19 +115,32 @@ export function refreshAgentModelCatalogListing(input: {
   // stops its process. Once admitted it runs to its timeout: its answer stays valid for the scope.
   const stopped = new AbortController()
   let expiry: ReturnType<typeof setTimeout> | undefined
-  const holders = new Set<AbortSignal>()
-  let held = false
+  const holders = new Map<AbortSignal, () => void>()
+  // A listing started without a signal is held until it settles.
+  let held = signal === undefined
+  let released = -Infinity
+  let grace: ReturnType<typeof setTimeout> | undefined
   const flight: InFlightListing = {
     agent,
     targets: new Set(input.selectedModel ? [input.selectedModel] : []),
     current: () =>
-      (held || [...holders].some((holder) => !holder.aborted)) &&
+      (held || holders.size > 0 || Date.now() < released + AGENT_MODEL_CATALOG_RELEASE_GRACE_MS) &&
       (deadline === undefined || Date.now() < deadline),
     hold: (holder) => {
-      if (!holder) {
-        held = true
-      } else if (!holder.aborted && !holders.has(holder)) {
-        holders.add(holder)
+      if (holder && !holder.aborted && !holders.has(holder)) {
+        const abandon = (): void => {
+          holders.delete(holder)
+          if (holders.size === 0) {
+            released = Date.now()
+            clearTimeout(grace)
+            grace = setTimeout(() => {
+              if (!flight.current()) {
+                retire()
+              }
+            }, AGENT_MODEL_CATALOG_RELEASE_GRACE_MS)
+          }
+        }
+        holders.set(holder, abandon)
         holder.addEventListener('abort', abandon, { once: true })
       }
     },
@@ -132,7 +148,8 @@ export function refreshAgentModelCatalogListing(input: {
     finish: result.resolve,
     cleanup: () => {
       clearTimeout(expiry)
-      for (const holder of holders) {
+      clearTimeout(grace)
+      for (const [holder, abandon] of holders) {
         holder.removeEventListener('abort', abandon)
       }
       stopped.abort()
@@ -140,11 +157,6 @@ export function refreshAgentModelCatalogListing(input: {
   }
   const retire = (): void =>
     retireAgentModelCatalogListing(input.refreshes, input.listingWaiters, fingerprint, flight)
-  const abandon = (): void => {
-    if (!flight.current()) {
-      retire()
-    }
-  }
   const current = (): boolean => input.refreshes.get(fingerprint) === flight && flight.current()
   input.refreshes.set(fingerprint, flight)
   flight.hold(signal)
