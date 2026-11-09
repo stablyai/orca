@@ -5,6 +5,28 @@ import { CircleAlert, X } from 'lucide-react'
 import { dispatchDictationControl } from './dictation-control-events'
 import { openVoiceSettings, type DictationFailureKind } from './dictation-toasts'
 
+/** The pill's ✕: cancels a dictation, or discards a failed one's recording. */
+export function DictationPillCloseButton({ label }: { label: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={label}
+          onClick={() => dispatchDictationControl('cancel')}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** The error pill's row: it keeps the failed recording until Retry, ✕ or the next dictation. */
 export function DictationPillFailure({ kind }: { kind: DictationFailureKind }) {
   const t = useTranslate()
@@ -28,22 +50,7 @@ export function DictationPillFailure({ kind }: { kind: DictationFailureKind }) {
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {message}
       </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={discardLabel}
-            onClick={() => dispatchDictationControl('cancel')}
-          >
-            <X className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {discardLabel}
-        </TooltipContent>
-      </Tooltip>
+      <DictationPillCloseButton label={discardLabel} />
       <CircleAlert aria-hidden className="size-4 shrink-0 text-destructive" />
       <span aria-hidden className="min-w-0 flex-1 truncate">
         {message}

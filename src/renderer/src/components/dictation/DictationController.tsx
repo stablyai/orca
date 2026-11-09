@@ -32,7 +32,6 @@ import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import {
   canStartDictation,
   initialDictationSession,
-  isDictationPillShown,
   isDictationUnderway,
   transitionDictationSession,
   type DictationSession,
@@ -346,7 +345,7 @@ export function DictationController() {
     retry: () => void retryDictation(),
     // The error pill leaves Esc to Settings and dialogs; only its ✕ discards the recording.
     escCancels: () =>
-      isDictationPillShown(sessionRef.current.phase) && sessionRef.current.phase !== 'error'
+      isDictationUnderway(sessionRef.current.phase) || sessionRef.current.phase === 'stopping'
   })
 
   useDictationSilenceStop(

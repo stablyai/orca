@@ -1,9 +1,12 @@
-import { DICTATION_SAMPLE_RATE } from '../../../../shared/rpc-contract/speech-params'
+import {
+  CLOUD_DICTATION_MAX_SECONDS,
+  DICTATION_SAMPLE_RATE
+} from '../../../../shared/rpc-contract/speech-params'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 import type { DictationTranscriptDelivery } from './dictation-transcript-delivery'
 
-// Ten minutes, the cloud upload cap, is about 38 MB of 16 kHz float audio.
-const MAX_KEPT_SAMPLES = 10 * 60 * DICTATION_SAMPLE_RATE
+// The cloud cap, ten minutes, is about 38 MB of 16 kHz float audio.
+const MAX_KEPT_SAMPLES = CLOUD_DICTATION_MAX_SECONDS * DICTATION_SAMPLE_RATE
 
 /** A session's audio, in memory only, so a failed transcription can be retried into the same place. */
 export type DictationKeptRecording = {
@@ -71,9 +74,9 @@ function* joinIntoBlocks(chunks: Float32Array[]): Generator<Float32Array> {
     }
     const block = new Float32Array(blockSamples)
     let offset = 0
-    for (const chunk of chunks.slice(start, end)) {
-      block.set(chunk, offset)
-      offset += chunk.length
+    for (let index = start; index < end; index += 1) {
+      block.set(chunks[index], offset)
+      offset += chunks[index].length
     }
     yield block
     start = end

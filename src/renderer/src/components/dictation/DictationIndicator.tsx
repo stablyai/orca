@@ -8,19 +8,21 @@ import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { Check, Loader2, X } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
+import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
+import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
 import { DictationGrapes } from './DictationGrapes'
 import { useDictationMeter } from './dictation-meter-store'
 import { useDictationPillBox, type DictationPillAnchor } from './dictation-pill-anchor'
-import { DictationPillFailure } from './DictationPillFailure'
+import { DictationPillCloseButton, DictationPillFailure } from './DictationPillFailure'
 import type { DictationFailureKind } from './dictation-toasts'
 
 // The finish button turns into a spinner only when finishing is slow enough to notice.
 const FINISH_SPINNER_DELAY_MS = 200
-// Cloud dictation stops at 10 minutes; the timer warns a minute before.
-const CLOUD_LIMIT_WARNING_SECONDS = 9 * 60
+// The timer warns a minute before cloud dictation stops.
+const CLOUD_LIMIT_WARNING_SECONDS = CLOUD_DICTATION_MAX_SECONDS - 60
 
 type DictationIndicatorProps = {
   /** The mic is recording (and buffering) while the speech engine is still starting. */
@@ -60,20 +62,24 @@ function useElapsedSeconds(running: boolean): number {
   return seconds
 }
 
+// The catalog never changes while the app runs; the paired web client has none and its host caps itself.
+let catalogRequest: Promise<SpeechModelManifest[]> | null = null
+
 function useIsCloudModel(): boolean {
   const modelId = useAppStore((state) => state.settings?.voice?.sttModel)
   const [cloud, setCloud] = useState(false)
   useEffect(() => {
     let current = true
-    // The paired web client has no catalog; its host enforces the cap itself.
-    Promise.resolve()
-      .then(() => window.api.speech.getCatalog())
-      .then((catalog) => {
-        if (current) {
-          setCloud(catalog.some((model) => model.id === modelId && model.provider === 'openai'))
-        }
-      })
-      .catch(() => undefined)
+    if (!catalogRequest) {
+      catalogRequest = Promise.resolve()
+        .then(() => window.api.speech.getCatalog())
+        .catch(() => [])
+    }
+    void catalogRequest.then((catalog) => {
+      if (current) {
+        setCloud(catalog.some((model) => model.id === modelId && model.provider === 'openai'))
+      }
+    })
     return () => {
       current = false
     }
@@ -162,22 +168,7 @@ function DictationPill({ captureLive, anchor, failure }: DictationIndicatorProps
         <DictationPillFailure kind={failedKind} />
       ) : (
         <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={cancelLabel}
-                onClick={() => dispatchDictationControl('cancel')}
-              >
-                <X className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {cancelLabel}
-            </TooltipContent>
-          </Tooltip>
+          <DictationPillCloseButton label={cancelLabel} />
           <DictationPillMeter recording={recording} status={announced} />
           {transcript ? (
             <span
