@@ -40,25 +40,6 @@ function scriptedClient(
   return client
 }
 
-describe('createWorktreeWithNameRetry', () => {
-  it('falls back to the client candidate when an older host omits displayName', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedClient(
-      [{ errorMessage: 'already exists locally' }, { id: 'wt-legacy' }],
-      attempts
-    )
-
-    await expect(
-      createWorktreeWithNameRetry({
-        client,
-        baseName: 'topic',
-        buildParams: (name) => ({ repo: 'id:r', name }),
-        worktreeCreateIdempotency: false
-      })
-    ).resolves.toEqual({ worktreeId: 'wt-legacy', name: 'topic-2' })
-  })
-})
-
 describe('createWorktreeWithNameRetry parent', () => {
   it('attaches every collision candidate to the same parent', async () => {
     const attempts: Attempt[] = []

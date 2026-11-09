@@ -5767,9 +5767,6 @@
           "888b83bf78": "No se pudo guardar el script de configuración",
           "a49196d538": "Se ejecuta cuando Orca crea un nuevo worktree.",
           "savedSetupCommand": "Se guardó el comando de configuración.",
-          "savedWithSkippedFields_one": "Se omitió {{count}} campo no compatible. Se guardó el comando de configuración.",
-          "savedWithSkippedFields_other": "Se omitieron {{count}} campos no compatibles. Se guardó el comando de configuración.",
-          "savedWithSkippedFields_many": "Se omitieron {{count}} campos no compatibles. Se guardó el comando de configuración.",
           "savedInProjectSettings": "Guardado en los <settings>ajustes de este proyecto</settings>"
         },
         "SetupScriptPromptCardViews": {
@@ -5782,13 +5779,12 @@
           "eefa756190": "Configurar manualmente",
           "ca4efcbc25": "Guardar",
           "fdbc6cb064": "Script de setup detectado",
-          "7275f674cc": "Setup detectado",
           "822ff300ad": "Descartar",
           "5bfd5c8779": "Descartar scripts de configuración",
-          "detectedFromSource": "Detectado en <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositorio ignora los scripts de configuración compartidos de <yaml>orca.yaml</yaml>. Añade un comando local o cambia la fuente en Ajustes.",
-          "foundSetupCommandIn": "Se encontró un comando de configuración en <source>{{source}}</source>. Guárdalo para ejecutarlo en los nuevos worktrees.",
-          "reviewSetupScript": "Revisar script de configuración"
+          "reviewSetupScript": "Revisar script de configuración",
+          "7275f674cc": "Setup detectado",
+          "detectedFromSource": "Detectado en <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Revisar script de configuración",
@@ -16710,13 +16706,7 @@
           "lost": "No se pudo insertar ni copiar el dictado."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Detener dictado",
-          "7f3660a7ba": "Iniciando micrófono…",
-          "f082d0cb9d": "Procesando…",
-          "3de5a129e7": "Escuchando",
-          "4977162383": "Volumen demasiado alto",
-          "25f2b7a6a5": "Hablando",
-          "loadingModel": "Cargando modelo de voz…"
+          "4977162383": "Volumen demasiado alto"
         }
       },
       "dashboard": {

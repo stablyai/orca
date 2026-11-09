@@ -1,5 +1,3 @@
-import type { RuntimeRpcProgress } from '../../../shared/runtime-rpc-envelope'
-
 // Transports own connection lifecycle; RPC binds messages across Unix sockets, WebSockets and named pipes.
 // Rich message context (abort signals, authenticated sockets) requires each concrete transport type.
 
@@ -7,8 +5,6 @@ import type { RuntimeRpcProgress } from '../../../shared/runtime-rpc-envelope'
 export type RpcMessageContext = {
   signal: AbortSignal
   startKeepalive: () => void
-  /** Long polls only: piggybacks a progress note on a keepalive frame; older clients ignore it. */
-  reportProgress?: (progress: RuntimeRpcProgress) => void
 }
 
 export type RpcTransport = {

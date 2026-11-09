@@ -4,7 +4,8 @@ import type {
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
 import { browserPageDocLocationsEqual } from '../../../../../../shared/browser-page-doc-location'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/constants'
+import '../../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
 import { isDocPreviewUrl } from '../../../../../../shared/document-preview/doc-preview-scheme'
 import { basename } from '@/lib/path'

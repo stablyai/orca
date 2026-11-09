@@ -12,7 +12,8 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../browser/routing/sessions/browser-route-session-runtime'
-import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
+import '../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../shared/browser/browser-blank-page'
 import {
   DOC_PREVIEW_PARTITION,
   parseDocPreviewUrl
