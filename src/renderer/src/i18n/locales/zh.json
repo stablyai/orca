@@ -209,6 +209,21 @@
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置。",
         "terminalControlledTooltip": "正在匹配终端外观。要更改此项，请关闭“匹配终端外观”。"
+      },
+      "editorTheme": {
+        "light": "浅色编辑器主题",
+        "lightDescription": "应用使用浅色主题时的代码编辑器、差异视图和笔记本颜色。",
+        "dark": "深色编辑器主题",
+        "darkDescription": "应用使用深色主题时的代码编辑器、差异视图和笔记本颜色。",
+        "followApp": "与应用主题相同",
+        "title": "编辑器主题",
+        "description": "独立于应用主题设置代码编辑器、差异视图和笔记本的颜色。",
+        "keyword": {
+          "editor": "编辑器",
+          "code": "代码",
+          "monaco": "monaco",
+          "syntax": "语法"
+        }
       }
     },
     "browser": {

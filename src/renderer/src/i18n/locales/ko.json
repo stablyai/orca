@@ -209,6 +209,21 @@
         "terminalControlledTooltip": "터미널 모양에 맞추는 중입니다. 변경하려면 터미널 모양에 맞추기를 끄세요.",
         "fontKeywordTypeface": "서체",
         "fontKeywordTypography": "타이포그래피"
+      },
+      "editorTheme": {
+        "light": "밝은 편집기 테마",
+        "lightDescription": "앱이 밝은 테마일 때 코드 편집기, 변경 내용 및 노트북의 색상입니다.",
+        "dark": "어두운 편집기 테마",
+        "darkDescription": "앱이 어두운 테마일 때 코드 편집기, 변경 내용 및 노트북의 색상입니다.",
+        "followApp": "앱 테마와 동일",
+        "title": "편집기 테마",
+        "description": "앱 테마와 별도로 코드 편집기, 변경 내용 및 노트북의 색상을 설정합니다.",
+        "keyword": {
+          "editor": "편집기",
+          "code": "코드",
+          "monaco": "monaco",
+          "syntax": "구문"
+        }
       }
     },
     "browser": {

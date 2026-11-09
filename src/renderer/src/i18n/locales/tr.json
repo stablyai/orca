@@ -642,6 +642,21 @@
         "sharper": "Daha keskin",
         "terminalControlledHint": "Terminal arayüzü tarafından belirlenir.",
         "terminalControlledTooltip": "Terminal arayüzünüzle eşleşiyor. Değiştirmek için Terminal arayüzüyle eşleştir seçeneğini kapatın."
+      },
+      "editorTheme": {
+        "light": "Açık düzenleyici teması",
+        "lightDescription": "Uygulama açık temadayken kod düzenleyicinin, fark görünümünün ve not defterlerinin renkleri.",
+        "dark": "Koyu düzenleyici teması",
+        "darkDescription": "Uygulama koyu temadayken kod düzenleyicinin, fark görünümünün ve not defterlerinin renkleri.",
+        "followApp": "Uygulama temasıyla aynı",
+        "title": "Düzenleyici teması",
+        "description": "Uygulama temasından bağımsız olarak kod düzenleyicinin, fark görünümünün ve not defterlerinin renkleri.",
+        "keyword": {
+          "editor": "düzenleyici",
+          "code": "kod",
+          "monaco": "monaco",
+          "syntax": "sözdizimi"
+        }
       }
     },
     "browser": {

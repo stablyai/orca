@@ -650,6 +650,21 @@
         "sharper": "Schärfer",
         "terminalControlledHint": "Durch die Terminal-Oberfläche festgelegt.",
         "terminalControlledTooltip": "An die Terminal-Oberfläche angepasst. Zum Ändern „An Terminal-Oberfläche anpassen“ deaktivieren."
+      },
+      "editorTheme": {
+        "light": "Helles Editor-Design",
+        "lightDescription": "Farben für Code-Editor, Diff und Notebooks bei hellem App-Design.",
+        "dark": "Dunkles Editor-Design",
+        "darkDescription": "Farben für Code-Editor, Diff und Notebooks bei dunklem App-Design.",
+        "followApp": "Wie das App-Design",
+        "title": "Editor-Design",
+        "description": "Farben für Code-Editor, Diff und Notebooks unabhängig vom App-Design.",
+        "keyword": {
+          "editor": "Editor",
+          "code": "Code",
+          "monaco": "monaco",
+          "syntax": "Syntax"
+        }
       }
     },
     "browser": {

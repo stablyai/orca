@@ -615,6 +615,21 @@
         "sharper": "更清晰",
         "terminalControlledHint": "由終端機介面設定。",
         "terminalControlledTooltip": "目前與終端機介面一致。若要變更此項，請關閉「與終端機介面一致」。"
+      },
+      "editorTheme": {
+        "light": "淺色編輯器主題",
+        "lightDescription": "應用程式使用淺色主題時的程式碼編輯器、差異檢視和筆記本顏色。",
+        "dark": "深色編輯器主題",
+        "darkDescription": "應用程式使用深色主題時的程式碼編輯器、差異檢視和筆記本顏色。",
+        "followApp": "與應用程式主題相同",
+        "title": "編輯器主題",
+        "description": "獨立於應用程式主題設定程式碼編輯器、差異檢視和筆記本的顏色。",
+        "keyword": {
+          "editor": "編輯器",
+          "code": "程式碼",
+          "monaco": "monaco",
+          "syntax": "語法"
+        }
       }
     },
     "browser": {

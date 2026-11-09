@@ -430,6 +430,21 @@
         "terminalControlledTooltip": "Suit l’interface du terminal. Désactivez Utiliser l’interface du terminal pour le modifier.",
         "fontKeywordTypeface": "police de caractères",
         "fontKeywordTypography": "typographie"
+      },
+      "editorTheme": {
+        "light": "Thème clair de l’éditeur",
+        "lightDescription": "Couleurs de l’éditeur de code, des comparaisons et des notebooks lorsque l’application est claire.",
+        "dark": "Thème sombre de l’éditeur",
+        "darkDescription": "Couleurs de l’éditeur de code, des comparaisons et des notebooks lorsque l’application est sombre.",
+        "followApp": "Identique au thème de l’application",
+        "title": "Thème de l’éditeur",
+        "description": "Couleurs de l’éditeur de code, des comparaisons et des notebooks, indépendamment du thème de l’application.",
+        "keyword": {
+          "editor": "éditeur",
+          "code": "code",
+          "monaco": "monaco",
+          "syntax": "syntaxe"
+        }
       }
     },
     "browser": {

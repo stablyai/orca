@@ -209,6 +209,21 @@
         "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。",
         "fontKeywordTypeface": "書体",
         "fontKeywordTypography": "タイポグラフィ"
+      },
+      "editorTheme": {
+        "light": "エディターのライトテーマ",
+        "lightDescription": "アプリがライトテーマのときのコードエディター、差分、ノートブックの色。",
+        "dark": "エディターのダークテーマ",
+        "darkDescription": "アプリがダークテーマのときのコードエディター、差分、ノートブックの色。",
+        "followApp": "アプリのテーマに合わせる",
+        "title": "エディターのテーマ",
+        "description": "アプリのテーマとは別に、コードエディター、差分、ノートブックの色を設定します。",
+        "keyword": {
+          "editor": "エディター",
+          "code": "コード",
+          "monaco": "monaco",
+          "syntax": "構文"
+        }
       }
     },
     "browser": {
