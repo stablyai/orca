@@ -1,9 +1,8 @@
-import { ActivityIndicator, Pressable, type View } from 'react-native'
-import { Mic, Square } from 'lucide-react-native'
+import { Pressable, type View } from 'react-native'
 import { useContext, type RefObject } from 'react'
-import { colors } from '../../../theme/mobile-theme'
 import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
 import { dictationControlsCopy } from '../../../dictation/mobile-dictation-controls-copy'
+import { MobileDictationMicIcon } from '../../../dictation/MobileDictationLiveControls'
 import { useMobileDictationCancelDrop } from '../../../dictation/use-mobile-dictation-cancel-drop'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
@@ -48,15 +47,11 @@ export function MobileNativeChatComposerMic({
     <Pressable
       accessibilityRole="button"
       aria-busy={micStarting || micProcessing}
-      accessibilityLabel={
-        micStarting
-          ? dictationControlsCopy.starting()
-          : micActive
-            ? dictationControlsCopy.stop()
-            : micProcessing
-              ? dictationControlsCopy.finishing()
-              : dictationControlsCopy.start()
-      }
+      accessibilityLabel={dictationControlsCopy.mic({
+        starting: micStarting,
+        active: micActive,
+        processing: micProcessing
+      })}
       style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
       // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
       onPress={dictationMode === 'hold' ? undefined : onMicPress}
@@ -72,19 +67,12 @@ export function MobileNativeChatComposerMic({
         swapKey={micProcessing ? 'processing' : micActive ? 'active' : 'idle'}
         icon
       >
-        {micProcessing ? (
-          <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
-        ) : micActive ? (
-          <Square
-            pointerEvents="none"
-            size={16}
-            color={colors.statusRed}
-            strokeWidth={2.4}
-            fill={colors.statusRed}
-          />
-        ) : (
-          <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
-        )}
+        <MobileDictationMicIcon
+          active={micActive}
+          processing={micProcessing}
+          micSize={19}
+          micStroke={2}
+        />
       </MobileNativeChatControlSwap>
     </Pressable>
   )

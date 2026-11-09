@@ -6,7 +6,7 @@ import {
   type View,
   type ViewStyle
 } from 'react-native'
-import { ImagePlus, Mic, Square } from 'lucide-react-native'
+import { ImagePlus } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -17,6 +17,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { keepHeldPressThroughLongPress } from '../../platform/held-press-long-press'
 import { dictationControlsCopy } from '../../dictation/mobile-dictation-controls-copy'
 import { useMobileDictationCancelDrop } from '../../dictation/use-mobile-dictation-cancel-drop'
+import { MobileDictationMicIcon } from '../../dictation/MobileDictationLiveControls'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -153,30 +154,18 @@ function MobileTerminalDictationButton({
       }
       accessibilityRole="button"
       aria-busy={dictation.isStarting || dictation.isProcessing}
-      accessibilityLabel={
-        dictation.isProcessing
-          ? dictationControlsCopy.finishing()
-          : dictation.isStarting
-            ? dictationControlsCopy.starting()
-            : dictation.isRecording
-              ? dictationControlsCopy.stop()
-              : dictationControlsCopy.start()
-      }
+      accessibilityLabel={dictationControlsCopy.mic({
+        starting: dictation.isStarting,
+        active: dictationActive,
+        processing: dictation.isProcessing
+      })}
     >
-      {/* The page's touch target is the button, and the icons ignore touches, so the swap mid-hold keeps the release. */}
-      {dictation.isProcessing ? (
-        <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
-      ) : dictationActive ? (
-        <Square
-          pointerEvents="none"
-          size={16}
-          color={colors.statusRed}
-          strokeWidth={2.4}
-          fill={colors.statusRed}
-        />
-      ) : (
-        <Mic pointerEvents="none" size={17} color={colors.textSecondary} strokeWidth={2.4} />
-      )}
+      <MobileDictationMicIcon
+        active={dictationActive}
+        processing={dictation.isProcessing}
+        micSize={17}
+        micStroke={2.4}
+      />
     </Pressable>
   )
 }

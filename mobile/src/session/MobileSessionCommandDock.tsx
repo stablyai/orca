@@ -1,11 +1,10 @@
-import { useContext, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
 import { MobileTerminalLiveInputStatus } from '../terminal/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../terminal/session/MobileTerminalInputActions'
-import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { MobileSessionAccessoryKeys } from '../terminal/session/MobileSessionAccessoryKeys'
 import { MobileTerminalMoreKeysSheet } from '../terminal/session/MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
@@ -23,7 +22,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   useMobileColorScheme()
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
-  const dictationLive = useContext(MobileDictationLiveContext)
   // The field's ✕, which the held mic may be released over.
   const dictationCancelRef = useRef<View>(null)
   const {
@@ -66,7 +64,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
-              live={dictationLive}
               cancelRef={dictationCancelRef}
               dictationMode={dictationMode}
               heard={liveDictationText}

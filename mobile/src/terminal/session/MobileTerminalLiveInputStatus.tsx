@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useContext, type RefObject } from 'react'
 import { Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -9,7 +9,7 @@ import {
   mobileDictationStatusTitle,
   type MobileDictationStatusFlags
 } from '../../dictation/MobileDictationStatusAnnouncement'
-import type { MobileDictationLive } from '../../dictation/mobile-dictation-live-context'
+import { MobileDictationLiveContext } from '../../dictation/mobile-dictation-live-context'
 import {
   MobileDictationCancelButton,
   MobileDictationFinishingNote,
@@ -18,7 +18,6 @@ import {
 
 type MobileTerminalLiveInputStatusProps = {
   readonly dictation: MobileDictationStatusFlags
-  readonly live: MobileDictationLive | null
   readonly cancelRef: RefObject<View | null>
   readonly dictationMode: string | undefined
   readonly isAttaching: boolean
@@ -29,7 +28,6 @@ type MobileTerminalLiveInputStatusProps = {
 /** Shows transient recording/upload status over the field; only its ✕ takes touches. */
 export function MobileTerminalLiveInputStatus({
   dictation,
-  live,
   cancelRef,
   dictationMode,
   isAttaching,
@@ -37,6 +35,7 @@ export function MobileTerminalLiveInputStatus({
 }: MobileTerminalLiveInputStatusProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const live = useContext(MobileDictationLiveContext)
   const dictationTitle = mobileDictationStatusTitle(dictation)
   if (!dictationTitle) {
     return isAttaching ? (

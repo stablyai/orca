@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { memo, useSyncExternalStore } from 'react'
 import { Text, View } from 'react-native'
 import { DICTATION_GRAPES } from '../../../src/shared/dictation-audio-meter'
 import {
@@ -20,8 +20,11 @@ function useMeterEnergy(meter: MobileDictationMeter): { energy: number; isClippi
   return { energy: useReducedMotionEnabled() === false ? level : 0, isClipping }
 }
 
-// Desktop's nine dots, red while the mic clips.
-export function MobileDictationGrapes({ meter, dotSize }: MeterProps & { dotSize: number }) {
+// Desktop's nine dots, red while the mic clips. Memoized: its parent re-renders on the timer's clock, the dots on the meter.
+export const MobileDictationGrapes = memo(function MobileDictationGrapes({
+  meter,
+  dotSize
+}: MeterProps & { dotSize: number }) {
   const { energy, isClipping } = useMeterEnergy(meter)
   return (
     <View
@@ -48,7 +51,7 @@ export function MobileDictationGrapes({ meter, dotSize }: MeterProps & { dotSize
       ))}
     </View>
   )
-}
+})
 
 export function useMobileDictationElapsed(meter: MobileDictationMeter): {
   now: number

@@ -1,6 +1,9 @@
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
 
+// Active: starting or recording, so the mic is a Stop.
+export type MobileDictationMicState = { starting: boolean; active: boolean; processing: boolean }
+
 // One set of dictation labels for the chat composer, the terminal and the pill.
 export const dictationControlsCopy = {
   start: () => translate('dictation.controls.start', 'Dictate'),
@@ -8,6 +11,14 @@ export const dictationControlsCopy = {
   stop: () => translate('dictation.controls.stop', 'Stop and insert'),
   finishing: () => translate('dictation.controls.finishing', 'Finishing dictation'),
   cancel: () => translate('dictation.controls.cancel', 'Cancel dictation'),
+  mic: ({ starting, active, processing }: MobileDictationMicState) =>
+    starting
+      ? dictationControlsCopy.starting()
+      : active
+        ? dictationControlsCopy.stop()
+        : processing
+          ? dictationControlsCopy.finishing()
+          : dictationControlsCopy.start(),
   finishingOn: (computer: string | null) =>
     computer
       ? translate('dictation.status.finishingOn', 'Finishing on {{computer}}', { computer })
