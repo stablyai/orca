@@ -1,5 +1,6 @@
 import type * as FilePromises from 'node:fs/promises'
 import * as fsPromises from 'node:fs/promises'
+import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import * as gitReadCache from '../../../git/source-control/git-read-cache-invalidation'
 import * as gitAdmin from '../../../../shared/git/metadata/git-common-directory'
 import { preparationPathKey } from './worktree-create-preparation-claim'
@@ -768,7 +769,7 @@ it.each([750, 7500])(
       await writeFile(join(admin, 'HEAD'), `${head}\n`)
     }
     const blockedRoot = join(owner.root, 'read-only-root')
-    rootMkdirFailure.path = join(blockedRoot, '.orca-preparing')
+    rootMkdirFailure.path = toHostFilesystemPath(join(blockedRoot, '.orca-preparing'))
     const read = gitAdmin.readGitAdminFile
     let unrelatedReads = 0
     vi.spyOn(gitAdmin, 'readGitAdminFile').mockImplementation((path, signal) => {
