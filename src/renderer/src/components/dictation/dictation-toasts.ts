@@ -39,14 +39,14 @@ function classifyDictationStartError(message: string): {
 /** `settings` failures offer Open settings beside Retry. */
 export type DictationFailureKind = 'settings' | 'transcribe'
 
-/** Which error pill a failed start gets; null when there's nothing a retry could fix, so it stays a toast. */
+/** A start that failed after recording began is a model that couldn't load; null keeps the toast. */
 export function dictationStartFailureKind(message: string): DictationFailureKind | null {
   const { kind } = classifyDictationStartError(message)
   // Main's macOS mic check fails before any audio could be transcribed.
   if (kind === 'host' || kind === 'microphone' || message.includes('Microphone access')) {
     return null
   }
-  return kind === 'other' ? 'transcribe' : 'settings'
+  return 'settings'
 }
 
 export function showDictationNoModelToast(): void {

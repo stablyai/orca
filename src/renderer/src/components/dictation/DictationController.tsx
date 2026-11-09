@@ -318,9 +318,7 @@ export function DictationController() {
       isCurrent: () => sessionRef.current.run === run,
       finish: () => finishDictationSession(sessionRef.current),
       fail: (message) =>
-        showFailure(dictationStartFailureKind(message) ?? 'transcribe', () =>
-          showDictationStartErrorToast(message)
-        )
+        showFailure(dictationStartFailureKind(message), () => showDictationStartErrorToast(message))
     })
   }, [settings, dispatch, finishDictationSession, showFailure])
 
