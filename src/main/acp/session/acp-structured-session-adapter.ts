@@ -25,7 +25,11 @@ import {
 import { readAcpLiveOptions } from '../options/acp-live-options'
 import { writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
-import { stopAcpChildren, acpChildStopCapabilities } from '../turns/acp-structured-child-stop'
+import {
+  acpChildStopCapabilities,
+  closeAcpChildSessions,
+  stopAcpChildren
+} from '../turns/acp-structured-child-stop'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -151,6 +155,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     if (input.turnId !== undefined && liveTurnId !== null && input.turnId !== liveTurnId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
+    // A user's Stop ends subagents too, even when the root turn ended just before it arrived.
+    closeAcpChildSessions(session)
     if (!stop.acpStopHasWork(session)) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }

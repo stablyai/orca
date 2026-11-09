@@ -21,11 +21,15 @@ import { acpSubagentOutcome, type AcpSubagents } from './acp-subagents'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import { acpNamedTextKey } from './acp-turn-messages'
 
+const textKey = (item: ProviderTimelineTextItem): string => ('id' in item ? item.id : item.stream)
+
 const sessionSchema = z.object({ sessionId: z.string() })
 
 export class AcpChildSessions {
-  /** ACP has no message end, so each child's text stays open until the child ends. */
-  private readonly openText = new Map<string, Map<string, ProviderTimelineTextItem>>()
+  /** ACP has no message end; a child's text closes at the next message on its channel, or when it ends. */
+  private readonly openText = new Map<string, ProviderTimelineTextItem>()
+  /** Children that have not reported an ending, which a user's Stop also ends. */
+  private readonly running = new Set<string>()
 
   constructor(
     private readonly rootSessionId: string,
@@ -33,6 +37,10 @@ export class AcpChildSessions {
     private readonly subagents: AcpSubagents,
     private readonly tools: AcpToolTimeline
   ) {}
+
+  live(): readonly string[] {
+    return [...this.running]
+  }
 
   /** A child session's events, or undefined when the notification is the root's own. */
   notification(
@@ -70,9 +78,10 @@ export class AcpChildSessions {
     if (child.rootSessionId !== rootSessionId) {
       return []
     }
+    const known = subagents.has(child.agentId)
     // Plain frames for a known child carry no lifecycle, so they publish no evidence.
     const events =
-      subagents.has(child.agentId) && child.state === undefined
+      known && child.state === undefined
         ? []
         : subagents.translate(
             [
@@ -96,8 +105,16 @@ export class AcpChildSessions {
         })
       )
     }
-    if (child.state !== undefined && acpSubagentOutcome(child.state) !== undefined) {
-      events.push(...this.closeText(child.agentId))
+    if (child.state === undefined || acpSubagentOutcome(child.state) === undefined) {
+      if (child.state !== undefined || !known) {
+        this.running.add(child.agentId)
+      }
+    } else {
+      this.running.delete(child.agentId)
+      events.push(
+        ...this.closeText(`${child.agentId}:assistant`),
+        ...this.closeText(`${child.agentId}:reasoning`)
+      )
     }
     return events
   }
@@ -123,10 +140,14 @@ export class AcpChildSessions {
       const item = update.messageId
         ? { id: acpNamedTextKey(update.messageId, channel) }
         : { stream: `${producer.agentId}:${update.sessionUpdate}` }
-      const open = this.openText.get(producer.agentId) ?? new Map()
-      open.set('id' in item ? item.id : item.stream, item)
-      this.openText.set(producer.agentId, open)
-      events = [{ type: 'text.delta', item, channel, text: update.content.text }]
+      // OpenCode keeps one fragment per channel open, so only a new message on the same channel ends one.
+      const slot = `${producer.agentId}:${channel}`
+      const open = this.openText.get(slot)
+      events = [
+        ...(open === undefined || textKey(open) === textKey(item) ? [] : this.closeText(slot)),
+        { type: 'text.delta', item, channel, text: update.content.text }
+      ]
+      this.openText.set(slot, item)
     } else if (
       update.sessionUpdate === 'tool_call' ||
       update.sessionUpdate === 'tool_call_update'
@@ -148,10 +169,10 @@ export class AcpChildSessions {
     )
   }
 
-  private closeText(agentId: string): ProviderTimelineEvent[] {
-    const open = this.openText.get(agentId)
-    this.openText.delete(agentId)
+  private closeText(slot: string): ProviderTimelineEvent[] {
+    const item = this.openText.get(slot)
+    this.openText.delete(slot)
     const join = { thread: this.rootSessionId, scope: AGENT_JOURNAL_THREAD_SCOPE }
-    return [...(open?.values() ?? [])].map((item) => ({ type: 'text.close', item, join }))
+    return item ? [{ type: 'text.close', item, join }] : []
   }
 }

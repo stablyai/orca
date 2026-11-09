@@ -107,6 +107,9 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
     elicitation: { form: {} },
     _meta: { [OPENCODE_CHILD_SESSION_CAPABILITY]: true }
   },
+  childSessionStop: {
+    supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
+  },
   effortChangesModel: true,
   normalizeToolUpdate,
   notification: openCodeChildUpdate,

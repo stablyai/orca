@@ -8,6 +8,7 @@ import {
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import {
   openAcpAdapterRig,
+  PROVIDER_SESSION,
   waitFor,
   type AcpAdapterRig
 } from './testing/acp-structured-adapter.test-support'
@@ -171,5 +172,50 @@ describe('OpenCode 2 recordings through the adapter', () => {
       expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
     )
     expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({ state: 'failed' })
+  })
+
+  it('a Stop also ends a background subagent the finished turn left running', async () => {
+    // OpenCode 2.0.21 shapes (opencode-v2-subagent-close): the child reports itself interrupted.
+    const child = {
+      rootSessionId: PROVIDER_SESSION,
+      childSessionId: 'child-1',
+      parentSessionId: PROVIDER_SESSION,
+      depth: 1,
+      title: 'Run sleep command'
+    }
+    const closed: unknown[] = []
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode2')!,
+      initialize: { agentCapabilities: { loadSession: true, sessionCapabilities: { close: {} } } },
+      script: (agent) => {
+        agent.on('session/prompt', (frame) => {
+          agent.notify('opencode/session/child_update', {
+            ...child,
+            type: 'status',
+            status: 'running'
+          })
+          agent.reply(frame, { stopReason: 'end_turn' })
+        })
+        agent.on('session/close', (frame) => {
+          closed.push(frame.params)
+          agent.reply(frame, {})
+          agent.notify('opencode/session/child_update', {
+            ...child,
+            type: 'status',
+            status: 'interrupted'
+          })
+        })
+      }
+    })
+    await rig.acquire()
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'send-1',
+      body: ask,
+      fence: 1
+    })
+    await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
+    await waitFor(() => expect(closed).toEqual([{ sessionId: 'child-1' }]))
   })
 })

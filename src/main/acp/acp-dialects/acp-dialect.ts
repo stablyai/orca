@@ -122,6 +122,8 @@ export type AcpDialect = {
     request(sessionId: string, id: string): { method: string; params: unknown }
     response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
   }
+  /** Subagents are child sessions that `session/close` interrupts; a user's Stop also ends them. */
+  childSessionStop?: { supported(initialized: InitializeResponse): boolean }
   backgroundTaskStop?: {
     /** Probe without a target to establish support without killing a task. */
     probe: { method: string; params: unknown }

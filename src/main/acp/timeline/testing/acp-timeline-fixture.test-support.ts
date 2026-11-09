@@ -9,7 +9,6 @@ import {
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
 import {
   AGENT,
-  NAMESPACE,
   SESSION,
   openProviderTimelineRig
 } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
@@ -81,15 +80,22 @@ export async function openAcpFixtureRig(
   dialect: AcpDialect = GROK_ACP_DIALECT,
   { journalOwnership = false }: { journalOwnership?: boolean } = {}
 ) {
-  const rig = await openProviderTimelineRig()
   let providerSessionId = 'session-1'
+  // Production lanes key the journal namespace by the provider session the reader resolves.
+  const rig = await openProviderTimelineRig(
+    journalOwnership ? { namespace: providerSessionId } : {}
+  )
   const scheme = createLegacyProviderTimelineIdentityScheme({ agent: AGENT, sessionId: SESSION })
   const translator = () =>
     new AcpTimelineTranslator({
       sessionId: providerSessionId,
       dialect,
       ...(journalOwnership
-        ? { ownership: createAcpOwnershipReader(scheme, NAMESPACE, () => rig.sink.journalItems()) }
+        ? {
+            ownership: createAcpOwnershipReader(scheme, providerSessionId, () =>
+              rig.sink.journalItems()
+            )
+          }
         : {})
     })
   let lane = translator()

@@ -145,6 +145,9 @@ export class AcpSessionRuntime {
   /** Requires advertised session deletion support. */
   deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
 
+  /** Any session the agent reports on this connection, including a subagent's child session. */
+  closeSession = (sessionId: string) => this.call('session/close', { sessionId }, z.unknown())
+
   start(
     options: AcpSessionStartOptions,
     received?: (started: AcpSessionStarted) => void

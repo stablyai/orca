@@ -44,7 +44,7 @@ export class AcpTimelineTranslator {
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
-  private readonly children: AcpChildSessions
+  readonly children: AcpChildSessions
   private readonly ownership: AcpTimelineOwnership
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   private readonly failures: AcpTurnFailures
