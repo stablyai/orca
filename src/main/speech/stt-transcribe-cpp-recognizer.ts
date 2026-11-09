@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -17,11 +17,9 @@ function performanceCoreThreads(): number {
 
 // The hotwords file is written in sherpa's format, one `term :score` per line. The host deletes it
 // once dictation starts, so a CPU fallback's reload finds it gone and runs without.
-function readVocabulary(path: string | undefined): string[] {
-  if (!path || !existsSync(path)) {
-    return []
-  }
-  return readFileSync(path, 'utf8')
+async function readVocabulary(path: string | undefined): Promise<string[]> {
+  const text = path ? await readFile(path, 'utf8').catch(() => '') : ''
+  return text
     .split('\n')
     .map((line) => line.replace(/\s+:[\d.]+\s*$/, '').trim())
     .filter(Boolean)
@@ -46,7 +44,7 @@ export async function createTranscribeCppRecognizer(
   )
   // The child runs one call at a time, so every stream can share one session.
   const session = model.createSession({ nThreads: performanceCoreThreads() })
-  const vocabulary = readVocabulary(init.hotwordsFilePath)
+  const vocabulary = await readVocabulary(init.hotwordsFilePath)
   const options: TranscribeCpp.TranscribeOptions = {
     timestamps: 'none',
     ...(init.language && model.capabilities.languages.includes(init.language)

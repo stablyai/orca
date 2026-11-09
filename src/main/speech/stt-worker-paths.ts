@@ -36,9 +36,20 @@ function speechNodeModulesDirCandidates(): string[] {
   return require.resolve.paths('transcribe-cpp') ?? []
 }
 
+// The app's engine packages don't change while it runs, so each engine is looked up once.
+const speechEngineModulesDirs = new Map<SpeechEngine, string | null>()
+
 /** The node_modules directory holding `engine`, or null on hosts without it. */
 export function getSpeechEngineModulesDir(engine: SpeechEngine): string | null {
-  return speechNodeModulesDirCandidates().find((dir) => hasSpeechEnginePackage(dir, engine)) ?? null
+  let dir = speechEngineModulesDirs.get(engine)
+  if (dir === undefined) {
+    dir =
+      speechNodeModulesDirCandidates().find((candidate) =>
+        hasSpeechEnginePackage(candidate, engine)
+      ) ?? null
+    speechEngineModulesDirs.set(engine, dir)
+  }
+  return dir
 }
 
 /** Whether this host ships the engine `model` runs on. */
