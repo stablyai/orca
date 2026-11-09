@@ -1,5 +1,6 @@
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import type { WebContents } from 'electron'
 import {
   browserRoutePageKey,

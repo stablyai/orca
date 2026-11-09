@@ -25,7 +25,10 @@ export async function resolveFederatedChildParent(args: {
   callerSession: OrchestrationSessionCaller | undefined
   serverCapabilities: readonly string[] | undefined
   serverName: string
-}): Promise<{ crossStoreParent: CrossStoreParentRef } | { warning: string }> {
+}): Promise<
+  | { crossStoreParent: CrossStoreParentRef; crossStoreParentInferredFrom: 'orchestration-context' }
+  | { warning: string }
+> {
   const { runtime } = args
   // Orchestration's caller authority picks the workspace; the shared builder verifies and names it.
   const callerId = await resolveDispatchCallerWorktreeId(runtime, args.from, args.callerSession)
@@ -48,5 +51,8 @@ export async function resolveFederatedChildParent(args: {
       `--worktree new-child can't nest under this workspace: ${resolved.reason} Use --worktree new-top-level.`
     )
   }
-  return { crossStoreParent: resolved.parent }
+  return {
+    crossStoreParent: resolved.parent,
+    crossStoreParentInferredFrom: 'orchestration-context'
+  }
 }

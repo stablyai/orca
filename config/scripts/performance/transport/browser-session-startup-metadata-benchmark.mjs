@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, posix, relative as relativePath, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 const root = resolve(import.meta.dirname, '../../../..')
@@ -12,7 +12,7 @@ const require = createRequire(join(root, 'package.json'))
 const { build } = require('esbuild')
 const relative = 'src/main/browser/browser-session-registry.ts'
 const historicalTarget = join(root, relative)
-const currentRelative = 'src/main/browser/sessions/browser-session-registry.ts'
+const currentRelative = 'src/main/browser/sessions/profiles/browser-session-registry.ts'
 const target = join(root, currentRelative)
 const scratch = mkdtempSync(join(tmpdir(), 'orca-browser-meta-bench-'))
 const previousSource = execFileSync('git', ['show', `${baseline}:${relative}`], {
@@ -56,23 +56,56 @@ const stubs = new Map([
     'export function attachBrowserExtensionsToProfileSession(profile,ids){globalThis.__metaBench.assignments.push([profile.id,ids])}'
   ]
 ])
+const baselineFiles = new Set(
+  execFileSync('git', ['ls-tree', '-r', '--name-only', baseline], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024
+  })
+    .trim()
+    .split('\n')
+)
+function baselineDependency(importer, specifier) {
+  const owner =
+    importer === historicalTarget ? relative : relativePath(root, importer).split('\\').join('/')
+  const candidate = posix.normalize(posix.join(posix.dirname(owner), specifier))
+  const found = [
+    candidate,
+    `${candidate}.ts`,
+    `${candidate}.tsx`,
+    `${candidate}.js`,
+    `${candidate}/index.ts`
+  ].find((file) => baselineFiles.has(file))
+  if (!found) {
+    throw new Error(`Missing actual baseline dependency: ${baseline}:${owner} -> ${specifier}`)
+  }
+  return join(root, found)
+}
 const registryByVersion = {}
 try {
   for (const [version, source] of Object.entries(sources)) {
     const sourceTarget = version === 'before' ? historicalTarget : target
     const currentStubSpecifiers = new Map([
-      ['./browser-session-cookie-staging', '../cookies/staging/browser-session-cookie-staging'],
-      ['./browser-session-route-policies', '../routing/sessions/browser-session-route-policies'],
+      ['./browser-session-cookie-staging', '../../cookies/staging/browser-session-cookie-staging'],
+      [
+        './browser-session-partition-policies',
+        '../partition-policies/browser-session-partition-policies'
+      ],
+      ['./browser-session-route-policies', '../../routing/sessions/browser-session-route-policies'],
+      ['./browser-session-profile-retirement', './browser-session-profile-retirement'],
       [
         '../persistence/loading-store/user-data-path',
-        '../../persistence/loading-store/user-data-path'
+        '../../../persistence/loading-store/user-data-path'
       ],
-      ['./browser-identity-mode-store', '../identity/browser-identity-mode-store'],
-      ['./browser-site-permission-store', '../site-settings/browser-site-permission-store'],
-      ['./browser-site-display-store', '../site-settings/browser-site-display-store'],
+      ['./browser-identity-mode-store', '../../identity/mode/browser-identity-mode-store'],
+      [
+        './browser-site-permission-store',
+        '../../site-settings/permissions/browser-site-permission-store'
+      ],
+      ['./browser-site-display-store', '../../site-settings/display/browser-site-display-store'],
       [
         './extensions/browser-extension-session-loader',
-        '../extensions/profile-sessions/browser-extension-session-loader'
+        '../../extensions/profile-sessions/browser-extension-session-loader'
       ]
     ])
     const versionStubs = new Map(
@@ -81,16 +114,12 @@ try {
         body
       ])
     )
-    const historicalDependencies = new Map([
-      [
-        './browser-session-meta-store',
-        join(root, 'src/main/browser/sessions/browser-session-meta-store.ts')
-      ],
-      [
-        './browser-session-persisted-profile-validation',
-        join(root, 'src/main/browser/sessions/browser-session-persisted-profile-validation.ts')
-      ]
-    ])
+    if (version === 'after') {
+      versionStubs.set(
+        './browser-profile-owned-stores',
+        'export function forgetBrowserProfileOwnedStores(){return true}'
+      )
+    }
     const output = join(scratch, `${version}.cjs`)
     await build({
       stdin: {
@@ -112,19 +141,34 @@ try {
                 return { path: args.path, namespace: 'startup-stub' }
               }
               if (
-                version === 'before' &&
-                args.importer === sourceTarget &&
-                historicalDependencies.has(args.path)
-              ) {
-                return { path: historicalDependencies.get(args.path) }
-              }
-              if (
                 args.path === 'node:fs' &&
                 args.importer.endsWith('/browser-session-meta-store.ts')
               ) {
                 return { path: 'fs-probe', namespace: 'startup-stub' }
               }
+              if (
+                version === 'before' &&
+                args.path.startsWith('.') &&
+                (args.importer === sourceTarget || args.namespace === 'startup-baseline')
+              ) {
+                return {
+                  path: baselineDependency(args.importer, args.path),
+                  namespace: 'startup-baseline'
+                }
+              }
             })
+            builder.onLoad({ filter: /.*/, namespace: 'startup-baseline' }, (args) => ({
+              contents: execFileSync(
+                'git',
+                ['show', `${baseline}:${relativePath(root, args.path).split('\\').join('/')}`],
+                {
+                  cwd: root,
+                  encoding: 'utf8'
+                }
+              ),
+              loader: args.path.endsWith('.tsx') ? 'tsx' : 'ts',
+              resolveDir: dirname(args.path)
+            }))
             builder.onLoad({ filter: /.*/, namespace: 'startup-stub' }, (args) => ({
               contents:
                 args.path === 'fs-probe'

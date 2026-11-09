@@ -240,7 +240,7 @@ export function AgentKanbanBoard({
 
   return (
     // Pop-outs have no app provider; supply the card tooltip provider in either host.
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <div
         className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}
       >

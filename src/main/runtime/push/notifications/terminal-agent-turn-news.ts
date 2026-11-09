@@ -1,5 +1,5 @@
 // Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
-import type { AgentPaneChange } from '../../../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../../../agent-hooks/observations/agent-transition-detector'
 import { mainAgentTurnInterrupted } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'

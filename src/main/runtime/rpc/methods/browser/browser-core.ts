@@ -1,3 +1,4 @@
+import { BROWSER_EXTENSION_METHODS } from './browser-extension-rpc-methods'
 import { defineMethod } from '../../core'
 import {
   BrowserTarget,
@@ -145,6 +146,7 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserTabClose(params)
   }),
   ...BROWSER_PROFILE_METHODS,
+  ...BROWSER_EXTENSION_METHODS,
   defineMethod({
     name: 'browser.hover',
     permission: 'workspace',

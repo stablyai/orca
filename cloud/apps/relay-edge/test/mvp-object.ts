@@ -41,7 +41,7 @@ import {
   waitFor,
   type Host
 } from './harness-mvp-object'
-import { drainCheck, heartbeatCheck, objectHealthCheck } from './mvp-object-hardening'
+import { drainCheck, heartbeatCheck, keepaliveCheck, keepaliveProbeCheck, objectHealthCheck } from './mvp-object-hardening'
 import { replayCheck, rotationCheck } from './mvp-object-replay'
 
 async function mainRemote(): Promise<void> {
@@ -107,7 +107,7 @@ async function main(): Promise<void> {
       await sleep(500)
     }
     await run(host, privateKey, () => jwksHits)
-    await Promise.all([heartbeatCheck(privateKey), drainCheck(privateKey), replayCheck(), rotationCheck()])
+    await Promise.all([heartbeatCheck(privateKey), keepaliveCheck(privateKey), keepaliveProbeCheck(privateKey), drainCheck(privateKey), replayCheck(), rotationCheck()])
     await sweepCheck()
     await preAuthCheck(stateDir)
     await objectHealthCheck(stateDir)

@@ -28,7 +28,6 @@ export type TerminalOrphanRecoveryState = WebTerminalOrphanTopologyState & {
   tabsByWorktree: Record<string, TerminalTab[]>
 }
 
-export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 export type RecoveryDisposition = 'claim' | 'retain' | 'remove'
 
 type RecoverySurfaceCoordinates = {
@@ -36,7 +35,7 @@ type RecoverySurfaceCoordinates = {
   leafId: string
   surfaceKey: string
   localTab: TerminalTab
-  incoming?: TerminalSurface
+  incoming?: RuntimeMobileSessionTerminalClientTab
   pending: boolean
   expectedPtyId: string | null
   locallyActive: boolean
@@ -166,7 +165,9 @@ export function prepareTerminalOrphanRecovery(
   return { candidates, unresolved, observed, retained }
 }
 
-export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): TerminalSurface {
+export function buildRetainedTerminalSurface(
+  surface: AnyRecoverySurface
+): RuntimeMobileSessionTerminalClientTab {
   const incoming = surface.incoming
   const localTitle = typeof surface.localTab.title === 'string' ? surface.localTab.title.trim() : ''
   // Why: a ready row counts as a live terminal, so a slept pane (#30108) would wake in the mirror.
@@ -190,7 +191,7 @@ export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): Termi
       terminal: null
     }
   }
-  const base: TerminalSurface = incoming ?? {
+  const base: RuntimeMobileSessionTerminalClientTab = incoming ?? {
     type: 'terminal',
     id: `${surface.tabId}::${surface.leafId}`,
     parentTabId: surface.tabId,

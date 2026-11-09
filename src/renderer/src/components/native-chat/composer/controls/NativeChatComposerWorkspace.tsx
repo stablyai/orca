@@ -54,7 +54,18 @@ export function NativeChatComposerWorkspace({
   } = useAppStore(useShallow(selector))
 
   const identity = getWorktreeGitIdentityDisplay({ branch, head })
-  const label = identity?.kind === 'branch' ? identity.branchName : identity?.sourceControlLabel
+  const label =
+    identity?.kind === 'branch'
+      ? identity.branchName
+      : identity
+        ? t(
+            'components.native-chat.composerWorkspace.detachedCommit',
+            'Commit {{head}} (not a branch)',
+            {
+              head: identity.shortHead
+            }
+          )
+        : undefined
   const identityCopyValue = identity?.kind === 'branch' ? identity.branchName : head
   const copyValue = async (value: string | undefined): Promise<void> => {
     if (!value) {

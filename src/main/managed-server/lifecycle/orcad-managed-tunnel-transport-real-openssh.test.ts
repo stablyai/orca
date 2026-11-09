@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshExecOptions } from '../../ssh/connection/ssh-exec-options'
-import { knownOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
+import { knownOrcadTunnelTransport } from './orcad-tunnel-transport-memo'
 import type { PortForwardStartOptions } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { spawnSystemSshCommand } from '../../ssh/system-transport/system-ssh-command'
 import {
@@ -15,7 +15,7 @@ import {
   freePort,
   startRealOpenSshFixture,
   type RealOpenSshFixture
-} from '../../ssh/system-transport/real-openssh-sshd-fixture'
+} from '../../ssh/system-transport/testing/real-openssh-sshd-fixture'
 import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'
 
 const GREETING = 'orcad-fixture'

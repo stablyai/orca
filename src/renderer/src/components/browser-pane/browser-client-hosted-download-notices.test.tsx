@@ -20,7 +20,7 @@ import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
-} from '../../../../shared/browser-guest-events'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { paneChannel } from './client-hosted-browser-pane-test-rig'
 import { useBrowserClientHostedDownloadNotices } from './browser-client-hosted-download-notices'
 

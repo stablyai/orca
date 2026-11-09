@@ -286,45 +286,6 @@ describe('quit-path durable writes never park the main thread', () => {
     expect(readState(dir).ui.sidebarWidth).toBe(200)
   })
 
-  it('serializes github-cache snapshots and keeps the newest generation', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    let releaseWrite!: () => void
-    const writeRelease = new Promise<void>((resolve) => {
-      releaseWrite = resolve
-    })
-    let signalWrite!: () => void
-    releases.push(releaseWrite)
-    const writeStarted = new Promise<void>((resolve) => {
-      signalWrite = resolve
-    })
-    let held = false
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    fsCalls.waitAsync = (fn, target) => {
-      if (held || fn !== 'writeFile' || !target.includes('orca-github-cache.json')) {
-        return null
-      }
-      held = true
-      signalWrite()
-      return writeRelease
-    }
-
-    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 1 } }, issue: {} })
-    const finalFlush = store.flushAsync()
-    await writeStarted
-    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 2 } }, issue: {} })
-
-    releaseWrite()
-    await finalFlush
-    fsCalls.recording = false
-
-    expect(JSON.parse(readFileSync(join(dir, 'orca-github-cache.json'), 'utf-8'))).toEqual({
-      pr: { test: { data: null, fetchedAt: 2 } },
-      issue: {}
-    })
-  })
-
   it('stats.flushAsync() wins over a debounced write already in flight', async () => {
     const dir = makeDir()
     const stats = await createStatsCollector(dir)

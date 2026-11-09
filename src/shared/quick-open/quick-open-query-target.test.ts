@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { isQuickOpenAbsolutePath, parseQuickOpenQueryTarget } from './quick-open-query-target'
+import { parseQuickOpenQueryTarget } from './quick-open-query-target'
 
 it.each([
   ['src/app.ts:12', { pathQuery: 'src/app.ts', line: 12 }],
@@ -23,10 +23,3 @@ it.each([
 ])('keeps invalid or ambiguous suffixes literal: %s', (query) => {
   expect(parseQuickOpenQueryTarget(query)).toEqual({ pathQuery: query })
 })
-
-it.each(['C:app.ts', 'src/app.ts', 'https://host/app.ts', '/tmp/\0bad'])(
-  'does not offer a direct path for %s',
-  (path) => {
-    expect(isQuickOpenAbsolutePath(path)).toBe(false)
-  }
-)

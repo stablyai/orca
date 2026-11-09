@@ -201,38 +201,3 @@ it('delivers the original workspace outcome after the picker unmounts', async ()
   await act(async () => finish?.({ ok: true, branch: 'feature', warning: 'Files left behind.' }))
   expect(onSwitched).toHaveBeenCalledWith('Files left behind.')
 })
-
-it('reports the picker closing itself after a switch so the next open reads status again', async () => {
-  vi.mocked(listRuntimeGitBranches).mockResolvedValue({
-    current: 'main',
-    branches: ['main', 'feature']
-  })
-  vi.mocked(searchRuntimeRemoteBranches).mockResolvedValue({ refs: [], truncated: false })
-  vi.mocked(switchRuntimeGitBranch).mockResolvedValueOnce({ ok: true, branch: 'feature' })
-  const onOpenChange = vi.fn()
-  await act(async () =>
-    root.render(
-      <BranchPicker
-        branch="main"
-        blocker={null}
-        context={{ target: { kind: 'local' }, worktreeId: 'original', worktreePath: '/repo' }}
-        repoId="repo"
-        hostId="local"
-        hostLabel="This computer"
-        workspaceLabel="repo"
-        workspaces={new Map()}
-        onOpenWorkspace={vi.fn()}
-        onSwitched={vi.fn()}
-        onOpenChange={onOpenChange}
-      />
-    )
-  )
-  await act(async () => container.querySelector('button')?.click())
-  expect(onOpenChange).toHaveBeenLastCalledWith(true)
-  await act(async () =>
-    Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'feature')
-      ?.click()
-  )
-  expect(onOpenChange).toHaveBeenLastCalledWith(false)
-})

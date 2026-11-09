@@ -1,5 +1,5 @@
 import React from 'react'
-import { ExternalLink, LoaderCircle } from 'lucide-react'
+import { AlertTriangle, ExternalLink, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
@@ -42,6 +42,7 @@ export function jobStatusTone(status: string): string {
     case 'waiting_for_resource':
     case 'scheduled':
       return 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+    case 'warning':
     case 'manual':
       return 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
     case 'canceled':
@@ -204,12 +205,14 @@ export function PipelineJobRow({
   onRetry: (job: GitLabPipelineJob) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const canRetry = ['failed', 'canceled', 'cancelled'].includes(job.status)
+  const allowedFailure = job.status === 'failed' && job.allowFailure === true
+  const canRetry = job.id > 0 && ['failed', 'canceled', 'cancelled'].includes(job.status)
   return (
     <div className="rounded-md">
-      <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_80px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">
+      <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_160px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">
         <button
           type="button"
+          disabled={job.id <= 0}
           onClick={() => onToggleTrace(job)}
           className="min-w-0 truncate text-left font-medium"
         >
@@ -218,11 +221,12 @@ export function PipelineJobRow({
         <span className="min-w-0 truncate text-xs text-muted-foreground">{job.stage}</span>
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide',
-            jobStatusTone(job.status)
+            'flex items-center gap-1 rounded-full px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide',
+            jobStatusTone(allowedFailure ? 'warning' : job.status)
           )}
         >
-          {job.status}
+          {allowedFailure ? <AlertTriangle className="size-3 shrink-0" /> : null}
+          {allowedFailure ? t('checks.gitlabAllowedFailure', 'Allowed to fail') : job.status}
         </span>
         <span className="text-right text-[11px] text-muted-foreground">
           {typeof job.duration === 'number'

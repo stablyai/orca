@@ -1,6 +1,6 @@
 import { createDecipheriv, createHash } from 'node:crypto'
 import type { BrowserCookieImportSummary } from '../../../../shared/browser-workspace-types'
-import type { EncryptionKeyResult } from './browser-cookie-sqlite'
+import type { EncryptionKeyResult } from './chromium-encryption-key-contract'
 
 // The fallback heuristic treats 8 nonprintable bytes in a 32-byte prefix as a host hash.
 const CHROMIUM_COOKIE_HMAC_LEN = 32

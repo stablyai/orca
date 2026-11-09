@@ -5,14 +5,14 @@ import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
-} from '../../../shared/browser-runtime-capabilities'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
-import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/browser-identity-mode-store'
+import { isBrowserIdentityModeStoreInitialized } from '../../browser/identity/mode/browser-identity-mode-store'
 import { servesLocalWslMigrationSource } from '../../orcad/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
 import { advertisedOrcadMigrationDestinationCapabilities } from '../../orcad/orcad-migration-destination-capabilities'

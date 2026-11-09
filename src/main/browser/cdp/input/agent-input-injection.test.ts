@@ -6,9 +6,9 @@ vi.mock('electron', () => ({
 }))
 
 import { isAgentInjectingInput, withAgentInputInjection } from './agent-input-injection'
-import { setupGuestShortcutForwarding } from '../../guest-lifecycle/input/browser-guest-shortcut-forwarding'
-import { setupGrabShortcutForwarding } from '../../guest-lifecycle/input/browser-guest-grab-shortcuts'
-import { setupGuestEscapeForwarding } from '../../guest-lifecycle/input/browser-guest-escape-forwarding'
+import { setupGuestShortcutForwarding } from '../../guest-lifecycle/input/shortcuts/browser-guest-shortcut-forwarding'
+import { setupGrabShortcutForwarding } from '../../guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
+import { setupGuestEscapeForwarding } from '../../guest-lifecycle/input/shortcuts/browser-guest-escape-forwarding'
 
 type BeforeInputHandler = (event: Electron.Event, input: Electron.Input) => void
 
