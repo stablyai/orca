@@ -8,13 +8,13 @@ import {
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
-} from './terminal-pane/terminal-hidden-worktree-retention'
+} from './terminal-pane/parking/retention/terminal-hidden-worktree-retention'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
-import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
-import { captureParkedTerminalBuffers } from './terminal-pane/parked-terminal-buffer-capture'
-import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
-import { recordTerminalWorktreeParkingDebugVerdicts } from './terminal-pane/terminal-parking-e2e-overrides'
-import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/terminal-cold-park-recheck-deadlines'
+import { selectEvictionExemptTerminalTabIds } from './terminal-pane/parking/retention/terminal-eviction-exempt-tabs'
+import { captureParkedTerminalBuffers } from './terminal-pane/parking/capture/parked-terminal-buffer-capture'
+import { warnTerminalLifecycleAnomaly } from './terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'
+import { recordTerminalWorktreeParkingDebugVerdicts } from './terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
+import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/parking/retention/terminal-cold-park-recheck-deadlines'
 import { haveSameIdSet } from './terminal-workspace-model'
 import {
   canOrdinarilyParkRetentionCandidate,

@@ -12,10 +12,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
-import type { GitConflictKind, GitStatusEntry } from '../../../../shared/git-status-types'
+import type { ConflictReviewEntry } from '../../../../shared/editor-tab-view-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type {
+  GitConflictKind,
+  GitStatusEntry
+} from '../../../../shared/git/status/git-status-types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 const getConflictKindLabels = createLocalizedCatalog<Record<GitConflictKind, string>>(() => ({
@@ -91,6 +96,7 @@ export function ConflictBanner({
     onJump: (direction: ConflictNavigationDirection) => void
   }
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const conflict = file.conflict
   if (!conflict) {
     return null
@@ -99,8 +105,8 @@ export function ConflictBanner({
   const isUnresolved = conflict.conflictStatus === 'unresolved'
   const kind = getConflictKindLabels()[conflict.conflictKind]
   const label = isUnresolved
-    ? translate('editorConflicts.unresolvedBanner', 'Unresolved conflict · {{kind}}', { kind })
-    : translate('editorConflicts.resolvedBanner', 'Conflict resolved locally · {{kind}}', { kind })
+    ? t('editorConflicts.unresolvedBanner', 'Unresolved conflict · {{kind}}', { kind })
+    : t('editorConflicts.resolvedBanner', 'Conflict resolved locally · {{kind}}', { kind })
 
   return (
     <div
@@ -133,7 +139,7 @@ export function ConflictBanner({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.editor.ConflictComponents.41d9af2e7a',
                     'Previous conflict'
                   )}
@@ -143,10 +149,7 @@ export function ConflictBanner({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate(
-                  'auto.components.editor.ConflictComponents.41d9af2e7a',
-                  'Previous conflict'
-                )}
+                {t('auto.components.editor.ConflictComponents.41d9af2e7a', 'Previous conflict')}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -155,7 +158,7 @@ export function ConflictBanner({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.editor.ConflictComponents.9c2901ef8a',
                     'Next conflict'
                   )}
@@ -165,7 +168,7 @@ export function ConflictBanner({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.editor.ConflictComponents.9c2901ef8a', 'Next conflict')}
+                {t('auto.components.editor.ConflictComponents.9c2901ef8a', 'Next conflict')}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -174,7 +177,7 @@ export function ConflictBanner({
       {/* The file is already open below; reserve open/edit guidance for placeholders and the review list. */}
       {!isUnresolved && (
         <div className="mt-1 text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.ConflictComponents.6e459867ad',
             'Session-local continuity state. Git is no longer reporting this file as unmerged.'
           )}
@@ -182,7 +185,7 @@ export function ConflictBanner({
       )}
       {entry?.oldPath && (
         <div className="mt-1 text-muted-foreground">
-          {translate('editorConflicts.renamedFrom', 'Renamed from {{path}}', {
+          {t('editorConflicts.renamedFrom', 'Renamed from {{path}}', {
             path: entry.oldPath
           })}
         </div>
@@ -192,6 +195,7 @@ export function ConflictBanner({
 }
 
 export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX.Element | null {
+  const t = useTranslate()
   const conflict = file.conflict
   if (!conflict) {
     return null
@@ -205,7 +209,7 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
         </div>
         <div className="text-xs text-muted-foreground">
           {conflict.message ??
-            translate(
+            t(
               'auto.components.editor.ConflictComponents.da539359b6',
               'No working-tree file is available to edit for this conflict.'
             )}
@@ -237,6 +241,8 @@ export function ConflictReviewPanel({
   onRefreshSnapshot: () => void
   onReturnToSourceControl: () => void
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   const [fileTreeCollapsed, setFileTreeCollapsedState] = React.useState(
     () => conflictReviewFileTreeCollapsedPreference
   )
@@ -260,7 +266,7 @@ export function ConflictReviewPanel({
   const [renderStartTime] = React.useState(() => Date.now())
   const snapshotTime = new Date(
     file.conflictReview?.snapshotTimestamp ?? renderStartTime
-  ).toLocaleTimeString(getIntlLocale())
+  ).toLocaleTimeString(intlLocale)
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed
     setFileTreeCollapsedState(collapsed)
@@ -271,13 +277,10 @@ export function ConflictReviewPanel({
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-md space-y-3">
           <div className="text-sm font-medium text-foreground">
-            {translate(
-              'auto.components.editor.ConflictComponents.992145ff5a',
-              'All conflicts resolved'
-            )}
+            {t('auto.components.editor.ConflictComponents.992145ff5a', 'All conflicts resolved')}
           </div>
           <div className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.editor.ConflictComponents.31931dec46',
               'This review snapshot no longer has any live unresolved conflicts.'
             )}
@@ -285,11 +288,11 @@ export function ConflictReviewPanel({
           <div className="flex items-center justify-center gap-2">
             <Button type="button" size="sm" variant="outline" onClick={onReturnToSourceControl}>
               <GitMerge className="size-3.5" />
-              {translate('auto.components.editor.ConflictComponents.28e7db4a90', 'Source Control')}
+              {t('auto.components.editor.ConflictComponents.28e7db4a90', 'Source Control')}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
               <X className="size-3.5" />
-              {translate('auto.components.editor.ConflictComponents.58ad5ad431', 'Dismiss')}
+              {t('auto.components.editor.ConflictComponents.58ad5ad431', 'Dismiss')}
             </Button>
           </div>
         </div>
@@ -316,7 +319,7 @@ export function ConflictReviewPanel({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.editor.ConflictComponents.c8ca989aea',
                       'Show file tree'
                     )}
@@ -326,16 +329,13 @@ export function ConflictReviewPanel({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate(
-                    'auto.components.editor.ConflictComponents.c8ca989aea',
-                    'Show file tree'
-                  )}
+                  {t('auto.components.editor.ConflictComponents.c8ca989aea', 'Show file tree')}
                 </TooltipContent>
               </Tooltip>
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {translate(
+                {t(
                   'auto.components.editor.ConflictComponents.unresolvedConflicts',
                   '{{count}} unresolved conflicts',
                   { count: unresolvedCount, defaultValue_one: '{{count}} unresolved conflict' }
@@ -343,7 +343,7 @@ export function ConflictReviewPanel({
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">
-                {translate('editorConflicts.snapshotCapturedAt', 'Snapshot captured at {{time}}.', {
+                {t('editorConflicts.snapshotCapturedAt', 'Snapshot captured at {{time}}.', {
                   time: snapshotTime
                 })}
               </span>
@@ -351,13 +351,13 @@ export function ConflictReviewPanel({
           </div>
           <Button type="button" size="sm" variant="outline" onClick={onRefreshSnapshot}>
             <RefreshCw className="size-3.5" />
-            {translate('auto.components.editor.ConflictComponents.90d576adb2', 'Refresh')}
+            {t('auto.components.editor.ConflictComponents.90d576adb2', 'Refresh')}
           </Button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
           {selectedContent ?? (
             <div className="flex h-full min-h-0 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.editor.ConflictComponents.f338288514',
                 'Loading conflict contents...'
               )}

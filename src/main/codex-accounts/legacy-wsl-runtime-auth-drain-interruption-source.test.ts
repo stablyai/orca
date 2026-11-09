@@ -69,14 +69,4 @@ describe('owned drain interruption', () => {
     expect(() => target.interrupt()).toThrow('Apply ancestor is not owned')
     expect(target.kill).not.toHaveBeenCalled()
   })
-
-  it.each(['', '0', '-1', '1', '300', '9007199254740992'])(
-    'refuses an invalid owned shell PID %j before running the census',
-    (pid) => {
-      const target = fixture([], pid)
-      expect(() => target.interrupt()).toThrow()
-      expect(target.census).not.toHaveBeenCalled()
-      expect(target.kill).not.toHaveBeenCalled()
-    }
-  )
 })

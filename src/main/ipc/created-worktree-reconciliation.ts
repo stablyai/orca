@@ -1,9 +1,10 @@
-import { describeCreatedWorktree, listWorktreesSharedStrict } from '../git/worktree'
+import { describeCreatedWorktree } from '../git/worktrees/catalog/worktree-listing'
+import { listWorktreesSharedStrict } from '../git/worktrees/catalog/worktree-scan-cache'
 // Import directly because suites mock the worktree barrel wholesale.
-import { WORKTREE_LIST_TIMEOUT_MS } from '../git/worktree-operation-options'
-import type { GitWorktreeExecOptions } from '../git/worktree'
+import { WORKTREE_LIST_TIMEOUT_MS } from '../git/worktrees/worktree-operation-options'
+import type { GitWorktreeExecOptions } from '../git/worktrees/worktree-operation-options'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 
 export function findCreatedWorktree<T extends { path: string; branch?: string }>(
   worktrees: readonly T[],

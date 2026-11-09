@@ -1,7 +1,7 @@
 // Apply routed-partition commands first while carrying in-memory editor views through saved-session loads.
 
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   LayoutApplyOutcome,
   LayoutCommand,
@@ -46,7 +46,8 @@ export function keepFrozen(
 export function commitWindowPaneDetach(
   hostIds: readonly ExecutionHostId[],
   command: WindowPaneDetachCommand,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  run: LayoutCommandRun = {}
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const resolved = resolveWindowPaneDetach(
     context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
@@ -56,7 +57,7 @@ export function commitWindowPaneDetach(
   if (resolved && 'code' in resolved) {
     return { value: { ok: false, code: resolved.code }, persist: false }
   }
-  const committed = commitLayoutCommand(hostIds, resolved?.command ?? command, context)
+  const committed = commitLayoutCommand(hostIds, resolved?.command ?? command, context, run)
   if (!resolved || !committed.value.ok || committed.persist === false) {
     return committed
   }

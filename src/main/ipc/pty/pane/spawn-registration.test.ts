@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
+import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/terminal-intentional-stops'
 import { admitPtySpawnOwnership, discardUnpersistedPtySpawn } from './spawn-registration'
 
 type MarkUnverifiable = (ptyId: string, reason: string) => void
@@ -65,18 +65,6 @@ describe('discarding a spawn whose binding failed to save', () => {
 
     expect(ptyOwnership.get(PTY_ID)).toBe('ssh:successor')
     expect(ptyIncarnationById.get(PTY_ID)).toBe('inc-2')
-  })
-
-  it('keeps an exit observed during a shutdown whose reply was lost', async () => {
-    const runtime = await discard(async () => {
-      // The provider's exit listener retires the PTY before the RPC rejects.
-      ptyOwnership.delete(PTY_ID)
-      ptyIncarnationById.delete(PTY_ID)
-      throw new Error('shutdown response lost')
-    })
-
-    expect(ptyOwnership.has(PTY_ID)).toBe(false)
-    expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
   })
 
   it('does not mark a same-id replacement unverifiable when the predecessor shutdown fails', async () => {

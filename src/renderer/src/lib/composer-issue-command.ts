@@ -1,9 +1,9 @@
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   canUseIssueCommandForLinkedItemProvider,
   renderIssueCommandTemplate
 } from '@/lib/new-workspace'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../shared/worktree/types'
 
 type ComposerIssueCommandInput = {
   enabled: boolean

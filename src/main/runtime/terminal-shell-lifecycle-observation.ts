@@ -1,6 +1,6 @@
 import type { RuntimeTerminalSummary } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalShellLifecycle } from '../../shared/terminal-shell-lifecycle'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { TerminalProcessInspection as PtyProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 export function terminalShellLifecycleObservation(
   summary: RuntimeTerminalSummary,

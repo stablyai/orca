@@ -225,6 +225,14 @@ export function isRepoOnCatalogHost(repo: {
   )
 }
 
+/** Legacy automation migration distinguishes an SSH stamp from a legacy dial target. */
+export function isRepoSshOnlyHost(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): boolean {
+  return (
+    normalizeHostPart(repo.connectionId) === null &&
+    parseExecutionHostId(repo.executionHostId)?.kind === 'ssh'
+  )
+}
+
 export function getSshTargetIdForExecutionHost(
   executionHostId: string | null | undefined
 ): string | null {

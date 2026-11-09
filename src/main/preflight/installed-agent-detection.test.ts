@@ -1,67 +1,35 @@
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { detectCommandsMock } = vi.hoisted(() => ({
-  detectCommandsMock: vi.fn(async (_commands: readonly string[]) => new Set<string>())
-}))
-
-vi.mock('./agent-command-detection', () => ({
-  detectAgentCommandsOnHost: detectCommandsMock
-}))
-vi.mock('../ipc/agent-detection-shell-path', () => ({
-  hydrateShellPathForAgentDetection: vi.fn(async () => undefined)
-}))
-vi.mock('../ipc/preflight-runtime-target', () => ({
-  getPreflightWslTarget: vi.fn(() => null)
+vi.mock('../ipc/command-path/agent-detection-shell-path', () => ({
+  hydrateShellPathForAgentDetection: vi.fn()
 }))
 
 import { detectInstalledAgents } from './installed-agent-detection'
 
-const originalPlatform = process.platform
-
-describe('detectInstalledAgents disabled-agent filtering', () => {
-  beforeEach(() => {
-    detectCommandsMock.mockReset()
+describe('detectInstalledAgents command overrides', () => {
+  let dir: string
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'orca agent override '))
+  })
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true })
   })
 
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: originalPlatform })
-  })
-
-  it('omits a disabled agent with a unique command from probes and results', async () => {
-    detectCommandsMock.mockImplementation(
-      async (commands) =>
-        new Set(commands.filter((command) => command === 'codex' || command === 'gemini'))
-    )
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['codex', 'gemini'])
-    await expect(
-      detectInstalledAgents(undefined, { disabledTuiAgents: ['codex'] })
-    ).resolves.toEqual(['gemini'])
-    expect(detectCommandsMock).toHaveBeenLastCalledWith(expect.not.arrayContaining(['codex']), {
-      context: undefined
-    })
-  })
-
-  it('keeps a shared command for an enabled agent without reporting the disabled agent', async () => {
-    Object.defineProperty(process, 'platform', { value: 'linux' })
-    detectCommandsMock.mockImplementation(
-      async (commands) =>
-        new Set(commands.filter((command) => command === 'claude' || command === 'orca'))
-    )
+  it('lists an agent outside PATH only when its override executable exists', async () => {
+    const executable = path.join(dir, process.platform === 'win32' ? 'ante.exe' : 'ante')
+    await writeFile(executable, '#!/bin/sh\n')
+    await chmod(executable, 0o755)
 
     await expect(
-      detectInstalledAgents(undefined, { disabledTuiAgents: ['claude'] })
-    ).resolves.toEqual(['claude-agent-teams'])
-    expect(detectCommandsMock).toHaveBeenCalledExactlyOnceWith(
-      expect.arrayContaining(['claude', 'orca']),
-      { context: undefined }
-    )
-
+      detectInstalledAgents(undefined, { agentCmdOverrides: { ante: `"${executable}"` } })
+    ).resolves.toContain('ante')
     await expect(
-      detectInstalledAgents(undefined, { disabledTuiAgents: ['claude-agent-teams'] })
-    ).resolves.toEqual(['claude'])
-    expect(detectCommandsMock).toHaveBeenLastCalledWith(expect.not.arrayContaining(['orca']), {
-      context: undefined
-    })
+      detectInstalledAgents(undefined, {
+        agentCmdOverrides: { ante: `"${path.join(dir, 'missing', 'ante')}"` }
+      })
+    ).resolves.not.toContain('ante')
   })
 })

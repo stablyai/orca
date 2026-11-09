@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { activateAndRevealWorkspace } from './worktree-activation'
+import { activateAndRevealWorkspace } from './workspace/activation/worktree-activation'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
   isUnifiedTabOwnedByWorktree
-} from './unified-tab-host-ownership'
+} from './workspace/ownership/unified-tab-host-ownership'
 
 export type SimulatorTabPaletteActivationFailure = 'missing-tab' | 'missing-worktree'
 

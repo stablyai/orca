@@ -1,8 +1,8 @@
 /** Advertised agentSession.agents lists registered agents/capabilities before sessions exist. Drop unreadable rows individually; unknown capability arms degrade to the least authority. */
 
-import { z } from 'zod'
-import type { AgentSessionCapabilities } from '../agent-session-capabilities'
-import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
+import * as z from 'zod'
+import type { AgentSessionCapabilities } from './agent-session-capabilities'
+import { isStructuredAgentId } from './lifecycle/agent-session-provider-handle-encoding'
 import { openEnum } from '../zod-salvage'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
@@ -32,6 +32,8 @@ const registeredAgentSchema = z.object({
     threadGoal: capabilityFlag,
     contextUsage: capabilityFlag,
     imagePrompts: capabilityFlag,
+    // An unknown fork level reads as absent: the host never forks for this client.
+    fork: z.enum(['checkpoint', 'tip']).optional().catch(undefined),
     // Holding a follow-up until the turn ends never interrupts one the client cannot reason about.
     steering: openEnum(['inject', 'queue'] as const, 'queue')
       .optional()

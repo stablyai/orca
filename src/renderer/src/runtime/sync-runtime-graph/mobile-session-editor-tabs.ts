@@ -2,9 +2,9 @@ import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { Tab } from '../../../../shared/tab-types'
-import { editorRowHost } from '../../../../shared/session-tab-file-host'
+import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import {
   getMobileMarkdownSourceFile,
@@ -65,6 +65,7 @@ export function buildMobileFileTab(
     language: file.language,
     mode: file.mode === 'diff' ? 'diff' : 'edit',
     ...(diffSource ? { diffSource } : {}),
+    ...(diffSource === 'staged' && file.branchOldPath ? { oldPath: file.branchOldPath } : {}),
     isDirty: file.isDirty,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,

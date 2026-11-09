@@ -1,8 +1,8 @@
 import { OrcaRuntimeWithRestoredHandlePaneStart } from './terminal/surface/restored-handle-pane-start'
 import type { RuntimeTerminalSummary } from '../../shared/runtime-terminal-contracts'
-import { classifyTerminalProcessInspectionFailure } from '../../shared/terminal-process-inspection'
+import { classifyTerminalProcessInspectionFailure } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { terminalShellLifecycleObservation } from './terminal-shell-lifecycle-observation'
-import { withTimeoutResult } from './runtime-async-boundaries'
+import { withTimeoutResult } from '../../shared/promise-timeout-fallback'
 
 export abstract class OrcaRuntimeWithShellLifecycleObservation extends OrcaRuntimeWithRestoredHandlePaneStart {
   protected abstract assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void

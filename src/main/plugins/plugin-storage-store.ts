@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureFile } from '../../shared/secure-storage/secure-file'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
@@ -28,7 +28,7 @@ export class PluginKvStore {
   constructor(
     pluginsDataDir: string,
     qualifiedKey: string,
-    fileName: 'storage.json' | 'settings.json'
+    fileName: 'storage.json' | 'settings.json' | 'panel-state.json'
   ) {
     this.filePath = join(pluginDataDir(pluginsDataDir, qualifiedKey), fileName)
   }
@@ -57,8 +57,7 @@ export class PluginKvStore {
   }
 
   get(key: string): PluginJsonValue | undefined {
-    const settings = this.read()
-    return settings && Object.hasOwn(settings, key) ? settings[key] : undefined
+    return this.read()?.[key]
   }
 
   getAll(): Record<string, PluginJsonValue> {

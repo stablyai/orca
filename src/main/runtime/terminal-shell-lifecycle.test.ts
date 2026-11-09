@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from './runtime-store-partial-fixture'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import { registerBoundPty } from './bind-first-pane.test-fixture'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta
+} from './orca-runtime-tests/runtime-store-partial-fixture'
+import type { TerminalProcessInspection as PtyProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { registerBoundPty } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import type { HostShellLifecycleObservation } from '../../shared/terminal-shell-lifecycle'
 import { terminalShellLifecycleObservation } from './terminal-shell-lifecycle-observation'
 

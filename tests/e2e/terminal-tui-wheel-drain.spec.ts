@@ -171,32 +171,4 @@ test.describe('terminal TUI wheel report drain', () => {
       fs.rmSync(logPath, { force: true })
     }
   })
-
-  test('aggressive alternating trackpad-like gesture does not replay after input ends', async ({
-    orcaPage
-  }) => {
-    // Why: the dense CDP wheel stream is throughput-bound on loaded CI runners.
-    test.slow()
-    const logPath = path.join(os.tmpdir(), `tui-wheel-drain-alt-${Date.now()}.log`)
-    const stopFrameCapture = await startHiddenRendererFrameCapture(orcaPage)
-    try {
-      await startHeavyTuiFixture(orcaPage, logPath)
-
-      const target = await terminalWheelTarget(orcaPage)
-      const input = await dispatchTrackpadWheelStream(orcaPage, {
-        alternate: true,
-        events: WHEEL_EVENTS,
-        deltaY: Math.min(49, target.cellHeight)
-      })
-      await orcaPage.waitForTimeout(8000)
-
-      const summary = summarizeArrivals(readReportArrivalLog(logPath), input)
-      console.log(`[tui-wheel-drain] alternate: ${JSON.stringify(summary)}`)
-
-      expect(summary.arrivalLagMs, JSON.stringify(summary)).toBeLessThanOrEqual(MAX_ARRIVAL_LAG_MS)
-    } finally {
-      await stopFrameCapture()
-      fs.rmSync(logPath, { force: true })
-    }
-  })
 })

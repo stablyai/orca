@@ -5,12 +5,11 @@ import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
 } from '../../shared/windows-transient-lock-removal'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { toWindowsWslPath } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'
-import { writeFileAtomically } from './fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
@@ -43,14 +42,18 @@ export class CodexManagedHomeLifecycle {
     // Cleanup requires this ownership marker before deleting the home.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
     return {
-      managedHomePath: this.paths.assert(managedHomePath, accountId),
+      managedHomePath: await this.paths.assert(managedHomePath, accountId),
       managedHomeRuntime: 'host',
       wslDistro: null,
       wslLinuxHomePath: null
     }
   }
 
-  importAuthFromHome(sourceHome: string, managedHomePath: string, accountId: string): void {
+  async importAuthFromHome(
+    sourceHome: string,
+    managedHomePath: string,
+    accountId: string
+  ): Promise<void> {
     const trimmed = sourceHome.trim()
     if (!trimmed) {
       throw new Error('A Codex home directory path is required.')
@@ -68,22 +71,26 @@ export class CodexManagedHomeLifecycle {
         `No Codex credentials found in ${resolvedSourceHome}. Run \`codex login\` into this directory first.`
       )
     }
-    const trustedHome = this.paths.assert(managedHomePath, accountId)
+    const trustedHome = await this.paths.assert(managedHomePath, accountId)
     writeFileAtomically(join(trustedHome, 'auth.json'), sourceAuthContents, { mode: 0o600 })
   }
 
   /** Preserve an unreadable home: rollback could destroy a successful login. */
-  removeUnlessUnproven(error: unknown, managedHomePath: string, accountId: string): void {
+  async removeUnlessUnproven(
+    error: unknown,
+    managedHomePath: string,
+    accountId: string
+  ): Promise<void> {
     if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
       return
     }
-    this.safeRemove(managedHomePath, accountId)
+    await this.safeRemove(managedHomePath, accountId)
   }
 
-  safeRemove(candidatePath: string, expectedAccountId: string): void {
+  async safeRemove(candidatePath: string, expectedAccountId: string): Promise<void> {
     let managedHomePath: string
     try {
-      managedHomePath = this.paths.assert(candidatePath, expectedAccountId)
+      managedHomePath = await this.paths.assert(candidatePath, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Refusing to remove untrusted managed home:', error)
       return
@@ -163,7 +170,7 @@ export class CodexManagedHomeLifecycle {
     const managedHomePath = toWindowsWslPath(linuxPath, distro)
     try {
       return {
-        managedHomePath: this.paths.assert(managedHomePath, accountId),
+        managedHomePath: await this.paths.assert(managedHomePath, accountId),
         managedHomeRuntime: 'wsl',
         wslDistro: distro,
         wslLinuxHomePath: linuxPath

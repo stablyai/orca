@@ -2,9 +2,9 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { createPtySubprocess } from './pty-subprocess'
-import { Session } from './session'
-import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
+import { createPtySubprocess } from './pty-subprocess/pty-subprocess'
+import { Session } from './sessions/session'
+import { inspectTerminalHostProcess } from './terminal-host/terminal-host-process-inspection'
 
 describe.skipIf(process.platform === 'win32')('managed Bash lifecycle on a real PTY', () => {
   it('does not export the private binding to an unsupported shell', async () => {

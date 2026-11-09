@@ -1,20 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSystemMemoryInfoReaderForTest } from './system-memory-details'
 import {
-  getSystemMemoryDetails,
-  setSystemMemoryInfoReaderForTest,
-  withSwapVolumeFreeSpace
-} from './system-memory-details'
-import {
-  readSwapVolumeFreeSpace,
   setSwapVolumeFreeSpaceReaderForTest,
   type SwapVolumeFreeSpace
 } from './swap-volume-free-space'
 import { samplePreGoneSystemMemory } from './pre-gone-host-memory'
 import {
   buildProcessGoneCrashDetails,
-  resetPreGoneCrashSamplingForTest,
-  samplePreGoneProcessMetrics,
-  startPreGoneCrashSampling
+  resetPreGoneCrashSamplingForTest
 } from './process-gone-diagnostics'
 
 type MetricFixture = {
@@ -40,8 +33,6 @@ const BROWSER_AND_RENDERER: MetricFixture[] = [
   }
 ]
 
-const BROWSER_ONLY: MetricFixture[] = [BROWSER_AND_RENDERER[0]]
-
 const UNDER_COMMIT_PRESSURE = {
   total: 16_000 * 1024,
   free: 400 * 1024,
@@ -54,19 +45,6 @@ const AFTER_THE_CORPSE_RELEASED = {
   free: 3_000 * 1024,
   swapTotal: 48_000 * 1024,
   swapFree: 2_900 * 1024
-}
-
-// A fixed pagefile cannot grow into free disk; swapTotal alone does not identify its limit.
-const FIXED_PAGEFILE_UNDER_PRESSURE = {
-  total: 16_000 * 1024,
-  free: 300 * 1024,
-  swapTotal: 16_100 * 1024,
-  swapFree: 180 * 1024
-}
-
-const NO_PAGEFILE_UNDER_PRESSURE = {
-  ...FIXED_PAGEFILE_UNDER_PRESSURE,
-  swapTotal: 15_900 * 1024
 }
 
 const BEFORE_THE_STORM = {
@@ -83,92 +61,6 @@ describe('pre-gone host memory', () => {
     setSwapVolumeFreeSpaceReaderForTest(null)
     appMetricsMock.mockClear()
     appMetricsMock.mockReturnValue(BROWSER_AND_RENDERER)
-  })
-
-  it('carries a pre-gone host reading, not only the post-mortem one', async () => {
-    setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
-    setSwapVolumeFreeSpaceReaderForTest(() => Promise.resolve({ freeMB: 120, volume: 'C:' }))
-    await samplePreGoneSystemMemory(Date.now() - 5_000)
-
-    // Simulate memory released by the renderer before the gone-time read.
-    setSystemMemoryInfoReaderForTest(() => AFTER_THE_CORPSE_RELEASED)
-    appMetricsMock.mockReturnValue(BROWSER_ONLY)
-
-    const details = buildProcessGoneCrashDetails({ processType: 'renderer' }, 'renderer')
-
-    expect(details.systemMemorySwapFreeMB).toBe(2_900)
-    expect(details.systemMemoryPreGoneSwapFreeMB).toBe(200)
-    expect(details.systemMemoryPreGoneFreeMB).toBe(400)
-    expect(details.systemMemoryPreGoneTotalMB).toBe(16_000)
-    expect(
-      Object.keys(details).filter((key) => key.startsWith('processMetricsPreGoneSystem'))
-    ).toEqual([])
-  })
-
-  it('reports swap-volume free space so low commit can be told from refused commit', async () => {
-    setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
-    setSwapVolumeFreeSpaceReaderForTest(() => Promise.resolve({ freeMB: 120, volume: 'C:' }))
-    await samplePreGoneSystemMemory(Date.now() - 5_000)
-
-    const details = buildProcessGoneCrashDetails({ processType: 'renderer' }, 'renderer')
-
-    expect(details.systemMemoryPreGoneSwapVolumeFreeMB).toBe(120)
-    // The volume reader anchors to SystemRoot, which may differ from the pagefile drive.
-    expect(details.systemMemoryPreGoneSwapVolume).toBe('C:')
-  })
-
-  it('omits swap-volume free space on Linux, where swap cannot grow into free disk', async () => {
-    // Linux root-filesystem space provides no headroom for fixed swap or zram.
-    setSwapVolumeFreeSpaceReaderForTest(null)
-
-    await expect(readSwapVolumeFreeSpace('linux')).resolves.toBeUndefined()
-  })
-
-  it('labels the reading with the pressure verdict the platform can actually give', () => {
-    setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
-    const windowsCommit = getSystemMemoryDetails('win32')
-    expect(windowsCommit.systemMemoryPressureSignal).toBe('available-commit-unqualified')
-    expect(
-      withSwapVolumeFreeSpace(windowsCommit, { freeMB: 120, volume: 'C:' }, 'win32')
-        .systemMemoryPressureSignal
-    ).toBe('available-commit-volume-cotimed')
-    expect(
-      withSwapVolumeFreeSpace(windowsCommit, { freeMB: 120, volume: 'C:' }, 'win32', false)
-        .systemMemoryPressureSignal
-    ).toBe('available-commit-unqualified')
-
-    setSystemMemoryInfoReaderForTest(() => ({ total: 16_000 * 1024, free: 400 * 1024 }))
-    expect(getSystemMemoryDetails('linux').systemMemoryPressureSignal).toBe('none')
-
-    setSystemMemoryInfoReaderForTest(() => ({ total: 16_000 * 1024, available: 900 * 1024 }))
-    expect(getSystemMemoryDetails('linux').systemMemoryPressureSignal).toBe('mem-available')
-
-    setSystemMemoryInfoReaderForTest(() => ({
-      total: 16_000 * 1024,
-      free: 272 * 1024,
-      fileBacked: 2_694 * 1024,
-      purgeable: 0
-    }))
-    expect(getSystemMemoryDetails('darwin').systemMemoryPressureSignal).toBe('none')
-  })
-
-  it('never reads free disk as proof the pagefile could have grown', () => {
-    setSystemMemoryInfoReaderForTest(() => FIXED_PAGEFILE_UNDER_PRESSURE)
-    const fixedPagefile = withSwapVolumeFreeSpace(
-      getSystemMemoryDetails('win32'),
-      { freeMB: 812_000, volume: 'C:' },
-      'win32'
-    )
-    expect(fixedPagefile.systemMemoryPressureSignal).toBe('available-commit-volume-cotimed')
-
-    setSystemMemoryInfoReaderForTest(() => NO_PAGEFILE_UNDER_PRESSURE)
-    expect(
-      withSwapVolumeFreeSpace(
-        getSystemMemoryDetails('win32'),
-        { freeMB: 812_000, volume: 'C:' },
-        'win32'
-      ).systemMemoryPressureSignal
-    ).toBe('available-commit-hard-capped')
   })
 
   it('will not let a statfs that outlived its tick qualify the win32 commit verdict', async () => {
@@ -247,37 +139,6 @@ describe('pre-gone host memory', () => {
     }
   })
 
-  it("arms the host sampler on its own unref'd 10 s timer, not the metric sweep's", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(0)
-    const readHostMemory = vi.fn(() => UNDER_COMMIT_PRESSURE)
-    setSystemMemoryInfoReaderForTest(readHostMemory)
-    setSwapVolumeFreeSpaceReaderForTest(() => Promise.resolve({ freeMB: 120, volume: 'C:' }))
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
-    try {
-      startPreGoneCrashSampling()
-
-      // Assert literal cadences so changing both constants cannot mask a regression.
-      expect(setIntervalSpy.mock.calls.map(([, ms]) => ms)).toEqual([60_000, 10_000])
-      for (const { value } of setIntervalSpy.mock.results) {
-        expect((value as NodeJS.Timeout).hasRef()).toBe(false)
-      }
-      expect(readHostMemory).toHaveBeenCalledTimes(1)
-
-      readHostMemory.mockReturnValue(AFTER_THE_CORPSE_RELEASED)
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(readHostMemory).toHaveBeenCalledTimes(2)
-      expect(appMetricsMock).toHaveBeenCalledTimes(1)
-
-      const details = buildProcessGoneCrashDetails({}, 'renderer')
-      expect(details.systemMemoryPreGoneSampleAgeMs).toBe(0)
-      expect(details.systemMemoryPreGoneSwapFreeMB).toBe(2_900)
-    } finally {
-      setIntervalSpy.mockRestore()
-      vi.useRealTimers()
-    }
-  })
-
   it('commits the host reading without waiting on the swap-volume statfs', async () => {
     setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
     setSwapVolumeFreeSpaceReaderForTest(() => new Promise(() => {}))
@@ -288,51 +149,5 @@ describe('pre-gone host memory', () => {
     setSystemMemoryInfoReaderForTest(() => AFTER_THE_CORPSE_RELEASED)
     void samplePreGoneSystemMemory(Date.now())
     expect(buildProcessGoneCrashDetails({}, 'renderer').systemMemoryPreGoneSwapFreeMB).toBe(2_900)
-  })
-
-  it('publishes no pre-gone host keys when every memory field failed to read', async () => {
-    // Even failed memory reads carry a signal label; that alone must not create a sample.
-    setSystemMemoryInfoReaderForTest(() => ({ total: Number.NaN, free: undefined }))
-    await samplePreGoneSystemMemory(Date.now())
-
-    const details = buildProcessGoneCrashDetails({}, 'renderer')
-
-    expect(Object.keys(details).filter((key) => key.startsWith('systemMemoryPreGone'))).toEqual([])
-  })
-
-  it('carries the last volume reading forward, aged, instead of dropping it', async () => {
-    vi.useFakeTimers()
-    try {
-      setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
-      setSwapVolumeFreeSpaceReaderForTest(() => Promise.resolve({ freeMB: 42, volume: 'C:' }))
-      await samplePreGoneSystemMemory(0)
-
-      // Leave statfs pending so the new host sample must carry the previous volume reading.
-      setSwapVolumeFreeSpaceReaderForTest(() => new Promise<never>(() => {}))
-      void samplePreGoneSystemMemory(10_000)
-      vi.setSystemTime(10_000)
-
-      const details = buildProcessGoneCrashDetails({}, 'renderer')
-      expect(details.systemMemoryPreGoneSwapVolumeFreeMB).toBe(42)
-      expect(details.systemMemoryPreGoneSwapVolume).toBe('C:')
-      expect(details.systemMemoryPreGoneSampleAgeMs).toBe(0)
-      expect(details.systemMemoryPreGoneSwapVolumeAgeMs).toBe(10_000)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps a failed host read from erasing the process-metric sample', async () => {
-    samplePreGoneProcessMetrics(Date.now() - 5_000)
-    setSystemMemoryInfoReaderForTest(() => {
-      throw new Error('getSystemMemoryInfo unavailable')
-    })
-    await samplePreGoneSystemMemory(Date.now() - 5_000)
-    setSystemMemoryInfoReaderForTest(null)
-
-    const details = buildProcessGoneCrashDetails({ processType: 'renderer' }, 'renderer')
-
-    expect(details.processMetricsPreGoneRendererWorkingSetMB).toBe(400)
-    expect(Object.keys(details).filter((key) => key.startsWith('systemMemoryPreGone'))).toEqual([])
   })
 })

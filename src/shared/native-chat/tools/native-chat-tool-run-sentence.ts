@@ -6,7 +6,7 @@ import {
   type NativeChatToolCategoryCall
 } from './native-chat-tool-icon'
 import { toolInputCommand } from './native-chat-tool-summary'
-import { isToolCallBlock, type NativeChatBlock } from '../../native-chat-types'
+import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
 
 /** Shared singular/plural category copy; desktop translates and mobile formats directly. */
 export const NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY: Record<

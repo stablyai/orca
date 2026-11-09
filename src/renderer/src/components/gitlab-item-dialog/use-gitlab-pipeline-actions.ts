@@ -1,4 +1,4 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -15,6 +15,7 @@ export function useGitLabPipelineActions(
   handleRefresh: () => void
 ) {
   const {
+    claimDetailsOwner,
     details,
     expandedJobId,
     jobTraceById,
@@ -83,13 +84,14 @@ export function useGitLabPipelineActions(
         return
       }
       setRetryingJobId(job.id)
+      const ownsResult = claimDetailsOwner()
       try {
         const result = await gitLabApiFor(repoSelector).retryJob({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
         })
-        if (!mountedRef.current) {
+        if (!ownsResult()) {
           return
         }
         if (result.ok) {
@@ -125,6 +127,7 @@ export function useGitLabPipelineActions(
       }
     },
     [
+      claimDetailsOwner,
       details?.item.projectRef,
       handleRefresh,
       item,

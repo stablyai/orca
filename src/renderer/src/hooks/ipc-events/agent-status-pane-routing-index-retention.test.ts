@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../store/types'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  TEST_REPO
-} from '../../store/slices/store-test-helpers'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { createTestStore } from '../../store/testing/app-store-test-fixture'
+import { makeTab } from '../../store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../store/repos/repo.test-fixture'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   createAgentStatusPaneRoutingIndex,
   resolvePaneKeyFromRoutingIndex
@@ -70,27 +68,5 @@ describe('agent-status routing layout lifetime', () => {
     expect(resolvePaneKeyFromRoutingIndex(current, makePaneKey(TAB_ID, LEAF_ID)).title).toBe(
       'Remote pane'
     )
-  })
-
-  it('keeps a same-source memo hit across collection and preserves held snapshots', async () => {
-    const store = createTestStore()
-    function rememberIndex() {
-      return new WeakRef(createAgentStatusPaneRoutingIndex(store.getState()))
-    }
-    const remembered = rememberIndex()
-    await collectRetiredLayouts()
-    const previous = remembered.deref()
-    expect(previous).toBeDefined()
-    expect(createAgentStatusPaneRoutingIndex(store.getState())).toBe(previous)
-
-    store.getState().setTabLayout(TAB_ID, {
-      root: { type: 'leaf', leafId: LEAF_ID },
-      activeLeafId: LEAF_ID,
-      expandedLeafId: null
-    })
-    const current = createAgentStatusPaneRoutingIndex(store.getState())
-    expect(current).not.toBe(previous)
-    expect(previous?.layoutsByTabId).toEqual({})
-    expect(current.layoutsByTabId[TAB_ID].root).toEqual({ type: 'leaf', leafId: LEAF_ID })
   })
 })

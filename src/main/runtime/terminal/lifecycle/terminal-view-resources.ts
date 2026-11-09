@@ -1,21 +1,76 @@
-import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
+import type {
+  TerminalIdentityRawInputs,
+  TerminalIdentityReadContext
+} from '../query/terminal-identity-read-context'
+import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
+import { TerminalIdentitySource } from '../identity/terminal-identity-source'
+import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
-import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
-import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
+import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,
   RuntimePtyTitleTrackerEntry,
-  RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+} from '../records/runtime-terminal-state-records'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
-import { RuntimeTerminalViewSubscribers } from '../../runtime-terminal-view-subscribers'
+import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
+import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
+import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
+  protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)
+  protected readonly ptysById = this.terminalIdentity.ptys
+  readonly handles = this.terminalIdentity.handles
+  protected readonly handleByLeafKey = this.terminalIdentity.leafHandles
+  protected readonly handleByPtyId = this.terminalIdentity.reverse
+  protected readonly handleByPtyIncarnation = this.terminalIdentity.incarnations
+  protected readonly syntheticTerminalHandles = this.terminalIdentity.synthetic
+  protected get leaves() {
+    return this.terminalIdentity.leaves
+  }
+  protected get tabs() {
+    return this.terminalIdentity.tabs
+  }
+  protected get graphSequence() {
+    return this.terminalIdentity.graphSequence
+  }
+  protected get rendererGraphEpoch() {
+    return this.terminalIdentity.rendererGraphEpoch
+  }
+
+  abstract getLiveTerminalPaneKey(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null
+  abstract createTerminalIdentityRawInputs(): TerminalIdentityRawInputs
+  abstract createTerminalIdentityReadContext(
+    inputs?: TerminalIdentityRawInputs
+  ): TerminalIdentityReadContext
+
+  abstract getNestedWorkerMaxDepth(): number
+
+  protected crewRuntimeReaders(): CrewRuntimeReaders {
+    return {
+      getNestedWorkerMaxDepth: this.getNestedWorkerMaxDepth.bind(this),
+      getOrchestrationDispatchAuthority: this.getOrchestrationDispatchAuthority.bind(this),
+      getLiveTerminalPaneKey: this.getLiveTerminalPaneKey.bind(this),
+      getTerminalWorktreeIdForHandle: this.getTerminalWorktreeIdForHandle.bind(this),
+      getTerminalProcessIncarnation: this.getTerminalProcessIncarnation.bind(this),
+      getTerminalHandleForPaneKey: this.getTerminalHandleForPaneKey.bind(this),
+      getPaneKeyForTerminalHandle: this.getPaneKeyForTerminalHandle.bind(this),
+      getTerminalPaneKey: this.getTerminalPaneKey.bind(this),
+      getOrchestrationFleetAgentStatusSnapshot:
+        this.getOrchestrationFleetAgentStatusSnapshot.bind(this),
+      createTerminalIdentityRawInputs: this.createTerminalIdentityRawInputs.bind(this),
+      createTerminalIdentityReadContext: this.createTerminalIdentityReadContext.bind(this),
+      orchestrationSenderNames: this.orchestrationSenderNames
+    }
+  }
+
   protected abstract notifyRemoteTerminalViewPresenceChanged(ptyId: string): void
 
   // Notify mobile when desktop restores fit, including disconnect and exit paths.
@@ -33,8 +88,6 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 
   protected readonly mobileNotifications = new RuntimeMobileNotificationController()
-
-  protected ptysById = new Map<string, RuntimePtyWorktreeRecord>()
 
   protected readonly pairedRendererSessionOwnedPtyIds = new Set<string>()
 
@@ -70,7 +123,17 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
 
+  /** PTYs whose screen has shown no agent dialog since this runtime attached; their restored permission waits are spent. */
+  protected restoredAgentDialogRuledOutPtys = new Set<string>()
+
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+
+  /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
+  protected forgetProviderVisibleState(ptyId: string): void {
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.restoredAgentDialogRuledOutPtys.delete(ptyId)
+  }
 
   protected ptyLifecycleGenerationById = new Map<string, number>()
 
@@ -121,8 +184,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     }
   >()
 
-  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode defaults to auto, and restart clears modes.
-  protected mobileDisplayModes = new Map<string, 'desktop'>()
+  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode uses the host default, and restart clears modes.
+  protected mobileDisplayModes = new Map<string, 'auto' | 'desktop'>()
 
   // Keep independent client records per PTY; subscribedAt selects restore baseline, lastActedAt selects the active viewport (docs/mobile-presence-lock.md).
   protected mobileSubscribers = new Map<
@@ -141,25 +204,23 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     >
   >()
 
-  // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).
-  protected readonly terminalViewSubscribers = new RuntimeTerminalViewSubscribers({
-    notifyPresenceChanged: (ptyId) => this.notifyRemoteTerminalViewPresenceChanged(ptyId),
-    hasMobileSubscribers: (ptyId) => (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0,
-    isUnattachedLocalCandidate: (ptyId) => {
-      if (
-        this.headlessTerminals.has(ptyId) ||
-        this.providerSnapshotPreferredPtys.has(ptyId) ||
-        this.pendingPtyRegistrationIncarnations.has(ptyId) ||
-        parseAppSshPtyId(ptyId)
-      ) {
+  protected readonly mainDaemonAttachments = new MainDaemonAttachments({
+    isAttachableLocalSession: (ptyId) => {
+      if (this.pendingPtyRegistrationIncarnations.has(ptyId) || parseAppSshPtyId(ptyId)) {
         return false
       }
       const pty = this.ptysById.get(ptyId)
       return pty !== undefined && pty.connectionId === null && pty.connected
     },
-    attachProvider: (ptyId) => {
-      const attach = this.ptyController?.attach
-      return attach ? (async () => attach(ptyId))() : null
-    }
+    hasMainTerminalState: (ptyId) =>
+      this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
+    attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
+  })
+
+  // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).
+  protected readonly terminalViewSubscribers = new RuntimeTerminalViewSubscribers({
+    notifyPresenceChanged: (ptyId) => this.notifyRemoteTerminalViewPresenceChanged(ptyId),
+    hasMobileSubscribers: (ptyId) => (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0,
+    ensureProviderAttach: (ptyId) => this.mainDaemonAttachments.ensure(ptyId)
   })
 }

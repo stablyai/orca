@@ -3,8 +3,11 @@ import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema
 } from '../../shared/runtime-ssh-access'
-import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from '../ssh/runtime-ssh-access'
-import { addFanoutListener } from '../event-listener-fanout'
+import {
+  linkRuntimeSshAccess,
+  unlinkRuntimeSshAccess
+} from '../ssh/runtime-access/runtime-ssh-access'
+import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
 export function registerRuntimeSshAccessHandlers(options: {
   getUserDataPath: () => string

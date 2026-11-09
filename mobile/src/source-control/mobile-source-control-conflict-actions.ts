@@ -1,4 +1,4 @@
-import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../src/shared/source-control/listing/source-control-entry-actions'
 import { translate, type Translate } from '../i18n/mobile-i18n'
 
 export const MOBILE_COMPLETE_MERGE_ACTION_ID = 'complete-merge'

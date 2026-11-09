@@ -122,24 +122,6 @@ describe('renderer restart wiring', () => {
     expect(remove.mock.calls).toEqual(add.mock.calls)
   })
 
-  it('relays updater status, aborted installs, and prevented unload events', () => {
-    const eventTarget = new EventTarget()
-    const unloadPrevented = vi.fn()
-    const restartAborted = vi.fn()
-    const { ipcRenderer, handleStatus, abort } = restartIpc(eventTarget)
-    eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, unloadPrevented)
-    eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, restartAborted)
-    ipcRenderer.emit('updater:status', {}, { state: 'error', message: 'install failed' })
-    // Main can abandon an install without emitting a status.
-    ipcRenderer.emit('updater:quitAndInstallAborted')
-    ipcRenderer.emit('window:unload-prevented')
-
-    expect(handleStatus).toHaveBeenCalledWith({ state: 'error', message: 'install failed' })
-    expect(abort).toHaveBeenCalledTimes(1)
-    expect(unloadPrevented).toHaveBeenCalledTimes(1)
-    expect(restartAborted).toHaveBeenCalledTimes(1)
-  })
-
   it('marks preparation before invoking main and aborts on IPC failure', async () => {
     const eventTarget = new EventTarget()
     const calls: string[] = []

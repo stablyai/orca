@@ -1,4 +1,4 @@
-import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 
 export const JIRA_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-jira-issue-ref'
 export const JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES = 1024
@@ -68,7 +68,7 @@ export function readJiraBoardIssueDragData(
 function isJiraBoardIssueRefTooLarge(payload: string): boolean {
   return (
     payload.length > JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES ||
-    measureClipboardTextByteLength(payload, {
+    measureUtf8ByteLength(payload, {
       stopAfterBytes: JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES
     }).exceededLimit
   )

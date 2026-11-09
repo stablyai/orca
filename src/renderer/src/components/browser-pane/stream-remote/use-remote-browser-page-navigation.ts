@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
-import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session-browser-history'
+import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { resolveBrowserAddressBarSubmission } from '../navigate/browser-address-bar-navigation'
 import { routeWorkspaceDocAddressSubmission } from '../navigate/workspace-doc-address-submission'
 import { deferBrowserPageNavigation } from '../navigate/browser-page-deferred-navigation'
@@ -10,9 +10,9 @@ import type {
   BrowserGotoResult,
   BrowserReloadResult,
   BrowserTabInfo
-} from '../../../../../shared/runtime-types'
+} from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'

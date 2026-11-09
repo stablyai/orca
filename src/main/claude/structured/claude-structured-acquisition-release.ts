@@ -2,27 +2,31 @@ import {
   closeClaudeSession,
   claudeCloseReport,
   claudeAcquisitionCleanupError
-} from '../claude-structured-session-close'
-import { AgentSessionAcquisitionExitUnprovenError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from './claude-structured-session-close'
+import { AgentSessionAcquisitionExitUnprovenError } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import type {
   ClaudeAcquisitionRegistry,
   ClaudeSession,
   ClaudeSessionExit,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
+import type { ProviderProcessCloseOptions } from '../../provider-process/provider-process-close'
+
+export type ClaudeReleaseRequest = { sessionId: string; closeOptions?: ProviderProcessCloseOptions }
 
 /** An observed exit still requires connection cleanup; absence alone cannot prove release. */
-export async function releaseClaudeAcquisition(input: {
-  sessionId: string
-  sessions: Map<string, ClaudeSession>
-  acquisitions: ClaudeAcquisitionRegistry
-  exits: Map<string, ClaudeSessionExit>
-  onExitProven?: (sessionId: string, exit: ClaudeSessionExit) => Promise<void>
-  persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle']
-  onEvent?: ClaudeStructuredSessionAdapterDeps['onEvent']
-  logger?: ClaudeStructuredSessionAdapterDeps['logger']
-  settledExitErrors?: Map<string, Error>
-}): Promise<boolean> {
+export async function releaseClaudeAcquisition(
+  input: ClaudeReleaseRequest & {
+    sessions: Map<string, ClaudeSession>
+    acquisitions: ClaudeAcquisitionRegistry
+    exits: Map<string, ClaudeSessionExit>
+    onExitProven?: (sessionId: string, exit: ClaudeSessionExit) => Promise<void>
+    persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle']
+    onEvent?: ClaudeStructuredSessionAdapterDeps['onEvent']
+    logger?: ClaudeStructuredSessionAdapterDeps['logger']
+    settledExitErrors?: Map<string, Error>
+  }
+): Promise<boolean> {
   const exit = input.exits.get(input.sessionId)
   if (!exit || input.sessions.has(input.sessionId) || input.acquisitions.get(input.sessionId)) {
     return closeClaudeSession(input)

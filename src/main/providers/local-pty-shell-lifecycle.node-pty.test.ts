@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { LocalPtyProvider } from './local-pty-provider'
+import { LocalPtyProvider } from './local-pty/local-pty-provider'
 
 vi.mock('electron', () => ({ app: { getPath: () => process.env.ORCA_USER_DATA_PATH } }))
 

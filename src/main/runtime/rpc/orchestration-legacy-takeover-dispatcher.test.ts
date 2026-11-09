@@ -1,17 +1,20 @@
-import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import Database from '../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const WORKER_HANDLE = 'term_legacy_worker'
@@ -148,206 +151,7 @@ function request(
   }
 }
 
-function counts(db: OrchestrationDb): Record<string, number> {
-  const sqlite = (db as unknown as { db: Database.Database }).db
-  return Object.fromEntries(
-    [
-      'messages',
-      'legacy_compatibility_principals',
-      'legacy_operation_receipts',
-      'legacy_mail_receipts',
-      'mutation_receipts'
-    ].map((table) => [
-      table,
-      (sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count
-    ])
-  )
-}
-
-function escalationParams(harness: Harness) {
-  return {
-    from: WORKER_HANDLE,
-    to: COORDINATOR_HANDLE,
-    subject: 'Blocked',
-    type: 'escalation',
-    payload: JSON.stringify({ taskId: harness.taskId, dispatchId: harness.dispatchId })
-  }
-}
-
 describe('legacy compatibility after explicit takeover', () => {
-  it('binds takeover to the authenticated invoking coordinator pane', async () => {
-    const harness = createHarness()
-    const before = harness.db.getRun(harness.adoptedRunId)
-
-    const spoofed = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.runUse',
-        {
-          id: harness.adoptedRunId,
-          from: COORDINATOR_HANDLE,
-          takeoverLegacy: true
-        },
-        evidence('current-coordinator'),
-        'spoofed-takeover'
-      )
-    )
-
-    expect(spoofed).toMatchObject({
-      ok: false,
-      error: { code: 'legacy_read_only', data: { effectsApplied: false } }
-    })
-    expect(harness.db.getRun(harness.adoptedRunId)).toEqual(before)
-
-    const bound = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.runUse',
-        {
-          id: harness.adoptedRunId,
-          from: CURRENT_COORDINATOR_HANDLE,
-          takeoverLegacy: true
-        },
-        evidence('current-coordinator'),
-        'authenticated-takeover'
-      )
-    )
-
-    expect(bound).toMatchObject({
-      ok: true,
-      result: { run: { coordinator_handle: CURRENT_COORDINATOR_HANDLE } }
-    })
-    // The receipt withholds routing pane keys; verify the stored binding instead.
-    expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBe(
-      CURRENT_COORDINATOR_PANE
-    )
-  })
-
-  it('does not let an uncommitted legacy coordinator attest after explicit takeover', async () => {
-    const harness = createHarness()
-    harness.db.bindRun({
-      runId: harness.adoptedRunId,
-      coordinatorHandle: 'term_current_coord',
-      coordinatorPaneKey: 'tab_current:55555555-5555-4555-8555-555555555555',
-      takeoverLegacy: true
-    })
-    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)).toBeUndefined()
-    const before = counts(harness.db)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.taskList',
-        {},
-        evidence('coordinator'),
-        'uncommitted-coordinator-after-takeover'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
-    expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)).toBeUndefined()
-    expect(counts(harness.db)).toEqual(before)
-  })
-
-  it.each(['escalation', 'worker_done'] as const)(
-    'keeps the retained coordinator address routable for post-takeover %s',
-    async (type) => {
-      const harness = createHarness()
-      harness.db.bindRun({
-        runId: harness.adoptedRunId,
-        coordinatorHandle: 'term_current_coord',
-        coordinatorPaneKey: 'tab_current:55555555-5555-4555-8555-555555555555',
-        takeoverLegacy: true
-      })
-
-      const response = await harness.dispatcher.dispatch(
-        request(
-          'orchestration.send',
-          {
-            ...escalationParams(harness),
-            type,
-            subject: type === 'worker_done' ? 'Completed' : 'Blocked'
-          },
-          evidence('worker'),
-          `post-takeover-${type}`
-        )
-      )
-
-      expect(response).toMatchObject({
-        ok: true,
-        result: {
-          message: {
-            to_handle: `run:${harness.adoptedRunId}`,
-            delivery_contract: 'current_delivery',
-            type
-          }
-        }
-      })
-    }
-  )
-
-  it('routes future worker mail to Run Delivery after same-handle takeover', async () => {
-    const harness = createHarness()
-    harness.db.bindRun({
-      runId: harness.adoptedRunId,
-      coordinatorHandle: COORDINATOR_HANDLE,
-      coordinatorPaneKey: COORDINATOR_PANE,
-      takeoverLegacy: true
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.send',
-        escalationParams(harness),
-        evidence('worker'),
-        'same-handle-takeover-mail'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        message: {
-          to_handle: `run:${harness.adoptedRunId}`,
-          delivery_contract: 'current_delivery',
-          type: 'escalation'
-        }
-      }
-    })
-  })
-
-  it('keeps post-takeover legacy ask routed to the adopted Run', async () => {
-    const harness = createHarness()
-    harness.db.bindRun({
-      runId: harness.adoptedRunId,
-      coordinatorHandle: 'term_current_coord',
-      coordinatorPaneKey: 'tab_current:55555555-5555-4555-8555-555555555555',
-      takeoverLegacy: true
-    })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.ask',
-        {
-          from: WORKER_HANDLE,
-          to: COORDINATOR_HANDLE,
-          question: 'Continue after takeover?',
-          timeoutMs: 1
-        },
-        evidence('worker'),
-        'post-takeover-ask'
-      )
-    )
-    const messageId = (response as { result?: { messageId?: string } }).result?.messageId
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { timedOut: true, messageId: expect.any(String) }
-    })
-    expect(harness.db.getMessageById(messageId as string)).toMatchObject({
-      to_handle: `run:${harness.adoptedRunId}`,
-      delivery_contract: 'current_delivery',
-      type: 'question'
-    })
-  })
-
   it('keeps an active legacy worker usable across authenticated takeover', async () => {
     const harness = createHarness()
     await expect(

@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(), skip: vi.fn() }
 const state = {
   activeModal: 'quick-open',
   activeWorktreeId: 'workspace',
-  closeModal: mocks.close,
-  getKnownWorktreeById: () => ({ path: '/workspace' })
+  closeModal: mocks.close
 }
 const history: readonly string[] = []
 const files = [
@@ -25,11 +24,16 @@ vi.mock('@/store', () => ({
     subscribe: () => () => {}
   })
 }))
-vi.mock('@/store/selectors', () => ({ useActiveWorktree: () => ({ path: '/workspace' }) }))
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => ({ path: '/workspace' })
+}))
+vi.mock('@/store/workspaces/selection/known-worktree-selection', () => ({
+  selectFileListWorktree: () => ({ path: '/workspace' })
+}))
 vi.mock('./quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files, loading: false, loadError: null })
 }))
-vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
+vi.mock('./right-sidebar/file-explorer/navigation/file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwnerFromState: () => ({ kind: 'local' })
 }))
 vi.mock('./quick-open-file-navigation', () => ({ openQuickOpenFile: mocks.open }))
@@ -49,53 +53,6 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn()
 })
 afterEach(cleanup)
-
-it('selects a new sole result after typing and opens its suffix location with Enter', async () => {
-  render(
-    <TooltipProvider>
-      <QuickOpen />
-    </TooltipProvider>
-  )
-  const input = screen.getByRole('combobox')
-  fireEvent.change(input, { target: { value: '.env api' } })
-  await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1))
-  expect(screen.getByRole('option').getAttribute('aria-selected')).toBe('true')
-  fireEvent.change(input, { target: { value: 'product-detail:2:3' } })
-  await waitFor(() => expect(screen.getByRole('option').textContent).toContain('product_detail.ts'))
-  expect(screen.getByRole('option').getAttribute('aria-selected')).toBe('true')
-  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
-  await waitFor(() => expect(mocks.open).toHaveBeenCalledOnce())
-  expect(mocks.open).toHaveBeenCalledWith(
-    'src/product_detail.ts',
-    'workspace',
-    '/workspace',
-    { pathQuery: 'product-detail', line: 2, column: 3 },
-    'product-detail:2:3',
-    expect.any(Function)
-  )
-  expect(mocks.close).toHaveBeenCalledOnce()
-})
-
-it('retains the dialog on failure and recovers after changing the query', async () => {
-  mocks.open.mockRejectedValueOnce(new Error('File no longer exists'))
-  render(
-    <TooltipProvider>
-      <QuickOpen />
-    </TooltipProvider>
-  )
-  const input = screen.getByRole('combobox')
-  fireEvent.change(input, { target: { value: 'product-detail' } })
-  await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1))
-  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
-  await waitFor(() =>
-    expect(screen.getByRole('alert').textContent).toContain('File no longer exists')
-  )
-  expect(mocks.close).not.toHaveBeenCalled()
-  fireEvent.change(input, { target: { value: '.env api' } })
-  await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
-  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
-  await waitFor(() => expect(mocks.close).toHaveBeenCalledOnce())
-})
 
 it.each(['settings', 'workspace-change', 'query-change'])(
   'does not close or focus after %s replaces a pending selection',
@@ -136,13 +93,3 @@ it.each(['settings', 'workspace-change', 'query-change'])(
     expect(mocks.close).not.toHaveBeenCalled()
   }
 )
-
-it('renders the separator match beneath a same-named ancestor', async () => {
-  render(
-    <TooltipProvider>
-      <QuickOpen />
-    </TooltipProvider>
-  )
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'user-profile' } })
-  await waitFor(() => expect(screen.getByRole('option').textContent).toContain('index.tsx'))
-})

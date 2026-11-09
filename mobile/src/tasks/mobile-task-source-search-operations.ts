@@ -1,6 +1,9 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { githubPrRepoSlugSchema } from '../session/github-pr-read-reply-schema'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { githubPrRepoSlugSchema } from '../source-control/review/github-pr-read-reply-schema'
 import {
   taskGitHubWorkItemListSchema,
   taskGitLabWorkItemListSchema,
@@ -71,6 +74,17 @@ export const githubWorkItemByNumberRead = bindDeferredRpcOperation(
     read: rpcResultVariant('github-work-item', taskWorkItemLookupSchema)
   })
 )
+
+export async function readGitHubWorkItemByNumber(
+  client: RpcClient,
+  params: { repo: string; number: number; type?: 'issue' | 'pr' },
+  // A rest tuple keeps the request's recorded arity when no options are given.
+  ...options: [SendRequestOptions?]
+): Promise<GitHubWorkItem | null> {
+  const reply = await githubWorkItemByNumberRead.request(client, params, ...options)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup decodes the same `workItemRow`, so the assertion only fills in members the row omits, each read through a guard or interpolated as text; what the schema adds is that a non-object payload is now a named incompatible reply rather than a spread over a string.
+  return githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
+}
 
 export const githubWorkItemBySlugRead = bindDeferredRpcOperation(
   defineRpcOperation({

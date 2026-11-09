@@ -1,22 +1,20 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import {
-  BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START
-} from '@/components/terminal-pane/terminal-bracketed-paste'
-import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
+import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
+import '../../../shared/terminal/input/terminal-bracketed-paste-text'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/input/paste/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -27,9 +25,8 @@ export {
 } from './agent-draft-paste-content'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
-export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
-export { BRACKETED_PASTE_END }
-export const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
+
+const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
 
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
@@ -46,6 +43,7 @@ export async function pasteDraftWhenAgentReady(args: {
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its spawn says the agent started there; null when it didn't. */
   launchPty?: Promise<string | null>
+  beforePaste?: () => boolean
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -96,7 +94,8 @@ export async function pasteDraftWhenAgentReady(args: {
     content,
     submit: submit === true,
     agent,
-    inputKind: 'launch'
+    inputKind: 'launch',
+    beforePaste: args.beforePaste
   })
 }
 
@@ -173,6 +172,7 @@ async function sendBracketedPasteToAgent(args: {
   submit: boolean
   agent?: TuiAgent
   inputKind: TerminalInputKind
+  beforePaste?: () => boolean
 }): Promise<boolean> {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
@@ -180,6 +180,9 @@ async function sendBracketedPasteToAgent(args: {
   try {
     // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
+      if (args.beforePaste?.() === false) {
+        return false
+      }
       const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind)
       if (!pasted || !submit) {
         return pasted

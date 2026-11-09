@@ -1,7 +1,7 @@
 // Exclusive hard links arbitrate stop versus cancel; cancel cannot succeed once dispatch wins.
 import { linkSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   OrcadManagedStopDecisionSchema,
   OrcadManagedStopRequestSchema,
@@ -9,7 +9,7 @@ import {
   type OrcadManagedStopRequest
 } from '../../shared/orcad-stop-request'
 import { orcadStopReceiptPath, readOrcadStopReceipt } from './orcad-completed-stop-receipt'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 type OrcadManagedStopDecisionValue = OrcadManagedStopDecision['decision']
 

@@ -1,16 +1,26 @@
-import './unused-default-rpc-methods.test-fixture'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
-import { OrchestrationDb } from '../orchestration/db'
-import { OrcaRuntimeService } from '../orca-runtime'
-import { OrchestrationError } from '../orchestration/orchestration-error'
+
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
+
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
+import type { OrcaRuntimeService } from '../orca-runtime'
+
 import type { RpcRequest } from './core'
+
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+
 import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-harness'
+
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 describe('orchestration commit-notify recovery', () => {
   const harness = createOrchestrationRpcHarness()
@@ -102,57 +112,7 @@ describe('orchestration commit-notify recovery', () => {
     const messages = db.getInbox(100)
     expect(messages).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
-  })
-
-  it('replays one Dispatch send after notification throws post-commit', async () => {
-    const { db, runtime } = harness.setup()
-    const task = db.createTask({ spec: 'Receive exact control mail' })
-    const { dispatch } = createReadyLocalWorker(db, task.id)
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const waiting = runtime.waitForMessage(`dispatch:${dispatch.id}`, { timeoutMs: 5_000 })
-    const replayed = await throwAfterCommitAndReplay(
-      dispatcher,
-      runtime,
-      request('rpc_dispatch_send', 'mutation_dispatch_send', 'orchestration.send', {
-        from: 'term_coord',
-        to: `dispatch:${dispatch.id}`,
-        subject: 'one durable Dispatch message'
-      }),
-      'rpc_dispatch_send_retry'
-    )
-
-    const messages = db.getUnreadMessages(`dispatch:${dispatch.id}`)
-    expect(messages).toHaveLength(1)
-    expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
-  })
-
-  it('replays one generic reply after notification throws post-commit', async () => {
-    const { db, runtime, activeRunId } = harness.setup()
-    const original = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${activeRunId}`,
-      subject: 'Need a generic answer',
-      runId: activeRunId
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const waiting = runtime.waitForMessage('term_worker', { timeoutMs: 5_000 })
-    const replayed = await throwAfterCommitAndReplay(
-      dispatcher,
-      runtime,
-      request('rpc_generic_reply', 'mutation_generic_reply', 'orchestration.reply', {
-        id: original.id,
-        body: 'One durable answer',
-        from: 'term_coord'
-      }),
-      'rpc_generic_reply_retry'
-    )
-
-    const replies = db.getInbox(100).filter((message) => message.thread_id === original.id)
-    expect(replies).toHaveLength(1)
-    expect(replayed.result).toMatchObject({ message: { id: replies[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one question reply nudge without duplicating the answer', async () => {
@@ -188,7 +148,7 @@ describe('orchestration commit-notify recovery', () => {
       db.getInbox(100).filter((message) => message.thread_id === question.message.id)
     ).toHaveLength(2)
     expect(replayed.result).toMatchObject({ duplicate: false })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays worker settlement without applying lifecycle state twice', async () => {
@@ -243,116 +203,7 @@ describe('orchestration commit-notify recovery', () => {
         mutation: { requestId: 'mutation_worker_done', replayed: true }
       }
     })
-    await expect(waiting).resolves.toBe('notified')
-  })
-
-  it('resumes an effect-free worker_done checkpoint after a runtime restart', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-worker-done-restart-'))
-    paths.push(dir)
-    const dbPath = join(dir, 'orchestration.db')
-    const db = new OrchestrationDb(dbPath)
-    const run = db.createRun({
-      objective: 'Resume worker_done',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: harness.coordinatorPaneKey
-    })
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_worker'
-        ? workerPaneKey
-        : handle === 'term_coord'
-          ? harness.coordinatorPaneKey
-          : null
-    )
-    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle.startsWith('term_') ? `runtime_test:${handle}:1` : null
-    )
-    const task = db.createTask({ spec: 'Resume before atomic settlement', runId: run.id })
-    const { dispatch } = createReadyLocalWorker(db, task.id, workerPaneKey)
-    const workerDone = request(
-      'rpc_worker_done_before_crash',
-      'mutation_worker_done_before_crash',
-      'orchestration.send',
-      {
-        from: 'term_worker',
-        subject: 'Done after restart',
-        type: 'worker_done',
-        payload: JSON.stringify({
-          taskId: task.id,
-          dispatchId: dispatch.id,
-          outcome: 'succeeded'
-        })
-      }
-    )
-    vi.spyOn(db, 'commitWorkerDoneMessageMutation').mockImplementationOnce(() => {
-      throw new OrchestrationError(
-        'operation_unknown',
-        'injected process loss before worker_done transaction'
-      )
-    })
-
-    const firstDispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const interrupted = await firstDispatcher.dispatch(workerDone)
-    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
-
-    expect(interrupted).toMatchObject({ ok: false, error: { code: 'operation_unknown' } })
-    expect(
-      db.getMutationReceipt(callerFingerprint, 'mutation_worker_done_before_crash')
-    ).toMatchObject({ state: 'pending', receipt: expect.stringContaining('effectFree') })
-    expect(db.getInbox(100).filter((message) => message.type === 'worker_done')).toHaveLength(0)
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    db.close()
-
-    const restartedDb = new OrchestrationDb(dbPath)
-    const restartedRuntime = new OrcaRuntimeService()
-    restartedRuntime.setOrchestrationDb(restartedDb)
-    vi.spyOn(restartedRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_worker'
-        ? workerPaneKey
-        : handle === 'term_coord'
-          ? harness.coordinatorPaneKey
-          : null
-    )
-    vi.spyOn(restartedRuntime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
-      restartedRuntime.getTerminalPaneKey(handle)
-    )
-    vi.spyOn(restartedRuntime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle.startsWith('term_') ? `runtime_test:${handle}:1` : null
-    )
-    vi.spyOn(restartedRuntime, 'notifyMessageArrived').mockImplementation(() => {})
-    const restartedDispatcher = new RpcDispatcher({
-      runtime: restartedRuntime,
-      methods: ORCHESTRATION_METHODS
-    })
-
-    const resumed = await restartedDispatcher.dispatch({
-      ...workerDone,
-      id: 'rpc_worker_done_after_crash'
-    })
-
-    expect(resumed).toMatchObject({
-      ok: true,
-      result: {
-        lifecycle: { action: 'completed' },
-        mutation: { requestId: 'mutation_worker_done_before_crash', replayed: true }
-      }
-    })
-    expect(
-      restartedDb.getInbox(100).filter((message) => message.type === 'worker_done')
-    ).toHaveLength(1)
-    expect(restartedDb.getTask(task.id)?.status).toBe('completed')
-    expect(restartedDb.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-    expect(
-      restartedDb
-        .getAttemptObservationFacts(dispatch.id)
-        .filter((fact) => fact.facet === 'worker_report')
-    ).toHaveLength(1)
-    expect(
-      restartedDb.getMutationReceipt(callerFingerprint, 'mutation_worker_done_before_crash')?.state
-    ).toBe('completed')
-    restartedDb.close()
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it.each([

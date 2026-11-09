@@ -1,6 +1,6 @@
 import { readShellLifecycleStateFile } from './managed-shell-lifecycle-state-file'
 import type { ShellLifecycleObservation } from '../shared/terminal-shell-lifecycle'
-import type { PtyChildProcessVerdict } from '../shared/terminal-process-inspection'
+import type { PtyChildProcessVerdict } from '../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 export const SHELL_LIFECYCLE_BINDING_ENV = '_ORCA_SHELL_LIFECYCLE_BINDING'
 const PREFIX = '\x1b]777;orca-shell-lifecycle;'

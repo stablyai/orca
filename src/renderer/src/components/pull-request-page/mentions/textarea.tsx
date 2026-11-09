@@ -1,3 +1,5 @@
+import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useId, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -7,16 +9,19 @@ import type { MentionOption, MentionQuery } from '../page-types'
 import { findMentionQuery } from './query'
 
 export function MentionTextarea({
-  value,
-  onValueChange,
+  value: body,
+  onValueChange: setBody,
   onKeyDown,
   placeholder,
   rows,
   className,
   wrapperClassName,
   mentionOptions,
-  textareaRef
+  mentionError,
+  textareaRef,
+  imageUpload
 }: {
+  imageUpload?: GitHubImageIntake
   value: string
   onValueChange: (value: string) => void
   onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
@@ -24,9 +29,16 @@ export function MentionTextarea({
   rows: number
   className?: string
   wrapperClassName?: string
+  mentionError?: string | null
   mentionOptions: MentionOption[]
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
 }): React.JSX.Element {
+  const images = useGitHubTextareaImages(textareaRef, body, setBody, {
+    ...imageUpload,
+    enabled: imageUpload?.enabled !== false
+  })
+  const value = images.value
+  const onValueChange = images.change
   const listboxId = useId()
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -34,7 +46,7 @@ export function MentionTextarea({
     () => (mentionQuery ? filterGitHubMentionOptions(mentionOptions, mentionQuery.query) : []),
     [mentionOptions, mentionQuery]
   )
-  const showSuggestions = mentionQuery !== null && suggestions.length > 0
+  const showSuggestions = mentionQuery !== null && (suggestions.length > 0 || Boolean(mentionError))
 
   const syncMentionQuery = useCallback((textarea: HTMLTextAreaElement): void => {
     const nextQuery = findMentionQuery(textarea.value, textarea.selectionStart)
@@ -72,6 +84,9 @@ export function MentionTextarea({
           role="listbox"
           className="absolute right-0 bottom-[calc(100%+6px)] left-0 z-50 max-h-64 overflow-y-auto rounded-md border border-border/70 bg-popover p-1 text-popover-foreground shadow-lg scrollbar-sleek"
         >
+          {mentionError && (
+            <div className="px-2 py-1.5 text-[12px] text-destructive">{mentionError}</div>
+          )}
           {suggestions.map((option, index) => (
             <button
               key={option.login}
@@ -110,11 +125,15 @@ export function MentionTextarea({
         </div>
       )}
       <ImeTextarea
-        ref={textareaRef}
+        ref={images.attachDrop}
+        onPaste={images.onPaste}
+        onBeforeInput={images.onBeforeInput}
         role="combobox"
         aria-expanded={showSuggestions}
         aria-controls={showSuggestions ? listboxId : undefined}
-        aria-activedescendant={showSuggestions ? `${listboxId}-${activeIndex}` : undefined}
+        aria-activedescendant={
+          showSuggestions && suggestions.length > 0 ? `${listboxId}-${activeIndex}` : undefined
+        }
         value={value}
         onChange={(event) => {
           onValueChange(event.target.value)
@@ -128,7 +147,7 @@ export function MentionTextarea({
         }}
         onBlur={() => setMentionQuery(null)}
         onKeyDown={(event) => {
-          if (showSuggestions) {
+          if (showSuggestions && (suggestions.length > 0 || event.key === 'Escape')) {
             if (event.key === 'ArrowDown') {
               event.preventDefault()
               setActiveIndex((current) => (current + 1) % suggestions.length)

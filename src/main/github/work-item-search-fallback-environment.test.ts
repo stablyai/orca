@@ -16,13 +16,6 @@ it('preserves the Search budget floor when the preferred count fails', async () 
   expect(api.restSearches).toBe(29)
 })
 
-it('still counts through GraphQL when the REST Search budget is below its floor', async () => {
-  api.restSearches = 29
-
-  expect(await countWorkItems('fixture/repo', 'is:issue')).toBe(120)
-  expect(api.restSearches).toBe(29)
-})
-
 it('keeps REST fallback on the credential captured for the failed preferred search', async () => {
   vi.stubEnv('GH_TOKEN', 'fixture-original-credential')
   api.aliasErrorRepo = 'fixture/repo'

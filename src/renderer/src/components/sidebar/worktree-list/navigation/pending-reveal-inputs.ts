@@ -2,12 +2,17 @@ import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-o
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
-import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type {
+  PendingSidebarRowReveal,
+  PendingSidebarWorktreeReveal
+} from '@/store/slices/ui/ui-slice-contract-core'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
@@ -15,7 +20,12 @@ import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
-import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
+import { getFolderWorkspaceRevealGroupKeys, sidebarWorkspaceStillExists } from './folder-reveal'
+import {
+  findPreferredRenderRowIndexForWorktree,
+  findPreferredRenderRowIndexForWorktreeIdentity,
+  rowKeyMatchesRenderRow
+} from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 
 export const MAX_REVEAL_RETRIES = 8
@@ -24,8 +34,8 @@ export type PendingSidebarRevealArgs = {
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
-  clearPendingRevealWorktreeId: () => void
-  clearPendingRevealSidebarRow: () => void
+  clearPendingRevealWorktreeId: (expected?: PendingSidebarWorktreeReveal | null) => void
+  clearPendingRevealSidebarRow: (expected?: PendingSidebarRowReveal | null) => void
   agentSendTargetWorktreeId: string | null
   renderRows: RenderRow[]
   virtualizer: Virtualizer<HTMLDivElement, HTMLDivElement>
@@ -35,6 +45,7 @@ export type PendingSidebarRevealArgs = {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  lineageParentIdentities?: SidebarLineageParentIdentities
   collapsedGroups: Set<string>
   toggleGroup: (key: string) => void
   groupBy: WorktreeGroupBy
@@ -104,4 +115,41 @@ export function resolvePendingSidebarReveal(args: {
     return 'scroll-and-clear'
   }
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
+}
+
+export function resolvePendingWorktreeRevealTarget(
+  args: Pick<
+    PendingSidebarRevealArgs,
+    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy'
+  >,
+  request: PendingSidebarWorktreeReveal
+) {
+  const rowKey = request.rowKey
+  const targetIndex = rowKey
+    ? args.renderRows.findIndex((row) => rowKeyMatchesRenderRow(row, rowKey))
+    : request.executionHostId
+      ? findPreferredRenderRowIndexForWorktreeIdentity(
+          args.renderRows,
+          { id: request.worktreeId, hostId: request.executionHostId },
+          args.pinnedDisplayPolicy
+        )
+      : findPreferredRenderRowIndexForWorktree(
+          args.renderRows,
+          request.worktreeId,
+          args.pinnedDisplayPolicy
+        )
+  const outcome = rowKey
+    ? targetIndex === -1
+      ? 'clear'
+      : 'scroll-and-clear'
+    : resolvePendingSidebarReveal({
+        targetIndex,
+        targetWorktreeStillExists: sidebarWorkspaceStillExists(
+          request.worktreeId,
+          args.worktrees,
+          selectFolderWorkspaces(args),
+          request.executionHostId
+        )
+      })
+  return { targetIndex, outcome }
 }

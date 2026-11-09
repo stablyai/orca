@@ -5,12 +5,12 @@ import {
   buildJiraCreateSubmission,
   hasJiraAssigneeCreateField
 } from '@/components/task-page/jira/task-page-jira-create-fields'
-import { jiraCreateIssue } from '@/runtime/runtime-jira-user-fields-client'
-import { jiraGetIssue } from '@/runtime/runtime-jira-client'
+import { jiraCreateIssue } from '@/runtime/jira/runtime-jira-user-fields-client'
+import { jiraGetIssue } from '@/runtime/jira/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationModel) {
   const {
     settings,

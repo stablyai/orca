@@ -1,4 +1,4 @@
-import type { ClaudeAgentTeamsService } from '../../claude-agent-teams-service'
+import type { ClaudeAgentTeamsService } from '../agent-teams/claude-agent-teams-service'
 import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
 import { buildRuntimeAgentTeamsLaunchPlan } from './agent-teams-launch-plan'
 

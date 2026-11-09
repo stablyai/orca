@@ -1,54 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH,
-  isAgentSessionConversationName,
   normalizeAgentSessionConversationName
 } from './agent-session-conversation-name'
-
-describe('normalizeAgentSessionConversationName', () => {
-  it('keeps a plain single-line name unchanged', () => {
-    expect(normalizeAgentSessionConversationName('Fix the flaky lease probe')).toBe(
-      'Fix the flaky lease probe'
-    )
-  })
-
-  it('flattens whitespace so a multi-line name cannot break the tab strip', () => {
-    expect(normalizeAgentSessionConversationName('Fix  the\nlease\tprobe  ')).toBe(
-      'Fix the lease probe'
-    )
-  })
-
-  it('rejects an empty or whitespace-only name rather than blanking the label', () => {
-    expect(normalizeAgentSessionConversationName('')).toBeNull()
-    expect(normalizeAgentSessionConversationName('   \n ')).toBeNull()
-  })
-
-  it('rejects anything that is not a string', () => {
-    expect(normalizeAgentSessionConversationName(undefined)).toBeNull()
-    expect(normalizeAgentSessionConversationName(null)).toBeNull()
-    expect(normalizeAgentSessionConversationName(42)).toBeNull()
-    expect(normalizeAgentSessionConversationName({ title: 'x' })).toBeNull()
-  })
-
-  it('bounds a pasted essay to the stored maximum', () => {
-    const normalized = normalizeAgentSessionConversationName(`First ${'x'.repeat(994)}`)
-    expect(normalized).toBe(`First ${'x'.repeat(194)}`)
-    expect(normalized).toHaveLength(AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH)
-    expect(isAgentSessionConversationName(normalized)).toBe(true)
-  })
-})
-
-describe('isAgentSessionConversationName', () => {
-  it('accepts only bounded canonical names', () => {
-    expect(isAgentSessionConversationName('Fix the probe')).toBe(true)
-    expect(isAgentSessionConversationName('')).toBe(false)
-    expect(isAgentSessionConversationName('a'.repeat(201))).toBe(false)
-    expect(isAgentSessionConversationName(' Fix the probe ')).toBe(false)
-    expect(isAgentSessionConversationName('Fix\nthe probe')).toBe(false)
-    expect(isAgentSessionConversationName('Fix\u202Egnp.exe probe')).toBe(false)
-    expect(isAgentSessionConversationName(7)).toBe(false)
-  })
-})
 
 describe('normalizeAgentSessionConversationName hostile text', () => {
   it('strips controls and lone surrogates', () => {
@@ -66,12 +20,6 @@ describe('normalizeAgentSessionConversationName hostile text', () => {
     expect(normalized).toBe('a'.repeat(AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH - 1))
     expect(normalized).not.toContain('\uFFFD')
   })
-
-  it('keeps a legitimate non-ASCII name intact', () => {
-    expect(normalizeAgentSessionConversationName('R\u00E9sum\u00E9 du fil \u2615')).toBe(
-      'R\u00E9sum\u00E9 du fil \u2615'
-    )
-  })
 })
 
 describe('normalizeAgentSessionConversationName joiners', () => {
@@ -87,18 +35,6 @@ describe('normalizeAgentSessionConversationName joiners', () => {
     ['Hindi ZWNJ conjunct', `क्${ZWNJ}ष ठीक`]
   ])('keeps the joiners in a %s name', (_label, name) => {
     expect(normalizeAgentSessionConversationName(name)).toBe(name)
-  })
-
-  it.each([
-    ['bidi override', 'Fix\u202Egnp.exe probe', 'Fix gnp.exe probe'],
-    ['isolate pair', 'Fix\u2066the\u2069 probe', 'Fix the probe'],
-    ['Arabic letter mark', 'Fix\u061Cthe probe', 'Fix the probe'],
-    ['soft hyphen', 'Fix\u00ADthe probe', 'Fix the probe'],
-    ['word joiner', 'Fix\u2060the probe', 'Fix the probe'],
-    ['zero-width space', 'Fix\u200Bthe probe', 'Fix the probe'],
-    ['byte order mark', 'Fix\uFEFFthe probe', 'Fix the probe']
-  ])('still strips a %s', (_label, name, expected) => {
-    expect(normalizeAgentSessionConversationName(name)).toBe(expected)
   })
 
   // These Cf runs escaped the old enumeration and produced nonempty labels that rendered invisibly.

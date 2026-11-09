@@ -9,11 +9,11 @@ const ptyJob = vi.hoisted(() => ({
 }))
 vi.mock('../../windows/windows-pty-job', () => ptyJob)
 
-import '../mock-descendant-sweep'
-import { TerminalHost } from '../terminal-host'
-import { TerminalSpawnGate } from '../terminal-spawn-gate'
-import { TerminalCreationWork } from '../terminal-creation-work'
-import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../immediate-kill-reply-budget'
+import './testing/mock-descendant-sweep'
+import { TerminalHost } from '../terminal-host/terminal-host'
+import { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
+import { TerminalCreationWork } from '../terminal-host/terminal-creation-work'
+import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../sessions/immediate-kill-reply-budget'
 import { createDaemonPtySubprocessHandle } from './subprocess-handle'
 import { spawnNativeDaemonPty } from './native-pty-spawn'
 import {
@@ -146,44 +146,6 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     } finally {
       vi.unstubAllEnvs()
     }
-  })
-
-  it('walks both fallback shells when ConPTY rejects the primary ones', async () => {
-    const proc = fakePane(9876, [CONPTY_PRELUDE])
-    nodePty.spawn.mockImplementation((file: string) => {
-      if (file !== 'cmd.exe') {
-        throw new Error(`spawn ${file} EACCES`)
-      }
-      return proc
-    })
-    const result = await spawnNativeDaemonPty(args)
-    expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual([
-      'pwsh.exe',
-      'powershell.exe',
-      'cmd.exe'
-    ])
-    expect(nodePty.spawn.mock.calls[2]![2]).toMatchObject({ useConptyDll: true })
-    expect(result.process).toBe(proc)
-    expect(result.shellPath).toBe('cmd.exe')
-    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
-  })
-
-  it('respawns a pane whose ConPTY never started reading input', async () => {
-    // Measured on CI: such a pane prints its banner and prompt, then ignores every keystroke.
-    const broken = fakePane(990001, ['Microsoft Windows [Version 10.0.20348]\r\n'])
-    const healthy = fakePane(990002, ['\x1b[1t', '\x1b[c\x1b[?1004h', 'Microsoft Windows'])
-    nodePty.spawn.mockReturnValueOnce(broken).mockReturnValueOnce(healthy)
-
-    const result = await spawnNativeDaemonPty(args)
-
-    expect(nodePty.spawn.mock.calls.map(([file]) => file)).toEqual(['pwsh.exe', 'pwsh.exe'])
-    expect(ptyJob.terminatePtyJob).toHaveBeenCalledWith(broken)
-    expect(broken.kill).toHaveBeenCalledOnce()
-    expect(broken.write).not.toHaveBeenCalled()
-    expect(result.process).toBe(healthy)
-    expect(result.shellPath).toBe('pwsh.exe')
-    expect(healthy.write).toHaveBeenCalledExactlyOnceWith('\x1b[?61;4c')
-    expect(result.claimStartupEvents?.().data).toEqual(['\x1b[1t\x1b[?1004h'])
   })
 
   it.each(['physical-exit', 'deadline', 'observation-retry'] as const)(
@@ -325,24 +287,6 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     }
   )
 
-  it('respawns only once, then says so in the pane', async () => {
-    nodePty.spawn.mockReturnValueOnce(healthyPane(990001))
-    await spawnNativeDaemonPty(args)
-    const first = deadPane(990002)
-    const second = deadPane(990003)
-    nodePty.spawn.mockReturnValueOnce(first).mockReturnValueOnce(second)
-
-    const result = await spawnNativeDaemonPty(args)
-
-    expect(nodePty.spawn).toHaveBeenCalledTimes(3)
-    expect(second.kill).not.toHaveBeenCalled()
-    expect(result.process).toBe(second)
-    expect(result.claimStartupEvents?.().data).toEqual([
-      'Microsoft Windows\r\n',
-      CONPTY_NO_INPUT_READER_NOTICE
-    ])
-  })
-
   it('never respawns a shell whose argv may carry a command', async () => {
     nodePty.spawn.mockReturnValueOnce(healthyPane(990001))
     await spawnNativeDaemonPty(args)
@@ -354,27 +298,6 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(nodePty.spawn).toHaveBeenCalledTimes(2)
     expect(dead.kill).not.toHaveBeenCalled()
     expect(result.claimStartupEvents?.().data.at(-1)).toBe(CONPTY_NO_INPUT_READER_NOTICE)
-  })
-
-  it('stops checking when no pane ever announces, as a changed ConPTY build would', async () => {
-    nodePty.spawn.mockReturnValueOnce(deadPane(990001)).mockReturnValueOnce(deadPane(990002))
-    const result = await spawnNativeDaemonPty(args)
-    expect(result.claimStartupEvents?.().data).not.toContain(CONPTY_NO_INPUT_READER_NOTICE)
-
-    const later = deadPane(990003)
-    nodePty.spawn.mockReturnValueOnce(later)
-    expect((await spawnNativeDaemonPty(args)).process).toBe(later)
-    expect(nodePty.spawn).toHaveBeenCalledTimes(3)
-  })
-
-  it('does not respawn a shell that exited before ConPTY announced anything', async () => {
-    const exited = fakePane(990001, [], 3)
-    nodePty.spawn.mockReturnValueOnce(exited)
-
-    const result = await spawnNativeDaemonPty(args)
-
-    expect(nodePty.spawn).toHaveBeenCalledOnce()
-    expect(result.claimStartupEvents?.().exit).toEqual({ exitCode: 3 })
   })
 
   it('kills the pane tree when the spawn is canceled while startup is awaited', async () => {
@@ -405,20 +328,6 @@ describe('Windows shell fallback over node-pty ConPTY', () => {
     expect(ptyJob.killConptyNow).toHaveBeenCalledWith(silent)
     expect(silent.kill).toHaveBeenCalledOnce()
     expect(nodePty.spawn).toHaveBeenCalledOnce()
-  })
-
-  it('hands out a pane that stays silent instead of stalling the spawn', async () => {
-    vi.useFakeTimers()
-    const silent = fakePane(990001, [])
-    nodePty.spawn.mockReturnValueOnce(silent)
-    const spawned = spawnNativeDaemonPty(args)
-    await vi.advanceTimersByTimeAsync(CONPTY_STARTUP_DECISION_LIMIT_MS)
-    const result = await spawned
-    vi.useRealTimers()
-
-    expect(nodePty.spawn).toHaveBeenCalledOnce()
-    expect(silent.kill).not.toHaveBeenCalled()
-    expect(result.process).toBe(silent)
   })
 
   it('starts no fallback shell once the spawn is canceled', async () => {

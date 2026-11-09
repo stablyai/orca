@@ -13,7 +13,7 @@ import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotOptions
-} from '../../ssh/orcad-recovery-slot'
+} from '../activation/orcad-recovery-slot'
 
 /** Only proven exit clears an interrupted decommission journal. */
 export async function reconcileOrcadDecommission(

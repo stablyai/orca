@@ -1,0 +1,474 @@
+// @vitest-environment happy-dom
+
+import { createElement } from 'react'
+import { act, cleanup, render } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { AppState } from '@/store/types'
+import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/files/runtime-file-client-types'
+import { useAppStore } from '@/store'
+import type { TerminalTab } from '../../src/shared/workspace-layout/terminal-tab-types'
+
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../src/shared/constants'
+import {
+  resolveNativeChatImageRuntimeContext,
+  resolveNativeChatImageRuntimeContextForOwner,
+  selectNativeChatImageOwnerState,
+  useNativeChatImageRuntimeContext
+} from '../../src/renderer/src/components/native-chat/media/images/native-chat-image-runtime-context'
+import {
+  makeFolderWorkspace,
+  makeProjectGroup
+} from '../../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/links/actions/native-chat-file-link-context'
+import {
+  resolveNativeChatSkillDiscoveryContext,
+  selectNativeChatSkillStateInputs
+} from '../../src/renderer/src/components/native-chat/composer/pickers/native-chat-skill-discovery-context'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { adoptFromEndpoint } from '@/store/host-catalog/endpoint-catalog-adoption'
+import { assertRuntimeFileMutationExpectation } from '../../src/main/runtime/files/file-mutation-expectation'
+import {
+  resetSshConnectionGenerations,
+  setSshConnectionGeneration
+} from '../../src/main/ssh/connection/authority/ssh-connection-generation'
+import {
+  agentSessionTabFixture,
+  nativeChatFanoutFixture,
+  nativeChatFanoutWorkspace,
+  repoFixture,
+  terminalTabFixture,
+  worktreeFixture
+} from '../../src/renderer/src/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
+
+const originalState = useAppStore.getState()
+afterEach(() => {
+  cleanup()
+  useAppStore.setState(originalState, true)
+})
+
+function state(overrides: Partial<AppState> = {}): AppState {
+  const tab: TerminalTab = {
+    id: 'tab-1',
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'Terminal 1',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  const worktree = worktreeFixture('wt-1', '/repo/worktree', { hostId: 'local' })
+  return {
+    ...useAppStore.getInitialState(),
+    activeWorkspaceExecutionHostId: 'local',
+    activeWorktreeId: 'wt-1',
+    detectedWorktreesByRepo: {},
+    folderWorkspaces: [],
+    getKnownWorktreeById: () => worktree,
+    projectGroups: [],
+    removedRuntimeEnvironmentIds: new Set(),
+    repos: [repoFixture()],
+    restoredRuntimeHostIdByWorkspaceSessionKey: {},
+    runtimeEnvironmentCatalogHydrated: true,
+    runtimeEnvironments: [],
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: null },
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    tabsByWorktree: { 'wt-1': [tab] },
+    unifiedTabsByWorktree: {},
+    worktreesByRepo: { repo: [worktree] },
+    ...overrides
+  }
+}
+
+describe('resolveNativeChatImageRuntimeContext', () => {
+  it.each(['inherited', 'adopted'] as const)(
+    'retains a paired folder target through real file, image, skill and write contexts: %s',
+    (shape) => {
+      const target = { kind: 'environment', environmentId: 'owner-a' } as const
+      const original = makeFolderWorkspace({
+        id: 'paired-folder',
+        projectGroupId: 'paired-project',
+        folderPath: '/remote/folder',
+        connectionId: 'box'
+      })
+      const folder =
+        shape === 'adopted'
+          ? adoptFromEndpoint(target, {
+              kind: 'folderWorkspace',
+              row: original,
+              resolveOwnHostId: () => 'ssh:box' as const
+            })
+          : { ...original, connectionId: null }
+      const workspaceId = `folder:${folder.id}`
+      const snapshot = state({
+        activeWorktreeId: workspaceId,
+        activeWorkspaceExecutionHostId: 'runtime:owner-a',
+        folderWorkspaces: [folder],
+        projectGroups: [
+          adoptFromEndpoint(target, {
+            kind: 'projectGroup',
+            row: {
+              ...makeProjectGroup(),
+              id: 'paired-project',
+              executionHostId: 'ssh:box',
+              connectionId: 'box'
+            }
+          })
+        ],
+        repos: [],
+        worktreesByRepo: {},
+        tabsByWorktree: {
+          [workspaceId]: [{ ...state().tabsByWorktree['wt-1'][0], worktreeId: workspaceId }]
+        },
+        runtimeEnvironments: [],
+        sshStateByEnvironment: new Map([
+          [
+            'owner-a',
+            {
+              targetsHydrated: true,
+              targetLabels: new Map([['box', 'Server box']]),
+              targetGenerations: new Map([['box', 7]]),
+              removedTargetLabels: new Map(),
+              connectionStates: new Map([
+                [
+                  'box',
+                  {
+                    targetId: 'box',
+                    status: 'connected',
+                    error: null,
+                    reconnectAttempt: 0,
+                    connectionGeneration: 7
+                  }
+                ]
+              ])
+            }
+          ]
+        ])
+      })
+      expect.soft(resolveNativeChatFileLinkContext(snapshot, 'tab-1')).toMatchObject({
+        worktreeId: workspaceId,
+        worktreePath: '/remote/folder',
+        runtimeEnvironmentId: 'owner-a'
+      })
+      expect
+        .soft(
+          resolveNativeChatImageRuntimeContext(selectNativeChatImageOwnerState(snapshot), 'tab-1')
+        )
+        .toMatchObject({
+          target: { kind: 'environment', environmentId: 'owner-a' },
+          worktreePath: '/remote/folder',
+          expectedExecutionHostId: 'ssh:box',
+          expectedSshConnectionGeneration: 7
+        })
+      expect
+        .soft(
+          resolveNativeChatSkillDiscoveryContext(
+            selectNativeChatSkillStateInputs(snapshot),
+            'tab-1'
+          )
+        )
+        .toMatchObject({
+          cwd: '/remote/folder',
+          runtimeTarget: { kind: 'environment', environmentId: 'owner-a' },
+          discoveryTarget: { worktreeId: workspaceId }
+        })
+      const editor = getEditorFileOperationContext(
+        snapshot,
+        { worktreeId: workspaceId },
+        '/remote/folder'
+      )
+      expect.soft(editor).toMatchObject({
+        target: { kind: 'environment', environmentId: 'owner-a' },
+        expectedExecutionHostId: 'ssh:box',
+        expectedSshConnectionGeneration: 7
+      })
+      resetSshConnectionGenerations()
+      setSshConnectionGeneration('box', 7)
+      expect
+        .soft(() =>
+          assertRuntimeFileMutationExpectation(
+            'ssh:box',
+            editor.expectedExecutionHostId,
+            editor.expectedSshTargetId,
+            editor.expectedSshConnectionGeneration
+          )
+        )
+        .not.toThrow()
+      resetSshConnectionGenerations()
+      expect.soft(captureWorktreeSshMutationExpectation(snapshot, workspaceId)).toEqual({
+        expectedExecutionHostId: 'ssh:box',
+        expectedSshTargetId: 'box',
+        expectedSshConnectionGeneration: 7
+      })
+    }
+  )
+
+  it('keeps selected-hook results equivalent to full-state resolution through ownership, pin and host transitions', () => {
+    const base = state({
+      worktreesByRepo: {
+        repo: [
+          worktreeFixture('wt-1', '/repo/worktree', { hostId: 'local' }),
+          worktreeFixture('wt-2', '/repo/second', { hostId: 'local' })
+        ]
+      }
+    })
+    const duplicate = {
+      ...base,
+      tabsByWorktree: {
+        'wt-1': [terminalTabFixture('tab-1', 'wt-1')],
+        'wt-2': [terminalTabFixture('tab-1', 'wt-2')]
+      },
+      unifiedTabsByWorktree: {
+        'wt-2': [agentSessionTabFixture('tab-1', 'wt-2')],
+        'wt-1': [agentSessionTabFixture('tab-1', 'wt-1')]
+      }
+    }
+    const fallback = { ...duplicate, tabsByWorktree: {} }
+    const moved = {
+      ...fallback,
+      unifiedTabsByWorktree: { 'wt-1': [agentSessionTabFixture('tab-1', 'wt-1')] }
+    }
+    const floatingTab = agentSessionTabFixture('tab-1', FLOATING_TERMINAL_WORKTREE_ID)
+    const floating = {
+      ...base,
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+      structuredSessionLaunchDirectoryByTabId: {},
+      floatingWorkspacePath: '/floating-setting'
+    }
+    const pinned = {
+      ...floating,
+      structuredSessionLaunchDirectoryByTabId: {
+        'tab-1': { sessionId: floatingTab.entityId, launchDirectory: '/pinned' }
+      }
+    }
+    const replaced = {
+      ...pinned,
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [{ ...floatingTab, entityId: 'replacement' }]
+      }
+    }
+    const folder = nativeChatFanoutFixture(0, 1, 0)
+    const folderState = {
+      ...base,
+      ...folder,
+      unifiedTabsByWorktree: {
+        [nativeChatFanoutWorkspace(0)]: [
+          agentSessionTabFixture('tab-1', nativeChatFanoutWorkspace(0))
+        ]
+      }
+    }
+    const environment = (id: string): AppState['runtimeEnvironments'][number] => ({
+      id,
+      name: id,
+      createdAt: 0,
+      updatedAt: 0,
+      lastUsedAt: null,
+      runtimeId: null,
+      preferredEndpointId: 'endpoint',
+      endpoints: []
+    })
+    const remote = (id: string): AppState => ({
+      ...base,
+      activeWorkspaceExecutionHostId: `runtime:${id}`,
+      runtimeEnvironments: [environment(id)],
+      repos: [repoFixture({ executionHostId: `runtime:${id}` })],
+      worktreesByRepo: {
+        repo: [worktreeFixture('wt-1', '/remote', { hostId: `runtime:${id}` })]
+      }
+    })
+    const ssh = (generation?: number): AppState => ({
+      ...remote('owner-a'),
+      activeWorkspaceExecutionHostId: 'ssh:ssh-1',
+      worktreesByRepo: {
+        repo: [
+          worktreeFixture('wt-1', '/ssh', {
+            hostId: 'ssh:ssh-1',
+            runtimeOwnerEnvironmentId: 'owner-a'
+          })
+        ]
+      },
+      sshStateByEnvironment: new Map([
+        [
+          'owner-a',
+          {
+            targets: [],
+            targetGenerations: new Map(),
+            targetLabels: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true,
+            connectionStates: new Map([
+              [
+                'ssh-1',
+                {
+                  targetId: 'ssh-1',
+                  status: 'connected',
+                  error: null,
+                  reconnectAttempt: 0,
+                  connectionGeneration: generation
+                }
+              ]
+            ])
+          }
+        ]
+      ])
+    })
+    const local = (worktreeId: string, worktreePath: string) => ({
+      worktreeId,
+      worktreePath,
+      target: { kind: 'local' as const }
+    })
+    const paired = ssh(3)
+    const cases: [
+      name: string,
+      snapshot: AppState,
+      expected: Partial<RuntimeFileOperationArgs> | null
+    ][] = [
+      ['terminal-first and first duplicate', duplicate, local('wt-1', '/repo/worktree')],
+      ['unified fallback', fallback, local('wt-2', '/repo/second')],
+      ['move', moved, local('wt-1', '/repo/worktree')],
+      ['remove', { ...moved, unifiedTabsByWorktree: {} }, null],
+      ['return', fallback, local('wt-2', '/repo/second')],
+      ['missing pin', floating, null],
+      [
+        'wrong pin',
+        {
+          ...pinned,
+          structuredSessionLaunchDirectoryByTabId: {
+            'tab-1': { sessionId: 'wrong', launchDirectory: '/wrong' }
+          }
+        },
+        null
+      ],
+      ['correct pin', pinned, local(FLOATING_TERMINAL_WORKTREE_ID, '/pinned')],
+      ['replaced session', replaced, null],
+      [
+        'replaced pin',
+        {
+          ...replaced,
+          structuredSessionLaunchDirectoryByTabId: {
+            'tab-1': { sessionId: 'replacement', launchDirectory: '/replacement' }
+          }
+        },
+        local(FLOATING_TERMINAL_WORKTREE_ID, '/replacement')
+      ],
+      [
+        'floating directory predicate skips unregistered duplicate',
+        {
+          ...pinned,
+          unifiedTabsByWorktree: {
+            [FLOATING_TERMINAL_WORKTREE_ID]: [
+              { ...floatingTab, entityId: 'unregistered', agentSessionAgent: undefined },
+              floatingTab
+            ]
+          }
+        },
+        local(FLOATING_TERMINAL_WORKTREE_ID, '/pinned')
+      ],
+      [
+        'floating terminal fallback',
+        {
+          ...floating,
+          tabsByWorktree: {
+            [FLOATING_TERMINAL_WORKTREE_ID]: [
+              terminalTabFixture('tab-1', FLOATING_TERMINAL_WORKTREE_ID)
+            ]
+          },
+          unifiedTabsByWorktree: {}
+        },
+        local(FLOATING_TERMINAL_WORKTREE_ID, '/floating-setting')
+      ],
+      [
+        'floating first registered duplicate wins',
+        {
+          ...pinned,
+          unifiedTabsByWorktree: {
+            [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab, { ...floatingTab, entityId: 'second' }]
+          },
+          structuredSessionLaunchDirectoryByTabId: {
+            'tab-1': { sessionId: 'second', launchDirectory: '/wrong-second' }
+          }
+        },
+        null
+      ],
+      ['folder', folderState, local(nativeChatFanoutWorkspace(0), '/repo/0')],
+      [
+        'runtime',
+        remote('owner-a'),
+        { worktreePath: '/remote', target: { kind: 'environment', environmentId: 'owner-a' } }
+      ],
+      [
+        'runtime replacement',
+        remote('owner-b'),
+        { target: { kind: 'environment', environmentId: 'owner-b' } }
+      ],
+      [
+        'owner-only runtime hydration',
+        {
+          ...remote('owner-a'),
+          activeWorktreeId: null,
+          activeWorkspaceExecutionHostId: null,
+          worktreesByRepo: {
+            repo: [
+              worktreeFixture('wt-1', '/remote', {
+                hostId: undefined,
+                runtimeOwnerEnvironmentId: 'owner-a'
+              })
+            ]
+          }
+        },
+        { worktreePath: '/remote', target: { kind: 'environment', environmentId: 'owner-a' } }
+      ],
+      [
+        'paired SSH',
+        paired,
+        {
+          worktreePath: '/ssh',
+          expectedExecutionHostId: 'ssh:ssh-1',
+          expectedSshConnectionGeneration: 3,
+          target: { kind: 'environment', environmentId: 'owner-a' }
+        }
+      ],
+      [
+        'SSH generation-only change',
+        { ...paired, sshStateByEnvironment: ssh(4).sshStateByEnvironment },
+        { expectedSshConnectionGeneration: 4 }
+      ],
+      [
+        'SSH generation absent',
+        { ...paired, sshStateByEnvironment: ssh().sshStateByEnvironment },
+        null
+      ],
+      [
+        'unpaired SSH',
+        {
+          ...paired,
+          repos: [repoFixture({ connectionId: 'ssh-1' })],
+          worktreesByRepo: {
+            repo: [worktreeFixture('wt-1', '/ssh', { hostId: 'ssh:ssh-1' })]
+          }
+        },
+        null
+      ]
+    ]
+    let observed: RuntimeFileOperationArgs | null = null
+    function Probe() {
+      observed = useNativeChatImageRuntimeContext('tab-1')
+      return null
+    }
+    useAppStore.setState(base)
+    render(createElement(Probe))
+    for (const [name, snapshot, expected] of cases) {
+      act(() => useAppStore.setState(snapshot))
+      expect(observed, name).toEqual(resolveNativeChatImageRuntimeContext(snapshot, 'tab-1'))
+      if (expected === null) {
+        expect(observed, name).toBeNull()
+      } else {
+        expect(observed, name).toMatchObject(expected)
+      }
+    }
+    expect(resolveNativeChatImageRuntimeContextForOwner(base, 'tab-1', null)).toBeNull()
+  })
+})

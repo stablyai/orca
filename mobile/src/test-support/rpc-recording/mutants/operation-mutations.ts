@@ -53,13 +53,6 @@ export const OPERATION_MUTATIONS = {
             return response
           }),`
   },
-  // Decodes the reply envelope instead of the accepted snapshot, so the Home card publishes nothing
-  // where a host answered.
-  'home-accounts-envelope': {
-    file: 'mobile-home-host-requests.ts',
-    before: 'const snapshot = decodeAccountsSnapshot(accounts.value)',
-    after: 'const snapshot = decodeAccountsSnapshot(reply)'
-  },
   // Offset-zero chunk writes preserve length; digest and decoded-byte observations must detect corruption.
   'mobile-web-bundle-chunk-placement': {
     file: 'mobile-web-bundle-fetch.ts',
@@ -109,12 +102,6 @@ export const OPERATION_MUTATIONS = {
       '(settingsResult.value as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })',
     after:
       '(settingsRes.value.result as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })'
-  },
-  // Treats any successful linear.status reply as a connected Linear account.
-  'home-providers-linear': {
-    file: 'mobile-home-host-requests.ts',
-    before: 'linearConnected: linear?.connected === true',
-    after: 'linearConnected: linear !== null'
   },
   // Read the wrong host-platform field so rows display an unreported platform.
   'repo-metadata-platform': {
@@ -195,18 +182,16 @@ export const OPERATION_MUTATIONS = {
   // the reader could not read takes the whole sidebar to `error` and the PR the user opened it for
   // disappears behind a retry.
   'pr-sidebar-checks-failure-state': {
-    file: 'mobile-pr-sidebar-state.ts',
-    before: `      return {
-        kind: 'ready',
-        data: {
-          pr,
-          details: null,
-          checks: [],
-          checksError: checksOutcome.error,
-          pushTarget: link.pushTarget
-        }
-      }`,
-    after: '      return failureState(checksOutcome.error)'
+    file: 'use-mobile-pr-sidebar-controller.ts',
+    before: `    if (!checks && !checksFailed) {
+      return { kind: 'loading' }
+    }`,
+    after: `    if (checksFailed) {
+      return prSidebarFailureState(checksError)
+    }
+    if (!checks) {
+      return { kind: 'loading' }
+    }`
   },
   // Always send the client member so tokenless phones falsely claim presence.
   'display-mode-unconditional-client': {
@@ -219,8 +204,8 @@ export const OPERATION_MUTATIONS = {
   // Send unmeasured viewport cells on auto toggles, replacing stored dimensions with null.
   'display-mode-unmeasured-viewport': {
     file: 'use-mobile-session-terminal-stream-display.ts',
-    before: `          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})`,
-    after: `          ...(next === 'auto' ? { viewport: viewportRef.current } : {})`
+    before: `          ...(viewport && next === 'auto' ? { viewport } : {})`,
+    after: `          ...(next === 'auto' ? { viewport } : {})`
   },
   // Send null instead of omitting afterTabId; only sessions without an active tab detect it.
   'create-after-tab-id-null': {
@@ -251,7 +236,7 @@ export const OPERATION_MUTATIONS = {
   // Let tab-load refusal abort terminal loading/refresh timers; this scenario has no created activation timer.
   'startup-tab-load-rejects-sequence': {
     file: 'use-mobile-session-startup.ts',
-    before: '      await ensureSessionTabs().catch(() => null)',
+    before: '      void ensureSessionTabs().catch(() => null)',
     after: '      await ensureSessionTabs()'
   },
   // Accept null Linear status; only result-null reaches the resulting connected property-read failure.

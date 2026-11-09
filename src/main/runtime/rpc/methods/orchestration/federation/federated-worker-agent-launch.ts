@@ -1,11 +1,12 @@
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Execute terminalOnly on the receiving host with federation's agent-first worktree/background-terminal factories. The dispatch brief is delivered later. */
 
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { WORKER_START_VOCABULARY } from '../structured-workers/orchestration-worker-start-mode'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import { resolveWorkerWorktreeName } from '../worker/worker-worktree-creation'
 import {
@@ -13,7 +14,8 @@ import {
   appendFederationTerminalEffects,
   type FederationEffect
 } from './federation-effects'
-import type { FederationAttachStartInput } from './federation-start-schema'
+import type { FederationAttachStartInput } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 
 const TERMINAL_ONLY_MESSAGE = 'A federated worker starts a terminal agent only.'
 
@@ -25,12 +27,18 @@ export async function launchFederatedWorkerAgent(args: {
   launchPreferences: AgentLaunchPreferences | undefined
   /** The workspace to start in; absent creates the new top-level worktree the params describe. */
   worktree?: { id: string }
+  /** The paired client that asked, so its own sidebar counts the new worktree as its own. */
+  creatorProvenance?: Worktree['creatorProvenance']
   setupSource: string
   effects: FederationEffect[]
   /** The created worktree's setup receipt, as soon as it exists, so a later failure reports it. */
   onSetup: (setup: WorkerSetupReceipt) => void
   onStage: (stage: 'worktree_create' | 'terminal_create') => void
-}): Promise<{ worktree: { id: string }; terminalHandle: string }> {
+}): Promise<{
+  worktree: { id: string }
+  terminalHandle: string
+  terminalCreation?: RuntimeTerminalCreate
+}> {
   const { runtime, db, params, effects } = args
   if (!args.agent) {
     // Validation refuses a fresh launch with no agent; this only narrows the type.
@@ -40,6 +48,7 @@ export async function launchFederatedWorkerAgent(args: {
   }
   const agent = args.agent
   let created: { id: string } | undefined
+  let terminalCreation: RuntimeTerminalCreate | undefined
   const launched = await executeAgentLaunch({
     runtime,
     intent: {
@@ -71,6 +80,9 @@ export async function launchFederatedWorkerAgent(args: {
         })
         const setupDecision = params.setup ?? 'run'
         const result = await runtime.createManagedWorktree({
+          onStartupTerminalCreated: (terminal) => {
+            terminalCreation = terminal
+          },
           repoSelector: repo,
           ...(await resolveWorkerWorktreeName(runtime, repo, params.name)),
           baseBranch: params.baseBranch,
@@ -88,13 +100,21 @@ export async function launchFederatedWorkerAgent(args: {
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
           activate: false,
-          lineage: { noParent: true }
+          ...(args.creatorProvenance ? { creatorProvenance: args.creatorProvenance } : {}),
+          lineage: params.crossStoreParent
+            ? {
+                crossStoreParent: params.crossStoreParent,
+                ...(params.crossStoreParentInferredFrom
+                  ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }
+                  : {})
+              }
+            : { noParent: true }
         })
         created = result.worktree
         const terminalHandle = result.startupTerminal?.handle
         effects.push({
           kind: 'worktree',
-          action: 'created_top_level',
+          action: params.crossStoreParent ? 'created_child' : 'created_top_level',
           id: result.worktree.id,
           name: result.worktree.displayName
         })
@@ -138,7 +158,8 @@ export async function launchFederatedWorkerAgent(args: {
           presentation: 'background'
         })
         effects.push({ kind: 'terminal', role: 'agent', action: 'created', id: terminal.handle })
-        return { handle: terminal.handle }
+        terminalCreation = terminal
+        return { handle: terminal.handle, terminalCreation: terminal }
       }
     }
   })
@@ -146,5 +167,5 @@ export async function launchFederatedWorkerAgent(args: {
   if (!worktree) {
     throw new Error('Federated worker topology did not resolve.')
   }
-  return { worktree, terminalHandle: launched.outcome.handle }
+  return { worktree, terminalHandle: launched.outcome.handle, terminalCreation }
 }

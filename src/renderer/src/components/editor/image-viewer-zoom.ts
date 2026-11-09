@@ -1,7 +1,4 @@
-export const MIN_IMAGE_VIEWER_ZOOM = 0.25
-export const MAX_IMAGE_VIEWER_ZOOM = 8
 export const IMAGE_VIEWER_ZOOM_STEP = 1.25
-export const IMAGE_VIEWER_SURFACE_PADDING = 16
 
 const DOM_DELTA_LINE = 1
 const DOM_DELTA_PAGE = 2
@@ -10,30 +7,7 @@ const PIXELS_PER_PAGE = 800
 const MAX_NORMALIZED_WHEEL_DELTA = 100
 const WHEEL_ZOOM_SENSITIVITY = 150
 
-type ImageZoomWheelEventLike = {
-  ctrlKey: boolean
-}
-
-export type ImageViewerImageDimensions = {
-  width: number
-  height: number
-}
-
-export type ImageViewerSurfaceSize = {
-  width: number
-  height: number
-}
-
-export type ImageViewerZoomAnchor = {
-  x: number
-  y: number
-}
-
-export function clampImageViewerZoom(next: number): number {
-  return Math.min(MAX_IMAGE_VIEWER_ZOOM, Math.max(MIN_IMAGE_VIEWER_ZOOM, next))
-}
-
-export function shouldHandleImageZoomWheel(event: ImageZoomWheelEventLike): boolean {
+export function shouldHandleImageZoomWheel(event: { ctrlKey: boolean }): boolean {
   return event.ctrlKey
 }
 
@@ -57,72 +31,4 @@ export function getPinchZoomFactor(deltaY: number, deltaMode: number): number {
   )
 
   return Math.exp(-boundedDeltaY / WHEEL_ZOOM_SENSITIVITY)
-}
-
-export function getNextWheelImageViewerZoom(
-  currentZoom: number,
-  deltaY: number,
-  deltaMode: number
-): number {
-  return clampImageViewerZoom(currentZoom * getPinchZoomFactor(deltaY, deltaMode))
-}
-
-export function getZoomedImageLayoutSize({
-  imageDimensions,
-  surfaceSize,
-  zoom,
-  padding = IMAGE_VIEWER_SURFACE_PADDING
-}: {
-  imageDimensions: ImageViewerImageDimensions | null
-  surfaceSize: ImageViewerSurfaceSize | null
-  zoom: number
-  padding?: number
-}): ImageViewerImageDimensions | null {
-  if (
-    !imageDimensions ||
-    !surfaceSize ||
-    imageDimensions.width <= 0 ||
-    imageDimensions.height <= 0 ||
-    surfaceSize.width <= 0 ||
-    surfaceSize.height <= 0
-  ) {
-    return null
-  }
-
-  const availableWidth = Math.max(0, surfaceSize.width - padding * 2)
-  const availableHeight = Math.max(0, surfaceSize.height - padding * 2)
-  if (availableWidth <= 0 || availableHeight <= 0) {
-    return null
-  }
-
-  const fitScale = Math.min(
-    1,
-    availableWidth / imageDimensions.width,
-    availableHeight / imageDimensions.height
-  )
-  const boundedZoom = clampImageViewerZoom(zoom)
-
-  // Resize the layout box for panning; transforms alone do not expand scroll extents.
-  return {
-    width: imageDimensions.width * fitScale * boundedZoom,
-    height: imageDimensions.height * fitScale * boundedZoom
-  }
-}
-
-export function getAnchoredImageViewerScrollOffset({
-  scrollOffset,
-  anchorOffset,
-  currentZoom,
-  nextZoom
-}: {
-  scrollOffset: number
-  anchorOffset: number
-  currentZoom: number
-  nextZoom: number
-}): number {
-  if (currentZoom <= 0) {
-    return scrollOffset
-  }
-
-  return (scrollOffset + anchorOffset) * (nextZoom / currentZoom) - anchorOffset
 }

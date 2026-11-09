@@ -1,21 +1,25 @@
+import { ClaudeHelperKillPoller } from '../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../shared/agent-hook-listener/grok-result-discovery'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
-import { pickHostTurnEnd } from '../shared/agent-status-types'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 import {
+  museHookPollPane,
+  museLogOffset,
+  nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
-import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
-import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
+import { AgentTranscriptPollScheduler } from '../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
+import { ClaudeOwedNotificationExpiryTimers } from '../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -27,6 +31,7 @@ type TranscriptPoll = {
   original: AgentHookEventPayload
   env?: string
   version?: string
+  delayMs?: number
 }
 
 export type AgentHookResultRetryHost = {
@@ -46,10 +51,18 @@ export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
+  private readonly claudeHelperKills: ClaudeHelperKillPoller
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.claudeHelperKills = new ClaudeHelperKillPoller(host.state, {
+      current: (paneKey) => host.state.lastStatusByPaneKey.get(paneKey),
+      publish: (event) => {
+        host.applyEvent(event, 'claude')
+      },
+      listening: host.isListening
+    })
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
@@ -63,6 +76,7 @@ export class AgentHookResultRetryScheduler {
     }
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
+    this.claudeHelperKills.clearAll()
     this.claudeOwedNotificationExpiry.clearAll()
   }
 
@@ -91,6 +105,15 @@ export class AgentHookResultRetryScheduler {
 
   clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.claudeHelperKills.clear(paneKey)
+  }
+
+  observeClaudeHook(row: AgentHookEventPayload, receivedAt?: number): void {
+    this.claudeHelperKills.schedule(row, receivedAt)
+  }
+
+  activateClaudeHelperObservations(): void {
+    this.claudeHelperKills.activate()
   }
 
   scheduleTranscriptPoll(
@@ -98,8 +121,12 @@ export class AgentHookResultRetryScheduler {
     body: unknown,
     original: AgentHookEventPayload,
     env?: string,
-    version?: string
+    version?: string,
+    delayMs?: number
   ): void {
+    if (source === 'claude') {
+      return
+    }
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
     if (source !== 'codex' && source !== 'muse') {
       return
@@ -108,6 +135,8 @@ export class AgentHookResultRetryScheduler {
       this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
+    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
+    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
       original.paneKey,
       {
@@ -115,10 +144,26 @@ export class AgentHookResultRetryScheduler {
         body,
         original,
         env,
-        version
+        version,
+        delayMs: museDelayMs
       },
-      hookTranscriptWatchPath(this.host.state, source, original.paneKey)
+      hookTranscriptWatchPath(this.host.state, source, original.paneKey),
+      museDelayMs
     )
+  }
+
+  rearmIgnoredMuseHook(body: unknown): void {
+    const paneKey = museHookPollPane(this.host.state, body, this.host.env)
+    if (!paneKey) {
+      return
+    }
+    const poll = this.transcriptPollScheduler.peek(paneKey)
+    if (
+      poll?.source === 'muse' &&
+      this.host.state.lastStatusByPaneKey.get(paneKey) === poll.original
+    ) {
+      this.scheduleTranscriptPoll('muse', poll.body, poll.original, poll.env, poll.version)
+    }
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -132,6 +177,7 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
+    const logOffset = source === 'muse' ? museLogOffset(this.host.state, paneKey) : undefined
     const event =
       source === 'codex'
         ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
@@ -143,7 +189,9 @@ export class AgentHookResultRetryScheduler {
     // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
     const next = update ? this.host.applyEvent(update, source, env, version) : original
     if (next) {
-      this.scheduleTranscriptPoll(source, body, next, env, version)
+      const quiet = !update && museLogOffset(this.host.state, paneKey) === logOffset
+      const delayMs = source === 'muse' ? nextMusePollDelay(poll.delayMs, quiet) : undefined
+      this.scheduleTranscriptPoll(source, body, next, env, version, delayMs)
     }
   }
 

@@ -1,5 +1,8 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { withReceiptNext } from './receipt-next-text'
+import { printOrchestrationResult } from './agent-view'
+import { checkView } from './message-agent-views'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
@@ -8,7 +11,7 @@ import {
   prepareOrchestrationCheckOutput,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { startCheckKeepalive } from './check-keepalive'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
@@ -25,6 +28,7 @@ type CheckResult = {
   cancelled?: boolean
   connectionLost?: boolean
   legacyCompatibility?: LegacyCompatibilityResult
+  next?: string
 }
 
 export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
@@ -74,7 +78,13 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
       ...result,
       result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
     }
-    printResult(result, json, (value) => formatOrchestrationCheckText(value, callerLabel))
+    if (flags.has('full')) {
+      printResult(result, json, (value) =>
+        withReceiptNext(formatOrchestrationCheckText(value, callerLabel), value)
+      )
+    } else {
+      printOrchestrationResult(result, json, checkView(callerLabel))
+    }
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()

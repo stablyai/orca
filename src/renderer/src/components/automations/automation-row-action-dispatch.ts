@@ -2,12 +2,14 @@
 
 import type {
   Automation,
-  AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../shared/automations/history/automation-run'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import {
   automationActionAvailability,
   capturedAutomationOwner,
@@ -117,7 +119,7 @@ export async function dispatchAutomationUpdate(
     (availability) =>
       updateOwnedAutomation(
         availability,
-        context.authority,
+        capturedAutomationOwner(context.capturedOwners, row.rowKey).authority ?? context.authority,
         row.automationId,
         updates,
         destination
@@ -135,7 +137,12 @@ export async function dispatchAutomationDelete(
     context,
     row,
     'delete',
-    (availability) => deleteOwnedAutomation(availability, context.authority, row.automationId),
+    (availability) =>
+      deleteOwnedAutomation(
+        availability,
+        capturedAutomationOwner(context.capturedOwners, row.rowKey).authority ?? context.authority,
+        row.automationId
+      ),
     legacy
   )
 }
@@ -163,7 +170,12 @@ export async function dispatchAutomationReread(
     context,
     row,
     'edit',
-    (availability) => showOwnedAutomation(availability, row.automationId),
+    (availability) =>
+      showOwnedAutomation(
+        availability,
+        row.automationId,
+        capturedAutomationOwner(context.capturedOwners, row.rowKey).authority
+      ),
     legacy
   )
 }
@@ -178,7 +190,12 @@ export async function dispatchAutomationRunHistory(
     context,
     row,
     'history',
-    (availability) => listOwnedAutomationRuns(availability, authority, row.automationId),
+    (availability) =>
+      listOwnedAutomationRuns(
+        availability,
+        capturedAutomationOwner(context.capturedOwners, row.rowKey).authority ?? authority,
+        row.automationId
+      ),
     legacy
   )
 }
@@ -195,7 +212,12 @@ export async function dispatchAutomationRunHistoryPage(
     row,
     'history',
     (availability) =>
-      listOwnedAutomationRunsPage(availability, authority, row.automationId, options),
+      listOwnedAutomationRunsPage(
+        availability,
+        capturedAutomationOwner(context.capturedOwners, row.rowKey).authority ?? authority,
+        row.automationId,
+        options
+      ),
     legacy
   )
 }

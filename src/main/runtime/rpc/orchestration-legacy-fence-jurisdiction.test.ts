@@ -1,6 +1,5 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
@@ -78,6 +77,11 @@ describe('legacy coordinator fence jurisdiction', () => {
       coordinatorPaneKey: CURRENT_COORDINATOR_PANE
     })
     expect(elsewhere.id).not.toBe(harness.adoptedRunId)
+    harness.db.bindRun({
+      runId: elsewhere.id,
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
     expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBeNull()
 
     const fenced = await harness.dispatcher.dispatch(

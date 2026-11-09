@@ -4,7 +4,7 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
 } from '../../shared/wsl-login-shell-command'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { resolveWslInteropSpawnCwd } from '../wsl/execution/wsl-interop-spawn-directory'
 
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }
 

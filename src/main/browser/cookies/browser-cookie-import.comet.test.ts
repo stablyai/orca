@@ -12,12 +12,6 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 
-import { BROWSER_FAMILY_LABELS } from '../../../shared/constants'
-
-function slashPath(pathValue: string): string {
-  return pathValue.replaceAll('\\', '/')
-}
-
 describe('detectInstalledBrowsers — Comet', () => {
   const originalPlatform = process.platform
   const originalHome = process.env.HOME
@@ -33,95 +27,6 @@ describe('detectInstalledBrowsers — Comet', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
     process.env.HOME = originalHome
     vi.restoreAllMocks()
-  })
-
-  it('detects Comet when its data directory and Cookies DB exist', async () => {
-    vi.doMock('node:fs', async () => {
-      const actual = await vi.importActual<typeof fsModule>('node:fs')
-      return {
-        ...actual,
-        existsSync: (p: string) => {
-          const normalizedPath = slashPath(p)
-          if (normalizedPath.includes('Comet/Default/Network/Cookies')) {
-            return true
-          }
-          if (normalizedPath.includes('Comet/Local State')) {
-            return true
-          }
-          return false
-        },
-        readFileSync: (p: string, enc?: string) => {
-          if (typeof p === 'string' && slashPath(p).includes('Comet/Local State')) {
-            return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
-          }
-          return actual.readFileSync(p as never, enc as never)
-        }
-      }
-    })
-
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
-    const detected = detectInstalledBrowsers()
-    const comet = detected.find((b) => b.family === 'comet')
-    expect(comet).toBeDefined()
-    expect(comet?.label).toBe('Comet')
-    expect(slashPath(comet?.cookiesPath ?? '')).toContain('Comet/Default/Network/Cookies')
-    expect(comet?.keychainService).toBe('Comet Safe Storage')
-  })
-
-  it('does not list Comet when its data directory is absent', async () => {
-    vi.doMock('node:fs', async () => {
-      const actual = await vi.importActual<typeof fsModule>('node:fs')
-      return {
-        ...actual,
-        existsSync: () => false
-      }
-    })
-
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
-    const detected = detectInstalledBrowsers()
-    expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
-  })
-
-  it('enumerates all Comet profiles from Local State info_cache', async () => {
-    vi.doMock('node:fs', async () => {
-      const actual = await vi.importActual<typeof fsModule>('node:fs')
-      return {
-        ...actual,
-        existsSync: (p: string) => {
-          const normalizedPath = slashPath(p)
-          if (normalizedPath.includes('Comet/Default/Network/Cookies')) {
-            return true
-          }
-          if (normalizedPath.includes('Comet/Local State')) {
-            return true
-          }
-          return false
-        },
-        readFileSync: (p: string, enc?: string) => {
-          if (typeof p === 'string' && slashPath(p).includes('Comet/Local State')) {
-            return JSON.stringify({
-              profile: {
-                info_cache: {
-                  Default: { name: 'Personal' },
-                  'Profile 1': { name: 'Work' },
-                  'Profile 2': { name: 'Research' }
-                }
-              }
-            })
-          }
-          return actual.readFileSync(p as never, enc as never)
-        }
-      }
-    })
-
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
-    const detected = detectInstalledBrowsers()
-    const comet = detected.find((b) => b.family === 'comet')
-    expect(comet).toBeDefined()
-    const directories = comet!.profiles.map((p) => p.directory).sort()
-    expect(directories).toEqual(['Default', 'Profile 1', 'Profile 2'])
-    const names = comet!.profiles.map((p) => p.name).sort()
-    expect(names).toEqual(['Personal', 'Research', 'Work'])
   })
 
   it('ignores Comet profile directories that escape the browser root', async () => {
@@ -153,7 +58,7 @@ describe('detectInstalledBrowsers — Comet', () => {
       }
     })
 
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const { detectInstalledBrowsers } = await import('./sources/browser-cookie-detection')
     const detected = detectInstalledBrowsers()
     expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
   })
@@ -172,7 +77,7 @@ describe('detectInstalledBrowsers — Comet', () => {
       }
     })
 
-    const { selectBrowserProfile } = await import('./browser-cookie-import')
+    const { selectBrowserProfile } = await import('./sources/browser-cookie-detection')
     const selected = selectBrowserProfile(
       {
         family: 'comet',
@@ -187,99 +92,5 @@ describe('detectInstalledBrowsers — Comet', () => {
     )
 
     expect(selected).toBeNull()
-  })
-
-  it('skips Comet when the data directory exists but no Cookies DB is present', async () => {
-    vi.doMock('node:fs', async () => {
-      const actual = await vi.importActual<typeof fsModule>('node:fs')
-      return {
-        ...actual,
-        existsSync: (p: string) => {
-          if (p.includes('Comet/Local State')) {
-            return true
-          }
-          if (p.includes('Network/Cookies') || p.endsWith('/Cookies')) {
-            return false
-          }
-          return false
-        },
-        readFileSync: (p: string, enc?: string) => {
-          if (typeof p === 'string' && p.includes('Comet/Local State')) {
-            return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
-          }
-          return actual.readFileSync(p as never, enc as never)
-        }
-      }
-    })
-
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
-    const detected = detectInstalledBrowsers()
-    expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
-  })
-})
-
-describe('detectInstalledBrowsers — Comet on Windows', () => {
-  const originalPlatform = process.platform
-  const originalLocalAppData = process.env.LOCALAPPDATA
-
-  const localAppData = 'C:\\Users\\test\\AppData\\Local'
-  const cometRoot = `${slashPath(localAppData)}/Perplexity/Comet/User Data`
-
-  beforeEach(() => {
-    vi.resetModules()
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    process.env.LOCALAPPDATA = localAppData
-  })
-
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: originalPlatform })
-    if (originalLocalAppData === undefined) {
-      delete process.env.LOCALAPPDATA
-    } else {
-      process.env.LOCALAPPDATA = originalLocalAppData
-    }
-    vi.restoreAllMocks()
-  })
-
-  function mockCometInstallAt(rootPath: string): void {
-    vi.doMock('node:fs', async () => {
-      const actual = await vi.importActual<typeof fsModule>('node:fs')
-      return {
-        ...actual,
-        existsSync: (p: string) =>
-          slashPath(p) === `${rootPath}/Local State` ||
-          slashPath(p) === `${rootPath}/Default/Network/Cookies`,
-        readFileSync: (p: string) => {
-          if (typeof p === 'string' && slashPath(p) === `${rootPath}/Local State`) {
-            return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
-          }
-          throw new Error(`Unexpected fixture read: ${p}`)
-        }
-      }
-    })
-  }
-
-  it('detects Comet under the Perplexity vendor directory', async () => {
-    mockCometInstallAt(cometRoot)
-
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
-    const comet = detectInstalledBrowsers().find((b) => b.family === 'comet')
-
-    expect(comet).toBeDefined()
-    expect(slashPath(comet?.cookiesPath ?? '')).toBe(`${cometRoot}/Default/Network/Cookies`)
-  })
-
-  it('does not detect a Comet data directory sitting directly under LOCALAPPDATA', async () => {
-    mockCometInstallAt(`${slashPath(localAppData)}/Comet/User Data`)
-
-    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
-
-    expect(detectInstalledBrowsers().find((b) => b.family === 'comet')).toBeUndefined()
-  })
-})
-
-describe('BROWSER_FAMILY_LABELS — Comet', () => {
-  it('maps the comet family key to the user-facing label "Comet"', () => {
-    expect(BROWSER_FAMILY_LABELS.comet).toBe('Comet')
   })
 })

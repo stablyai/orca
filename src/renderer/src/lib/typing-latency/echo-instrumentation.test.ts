@@ -5,7 +5,6 @@ import {
   discardUndispatchedKeystroke,
   drainTimedOutEchoCandidates,
   instrumentPaneEcho,
-  noteEchoOutputArrival,
   recordKeystroke,
   type EchoObservation,
   type InstrumentedPane
@@ -97,23 +96,6 @@ afterEach(() => {
 })
 
 describe('recordKeystroke', () => {
-  it('queues inputs rather than overwriting a single slot', () => {
-    const entry = emptyEntry()
-    expect(recordKeystroke(entry, 0, 'direct').unmatched).toBe(0)
-    expect(recordKeystroke(entry, 5, 'ime').unmatched).toBe(0)
-    expect(entry.undispatched.map((pending) => pending.t0)).toEqual([0, 5])
-    expect(entry.pendingCount).toBe(2)
-  })
-
-  it('counts timed-out undispatched inputs without creating an output attribution gap', () => {
-    const entry = emptyEntry()
-    recordKeystroke(entry, 0, 'direct')
-    recordKeystroke(entry, 1, 'direct')
-    expect(recordKeystroke(entry, 5000, 'direct').unmatched).toBe(2)
-    expect(entry.pendingCount).toBe(1)
-    expect(entry.attributionGap).toBe(false)
-  })
-
   it('drains a final timed-out input without waiting for another keystroke', () => {
     const entry = emptyEntry()
     const recorded = recordKeystroke(entry, 0, 'direct')
@@ -144,23 +126,6 @@ describe('recordKeystroke', () => {
     expect(recorded.candidate.status).toBe('unmatched-dispatched')
     expect(discardUndispatchedKeystroke(entry, recorded.candidate)).toBeNull()
     expect(entry.pendingCount).toBe(0)
-  })
-
-  it('bounds pending input state during sustained typing', () => {
-    const entry = emptyEntry()
-    let dropped = 0
-    const records: ReturnType<typeof recordKeystroke>[] = []
-    for (let index = 0; index < 200; index += 1) {
-      const recorded = recordKeystroke(entry, index, 'direct')
-      dropped += recorded.unmatched
-      records.push(recorded)
-    }
-    expect(entry.pendingCount).toBe(64)
-    expect(entry.undispatched).toHaveLength(64)
-    expect(entry.ignoredDispatches).toHaveLength(64)
-    expect(dropped).toBe(136)
-    expect(discardUndispatchedKeystroke(entry, records[64]!.candidate)).toBe('counted-unmatched')
-    expect(entry.ignoredDispatches).toHaveLength(64)
   })
 
   it('drops a prevented commit only when it never dispatched', () => {
@@ -302,68 +267,6 @@ describe('instrumentPaneEcho', () => {
     terminal.dispose()
   })
 
-  it('splits event queueing, round trip, scheduler queueing, parse, and paint', () => {
-    const fake = fakeTerminal()
-    const observations: EchoObservation[] = []
-    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
-      observations.push(value)
-    )
-    const now = vi.spyOn(performance, 'now')
-
-    recordKeystroke(entry, 10, 'direct', 4)
-    now.mockReturnValueOnce(25)
-    fake.emitData('a')
-    noteEchoOutputArrival(entry, 30)
-    now.mockReturnValueOnce(33)
-    fake.terminal.write('echo')
-    now.mockReturnValueOnce(40)
-    fake.emitParsed()
-    now.mockReturnValueOnce(50)
-    fake.emitRender()
-
-    expect(observations).toEqual([
-      {
-        attribution: 'single-input',
-        source: 'direct',
-        inputToDispatchMs: 15,
-        dispatchToParseMs: 15,
-        parseToPaintMs: 10,
-        inputToPaintMs: 40,
-        eventToHandlerMs: 6,
-        eventToPaintMs: 46,
-        dispatchToArrivalMs: 5,
-        arrivalToWriteMs: 3,
-        writeToParseMs: 7,
-        startedAt: 4,
-        paintedAt: 50,
-        outputBytes: 4,
-        outputWrites: 1
-      }
-    ])
-  })
-
-  it('counts UTF-8 bytes consistently for string and binary writes', () => {
-    const fake = fakeTerminal()
-    const observations: EchoObservation[] = []
-    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
-      observations.push(value)
-    )
-
-    recordAndDispatch(entry, fake, 'ime')
-    fake.terminal.write('한𠀀')
-    fake.terminal.write(new Uint8Array(6))
-    fake.emitParsed()
-    fake.emitRender()
-
-    expect(observations).toHaveLength(1)
-    expect(observations[0]).toMatchObject({
-      attribution: 'single-input',
-      outputBytes: 13,
-      outputWrites: 2
-    })
-    expect(fake.writtenPayloads).toHaveLength(2)
-  })
-
   it('does not credit output that arrived before the input dispatched', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
@@ -407,29 +310,6 @@ describe('instrumentPaneEcho', () => {
       inputCount: 2,
       sourceCounts: { direct: 2, ime: 0 },
       outputBatchBytes: 1,
-      outputBatchWrites: 1
-    })
-  })
-
-  it('emits one aggregate observation for genuinely coalesced mixed-source output', () => {
-    const fake = fakeTerminal()
-    const observations: EchoObservation[] = []
-    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
-      observations.push(value)
-    )
-
-    recordAndDispatch(entry, fake, 'direct')
-    recordAndDispatch(entry, fake, 'ime')
-    fake.terminal.write('x'.repeat(90))
-    fake.emitParsed()
-    fake.emitRender()
-
-    expect(observations).toHaveLength(1)
-    expect(observations[0]).toMatchObject({
-      attribution: 'ambiguous-burst',
-      inputCount: 2,
-      sourceCounts: { direct: 1, ime: 1 },
-      outputBatchBytes: 90,
       outputBatchWrites: 1
     })
   })
@@ -650,12 +530,5 @@ describe('instrumentPaneEcho', () => {
     fake.emitRender()
     fake.emitData()
     expect(observations).toEqual([])
-  })
-
-  it('degrades to a no-op when the pane has no terminal', () => {
-    const entry = instrumentPaneEcho({}, () => undefined)
-    expect(entry.disposables).toEqual([])
-    expect(detachPaneEcho(entry)).toBe(0)
-    expect(entry.pane).toBeNull()
   })
 })

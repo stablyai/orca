@@ -2,23 +2,25 @@ import { ipcRenderer } from 'electron'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   type RuntimeHostStatusSnapshot
-} from '../../shared/runtime-host-status'
-import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+} from '../../shared/remote-runtime/host-status/runtime-host-status'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-runtime/pairing/remote-pairing-verification'
+import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
-import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/runtime-environment-diagnostics'
-import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../shared/runtime-environment-catalog-channel'
+import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../shared/remote-runtime/host-catalog/runtime-environment-diagnostics'
+import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../shared/remote-runtime/host-catalog/runtime-environment-catalog-channel'
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
   type WslOrcadAccountNotAppliedEvent
 } from '../../shared/wsl-orcad-account-notice'
 import {
   subscribeRuntimeEnvironmentFromPreload,
+  subscribeCrewAttemptFromPreload,
+  cancelRuntimeEnvironmentSubscriptionFromPreload,
   type RuntimeEnvironmentSubscriptionHandle
 } from '../runtime-environment-subscriptions'
 import type { PreloadApi } from '../api-types'
@@ -121,7 +123,9 @@ export const runtimeEnvironmentsApi = {
     expectedEnvironmentRuntimeId?: string
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
-    ipcRenderer.invoke('runtimeEnvironments:unsubscribe', args).then(() => undefined),
+    cancelRuntimeEnvironmentSubscriptionFromPreload(ipcRenderer, args.subscriptionId),
+  subscribeCrewAttempt: (args, callbacks) =>
+    subscribeCrewAttemptFromPreload(ipcRenderer, args, callbacks),
   subscribe: async (
     args: {
       subscriptionId?: string

@@ -1,7 +1,7 @@
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from '../node-bounded-json-stringify'
+} from '../json-stream/node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import type { RuntimeOrchestrationEnvelope } from '../runtime-rpc-envelope'
 

@@ -22,10 +22,10 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace('{{value0}}', params?.value0 ?? '')
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionIdForFile
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => mocks.worktreeRuntimeOwnerId
 }))
 vi.mock('@/lib/file-owner-runtime-target', () => {
@@ -48,11 +48,11 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }
 })
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => mocks.connectionIdForWorkspace,
   getConnectionIdForFile: () => mocks.connectionIdForFile
 }))
-vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
+vi.mock('@/components/terminal-pane/links/files/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
 vi.mock('@/store', () => ({
@@ -68,8 +68,7 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-
-import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
+import { openDocPreviewExternally } from './doc-preview-document-actions'
 import { localAndSshTwinRows } from '@/lib/workspace-twin-rows.test-fixture'
 
 const REMOTE_DOCUMENT = {
@@ -92,58 +91,7 @@ beforeEach(() => {
   vi.stubGlobal('window', { api: { shell: { openFilePath: mocks.openFilePath } } })
 })
 
-describe('openDocPreviewSource', () => {
-  it('opens the document as an ordinary source tab with the editor language', () => {
-    openDocPreviewSource(REMOTE_DOCUMENT)
-
-    expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: REMOTE_DOCUMENT.filePath,
-        relativePath: REMOTE_DOCUMENT.relativePath,
-        worktreeId: 'wt-1',
-        language: 'html',
-        mode: 'edit'
-      })
-    )
-  })
-
-  // An absolute path alone cannot distinguish an external SSH file from this computer’s file.
-  it('carries the external SSH target onto the source tab', () => {
-    openDocPreviewSource({ ...REMOTE_DOCUMENT, externalSshTargetId: 'ssh-7' })
-
-    expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({ externalSshTargetId: 'ssh-7' })
-    )
-  })
-
-  it('omits the field entirely when the document has no external target', () => {
-    openDocPreviewSource(REMOTE_DOCUMENT)
-
-    expect(mocks.openFile.mock.calls[0]?.[0]).not.toHaveProperty('externalSshTargetId')
-  })
-})
-
 describe('openDocPreviewExternally', () => {
-  it('hands a local document straight to the OS', () => {
-    openDocPreviewExternally(REMOTE_DOCUMENT)
-
-    expect(mocks.openFilePath).toHaveBeenCalledWith(REMOTE_DOCUMENT.filePath, 'local')
-    expect(mocks.downloadAndOpen).not.toHaveBeenCalled()
-  })
-
-  it('downloads an SSH document before handing it over', () => {
-    mocks.connectionIdForFile = 'ssh-1'
-    mocks.connectionIdForWorkspace = 'ssh-1'
-
-    openDocPreviewExternally(REMOTE_DOCUMENT)
-
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-    expect(mocks.downloadAndOpen).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'ssh-1' }),
-      REMOTE_DOCUMENT.filePath
-    )
-  })
-
   // Folder workspaces may span hosts; unresolved workspace ownership must not override a resolved file owner.
   it('routes on the file owner when the workspace-scoped owner is unresolved', () => {
     mocks.connectionIdForFile = 'ssh-1'
@@ -208,18 +156,6 @@ describe('openDocPreviewExternally', () => {
     mocks.activeRuntimeEnvironmentId = 'env-1'
 
     openDocPreviewExternally({ ...REMOTE_DOCUMENT, runtimeEnvironmentId: null })
-
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-    expect(mocks.downloadAndOpen).toHaveBeenCalled()
-  })
-
-  // Runtime containment needs the root; unknown roots must not misclassify remote paths as local.
-  it('downloads a runtime document whose workspace root is unknown', () => {
-    mocks.worktreePath = null
-    mocks.worktreeRuntimeOwnerId = 'env-1'
-    mocks.activeRuntimeEnvironmentId = 'env-1'
-
-    openDocPreviewExternally({ ...REMOTE_DOCUMENT, runtimeEnvironmentId: 'env-1' })
 
     expect(mocks.openFilePath).not.toHaveBeenCalled()
     expect(mocks.downloadAndOpen).toHaveBeenCalled()

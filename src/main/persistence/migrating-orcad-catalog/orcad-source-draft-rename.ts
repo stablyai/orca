@@ -4,7 +4,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,

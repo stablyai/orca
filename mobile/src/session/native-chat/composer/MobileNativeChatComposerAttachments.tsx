@@ -11,14 +11,18 @@ import {
   View
 } from 'react-native'
 import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../files/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
+import { chatTextAttachmentName } from '../../../../../src/shared/native-chat-text-attachment-references'
 
 const THUMB_SIZE = 58
+// Items sit 12pt in from the composer box's edge (box padding plus strip padding).
+const ITEM_RADIUS = concentricRadius(radii.floating, 12)
 
 function composerFileMeta(
   file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>,
@@ -46,9 +50,11 @@ export function MobileNativeChatComposerAttachments({
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const onOpenFile = useMobileNativeChatOpenFile()
   if (images.length === 0 && files.length === 0) {
     return null
   }
+  const pastedText = t('chat.textAttachmentPreview.pastedText', 'Pasted text')
   return (
     <ScrollView
       horizontal
@@ -90,21 +96,26 @@ export function MobileNativeChatComposerAttachments({
           <View style={styles.fileIcon}>
             <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
           </View>
-          <View style={styles.fileText}>
+          <Pressable
+            style={styles.fileText}
+            disabled={!file.path || !onOpenFile}
+            accessibilityRole="button"
+            onPress={() => file.path && onOpenFile?.(file.path)}
+          >
             <Text style={styles.fileName} numberOfLines={1}>
-              {file.name}
+              {chatTextAttachmentName(file.name, pastedText)}
             </Text>
             <Text style={styles.fileMeta} numberOfLines={1}>
               {composerFileMeta(file, t)}
             </Text>
-          </View>
+          </Pressable>
           {file.path === null ? (
             <View
               style={styles.uploading}
               accessibilityLabel={t(
                 'chat.composerAttachments.uploadingFile',
                 'Uploading {{name}}',
-                { name: file.name }
+                { name: chatTextAttachmentName(file.name, pastedText) }
               )}
             >
               <ActivityIndicator size="small" color={colors.onAccent} />
@@ -113,7 +124,7 @@ export function MobileNativeChatComposerAttachments({
           {onRemoveFile ? (
             <RemoveBadge
               label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
-                name: file.name
+                name: chatTextAttachmentName(file.name, pastedText)
               })}
               onPress={() => onRemoveFile(file.id)}
             />
@@ -127,7 +138,12 @@ export function MobileNativeChatComposerAttachments({
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
   useMobileColorScheme()
   return (
-    <Pressable accessibilityLabel={label} style={styles.remove} onPress={onPress} hitSlop={8}>
+    <Pressable
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.remove, pressed && pressedStyle]}
+      onPress={onPress}
+      hitSlop={8}
+    >
       <X size={11} color={colors.textPrimary} strokeWidth={3} />
     </Pressable>
   )
@@ -148,13 +164,13 @@ const styles = themedStyleSheet(() => ({
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     backgroundColor: colors.composerControl
   },
   thumbImage: {
     width: '100%',
     height: '100%',
-    borderRadius: radii.composerItem
+    borderRadius: ITEM_RADIUS
   },
   fileCard: {
     height: THUMB_SIZE,
@@ -165,13 +181,13 @@ const styles = themedStyleSheet(() => ({
     gap: 9,
     paddingLeft: 10,
     paddingRight: spacing.md,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     backgroundColor: colors.composerControl
   },
   fileIcon: {
     width: 32,
     height: 36,
-    borderRadius: 7,
+    borderRadius: concentricRadius(ITEM_RADIUS, 10),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
@@ -192,7 +208,7 @@ const styles = themedStyleSheet(() => ({
   },
   uploading: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
@@ -204,7 +220,7 @@ const styles = themedStyleSheet(() => ({
     right: -5,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,

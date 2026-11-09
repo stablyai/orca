@@ -2,7 +2,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import {
   buildTaskPageGitHubWorkItemMutationPatch,
   type TaskPageGitHubMutationIntent
@@ -34,7 +34,7 @@ import type {
   BeginTaskPageGitHubWorkItemMutationArgs,
   BeginTaskPageGitHubWorkItemMutationResult
 } from './task-page-github-work-item-mutation-types'
-import type { ParsedTaskQuery } from '../../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../../shared/work-items/task-query'
 
 function resolveSourceScope(sourceContext?: TaskSourceContext | null): string | null {
   if (sourceContext?.provider === 'github') {
@@ -100,7 +100,7 @@ export function beginTaskPageGitHubWorkItemMutation(
   }
   const generation = nextTaskPageGitHubMutationGeneration(key)
 
-  if (built.kind === 'list') {
+  if (built.kind === 'list' && !(args.settleAccepted && built.family === 'assignees')) {
     const existing = getConfirmedListSnapshot(
       sourceScope,
       args.item.repoId,
@@ -115,6 +115,7 @@ export function beginTaskPageGitHubWorkItemMutation(
   }
 
   const op: PendingOp = {
+    settleAccepted: args.settleAccepted,
     generation,
     key,
     previous: built.previous,
@@ -133,12 +134,14 @@ export function beginTaskPageGitHubWorkItemMutation(
         : { reviewRequests: merged.reviewRequests }
       : built.next
 
-  args.patchWorkItem(args.item.id, composedFields, args.item.repoId, {
-    sourceContext: args.sourceContext
-  })
+  if (!args.settleAccepted) {
+    args.patchWorkItem(args.item.id, composedFields, args.item.repoId, {
+      sourceContext: args.sourceContext
+    })
+  }
 
   recomputeSoftHideForItem({
-    item: { ...args.item, ...merged },
+    item: { ...args.item, ...merged, ...(args.settleAccepted ? built.next : {}) },
     sourceScope,
     query: args.query,
     queryKey: args.queryKey,

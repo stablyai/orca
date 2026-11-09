@@ -4,13 +4,20 @@ import type {
   GitLabWorkItemDetails
 } from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
-import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
+import {
+  derivePipelineStatus,
+  mapIssueToWorkItem,
+  mapMRToWorkItem,
+  settleManualPipelineStatus
+} from './mappers'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
-import { fetchDiscussions, flattenDiscussions } from './mr-discussion-notes'
+import { fetchDiscussionComments } from './mr-discussion-notes'
 import { fetchMRFiles } from './mr-file-diffs'
 import { fetchMRApprovalState, fetchMRReviewers } from './mr-reviewers-and-approvals'
 import { fetchPipelineJobs } from './pipeline-job-graph'
+import { GitLabIncompletePaginationError } from './gitlab-paginated-list'
+import { gitLabRunTimes } from './gitlab-run-times'
 import {
   acquire,
   getGlabKnownHosts,
@@ -28,11 +35,22 @@ type GitLabRawIssue = Parameters<typeof mapIssueToWorkItem>[0] & {
   assignees?: { username?: string | null }[] | null
 }
 
+type GitLabRawPipeline = {
+  id?: number
+  status?: string
+  web_url?: string | null
+  sha?: string | null
+  ref?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+}
+
 type GitLabRawMR = Parameters<typeof mapMRToWorkItem>[0] & {
   description?: string | null
   sha?: string
   diff_refs?: { base_sha?: string; head_sha?: string; start_sha?: string } | null
-  head_pipeline?: { id?: number } | null
+  head_pipeline?: GitLabRawPipeline | null
+  pipeline?: GitLabRawPipeline | null
   reviewers?: GitLabRawUser[] | null
 }
 
@@ -45,7 +63,7 @@ export async function getWorkItemDetails(
   connectionId?: string | null,
   projectRefOverride?: ProjectRef | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { includeReviewDetails?: boolean } = {}
+  options: { includeReviewDetails?: boolean; markViewerComments?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Retain the list row's selected project to avoid same-number fork/upstream collisions.
   const projectRef =
@@ -65,7 +83,14 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (type === 'issue') {
-      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
+      return await fetchIssueDetails(
+        repoPath,
+        projectRef,
+        iid,
+        connectionId,
+        localGitOptions,
+        options.markViewerComments !== false
+      )
     }
     return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions, options)
   } catch {
@@ -80,9 +105,10 @@ async function fetchIssueDetails(
   projectRef: ProjectRef,
   iid: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  markViewerComments = true
 ): Promise<GitLabWorkItemDetails | null> {
-  const [issueRes, discussions] = await Promise.all([
+  const [issueRes, comments] = await Promise.all([
     glabExecFileAsync(
       [
         'api',
@@ -91,7 +117,15 @@ async function fetchIssueDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussions(repoPath, projectRef, 'issue', iid, connectionId, localGitOptions)
+    fetchDiscussionComments(
+      repoPath,
+      projectRef,
+      'issue',
+      iid,
+      connectionId,
+      localGitOptions,
+      markViewerComments
+    )
   ])
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -103,7 +137,7 @@ async function fetchIssueDetails(
   return {
     item,
     body: issueRaw.description ?? '',
-    comments: flattenDiscussions(discussions),
+    comments,
     assignees: (issueRaw.assignees ?? [])
       .map((a) => a?.username)
       .filter((u): u is string => typeof u === 'string')
@@ -116,10 +150,10 @@ async function fetchMRDetails(
   iid: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { includeReviewDetails?: boolean } = {}
+  options: { includeReviewDetails?: boolean; markViewerComments?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Discussion can overlap MR details; child jobs need its head_pipeline ID.
-  const [mrRes, discussions] = await Promise.all([
+  const [mrRes, comments] = await Promise.all([
     glabExecFileAsync(
       [
         'api',
@@ -128,7 +162,16 @@ async function fetchMRDetails(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussions(repoPath, projectRef, 'mr', iid, connectionId, localGitOptions)
+    fetchDiscussionComments(
+      repoPath,
+      projectRef,
+      'mr',
+      iid,
+      connectionId,
+      localGitOptions,
+      // Checks polling never reads viewerDidAuthor, so it skips the viewer lookup with the other review details.
+      options.markViewerComments ?? options.includeReviewDetails !== false
+    )
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -136,7 +179,8 @@ async function fetchMRDetails(
     const { repoId: _repoId, ...rest } = full
     return rest
   })()
-  const pipelineId = mrRaw.head_pipeline?.id
+  const rawPipeline = mrRaw.head_pipeline ?? mrRaw.pipeline
+  const pipelineId = rawPipeline?.id
   const pipelineJobs =
     typeof pipelineId === 'number'
       ? await fetchPipelineJobs(
@@ -145,7 +189,13 @@ async function fetchMRDetails(
           pipelineId,
           connectionId,
           localGitOptions
-        ).catch(() => [])
+        ).catch((error: unknown) => {
+          // A partial job list must fail the read so Checks and the dialog keep what they showed.
+          if (error instanceof GitLabIncompletePaginationError) {
+            throw error
+          }
+          return []
+        })
       : undefined
   // Checks needs pipeline/discussion data without the dialog's optional review enrichment.
   const includeReviewDetails = options.includeReviewDetails !== false
@@ -167,11 +217,25 @@ async function fetchMRDetails(
   return {
     item,
     body: mrRaw.description ?? '',
-    comments: flattenDiscussions(discussions),
+    comments,
     headSha: mrRaw.sha,
     baseSha: mrRaw.diff_refs?.base_sha,
     startSha: mrRaw.diff_refs?.start_sha,
     files,
+    ...(typeof pipelineId === 'number'
+      ? {
+          pipeline: {
+            id: pipelineId,
+            status: rawPipeline?.status ?? '',
+            // The MR aggregate's own rule on this same reply, so both read one verdict.
+            checkStatus: settleManualPipelineStatus(mrRaw, derivePipelineStatus(rawPipeline)),
+            webUrl: rawPipeline?.web_url ?? null,
+            ...(rawPipeline?.sha ? { sha: rawPipeline.sha } : {}),
+            ...(rawPipeline?.ref ? { ref: rawPipeline.ref } : {}),
+            ...(rawPipeline ? gitLabRunTimes(rawPipeline) : {})
+          }
+        }
+      : {}),
     ...(pipelineJobs !== undefined ? { pipelineJobs } : {}),
     reviewers,
     ...(approvalState ? { approvalState } : {})
