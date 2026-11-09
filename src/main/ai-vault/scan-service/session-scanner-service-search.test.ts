@@ -105,6 +105,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   emit({ type: 'sessionSearch', init: searchInit(false) })
+  await searchStatus()
   process.send = originalSend
   await harness.cleanup()
 })
@@ -160,5 +161,6 @@ it('answers disabled once consent is withdrawn, without a respawn', async () => 
   expect(await searchSessions('distinctive')).toEqual({ kind: 'unavailable', reason: 'disabled' })
   expect(await searchStatus()).toMatchObject({ enabled: false, phase: 'idle' })
   emit({ type: 'sessionSearch', init: searchInit(true) })
+  await call({ type: 'request', operation: 'searchReconcile' })
   expect((await searchSessions('distinctive')).kind).toBe('results')
 })

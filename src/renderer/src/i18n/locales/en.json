@@ -12004,7 +12004,11 @@
           "stopCleanup": "Stop cleanup",
           "cleanupStopped": "Cleanup stopped",
           "stopCleanupFailed": "Couldn’t stop Cloud VM cleanup.",
-          "cloudVmRefreshLabel": "Refresh Cloud VMs"
+          "cloudVmRefreshLabel": "Refresh Cloud VMs",
+          "provisioning": "Provisioning",
+          "untrackedRuntimeHint": "Orca never received this VM’s details. Cleanup runs destroy with only instance ID {{instanceId}}; if it fails, delete the VM in your provider, then remove it from this list.",
+          "removeFromList": "Remove from list",
+          "removeFromListFailed": "Couldn’t remove Cloud VM runtime from the list."
         },
         "ephemeralVms": {
           "search": {
@@ -22113,7 +22117,7 @@
       "sortRelevance": "Most relevant",
       "sortNewest": "Newest",
       "sortResultsAriaLabel": "Sort results: {{value0}}",
-      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
+      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
       "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
@@ -22173,7 +22177,7 @@
       "description": "Search everything your agents have said and done, on this computer and on any paired Orca server.",
       "searchDescription": "Turn on session search for this computer and paired servers, or clear search data.",
       "indexComputers": "Search inside sessions",
-      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.",
+      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Search sessions on {{host}}",
       "serverOffline": "Offline",
@@ -24250,7 +24254,8 @@
       "suspendExitedWithoutCode": "Suspend exited with code unknown.",
       "resumeExited": "Resume exited with code {{exitCode}}.",
       "resumeExitedWithoutCode": "Resume exited with code unknown.",
-      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer."
+      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
+      "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources."
     }
   },
   "installDirAcl": {

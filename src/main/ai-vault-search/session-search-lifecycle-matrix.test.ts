@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { chmod, mkdir, rename, rm } from 'node:fs/promises'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -182,7 +183,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  indexer?.close()
+  await indexer?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()
@@ -262,7 +263,7 @@ for (const roots of ROOT_LAYOUTS) {
               await operation.run({
                 indexer: () => indexer as SessionSearchIndexer,
                 reopen: async (args = {}) => {
-                  indexer?.close()
+                  await indexer?.close()
                   resetTranscriptConsumersForTests()
                   resetSessionParseCacheForTests()
                   if (args.removeDatabase === true) {

@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from '../../browser-error'
-import type { CdpCommandSender } from '../snapshots/snapshot-engine'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 export class CdpNavigationOperations {
   async getNavigationId(sender: CdpCommandSender): Promise<string> {
