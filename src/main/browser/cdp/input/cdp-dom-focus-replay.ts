@@ -1,8 +1,8 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
 import type { CdpClientResponseWriter } from '../transport/cdp-client-response-writer'
-import type { CdpDebuggerChannel } from './cdp-debugger-channel'
-import type { TextInsertionRoute } from '../input/guest-direct-key-input'
+import type { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
+import type { TextInsertionRoute } from './guest-direct-key-input'
 
 /** Replay DOM.focus before insertion because native focusing can blur the target. */
 export class CdpDomFocusReplay {

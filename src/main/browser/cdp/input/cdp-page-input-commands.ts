@@ -1,23 +1,23 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
 import type { CdpClientResponseWriter } from '../transport/cdp-client-response-writer'
-import type { CdpDebuggerChannel } from './cdp-debugger-channel'
+import type { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
 import type { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import {
   enablePageFocusEmulation,
   isFocusRoutedCdpInput,
   isFocusTakingCdpInput,
   type AgentInputFocusGuard
-} from '../input/agent-input-focus-guard'
+} from './agent-input-focus-guard'
 import {
   dispatchPageKeyEvent,
   isEmbeddedGuest,
   routePageTextInsertion
-} from '../input/guest-direct-key-input'
-import type { GuestSessionCdpSender } from '../input/guest-frame-input-sessions'
-import { withAgentInputInjection } from '../input/agent-input-injection'
+} from './guest-direct-key-input'
+import type { GuestSessionCdpSender } from './guest-frame-input-sessions'
+import { withAgentInputInjection } from './agent-input-injection'
 import type { AgentPointerInput } from '../../guest-lifecycle/page-activity/browser-agent-activity'
-import type { CapturePaintHold } from './cdp-screenshot'
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import { waitForGuestFirstPaint } from '../debugger/guest-first-paint'
 
 /** Shows the agent's pointer at an input's point and resolves once it has landed. */
