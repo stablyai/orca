@@ -2,6 +2,7 @@
 import type { MessagePortMain } from 'electron'
 import type { SpeechAudioPortMessage } from '../../shared/speech-types'
 import { resampleToRate } from './stt-audio-resample'
+import { collapseHallucinatedRepeats } from './stt-hallucinated-repeat'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 import { buildRecognizerConfig } from './stt-worker-model-config'
 import { createStopTailPadding } from './stt-stop-tail-padding'
@@ -76,7 +77,7 @@ function decodeOfflineChunk(samples: Float32Array): string {
   sherpa.acceptWaveformOffline(stream, { sampleRate: modelSampleRate, samples })
   sherpa.decodeOfflineStream(recognizer, stream)
   const result = JSON.parse(sherpa.getOfflineStreamResultAsJson(stream))
-  return result?.text?.trim() ?? ''
+  return collapseHallucinatedRepeats(result?.text?.trim() ?? '')
 }
 
 function feedOnline(streamId: string, stream: SessionStream, samples: Float32Array): void {
