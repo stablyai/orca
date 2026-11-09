@@ -4,7 +4,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import type { ForceDeleteWorktreeBranchResult } from '../../../../../../shared/worktree/create-types'

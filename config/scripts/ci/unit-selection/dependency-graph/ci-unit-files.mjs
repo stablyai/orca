@@ -39,7 +39,6 @@ export const UNIT_EXCLUDE = [
   'src/main/startup/shell-probe-terminal-detach.live-shell.test.ts',
   'src/main/startup/shell-probe-lifetime.live-shell.test.ts',
   'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts',
-  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts',
   'src/shared/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',

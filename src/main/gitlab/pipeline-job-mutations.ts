@@ -31,6 +31,7 @@ function mapRetriedPipelineJob(
     name?: string
     stage?: string
     status?: string
+    allow_failure?: boolean
     web_url?: string
     duration?: number | null
     started_at?: string | null
@@ -44,6 +45,7 @@ function mapRetriedPipelineJob(
     name: data.name ?? '',
     stage: data.stage ?? '',
     status: data.status ?? '',
+    ...(typeof data.allow_failure === 'boolean' ? { allowFailure: data.allow_failure } : {}),
     webUrl: data.web_url ?? '',
     duration: typeof data.duration === 'number' ? data.duration : null,
     ...gitLabRunTimes(data)

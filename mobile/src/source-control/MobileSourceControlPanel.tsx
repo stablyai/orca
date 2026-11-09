@@ -51,6 +51,8 @@ export type MobileSourceControlPanelProps = {
   name?: string
   embedded?: boolean
   initialTab?: SourceControlHubRouteTab
+  /** Back for a hub shown over another screen in place; a route's Back pops it. */
+  backInPlace?: { onPress: () => void; label: string }
   onRequestClose?: () => void
 }
 
@@ -60,6 +62,7 @@ export function MobileSourceControlPanel({
   name = '',
   embedded = false,
   initialTab = 'changes',
+  backInPlace,
   onRequestClose
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
@@ -251,6 +254,7 @@ export function MobileSourceControlPanel({
       // Only Changes reads through the query layer so far; the PR tab keeps its own loading UI.
       refreshing={activeTab === 'changes' && state.refreshing}
       onBack={onBack}
+      backInPlace={backInPlace}
       onClose={onClose}
       onRefresh={onRefresh}
       menuGroups={

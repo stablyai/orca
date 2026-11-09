@@ -273,8 +273,13 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       <NativeChatCrewFrame
         panel={<NativeChatCrewPanel {...props} composerRef={composerRef} canMention={canMention} />}
       >
-        <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
-          {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
+        <NativeChatContextClearFade
+          // A read failure stays in view: no divider may come to end the fade.
+          clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
+          overlay={
+            find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null
+          }
+        >
           {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
             historyPhase !== 'unread' && <NativeChatLoadingCue />
           ) : viewState.kind === 'error' ? (

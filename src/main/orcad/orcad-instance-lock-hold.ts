@@ -14,7 +14,9 @@ export type OrcadInstanceLock = {
   readonly path: string
   readonly record: OrcadLockRecord
   readonly previousUnexpectedExit: OrcadUnexpectedExit | null
-  release(): void
+  /** `keepUnexpectedExit` puts back the crashed run's record this lock reclaimed, so the next
+   * start still reports that run; for one-shot tools that must not consume the notice. */
+  release(options?: { keepUnexpectedExit?: boolean }): void
 }
 
 type OrcadLockBeat = 'held' | 'lost' | 'unproven'
@@ -90,8 +92,14 @@ export function holdOrcadInstanceLock(
   publish: () => boolean,
   {
     previousUnexpectedExit,
+    restoreReclaimedRecord,
     onExclusivityLost
-  }: { previousUnexpectedExit: OrcadUnexpectedExit | null; onExclusivityLost: () => void }
+  }: {
+    previousUnexpectedExit: OrcadUnexpectedExit | null
+    /** Republishes the reclaimed record without overwriting a successor's lock. */
+    restoreReclaimedRecord?: () => void
+    onExclusivityLost: () => void
+  }
 ): OrcadInstanceLock {
   let released = false
   const root = realpathSync(dirname(lockPath))
@@ -109,7 +117,7 @@ export function holdOrcadInstanceLock(
     path: lockPath,
     record,
     previousUnexpectedExit,
-    release: () => {
+    release: (options) => {
       if (released) {
         return
       }
@@ -127,6 +135,9 @@ export function holdOrcadInstanceLock(
         unlinkSync(lockPath)
       } catch {
         // Dead-PID leftovers can be reclaimed on the next start.
+      }
+      if (options?.keepUnexpectedExit && previousUnexpectedExit) {
+        restoreReclaimedRecord?.()
       }
     }
   }

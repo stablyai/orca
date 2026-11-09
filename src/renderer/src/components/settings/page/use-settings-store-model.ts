@@ -38,7 +38,7 @@ import {
 } from '../navigation/settings-project-list'
 import { resolveSettingsHostScope } from '../host-scope/settings-host-scope'
 import { useSettingsHostNavigation } from '../host-scope/use-settings-host-navigation'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
   projectRemovalTargets

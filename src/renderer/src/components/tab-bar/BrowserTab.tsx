@@ -9,9 +9,10 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { TabHoverCard } from './TabHoverCard'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -53,7 +54,7 @@ export function formatBrowserTabUrlLabel(url: string, t: Translate = translate):
   }
 }
 
-export function getBrowserTabLabel(tab: BrowserTabState, t?: Translate): string {
+export function getBrowserTabLabel(tab: BrowserWorkspace, t?: Translate): string {
   if (
     !tab.title ||
     tab.title === tab.url ||
@@ -65,7 +66,7 @@ export function getBrowserTabLabel(tab: BrowserTabState, t?: Translate): string 
   return tab.title || tab.url
 }
 
-function isBlankBrowserTab(tab: BrowserTabState): boolean {
+function isBlankBrowserTab(tab: BrowserWorkspace): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
@@ -85,7 +86,7 @@ export default function BrowserTab({
   dropIndicator,
   includeTopTabBorder = true
 }: {
-  tab: BrowserTabState
+  tab: BrowserWorkspace
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean

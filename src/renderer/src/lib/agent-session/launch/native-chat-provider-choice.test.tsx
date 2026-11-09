@@ -79,7 +79,7 @@ vi.mock('@/runtime/hosts/installation/managed-runtime-install-status', async (im
 vi.mock('@/runtime/hosts/installation/use-managed-runtime-install', () => ({
   useManagedRuntimeInstall: () => runtime.current
 }))
-vi.mock('../../../components/provider-accounts/AntigravityChatSignInRow', () => ({
+vi.mock('../../../components/provider-accounts/use-antigravity-chat-sign-in', () => ({
   useAntigravityChatSignIn: () => ({ flow: null })
 }))
 vi.mock(

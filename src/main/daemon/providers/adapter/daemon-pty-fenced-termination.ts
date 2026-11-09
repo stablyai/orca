@@ -9,8 +9,8 @@ import {
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
-import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
-export abstract class DaemonPtyFencedTermination extends DaemonPtyDaemonRecovery {
+import { DaemonPtyPreservedHostLoss } from './daemon-pty-preserved-host-loss'
+export abstract class DaemonPtyFencedTermination extends DaemonPtyPreservedHostLoss {
   async [admitProspectivePtySpawn]() {
     if (this.retired || this.idleRetirementAdmissionClosed || !this.supportsFencedTermination('')) {
       return null

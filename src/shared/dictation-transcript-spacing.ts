@@ -1,3 +1,7 @@
+/** Blocks that bound a rich-text caret's neighbours, so a new paragraph's start has none. */
+export const DICTATION_TEXT_BLOCK_SELECTOR =
+  'p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div'
+
 const CJK_BOUNDARY_CHAR_RE =
   /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u
 const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%。，、！？；：）)\]}”’»]$/u

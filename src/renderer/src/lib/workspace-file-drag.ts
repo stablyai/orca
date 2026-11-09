@@ -4,7 +4,7 @@ import {
   NATIVE_FILE_DROP_MAX_PATHS,
   validateNativeFileDropPaths
 } from '../../../shared/file-import/native-file-drop'
-import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 import {
   isUnresolvedOwnerHostId,
   normalizeExecutionHostId,
@@ -90,7 +90,7 @@ export function readWorkspaceFileDragSource(
     return null
   }
   if (
-    measureClipboardTextByteLength(data, {
+    measureUtf8ByteLength(data, {
       stopAfterBytes: WORKSPACE_FILE_DRAG_SOURCE_MAX_BYTES
     }).exceededLimit
   ) {
@@ -238,7 +238,7 @@ export function readWorkspaceFileDragPaths(
     return { byteLength: 0, pathCount: 0, paths: [], status: 'accepted' }
   }
 
-  const rawMeasurement = measureClipboardTextByteLength(data, { stopAfterBytes: maxPathBytes })
+  const rawMeasurement = measureUtf8ByteLength(data, { stopAfterBytes: maxPathBytes })
   if (rawMeasurement.exceededLimit) {
     return {
       byteLength: rawMeasurement.byteLength,

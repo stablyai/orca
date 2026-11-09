@@ -1,6 +1,7 @@
 import { webContents } from 'electron'
 import { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { BrowserManagerEventForwarding } from './browser-manager-event-forwarding'
 

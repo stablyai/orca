@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createLaunchFunnelStore, resetLaunchFunnelStore } from './agent-launch-funnel-test-harness'
-import type * as LaunchConnectionOwnerModule from '../../../connection-owner-resolution'
+import type * as LaunchConnectionOwnerModule from '../../../workspace/ownership/connection-owner-resolution'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
 
 const store = createLaunchFunnelStore()
@@ -12,9 +12,11 @@ const mockPasteDraftWhenAgentReady = vi.fn<(request: Record<string, unknown>) =>
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: mockLaunchConnectionId }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdFromState: mockLaunchConnectionId
+}))
 const mockLaunchConnectionId = vi.hoisted(() => () => null)
-vi.mock('../../../connection-owner-resolution', async (importOriginal) => ({
+vi.mock('../../../workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchConnectionOwnerModule>()),
   getConnectionIdFromState: mockLaunchConnectionId
 }))

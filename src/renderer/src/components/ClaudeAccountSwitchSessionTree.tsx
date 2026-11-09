@@ -4,12 +4,12 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
-import type { ClaudeAccountSwitchPromptSessions } from '@/lib/claude-account-switch-sessions'
+import type { ClaudeAccountSwitchPromptSessions } from '@/lib/provider-accounts/claude-account-switch-sessions'
 import {
   isClaudePaneMidTurn,
   type ClaudeSessionCantMoveReason,
   type ClaudeSessionMoveCandidate
-} from '@/lib/claude-session-account-move'
+} from '@/lib/agent-session/accounts/claude/claude-session-account-move'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName

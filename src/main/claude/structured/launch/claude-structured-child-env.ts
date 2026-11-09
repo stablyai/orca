@@ -82,6 +82,28 @@ async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChi
   return { ...invocation, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
 }
 
+const CLAUDE_ENTRYPOINT_ENV = 'CLAUDE_CODE_ENTRYPOINT'
+
+// Name Orca as the client instead of the SDK's sdk-ts default or a launching Claude's value.
+export function withOrcaClaudeEntrypoint(
+  inheritedEnv: Record<string, string>,
+  overlay: Record<string, string> | undefined,
+  platform: NodeJS.Platform
+): Record<string, string> {
+  // Windows env names are case-insensitive, so a differently cased twin is the same variable.
+  const isEntrypointKey = (key: string): boolean =>
+    (platform === 'win32' ? key.toUpperCase() : key) === CLAUDE_ENTRYPOINT_ENV
+  const withoutEntrypoint = (source: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(Object.entries(source).filter(([key]) => !isEntrypointKey(key)))
+  const override = Object.entries(overlay ?? {}).find(([key]) => isEntrypointKey(key))?.[1]
+  // The SDK reads only the exact name and otherwise adds its own default, which Windows would pick.
+  return {
+    ...withoutEntrypoint(inheritedEnv),
+    ...withoutEntrypoint(overlay ?? {}),
+    [CLAUDE_ENTRYPOINT_ENV]: override ?? 'orca'
+  }
+}
+
 // Merge onto the shell environment to retain PATH and ambient Anthropic auth.
 export function claudeChildEnv(
   sources: ClaudeChildEnvSources,
@@ -89,10 +111,13 @@ export function claudeChildEnv(
   /** False when the session's seal pairs the CLI runtime itself, behind this app's CLI. */
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
-  const env = decorateEnv({
-    ...withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-    ...sources.overlay
-  })
+  const env = decorateEnv(
+    withOrcaClaudeEntrypoint(
+      withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
+      sources.overlay,
+      process.platform
+    )
+  )
   return runtimeOnPath
     ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })
     : env

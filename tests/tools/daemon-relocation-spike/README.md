@@ -39,9 +39,6 @@ node tests/tools/daemon-relocation-spike/spike.mjs \
   --work-dir <scratch-dir> \
   [--tier full|no-gpu|minimal] \
   [--keep-work-dir]
-
-# Offline logic validation (any OS, no build, no launch):
-node tests/tools/daemon-relocation-spike/spike.mjs --selftest
 ```
 
 Exit code is `0` only when the run **PASSES**: daemon ready, PTY echo
@@ -138,8 +135,7 @@ handles those by construction (they are copied, so nothing opens the originals).
 ## What remains unverified until CI runs it
 
 This session has **no build**, so the launch path is unproven. Verified here:
-`node --check` on every `.mjs`, a green `--selftest`, and clean
-`pnpm exec oxlint`. Open questions the real CI run must answer:
+`node --check` on every `.mjs` and clean `pnpm exec oxlint`. Open questions the real CI run must answer:
 
 - Whether `TIER_MINIMAL` (no top-level DLLs) boots `Orca.exe` as node at all, or
   whether run-as-node still needs `ffmpeg.dll` / others — this is the core

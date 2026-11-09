@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))

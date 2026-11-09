@@ -43,7 +43,9 @@ vi.mock('@/runtime/workspace-layout/frames/layout-frame-terminal-panes', () => (
   layoutFrameTerminalTab: () => (frames.holdsTab ? { id: 'main-tab' } : undefined)
 }))
 const revealWorkspaceSurface = vi.hoisted(() => vi.fn())
-vi.mock('../../../workspace-surface-reveal', () => ({ revealWorkspaceSurface }))
+vi.mock('../../../workspace/activation/workspace-surface-reveal', () => ({
+  revealWorkspaceSurface
+}))
 
 createTabsSliceMockApi()
 

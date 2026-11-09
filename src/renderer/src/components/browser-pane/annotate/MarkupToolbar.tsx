@@ -105,7 +105,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
   const t = useTranslate()
   useUiLanguageRevision()
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <div className="flex flex-wrap items-center justify-center gap-1 rounded-md border border-border bg-card/95 px-1.5 py-1 shadow-md backdrop-blur">
         {toolItems(t).map((item) => (
           <IconButton

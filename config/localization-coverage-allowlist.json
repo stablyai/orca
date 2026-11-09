@@ -60,31 +60,45 @@
     "kind": "object-property:keywords",
     "text": "ghostty",
     "dynamic": false,
-    "count": 2
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
+    "kind": "object-property:keywords",
+    "text": "ghostty",
+    "dynamic": false,
+    "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",
     "dynamic": false,
-    "count": 2
+    "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Ghostty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
     "kind": "object-property:keywords",
     "text": "Kitty",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
     "kind": "object-property:keywords",
     "text": "kitty",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal/platform/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/terminal/configuration/terminal-config-import-search.ts",
     "kind": "object-property:keywords",
     "text": "kitty.conf",
     "dynamic": false,

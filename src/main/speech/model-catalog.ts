@@ -132,6 +132,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'openai-gpt-transcribe',
+    label: 'GPT Transcribe',
+    description: 'Cloud transcription with high accuracy. Requires an OpenAI API key.',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     description:
@@ -141,7 +152,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    // OpenAI shuts the gpt-4o transcribe models down on 2027-02-26.
+    replacedBy: 'openai-gpt-transcribe'
   },
   {
     id: 'openai-gpt-4o-transcribe',
@@ -152,7 +165,8 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    replacedBy: 'openai-gpt-transcribe'
   }
 ]
 

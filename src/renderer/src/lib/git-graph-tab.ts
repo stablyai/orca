@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
+import { captureWorktreeOperationGenerationSnapshot } from './workspace/ownership/worktree-operation-generation'
 import { useAppStore } from '@/store'
 import {
   findFirstIndexedWorktree,
@@ -16,7 +16,7 @@ import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
   type WorktreeOperationRouteState
-} from './worktree-operation-route'
+} from './workspace/ownership/worktree-operation-route'
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'
@@ -119,7 +119,11 @@ export function gitGraphUpdateMessage(worktreeId: string, t: Translate = transla
   })
 }
 
-export async function openGitGraph(worktreeId: string): Promise<void> {
+export async function openGitGraph(
+  worktreeId: string,
+  // Lazy so a split is created only when a new tab actually opens.
+  resolveTargetGroupId?: () => string | undefined
+): Promise<void> {
   const supported = await probeGitGraphSupport(worktreeId)
   if (!supported) {
     return
@@ -151,6 +155,6 @@ export async function openGitGraph(worktreeId: string): Promise<void> {
       },
       mode: 'git-graph'
     },
-    { reopenId: id, preview: false }
+    { reopenId: id, preview: false, targetGroupId: resolveTargetGroupId?.() }
   )
 }

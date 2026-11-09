@@ -31,8 +31,9 @@ import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
 } from '@/lib/browser/history/browser-page-conversion-history'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
