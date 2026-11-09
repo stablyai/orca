@@ -7,7 +7,14 @@ import {
   writeEnvironmentStore
 } from '../../shared/remote-runtime/host-store/runtime-environment-store-file'
 
-function isOrcaCloudRuntime(runtime: EphemeralVmRuntimeRecord): boolean {
+/** The fields of a runtime record the rename reads. */
+export type LegacyRenameRuntime = Pick<
+  EphemeralVmRuntimeRecord,
+  'id' | 'recipeId' | 'runtimeEnvironmentId'
+> &
+  Partial<Pick<EphemeralVmRuntimeRecord, 'recipe'>>
+
+function isOrcaCloudRuntime(runtime: LegacyRenameRuntime): boolean {
   return runtime.recipe?.provider === 'orca-cloud' || runtime.recipeId === ORCA_CLOUD_RECIPE_ID
 }
 
@@ -18,7 +25,7 @@ function isOrcaCloudRuntime(runtime: EphemeralVmRuntimeRecord): boolean {
  */
 export function renameLegacyOrcaCloudEnvironments(
   userDataPath: string,
-  runtimes: readonly EphemeralVmRuntimeRecord[]
+  runtimes: readonly LegacyRenameRuntime[]
 ): number {
   const renames = new Map<string, string>()
   for (const runtime of runtimes) {

@@ -1,8 +1,6 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { readdir, readFile, readlink } from 'node:fs/promises'
-import { promisify } from 'node:util'
 
-const execFileAsync = promisify(execFile)
 const TCP_LISTEN = '0A'
 // Little-endian hex as /proc/net/tcp{,6} prints them: 127.0.0.0/8, 0.0.0.0, ::1, ::, ::ffff:127.x.
 const LOOPBACK_OR_ANY =
@@ -65,12 +63,16 @@ async function linuxListenerPids(port: number): Promise<number[]> {
 
 async function darwinListenerPids(port: number): Promise<number[]> {
   try {
-    const { stdout } = await execFileAsync(
-      'lsof',
-      ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-a', '-u', String(process.getuid?.()), '-Fp'],
-      { timeout: 5_000 }
-    )
-    return stdout
+    const result = await runProcess({
+      program: 'lsof',
+      args: ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-a', '-u', String(process.getuid?.()), '-Fp'],
+      timeoutMs: 5_000
+    })
+    // lsof exits 1 when nothing listens; a timeout is treated the same (no listener proven).
+    if (result.timedOut || result.code !== 0) {
+      return []
+    }
+    return result.stdout
       .split('\n')
       .filter((line) => line.startsWith('p'))
       .map((line) => Number(line.slice(1)))

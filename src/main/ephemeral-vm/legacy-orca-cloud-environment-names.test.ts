@@ -7,18 +7,16 @@ import {
   addEnvironmentFromPairingCode,
   listEnvironments
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { renameLegacyOrcaCloudEnvironments } from './legacy-orca-cloud-environment-names'
+import {
+  renameLegacyOrcaCloudEnvironments,
+  type LegacyRenameRuntime
+} from './legacy-orca-cloud-environment-names'
 
 const CLOUD_RUNTIME = '6f1c2a9e-0b4d-4c11-9a3e-7d2f22b5b1e7'
 const RECIPE_RUNTIME = '0aa1c2a9-0b4d-4c11-9a3e-7d2f9c0ffee1'
 
-function runtime(
-  id: string,
-  runtimeEnvironmentId: string,
-  recipeId: string
-): EphemeralVmRuntimeRecord {
-  return { id, recipeId, runtimeEnvironmentId } as EphemeralVmRuntimeRecord
+function runtime(id: string, runtimeEnvironmentId: string, recipeId: string): LegacyRenameRuntime {
+  return { id, recipeId, runtimeEnvironmentId }
 }
 
 describe('renameLegacyOrcaCloudEnvironments', () => {

@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { registerEphemeralVmRecipeStepProvider } from '../../shared/ephemeral-vm-recipe-step-providers'
 import { ORCA_CLOUD_RECIPE } from '../hosted-sandbox/hosted-sandbox-recipe'
 
-const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
+const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 const { getPathMock, handleMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(),
   handleMock: vi.fn()
@@ -55,17 +55,20 @@ function setup(remote: string | null) {
   }))
   unregister.push(registerEphemeralVmRecipeStepProvider('orca-cloud', step))
   const repo = { id: 'repo-1', path: repoPath, displayName: 'Repo', addedAt: 0 }
-  registerEphemeralVmHandlers({
-    getRepo: vi.fn((id: string) => (id === repo.id ? repo : null)),
-    getRepos: vi.fn(() => [repo]),
-    getSettings: vi.fn(() => ({ activeRuntimeEnvironmentId: null }))
-  } as never)
+  registerEphemeralVmHandlers(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: provisioning reads only these three store methods
+    {
+      getRepo: vi.fn((id: string) => (id === repo.id ? repo : null)),
+      getRepos: vi.fn(() => [repo]),
+      getSettings: vi.fn(() => ({ activeRuntimeEnvironmentId: null }))
+    } as never
+  )
   const provision = (extra: Record<string, unknown> = {}) =>
     handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: ORCA_CLOUD_RECIPE.id,
       ...extra
-    } as never) as Promise<{ ok: boolean; errorCode?: string }>
+    })
   return { step, provision }
 }
 

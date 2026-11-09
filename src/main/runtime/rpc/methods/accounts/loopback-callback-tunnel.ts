@@ -23,6 +23,7 @@ export async function grantLoopbackCallbackPort(
   }
   const ended = new AbortController()
   let checking = false
+  // A liveness check with a stop: cleared on abort (listener gone, callback served, released).
   const poll = setInterval(() => {
     if (checking) {
       return

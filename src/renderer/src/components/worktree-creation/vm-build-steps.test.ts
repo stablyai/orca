@@ -7,6 +7,7 @@ import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'
 import { humanizeOrcaCloudLogLine } from './orca-cloud-build-log'
+import type { Translate } from '@/i18n/use-translate'
 
 const base = {
   status: 'creating' as const,
@@ -183,9 +184,7 @@ describe('holdRunningSteps', () => {
 })
 
 describe('humanizeOrcaCloudLogLine', () => {
-  const t = ((_key: string, fallback: string) => fallback) as Parameters<
-    typeof humanizeOrcaCloudLogLine
-  >[1]
+  const t: Translate = (_key, fallback) => fallback
 
   it('turns provider codes into sentences and hides internals', () => {
     expect(humanizeOrcaCloudLogLine('Orca Cloud: included_hours_exhausted', t)).toBe(

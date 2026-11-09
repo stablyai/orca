@@ -14,7 +14,6 @@ import {
   Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -323,11 +322,11 @@ export function FailureActionRow({
       ) : null}
       <Button
         type="button"
-        variant={destroys ? 'destructive-chip' : 'ghost'}
+        // Leaving is the quiet way out; only deleting a running sandbox earns the destructive chip.
+        variant={destroys ? 'destructive-chip' : 'quiet'}
         size="xs"
         onClick={actions.onDismiss}
-        // Leaving is the quiet way out; only deleting a running sandbox earns the destructive chip.
-        className={cn('ml-auto', !destroys && 'text-muted-foreground hover:text-foreground')}
+        className="ml-auto"
       >
         {destroys ? <Trash2 /> : null}
         {destroys
