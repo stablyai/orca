@@ -28,10 +28,10 @@ function environmentBuildIdOf(record: EphemeralVmRuntimeRecord): string | undefi
   if (!driver || typeof driver !== 'object' || Array.isArray(driver)) {
     return undefined
   }
-  const state = (driver as { driverState?: unknown }).driverState
+  const state = 'driverState' in driver ? driver.driverState : undefined
   const id =
-    state && typeof state === 'object' && !Array.isArray(state)
-      ? (state as { environmentBuildId?: unknown }).environmentBuildId
+    state && typeof state === 'object' && !Array.isArray(state) && 'environmentBuildId' in state
+      ? state.environmentBuildId
       : undefined
   return typeof id === 'string' && id ? id : undefined
 }

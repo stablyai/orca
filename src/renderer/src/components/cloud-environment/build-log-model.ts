@@ -8,7 +8,7 @@ export const BUILD_STEPS: readonly EnvironmentBuildStep[] = [
   'record',
   'snapshot'
 ]
-const SCRIPT_STEPS = new Set<EnvironmentBuildStep>(['clone', 'install', 'record'])
+const SCRIPT_STEP_LIST: readonly EnvironmentBuildStep[] = ['clone', 'install', 'record']
 
 export type LogLineKind = 'plain' | 'warning' | 'error' | 'orca-error'
 
@@ -35,9 +35,8 @@ const ERROR_LINE =
 const WARNING_LINE = /\b(?:warn|warning|deprecated)\b|WARN\b|^W: /i
 
 export function parseStepMarker(plain: string): EnvironmentBuildStep | null {
-  const match = STEP_MARKER.exec(plain.trim())
-  const step = match?.[1] as EnvironmentBuildStep | undefined
-  return step && SCRIPT_STEPS.has(step) ? step : null
+  const marker = STEP_MARKER.exec(plain.trim())?.[1]
+  return SCRIPT_STEP_LIST.find((step) => step === marker) ?? null
 }
 
 /** Heuristic highlighting; Orca's own `::orca-error::` lines win over everything. */

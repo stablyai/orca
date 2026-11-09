@@ -9,6 +9,10 @@ const textareaVariants = cva('', {
     variant: {
       default: '',
       code: 'font-mono',
+      // Body-size text at every width (the default steps up to text-base below md).
+      compact: 'text-sm md:text-sm',
+      // Borderless field inside a composer card that draws its own frame and focus.
+      bare: 'resize-none border-0 bg-transparent p-1 text-sm shadow-none md:text-sm focus-visible:ring-0 dark:bg-transparent',
       cell: 'h-full min-h-0 resize-none rounded-none border-0 px-2 py-0 font-mono text-xs shadow-none md:text-xs focus-visible:ring-1 focus-visible:ring-inset',
       composite:
         'resize-none rounded-none border-0 p-0 font-mono text-xs leading-5 shadow-none md:text-xs focus-visible:ring-0 dark:bg-transparent'

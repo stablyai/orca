@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils'
 import type { StepStatus } from './build-steps'
 import type { EnvironmentBuildStatus } from './cloud-environment-types'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 
 export function stepStatusFromBuild(status: EnvironmentBuildStatus): StepStatus {
   if (status === 'starting' || status === 'running' || status === 'snapshotting') {
@@ -37,11 +38,11 @@ export function BuildStatusIcon({
         <>
           <Loader2
             aria-hidden
-            className={cn(base, 'animate-spin text-sky-600 motion-reduce:hidden dark:text-sky-400')}
+            className={cn(base, 'animate-spin text-callout-note motion-reduce:hidden')}
           />
           <CircleDot
             aria-hidden
-            className={cn(base, 'hidden text-sky-600 motion-reduce:block dark:text-sky-400')}
+            className={cn(base, 'hidden text-callout-note motion-reduce:block')}
           />
         </>
       )
@@ -68,8 +69,8 @@ export function useNow(enabled: boolean, intervalMs = 1000): number {
       return
     }
     setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), intervalMs)
-    return () => window.clearInterval(timer)
+    // An elapsed-time clock: hidden windows skip ticks and catch up when shown.
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs })
   }, [enabled, intervalMs])
   return now
 }

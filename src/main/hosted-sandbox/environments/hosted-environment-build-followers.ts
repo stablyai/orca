@@ -124,16 +124,17 @@ export function createHostedEnvironmentBuildFollowers(
   }
 
   // Followers whose CLI went away keep streaming until swept, so sweep on a slow beat too.
-  let sweeper: ReturnType<typeof setInterval> | null = null
+  // Runs only while followers exist and stops once the last one is swept.
+  let sweeper: ReturnType<typeof setTimeout> | null = null
   const ensureSweeper = (): void => {
     if (sweeper) {
       return
     }
-    sweeper = setInterval(() => {
+    sweeper = setTimeout(() => {
+      sweeper = null
       sweep()
-      if (followers.size === 0 && sweeper) {
-        clearInterval(sweeper)
-        sweeper = null
+      if (followers.size > 0) {
+        ensureSweeper()
       }
     }, ABANDONED_AFTER_MS / 2)
     sweeper.unref?.()
@@ -269,7 +270,7 @@ export function createHostedEnvironmentBuildFollowers(
     },
     dispose() {
       if (sweeper) {
-        clearInterval(sweeper)
+        clearTimeout(sweeper)
         sweeper = null
       }
       // Deleting the current key while iterating a Map is safe.

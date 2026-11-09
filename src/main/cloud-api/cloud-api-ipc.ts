@@ -40,6 +40,7 @@ function call<A extends unknown[]>(
       }
       parsed.push(result.data)
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: parsed[i] is schemas[i]'s output and schemas is typed per A[i]; TS cannot prove a tuple built in a loop.
     return callCloudApi((client) => run(client, ...(parsed as A)))
   }
 }

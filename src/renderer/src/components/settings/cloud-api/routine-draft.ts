@@ -16,7 +16,12 @@ import {
   type RoutineTriggerInput
 } from '../../../../../shared/cloud-api/cloud-api-types'
 
-export type RoutineSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
+const ROUTINE_SCHEDULE_PRESETS = ['hourly', 'daily', 'weekdays', 'weekly', 'custom'] as const
+export type RoutineSchedulePreset = (typeof ROUTINE_SCHEDULE_PRESETS)[number]
+
+export function isRoutineSchedulePreset(value: string): value is RoutineSchedulePreset {
+  return ROUTINE_SCHEDULE_PRESETS.some((preset) => preset === value)
+}
 export type RoutineTriggerKind = RoutineTriggerInput['kind']
 
 export type RoutineDraft = {
@@ -43,14 +48,20 @@ export type RoutineDraft = {
   enabled: boolean
 }
 
-export type RoutineDraftField =
-  | 'name'
-  | 'source'
-  | 'repoUrl'
-  | 'customCron'
-  | 'githubEvents'
-  | 'prompt'
-  | 'maxRuntimeMinutes'
+const ROUTINE_DRAFT_FIELDS = [
+  'name',
+  'source',
+  'repoUrl',
+  'customCron',
+  'githubEvents',
+  'prompt',
+  'maxRuntimeMinutes'
+] as const
+export type RoutineDraftField = (typeof ROUTINE_DRAFT_FIELDS)[number]
+
+export function isRoutineDraftField(value: string): value is RoutineDraftField {
+  return ROUTINE_DRAFT_FIELDS.some((field) => field === value)
+}
 
 export const DEFAULT_ROUTINE_MAX_RUNTIME_MINUTES = 30
 
@@ -267,9 +278,7 @@ export function routinePatchFromInput(routine: Routine, input: RoutineInput): Ro
       patch.repo = input.repo
     }
   }
-  const { urlHint: _hint, ...currentTrigger } = routine.trigger as RoutineTriggerInput & {
-    urlHint?: unknown
-  }
+  const currentTrigger = triggerAsInput(routine.trigger)
   if (!same(input.trigger, currentTrigger)) {
     patch.trigger = input.trigger
   }
@@ -300,4 +309,9 @@ export function withCurrentProject(
   return projectId && !projects.some((project) => project.id === projectId)
     ? [...projects, { id: projectId, name: fallbackName, repo: null }]
     : projects
+}
+
+/** The trigger as the editor would send it: webhook triggers drop the server's URL hint. */
+function triggerAsInput(trigger: Routine['trigger']): RoutineTriggerInput {
+  return trigger.kind === 'webhook' ? { kind: 'webhook' } : trigger
 }

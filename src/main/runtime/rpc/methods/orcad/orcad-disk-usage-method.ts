@@ -6,6 +6,11 @@ import {
   OrcadDiskUsageParamsSchema
 } from '../../../../../shared/orcad-disk-usage'
 import type { Repo } from '../../../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../shared/execution-host'
 import { readOrcadDiskUsage } from '../../../../orcad/orcad-disk-usage'
 
 /** Workspace root first so it leads the result; then local repo checkouts and $HOME. */
@@ -17,8 +22,8 @@ export function orcadDiskUsageProbePaths(args: {
   const repoPaths = args.repos
     .filter(
       (repo) =>
-        !repo.connectionId &&
-        (!repo.executionHostId || repo.executionHostId === 'local') &&
+        getRepoRoutingConnectionId(repo) === null &&
+        getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
         isAbsolute(repo.path)
     )
     .map((repo) => repo.path)

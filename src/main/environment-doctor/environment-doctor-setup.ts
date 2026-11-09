@@ -29,7 +29,7 @@ export async function checkSetup(
   if (!script) {
     if (
       context.checkout.kind === 'checkout' &&
-      hasEnvironmentBuildMarker(context.checkout.commonDir, context.root)
+      (await hasEnvironmentBuildMarker(context.checkout.commonDir, context.root))
     ) {
       return [
         check(

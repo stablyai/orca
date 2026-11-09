@@ -158,7 +158,9 @@ export function RoutineRow({
             {where ? <span className="text-muted-foreground"> · {where}</span> : null}
             <span className="text-muted-foreground">
               {' · '}
-              {routine.agent === 'codex' ? 'Codex' : 'Claude Code'}
+              {routine.agent === 'codex'
+                ? t('auto.components.settings.cloudRoutines.agentCodex', 'Codex')
+                : t('auto.components.settings.cloudRoutines.agentClaude', 'Claude Code')}
             </span>
           </p>
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">

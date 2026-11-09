@@ -8,7 +8,9 @@ const inputVariants = cva('', {
   variants: {
     variant: {
       default: '',
-      code: 'font-mono text-xs md:text-xs'
+      code: 'font-mono text-xs md:text-xs',
+      /** Monospace at the body size, for a primary field that takes a path or slug. */
+      'code-body': 'font-mono text-[13px] md:text-[13px]'
     },
     surface: {
       default: '',
@@ -22,7 +24,9 @@ const inputVariants = cva('', {
     // Reserves room for an icon button absolutely positioned inside the field's right edge.
     adornment: {
       none: '',
-      trailing: 'pr-8'
+      trailing: 'pr-8',
+      // Reserves room for a decorative icon absolutely positioned inside the field's left edge.
+      leading: 'pl-7'
     }
   },
   defaultVariants: { variant: 'default', density: 'default', adornment: 'none' }

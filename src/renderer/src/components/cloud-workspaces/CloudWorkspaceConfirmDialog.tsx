@@ -62,9 +62,13 @@ function MakePrivateBody({
   return (
     <DialogDescription>
       {connected.length > 0
-        ? t('auto.components.cloudWorkspaces.makePrivateDisconnects', '{{names}} will be disconnected.', {
-            names
-          })
+        ? t(
+            'auto.components.cloudWorkspaces.makePrivateDisconnects',
+            '{{names}} will be disconnected.',
+            {
+              names
+            }
+          )
         : t(
             'auto.components.cloudWorkspaces.makePrivateNobody',
             'No teammates are connected right now. Only the owner will be able to open it.'

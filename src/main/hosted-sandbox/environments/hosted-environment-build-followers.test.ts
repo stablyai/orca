@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createHostedEnvironmentBuildFollowers,
   type HostedEnvironmentBuildFollowers
@@ -143,9 +143,14 @@ describe('createHostedEnvironmentBuildFollowers', () => {
     // Let both watches finish before reading, so both buffers filled up.
     await followers.poll(client, ENV_ID, BUILD_ID, 0, 0)
     await followers.poll(client, ENV_ID, other, 0, 0)
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    const a = await followers.poll(client, ENV_ID, BUILD_ID, 0, 0)
-    const b = await followers.poll(client, ENV_ID, other, 0, 0)
+    const [a, b] = await vi.waitFor(async () => {
+      const both = await Promise.all([
+        followers!.poll(client, ENV_ID, BUILD_ID, 0, 0),
+        followers!.poll(client, ENV_ID, other, 0, 0)
+      ])
+      expect(both.every((result) => result.done)).toBe(true)
+      return both
+    })
     const total = [...a.chunks, ...b.chunks].reduce((sum, entry) => sum + entry.data.length, 0)
     expect(total).toBeLessThanOrEqual(500)
     expect(a.truncated || b.truncated).toBe(true)

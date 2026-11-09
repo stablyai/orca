@@ -182,15 +182,23 @@ export function CloudWorkspaceRow({
         onClick={() => actions.open(w)}
         aria-label={
           w.ownerUserId === selfId
-            ? t('auto.components.cloudWorkspaces.rowLabelOwnedByYou', '{{title}}, {{status}}, owned by you', {
-                title,
-                status
-              })
-            : t('auto.components.cloudWorkspaces.rowLabel', '{{value0}}, {{value1}}, owned by {{value2}}', {
-                value0: title,
-                value1: status,
-                value2: ownerName
-              })
+            ? t(
+                'auto.components.cloudWorkspaces.rowLabelOwnedByYou',
+                '{{title}}, {{status}}, owned by you',
+                {
+                  title,
+                  status
+                }
+              )
+            : t(
+                'auto.components.cloudWorkspaces.rowLabel',
+                '{{value0}}, {{value1}}, owned by {{value2}}',
+                {
+                  value0: title,
+                  value1: status,
+                  value2: ownerName
+                }
+              )
         }
         aria-describedby={descriptionId}
         className="flex min-w-0 flex-1 cursor-default items-center gap-3 rounded-lg py-2 pl-3 text-left outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
@@ -224,10 +232,17 @@ export function CloudWorkspaceRow({
                 </TooltipTrigger>
                 <TooltipContent side="top">
                   {w.ownerUserId === selfId
-                    ? t('auto.components.cloudWorkspaces.privateTooltipYou', 'Private — only you can see it')
-                    : t('auto.components.cloudWorkspaces.privateTooltip', 'Private — only {{name}} can open it', {
-                        name: ownerName
-                      })}
+                    ? t(
+                        'auto.components.cloudWorkspaces.privateTooltipYou',
+                        'Private — only you can see it'
+                      )
+                    : t(
+                        'auto.components.cloudWorkspaces.privateTooltip',
+                        'Private — only {{name}} can open it',
+                        {
+                          name: ownerName
+                        }
+                      )}
                 </TooltipContent>
               </Tooltip>
             )}

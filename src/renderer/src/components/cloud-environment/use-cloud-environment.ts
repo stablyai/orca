@@ -11,6 +11,7 @@ import { draftFromEnvironment, draftPatch, upsertBuild } from './environment-dra
 import { useEnvironmentStaleness } from './use-environment-staleness'
 import { idleActions, type ActionState } from './environment-action-state'
 import { mergeBuildsByRecency, settledEnvironmentsApi } from './environment-api-safety'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 
 /** Builds advance server-side; while one runs, re-read the history this often (the log streams). */
 const IN_PROGRESS_POLL_MS = 8_000
@@ -105,12 +106,15 @@ export function useCloudEnvironment(rawApi: EnvironmentsApi) {
     if (!envId || !anyInProgress) {
       return
     }
-    const timer = window.setInterval(() => {
-      if (reading.current === 0) {
-        void readDetail(envId, { background: true })
-      }
-    }, IN_PROGRESS_POLL_MS)
-    return () => window.clearInterval(timer)
+    // Paused while the window is hidden; the build stream still pushes live status.
+    return installWindowVisibilityInterval({
+      run: () => {
+        if (reading.current === 0) {
+          void readDetail(envId, { background: true })
+        }
+      },
+      intervalMs: IN_PROGRESS_POLL_MS
+    })
   }, [envId, anyInProgress, readDetail])
 
   const applyBuild = useCallback((build: EnvironmentBuildView) => {

@@ -135,10 +135,8 @@ export function localTimeZone(): string {
 export function timeZoneOptions(local: string = localTimeZone()): string[] {
   let zones: string[] = []
   try {
-    zones =
-      (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.(
-        'timeZone'
-      ) ?? []
+    // Older runtimes lack supportedValuesOf; fall back to the guaranteed zones below.
+    zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
   } catch {
     zones = []
   }

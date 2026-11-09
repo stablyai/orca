@@ -91,7 +91,9 @@ export class RuntimeRepositoryHooksCommands {
       hooks,
       mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path),
       // Dependencies come from an Orca Cloud environment build: no setup-script nudge.
-      ...(isEnvironmentBuildCheckout(repo.path) ? { environmentProvisioned: true as const } : {})
+      ...((await isEnvironmentBuildCheckout(repo.path))
+        ? { environmentProvisioned: true as const }
+        : {})
     }
   }
 

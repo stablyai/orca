@@ -121,7 +121,7 @@ export function EnvironmentForm({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="max-w-72">
-                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                <DropdownMenuLabel variant="hint">
                   {t(
                     'cloudEnvironment.form.importHint',
                     'Reads Conductor and dev container setup from a local project.'

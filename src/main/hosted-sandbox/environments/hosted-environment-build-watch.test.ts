@@ -267,6 +267,7 @@ describe('watchHostedEnvironmentBuild', () => {
         },
         // Six heartbeats 15 ms apart span three idle windows of 30 ms without a single log line.
         async pull(controller) {
+          // ast-grep-ignore: test-no-real-time-wait -- the heartbeats must arrive in real time to straddle the stream's idle window.
           await new Promise((resolve) => setTimeout(resolve, 15))
           if (beats++ < 6) {
             controller.enqueue(encoder.encode(line({ type: 'heartbeat', at: beats })))

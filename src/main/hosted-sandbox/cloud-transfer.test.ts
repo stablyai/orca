@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -128,9 +128,12 @@ describe('cloud transfer housekeeping', () => {
     mkdirSync(join(root, 'abandoned'))
     writeFileSync(join(root, 'abandoned', 'transfer.tar'), 'x')
     mkdirSync(join(root, 'kept', 'unapplied'), { recursive: true })
-    expect(await sweepCloudTransfers(root, Date.now())).toBe(1)
-    expect(await sweepCloudTransfers(root, Date.now() + 31 * 86_400_000)).toBe(1)
-    expect(await sweepCloudTransfers(join(root, 'missing'), Date.now())).toBe(0)
+    // Fixed times: the leftovers were written at T0; the sweep runs a minute and a month later.
+    const T0 = 1_800_000_000_000
+    utimesSync(join(root, 'kept', 'unapplied'), T0 / 1000, T0 / 1000)
+    expect(await sweepCloudTransfers(root, T0 + 60_000)).toBe(1)
+    expect(await sweepCloudTransfers(root, T0 + 31 * 86_400_000)).toBe(1)
+    expect(await sweepCloudTransfers(join(root, 'missing'), T0)).toBe(0)
   })
 
   it('installs only session transcripts, never other files from the project folder', async () => {

@@ -103,10 +103,7 @@ export function BuildHistoryList({
                       : ''}
                   </span>
                   {build.active ? (
-                    <Badge
-                      variant="outline"
-                      className="h-4 border-status-success-border bg-status-success-background px-1.5 text-[10px] font-semibold tracking-wide text-status-success uppercase"
-                    >
+                    <Badge variant="statusActive">
                       {t('cloudEnvironment.history.active', 'Active')}
                     </Badge>
                   ) : null}
@@ -186,17 +183,19 @@ function ActivateButton({
 }): React.JSX.Element {
   const t = useTranslate()
   const button = (
-    <Button
-      type="button"
-      size="xs"
-      variant="ghost"
-      disabled={busy || !build.activatable}
-      onClick={() => onActivate(build)}
-      className="opacity-80 group-hover/build:opacity-100 focus-visible:opacity-100"
-    >
-      {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <RotateCcw />}
-      {t('cloudEnvironment.history.use', 'Use this build')}
-    </Button>
+    // Quiet until the row is hovered or the button focused; the wrapper owns the fade, not Button.
+    <span className="inline-flex opacity-80 group-hover/build:opacity-100 focus-within:opacity-100">
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        disabled={busy || !build.activatable}
+        onClick={() => onActivate(build)}
+      >
+        {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <RotateCcw />}
+        {t('cloudEnvironment.history.use', 'Use this build')}
+      </Button>
+    </span>
   )
   return (
     <DisabledReason

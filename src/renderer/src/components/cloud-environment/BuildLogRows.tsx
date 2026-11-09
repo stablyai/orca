@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { getBuiltinTheme } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { getIntlLocale } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { FOCUS_RING } from '../orca-cloud/cloud-focus'
@@ -106,7 +107,7 @@ export const LogLineRow = memo(function LogLineRow({
     <div
       className={cn(
         'group/line flex min-h-5 gap-3 px-3 leading-5 hover:bg-foreground/[0.04]',
-        line.kind === 'error' && 'bg-destructive/10 text-destructive dark:text-red-300',
+        line.kind === 'error' && 'bg-destructive/10 text-destructive',
         line.kind === 'warning' && 'text-status-warning-text'
       )}
     >
@@ -179,7 +180,7 @@ export function StepHeaderRow({
           className="text-[11px] tabular-nums text-muted-foreground"
           title={t('cloudEnvironment.log.lineCountTitle', 'Lines of output')}
         >
-          {lineCount.toLocaleString()}
+          {lineCount.toLocaleString(getIntlLocale())}
         </span>
       ) : null}
       <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
@@ -257,7 +258,7 @@ export function FailureSummary({
   const reason = onShowError ? null : buildErrorCopy(build.error, t)
   return (
     <InlineError
-      className="rounded-none border-x-0 border-t-0"
+      layout="strip-top"
       title={summary.headline}
       detail={
         reason ? (
@@ -297,7 +298,7 @@ export function LogFooter({
     return (
       <InlineError
         tone="neutral"
-        className="rounded-none border-x-0 border-b-0"
+        layout="strip-bottom"
         title={t('cloudEnvironment.log.lostStatic', 'Lost connection to the build log.')}
         detail={
           streamState === 'reconnecting'

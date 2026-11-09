@@ -27,6 +27,17 @@ function client(fetchImpl: typeof fetch, getAccessToken = async () => 'tok_secre
   })
 }
 
+async function cloudApiErrorOf(promise: Promise<unknown>): Promise<CloudApiError> {
+  const caught = await promise.then(
+    () => null,
+    (error: unknown) => error
+  )
+  if (!(caught instanceof CloudApiError)) {
+    throw new Error(`expected a CloudApiError, got ${String(caught)}`)
+  }
+  return caught
+}
+
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   try {
     await promise
@@ -41,45 +52,48 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
 
 describe('createCloudApiClient', () => {
   it('sends the bearer token, JSON body and query, and validates the answer', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
       respond(200, { keys: [KEY], availableScopes: ['audit:read'] })
     )
-    const keys = await client(fetchImpl as unknown as typeof fetch).listApiKeys()
+    const keys = await client(fetchImpl).listApiKeys()
     expect(keys.keys[0]?.prefix).toBe('orca_sk_Ab3x')
     // Unknown scopes from a newer server are dropped, not fatal.
     expect(keys.keys[0]?.scopes).toEqual(['workspaces:read'])
-    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+    const [url, init] = fetchImpl.mock.calls[0] ?? []
     expect(url).toBe('https://cp.example.dev/v1/api-keys')
-    expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok_secret')
-    expect(init.redirect).toBe('error')
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer tok_secret')
+    expect(init?.redirect).toBe('error')
 
-    const created = vi.fn(async () =>
+    const created = vi.fn<typeof fetch>(async () =>
       respond(201, { key: KEY, secret: `orca_sk_${'a'.repeat(32)}` })
     )
-    await client(created as unknown as typeof fetch).createApiKey({
+    await client(created).createApiKey({
       name: 'CI',
       scopes: ['workspaces:read']
     })
-    const [, createInit] = created.mock.calls[0] as unknown as [string, RequestInit]
-    expect(createInit.method).toBe('POST')
-    expect(JSON.parse(String(createInit.body))).toEqual({ name: 'CI', scopes: ['workspaces:read'] })
+    const [, createInit] = created.mock.calls[0] ?? []
+    expect(createInit?.method).toBe('POST')
+    expect(JSON.parse(String(createInit?.body))).toEqual({
+      name: 'CI',
+      scopes: ['workspaces:read']
+    })
 
-    const runs = vi.fn(async () => respond(200, { runs: [], nextBefore: null }))
-    await client(runs as unknown as typeof fetch).listRoutineRuns('rt/1', { limit: 20, before: 99 })
-    expect((runs.mock.calls[0] as unknown as [string])[0]).toBe(
+    const runs = vi.fn<typeof fetch>(async () => respond(200, { runs: [], nextBefore: null }))
+    await client(runs).listRoutineRuns('rt/1', { limit: 20, before: 99 })
+    expect(runs.mock.calls[0]?.[0]).toBe(
       'https://cp.example.dev/v1/routines/rt%2F1/runs?limit=20&before=99'
     )
   })
 
   it('rejects a malformed answer as invalid-response', async () => {
-    const fetchImpl = vi.fn(async () => respond(200, { keys: 'nope' }))
-    expect(await codeOf(client(fetchImpl as unknown as typeof fetch).listApiKeys())).toBe(
-      'invalid-response'
+    const fetchImpl = vi.fn<typeof fetch>(async () => respond(200, { keys: 'nope' }))
+    expect(await codeOf(client(fetchImpl).listApiKeys())).toBe('invalid-response')
+    const badSecret = vi.fn<typeof fetch>(async () =>
+      respond(201, { key: KEY, secret: 'not-a-key' })
     )
-    const badSecret = vi.fn(async () => respond(201, { key: KEY, secret: 'not-a-key' }))
     expect(
       await codeOf(
-        client(badSecret as unknown as typeof fetch).createApiKey({
+        client(badSecret).createApiKey({
           name: 'x',
           scopes: ['audit:read']
         })
@@ -88,51 +102,44 @@ describe('createCloudApiClient', () => {
   })
 
   it('maps network and token failures without leaking the token', async () => {
-    const offline = vi.fn(async () => {
+    const offline = vi.fn<typeof fetch>(async () => {
       throw new TypeError('fetch failed tok_secret')
     })
-    const error = await client(offline as unknown as typeof fetch)
-      .me()
-      .catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(CloudApiError)
-    expect((error as CloudApiError).code).toBe('network')
-    expect(String((error as CloudApiError).message)).not.toContain('tok_secret')
+    const error = await cloudApiErrorOf(client(offline).me())
+    expect(error.code).toBe('network')
+    expect(error.message).not.toContain('tok_secret')
 
-    const noToken = client(vi.fn() as unknown as typeof fetch, async () => {
+    const noToken = client(vi.fn<typeof fetch>(), async () => {
       throw new Error('signed out')
     })
     expect(await codeOf(noToken.me())).toBe('signed-out')
   })
 
   it('treats a missing routines route as not-available but a missing routine as not-found', async () => {
-    const missing = vi.fn(async () => respond(404, { error: 'not_found' }))
-    const c = client(missing as unknown as typeof fetch)
+    const missing = vi.fn<typeof fetch>(async () => respond(404, { error: 'not_found' }))
+    const c = client(missing)
     expect(await codeOf(c.listRoutines())).toBe('not-available')
     expect(await codeOf(c.getRoutine('rt_1'))).toBe('not-found')
   })
 
   it('carries retry-after on rate limits and accepts empty DELETE bodies', async () => {
-    const limited = vi.fn(async () =>
+    const limited = vi.fn<typeof fetch>(async () =>
       respond(429, { error: 'rate_limited' }, { 'retry-after': '7' })
     )
-    const error = (await client(limited as unknown as typeof fetch)
-      .listApiKeys()
-      .catch((caught: unknown) => caught)) as CloudApiError
+    const error = await cloudApiErrorOf(client(limited).listApiKeys())
     expect(error.code).toBe('rate-limited')
     expect(error.retryAfterSeconds).toBe(7)
 
-    const deleted = vi.fn(async () => new Response(null, { status: 200 }))
-    await expect(
-      client(deleted as unknown as typeof fetch).revokeApiKey('key_1')
-    ).resolves.toBeUndefined()
+    const deleted = vi.fn<typeof fetch>(async () => new Response(null, { status: 200 }))
+    await expect(client(deleted).revokeApiKey('key_1')).resolves.toBeUndefined()
   })
 })
 
 describe('response hardening', () => {
   it('keeps a freshly minted secret even if the key metadata drifted', async () => {
     const secret = `orca_sk_${'b'.repeat(32)}`
-    const fetchImpl = vi.fn(async () => respond(201, { key: { id: 7 }, secret }))
-    const created = await client(fetchImpl as unknown as typeof fetch).createApiKey({
+    const fetchImpl = vi.fn<typeof fetch>(async () => respond(201, { key: { id: 7 }, secret }))
+    const created = await client(fetchImpl).createApiKey({
       name: 'x',
       scopes: ['workspaces:read']
     })
@@ -154,9 +161,9 @@ describe('response hardening', () => {
       finishedAt: 2,
       durationMs: 1
     }
-    const fetchImpl = vi.fn(async () => respond(202, { run }))
+    const fetchImpl = vi.fn<typeof fetch>(async () => respond(202, { run }))
     // A bad link is dropped, never opened, and doesn't fail the whole response.
-    const { run: parsed } = await client(fetchImpl as unknown as typeof fetch).runRoutine('rt_1')
+    const { run: parsed } = await client(fetchImpl).runRoutine('rt_1')
     expect(parsed.result?.prUrl).toBeUndefined()
     expect(parsed.status).toBe('succeeded')
   })

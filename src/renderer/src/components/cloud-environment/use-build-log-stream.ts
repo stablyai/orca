@@ -56,7 +56,7 @@ export function useBuildLogStream(
   const [attempt, setAttempt] = useState(0)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- one buffer per build; reconnects reuse it.
   const buffer = useMemo(() => new BuildLogBuffer(), [envId, buildId])
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- the router lives as long as its buffer.
+  // The router lives as long as its buffer.
   const router = useMemo(() => new LogReplayRouter(buffer), [buffer])
   const [status, setStatus] = useState<StreamStatus>({
     key: null,

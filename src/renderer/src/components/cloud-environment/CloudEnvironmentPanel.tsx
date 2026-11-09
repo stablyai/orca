@@ -306,7 +306,7 @@ export function CloudEnvironmentSkeleton(): React.JSX.Element {
         </div>
         <Skeleton className="h-8 w-28" />
       </div>
-      <Skeleton className="h-48 w-full rounded-lg" />
+      <Skeleton shape="card" className="h-48 w-full" />
       <div className="space-y-2">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-10 w-full" />

@@ -61,10 +61,12 @@ function readServerError(body: unknown): { error?: string; reason?: string } {
   if (typeof body !== 'object' || body === null) {
     return {}
   }
-  const record = body as Record<string, unknown>
   const pick = (value: unknown): string | undefined =>
     typeof value === 'string' ? value.slice(0, MAX_DETAIL_CHARS) : undefined
-  return { error: pick(record.error), reason: pick(record.reason) }
+  return {
+    error: pick('error' in body ? body.error : undefined),
+    reason: pick('reason' in body ? body.reason : undefined)
+  }
 }
 
 /** Maps a non-2xx control-plane answer to a stable code the renderer can word. */

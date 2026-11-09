@@ -410,13 +410,13 @@ export const BuildLogViewer = memo(function BuildLogViewer({
           </div>
         </div>
         {running && !scroll.following && scroll.awayFromBottom && rowCount > 0 ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1">
             <Button
               type="button"
               size="xs"
-              variant="secondary"
+              variant="secondary-floating"
               onClick={jumpToLatest}
-              className="pointer-events-auto rounded-full shadow-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1"
+              className="pointer-events-auto"
             >
               <ArrowDown />
               {scroll.unseen > 0

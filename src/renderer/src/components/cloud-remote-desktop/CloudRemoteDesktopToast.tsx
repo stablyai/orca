@@ -146,19 +146,20 @@ export function CloudRemoteDesktopToast({
       <InlineError
         title={copy.title}
         detail={copy.detail}
-        className={copy.action ? 'pr-9 pb-11' : 'pr-9'}
+        layout="toast"
+        action={
+          copy.action ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => onAction(copy.action!)}
+            >
+              {actionLabel(t, copy.action)}
+            </Button>
+          ) : undefined
+        }
       />
-      {copy.action ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="absolute bottom-2.5 left-10"
-          onClick={() => onAction(copy.action!)}
-        >
-          {actionLabel(t, copy.action)}
-        </Button>
-      ) : null}
       <Button
         type="button"
         variant="ghost"

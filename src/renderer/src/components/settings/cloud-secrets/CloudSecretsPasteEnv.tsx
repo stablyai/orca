@@ -233,12 +233,14 @@ export function CloudSecretsPasteEnv({
             t('cloudSecrets.paste.ready', '{{count}} ready', { count }),
             blocked > 0
               ? t('cloudSecrets.paste.blocked', '{{count}} need a fix and will be skipped', {
-                  count: blocked
+                  count: blocked,
+                  defaultValue_one: '{{count}} needs a fix and will be skipped'
                 })
               : null,
             duplicates > 0
               ? t('cloudSecrets.paste.duplicates', '{{count}} duplicates ignored', {
-                  count: duplicates
+                  count: duplicates,
+                  defaultValue_one: '{{count}} duplicate ignored'
                 })
               : null
           ]
@@ -326,7 +328,10 @@ export function CloudSecretsPasteEnv({
             onClick={() => void save()}
           >
             {saving ? <Loader2 className="animate-spin" /> : null}
-            {t('cloudSecrets.paste.save', 'Save {{count}} secrets', { count })}
+            {t('cloudSecrets.paste.save', 'Save {{count}} secrets', {
+              count,
+              defaultValue_one: 'Save {{count}} secret'
+            })}
           </Button>
         </div>
       </div>

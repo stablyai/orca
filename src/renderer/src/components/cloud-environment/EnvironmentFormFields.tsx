@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
+import { getIntlLocale } from '@/i18n/i18n'
 import { normalizeRepoInput, repoDisplayName, repoKey } from './cloud-environment-copy'
 import type { EnvironmentDraft } from './cloud-environment-types'
 import { MAX_INSTALL_SCRIPT_CHARS } from './environment-draft'
@@ -118,7 +119,9 @@ export function RepoListEditor({
                     aria-label={t('cloudEnvironment.form.branchAria', 'Branch for {{repo}}', {
                       repo: name
                     })}
-                    className="h-7 pl-7 font-mono text-xs md:text-xs"
+                    variant="code"
+                    adornment="leading"
+                    className="h-7"
                     onChange={(event) => {
                       const next = [...repos]
                       next[index] = {
@@ -159,7 +162,8 @@ export function RepoListEditor({
           )}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${inputId}-error` : undefined}
-          className="h-8 font-mono text-[13px] md:text-[13px]"
+          variant="code-body"
+          className="h-8"
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault()
@@ -194,14 +198,13 @@ export function RepoListEditor({
               type="button"
               variant="outline"
               size="xs"
-              className="font-mono"
               onClick={() => add(suggestion.slug)}
               aria-label={t('cloudEnvironment.form.addSuggestion', 'Add {{repo}}', {
                 repo: suggestion.slug
               })}
             >
               <Plus />
-              {suggestion.slug}
+              <span className="font-mono">{suggestion.slug}</span>
             </Button>
           ))}
         </div>
@@ -322,7 +325,8 @@ export function InstallScriptEditor({
             readOnly && 'hidden'
           )}
         >
-          {value.length.toLocaleString()} / {MAX_INSTALL_SCRIPT_CHARS.toLocaleString()}
+          {value.length.toLocaleString(getIntlLocale())} /{' '}
+          {MAX_INSTALL_SCRIPT_CHARS.toLocaleString(getIntlLocale())}
         </span>
       </div>
     </div>

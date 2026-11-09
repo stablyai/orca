@@ -32,6 +32,6 @@ export const Scopes = z
   .max(64)
   .transform((scopes) =>
     scopes.filter((scope): scope is CloudApiScope =>
-      (CLOUD_API_SCOPES as readonly string[]).includes(scope)
+      CLOUD_API_SCOPES.some((known) => known === scope)
     )
   )

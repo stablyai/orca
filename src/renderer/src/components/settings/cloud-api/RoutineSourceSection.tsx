@@ -133,7 +133,10 @@ export function RoutineSourceSection({
               value={draft.repoUrl}
               inputMode="url"
               spellCheck={false}
-              placeholder="https://github.com/acme/api"
+              placeholder={t(
+                'auto.components.settings.cloudRoutines.editor.repoUrlPlaceholder',
+                'https://github.com/acme/api'
+              )}
               aria-invalid={Boolean(errors.repoUrl)}
               aria-describedby={errors.repoUrl ? `${ids}-repo-error` : undefined}
               onChange={(event) => update({ repoUrl: event.target.value })}

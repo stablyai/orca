@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { sampleBuild } from './cloud-environment-fixture-data'
 import { mergeBuildsByRecency, settledEnvironmentsApi } from './environment-api-safety'
-import type { EnvironmentsApi } from './cloud-environment-types'
 
 describe('mergeBuildsByRecency', () => {
   it('keeps the further-along view of a build but takes `active` from the fetch', () => {
@@ -31,9 +30,16 @@ describe('mergeBuildsByRecency', () => {
 
 describe('settledEnvironmentsApi', () => {
   it('turns a rejected call into an error result', async () => {
+    const gone = (): Promise<never> => Promise.reject(new Error('ipc gone'))
     const api = settledEnvironmentsApi({
-      get: () => Promise.reject(new Error('ipc gone'))
-    } as unknown as EnvironmentsApi)
+      list: gone,
+      get: gone,
+      create: gone,
+      update: gone,
+      startBuild: gone,
+      cancelBuild: gone,
+      activateBuild: gone
+    })
     await expect(api.get('env_1')).resolves.toEqual({
       ok: false,
       error: { code: 'unavailable', message: 'ipc gone' }

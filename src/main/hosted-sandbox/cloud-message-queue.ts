@@ -10,7 +10,6 @@
 // Only the person queuing a prompt wakes a VM. Background retries deliver only to a VM that is
 // already up, never to one asleep, archived or manually disconnected, and stop after a budget.
 import { randomUUID } from 'node:crypto'
-import { rmSync } from 'node:fs'
 import { CLOUD_QUEUED_PROMPT_MAX_CHARS } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -21,12 +20,12 @@ import {
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { SendParams } from '../../shared/rpc-contract/structured-agent-session-params'
 import {
-  readSealedPrompts,
+  createSealedPromptDisk,
   currentFence,
+  earliestOwedAttempt,
   publicView,
   RETRYABLE_REFUSALS,
-  removeLegacyPlaintextQueue,
-  writeSealedPrompts,
+  SendResultSchema,
   type CloudMessageQueue,
   type CloudMessageQueueDeps,
   type StoredPrompt
@@ -52,26 +51,33 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
   const log = deps.log ?? ((line: string) => console.error(line))
   const driving = new Map<string, Promise<void>>()
   const mintId = () => createStructuredAgentSessionOperationId(randomUUID, now())
-  removeLegacyPlaintextQueue(deps.path)
-  let prompts: StoredPrompt[] = readSealedPrompts(deps.path, deps.codec)
+  let prompts: StoredPrompt[] = []
+  // Bumped by clear() so a load still reading the old file cannot bring cleared prompts back.
+  let generation = 0
+  const disk = createSealedPromptDisk(deps.path, deps.codec, log)
+  const loaded = disk.load.then((stored) => {
+    prompts = generation === 0 ? [...stored, ...prompts] : prompts
+  })
 
-  function save(): void {
+  /** Resolves once the queue is on disk as of this call; rejects if that write failed. */
+  function save(): Promise<void> {
     const cutoff = now() - DELIVERED_RETENTION_MS
     prompts = prompts.filter((prompt) => prompt.state !== 'delivered' || prompt.updatedAt >= cutoff)
-    writeSealedPrompts(deps.path, deps.codec, prompts)
+    return disk.write(prompts)
   }
 
-  function update(prompt: StoredPrompt, patch: Partial<StoredPrompt>): void {
+  function update(prompt: StoredPrompt, patch: Partial<StoredPrompt>): Promise<void> {
     Object.assign(prompt, patch, { updatedAt: now() })
-    save()
+    const saved = save()
     deps.onChange?.(prompt.workspaceId)
+    return saved
   }
 
   function failOnce(prompt: StoredPrompt, error: string): void {
     const failures = prompt.failures + 1
     if (failures >= MAX_FAILURES) {
       // A prompt that reached `sending` may already be on the host: say so, so nobody re-sends it.
-      update(
+      void update(
         prompt,
         prompt.state === 'sending'
           ? {
@@ -83,7 +89,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       )
       return
     }
-    update(prompt, {
+    void update(prompt, {
       failures,
       nextAttemptAt: now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** (failures - 1))
     })
@@ -104,7 +110,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       prompt.state === 'queued' &&
       now() - mintedAt > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - REMINT_MARGIN_MS
     ) {
-      update(prompt, { clientOperationId: mintId() })
+      await update(prompt, { clientOperationId: mintId() })
     }
     const before = { id: prompt.clientOperationId, text: prompt.text, state: prompt.state }
     let fence: number | { refused: string } | null
@@ -129,7 +135,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       return 'stop'
     }
     if (typeof fence !== 'number') {
-      update(prompt, { state: 'failed', error: 'This chat is no longer on the workspace.' })
+      await update(prompt, { state: 'failed', error: 'This chat is no longer on the workspace.' })
       return 'next'
     }
     const params = structuredAgentSessionMessageSendMutation({
@@ -142,11 +148,11 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
     })
     // The host's own schema: a prompt it would reject outright is failed here, never retried.
     if (!SendParams.safeParse(params).success) {
-      update(prompt, { state: 'failed', error: 'This message cannot be sent to that chat.' })
+      await update(prompt, { state: 'failed', error: 'This message cannot be sent to that chat.' })
       return 'next'
     }
     // Durable before the send: from here on, any retry resends this same operation id.
-    update(prompt, { state: 'sending' })
+    await update(prompt, { state: 'sending' })
     let response: RuntimeRpcResponse<unknown>
     try {
       response = await deps.call(environmentId, 'agentSession.send', params, SEND_TIMEOUT_MS)
@@ -159,9 +165,10 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       failOnce(prompt, response.error.message.slice(0, 200))
       return 'stop'
     }
-    const result = response.result as { ok: boolean; refusal?: { code?: string; message?: string } }
+    const parsed = SendResultSchema.safeParse(response.result)
+    const result = parsed.success ? parsed.data : { ok: false, refusal: undefined }
     if (result.ok) {
-      update(prompt, { state: 'delivered', error: undefined })
+      await update(prompt, { state: 'delivered', error: undefined })
       return 'next'
     }
     const code = result.refusal?.code ?? 'unknown'
@@ -169,11 +176,12 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       failOnce(prompt, result.refusal?.message ?? code)
       return 'stop'
     }
-    update(prompt, { state: 'failed', error: result.refusal?.message ?? code })
+    await update(prompt, { state: 'failed', error: result.refusal?.message ?? code })
     return 'next'
   }
 
   async function driveWorkspace(workspaceId: string, allowWake: boolean): Promise<void> {
+    await loaded
     if (pendingOf(workspaceId).length === 0) {
       return
     }
@@ -233,6 +241,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       if (!trimmed || trimmed.length > CLOUD_QUEUED_PROMPT_MAX_CHARS) {
         throw new Error('Prompt is empty or too long.')
       }
+      await loaded
       const place = await deps.locate(workspaceId)
       if (place.kind === 'blocked') {
         throw new Error(place.reason)
@@ -254,7 +263,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
         nextAttemptAt: at
       }
       prompts.push(prompt)
-      save()
+      await save()
       deps.onChange?.(workspaceId)
       void run(workspaceId, true)
       return publicView(prompt)
@@ -268,7 +277,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
         return false
       }
       prompts = prompts.filter((p) => p !== prompt)
-      save()
+      void save()
       deps.onChange?.(prompt.workspaceId)
       return true
     },
@@ -284,9 +293,11 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
         return false
       }
       // Never sent, so a new text is a new operation; nothing on the host knows the old id.
-      update(prompt, { text: trimmed, clientOperationId: mintId() })
+      void update(prompt, { text: trimmed, clientOperationId: mintId() })
       return true
     },
+    nextAttemptAt: () => earliestOwedAttempt(prompts),
+    flushed: () => disk.flushed(),
     drive(workspaceId) {
       const ids = workspaceId
         ? [workspaceId]
@@ -309,15 +320,15 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
         }
       }
       if (changed) {
-        save()
+        void save()
         deps.onChange?.(workspaceId)
       }
     },
     clear() {
-      removeLegacyPlaintextQueue(deps.path)
+      generation++
       const workspaces = new Set(prompts.map((p) => p.workspaceId))
       prompts = []
-      rmSync(deps.path, { force: true })
+      void disk.remove().catch(() => undefined)
       for (const workspaceId of workspaces) {
         deps.onChange?.(workspaceId)
       }

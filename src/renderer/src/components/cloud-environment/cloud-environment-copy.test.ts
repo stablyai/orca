@@ -8,9 +8,13 @@ import {
 } from './cloud-environment-copy'
 import type { EnvironmentStaleness } from './cloud-environment-types'
 import { parseEnvVarNames } from './environment-draft'
+import type { Translate } from '@/i18n/use-translate'
 
-const t = (_key: string, fallback: string, options?: Record<string, unknown>): string =>
-  fallback.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(options?.[name] ?? ''))
+const t: Translate = (_key, fallback, options) =>
+  fallback.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
+    const value: unknown = options?.[name]
+    return value === undefined || value === null ? '' : String(value)
+  })
 
 function staleness(overrides: Partial<EnvironmentStaleness>): EnvironmentStaleness {
   return {
@@ -51,7 +55,7 @@ describe('stalenessBannerCopy', () => {
         ]
       }),
       6,
-      t as never
+      t
     )
     expect(copy).toEqual({
       tone: 'prominent',
@@ -62,7 +66,7 @@ describe('stalenessBannerCopy', () => {
 
   it('reports config changes', () => {
     expect(
-      stalenessBannerCopy(staleness({ recommendation: 'config_changed' }), 6, t as never)?.message
+      stalenessBannerCopy(staleness({ recommendation: 'config_changed' }), 6, t)?.message
     ).toBe('You changed the environment since build #6')
   })
 
@@ -73,7 +77,7 @@ describe('stalenessBannerCopy', () => {
         repos: [{ ...staleness({}).repos[0], aheadBy: 12 }]
       }),
       6,
-      t as never
+      t
     )
     expect(many).toEqual({
       tone: 'subtle',
@@ -87,31 +91,29 @@ describe('stalenessBannerCopy', () => {
         repos: [{ ...staleness({}).repos[0], aheadBy: 1 }]
       }),
       6,
-      ((key: string, fallback: string, options?: Record<string, unknown>) => {
+      (key, fallback, options) => {
         seen.push(options ?? {})
         return t(key, fallback, options)
-      }) as never
+      }
     )
     expect(seen[0]).toMatchObject({ count: 1 })
   })
 
   it('is subtle when Orca updated the base image', () => {
-    const copy = stalenessBannerCopy(staleness({ recommendation: 'image_updated' }), 6, t as never)
+    const copy = stalenessBannerCopy(staleness({ recommendation: 'image_updated' }), 6, t)
     expect(copy).toEqual({
       tone: 'subtle',
       rebuild: true,
       message: 'Orca’s base image was updated since build #6 — rebuild to pick it up'
     })
-    const flagged = stalenessBannerCopy(staleness({ imageUpdated: true }), 6, t as never)
+    const flagged = stalenessBannerCopy(staleness({ imageUpdated: true }), 6, t)
     expect(flagged?.tone).toBe('subtle')
   })
 
   it('says nothing when up to date, unknown or never built', () => {
-    expect(stalenessBannerCopy(staleness({}), 6, t as never)).toBeNull()
-    expect(stalenessBannerCopy(staleness({ recommendation: 'unknown' }), 6, t as never)).toBeNull()
-    expect(
-      stalenessBannerCopy(staleness({ recommendation: 'deps_changed' }), null, t as never)
-    ).toBeNull()
+    expect(stalenessBannerCopy(staleness({}), 6, t)).toBeNull()
+    expect(stalenessBannerCopy(staleness({ recommendation: 'unknown' }), 6, t)).toBeNull()
+    expect(stalenessBannerCopy(staleness({ recommendation: 'deps_changed' }), null, t)).toBeNull()
   })
 })
 
@@ -138,18 +140,16 @@ describe('env var names', () => {
 
 describe('build failure copy', () => {
   it('never implies a failed build replaced the active one', () => {
-    expect(failedBuildSummary(7, 'install', 6, t as never)).toEqual({
+    expect(failedBuildSummary(7, 'install', 6, t)).toEqual({
       headline: 'Build #7 failed at Run install script.',
       consequence: 'New workspaces still start from build #6.'
     })
-    expect(failedBuildSummary(3, null, null, t as never)).toEqual({
+    expect(failedBuildSummary(3, null, null, t)).toEqual({
       headline: 'Build #3 failed.',
       consequence: 'New workspaces start without a prebuilt environment until a build succeeds.'
     })
-    expect(buildErrorCopy('exit_2', t as never)).toBe(
-      'The install script stopped at a failing command.'
-    )
-    expect(buildErrorCopy('provider_503', t as never)).not.toMatch(/503|provider/)
-    expect(buildErrorCopy(null, t as never)).toBeNull()
+    expect(buildErrorCopy('exit_2', t)).toBe('The install script stopped at a failing command.')
+    expect(buildErrorCopy('provider_503', t)).not.toMatch(/503|provider/)
+    expect(buildErrorCopy(null, t)).toBeNull()
   })
 })

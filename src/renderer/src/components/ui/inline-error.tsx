@@ -16,6 +16,9 @@ type InlineErrorProps = {
   retrying?: boolean
   /** 'compact' for narrow panels (sidebar sections): tighter padding, xs text. */
   density?: 'default' | 'compact'
+  /** 'toast' leaves room for the toast's own dismiss button and puts the action under the text.
+   *  'strip-top' / 'strip-bottom' run edge to edge at the top or bottom of a framed panel. */
+  layout?: 'inline' | 'toast' | 'strip-top' | 'strip-bottom'
   /** A next step other than retry (e.g. "Sign in"), rendered inside the box after the text.
    *  Pass an outline xs Button with a short verb-first label; never a primary button. */
   action?: React.ReactNode
@@ -35,6 +38,7 @@ function InlineError({
   onRetry,
   retrying = false,
   density = 'default',
+  layout = 'inline',
   action,
   className
 }: InlineErrorProps): React.JSX.Element {
@@ -46,8 +50,14 @@ function InlineError({
       className={cn(
         // Wraps so a narrow box (e.g. a hint under a half-width field) puts its button under the text
         // instead of squeezing the text to one word per line.
-        'flex flex-wrap rounded-lg border',
+        'flex flex-wrap border',
+        layout === 'strip-top'
+          ? 'rounded-none border-x-0 border-t-0'
+          : layout === 'strip-bottom'
+            ? 'rounded-none border-x-0 border-b-0'
+            : 'rounded-lg',
         density === 'compact' ? 'gap-2 px-2.5 py-2 text-xs' : 'gap-3 px-3 py-2.5 text-sm',
+        layout === 'toast' && 'pr-9',
         detail ? 'items-start' : 'items-center',
         tone === 'error'
           ? 'border-destructive/15 bg-destructive/5 dark:border-destructive/25'
@@ -77,7 +87,17 @@ function InlineError({
           </p>
         ) : null}
       </div>
-      {action ? <div className="ms-auto flex shrink-0 items-center gap-2">{action}</div> : null}
+      {action ? (
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2',
+            // Under the text, aligned with the title (icon width + gap).
+            layout === 'toast' ? 'basis-full ps-7' : 'ms-auto'
+          )}
+        >
+          {action}
+        </div>
+      ) : null}
       {onRetry && retryLabel ? (
         <Button
           type="button"

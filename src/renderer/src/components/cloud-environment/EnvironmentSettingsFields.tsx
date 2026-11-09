@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { X } from 'lucide-react'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { cn } from '@/lib/utils'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { useTranslate } from '@/i18n/use-translate'
 import { MAX_ENV_VAR_NAMES, parseEnvVarNames } from './environment-draft'
 import type { EnvironmentMachineSize } from './cloud-environment-types'
@@ -127,6 +128,9 @@ export function EnvVarChipEditor({
               }
             }}
             onKeyDown={(event) => {
+              if (isImeOwnedKeyboardEvent(event)) {
+                return
+              }
               if (event.key === 'Enter') {
                 event.preventDefault()
                 commit(value)

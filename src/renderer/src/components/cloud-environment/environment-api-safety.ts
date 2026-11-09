@@ -16,12 +16,12 @@ function settle<T>(promise: Promise<EnvironmentResult<T>>): Promise<EnvironmentR
 }
 
 /** The calls the settings panel makes, each guaranteed to resolve. */
-export function settledEnvironmentsApi(
-  api: EnvironmentsApi
-): Pick<
+type SettledCalls = Pick<
   EnvironmentsApi,
   'list' | 'get' | 'create' | 'update' | 'startBuild' | 'cancelBuild' | 'activateBuild'
-> {
+>
+
+export function settledEnvironmentsApi(api: SettledCalls): SettledCalls {
   return {
     list: () => settle(api.list()),
     get: (envId) => settle(api.get(envId)),

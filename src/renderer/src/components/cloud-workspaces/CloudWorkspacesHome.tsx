@@ -22,7 +22,11 @@ import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
 import { frontCloudChat } from './cloud-workspace-links'
-import { cloudWorkspaceTitle, copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
+import {
+  cloudWorkspaceTitle,
+  copyCloudWorkspaceLink,
+  openCloudWorkspace
+} from './open-cloud-workspace'
 import { useCloudWorkspaces, useCloudWorkspacesAvailable } from './use-cloud-workspaces'
 
 const INITIAL_FILTERS: CloudWorkspacesFilters = {

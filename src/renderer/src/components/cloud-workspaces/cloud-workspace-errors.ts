@@ -65,7 +65,10 @@ export function describeInlineError(
   t: Translate = translate
 ): string {
   if (error === 'unauthorized') {
-    return t('auto.components.cloudWorkspaces.errorUnauthorizedInline', 'Your Orca Cloud session expired.')
+    return t(
+      'auto.components.cloudWorkspaces.errorUnauthorizedInline',
+      'Your Orca Cloud session expired.'
+    )
   }
   if (error === 'timeout' || error === 'unavailable' || error === 'provider_unavailable') {
     return t(
@@ -87,5 +90,8 @@ export function describeInlineError(
   ) {
     return describeError(error, reason, t)
   }
-  return t('auto.components.cloudWorkspaces.errorUnknownInline', 'Something went wrong. Nothing was changed.')
+  return t(
+    'auto.components.cloudWorkspaces.errorUnknownInline',
+    'Something went wrong. Nothing was changed.'
+  )
 }

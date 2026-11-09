@@ -268,7 +268,15 @@ function FormStep({
         id={`${ids}-expiry`}
         label={t('auto.components.settings.cloudApi.create.expiry', 'Expires')}
       >
-        <Select value={expiry} onValueChange={(next) => setExpiry(next as Expiry)}>
+        <Select
+          value={expiry}
+          onValueChange={(next) => {
+            const option = EXPIRY_OPTIONS.find((value) => value === next)
+            if (option) {
+              setExpiry(option)
+            }
+          }}
+        >
           <SelectTrigger id={`${ids}-expiry`} className="w-full">
             <SelectValue />
           </SelectTrigger>

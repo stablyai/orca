@@ -34,6 +34,7 @@ import { RoutineAgentSection, routineFieldError as fieldError } from './RoutineA
 import { WebhookTriggerInfo, WebhookUrlStep } from './RoutineWebhookParts'
 import {
   emptyRoutineDraft,
+  isRoutineDraftField,
   routineDraftFromRoutine,
   routinePatchFromInput,
   withCurrentProject,
@@ -204,7 +205,9 @@ function EditorForm({
     setErrors((current) => {
       const next = { ...current }
       for (const key of Object.keys(patch)) {
-        delete next[key as RoutineDraftField]
+        if (isRoutineDraftField(key)) {
+          delete next[key]
+        }
       }
       if ('projectId' in patch) {
         delete next.source

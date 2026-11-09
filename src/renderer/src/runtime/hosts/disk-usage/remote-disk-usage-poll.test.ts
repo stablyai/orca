@@ -10,6 +10,7 @@ import {
 } from './remote-disk-usage-poll'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { OrcadDiskUsageResult } from '../../../../../shared/orcad-disk-usage'
+import type { RuntimeRpcFailure } from '../../../../../shared/runtime-rpc-envelope'
 
 const RESULT: OrcadDiskUsageResult = {
   checkedAt: 1,
@@ -17,12 +18,13 @@ const RESULT: OrcadDiskUsageResult = {
 }
 
 function rpcError(code: string): RuntimeRpcCallError {
-  return new RuntimeRpcCallError({
+  const failure: RuntimeRpcFailure = {
     id: '1',
     ok: false,
     error: { code, message: code },
     _meta: { runtimeId: 'r' }
-  } as never)
+  }
+  return new RuntimeRpcCallError(failure)
 }
 
 function noFocus(): () => void {

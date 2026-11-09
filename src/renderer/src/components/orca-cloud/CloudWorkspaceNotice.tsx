@@ -58,8 +58,8 @@ export function CloudWorkspaceNotice({
       {onDismiss ? (
         <Button
           size="icon-xs"
-          variant="ghost"
-          className="-mt-1 -mr-1 text-muted-foreground"
+          variant="quiet"
+          className="-mt-1 -mr-1"
           aria-label={t('orcaCloudWorkspace.dismiss', 'Dismiss')}
           onClick={onDismiss}
         >

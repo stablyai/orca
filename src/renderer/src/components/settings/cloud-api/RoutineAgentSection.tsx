@@ -91,8 +91,14 @@ export function RoutineAgentSection({
           equalWidth
           ariaLabelledBy={`${ids}-agent`}
           options={[
-            { value: 'claude', label: 'Claude Code' },
-            { value: 'codex', label: 'Codex' }
+            {
+              value: 'claude',
+              label: t('auto.components.settings.cloudRoutines.agentClaude', 'Claude Code')
+            },
+            {
+              value: 'codex',
+              label: t('auto.components.settings.cloudRoutines.agentCodex', 'Codex')
+            }
           ]}
         />
       </div>

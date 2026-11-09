@@ -101,7 +101,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
               ) : null}
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col pt-3">
+          <TabsContent value="chat" className="mt-3 flex min-h-0 flex-1 flex-col">
             <ChatPanel
               chats={snapshot.chats}
               queued={props.queued}
@@ -110,72 +110,70 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
               onEdit={props.onEdit}
             />
           </TabsContent>
-          <TabsContent
-            value="terminals"
-            className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek pt-3"
-          >
-            {snapshot.terminals.length === 0 ? (
-              <p className="max-w-[60ch] py-4 text-sm text-muted-foreground">
-                {t('components.orcaCloud.offline.noTerminals', 'No terminal output was saved.')}
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {snapshot.terminals.map((terminal) => {
-                  const title = terminal.title ?? terminal.handle
-                  return (
-                    <figure
-                      key={terminal.handle}
-                      className="overflow-hidden rounded-lg border border-border"
-                    >
-                      <figcaption className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-                        <SquareTerminal className="size-3.5" aria-hidden="true" />
-                        <span className="truncate">{title}</span>
-                        <span className="ml-auto">
-                          {t('components.orcaCloud.offline.readOnly', 'Read-only')}
-                        </span>
-                      </figcaption>
-                      <pre
-                        className="max-h-72 overflow-auto scrollbar-sleek bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground/90"
-                        tabIndex={0}
-                        aria-label={t(
-                          'components.orcaCloud.offline.terminalOutput',
-                          'Saved output of {{title}}',
-                          { title }
-                        )}
-                        // Like a live terminal, open at the latest output.
-                        ref={scrollToEnd}
+          <TabsContent value="terminals" className="mt-3 flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              {snapshot.terminals.length === 0 ? (
+                <p className="max-w-[60ch] py-4 text-sm text-muted-foreground">
+                  {t('components.orcaCloud.offline.noTerminals', 'No terminal output was saved.')}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {snapshot.terminals.map((terminal) => {
+                    const title = terminal.title ?? terminal.handle
+                    return (
+                      <figure
+                        key={terminal.handle}
+                        className="overflow-hidden rounded-lg border border-border"
                       >
-                        {terminal.lines.join('\n')}
-                      </pre>
-                    </figure>
-                  )
-                })}
-              </div>
-            )}
+                        <figcaption className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+                          <SquareTerminal className="size-3.5" aria-hidden="true" />
+                          <span className="truncate">{title}</span>
+                          <span className="ml-auto">
+                            {t('components.orcaCloud.offline.readOnly', 'Read-only')}
+                          </span>
+                        </figcaption>
+                        <pre
+                          className="max-h-72 overflow-auto scrollbar-sleek bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground/90"
+                          tabIndex={0}
+                          aria-label={t(
+                            'components.orcaCloud.offline.terminalOutput',
+                            'Saved output of {{title}}',
+                            { title }
+                          )}
+                          // Like a live terminal, open at the latest output.
+                          ref={scrollToEnd}
+                        >
+                          {terminal.lines.join('\n')}
+                        </pre>
+                      </figure>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </TabsContent>
-          <TabsContent
-            value="changes"
-            className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek pt-3"
-          >
-            {snapshot.git ? (
-              <CloudGitChanges
-                now={now}
-                data={{
-                  branch: snapshot.git.branch,
-                  changes: snapshot.git.changes,
-                  changeCount: snapshot.git.changeCount,
-                  commits: snapshot.git.commits.map((commit) => ({
-                    sha: commit.id,
-                    subject: commit.subject,
-                    at: commit.at
-                  }))
-                }}
-              />
-            ) : (
-              <p className="max-w-[60ch] py-4 text-sm text-muted-foreground">
-                {t('components.orcaCloud.offline.noGit', 'No source control state was saved.')}
-              </p>
-            )}
+          <TabsContent value="changes" className="mt-3 flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              {snapshot.git ? (
+                <CloudGitChanges
+                  now={now}
+                  data={{
+                    branch: snapshot.git.branch,
+                    changes: snapshot.git.changes,
+                    changeCount: snapshot.git.changeCount,
+                    commits: snapshot.git.commits.map((commit) => ({
+                      sha: commit.id,
+                      subject: commit.subject,
+                      at: commit.at
+                    }))
+                  }}
+                />
+              ) : (
+                <p className="max-w-[60ch] py-4 text-sm text-muted-foreground">
+                  {t('components.orcaCloud.offline.noGit', 'No source control state was saved.')}
+                </p>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       )}
