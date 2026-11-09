@@ -32,8 +32,15 @@ export function peerMailLocalCaller(args: {
       : (args.attestedCaller?.paneKey ?? args.runtime.getLiveTerminalPaneKey(args.from))
   if (!args.from || !paneKey) {
     throw new OrchestrationError(
-      'caller_required',
+      'invalid_argument',
       '--on needs a terminal or chat agent on this Orca to receive the replies. Run it from that agent. Nothing was sent.',
+      NOTHING_SENT
+    )
+  }
+  if (args.runtime.getOrchestrationDb().findActiveRemoteAttachmentForPane(paneKey)) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "This terminal is a worker for another Orca's Run; its mail goes to that Run's coordinator, not to other servers. Nothing was sent.",
       NOTHING_SENT
     )
   }
@@ -63,6 +70,13 @@ export async function sendPeerMail(args: {
     throw new OrchestrationError(
       'invalid_argument',
       `--on carries --type status or handoff, not ${type}. Nothing was sent.`,
+      NOTHING_SENT
+    )
+  }
+  if (params.payload !== undefined) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--on carries a subject and body; payload fields such as --task-id or --report-path name work on this Orca only. Nothing was sent.',
       NOTHING_SENT
     )
   }

@@ -253,4 +253,51 @@ describe('agent mail between paired Orca servers', () => {
     })
     expect(b.db.getInbox(10)).toEqual([])
   })
+
+  it('acknowledges a retried delivery after its recipient is gone, storing it once', async () => {
+    const deliver = {
+      conversationId: 'peerconv_aaaaaaaaaaaa',
+      messageId: 'msg_aaaaaaaaaaaa',
+      to: 'term_b',
+      senderLabel: "term_a on Jinwoo's Mac",
+      subject: 'Once'
+    }
+    const first = await transport.call('devB', 'orchestration.peerMailDeliver', deliver)
+    vi.mocked(b.runtime.getLiveTerminalPaneKey).mockReturnValue(null)
+
+    const retried = await transport.call('devB', 'orchestration.peerMailDeliver', deliver)
+
+    expect(first).toMatchObject({ ok: true })
+    expect(retried).toMatchObject({ ok: true, result: { message: { id: 'msg_aaaaaaaaaaaa' } } })
+    expect(b.db.getInbox(10).filter((message) => message.subject === 'Once')).toHaveLength(1)
+  })
+
+  it('refuses payload fields before sending anything', async () => {
+    const sent = await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Report',
+      payload: '{"taskId":"task_1"}'
+    })
+
+    expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(b.db.getInbox(10)).toEqual([])
+  })
+
+  it('refuses mail to a worker another Orca coordinates', async () => {
+    vi.spyOn(b.db, 'findActiveRemoteAttachmentForPane').mockImplementation((paneKey) =>
+      paneKey === B_PANE ? ({ dispatch_id: 'ctx_remote' } as never) : undefined
+    )
+
+    const sent = await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Side mail'
+    })
+
+    expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(b.db.getInbox(10)).toEqual([])
+  })
 })

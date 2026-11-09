@@ -3,15 +3,23 @@ import { RuntimeClient, RuntimeClientError } from '../../runtime-client'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import type { OrchestrationCallerShowResult } from '../../../shared/orchestration/orchestration-caller-status'
 import { renderOrchestrationArgv } from './agent-view'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
 type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check'
 
 const SERVER_FLAGS = new Set(['--environment', '--server'])
 
 /** The server a remote client was pointed at, as the caller spelled it. */
-function serverSelector(flags: HandlerContext['flags']): string | undefined {
+function serverSelector(
+  flags: HandlerContext['flags']
+): { name: string; route: string } | undefined {
   const explicit = flags.get('environment') ?? flags.get('server')
-  return typeof explicit === 'string' ? explicit : process.env.ORCA_ENVIRONMENT?.trim() || undefined
+  if (typeof explicit === 'string') {
+    return { name: explicit, route: `--server ${explicit}` }
+  }
+  const inherited = process.env.ORCA_ENVIRONMENT?.trim()
+  return inherited ? { name: inherited, route: `ORCA_ENVIRONMENT=${inherited}` } : undefined
 }
 
 /** Only an agent its own Orca verifies counts; a person's shell keeps --server = run it there. */
@@ -60,15 +68,30 @@ export async function refuseAgentServerRoute(
   if (!server || !(await isOrcaVerifiedAgent())) {
     return
   }
+  const { name, route } = server
   if (command === 'check') {
     throw new RuntimeClientError(
       'mailbox_is_local',
-      `Your mailbox is on this Orca; replies from ${server} arrive here. Drop --server.`
+      `Your mailbox is on this Orca; replies from ${name} arrive here. Drop ${route}.`
     )
   }
   const verb = command === 'send' ? 'message an agent' : 'start a worker'
   throw new RuntimeClientError(
     'agent_server_route_refused',
-    `${command} --server ${server} runs on ${server} and nothing comes back to you. To ${verb} on ${server}, use: ${withOn(ctx.rawArgs, server)}`
+    `${command} with ${route} runs on ${name} and nothing comes back to you. To ${verb} on ${name}, use: ${withOn(ctx.rawArgs, name)}`
   )
+}
+
+/** An older Orca would drop --on and send the mail to an agent here, so it must carry peer mail first. */
+export async function requirePeerMailCarrier(ctx: HandlerContext): Promise<void> {
+  if (!ctx.flags.has('on')) {
+    return
+  }
+  const { result } = await ctx.client.call<RuntimeStatus>('status.get')
+  if (!result.capabilities?.includes(ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'peer_mail_unsupported',
+      'The Orca running here is too old to carry mail to another server. Update or restart Orca here, then send again. Nothing was sent.'
+    )
+  }
 }

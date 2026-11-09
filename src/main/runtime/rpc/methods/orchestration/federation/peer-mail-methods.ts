@@ -67,6 +67,22 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           NOTHING_DELIVERED
         )
       }
+      // A retry after a lost answer is acknowledged even if the recipient has since gone.
+      const delivered = db.getPeerMailMessage(params.messageId)
+      if (delivered) {
+        const conversation = db.getPeerMailConversation(delivered.conversation_id)
+        if (
+          delivered.conversation_id !== params.conversationId ||
+          conversation?.peer_fingerprint !== peerFingerprint
+        ) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            `Message ${params.messageId} already belongs to another conversation. Nothing was delivered.`,
+            NOTHING_DELIVERED
+          )
+        }
+        return { message: { id: params.messageId, to } }
+      }
       if (mayNameSession(to)) {
         // Recipient routing reads the session record store, which the host opens lazily.
         await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
@@ -76,6 +92,15 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         throw new OrchestrationError(
           recipient.code,
           `${recipient.message} Nothing was delivered.`,
+          NOTHING_DELIVERED
+        )
+      }
+      const paneKey = runtime.getLiveTerminalPaneKey(recipient.to)
+      if (paneKey && db.findActiveRemoteAttachmentForPane(paneKey)) {
+        // Its mailbox is its Dispatch, which only its Run home writes to.
+        throw new OrchestrationError(
+          'invalid_argument',
+          `${to} is a worker for another Orca's Run; message it through that Run's coordinator. Nothing was delivered.`,
           NOTHING_DELIVERED
         )
       }
