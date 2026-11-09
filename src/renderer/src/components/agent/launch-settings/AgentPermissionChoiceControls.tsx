@@ -155,8 +155,6 @@ export type AgentPermissionChoiceRow = {
   flag: string
   /** The agent's own Arguments set permissions, so terminals use those instead. */
   argsSetPermission: boolean
-  /** Only for a Claude-family agent on Full access, on a host that has the opt-in. */
-  guardSkip?: { enabled: boolean; onChange: (enabled: boolean) => void }
 }
 
 export function AgentPermissionMenu({

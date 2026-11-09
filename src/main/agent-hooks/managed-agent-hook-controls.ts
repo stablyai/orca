@@ -33,7 +33,7 @@ type ManagedHookSettings = Partial<
     | 'disabledTuiAgents'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
-    | 'agentPermissionGuardSkip'
+    | 'agentDefaultEnv'
   >
 > | null
 

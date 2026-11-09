@@ -7,10 +7,8 @@ import { resolveStructuredAgentCommand } from '../../../native-chat/structured-a
 import { structuredAgentConfiguredArgs } from '../../../native-chat/structured-agent-configured-args'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import {
-  resolveTuiAgentLaunchEnv,
-  type AgentLaunchProfileSettings
-} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../../terminal/lifecycle/pty-worktree-refresh'
@@ -25,8 +23,7 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
   protected structuredAgentLaunchEnv(
     agent: StructuredAgentId,
-    // Narrowing to agentDefaultEnv hid the stored permission, dropping the env Orca adds for Full access.
-    settings: AgentLaunchProfileSettings
+    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
   ) {
     return {
       ...resolveTuiAgentLaunchEnv(agent, settings),

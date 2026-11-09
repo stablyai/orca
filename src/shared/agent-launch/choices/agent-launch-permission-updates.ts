@@ -32,7 +32,6 @@ import {
   type AgentPermissionChoice
 } from '../permissions/tui-agent-permission-choice'
 import { liftAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
-import { withoutPermissionGuardSkip } from '../permissions/agent-permission-guard-skip'
 import { isTuiAgent } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 
@@ -223,9 +222,7 @@ export function wholeAgentEnvironmentUpdates(
   const groups = new Map<string, Set<string>>()
   const identity = (name: string) => (platform === 'win32' ? name.toLowerCase() : name)
   const carrierEntries: [string, string][] = []
-  // The field never shows Orca's guard-skip entry; diffing against it would read as a removal.
-  const shown = withoutPermissionGuardSkip(settings)
-  const previous = resolveTuiAgentLaunchEnv(agent, shown, platform, (name, value) => {
+  const previous = resolveTuiAgentLaunchEnv(agent, settings, platform, (name, value) => {
     if (isCarrier(name)) {
       carrierEntries.push([name, value])
       return true

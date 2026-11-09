@@ -6,10 +6,6 @@ import {
 import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from '../../global-settings-types'
 import { isTuiAgent } from '../catalog/tui-agent-config'
-import {
-  agentPermissionGuardSkipEnv,
-  withoutPermissionGuardSkip
-} from '../permissions/agent-permission-guard-skip'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from '../permissions/tui-agent-permissions'
 import {
   readLaunchPermissionChoice,
@@ -43,7 +39,6 @@ export type AgentLaunchProfileSettings = Partial<
     | 'agentLaunchChoices'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
-    | 'agentPermissionGuardSkip'
     | 'terminalWindowsShell'
   >
 >
@@ -260,10 +255,9 @@ export function resolveTuiAgentLaunchEnv(
     }
     return Object.fromEntries(entries)
   }
-  const added = Object.entries({
-    ...agentPermissionEnv(agent, resolveAgentPermission(agent, settings).choice),
-    ...agentPermissionGuardSkipEnv(agent, settings)
-  }).filter(([name]) => !own?.some(([key]) => permissionEnvNameMatches(key, name, platform)))
+  const added = Object.entries(
+    agentPermissionEnv(agent, resolveAgentPermission(agent, settings).choice)
+  ).filter(([name]) => !own?.some(([key]) => permissionEnvNameMatches(key, name, platform)))
   return Object.fromEntries(added.length ? [...added, ...(own ?? [])] : (own ?? []))
 }
 
@@ -289,7 +283,6 @@ export function composeAgentLaunchProfile(
       (agent) => Object.keys(agentPermissionEnv(agent, 'full-access')).length > 0
     )
   ])
-  const published = withoutPermissionGuardSkip(settings)
   return {
     agentDefaultArgs: Object.fromEntries(
       [...argAgents].map((agent) => [
@@ -309,9 +302,8 @@ export function composeAgentLaunchProfile(
         )
       ])
     ),
-    // Older clients can't toggle Orca's guard-skip entry and would save it back as the user's.
     agentDefaultEnv: Object.fromEntries(
-      [...envAgents].map((agent) => [agent, resolveTuiAgentLaunchEnv(agent, published, platform)])
+      [...envAgents].map((agent) => [agent, resolveTuiAgentLaunchEnv(agent, settings, platform)])
     )
   }
 }

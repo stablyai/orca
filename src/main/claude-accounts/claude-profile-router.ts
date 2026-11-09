@@ -55,7 +55,7 @@ export type ClaudeProfileRouterSettings = Pick<
   | 'disabledTuiAgents'
   | 'agentPermissionDefault'
   | 'agentPermissionOverrides'
-  | 'agentPermissionGuardSkip'
+  | 'agentDefaultEnv'
 >
 
 /** Mirror the settings selection to a pointer file for Claude in existing terminals. */

@@ -19,7 +19,6 @@ export type AgentStartupSettings = Partial<
     | 'agentDefaultEnv'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
-    | 'agentPermissionGuardSkip'
     | 'terminalWindowsShell'
   >
 >

@@ -1,8 +1,6 @@
 import type { AgentPermissionChoiceRow } from './AgentPermissionChoiceControls'
 import { AgentPermissionChoiceItems, AgentPermissionChoiceName } from './AgentPermissionChoiceItems'
-import { translate } from '@/i18n/i18n'
 import {
-  DropdownMenuCheckboxItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator
@@ -63,33 +61,6 @@ export function AgentPermissionMenuOptions({
         disabled={disabled}
         onSelect={permission.onSelect}
       />
-      {permission.guardSkip ? (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuCheckboxItem
-            checked={permission.guardSkip.enabled}
-            disabled={disabled}
-            // Keep the menu open: this refines the choice above rather than replacing it.
-            onSelect={(event) => event.preventDefault()}
-            onCheckedChange={(checked) => permission.guardSkip?.onChange(checked === true)}
-          >
-            <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
-              <span>
-                {translate(
-                  'settings.agents.permissionGuardSkip',
-                  'Also skip Claude Code’s built-in refusals'
-                )}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {translate(
-                  'settings.agents.permissionGuardSkipExplanation',
-                  'Claude Code refuses a few commands even with Full access. This removes those refusals too. While it’s on, Orca can’t show when any Claude session is waiting for permission.'
-                )}
-              </span>
-            </span>
-          </DropdownMenuCheckboxItem>
-        </>
-      ) : null}
     </DropdownMenuRadioGroup>
   )
 }

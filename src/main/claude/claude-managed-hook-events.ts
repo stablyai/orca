@@ -121,10 +121,10 @@ export function getClaudeManagedHookPlan(
       (!('installFrom' in event) || claudeVersionReaches(claudeVersion, event.installFrom))
   )
   // A failed version probe must not retire entries installed using a known version.
-  const known = parseClaudeCliVersion(claudeVersion) !== null
-  const retire = CLAUDE_MANAGED_EVENTS.filter(
-    (event) => !install.includes(event) && (known || retired(event))
-  )
+  const retire =
+    parseClaudeCliVersion(claudeVersion) === null
+      ? CLAUDE_MANAGED_EVENTS.filter(retired)
+      : CLAUDE_MANAGED_EVENTS.filter((event) => !install.includes(event))
   return {
     install,
     retire,

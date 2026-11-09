@@ -21,10 +21,6 @@ import {
   type AgentPermissionSettings
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
-import {
-  agentSupportsPermissionGuardSkip,
-  withoutPermissionGuardSkip
-} from '../../../../../../shared/agent-launch/permissions/agent-permission-guard-skip'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
   agentPermissionChoiceLabel,
@@ -161,7 +157,6 @@ export function AgentLaunchSettingsCatalog({
     void mutate(scopedMutation).catch(() => {})
   }
   const typed = settings.agentPermission
-  const guardSkip = settings.agentPermissionGuardSkip
   const permissionSettings: AgentPermissionSettings | null = typed
     ? { agentPermissionDefault: typed.default, agentPermissionOverrides: typed.overrides }
     : null
@@ -190,17 +185,7 @@ export function AgentLaunchSettingsCatalog({
       }).choice,
       onSelect: (choice) => save({ type: 'permission', agent, choice }),
       flag: agentPermissionArgs(agent, resolved.choice),
-      argsSetPermission: agentArgsSetPermission(agent, typed?.userArgs[agent]),
-      // Claude Code reads the variable only in the bypass mode Full access starts it in.
-      ...(guardSkip && resolved.choice === 'full-access' && agentSupportsPermissionGuardSkip(agent)
-        ? {
-            guardSkip: {
-              enabled: guardSkip[agent] === true,
-              onChange: (enabled: boolean) =>
-                save({ type: 'permission-guard-skip', agent, enabled })
-            }
-          }
-        : {})
+      argsSetPermission: agentArgsSetPermission(agent, typed?.userArgs[agent])
     }
   }
   const saveUserArgs = async (agent: TuiAgent, label: string, value: string): Promise<void> => {
@@ -255,11 +240,7 @@ export function AgentLaunchSettingsCatalog({
     envOverride: !local
       ? {}
       : typed
-        ? resolveTuiAgentLaunchEnv(
-            agent.id,
-            withoutPermissionGuardSkip(local.settings),
-            window.api.platform.get().platform
-          )
+        ? resolveTuiAgentLaunchEnv(agent.id, local.settings, window.api.platform.get().platform)
         : resolveTuiAgentLaunchEnv(agent.id, { agentDefaultEnv: local.settings.agentDefaultEnv }),
     permission: typed ? undefined : permissions.rows.get(agent.id),
     permissionChoice: choiceRow(agent.id),
