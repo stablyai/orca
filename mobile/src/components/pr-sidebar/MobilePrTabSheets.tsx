@@ -22,13 +22,9 @@ import {
 } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
-import * as z from 'zod'
 import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
-import { useKeptDraft } from '../../drafts/use-kept-draft'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
-
-// An edit and the PR text it was typed against.
-const EDIT = z.object({ base: z.string(), text: z.string() })
 
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
@@ -181,28 +177,33 @@ function PrEditTextSheet({
   const current =
     field === 'title' ? (details?.item.title ?? data?.pr.title ?? '') : (details?.body ?? '')
   const resource = request.scope.resource
-  // An unsaved edit waits through Cancel and the app being killed.
-  const [kept, setKept] = useKeptDraft(
-    resource
-      ? workspaceDraftRowKey(
-          'prEdit',
-          { hostId: tab.hostId, executionHost, worktreeId: tab.worktreeId },
-          `${resource}:${field}`
-        )
-      : null,
-    EDIT
-  )
+  // An unsaved edit waits through Cancel and the app being killed, with the PR text it was typed against.
+  const keptKey = resource
+    ? workspaceDraftRowKey(
+        'prEdit',
+        { hostId: tab.hostId, executionHost, worktreeId: tab.worktreeId },
+        `${resource}:${field}`
+      )
+    : null
+  const [keptAgainst, setKeptAgainst] = useDurableDraftField(keptKey, 'against')
+  const [keptText, setKeptText] = useDurableDraftField(keptKey, 'text')
   // An edit typed against text the PR still has comes back; once the PR text changes it would revert someone's edit.
   const [base] = useState(current)
-  const draft = kept?.base === base ? kept.text : base
-  const setDraft = (text: string) => setKept(text === base ? null : { base, text })
+  // Quoted, so an empty PR description still marks an edit (an empty field is no field).
+  const against = JSON.stringify(base)
+  const draft = keptAgainst === against ? keptText : base
+  const setDraft = (text: string) => {
+    const edited = text !== base
+    setKeptText(edited ? text : '')
+    setKeptAgainst(edited ? against : '')
+  }
   const { textAction } = tab
   const save = async () => {
     if (!tab.ownsSheet(request)) {
       return
     }
     if (await textAction.save(field, draft, current)) {
-      setKept(null)
+      setDraft(base)
       tab.closeSheetIf(request)
     }
   }

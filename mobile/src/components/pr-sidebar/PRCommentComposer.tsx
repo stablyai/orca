@@ -7,7 +7,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { isSubmittableCommentBody } from '../../source-control/review/pr-comment-actions'
 import { MessageBox } from '../composer-input/MessageBox'
 import { composerInputStyles } from '../composer-input/composer-input-styles'
-import { useKeptTextDraft } from '../../drafts/use-kept-draft'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type Props = {
   // Share plain-text composer across root comment, reply and edit.
@@ -39,7 +39,7 @@ export function PRCommentComposer({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [edited, setEdited] = useState(initialBody ?? '')
-  const [kept, setKept] = useKeptTextDraft(draftKey)
+  const [kept, setKept] = useDurableDraftField(draftKey, 'body')
   const [body, setBody] = draftKey === null ? [edited, setEdited] : [kept, setKept]
   // Guard synchronously against double-submit before parent’s async submitting state rerenders.
   const inFlightRef = useRef(false)
@@ -51,9 +51,11 @@ export function PRCommentComposer({
     }
     inFlightRef.current = true
     try {
-      const ok = await onSubmit(body.trim())
+      const posted = body.trim()
+      const ok = await onSubmit(posted)
+      // A reopened composer shares the draft; text typed there since stays.
       if (ok) {
-        setBody('')
+        setBody((current) => (current.trim() === posted ? '' : current))
       }
     } finally {
       inFlightRef.current = false

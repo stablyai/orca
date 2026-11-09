@@ -5,7 +5,7 @@ import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/use-workspace-client'
 import { getWorktreeLabel } from '../worktree/worktree-label'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
-import { useKeptTextDraft } from '../drafts/use-kept-draft'
+import { useDurableDraftField } from '../drafts/durable-draft-fields'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
@@ -53,8 +53,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const executionHost = useWorkspaceExecutionHost()
   // The message waits through leaving the screen and the app being killed; a commit clears it.
-  const [commitMessage, setCommitMessage] = useKeptTextDraft(
-    workspaceDraftRowKey('commit', { hostId, executionHost, worktreeId }, '')
+  const [commitMessage, setCommitMessage] = useDurableDraftField(
+    workspaceDraftRowKey('commit', { hostId, executionHost, worktreeId }, ''),
+    'message'
   )
   const [generatingMessage, setGeneratingMessage] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)

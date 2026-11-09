@@ -53,7 +53,8 @@ vi.mock('../../source-control/mobile-hosted-review-create-intent-runner', () => 
 }))
 
 import { publishPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
-import { resetKeptDraftsForTests } from '../../drafts/use-kept-draft'
+import { resetDurableDraftFieldsForTests } from '../../drafts/durable-draft-fields'
+import { publishInMemoryDeviceStore } from '../../drafts/in-memory-device-store.test-support'
 import { createFakeRpcClient } from '../../mobile-web-shell/bridge-host-test-fakes'
 import { PrCreateSheet } from './PrCreateSheet'
 import type { MobilePrTab } from './use-mobile-pr-tab'
@@ -101,7 +102,7 @@ async function typeTitle(title: string): Promise<void> {
 function kill(): void {
   act(() => renderer?.unmount())
   renderer = null
-  resetKeptDraftsForTests()
+  resetDurableDraftFieldsForTests()
 }
 
 beforeEach(() => {
@@ -112,23 +113,7 @@ beforeEach(() => {
     body: '',
     base: 'main'
   })
-  publishPageDeviceStore({
-    available: () => true,
-    read: async (_table, keys) => ({
-      status: 'ok',
-      values: keys.map((key) => table.get(key) ?? null)
-    }),
-    write: async (_table, ops) => {
-      for (const op of ops) {
-        if (op.value === null) {
-          table.delete(op.key)
-        } else {
-          table.set(op.key, op.value)
-        }
-      }
-      return { written: true }
-    }
-  })
+  publishInMemoryDeviceStore(table)
 })
 
 afterEach(() => {

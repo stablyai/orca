@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
@@ -20,7 +20,6 @@ import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
-import * as z from 'zod'
 import {
   cancelMobilePrFields,
   generateMobilePrFields,
@@ -37,18 +36,32 @@ import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
 import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
-import { setKeptDraft, useKeptDraft } from '../../drafts/use-kept-draft'
+import { updateDurableDraftField, useDurableDraftField } from '../../drafts/durable-draft-fields'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
 // The provider rides along so a kept draft reopens without asking the host again.
-const FIELDS = z.object({
-  title: z.string(),
-  body: z.string(),
-  base: z.string(),
-  draft: z.boolean(),
-  provider: z.string()
-})
-type Fields = z.infer<typeof FIELDS>
+type Fields = { title: string; body: string; base: string; draft: boolean; provider: string }
+
+// Every edit keeps the whole form. The provider is never empty, so it is what marks a kept draft.
+function keepCreateFields(key: string, fields: Fields | null): void {
+  updateDurableDraftField(key, 'provider', fields?.provider ?? '')
+  updateDurableDraftField(key, 'title', fields?.title ?? '')
+  updateDurableDraftField(key, 'body', fields?.body ?? '')
+  updateDurableDraftField(key, 'base', fields?.base ?? '')
+  updateDurableDraftField(key, 'draft', fields?.draft ? 'yes' : '')
+}
+
+function useKeptCreateFields(key: string | null): Fields | null {
+  const [provider] = useDurableDraftField(key, 'provider')
+  const [title] = useDurableDraftField(key, 'title')
+  const [body] = useDurableDraftField(key, 'body')
+  const [base] = useDurableDraftField(key, 'base')
+  const [draft] = useDurableDraftField(key, 'draft')
+  return useMemo(
+    () => (provider ? { title, body, base, draft: draft === 'yes', provider } : null),
+    [base, body, draft, provider, title]
+  )
+}
 
 // One Create flow for every entry point and all five providers: seed from commits, push if needed, land on the PR tab.
 export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
@@ -62,7 +75,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   const keptKey = gitBranch
     ? workspaceDraftRowKey('prCreate', { hostId, executionHost, worktreeId }, gitBranch)
     : null
-  const [kept, setKept] = useKeptDraft(keptKey, FIELDS)
+  const kept = useKeptCreateFields(keptKey)
   const [seeded, setSeeded] = useState<Fields | null>(null)
   const [seedError, setSeedError] = useState<string | null>(null)
   const fields = kept ?? seeded
@@ -126,10 +139,9 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   })
   // The first edit turns the seeded fields into a kept draft.
   const update = (patch: Partial<Fields>) => {
-    setKept((current) => {
-      const from = current ?? seeded
-      return from ? { ...from, ...patch } : null
-    })
+    if (keptKey && fields) {
+      keepCreateFields(keptKey, { ...fields, ...patch })
+    }
   }
 
   // Closing the sheet cancels a running generation, drops its late answer and keeps typed fields; a reconnect does none.
@@ -228,7 +240,7 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
       // client change closed this sheet mid-run.
       setSeeded(fields)
       if (createdKey) {
-        setKeptDraft(createdKey, FIELDS, null)
+        keepCreateFields(createdKey, null)
       }
       const created = {
         url: outcome.url,

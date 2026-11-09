@@ -35,7 +35,7 @@ import type { FileDocState, FileSyntaxState } from './session-document-state'
 import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
 import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
-import { useKeptTextDraft } from '../../drafts/use-kept-draft'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -73,7 +73,11 @@ function FileReaderDocument({
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
-  const [commentDraft, setCommentDraft] = useKeptTextDraft(noteDraftKey ?? null)
+  const [keptNote, setKeptNote] = useDurableDraftField(noteDraftKey ?? null, 'note')
+  const [localNote, setLocalNote] = useState('')
+  const [commentDraft, setCommentDraft] = noteDraftKey
+    ? [keptNote, setKeptNote]
+    : [localNote, setLocalNote]
   const plainDiffLines = useMemo(
     () =>
       doc?.status === 'ready' && doc.kind === 'diff'
@@ -109,10 +113,12 @@ function FileReaderDocument({
       if (!diffCommentActions) {
         return
       }
-      void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
+      const note = commentDraft
+      void diffCommentActions.onAdd(relativePath, lineNumber, note).then((added) => {
         if (added) {
           setActiveCommentLine(null)
-          setCommentDraft('')
+          // Only the saved text; a note typed since in a reopened reader stays.
+          setCommentDraft((current) => (current === note ? '' : current))
         }
       })
     },

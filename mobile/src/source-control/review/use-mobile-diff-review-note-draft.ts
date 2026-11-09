@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { DiffComment } from '../../../../src/shared/diff-comment-types'
-import { useKeptTextDraft } from '../../drafts/use-kept-draft'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 import type { ComposerState } from './mobile-diff-review-screen-model'
 import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheets'
 
@@ -17,7 +17,7 @@ type NewNoteSheet =
 
 /** The review's unsaved new note: kept across Cancel, reopen and picking other lines, cleared only once saved. */
 export function useMobileDiffReviewNoteDraft({ draftKey, composer, openSheet }: NoteDraftInput) {
-  const [newNote, setNewNote] = useKeptTextDraft(draftKey)
+  const [newNote, setNewNote] = useDurableDraftField(draftKey, 'note')
   // An edit borrows the text field with its own text; the new note is untouched underneath.
   const [editBody, setEditBody] = useState('')
   const editing = composer?.mode === 'edit'
