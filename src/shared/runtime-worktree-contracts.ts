@@ -171,6 +171,8 @@ export type RuntimeSpeechSetupState = {
   enabled: boolean
   selectedModelId: string
   dictationMode: 'toggle' | 'hold'
+  /** Phones that recognize speech themselves clean their own text by this switch. */
+  removeFillerWords: boolean
   models: RuntimeSpeechModelSummary[]
 }
 

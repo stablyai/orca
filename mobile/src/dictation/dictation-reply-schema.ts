@@ -32,6 +32,8 @@ export const dictationSetupSchema = z.looseObject({
   enabled: salvagedOptional('enabled', z.boolean()),
   selectedModelId: salvagedOptional('selectedModelId', z.string()),
   dictationMode: salvagedOptional('dictationMode', z.string()),
+  // Absent from older hosts, which remove no fillers either; the phone then keeps them on, the host default.
+  removeFillerWords: salvagedOptional('removeFillerWords', z.boolean()),
   models: salvagingArray(speechModelSchema)
 })
 
