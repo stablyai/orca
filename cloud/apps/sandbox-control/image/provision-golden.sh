@@ -170,8 +170,12 @@ else
 fi
 # The image's node/npm/npx live only on the build command's PATH; append them so agents (codex's
 # `env node` shebang) and stdio MCP servers launched with npx resolve them in Orca's login shells.
-system_node_bin="$(dirname "$(command -v npx || command -v node)")"
-printf 'export PATH=%s/tools/bin:%s/bin:$PATH:%s\n' "$ORCA_HOME" "$ORCA_HOME" "$system_node_bin" |
+system_node="$(command -v npx || command -v node || true)"
+if [ -z "$system_node" ]; then
+  echo 'no node/npx on the build PATH' >&2
+  exit 1
+fi
+printf 'export PATH=%s/tools/bin:%s/bin:$PATH:%s\n' "$ORCA_HOME" "$ORCA_HOME" "$(dirname "$system_node")" |
   sudo tee /etc/profile.d/orca.sh >/dev/null
 # Every new shell (login or not: /etc/bashrc sources profile.d) re-reads the session env file.
 sudo install -m 0644 "$ORCA_HOME/bin/orca-session-env.sh" /etc/profile.d/zz-orca-session-env.sh

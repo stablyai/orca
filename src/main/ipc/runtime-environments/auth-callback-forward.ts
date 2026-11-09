@@ -1,3 +1,4 @@
+import { GENERIC_RELAY_TTL_MS, isLoopbackCallbackRequest } from './loopback-callback-request'
 import { createServer, type Server, type Socket } from 'node:net'
 import { ipcMain } from 'electron'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
@@ -139,7 +140,12 @@ export class AuthCallbackForward {
     readonly request: AuthCallbackForwardTarget,
     private readonly onClosed: () => void
   ) {
-    this.ttl = setTimeout(() => this.close(), TTL_MS)
+    // A generic loopback relay (an MCP server's OAuth redirect, no sign-in flow) lives briefly:
+    // the browser hits it within seconds of the user approving.
+    this.ttl = setTimeout(
+      () => this.close(),
+      request.flowId === null ? GENERIC_RELAY_TTL_MS : TTL_MS
+    )
   }
 
   async start(openTunnel: AuthCallbackTunnelOpener): Promise<AuthCallbackForwardResult> {
@@ -196,7 +202,31 @@ export class AuthCallbackForward {
         this.close()
       }
     }
+    if (this.request.flowId === null) {
+      // Generic relays carry only a browser's OAuth redirect: a GET whose Host is this loopback
+      // port. Anything else (DNS rebinding pages, other local processes probing the sandbox's
+      // services on that port) is refused before a byte reaches the sandbox.
+      socket.on('error', () => socket.destroy())
+      socket.once('data', (first: Buffer) => {
+        if (!isLoopbackCallbackRequest(first, this.request.port)) {
+          socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
+          return
+        }
+        socket.pause()
+        socket.unshift(first)
+        this.pipeToHost(socket, count)
+      })
+      return
+    }
     socket.pause()
+    this.pipeToHost(socket, count)
+  }
+
+  private pipeToHost(socket: Socket, count: (chunk: Buffer) => void): void {
+    if (!this.tunnel) {
+      socket.destroy()
+      return
+    }
     this.tunnel.client.open({ host: '127.0.0.1', port: this.request.port }).then(
       (remote) => {
         if (socket.destroyed) {
@@ -256,11 +286,16 @@ export async function openAuthCallbackForward(
   request: AuthCallbackForwardRequest | AuthCallbackForwardTarget
 ): Promise<AuthCallbackForwardResult> {
   const target: AuthCallbackForwardTarget = { ...request, flowId: request.flowId ?? null }
-  // A retried sign-in replaces this computer's earlier listener on the same port.
+  // A retried sign-in replaces this computer's earlier listener on the same port, but a generic
+  // relay (a clicked MCP OAuth link) never displaces a sign-in in progress.
   for (const existing of forwards.values()) {
-    if (existing.request.port === request.port) {
-      existing.close()
+    if (existing.request.port !== request.port) {
+      continue
     }
+    if (target.flowId === null && existing.request.flowId !== null) {
+      return { ok: false, code: 'port_busy', message: 'A sign-in is using this port.' }
+    }
+    existing.close()
   }
   const key = keyOf(target)
   const forward = new AuthCallbackForward(target, () => {

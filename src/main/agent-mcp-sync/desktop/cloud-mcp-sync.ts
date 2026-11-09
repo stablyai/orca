@@ -23,7 +23,9 @@ const MAX_EXCLUDED = 512
 
 export type { CloudMcpSyncPreferences }
 
-const DEFAULT_PREFERENCES: CloudMcpSyncPreferences = { autoSync: true, excluded: [] }
+// Off until the user syncs once by hand: MCP entries often carry tokens (env, headers), so nothing
+// leaves this computer for a cloud sandbox without that first explicit Sync.
+const DEFAULT_PREFERENCES: CloudMcpSyncPreferences = { autoSync: false, excluded: [] }
 
 export type CloudMcpSyncDeps = {
   userDataPath: string
@@ -93,7 +95,7 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
         const parsed: unknown = JSON.parse(readFileSync(preferencesPath, 'utf8'))
         const excluded = isMcpRecord(parsed) ? parsed.excluded : undefined
         preferences = {
-          autoSync: !isMcpRecord(parsed) || parsed.autoSync !== false,
+          autoSync: isMcpRecord(parsed) && parsed.autoSync === true,
           excluded: Array.isArray(excluded)
             ? excluded
                 .filter((key): key is string => typeof key === 'string' && key.length <= 200)
@@ -244,6 +246,10 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       }
       if (trigger === 'connect' && !getPreferences().autoSync) {
         return Promise.resolve(statuses.get(environmentId) ?? null)
+      }
+      if (trigger === 'manual' && !getPreferences().autoSync) {
+        // The first explicit Sync is the consent; later connects keep the sandbox current.
+        setPreferences({ autoSync: true })
       }
       // One sync per workspace at a time; a click during an auto-sync runs after it.
       const next = (queues.get(environmentId) ?? Promise.resolve())
