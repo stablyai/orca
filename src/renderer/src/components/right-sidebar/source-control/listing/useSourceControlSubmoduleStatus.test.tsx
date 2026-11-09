@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({ getRuntimeGitSubmoduleStatus: vi.fn() }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitSubmoduleStatus: mocks.getRuntimeGitSubmoduleStatus
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: () => undefined
+}))
 
 import {
   useSourceControlSubmoduleStatus,

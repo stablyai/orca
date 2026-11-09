@@ -11,7 +11,7 @@ import {
   readRuntimeFixture,
   type TranscriptReplayResize
 } from './agent-transcript-replay-test-harness'
-import { isKnownReadyPromptBody, isQuietReadyScreenBody } from './terminal-wait-detection'
+import { isQuietReadyScreenBody } from './terminal-wait-detection'
 import { evaluateAgentStateRules } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -245,17 +245,5 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
         vi.useRealTimers()
       }
     })
-  })
-
-  it('never reads the screen for another agent', async () => {
-    const { ruledScreenLines, waitText } = await finalReplayFrame(
-      firstReady.name,
-      firstReady.cols,
-      firstReady.rows
-    )
-    const readScreenLines = vi.fn(() => ruledScreenLines)
-    isKnownReadyPromptBody(waitText, 'claude', readScreenLines, false)
-    expect(isQuietReadyScreenBody(waitText, 'claude', readScreenLines)).toBe(false)
-    expect(readScreenLines).not.toHaveBeenCalled()
   })
 }

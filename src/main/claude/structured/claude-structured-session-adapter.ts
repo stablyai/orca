@@ -1,5 +1,5 @@
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
-import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { isKillDeliveredRootExit } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { claudeAcquireFailure } from '../claude-startup-failure'
 import { claudeStartPublication, openClaudeStart } from './claude-structured-start-ending'
 import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
@@ -50,9 +50,11 @@ import { claudePromptCancelRoute } from './journal/claude-structured-prompt-repl
 import { claudeForkForRewind } from '../claude-rewind-fork'
 import { copyClaudeConversation } from '../claude-conversation-copy'
 import { ClaudeConversationNaming } from '../claude-conversation-naming'
+import { captureClaudeConversationTitleOwner } from './claude-conversation-title-owner'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
+  captureConversationTitleOwner = captureClaudeConversationTitleOwner(this.sessions)
   private readonly acquisitions = new ClaudeAcquisitionRegistry()
   private readonly exits = new Map<string, ClaudeSessionExit>()
   private readonly settledExitErrors = new Map<string, Error>()
@@ -91,8 +93,15 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...(naming ? { naming } : {}),
       callbacks: {
         publish: start.publish,
-        deliver: (attempt, sessionId, event) =>
-          deliverClaudeConnectionEvent(this.sessions, this.exits, attempt, sessionId, event),
+        deliver: (attempt, sessionId, event, payload) =>
+          deliverClaudeConnectionEvent(
+            this.sessions,
+            this.exits,
+            attempt,
+            sessionId,
+            event,
+            payload
+          ),
         emit: (session, _events, event) => this.emit(session, event),
         handleExit: (sessionId, attempt, error) =>
           observeClaudeSessionExit(this.exitLifecycle, sessionId, attempt, error),
@@ -250,11 +259,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     try {
       const closed = await close()
       const receipt = this.settledExitErrors.get(sessionId)
-      if (
-        closed &&
-        receipt instanceof AgentSessionAcquisitionRootExitObservedError &&
-        receipt.deathEvidenceKind === 'kill-delivered'
-      ) {
+      if (closed && isKillDeliveredRootExit(receipt)) {
         throw receipt
       }
       return closed
@@ -281,13 +286,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     options
   ) =>
     this.releaseAcquisition({ sessionId, closeOptions: options }).finally(() => {
-      const receipt = this.settledExitErrors.get(sessionId)
-      if (
-        !(
-          receipt instanceof AgentSessionAcquisitionRootExitObservedError &&
-          receipt.deathEvidenceKind === 'kill-delivered'
-        )
-      ) {
+      if (!isKillDeliveredRootExit(this.settledExitErrors.get(sessionId))) {
         this.settledExitErrors.delete(sessionId)
       }
     })

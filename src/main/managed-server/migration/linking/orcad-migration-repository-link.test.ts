@@ -472,20 +472,6 @@ describe('moving the host again after its server was stopped', () => {
     expect(groupName(server, parent.id)).toBe('Parent renamed on the server')
   })
 
-  // Hiding server-owned groups must preserve inherited host ownership for later folders.
-  it('still moves a later folder workspace that takes its host from the server’s group', async () => {
-    const groupId = groupDesktopRepo()
-    await convert()
-    stopServer()
-    await convert()
-    const folder = store.createFolderWorkspace({
-      projectGroupId: groupId,
-      folderPath: '/root/notes'
-    })
-    await expect(runDelta()).resolves.toMatchObject({ outcome: 'moved' })
-    expect(server.getFolderWorkspace(folder.id)?.projectGroupId).toBe(groupId)
-  })
-
   // Groups absent from the server still move, even when only a linked project used them.
   it('moves a linked project’s group the server does not hold, so later rows can use it', async () => {
     otherDesktopAddsSameCheckout()

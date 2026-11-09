@@ -5,7 +5,7 @@ import type {
 } from '../../../../../preload/api/preflight-api'
 import type { AppState } from '../../types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { getActiveWorkspaceOwnerTarget } from '@/lib/resolved-worktree-execution-host'
 import { getLocalPreflightContext } from '@/lib/local-preflight-context'
 import { localPreflightContextKey } from '@/lib/local-preflight-context-key'

@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { linearCreateProject } from '@/runtime/linear/runtime-linear-project-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreationModel) {
   const {

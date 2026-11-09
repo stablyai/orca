@@ -7,7 +7,7 @@ import {
   type PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { useAppStore } from '@/store'

@@ -1,6 +1,7 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,
@@ -106,10 +107,11 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   if (agent === 'claude') {
     stripInheritedClaudeSessionEnv(inherited)
   }
-  return {
-    ...inherited,
-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
-  }
+  return overlayEnvironmentVariables(
+    inherited,
+    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
+    process.platform
+  )
 }
 
 /** What a chat start of `agent` on this host launches from, for a child that serves no chat. */

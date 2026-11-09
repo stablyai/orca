@@ -6,11 +6,12 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 
-const sourcePath = 'src/renderer/src/lib/markdown-review-notes.ts'
+const sourcePath = 'src/renderer/src/lib/editor/markdown/review-notes/markdown-review-notes.ts'
+const baselineSourcePath = 'src/renderer/src/lib/markdown-review-notes.ts'
 const baseline = process.argv[2] ?? '20ab9950654'
-async function load(contents) {
+async function load(contents, inputPath) {
   const result = await build({
-    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(sourcePath)) },
+    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(inputPath)) },
     bundle: true,
     platform: 'node',
     format: 'esm',
@@ -21,9 +22,10 @@ async function load(contents) {
   )
 }
 const before = await load(
-  execFileSync('git', ['show', `${baseline}:${sourcePath}`], { encoding: 'utf8' })
+  execFileSync('git', ['show', `${baseline}:${baselineSourcePath}`], { encoding: 'utf8' }),
+  baselineSourcePath
 )
-const after = await load(readFileSync(sourcePath, 'utf8'))
+const after = await load(readFileSync(sourcePath, 'utf8'), sourcePath)
 const results = []
 for (const [name, lineCount, width, count, iterations] of [
   ['small', 20, 40, 1, 1000],

@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'

@@ -10,7 +10,7 @@ import {
 } from '../../worktree-list/listing/stale-workspace-list-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
-import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'

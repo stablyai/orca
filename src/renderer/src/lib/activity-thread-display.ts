@@ -10,8 +10,8 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '../../../shared/agent-status/presentation/agent-row-primary-text'
-import { formatAgentToolPreview } from './agent-row-tool-preview'
-import { agentVerdictStatusLine } from './agent-verdict-status-line'
+import { formatAgentToolPreview } from './agent-status/presentation/agent-row-tool-preview'
+import { agentVerdictStatusLine } from './agent-status/presentation/agent-verdict-status-line'
 
 // Terse follow-ups such as “yes” are valid prompts but poor cross-worktree task labels.
 const TERSE_FOLLOW_UP_PATTERN =

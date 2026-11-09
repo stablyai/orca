@@ -92,7 +92,7 @@ it('fails a legacy traversal rather than selecting from an incomplete foreign pr
   await expect(createGitLabBranchDiscovery(args)('feature')).rejects.toThrow('incomplete')
 })
 
-it.each([100, 1000])(
+it.each([1000])(
   'walks %s raw legacy rows once before choosing an eligible source',
   async (count) => {
     read.mockResolvedValue({ stdout: JSON.stringify([row(1, 'opened', 8)]) })

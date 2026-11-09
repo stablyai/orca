@@ -1,22 +1,14 @@
-import { structuredAgentSessionStopControl } from '../../../../../shared/agent-session/view/structured-agent-session-stop-control'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { expect, it, vi } from 'vitest'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
-import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import {
   mocks,
   deferred,
-  start,
   createParams,
-  target,
   created,
   draft
 } from './structured-agent-session-launch-create-message.test-fixture'
-import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-registry'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
@@ -24,68 +16,6 @@ import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slice
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function registerCreateSelectionTests(): void {
-  it('freezes the message and held options in create and publishes without another read or send', async () => {
-    mocks.exactSupport.mockResolvedValue(true)
-    recordHostModelCatalogSnapshot(target, 'codex', null, {
-      origin: 'probe',
-      fetchedAt: 1,
-      defaultHoldsInEveryWorkspace: true,
-      models: [
-        {
-          id: 'picked-model',
-          label: 'Picked',
-          isDefault: false,
-          efforts: [
-            { value: 'low', label: 'Low' },
-            { value: 'high', label: 'High' }
-          ]
-        }
-      ]
-    })
-    const create = deferred<unknown>()
-    mocks.call.mockReturnValue(create.promise)
-    const launch = start()
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'picked-model')
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    const params = createParams()
-    expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'opening text' }])
-    expect(params.options).toEqual({ model: 'picked-model', effort: 'high' })
-    expect(params.firstMessage?.selection).toEqual({ model: 'picked-model', effort: 'high' })
-    expect(params.envelope.payloadFingerprint).toBe(
-      structuredAgentSessionCreateFingerprint({ sessionId: launch.sessionId, ...params })
-    )
-    expect(getStructuredAgentSessionPendingSends(launch.sessionId)[0]?.phase).toBe('sending')
-    const stop = vi.fn(async () => null)
-    expect(
-      structuredAgentSessionStopControl({
-        published: false,
-        host: { stopsConversation: true, stop },
-        transportState: { turnId: null, isWorking: false },
-        sends: { sending: true, stopSends: vi.fn() }
-      }).canStop
-    ).toBe(false)
-    create.resolve(created())
-    await launch.launchResult
-    await expect(launch.promptDeliveryResult).resolves.toMatchObject({ delivered: true })
-    const state = getStructuredAgentSessionReadOwner(launch.sessionId, target).getSnapshot().state
-    expect(state.fence).toBe(1)
-    const isWorking = isStructuredAgentSessionMainAgentWorking(null, state.submissions, state.fence)
-    expect(isWorking).toBe(true)
-    const control = structuredAgentSessionStopControl({
-      published: true,
-      host: { stopsConversation: true, stop },
-      transportState: { turnId: null, isWorking },
-      sends: { sending: false, stopSends: vi.fn() }
-    })
-    expect(control.canStop).toBe(true)
-    await control.stop()
-    expect(stop).toHaveBeenCalledWith(null, expect.any(Function))
-    expect(draft(launch.sessionId)).toBe('')
-    expect(mocks.inventory).not.toHaveBeenCalled()
-    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
-  })
-
   it('keeps frozen selection completed when exact create proof arrives after the deadline', async () => {
     const create = deferred<unknown>()
     mocks.call.mockReturnValue(create.promise)

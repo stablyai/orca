@@ -14,7 +14,7 @@ function refetchesOnConnect(query: Query): boolean {
 }
 
 // One connected-edge listener per world per host client, however many screens read that host.
-function retainHostConnectionInvalidation(
+export function retainHostConnectionInvalidation(
   queryClient: QueryClient,
   hostId: string,
   client: RpcClient

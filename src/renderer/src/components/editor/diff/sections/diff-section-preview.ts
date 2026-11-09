@@ -1,5 +1,5 @@
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
-import { canPreviewLanguage } from '@/lib/file-preview'
+import { canPreviewLanguage } from '@/lib/browser/documents/file-preview'
 
 // Preview reads the working file on disk; exclude deleted files and historical snapshots that may differ from it.
 export function canOpenDiffSectionPreviewToSide(params: {
