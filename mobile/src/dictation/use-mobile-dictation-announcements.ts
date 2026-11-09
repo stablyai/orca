@@ -57,8 +57,8 @@ export function useMobileDictationAnnouncements(
       cancelled.current = false
       listeningSaid.current = false
     }
-    // A refused start also goes back to idle, but its reason is said where it is reported.
-    if (status === 'idle' && previous !== 'idle' && previous !== 'error' && cancelled.current) {
+    // Only a ✕ (including Discard on a kept failure); a refused start's reason is said where it is reported.
+    if (status === 'idle' && previous !== 'idle' && cancelled.current) {
       say(dictationAnnounceCopy.cancelled())
     }
     if (status === 'idle') {
