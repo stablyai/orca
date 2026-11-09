@@ -23,6 +23,7 @@ import type { GoldenImageProviderApi } from './golden-image-provider'
 import { assertStartsOpen, type GuardrailConfig, DEFAULT_GUARDRAILS } from './guardrails'
 import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
+import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
 import type { Keyring } from './secrets-crypto'
 
 export const BUILD_DEADLINE_MS = 45 * 60_000
@@ -248,7 +249,13 @@ export async function startBuild(deps: BuildDeps, caller: SandboxCaller, environ
     return await bootBuild(deps, row, config)
   } catch (error) {
     const current = (await getBuild(deps.db, environment.id, id)) ?? row
-    await failBuild(deps, current, 'boot', error instanceof ProviderError ? `provider_${error.status}` : 'boot_failed')
+    const code =
+      error instanceof ProviderError
+        ? `provider_${error.status}`
+        : error instanceof EnvironmentError && error.reason === 'github_unavailable'
+          ? 'github_unavailable'
+          : 'boot_failed'
+    await failBuild(deps, current, code === 'github_unavailable' ? 'clone' : 'boot', code)
     throw error
   }
 }
@@ -258,7 +265,13 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
   const lines: string[] = []
   for (const [index, repo] of config.repos.entries()) {
     let header = ''
-    const minted = deps.github ? await deps.github.tokenForRepo(repo.url, row.account_id).catch(() => null) : null
+    // A minting error is not "public repo": cloning anonymously would end in a misleading 404 (seen live).
+    const minted = deps.github
+      ? await deps.github.tokenForRepo(repo.url, row.account_id).catch((error: unknown) => {
+          log('environment_build_github_token_failed', { buildId: row.id, error: String(error).slice(0, 120) })
+          throw new EnvironmentError('conflict', 409, 'github_unavailable')
+        })
+      : null
     if (minted) {
       const ph = placeholder(row.id, index)
       credentials.push({
@@ -400,8 +413,55 @@ async function finalize(deps: BuildDeps, row: BuildRow, exitCode: number): Promi
   }
 }
 
+/**
+ * Boot the new image once and require orcad to answer before any workspace gets it: an install script
+ * that breaks Orca fails its own build instead of every later create. The first boot of a snapshot is
+ * also its slowest (provider-side hydration), so a user never pays it.
+ */
+async function smokeBoot(deps: BuildDeps, row: BuildRow, snapshotId: string): Promise<void> {
+  // Unique per attempt: a recovery pass racing this one must not delete our box (or we theirs).
+  const name = `${row.provider_name}-smoke-${crypto.getRandomValues(new Uint32Array(1))[0]!.toString(36)}`
+  try {
+    const box = await deps.provider.createSandbox({
+      name,
+      snapshotId,
+      vcpus: 2,
+      region: deps.config.region,
+      timeoutMs: 5 * 60_000,
+      ports: [ORCAD_PORT],
+      networkPolicy: compileNetworkPolicy({ mode: 'allowlist' }),
+      tags: { orcaEnvBuildSmoke: row.id, orcaEnv: deps.config.environment },
+      snapshotExpirationMs: 0,
+      persistent: false
+    })
+    await startOrcad(deps.provider, box, { sandboxId: `smoke-${row.id}` })
+  } finally {
+    await deps.provider.deleteSandbox(name).catch(() => undefined)
+  }
+}
+
 async function completeBuild(deps: BuildDeps, row: BuildRow, snapshotId: string): Promise<BuildRow> {
   await deps.provider.deleteBuildSandbox(row.provider_name).catch(() => undefined)
+  // The smoke boot can take minutes: mark progress so no watcher takes this build for interrupted.
+  row = (await transition(deps.db, row, {}, deps.now())) ?? row
+  try {
+    await smokeBoot(deps, row, snapshotId)
+  } catch (error) {
+    if (error instanceof ProviderError) {
+      // The provider hiccuped, not the image: never throw away a finished build for that.
+      log('environment_build_smoke_skipped', { buildId: row.id, status: error.status })
+    } else {
+      log('environment_build_smoke_failed', { buildId: row.id, error: String(error).slice(0, 200) })
+      const failed = await transition(deps.db, row, { status: 'failed', failed_step: 'snapshot', error: 'smoke_failed', finished_at: deps.now() }, deps.now())
+      if (failed) {
+        // Ours to delete only when this pass is the one that failed the build.
+        await deps.provider.deleteSnapshot(snapshotId).catch(() => undefined)
+        log('environment_build_failed', { buildId: row.id, number: row.number, step: 'snapshot', error: 'smoke_failed' })
+        return failed
+      }
+      return (await getBuild(deps.db, row.environment_id, row.id)) ?? row
+    }
+  }
   const now = deps.now()
   const done = await transition(deps.db, row, { status: 'succeeded', snapshot_id: snapshotId, finished_at: now }, now)
   const alive = await deps.db
@@ -409,8 +469,12 @@ async function completeBuild(deps: BuildDeps, row: BuildRow, snapshotId: string)
     .bind(row.environment_id)
     .first<{ ok: number }>()
   if (!done || !alive) {
-    // Failed meanwhile (deadline) or the environment was deleted: the snapshot is ours to clean up.
-    await deps.provider.deleteSnapshot(snapshotId).catch(() => undefined)
+    // Failed meanwhile (deadline) or the environment was deleted: the snapshot is ours to clean up,
+    // unless a racing pass already completed the build with this very snapshot.
+    const current = done ?? (await getBuild(deps.db, row.environment_id, row.id))
+    if (done || current?.snapshot_id !== snapshotId) {
+      await deps.provider.deleteSnapshot(snapshotId).catch(() => undefined)
+    }
     if (done) {
       await deps.db.prepare('UPDATE environment_builds SET snapshot_deleted_at = ? WHERE id = ?').bind(now, row.id).run()
     }
