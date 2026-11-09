@@ -2011,6 +2011,11 @@
               "googleCookiesSkippedRemoteWorkspace": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google."
             }
           }
+        },
+        "navigation": {
+          "remoteOAuthCallbackRelay": {
+            "failed": "Orca could not pass this sign-in back to the remote host, so the browser may show a connection error when it finishes."
+          }
         }
       },
       "pluginCommandKeybindings": {
@@ -26475,5 +26480,59 @@
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
     }
+  },
+  "cloudMcpSync": {
+    "appliesEverywhere": "Applies to every cloud workspace",
+    "autoSync": "Sync on connect",
+    "autoSyncHint": "Applies to every cloud workspace. Servers added inside the sandbox are left alone.",
+    "egressNote": "Orca opens the sandbox’s network to each remote server’s host. Other hosts stay blocked.",
+    "error": {
+      "failed": "The last sync didn’t finish. Servers already in the sandbox still work.",
+      "hostOutdated": "This sandbox’s Orca is too old for MCP servers. Create a new workspace to use them.",
+      "hostUnreachable": "Couldn’t reach the sandbox. Servers already in the sandbox still work."
+    },
+    "lastSynced": "Last synced {{time}}",
+    "loading": "Loading MCP servers…",
+    "row": {
+      "commandMissing": "Will sync once {{command}} is installed in the sandbox",
+      "configUnreadable": "Couldn’t update the agent’s config in the sandbox",
+      "inRepo": "Comes from the repo’s .mcp.json, so the sandbox already has it",
+      "invalid": "Invalid server entry",
+      "keptHost": "The sandbox already has its own {{name}} server",
+      "localCommand": "Command exists only on this computer",
+      "localPath": "Uses files on this computer",
+      "localUrl": "Runs on this computer’s localhost",
+      "unreachable": "Synced, but the sandbox can’t reach this server. Sync now to reopen its host."
+    },
+    "saveFailed": "Couldn’t save the change.",
+    "startFailed": "Couldn’t start the sync.",
+    "state": {
+      "pending": "Not synced yet",
+      "skipped": "Not synced",
+      "synced": "Synced",
+      "unreachable": "Synced, not reachable"
+    },
+    "summary": {
+      "found": "{{count}} found",
+      "none": "None found in Claude Code or Codex on this computer. Servers you add there show up here.",
+      "notSynced": "{{count}} found, not synced yet",
+      "pair": "{{synced}}, {{skipped}}",
+      "skipped": "{{count}} skipped",
+      "synced": "{{count}} synced",
+      "found_one": "{{count}} found",
+      "found_other": "{{count}} found",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced",
+      "skipped_one": "{{count}} skipped",
+      "skipped_other": "{{count}} skipped"
+    },
+    "syncAgain": "Sync again",
+    "syncNow": "Sync now",
+    "syncing": "Syncing MCP servers…",
+    "syncingShort": "Syncing…",
+    "title": "MCP servers",
+    "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces"
   }
 }

@@ -5,6 +5,7 @@ import { BrowserNetworkTunnelSession } from '../../browser/network/tunnels/brows
 import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL } from '../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { createAuthCallbackDialer } from '../../runtime/rpc/methods/accounts/auth-callback-tunnel'
 import { AuthCallbackForward, type AuthCallbackTunnelOpener } from './auth-callback-forward'
+import { isLoopbackCallbackRequest } from './loopback-callback-request'
 
 // Past one flow-control window, so the reply only finishes if the forward returns credit.
 const REPLY_BYTES = 600 * 1024
@@ -90,5 +91,38 @@ describe('AuthCallbackForward', () => {
       browser.on('error', reject)
     })
     expect(received).toBe(REPLY_BYTES)
+  })
+})
+
+describe('generic loopback relay request gate', () => {
+  const req = (lines: string[]) => Buffer.from(`${lines.join('\r\n')}\r\n\r\n`, 'latin1')
+  it('accepts a browser OAuth redirect to this loopback port', () => {
+    expect(
+      isLoopbackCallbackRequest(
+        req(['GET /callback?code=x&state=y HTTP/1.1', 'Host: localhost:8976']),
+        8976
+      )
+    ).toBe(true)
+    expect(isLoopbackCallbackRequest(req(['GET /cb HTTP/1.1', 'host: 127.0.0.1:8976']), 8976)).toBe(
+      true
+    )
+  })
+  it('refuses DNS-rebinding hosts, other ports, non-GET and duplicate Host headers', () => {
+    expect(
+      isLoopbackCallbackRequest(req(['GET / HTTP/1.1', 'Host: evil.example:8976']), 8976)
+    ).toBe(false)
+    expect(isLoopbackCallbackRequest(req(['GET / HTTP/1.1', 'Host: localhost:9999']), 8976)).toBe(
+      false
+    )
+    expect(isLoopbackCallbackRequest(req(['POST / HTTP/1.1', 'Host: localhost:8976']), 8976)).toBe(
+      false
+    )
+    expect(
+      isLoopbackCallbackRequest(
+        req(['GET / HTTP/1.1', 'Host: localhost:8976', 'Host: evil.example']),
+        8976
+      )
+    ).toBe(false)
+    expect(isLoopbackCallbackRequest(Buffer.from('\x16\x03\x01binary'), 8976)).toBe(false)
   })
 })

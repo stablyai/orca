@@ -1,6 +1,7 @@
 import { defineMethod, type RpcContext } from '../../core'
 import type { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
 import { createAuthCallbackTunnelMethod } from './auth-callback-tunnel'
+import { loopbackCallbackTunnelMethod } from './loopback-callback-tunnel'
 import {
   agentLaunchLoginEnv,
   createHostAgentSignInStatusChecker,
@@ -59,5 +60,6 @@ export const agentSignInMethods = (
       return checkerFor(runtime).read(true)
     }
   }),
-  createAuthCallbackTunnelMethod(flowsFor, ownerOf)
+  createAuthCallbackTunnelMethod(flowsFor, ownerOf),
+  loopbackCallbackTunnelMethod
 ]

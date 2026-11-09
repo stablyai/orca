@@ -44,6 +44,7 @@ import { HostRemoveDialog } from '../../HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-rename-remove'
 import { HostAgentSignOutDialog, HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
+import { CloudMcpSyncMenuItem } from './CloudMcpSyncMenuItem'
 import type { HostAgentSignInAgent } from '../../../../../../shared/host-agent-sign-in-status'
 
 function blockedTitle(
@@ -309,6 +310,13 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
           />
         )}
         <DropdownMenuSeparator />
+        {runtimeEnvironmentId && (
+          <CloudMcpSyncMenuItem
+            environmentId={runtimeEnvironmentId}
+            open={open}
+            onSelect={handleManage}
+          />
+        )}
         <DropdownMenuItem onSelect={handleManage}>
           <Settings2 className="size-3.5" />
           {t('auto.components.sidebar.HostSectionHeaderMenu.3c4d5e6f7a', 'Manage host…')}
