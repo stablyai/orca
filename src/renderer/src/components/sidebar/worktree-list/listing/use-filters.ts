@@ -34,6 +34,7 @@ import {
 } from '../../../../../../shared/workspace-creator-visibility'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -46,21 +47,30 @@ type RevealContext = {
 
 /** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
-  filterRepoIds: ({ state, worktree }) => {
+  filterRepoIds: ({ state, worktree, targetHostId }) => {
     const folderScope = parseWorkspaceKey(worktree.id)
     if (folderScope?.type === 'folder') {
-      const folder = selectFolderWorkspaces(state).find(
-        (candidate) => candidate.id === folderScope.folderWorkspaceId
+      // Two hosts can hold folders with the same id; resolve it against the row's own host.
+      const folderResult = resolveQualifiedIndexedFolderWorkspace(
+        state,
+        folderScope.folderWorkspaceId,
+        targetHostId
       )
-      if (!folder) {
+      if (folderResult.kind !== 'selected') {
+        return
+      }
+      const folder = folderResult.value.workspace
+      const groupRepos = state.repos.filter(
+        (repo) => repo.projectGroupId === folder.projectGroupId
+      )
+      // A selected repo of the group already passes this filter; another filter hides the folder.
+      if (groupRepos.some((repo) => state.filterRepoIds.includes(repo.id))) {
         return
       }
       // The filter stores repository ids; reveal the folder through a repo of its project group.
-      const groupRepo = state.repos.find((repo) => repo.projectGroupId === folder.projectGroupId)
+      const [groupRepo] = groupRepos
       if (groupRepo) {
-        if (!state.filterRepoIds.includes(groupRepo.id)) {
-          state.setFilterRepoIds([...state.filterRepoIds, groupRepo.id])
-        }
+        state.setFilterRepoIds([...state.filterRepoIds, groupRepo.id])
       } else if (state.filterRepoIds.length > 0) {
         // A group with no repo cannot be selected; clearing removes the only filter hiding it.
         state.setFilterRepoIds([])
