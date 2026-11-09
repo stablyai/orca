@@ -12,8 +12,8 @@ import type { ParseHostAccessLinkResult } from '../../../../../../shared/remote-
 import {
   applyParsedSshHostInput,
   type EditingTarget
-} from '../../../settings/ssh/targets/ssh-target-draft'
-import { SshHostAdvancedFields } from '../../../settings/ssh/targets/SshHostAdvancedFields'
+} from '../../../ssh-host-form/ssh-target-draft'
+import { SshHostAdvancedFields } from '../../../ssh-host-form/SshHostAdvancedFields'
 
 export function SshHostFields({
   form,

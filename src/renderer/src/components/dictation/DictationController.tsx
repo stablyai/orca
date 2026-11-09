@@ -262,10 +262,10 @@ export function DictationController() {
     }
   }, [startDictation, stopDictation])
 
-  // Toggle mode uses intercepted main IPC so the chord cannot reach xterm or system shortcuts.
+  // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
   useEffect(() => {
-    const mode = settings?.voice?.dictationMode ?? 'toggle'
-    if (mode !== 'toggle' || !settings?.voice?.enabled) {
+    const mode = settings?.voice?.dictationMode ?? 'auto'
+    if (mode === 'hold' || !settings?.voice?.enabled) {
       return
     }
     return window.api.ui.onDictationKeyDown(toggleDictation)
@@ -298,6 +298,7 @@ export function DictationController() {
 
   useHoldDictationGesture({
     canStartDictation: () => canStartDictation(sessionRef.current.phase),
+    isDictationUnderway: () => isDictationUnderway(sessionRef.current.phase),
     keybindings,
     settings,
     startDictation,

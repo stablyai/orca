@@ -34,6 +34,11 @@ import {
   resumeEphemeralVmWorkspace
 } from '../ephemeral-vm/workspace-resume'
 import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
+import { setSshHostAsleepCheck } from '../ssh/connection/ssh-host-sleep-hold'
+import {
+  isRecipeVmSshTargetAsleep,
+  setRecipeVmAsleepStoreRoot
+} from '../ephemeral-vm/recipe-vm-asleep'
 import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
@@ -56,6 +61,10 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-b
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
+import {
+  createCliRecipeWorkspace,
+  listCliEnvironmentRecipes
+} from '../ephemeral-vm/cli-workspace-create'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -140,6 +149,18 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+  runtime.setRecipeWorkspaceService({
+    create: (params, repo, options) =>
+      createCliRecipeWorkspace({
+        store,
+        userDataPath: app.getPath('userData'),
+        repo,
+        params,
+        pluginService: state.pluginService,
+        ...options
+      }),
+    list: (repo) => listCliEnvironmentRecipes(store, repo, state.pluginService)
+  })
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),
@@ -164,6 +185,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
     }
   })
+  // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
+  setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
+  setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(app.getPath('userData'), targetId))
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)

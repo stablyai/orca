@@ -52,6 +52,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
             ? context?.signal
             : undefined,
         connectionSignal: context?.signal,
+        ...(longPoll && context?.reportProgress ? { reportProgress: context.reportProgress } : {}),
         caller: LOCAL_CLI_RPC_CALLER,
         callerScope,
         pairingOffers: callerScope.kind === 'owner' ? this.ownerPairingOffers() : undefined

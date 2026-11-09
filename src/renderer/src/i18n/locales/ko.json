@@ -3773,7 +3773,6 @@
             "4f327c8b3d": "Markdown 열기...",
             "3d5d6c960d": "새로운 Markdown",
             "fd2b42aaa3": "새로운 모바일 에뮬레이터",
-            "aea43b5748": "기존 에뮬레이터 탭을 엽니다.",
             "b426bb2615": "모바일 에뮬레이터로 이동",
             "4833fb2cbe": "새 브라우저 탭",
             "d364f3c8d4": "새로운 Terminal",
@@ -5341,7 +5340,10 @@
           "69f5b5380d": "복제 중...",
           "cloneOnHostDescription": "Git URL을 입력하고 {{value0}}에서 클론할 위치를 선택하세요.",
           "cloneParentFolder": "상위 폴더",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "폴더 이름",
+          "cloneFolderTakenByRepo": "이 폴더의 \"{{value0}}\"은(는) 이미 다른 저장소이므로 이 클론에는 별도의 폴더가 필요합니다.",
+          "cloneFolderNotEmpty": "이 폴더에 \"{{value0}}\"이(가) 이미 있으므로 이 클론에는 별도의 폴더가 필요합니다."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "닫기",
@@ -7885,7 +7887,6 @@
           "f828e1de19": "- 팀과 공유",
           "673a7fd10e": "확인 중...",
           "5426ecbdcb": "로컬 스크립트가 실행되지 않습니다.",
-          "b2b06c7ce8": "사용 가능한 환경 변수(자세한 내용을 보려면 마우스를 올리세요):",
           "95a0411b3e": "템플릿",
           "175daba180": "예",
           "b20c5df6ca": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
@@ -8773,7 +8774,8 @@
           "6fa734ed95": "{{value0}} 삭제",
           "openAiKeyName": "OpenAI 트랜스크립션 키",
           "dictationShortcutDescription": "{{shortcut}} 단축키를 눌러 포커스된 패널에 텍스트를 받아쓰세요.",
-          "dictationModesDescription": "토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다."
+          "dictationModeAuto": "자동",
+          "dictationModesWithAutoDescription": "자동: {{shortcut}} 단축키를 길게 누르면 손을 뗄 때까지 받아쓰기하고, 짧게 누르면 시작하고 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다. 토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -10605,7 +10607,10 @@
               "modelUnloadTitle": "음성 모델 언로드",
               "modelUnloadDescription": "로컬 음성 모델을 메모리에서 언로드할 시점을 선택합니다.",
               "modelUnloadKeyword": "언로드",
-              "modelMemoryKeyword": "메모리"
+              "modelMemoryKeyword": "메모리",
+              "fillerWordsTitle": "군말 제거",
+              "fillerWordsDescription": "받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다.",
+              "fillerWordsKeyword": "군말"
             }
           }
         },
@@ -18808,6 +18813,7 @@
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
         "skills": "스킬",
+        "checkingSkills": "새 스킬을 확인하는 중…",
         "loadingSkills": "스킬 로딩 중…",
         "clearDescription": "대화 컨텍스트 지우기",
         "skillsUnavailableHost": "SSH 채팅에서는 스킬 목록을 표시할 수 없습니다",
@@ -19488,6 +19494,7 @@
       "composerWorkspace": {
         "copyFailed": "복사하지 못했습니다",
         "copyIdentity": "{{value0}} 복사",
+        "detachedCommit": "커밋 {{head}} (브랜치 아님)",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
@@ -19959,7 +19966,14 @@
           "cloud": "클라우드 모델은 제공업체 서버에서 실행되므로 여기에는 아무것도 로드되지 않습니다.",
           "never": "안 함",
           "immediately": "즉시"
+        },
+        "fillerWords": {
+          "title": "군말 제거",
+          "description": "받아쓰기 언어에 맞춰 받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "사용 가능한 환경 변수"
       }
     },
     "agentChildRow": {
@@ -21068,7 +21082,6 @@
       "sortRelevance": "관련성이 가장 높은",
       "sortNewest": "최신",
       "sortResultsAriaLabel": "결과 정렬: {{value0}}",
-      "consent": "전체 텍스트 검색을 활성화하시겠습니까? Orca는 전체 대화와 도구 출력당 최대 3,072자를 포함하여 로컬 에이전트 기록에서 이 컴퓨터에 인덱스를 구축합니다. 내용은 편집되지 않습니다. 인증된 페어링 클라이언트는 검색이 가능합니다.",
       "remoteDisabled": "이 컴퓨터에서는 검색이 비활성화되어 있습니다. 세션을 검색하려면 해당 컴퓨터에서 기록 색인화를 활성화하십시오.",
       "titleOnly": "이 컴퓨터에서는 전체 텍스트 검색이 꺼져 있어 세션 제목만 일치시킵니다.",
       "notReady": "검색 색인이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
@@ -21125,7 +21138,6 @@
       "description": "이 컴퓨터와 페어링된 Orca 서버에서 에이전트가 말하고 행한 모든 내용을 검색하세요.",
       "searchDescription": "이 컴퓨터와 페어링된 서버에 대한 세션 검색을 켜거나 검색 데이터를 지웁니다.",
       "indexComputers": "세션 내부 검색",
-      "computersConsent": "각 컴퓨터는 자체 에이전트 대화와 도구 출력의 검색 가능한 사본을 보관합니다. 이 데이터는 해당 컴퓨터 밖으로 전송되지 않습니다.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}}의 세션 검색",
       "serverOffline": "오프라인",
@@ -21695,9 +21707,9 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "삭제 환경설정을 저장하지 못했습니다",
     "alwaysForceDelete": "항상 강제 삭제",
+    "alwaysForceDeleteDescription": "이후 모든 워크스페이스 삭제에 적용됩니다.",
     "moreActions": "추가 강제 삭제 옵션",
-    "alwaysForceDeleteTooltip": "이후 모든 워크스페이스 삭제에 적용됩니다.",
-    "alwaysForceDeleteBranchesTooltip": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
+    "alwaysForceDeleteBranchesDescription": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
     "moreBranchActions": "브랜치 삭제 옵션 더 보기",
     "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제",
     "moreDeleteOptions": "추가 삭제 옵션",
@@ -22060,7 +22072,8 @@
     "refresh": "새로 고침",
     "restartLocal": "로컬 데몬 다시 시작",
     "killAllLocal": "모든 로컬 세션 종료",
-    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다."
+    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다.",
+    "metricDetails": "지표 세부 정보"
   },
   "workspaceSpace": {
     "table": {

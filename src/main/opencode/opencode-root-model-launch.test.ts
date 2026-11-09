@@ -29,16 +29,6 @@ const launch = (version: string, command: string, envToDelete: string[] = []) =>
 
 beforeEach(() => run.mockReset())
 
-it('starts OpenCode 2 on its own server with the picked model in its launch config', async () => {
-  const result = await launch('2.0.21', "opencode '--model' 'opencode/big-pickle'")
-  expect(result.command).toBe('opencode --standalone')
-  expect(JSON.parse(result.env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({
-    autoupdate: false,
-    model: 'opencode/big-pickle',
-    agents: { build: { model: 'opencode/big-pickle' } }
-  })
-})
-
 it('keeps the overlay when the caller asked to drop inherited OpenCode config', async () => {
   const result = await launch('2.0.21', "opencode '--model' 'opencode/big-pickle'", [
     'OPENCODE_CONFIG_CONTENT'

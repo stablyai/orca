@@ -2,6 +2,7 @@ import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { RuntimeRpcProgress } from '../../../shared/runtime-rpc-envelope'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
@@ -136,6 +137,8 @@ export type RpcContext = {
   markWorkerDoneMutationEffectFree?: () => void
   // Prompt retries stop once PTY write effects become ambiguous.
   markMutationEffectPossible?: () => void
+  // Long polls on a local socket may report named progress steps to the waiting client.
+  reportProgress?: (progress: RuntimeRpcProgress) => void
   // Commit operation identity with worker-start so crash recovery can inspect it.
   orchestrationMutation?: {
     callerFingerprint: string

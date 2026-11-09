@@ -3773,7 +3773,6 @@
             "4f327c8b3d": "打开 Markdown...",
             "3d5d6c960d": "新 Markdown",
             "fd2b42aaa3": "新的手机模拟器",
-            "aea43b5748": "打开现有的模拟器选项卡。",
             "b426bb2615": "转到手机模拟器",
             "4833fb2cbe": "新浏览器选项卡",
             "d364f3c8d4": "新终端",
@@ -5341,7 +5340,10 @@
           "69f5b5380d": "克隆...",
           "cloneOnHostDescription": "输入 Git URL，并选择要在 {{value0}} 上克隆到的位置。",
           "cloneParentFolder": "父文件夹",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "文件夹名称",
+          "cloneFolderTakenByRepo": "此文件夹中的“{{value0}}”已是另一个仓库，因此此克隆需要使用单独的文件夹。",
+          "cloneFolderNotEmpty": "此文件夹中已存在“{{value0}}”，因此此克隆需要使用单独的文件夹。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "关闭",
@@ -7885,7 +7887,6 @@
           "f828e1de19": "- 与您的团队分享",
           "673a7fd10e": "检查中...",
           "5426ecbdcb": "本地脚本将不会运行",
-          "b2b06c7ce8": "可用的环境变量（将鼠标悬停以查看详细信息）：",
           "95a0411b3e": "模板",
           "175daba180": "例子",
           "b20c5df6ca": "添加“orca.yaml”文件以启用此仓库的共享设置、存档或议题自动化默认值。示例模板：",
@@ -8773,7 +8774,8 @@
           "6fa734ed95": "删除 {{value0}}",
           "openAiKeyName": "您的 OpenAI 转录密钥",
           "dictationShortcutDescription": "按 {{shortcut}} 可将文本听写到当前聚焦的任意窗格中。",
-          "dictationModesDescription": "切换：按一次 {{shortcut}} 开始，再按一次停止。按住：按住 {{shortcut}} 期间进行听写。"
+          "dictationModeAuto": "自动",
+          "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -10605,7 +10607,10 @@
               "modelUnloadTitle": "卸载语音模型",
               "modelUnloadDescription": "选择何时从内存中卸载本地语音模型。",
               "modelUnloadKeyword": "卸载",
-              "modelMemoryKeyword": "内存"
+              "modelMemoryKeyword": "内存",
+              "fillerWordsTitle": "移除语气词",
+              "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
+              "fillerWordsKeyword": "语气词"
             }
           }
         },
@@ -18750,6 +18755,7 @@
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
         "skills": "技能",
+        "checkingSkills": "正在检查新技能…",
         "loadingSkills": "正在加载技能…",
         "clearDescription": "清除对话上下文",
         "skillsUnavailableHost": "SSH 聊天中无法列出技能",
@@ -19429,6 +19435,7 @@
       "composerWorkspace": {
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
+        "detachedCommit": "提交 {{head}}（非分支）",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
@@ -19959,7 +19966,14 @@
           "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。",
           "never": "从不",
           "immediately": "立即"
+        },
+        "fillerWords": {
+          "title": "移除语气词",
+          "description": "按听写语言，从听写文本中去掉“嗯”“呃”之类的语气词。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "可用的环境变量"
       }
     },
     "agentChildRow": {
@@ -21068,7 +21082,6 @@
       "sortRelevance": "最相关的",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "排序结果：{{value0}}",
-      "consent": "启用全文搜索吗？ Orca 根据本地智能体记录在此计算机上构建索引，包括完整对话和每个工具输出最多 3,072 个字符。内容未经过编辑。经过身份验证的配对客户端可以搜索它。",
       "remoteDisabled": "此计算机上已禁用搜索。在该计算机上启用转录索引以搜索其会话。",
       "titleOnly": "此计算机上的全文搜索已关闭，因此仅匹配会话标题。",
       "notReady": "搜索索引尚未准备好。稍后再试。",
@@ -21125,7 +21138,6 @@
       "description": "在此计算机和任何配对的 Orca 服务器上搜索您的智能体所说和所做的一切。",
       "searchDescription": "打开此计算机和配对服务器的会话搜索，或清除搜索数据。",
       "indexComputers": "在会话内搜索",
-      "computersConsent": "每台计算机都保留自己的智能体对话和工具输出的可搜索副本。没有任何东西离开那台计算机。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "搜索 {{host}} 上的会话",
       "serverOffline": "离线",
@@ -21695,9 +21707,9 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "无法保存删除偏好设置",
     "alwaysForceDelete": "始终强制删除",
+    "alwaysForceDeleteDescription": "适用于今后所有工作区删除操作。",
     "moreActions": "更多强制删除选项",
-    "alwaysForceDeleteTooltip": "适用于今后所有工作区删除操作。",
-    "alwaysForceDeleteBranchesTooltip": "适用于将来删除工作区后保留的分支。",
+    "alwaysForceDeleteBranchesDescription": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
     "alwaysForceDeleteBranches": "始终删除保留的分支",
     "moreDeleteOptions": "更多删除选项",
@@ -22060,7 +22072,8 @@
     "refresh": "刷新",
     "restartLocal": "重启本地守护进程",
     "killAllLocal": "结束所有本地会话",
-    "killFailed": "无法结束终端。将保留上次观察到的会话。"
+    "killFailed": "无法结束终端。将保留上次观察到的会话。",
+    "metricDetails": "指标详情"
   },
   "browserExtensions": {
     "permission": {

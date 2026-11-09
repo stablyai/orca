@@ -55,9 +55,9 @@ export function createClaudeNamingGeneration(
         generation.phase = 'initializing'
       }
       const close = connection.close
-      connection.close = () => {
+      connection.close = (...args) => {
         generation.phase = 'closing'
-        const done = close.call(connection)
+        const done = close.apply(connection, args)
         generation.closing = done
         notify()
         return done.finally(() => {

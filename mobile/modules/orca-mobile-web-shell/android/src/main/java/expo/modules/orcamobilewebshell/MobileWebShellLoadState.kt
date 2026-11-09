@@ -26,6 +26,7 @@ internal data class MobileWebShellLoadEmission(
 /** Failure is terminal and duplicate reports are dropped: late error-document/rule-list callbacks must never restore ready. Cross-thread readers require volatile state. */
 internal class MobileWebShellLoadStateMachine {
   private var terminal = false
+  val isTerminal: Boolean get() = terminal
   private var last: MobileWebShellLoadEmission? = null
   private var rendererLoss: Pair<Boolean, Boolean>? = null
 

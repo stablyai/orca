@@ -25,7 +25,8 @@ import {
 
 import {
   MANAGED_SERVER_RUNTIME_CAPABILITY,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
+  WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY
 } from '../../../shared/host-runtime-capabilities'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 import {
@@ -61,6 +62,11 @@ import { supportsDurableTerminalPromptDelivery } from '../terminal/input/durable
 import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-workspace-change-events'
 
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
+  /** Only a host wired with a recipe runner (the desktop) advertises recipe workspace creation. */
+  supportsRecipeWorkspaceCreation(): boolean {
+    return false
+  }
+
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
     const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
@@ -93,6 +99,9 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
     )
+    if (this.supportsRecipeWorkspaceCreation()) {
+      capabilities.push(WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY)
+    }
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }

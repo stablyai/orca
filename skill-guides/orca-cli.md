@@ -153,6 +153,18 @@ Lineage rules:
 - To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 
+Per-workspace environment recipes: `ORCA vm recipe list --repo id:<repoId> --json` lists the
+recipes `--recipe` accepts. `ORCA worktree create --name task --recipe <id> --no-parent --json`
+runs the recipe's create step and creates the workspace on the new environment's Orca server. Run
+it on the computer whose Orca desktop app owns the recipe; omit `--environment` and `--pairing-code`.
+It can take minutes; without `--json`, named progress steps print to stderr. Provisioned-root recipes
+own setup, so `--setup run` and `--run-hooks` are refused for them. Add `--agent`, `--prompt`,
+`--model`, or `--effort` to launch on the new environment. The result's `recipe.environmentId` is the
+environment for follow-up commands (`--environment id:<id>`). On failure the error code is
+`recipe_workspace_create_failed`; `data.phase` names the failed step and `data.environment` says
+whether Orca destroyed the new environment. Never retry with `--retry-launch`; after a failed agent
+launch, use the returned `agent launch` recovery command against the existing workspace.
+
 Agent/setup flags:
 
 ```text
@@ -344,7 +356,7 @@ Search rules:
 
 - Quote a multi-word query; unquoted words are read as command names.
 - Search for a distinctive phrase or identifier, not a description of the topic. An exact sentence matches as a phrase first, then as all of its words, then as any of them.
-- `--scope all` (the default) covers conversation turns, commands, and tool output; `--scope conversation` keeps user and assistant turns only.
+- `--scope all` (the default) and `--scope conversation` search user and assistant turns; tool output is excluded.
 - Each hit carries the session, a snippet with the matched text marked, and a `resumeCommand`. `--debug` adds the route the host used.
 - Check `--index-status --json` first. Search runs only where a human turned it on under Settings → Agent Session History; when `enabled` is false, say so and stop. There is no CLI way to turn it on.
 - While `phase` is `indexing`, results can be incomplete. `--fresh` waits up to five seconds for the host to catch up, then searches anyway.

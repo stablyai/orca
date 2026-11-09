@@ -4284,7 +4284,6 @@
             "4f327c8b3d": "Markdown Aç...",
             "3d5d6c960d": "Yeni Markdown",
             "fd2b42aaa3": "Yeni Mobil Emülatör",
-            "aea43b5748": "Mevcut emülatör sekmesini açın.",
             "b426bb2615": "Mobil Emülatöre Git",
             "4833fb2cbe": "Yeni Tarayıcı Sekmesi",
             "d364f3c8d4": "Yeni Terminal",
@@ -5957,7 +5956,10 @@
           "69f5b5380d": "Klonlanıyor...",
           "cloneOnHostDescription": "Git URL'sini girin ve {{value0}} üzerinde nereye klonlanacağını seçin.",
           "cloneParentFolder": "Üst klasör",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Klasör adı",
+          "cloneFolderTakenByRepo": "Bu klasördeki \"{{value0}}\" zaten farklı bir depo, bu yüzden bu klonun kendi klasörü olmalı.",
+          "cloneFolderNotEmpty": "Bu klasörde \"{{value0}}\" zaten var, bu yüzden bu klonun kendi klasörü olmalı."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Kapat",
@@ -8561,7 +8563,6 @@
           "f828e1de19": "- ekibinizle paylaşılır",
           "673a7fd10e": "Kontrol ediliyor...",
           "5426ecbdcb": "Yerel betikler çalıştırılmayacak",
-          "b2b06c7ce8": "Kullanılabilir ortam değişkenleri (ayrıntılar için üzerine gelin):",
           "95a0411b3e": "şablon",
           "175daba180": "Örnek",
           "b20c5df6ca": "Bu repo için paylaşılan kurulum, arşiv veya sorun otomasyonu varsayılanlarını etkinleştirmek üzere bir `orca.yaml` dosyası ekleyin. Örnek şablon:",
@@ -9453,7 +9454,8 @@
           "cd9fe37556": "Mikrofon izni verildi",
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
           "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
-          "dictationModesDescription": "Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın. Basılı tut: {{shortcut}} basılıyken dikte edin."
+          "dictationModeAuto": "Otomatik",
+          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -11281,7 +11283,10 @@
               "modelUnloadTitle": "Konuşma modelini bellekten kaldır",
               "modelUnloadDescription": "Yerel konuşma modelinin bellekten ne zaman kaldırılacağını seçin.",
               "modelUnloadKeyword": "kaldır",
-              "modelMemoryKeyword": "bellek"
+              "modelMemoryKeyword": "bellek",
+              "fillerWordsTitle": "Dolgu seslerini kaldır",
+              "fillerWordsDescription": "Dikte edilen metinden “hmm” gibi duraksama seslerini çıkarır.",
+              "fillerWordsKeyword": "dolgu"
             }
           }
         },
@@ -19469,6 +19474,7 @@
         "noCommands": "Eşleşen komut yok",
         "commands": "Komutlar",
         "skills": "Beceriler",
+        "checkingSkills": "Yeni beceriler denetleniyor…",
         "loadingSkills": "Beceriler yükleniyor...",
         "skillsLoaded": "Beceriler yüklendi",
         "clearDescription": "Konuşma bağlamını temizle",
@@ -20176,6 +20182,7 @@
       "composerWorkspace": {
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
+        "detachedCommit": "Commit {{head}} (dal değil)",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
@@ -20642,7 +20649,14 @@
           "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
           "never": "Asla",
           "immediately": "Hemen"
+        },
+        "fillerWords": {
+          "title": "Dolgu seslerini kaldır",
+          "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Kullanılabilir ortam değişkenleri"
       }
     },
     "agentChildRow": {
@@ -21378,7 +21392,6 @@
       "sortRelevance": "En alakalı",
       "sortNewest": "En yeni",
       "sortResultsAriaLabel": "Sonuçları sırala: {{value0}}",
-      "consent": "Tam metin arama etkinleştirilsin mi? Orca, tam konuşmalar ve araç çıktısı başına 3.072 karaktere kadar dahil olmak üzere yerel ajan dökümlerinden bu bilgisayarda bir dizin oluşturur. İçerik sansürlenmez. Kimliği doğrulanmış eşlenmiş istemciler bu dizinde arama yapabilir.",
       "remoteDisabled": "Arama bu bilgisayarda devre dışı. Oturumlarında arama yapmak için o bilgisayarda döküm dizinlemeyi etkinleştirin.",
       "titleOnly": "Bu bilgisayarda tam metin araması kapalı olduğu için yalnızca oturum başlıklarında eşleşme aranır.",
       "notReady": "Arama dizini henüz hazır değil. Birazdan tekrar deneyin.",
@@ -21438,7 +21451,6 @@
       "description": "Bu bilgisayarda ve eşlenmiş herhangi bir Orca sunucusunda ajanlarınızın söylediği ve yaptığı her şeyi arayın.",
       "searchDescription": "Bu bilgisayar ve eşlenmiş sunucular için oturum aramasını açın veya arama verilerini temizleyin.",
       "indexComputers": "Oturumların içinde ara",
-      "computersConsent": "Her bilgisayar, kendi ajan konuşmalarının ve araç çıktısının aranabilir bir kopyasını tutar. Hiçbir şey o bilgisayardan dışarı çıkmaz.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} üzerindeki oturumları ara",
       "serverOffline": "Çevrimdışı",
@@ -21839,11 +21851,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Silme tercihi kaydedilemedi",
     "alwaysForceDelete": "Her zaman zorla sil",
+    "alwaysForceDeleteDescription": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreActions": "Diğer zorla silme seçenekleri",
-    "alwaysForceDeleteTooltip": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreBranchActions": "Diğer branch silme seçenekleri",
     "alwaysForceDeleteBranches": "Korunan branch'leri her zaman sil",
-    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
+    "alwaysForceDeleteBranchesDescription": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
     "moreDeleteOptions": "Diğer silme seçenekleri",
     "alwaysDelete": "Her zaman sil",
     "alwaysDeleteTooltip": "Bundan sonraki silme işlemlerinde bu onayı atla."
@@ -22382,7 +22394,8 @@
     "refresh": "Yenile",
     "restartLocal": "Yerel arka plan hizmetini yeniden başlat",
     "killAllLocal": "Tüm yerel oturumları sonlandır",
-    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur."
+    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur.",
+    "metricDetails": "Metrik ayrıntıları"
   },
   "browserExtensions": {
     "permission": {

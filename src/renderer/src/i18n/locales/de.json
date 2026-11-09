@@ -4311,7 +4311,6 @@
             "4f327c8b3d": "Markdown öffnen…",
             "3d5d6c960d": "Neue Markdown-Datei erstellen",
             "fd2b42aaa3": "Neuen Mobilgeräte-Emulator erstellen",
-            "aea43b5748": "Den vorhandenen Emulator-Tab öffnen.",
             "b426bb2615": "Zum Mobilgeräte-Emulator wechseln",
             "4833fb2cbe": "Neuen Browser-Tab öffnen",
             "d364f3c8d4": "Neues Terminal öffnen",
@@ -5973,7 +5972,10 @@
           "69f5b5380d": "Wird geklont…",
           "cloneOnHostDescription": "Die Git-URL eingeben und einen Speicherort zum Klonen auf {{value0}} auswählen.",
           "cloneParentFolder": "Übergeordneter Ordner",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Ordnername",
+          "cloneFolderTakenByRepo": "„{{value0}}“ in diesem Ordner ist bereits ein anderes Repository, daher braucht dieser Klon einen eigenen Ordner.",
+          "cloneFolderNotEmpty": "„{{value0}}“ existiert in diesem Ordner bereits, daher braucht dieser Klon einen eigenen Ordner."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Schließen",
@@ -8577,7 +8579,6 @@
           "f828e1de19": "- mit dem Team geteilt",
           "673a7fd10e": "Wird geprüft…",
           "5426ecbdcb": "Lokale Skripte werden nicht ausgeführt",
-          "b2b06c7ce8": "Verfügbare Umgebungsvariablen (für Details mit der Maus darüberfahren):",
           "95a0411b3e": "Vorlage",
           "175daba180": "Beispiel",
           "b20c5df6ca": "Eine Datei `orca.yaml` hinzufügen, um gemeinsame Standardwerte für Einrichtung, Archivierung oder Issue-Automatisierung in diesem Repository zu aktivieren. Beispielvorlage:",
@@ -9469,7 +9470,8 @@
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
           "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
-          "dictationModesDescription": "Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt."
+          "dictationModeAuto": "Automatisch",
+          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -11297,7 +11299,10 @@
               "modelUnloadTitle": "Sprachmodell entladen",
               "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
               "modelUnloadKeyword": "entladen",
-              "modelMemoryKeyword": "speicher"
+              "modelMemoryKeyword": "speicher",
+              "fillerWordsTitle": "Füllwörter entfernen",
+              "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
+              "fillerWordsKeyword": "füllwörter"
             }
           }
         },
@@ -19484,6 +19489,7 @@
         "noCommands": "Keine passenden Befehle",
         "commands": "Befehle",
         "skills": "Skills",
+        "checkingSkills": "Nach neuen Skills wird gesucht…",
         "loadingSkills": "Skills werden geladen…",
         "skillsLoaded": "Skills geladen",
         "clearDescription": "Unterhaltungskontext leeren",
@@ -20194,6 +20200,7 @@
       "composerWorkspace": {
         "copyFailed": "Kopieren fehlgeschlagen",
         "copyIdentity": "{{value0}} kopieren",
+        "detachedCommit": "Commit {{head}} (kein Branch)",
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
         "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
@@ -20660,7 +20667,14 @@
           "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
           "never": "Nie",
           "immediately": "Sofort"
+        },
+        "fillerWords": {
+          "title": "Füllwörter entfernen",
+          "description": "Entfernt Laute wie „äh“ und „ähm“ aus diktiertem Text, passend zur Diktiersprache."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Verfügbare Umgebungsvariablen"
       }
     },
     "agentChildRow": {
@@ -21397,7 +21411,6 @@
       "sortRelevance": "Relevanteste",
       "sortNewest": "Neueste",
       "sortResultsAriaLabel": "Ergebnisse sortieren: {{value0}}",
-      "consent": "Volltextsuche aktivieren? Orca erstellt auf diesem Computer einen Index aus lokalen Agentenprotokollen, einschließlich vollständiger Unterhaltungen und bis zu 3.072 Zeichen pro Tool-Ausgabe. Inhalte werden nicht geschwärzt. Authentifizierte, gekoppelte Clients können den Index durchsuchen.",
       "remoteDisabled": "Die Suche ist auf diesem Computer deaktiviert. Dort die Indexierung von Protokollen aktivieren, um seine Sitzungen zu durchsuchen.",
       "titleOnly": "Die Volltextsuche ist auf diesem Computer deaktiviert. Daher werden nur Sitzungstitel durchsucht.",
       "notReady": "Der Suchindex ist noch nicht bereit. In Kürze erneut versuchen.",
@@ -21457,7 +21470,6 @@
       "description": "Alles durchsuchen, was Agenten auf diesem Computer und auf gekoppelten Orca-Servern gesagt und getan haben.",
       "searchDescription": "Die Sitzungssuche für diesen Computer und gekoppelte Server aktivieren oder Suchdaten löschen.",
       "indexComputers": "Innerhalb von Sitzungen suchen",
-      "computersConsent": "Jeder Computer speichert eine durchsuchbare Kopie seiner eigenen Agentenunterhaltungen und Tool-Ausgaben. Nichts verlässt diesen Computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Sitzungen auf {{host}} durchsuchen",
       "serverOffline": "Offline",
@@ -21858,11 +21870,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Die Löscheinstellung konnte nicht gespeichert werden",
     "alwaysForceDelete": "Löschen immer erzwingen",
+    "alwaysForceDeleteDescription": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreActions": "Weitere Optionen zum erzwungenen Löschen",
-    "alwaysForceDeleteTooltip": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreBranchActions": "Weitere Optionen zum Löschen von Branches",
     "alwaysForceDeleteBranches": "Beibehaltene Branches immer löschen",
-    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden.",
+    "alwaysForceDeleteBranchesDescription": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden.",
     "moreDeleteOptions": "Weitere Löschoptionen",
     "alwaysDelete": "Immer löschen",
     "alwaysDeleteTooltip": "Diese Bestätigung bei zukünftigen Löschvorgängen überspringen."
@@ -22558,7 +22570,8 @@
     "refresh": "Aktualisieren",
     "restartLocal": "Lokalen Daemon neu starten",
     "killAllLocal": "Alle lokalen Sitzungen beenden",
-    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten."
+    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten.",
+    "metricDetails": "Metrikdetails"
   },
   "browserExtensions": {
     "permission": {

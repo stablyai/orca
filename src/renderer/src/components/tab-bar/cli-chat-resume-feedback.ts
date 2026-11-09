@@ -56,12 +56,12 @@ export async function reportCliChatResumeFailureInChat(
   }
 }
 
-/** Said in the chat that took the terminal's place, since that terminal is gone. */
-export function cliChatResumeExitUnprovenText(source: CliChatResumeSource): string {
-  return translate(
-    'components.native-chat.resumeInNewChat.terminalExitUnprovenInChat',
-    "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
-    { agent: agentLabel(source.agent) }
+/** The host found no history to open for the conversation: none saved, or none it can reach. */
+export function canRestartMissingConversation(error: unknown): boolean {
+  const refusal = structuredLaunchFailure(error)
+  return (
+    refusal?.code === 'agent_session_identity_required' &&
+    refusal.details?.reason === 'transcriptNotFound'
   )
 }
 

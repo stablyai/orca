@@ -1,5 +1,5 @@
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
@@ -27,6 +27,11 @@ import {
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import { isRecipeVmEnvironmentAsleep } from '../../ephemeral-vm/recipe-vm-asleep'
+import {
+  RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
+  RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
+} from '../../../shared/remote-runtime/recipe-vm-wake'
 
 const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
 
@@ -78,6 +83,14 @@ export function createRuntimeEnvironmentStatusOwner(
       const incarnation = getRuntimeEnvironmentCapabilityIncarnation(environment.id)
       const isCurrent = (): boolean =>
         getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
+      // A sleeping VM's health probe would be the dial that wakes it; answer without dialing.
+      // (A tunnelled server is refused the same way by its preparation below.)
+      if (isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
+        return runtimeHostStatusFailure(
+          RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
+          RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
+        )
+      }
       if (environment.connectionDependency === 'ssh-tunnel') {
         try {
           await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
@@ -100,14 +113,17 @@ export function createRuntimeEnvironmentStatusOwner(
         getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
           'supported'
           ? transport.request(signal)
-          : sendRemoteRuntimeRequest<RuntimeStatus>(
+          : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
               connection,
               'status.get',
               undefined,
               15_000,
               undefined,
+              undefined,
               signal,
-              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+              undefined,
+              undefined
             ))
       } catch (error) {
         response = runtimeHostStatusError(error)

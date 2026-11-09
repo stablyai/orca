@@ -56,7 +56,7 @@ function PortAction({
   )
 
   return (
-    <Tooltip delayDuration={200}>
+    <Tooltip>
       <TooltipTrigger asChild>
         {disabled ? <span className="inline-flex">{button}</span> : button}
       </TooltipTrigger>
@@ -218,9 +218,12 @@ export function PortRow({
       </span>
       <div className="min-w-0 space-y-0.5">
         <div className="relative flex h-5 min-w-0 items-center">
-          <Tooltip delayDuration={200}>
+          <Tooltip>
             <TooltipTrigger asChild>
-              <span className="block min-w-0 select-text truncate text-[11px] text-muted-foreground">
+              <span
+                tabIndex={0}
+                className="block min-w-0 select-text truncate text-2xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 {processLabel}
               </span>
             </TooltipTrigger>

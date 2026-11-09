@@ -11,7 +11,7 @@ import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
 } from '@/lib/remote-pairing-copy'
-import { defaultServerNameForAccessLink } from '../settings/runtime-environments/catalog/runtime-server-default-name'
+import { defaultServerNameForAccessLink } from '../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import {
   RuntimeHostAccessFailureAlert,
   type RuntimeHostAccessFailure

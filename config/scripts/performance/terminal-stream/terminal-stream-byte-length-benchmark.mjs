@@ -60,8 +60,8 @@ const { TERMINAL_OUTPUT_BATCH_MAX_BYTES, TERMINAL_STREAM_CHUNK_BYTES } = await i
     import.meta.url
   ).href
 )
-const { measureClipboardTextByteLength } = await import(
-  new URL('../../../../src/shared/clipboard-text.ts', import.meta.url).href
+const { measureUtf8ByteLength } = await import(
+  new URL('../../../../src/shared/utf8-byte-limits.ts', import.meta.url).href
 )
 const {
   MIN_NATIVE_BYTE_LENGTH_CODE_UNITS,
@@ -107,9 +107,9 @@ function runWithNativeCallCount(fn) {
   }
 }
 
-const legacyMeasure = measureClipboardTextByteLength
+const legacyMeasure = measureUtf8ByteLength
 const legacyExceeds = (data, maxBytes) =>
-  measureClipboardTextByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
+  measureUtf8ByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
 
 function mulberry32(seed) {
   let state = seed >>> 0

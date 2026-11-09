@@ -103,12 +103,16 @@ function resetStructuredLaunchCallers(
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }
 
-function restartStructuredLaunchState(state: StructuredLaunchState, requested = false): void {
+function restartStructuredLaunchState(
+  state: StructuredLaunchState,
+  requested = false,
+  fresh = false
+): void {
   const wasVisibilityUnknown = state.visibilityUnknown
   const retainedOpening = wasVisibilityUnknown && !!state.intent.params.firstMessage
   if (!wasVisibilityUnknown || (retainedOpening && requested)) {
     const surfaceAddress = state.intent.surfaceAddress
-    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening)
+    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening, fresh)
     state.intent.surfaceAddress = surfaceAddress
   }
   resetStructuredLaunchCallers(state, retainedOpening)
@@ -286,7 +290,11 @@ export function startStructuredAgentLaunch(
   }
 }
 
-export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId: string): boolean {
+export function retryStructuredAgentSessionLaunch(
+  worktreeId: string,
+  sessionId: string,
+  { fresh = false }: { fresh?: boolean } = {}
+): boolean {
   const state =
     getStructuredLaunchStateBySessionId(sessionId) ??
     restorePersistedStructuredLaunchState(worktreeId, sessionId)
@@ -298,7 +306,7 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   ) {
     return false
   }
-  restartStructuredLaunchState(state, true)
+  restartStructuredLaunchState(state, true, fresh)
   return true
 }
 
