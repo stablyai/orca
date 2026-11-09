@@ -226,21 +226,22 @@ export function ensureWorktreeHasInitialTerminal(
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
-    if (existingTerminalTabId && (setup || issueCommand)) {
-      // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback setup.
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+    const queuedOnExisting = existingTerminalTabId !== null && Boolean(setup || issueCommand)
+    // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback
+    // setup. Editor- or browser-only workspaces run it in its own tab.
+    if (queuedOnExisting || setup) {
       queueSetupAndIssueCommands(
         store,
         worktreeId,
         existingTerminalTabId,
         setup,
-        issueCommand,
+        existingTerminalTabId ? issueCommand : undefined,
         wrappedSetupCommandStr,
         opts
       )
-      return existingTerminalTabId
     }
-    return null
+    return queuedOnExisting ? existingTerminalTabId : null
   }
 
   const templatedTabId = applyDefaultTerminalTabs(

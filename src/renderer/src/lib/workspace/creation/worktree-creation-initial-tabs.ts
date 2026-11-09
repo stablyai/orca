@@ -54,7 +54,7 @@ export function prepareCreatedWorktreeActivation({
       ...(primaryTabId
         ? { worktreeCreationId: creationId, providesInitialSurface: true }
         : {
-            // Seeding above already queued setup on every path; passing it again opens a second Setup tab.
+            // Seeding above owns setup delivery; passing it again opens a second Setup tab.
             ...(result.setup && !instantFolder ? { setup: result.setup } : {}),
             ...(defaultTabs ? { defaultTabs } : {}),
             ...(windowStartup.startup ? { startup: windowStartup.startup } : {}),
