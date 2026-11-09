@@ -40,6 +40,16 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
   if (screen === 'tasks') {
     return firstPaintTaskKeys(hostId)
   }
+  if (screen === 'new-workspace') {
+    // The drawer's existing-workspace check and host labels.
+    return [
+      persistedHostQueryKey(hostWorktreeCatalogQuery, hostWorktreeCatalogKey(hostId)),
+      persistedHostQueryKey(
+        hostRepoLabelsQuery,
+        hostQueryKey(hostId, hostRepoLabelsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+      )
+    ].filter((key) => key !== null)
+  }
   const keys =
     screen === undefined
       ? [
