@@ -60,7 +60,7 @@ it('keeps an absent skill installable with planned-location details', async () =
   )
 
   const details = await screen.findByRole('button', { name: 'Details' })
-  const install = screen.getByRole('button', { name: 'Install', exact: true })
+  const install = screen.getByRole('button', { name: 'Install' })
   expect(install.hasAttribute('disabled')).toBe(false)
   expect(screen.getByText('Not installed', { exact: true })).toBeDefined()
   expect(screen.queryByText('Installed', { exact: true })).toBeNull()
