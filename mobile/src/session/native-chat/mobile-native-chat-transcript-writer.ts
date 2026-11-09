@@ -62,12 +62,13 @@ const SAME_COPY_REWRITE_MS = 60_000
 
 // Whether two copies hold the same rows: an open that changed nothing then skips re-encoding the whole window.
 function sameRows(a: StoredChatTranscript, b: StoredChatTranscript): boolean {
+  // The merger replaces a row object whenever the row changes, anywhere in the list; a copy read back from the
+  // store holds other objects, so the first save after a relaunch writes once.
   if (a.kind === 'terminal' && b.kind === 'terminal') {
     return (
       a.messages.length === b.messages.length &&
       a.hasMore === b.hasMore &&
-      a.messages[0]?.id === b.messages[0]?.id &&
-      JSON.stringify(a.messages.at(-1)) === JSON.stringify(b.messages.at(-1))
+      a.messages.every((row, at) => row === b.messages[at])
     )
   }
   // A journal's cursor moves with every change to its rows.

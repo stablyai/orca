@@ -51,21 +51,23 @@ describe('chat copies when the app leaves the foreground', () => {
 
   it('saves new rows on leaving and writes nothing when a flap brings none', async () => {
     vi.useFakeTimers()
-    note([message('m1'), message('m2')])
+    const [m1, m2, m3] = [message('m1'), message('m2'), message('m3')]
+    note([m1, m2, m3])
     emitPageAppInactive()
     await vi.runAllTimersAsync()
     expect(writes).toHaveLength(1)
 
     // Two minutes later, Notification Centre and back: the rows on screen are a new list with the same rows.
     vi.setSystemTime(Date.now() + 120_000)
-    note([message('m1'), message('m2')])
+    note([m1, m2, m3])
     emitPageAppInactive()
-    note([message('m1'), message('m2')])
+    note([m1, m2, m3])
     emitPageAppInactive()
     await vi.runAllTimersAsync()
     expect(writes).toHaveLength(1)
 
-    note([message('m1'), message('m2'), message('m3')])
+    // A middle row changed (a tool result landed), with the last row the same.
+    note([m1, { ...m2, blocks: [{ type: 'text', text: 'm2 with its result' }] }, m3])
     emitPageAppInactive()
     await vi.runAllTimersAsync()
     expect(writes).toHaveLength(2)
