@@ -118,12 +118,12 @@ export async function exerciseBusyChatReuse(
     vi.spyOn(tabOwner, 'ensureStructuredAgentSessionHost').mockResolvedValue()
     vi.spyOn(tabOwner, 'openAgentSessionRecordStore').mockResolvedValue(rig.store)
     tabOwner.projectStructuredAgentSessionTab({
-      workspaceId: saved.workspaceId,
+      workspaceId: location.workspaceId,
       sessionId: 'selected-survivor',
       agent: 'codex',
       activate: true
     })
-    const tabsBefore = await tabOwner.listMobileSessionTabs(`id:${saved.workspaceId}`)
+    const tabsBefore = await tabOwner.listMobileSessionTabs(`id:${location.workspaceId}`)
     expect(tabsBefore.tabs).not.toContainEqual(expect.objectContaining({ sessionId }))
     expect(tabsBefore.activeTabId).toBe('agent-session:selected-survivor')
     const runtimeFacade = {
@@ -155,7 +155,7 @@ export async function exerciseBusyChatReuse(
     expect(await rig.drafts()).toEqual([{ messageId: q, state: 'waiting' }])
     expect(await rig.handoff(q)).toBeUndefined()
     expect(send).toHaveBeenCalledOnce()
-    const tabsAfter = await tabOwner.listMobileSessionTabs(`id:${saved.workspaceId}`)
+    const tabsAfter = await tabOwner.listMobileSessionTabs(`id:${location.workspaceId}`)
     expect(tabsAfter.tabs).toContainEqual(expect.objectContaining({ sessionId }))
     expect(tabsAfter.activeTabId).toBe(tabsBefore.activeTabId)
     service.start()
