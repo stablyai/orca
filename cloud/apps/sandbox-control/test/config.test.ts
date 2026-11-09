@@ -34,6 +34,25 @@ describe('GET /v1/config', () => {
     )
     expect(body.createTiming?.samples).toBe(MIN_TIMING_SAMPLES)
   })
+
+  it('a sleep and wake soon after create never counts as a slow create (create_ms, not ready_at)', async () => {
+    const h = await createHarness()
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-cycle', machineSize: 'standard' } })
+    const id = created.body.sandbox.id
+    h.advance(20_000)
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    h.advance(5_000)
+    expect((await h.call('POST', `/v1/sandboxes/${id}/resume`)).status).toBe(200)
+    const row = h.raw.prepare('SELECT create_ms, wake_ms, ready_at - created_at AS gap FROM sandboxes WHERE id = ?').get(id) as {
+      create_ms: number
+      wake_ms: number
+      gap: number
+    }
+    // The fake clock doesn't move during a call, so the real start took 0 ms; ready_at moved with the wake.
+    expect(row.create_ms).toBe(0)
+    expect(row.gap).toBe(25_000)
+    expect(row.wake_ms).toBe(0)
+  })
 })
 
 describe('summarizeStartTimes', () => {

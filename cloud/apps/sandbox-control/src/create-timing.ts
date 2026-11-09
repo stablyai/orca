@@ -13,7 +13,7 @@ const MAX_START_MS = 120_000
 
 function percentile(sorted: readonly number[], fraction: number): number {
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(fraction * sorted.length) - 1))
-  return sorted[index]
+  return sorted[index]!
 }
 
 export function summarizeStartTimes(durations: readonly number[]): HostedSandboxTiming | undefined {
@@ -24,14 +24,22 @@ export function summarizeStartTimes(durations: readonly number[]): HostedSandbox
   return { p50Ms: percentile(sorted, 0.5), p95Ms: percentile(sorted, 0.95), samples: sorted.length }
 }
 
-/** Create-to-ready of the most recent sandboxes; undefined when too few have started. */
+/**
+ * Create-to-ready of the most recent sandboxes (create_ms, written once at first ready; ready_at -
+ * created_at also counted later wakes); undefined when too few have started.
+ */
 export async function recentCreateTiming(db: D1Database): Promise<HostedSandboxTiming | undefined> {
+  return recentTiming(db, 'create_ms')
+}
+
+/** Resume-to-ready of the most recent wakes. */
+export async function recentWakeTiming(db: D1Database): Promise<HostedSandboxTiming | undefined> {
+  return recentTiming(db, 'wake_ms')
+}
+
+async function recentTiming(db: D1Database, column: 'create_ms' | 'wake_ms'): Promise<HostedSandboxTiming | undefined> {
   const { results } = await db
-    .prepare(
-      `SELECT ready_at - created_at AS ms FROM sandboxes
-       WHERE ready_at IS NOT NULL
-       ORDER BY rowid DESC LIMIT ?`
-    )
+    .prepare(`SELECT ${column} AS ms FROM sandboxes WHERE ${column} IS NOT NULL ORDER BY rowid DESC LIMIT ?`)
     .bind(RECENT_ROWS)
     .all<{ ms: number }>()
   return summarizeStartTimes(results.map((row) => row.ms))

@@ -325,11 +325,16 @@ async function boot(
       })
     )
   ])
+  const readyAt = deps.now()
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
     orcad_endpoint: orcadEndpoint(state),
-    ready_at: deps.now(),
+    ready_at: readyAt,
+    // Start timings for GET /v1/config: a create is measured from the write-ahead row, a wake from
+    // its resume claim. ready_at alone can't tell them apart.
+    ...(row.status === 'creating' ? { create_ms: readyAt - row.created_at } : {}),
+    ...(row.status === 'resuming' ? { wake_ms: readyAt - row.updated_at } : {}),
     archived_at: null,
     archive_expires_at: null,
     retention_warned_at: null,
