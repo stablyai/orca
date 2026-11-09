@@ -69,7 +69,7 @@ export function NativeChatQuestionOption({
       {preview && selected ? (
         <pre
           ref={revealPreview}
-          className="mx-3.5 mb-2.5 max-h-56 overflow-auto whitespace-pre rounded-md border border-chat-code-border bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-relaxed text-chat-foreground scrollbar-sleek"
+          className="mx-3.5 mb-2.5 max-h-56 overflow-auto whitespace-pre rounded-md border border-chat-code-border bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-snug text-chat-foreground scrollbar-sleek"
         >
           {preview}
         </pre>

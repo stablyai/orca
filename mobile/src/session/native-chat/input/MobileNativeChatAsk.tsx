@@ -66,7 +66,7 @@ export function MobileNativeChatAsk({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { scrollRef, inputRef, revealReply, scrollViewProps, revealContentBottom } =
+  const { scrollRef, inputRef, revealReply, scrollViewProps, revealContent } =
     useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
@@ -272,7 +272,7 @@ export function MobileNativeChatAsk({
             label={opt.label}
             description={opt.description}
             preview={opt.preview}
-            onPreviewLayout={revealContentBottom}
+            onPreviewLayout={revealContent}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={submitting}

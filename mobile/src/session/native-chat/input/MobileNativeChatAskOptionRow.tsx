@@ -25,8 +25,8 @@ export function MobileNativeChatAskOptionRow({
   description?: string
   /** Shown under the row while it is selected, as the agent wrote it. */
   preview?: string
-  /** The preview's bottom edge in the card's scroll content; the row renders as its direct child. */
-  onPreviewLayout?: (bottom: number) => void
+  /** The preview's edges in the card's scroll content; the row renders as its direct children. */
+  onPreviewLayout?: (top: number, bottom: number) => void
   selected: boolean
   multi?: boolean
   disabled: boolean
@@ -65,26 +65,28 @@ export function MobileNativeChatAskOptionRow({
       </View>
     </Pressable>
   )
-  if (!preview || !selected) {
-    return row
-  }
+  // One root shape whether or not the preview shows, so selecting never remounts the row.
   return (
     <>
       {row}
-      <View
-        style={styles.preview}
-        onLayout={(event: LayoutChangeEvent) => {
-          const { y, height } = event.nativeEvent.layout
-          onPreviewLayout?.(y + height)
-        }}
-      >
-        {/* Mockups are drawn in columns, so they scroll sideways instead of wrapping at phone width. */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <Text selectable style={styles.previewText}>
-            {preview}
-          </Text>
-        </ScrollView>
-      </View>
+      {preview && selected ? (
+        <View
+          style={styles.preview}
+          onLayout={(event: LayoutChangeEvent) => {
+            const { y, height } = event.nativeEvent.layout
+            onPreviewLayout?.(y, y + height)
+          }}
+        >
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+            {/* Mockups are drawn in columns, so they scroll sideways instead of wrapping at phone width. */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <Text selectable style={styles.previewText}>
+                {preview}
+              </Text>
+            </ScrollView>
+          </ScrollView>
+        </View>
+      ) : null}
     </>
   )
 }
@@ -141,7 +143,8 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     borderRadius: concentricRadius(radii.surface, spacing.xs),
     padding: spacing.sm,
-    marginBottom: spacing.xs
+    marginBottom: spacing.xs,
+    maxHeight: 220
   },
   previewText: {
     color: colors.textPrimary,

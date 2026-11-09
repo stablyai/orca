@@ -87,7 +87,7 @@ describe('NativeChatQuestionCard', () => {
     expect(document.activeElement).toBe(rows[0])
   })
 
-  it('shows a picked preview, keeps it on a second click, and confirms it with Enter', () => {
+  it('shows a picked preview, keeps it on a second click, and confirms the digit-named option with Enter', () => {
     vi.useFakeTimers()
     container.setAttribute('data-native-chat-root', 'true')
     const onAnswer = vi.fn()
@@ -120,6 +120,9 @@ describe('NativeChatQuestionCard', () => {
     expect(container.querySelector('pre')?.textContent).toBe('| nav |\n| main |')
     expect(document.activeElement).toBe(rows[1])
     expect(onAnswer).not.toHaveBeenCalled()
+    pressKey({ key: 'ArrowUp' }, rows[1]!)
+    pressKey({ key: '2' }, rows[0]!)
+    expect(document.activeElement).toBe(rows[1])
     pressKey({ key: 'Enter' }, rows[1]!)
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })

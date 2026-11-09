@@ -30,11 +30,14 @@ export function useMobileNativeChatReplyScroll() {
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
     scrollOffset.current = event.nativeEvent.contentOffset.y
   }
-  // Scroll just enough to show content that opened below the visible edge.
-  const revealContentBottom = (bottom: number): void => {
+  // Scroll just enough to show content that opened below the visible edge, never past its top.
+  const revealContent = (top: number, bottom: number): void => {
     const hidden = bottom - (scrollOffset.current + viewportHeight.current)
     if (viewportHeight.current > 0 && hidden > 0) {
-      scrollRef.current?.scrollTo({ y: scrollOffset.current + hidden, animated: true })
+      scrollRef.current?.scrollTo({
+        y: Math.min(scrollOffset.current + hidden, top),
+        animated: true
+      })
     }
   }
   const scrollViewProps = {
@@ -49,6 +52,6 @@ export function useMobileNativeChatReplyScroll() {
     revealReply,
     onViewportLayout,
     scrollViewProps,
-    revealContentBottom
+    revealContent
   }
 }

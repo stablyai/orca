@@ -25,6 +25,10 @@ afterEach(async () => {
 
 // Control characters escape to six bytes each, so this question only fits a journal row on its own.
 const CONTROL = '\u0001'
+// Each preview fits the 8 KiB bound, so it must come back exactly as written.
+const PREVIEWS = [1, 2, 3, 4].map((q) =>
+  [1, 2, 3, 4].map((o) => `layout ${q}.${o}${CONTROL.repeat(8_192 - 12)}`)
+)
 
 function largestQuestion(): AgentJournalQuestionItem {
   const questions = [1, 2, 3, 4].map((q) => ({
@@ -34,7 +38,7 @@ function largestQuestion(): AgentJournalQuestionItem {
     options: [1, 2, 3, 4].map((o) => ({
       id: `q${q}:choice-${o}`,
       label: `Layout ${o}`,
-      preview: `layout ${q}.${o}${CONTROL.repeat(8_192 - 12)}`
+      preview: PREVIEWS[q - 1]![o - 1]!
     }))
   }))
   return boundJournalPromptBody({
@@ -85,8 +89,5 @@ it('saves, cancels and reopens a question whose previews make it larger than one
   const previews = (saved as AgentJournalQuestionItem).questions!.flatMap((question) =>
     question.options.map((option) => option.preview)
   )
-  expect(previews).toEqual(
-    body.questions!.flatMap((question) => question.options.map((option) => option.preview))
-  )
-  expect(previews).toHaveLength(16)
+  expect(previews).toEqual(PREVIEWS.flat())
 })

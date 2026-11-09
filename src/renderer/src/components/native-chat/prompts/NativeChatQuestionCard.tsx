@@ -165,16 +165,17 @@ export function NativeChatQuestionCard({
     via: 'pointer' | 'digit' | 'enter' = 'pointer'
   ): void => {
     const cur = selections[index] ?? []
+    // Focus first, so Enter after any digit acts on the row that digit named.
+    if (showsPreviews && via === 'digit') {
+      cardRef.current
+        ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+        [optionIndex]?.focus()
+    }
     if (showsPreviews && cur.includes(optionIndex)) {
       if (via === 'enter') {
         confirm(true)
       }
       return
-    }
-    if (showsPreviews && via === 'digit') {
-      cardRef.current
-        ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
-        [optionIndex]?.focus()
     }
     const picked = !cur.includes(optionIndex)
     const chosen = toggleAskOption(cur, optionIndex, q.multiSelect)
