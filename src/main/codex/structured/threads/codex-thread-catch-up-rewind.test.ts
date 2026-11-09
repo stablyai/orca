@@ -116,7 +116,7 @@ it('retains the original adoption cutoff through native rewind and disk recovery
       operationId,
       callerKey,
       itemId: target,
-      expectedEpoch: c.journal.physicalCursor().epoch,
+      expectedEpoch: c.journal.cursor().epoch,
       phase: 'provider-succeeded'
     }
   })

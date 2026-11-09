@@ -163,6 +163,10 @@ export function writeJournalDomainCurrentItem(
   if (
     isTurnOrClear(next) ||
     isTurnOrClear(input.previous?.item) ||
+    next.body.kind === 'approval' ||
+    next.body.kind === 'question' ||
+    input.previous?.item.body.kind === 'approval' ||
+    input.previous?.item.body.kind === 'question' ||
     (metadata.root && next.body.kind === 'message' && next.body.role === 'user') ||
     (input.previous?.item.body.kind === 'message' && input.previous.item.body.role === 'user') ||
     isStructuredAgentSessionCommandEntry(next.body) ||

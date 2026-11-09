@@ -524,7 +524,7 @@ describe('Codex chat catch-up', () => {
         operationId,
         callerKey,
         itemId: target,
-        expectedEpoch: c.journal.physicalCursor().epoch,
+        expectedEpoch: c.journal.cursor().epoch,
         phase: 'provider-succeeded'
       }
     })

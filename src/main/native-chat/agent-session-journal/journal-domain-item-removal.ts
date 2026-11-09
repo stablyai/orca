@@ -47,7 +47,7 @@ export function removeJournalDomainItem(
   const itemId = alias ? String(alias.item_id) : key
   const row = db
     .prepare(`SELECT CASE WHEN ? OR turn_id IS NOT NULL THEN payload_json END AS payload_json,
-      revision, sequence, sequence_index, turn_marker,prompt,command_entry,
+      revision, sequence, sequence_index, turn_marker,prompt,command_entry,kind,
       queue_failure_report_turn_item_id FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(Number(includeBody), ...prefix, itemId)
   if (row?.turn_marker) {
@@ -76,6 +76,8 @@ export function removeJournalDomainItem(
   if (
     row.turn_marker ||
     row.prompt ||
+    row.kind === 'approval' ||
+    row.kind === 'question' ||
     row.command_entry ||
     row.queue_failure_report_turn_item_id !== null
   ) {
