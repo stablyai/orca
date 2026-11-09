@@ -599,6 +599,7 @@
       "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} 오프라인 · {{time}} 기준",
       "reconnecting": "{{hostName}}에 다시 연결하는 중…",
       "stopped": "{{hostName}}이(가) 중지되었습니다. 컴퓨터에서 시작하세요.",
       "server": "서버",

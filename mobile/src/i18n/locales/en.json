@@ -3314,6 +3314,7 @@
       "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} is offline · as of {{time}}",
       "reconnecting": "{{hostName}} is reconnecting…",
       "stopped": "{{hostName}} is stopped. Start it on your computer.",
       "server": "The server",
