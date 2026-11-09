@@ -4,6 +4,7 @@ const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 
 const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
   'node',
+  'bun',
   'python',
   'python3',
   'bash',
@@ -24,6 +25,14 @@ const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
   '--experimental-loader'
 ])
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
+const BUN_OPTIONS_WITH_VALUE = new Set([
+  '--preload',
+  '--cwd',
+  '--config',
+  '-c',
+  '--env-file',
+  '--tsconfig-override'
+])
 
 export function isInterpreterProcessName(normalized: string): boolean {
   return STATIC_INTERPRETER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
@@ -89,6 +98,10 @@ export function findInterpreterEntrypointToken(
   if (!isInterpreterProcessName(firstNormalized)) {
     return null
   }
+  // Why: only `bun <file>` / `bun run <file>` execute a script; subcommands (build, test, x, ...)
+  // and later args (`bun run dev <path>`) must not be scanned for an agent path.
+  const bun = firstNormalized === 'bun'
+  let sawRun = false
   for (let index = 1; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token === '--') {
@@ -102,10 +115,20 @@ export function findInterpreterEntrypointToken(
       if (INTERPRETER_OPTIONS_WITH_INLINE_SOURCE.has(name)) {
         return null
       }
-      if (INTERPRETER_OPTIONS_WITH_VALUE.has(name) && name === token) {
+      if (
+        (INTERPRETER_OPTIONS_WITH_VALUE.has(name) || (bun && BUN_OPTIONS_WITH_VALUE.has(name))) &&
+        name === token
+      ) {
         index += 1
       }
       continue
+    }
+    if (bun && !sawRun && token === 'run') {
+      sawRun = true
+      continue
+    }
+    if (bun) {
+      return tokenLooksExecutable(token, index, firstNormalized) ? token : null
     }
     if (tokenLooksExecutable(token, index, firstNormalized)) {
       return token

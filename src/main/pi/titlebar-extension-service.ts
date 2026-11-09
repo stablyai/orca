@@ -34,7 +34,7 @@ type PiManagedExtensionEnv = {
   statusExtensionPath?: string
 }
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'omo'>
 
 // Retain old per-kind roots for upgrade cleanup.
 const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
@@ -46,7 +46,8 @@ const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  omo: '.omo'
 }
 
 function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
@@ -135,7 +136,8 @@ export class PiTitlebarExtensionService {
       return { sourceAgentDir }
     }
 
-    if (kind !== 'prime-agent') {
+    // Why: omo gets status only; titlebar and prefill are not wired for it yet.
+    if (kind === 'pi' || kind === 'omp') {
       this.writeManagedExtension(
         join(extensionsDir, ORCA_PI_EXTENSION_FILE),
         withOrcaManagedExtensionMarker(getPiTitlebarExtensionSource(kind))
@@ -177,7 +179,7 @@ export class PiTitlebarExtensionService {
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
-    if (kind !== 'prime-agent') {
+    if (kind === 'pi' || kind === 'omp') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
@@ -212,6 +214,8 @@ export class PiTitlebarExtensionService {
       }
     } else if (kind === 'prime-agent') {
       env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = installed.sourceAgentDir
+    } else if (kind === 'omo') {
+      env.ORCA_OMO_SOURCE_AGENT_DIR = installed.sourceAgentDir
     } else {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     }

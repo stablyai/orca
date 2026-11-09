@@ -25,18 +25,18 @@ function serializePlanReviewPrompt(hookPayload: Record<string, unknown>): string
 }
 
 function isPiCompatibleAskTool(
-  agentKind: 'pi' | 'omp' | 'prime-agent',
+  agentKind: 'pi' | 'omp' | 'prime-agent' | 'omo',
   toolName: string | undefined
 ): boolean {
   return agentKind === 'omp'
     ? toolName === 'ask'
-    : agentKind === 'pi' && isAskUserQuestionTool(toolName)
+    : (agentKind === 'pi' || agentKind === 'omo') && isAskUserQuestionTool(toolName)
 }
 
 export function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: 'pi' | 'omp' | 'prime-agent' | 'omo'
 ): ToolSnapshot {
   // Custom modals carry neither approvals nor structured questions.
   if (

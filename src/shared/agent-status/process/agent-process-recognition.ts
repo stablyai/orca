@@ -39,13 +39,15 @@ function normalizeProcessName(
   return withoutProcessExtension
 }
 
-const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
+const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'bun', 'python', 'python3'])
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TerminalAgent>([
   ['dsb', 'dsb'],
   ['deepseek-build', 'dsb'],
-  ['deepseek-build-agent', 'dsb']
+  ['deepseek-build-agent', 'dsb'],
+  // Why: `senpi` is OmO's npm build; recognize it as OmO without making it a detect/launch command.
+  ['senpi', 'omo']
 ])
 const AGENT_TYPE_IDS = new Set<string>(['dsb'])
 

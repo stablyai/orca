@@ -27,7 +27,9 @@ import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
 } from '../shared/opencode-tui-plugin-install'
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+// Why: omo hooks are local-only for now; remote relays keep the existing Pi-family kinds.
+type RelayPiAgentKind = Exclude<PiAgentKind, 'omo'>
+type LegacyOverlayAgentKind = Exclude<RelayPiAgentKind, 'prime-agent'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const OPENCODE2_OVERLAY_SUBDIR = 'opencode2-overlays'
@@ -53,7 +55,7 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
     : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
 }
 // Select source by launching agent, never disk presence; Pi and OMP share an env key but use different homes.
-const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
+const PI_AGENT_HOME_DIR_NAME: Record<RelayPiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
   'prime-agent': '.prime'
@@ -81,7 +83,7 @@ export class PluginOverlayManager {
   private opencodeStartupPromptSource: string | null = null
   private opencodePluginSource: string | null = null
   private opencode2PluginSource: string | null = null
-  private piExtensionSources: Record<PiAgentKind, string | null> = {
+  private piExtensionSources: Record<RelayPiAgentKind, string | null> = {
     pi: null,
     omp: null,
     'prime-agent': null
@@ -128,13 +130,13 @@ export class PluginOverlayManager {
   hasOpenCodeSource(agent: 'opencode' | 'opencode2' = 'opencode'): boolean {
     return Boolean(agent === 'opencode2' ? this.opencode2PluginSource : this.opencodePluginSource)
   }
-  hasPiSource(kind?: PiAgentKind): boolean {
+  hasPiSource(kind?: RelayPiAgentKind): boolean {
     if (kind) {
       return this.getPiExtensionSource(kind) !== null
     }
     return Object.values(this.piExtensionSources).some((source) => source !== null)
   }
-  private getPiExtensionSource(kind: PiAgentKind): string | null {
+  private getPiExtensionSource(kind: RelayPiAgentKind): string | null {
     const source = this.piExtensionSources[kind]
     return source ?? (kind === 'omp' ? this.piExtensionSources.pi : null)
   }
@@ -230,7 +232,7 @@ export class PluginOverlayManager {
     return this.materializeOpenCode(id, existingConfigDir, 'opencode2')
   }
 
-  private getDefaultPiAgentDir(kind: PiAgentKind, configDirName?: string): string {
+  private getDefaultPiAgentDir(kind: RelayPiAgentKind, configDirName?: string): string {
     const root =
       kind === 'omp' ? configDirName || PI_AGENT_HOME_DIR_NAME.omp : PI_AGENT_HOME_DIR_NAME[kind]
     return join(this.homeDir, root, PI_AGENT_SUBDIR)
@@ -254,7 +256,7 @@ export class PluginOverlayManager {
   materializePi(
     id: string,
     existingAgentDir?: string,
-    kind: PiAgentKind = 'pi',
+    kind: RelayPiAgentKind = 'pi',
     options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): MaterializePiResult | null {
     const extensionSource = this.getPiExtensionSource(kind)

@@ -136,6 +136,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // OMP embeds Pi’s CSI-u reader; preserve newline encoding after live Kitty state resets.
     windowsShiftEnterEncoding: 'csi-u'
   },
+  // Why: `omo [options] [--] [@files...] [messages...]` takes the task as positional argv; the
+  // separator keeps prompts starting with `install`/`update`/`-…` from parsing as a subcommand or flag.
+  omo: { detectCmd: 'omo', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   'prime-agent': {
     detectCmd: 'prime-agent',
     promptInjectionMode: 'argv',

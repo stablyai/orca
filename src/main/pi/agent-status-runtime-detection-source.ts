@@ -30,10 +30,13 @@ export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string):
   ]
 }
 
-export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): string[] {
+export function getPiAgentStatusRuntimeDetectionSourceLines(
+  kind: PiAgentKind,
+  hookKind: PiAgentKind
+): string[] {
   if (kind === 'prime-agent') {
     return [
-      `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
+      `const CONFIGURED_HOOK_PATH = '/hook/${hookKind}'`,
       '',
       'function isOmpRuntime(): boolean {',
       '  return false',
@@ -46,11 +49,24 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): 
   }
 
   return [
-    ...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`),
+    ...getPiOmpRuntimeDetectionSourceLines(`/hook/${hookKind}`),
+    '',
+    // Standalone senpi is OmO's engine but runs without the launcher's OMO_NATIVE marker.
+    'function isOmoRuntime(): boolean {',
+    "  if (process.env.OMO_NATIVE === '1') return true",
+    '  return [process.title, process.env._, process.argv[1], process.argv[0]].some((value) =>',
+    "    ['senpi', 'senpi.js', 'senpi.cmd', 'senpi.exe'].includes(processName(value)) ||",
+    "    /(?:^|\\/)node_modules\\/@code-yeongyu\\/senpi\\/dist\\/bundle\\/cli\\.js$/.test(String(value || '').replace(/\\\\/g, '/'))",
+    '  )',
+    '}',
     '',
     'function resolveHookPath(ompRuntime: boolean): string {',
     '  // Bare-shell OMP may run inside a configured Pi pane.',
     "  if (ompRuntime) return '/hook/omp'",
+    // Pi and OmO can share one agent dir, so the launcher marker picks the route, not the last installer.
+    "  if (CONFIGURED_HOOK_PATH === '/hook/pi' || CONFIGURED_HOOK_PATH === '/hook/omo') {",
+    "    return isOmoRuntime() ? '/hook/omo' : '/hook/pi'",
+    '  }',
     '  return CONFIGURED_HOOK_PATH',
     '}'
   ]

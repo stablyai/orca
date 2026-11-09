@@ -26,6 +26,12 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     agent: 'pi',
     processName: 'pi'
   },
+  // Why: npm OmO (`omo-ai`) execs `bun .../@code-yeongyu/senpi/dist/bundle/cli.js`, a generic name.
+  {
+    pattern: /(?:^|\/)node_modules\/@code-yeongyu\/senpi\/dist\/bundle\/cli\.js$/,
+    agent: 'omo',
+    processName: 'omo'
+  },
   // Prime Agent also uses a generic bundled cli.js.
   {
     pattern: /(?:^|\/)node_modules\/prime-agent\/dist\/bundle\/cli\.js$/,

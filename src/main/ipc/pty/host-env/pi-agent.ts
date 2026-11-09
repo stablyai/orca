@@ -37,6 +37,23 @@ export function resolvePiAgentSourceDir(
     )
   }
 
+  if (kind === 'omo') {
+    // Match OmO's launcher order; an inherited Pi/OMP overlay is not the user's home.
+    for (const key of ['OMO_CODING_AGENT_DIR', 'SENPI_CODING_AGENT_DIR', 'PI_CODING_AGENT_DIR']) {
+      const dir =
+        readEnvWithProcessFallback(baseEnv, key) ?? readSessionShellStartupEnvVar(key, baseEnv)
+      if (
+        dir &&
+        (key !== 'PI_CODING_AGENT_DIR' ||
+          (dir !== readEnvWithProcessFallback(baseEnv, 'ORCA_PI_CODING_AGENT_DIR') &&
+            dir !== readEnvWithProcessFallback(baseEnv, 'ORCA_OMP_CODING_AGENT_DIR')))
+      ) {
+        return dir
+      }
+    }
+    return undefined
+  }
+
   const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
   const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
 
@@ -70,6 +87,10 @@ export function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiA
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
     return
   }
+  if (kind === 'omo') {
+    delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    return
+  }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
   delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
 }
@@ -98,6 +119,14 @@ export function exposePiManagedExtensionEnv(
       baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     } else {
       delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    }
+    return
+  }
+  if (kind === 'omo') {
+    if (managedEnv.ORCA_OMO_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_OMO_SOURCE_AGENT_DIR = managedEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
     }
     return
   }
