@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Plus, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenuItem,
@@ -109,8 +109,7 @@ export function SidebarTeamSubmenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem onSelect={() => openTeamPage({ kind: 'create' })}>
-          <Plus className="ml-[18px] size-3.5" />
+        <DropdownMenuItem inset onSelect={() => openTeamPage({ kind: 'create' })}>
           {t('auto.components.sidebar.teamSwitcher.create', 'Create a team…')}
         </DropdownMenuItem>
       </DropdownMenuSubContent>
