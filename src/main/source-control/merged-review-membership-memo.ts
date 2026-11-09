@@ -7,6 +7,7 @@ type RetentionPolicy<T> = {
   weight: (value: T) => number
   maxWeight: number
   failureWeight?: number
+  lru?: boolean
   ttl: (value: T) => number
 }
 
