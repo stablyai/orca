@@ -12,6 +12,7 @@ afterEach(() => {
 })
 
 import { Terminal } from '@xterm/headless'
+import { stubRuntimeHostStatusSubscriptions } from '../pty-transport/remote/remote-runtime-pty-transport-test-harness'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -55,6 +56,7 @@ describe('pushed remote snapshots never splice stale history above the image', (
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     vi.doUnmock(
       '../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )

@@ -5,8 +5,10 @@ import {
 } from '../../../../../../shared/protocol-version'
 import { preparePendingSplitClose } from './pending-split-close-test-fixture'
 import { flushPtySideEffects } from '../../pty-transport/ipc/pty-transport-test-harness'
+import { stubRuntimeHostStatusSubscriptions } from '../../pty-transport/remote/remote-runtime-pty-transport-test-harness'
 
 export async function preparePendingRuntimeClose(id = 'remote:env-1@@term_original') {
+  stubRuntimeHostStatusSubscriptions()
   const p = await preparePendingSplitClose(id)
   p.transport.detach?.({ preserveExitObserver: false })
   p.spawn.resolve({ id, isReattach: true })

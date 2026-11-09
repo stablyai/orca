@@ -226,3 +226,46 @@ it.each(['success', 'rejection'] as const)(
     expect(creates[1][0].params.clientMutationId).toBe(creates[0][0].params.clientMutationId)
   }
 )
+
+it('keeps the retained create when its old success arrives during successor reconciliation', async () => {
+  const transport = await createTransport()
+  const oldReply = pendingReply()
+  const replayReply = pendingReply()
+  const dispatch = fixture.runtimeCall.getMockImplementation()!
+  let creates = 0
+  fixture.runtimeCall.mockImplementation((args) => {
+    if (args.method === 'terminal.create') {
+      return ++creates === 1 ? oldReply.promise : replayReply.promise
+    }
+    if (args.method === 'status.get') {
+      return {
+        ok: true,
+        result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
+      }
+    }
+    return dispatch(args)
+  })
+  const connect = transport.connect({ url: '', callbacks: {} })
+  await vi.waitFor(() => expect(creates).toBe(1))
+  publish(true)
+  publish(false, 2)
+  await vi.waitFor(() => expect(creates).toBe(2))
+  oldReply.resolve({
+    ok: true,
+    result: { terminal: { handle: 'terminal-1', incarnationId: 'old' } }
+  })
+  await connect
+  expect(transport.getPtyId()).toBeNull()
+  expect(fixture.runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.close')).toBe(
+    false
+  )
+  replayReply.resolve({
+    ok: true,
+    result: { terminal: { handle: 'terminal-1', incarnationId: 'current' } }
+  })
+  await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
+  expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+  expect(fixture.runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.close')).toBe(
+    false
+  )
+})
