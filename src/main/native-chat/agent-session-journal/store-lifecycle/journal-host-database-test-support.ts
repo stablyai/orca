@@ -1,6 +1,11 @@
 import { insertJournalDomainQueueRow } from '../journal-domain-queue-rows'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
-import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionJournalProviderHandle } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -11,11 +16,6 @@ import { restoreJournal, type JournalLoad } from '../replay/journal-open'
 import { fields } from '../outcomes/journal-state-schema'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from '../outcomes/journal-outcome-codec'
-import {
-  openTestAgentSessionDatabase,
-  closeTestAgentSessionDatabase,
-  closeTestAgentSessionRecordStores
-} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 import '../durable-rows/journal-row-schema'
 import { serializeJournalRow } from '../durable-rows/journal-row-encoding'

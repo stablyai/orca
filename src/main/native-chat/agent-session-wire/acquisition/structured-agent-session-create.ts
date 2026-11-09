@@ -261,8 +261,7 @@ async function foundConversation(
     const tabId = store.getSessionTabId(sessionId)
     const [cursor, firstMessage] = await Promise.all([
       session.journal.reads.cursor(),
-      options.firstMessage &&
-        (await session.journal.reads.submission(options.firstMessage.clientMessageId))
+      options.firstMessage && session.journal.reads.submission(options.firstMessage.clientMessageId)
     ])
     const result = {
       ok: true as const,

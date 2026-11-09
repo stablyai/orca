@@ -138,7 +138,7 @@ function settleOpeningLiveWork(
         db,
         target,
         {
-          settlementId: `open-live-work:${head.last_sequence}`,
+          settlementId: `open-live-work:${Number(head.last_sequence)}`,
           fence: Number(head.highest_fence),
           recovered: true,
           mutations: revisions.map((revision) => ({

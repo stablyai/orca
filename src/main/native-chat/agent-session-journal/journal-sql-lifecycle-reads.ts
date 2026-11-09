@@ -73,7 +73,10 @@ export function readJournalDomainLifecycle(
           .prepare(`SELECT payload_json
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
           .get(...prefix, agentJournalSubmissionKey(nextClientMessageId))
-  const body = next ? (JSON.parse(String(next.payload_json)) as AgentJournalRenderItem).body : null
+  const nextItem: AgentJournalRenderItem | null = next
+    ? JSON.parse(String(next.payload_json))
+    : null
+  const body = nextItem?.body
   return {
     kind: 'outgrown-child',
     child: {

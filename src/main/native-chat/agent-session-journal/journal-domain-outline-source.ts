@@ -45,7 +45,9 @@ function outlineBlocks(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
         return [{ type: 'tool-result', output: '', callId: block.callId }]
       case 'image-ref':
         return [{ type: 'image-ref' }]
-      default:
+      case 'background-task':
+      case 'subagent':
+      case 'subagent-group':
         return []
     }
   })

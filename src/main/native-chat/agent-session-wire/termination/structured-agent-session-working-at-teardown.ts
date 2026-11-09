@@ -34,7 +34,8 @@ import {
 } from '../../../../shared/agent-session/structured-agent-session-command-entry'
 import {
   activeStructuredAgentSessionTurnId,
-  newestStructuredAgentSessionTurn
+  newestStructuredAgentSessionTurn,
+  runningStructuredAgentSessionTurnItemBySequence
 } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { isUnansweredHandedOverSubmission } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
@@ -45,7 +46,6 @@ import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput
 } from '../delivery/structured-agent-session-handing-over'
-import { runningStructuredAgentSessionTurnItemBySequence } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 

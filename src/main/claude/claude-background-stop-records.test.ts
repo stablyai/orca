@@ -57,8 +57,8 @@ async function droppedFromRoster() {
         fence: 7,
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only through readWork.
         journal: {} as AgentSessionJournal,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only the state answer.
         readWork: async <K extends JournalWorkRead['kind']>() =>
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command admission requests only the state answer.
           ({ kind: 'state', state: IDLE_WORK }) as JournalWorkAnswer<K>,
         adapter: run.adapter
       },

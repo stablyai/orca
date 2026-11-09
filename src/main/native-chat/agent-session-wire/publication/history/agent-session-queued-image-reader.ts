@@ -258,7 +258,7 @@ export async function queuedImageReaderEvent(
     }
     return {
       ...event,
-      ...(work ? await agentSessionPublishedWorkFields(journal, work) : {}),
+      ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
       batch: {
         ...event.batch,
         items: [...items.values()].sort(compareAgentJournalItems),

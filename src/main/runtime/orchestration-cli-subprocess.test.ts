@@ -1,5 +1,4 @@
 // Exercise compiled CLI keepalives over pipes; skip until built (the verification gate builds it).
-import { withTestAgentSessionDatabase } from './agent-session/records/agent-session-record-store-test-harness'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -31,7 +30,8 @@ import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journ
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText,
-  openTestAgentSessionDatabase
+  openTestAgentSessionDatabase,
+  withTestAgentSessionDatabase
 } from './agent-session/records/agent-session-record-store-test-harness'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 

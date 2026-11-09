@@ -1,6 +1,9 @@
 import type * as RuntimeEnvironmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import '../../unused-default-rpc-methods.test-fixture'
-import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-test-harness'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -85,7 +88,6 @@ import {
   store as runtimeStore,
   TEST_WORKTREE_ID
 } from '../../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { runtimeStub, setAgentLaunchRecordStore } from './agent-launch.test-fixture'
 import { RuntimeWorktreeLineageController } from '../../../workspaces/lineage/runtime-worktree-lineage-controller'
