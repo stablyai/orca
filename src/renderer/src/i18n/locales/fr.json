@@ -4835,6 +4835,9 @@
             "accounts": "Comptes Antigravity enregistrés",
             "readAgo": "Relevé {{time}}",
             "notRead": "Utilisation inconnue : pas encore relevée"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Réinitialisation à {{when}}"
           }
         }
       },
