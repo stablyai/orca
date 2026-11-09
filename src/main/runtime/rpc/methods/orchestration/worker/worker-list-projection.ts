@@ -13,6 +13,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createSessionWorkerLivenessReader } from '../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import {
   applyFederatedFleetObservations,
+  federatedFleetHosts,
   readFederatedFleetSnapshots
 } from '../federation/federated-fleet-snapshot'
 import { ensureSessionWorkerRecords } from './session-worker-observation'
@@ -116,15 +117,11 @@ export async function projectWorkerListFleet(
     completeProjection: options.completeProjection,
     observeSession: createSessionWorkerLivenessReader(db, statuses)
   })
+  const dispatchIds = rows.map((row) => row.dispatchId)
+  // Without --include-remote no server is asked, but a remote worker still names its server.
   const federated = options.includeRemote
-    ? await readFederatedFleetSnapshots({
-        runtime,
-        db,
-        dispatchIds: rows.map((row) => row.dispatchId)
-      })
-    : null
-  if (federated) {
-    applyFederatedFleetObservations(fleet, federated, fleet.durable)
-  }
-  return { ...fleet, hostErrors: federated?.errors ?? [] }
+    ? await readFederatedFleetSnapshots({ runtime, db, dispatchIds })
+    : { observations: new Map(), errors: [], hosts: federatedFleetHosts(db, dispatchIds) }
+  applyFederatedFleetObservations(fleet, federated, fleet.durable)
+  return { ...fleet, hostErrors: federated.errors }
 }
