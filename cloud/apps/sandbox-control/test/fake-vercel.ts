@@ -59,7 +59,10 @@ export function createFakeVercel(now: () => number): FakeVercel {
       tags: box.params.tags
     },
     session: { id: box.sessionId, status: box.status, startedAt: box.startedAt, timeoutMs: box.timeoutMs },
-    routes: [{ port: 6768, url: box.route }]
+    routes: box.params.ports.map((port) => ({
+      port,
+      url: port === 6768 ? box.route : box.route.replace('https://', `https://p${port}-`)
+    }))
   })
   const bySession = (sessionId: string): FakeBox => {
     const box = [...boxes.values()].find((candidate) => candidate.sessionId === sessionId)

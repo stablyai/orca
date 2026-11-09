@@ -20,6 +20,8 @@ import {
 } from './hosted-workspace-service'
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { setHostedSessionSync } from './hosted-session-sync'
+import { installCloudTransferHandlers } from './cloud-transfer'
+import { installCloudSshHandlers } from './cloud-ssh'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -61,6 +63,11 @@ export function installHostedSandbox(): void {
     stopSession: (environmentId) => registry.stopEnvironment(environmentId)
   })
   setHostedWorkspaceService(workspaces)
+  const disposeTransfer = installCloudTransferHandlers({
+    userDataPath,
+    windows: () => BrowserWindow.getAllWindows()
+  })
+  const disposeSsh = installCloudSshHandlers({ userDataPath, client })
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
   let beats = 0
@@ -94,6 +101,8 @@ export function installHostedSandbox(): void {
     }
     registry.dispose()
     workspaces.dispose()
+    disposeTransfer()
+    disposeSsh()
     setHostedWorkspaceService(null)
   })
 }

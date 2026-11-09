@@ -84,6 +84,17 @@ import {
   workspaceStatus,
   type WorkspaceConfig
 } from './workspace-lifecycle'
+import { wakeForPreview } from './preview-wake'
+import {
+  SshPublicKeySchema,
+  SshUnavailableError,
+  setupSsh,
+  sshLoginUser,
+  sshRowForSecret,
+  wakeForSsh
+} from './sandbox-ssh'
+
+const SshSetupRequestSchema = z.object({ publicKey: SshPublicKeySchema }).strict()
 
 const MAX_JSON_BYTES = 16 * 1024
 /** Archive bodies carry the desktop's cached repo state (file trees) when the VM is already asleep. */
@@ -579,8 +590,20 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return response
     }
+    // Wake on SSH: the desktop's ProxyCommand presents a per-sandbox wake secret, not an Orca token.
+    const sshWake = /^\/v1\/ssh-wake\/(sbx_[a-f0-9]{24})$/.exec(url.pathname)
+    if (sshWake && request.method === 'POST') {
+      const secret = /^Bearer (osw_[A-Za-z0-9_-]{20,100})$/.exec(request.headers.get('authorization') ?? '')?.[1] ?? ''
+      const row = await getSandbox(env.SANDBOX_DB, sshWake[1]!)
+      const ssh = row ? await sshRowForSecret(env.SANDBOX_DB, row.id, secret) : null
+      const life = ssh ? await lifecycleDeps(env, deps) : null
+      if (!row || !ssh || !life || row.status === 'destroyed') {
+        return fail('unauthorized', 401)
+      }
+      return json(await wakeForSsh(life, row, ssh, { ...workspaceConfig(env, deps), waitMs: parseWakeWait(url, await readJson(request)) }))
+    }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -660,6 +683,18 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
+      case 'POST ssh': {
+        const body = SshSetupRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        const { wakeSecret } = await setupSsh(env.SANDBOX_DB, row, body.data.publicKey, life.now())
+        return json({
+          wakeUrl: `${url.origin}/v1/ssh-wake/${row.id}`,
+          wakeSecret,
+          user: await sshLoginUser(life.provider, row)
+        })
+      }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))
         if (!body.success) {
@@ -731,6 +766,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)
+  }
+  if (error instanceof SshUnavailableError) {
+    return fail('conflict', 409, `ssh_${error.reason}`)
   }
   // Provider and VM failures are summarized; their bodies never reach the desktop.
   if (error instanceof ProviderError || error instanceof VmCommandError) {

@@ -5,6 +5,8 @@ import { READY_VIA_FILE_ENV, resolveOrcadReadyLine } from './orcad-ready'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 
 export const ORCAD_PORT = 6768
+/** WebSocket bridge to the VM's loopback sshd (wake on SSH; see sandbox-ssh.ts). */
+export const SSH_BRIDGE_PORT = 2222
 export const START_COMMAND = '/opt/orca/bin/orca-sandbox-start'
 export const DRAIN_COMMAND = '/opt/orca/bin/orca-sandbox-drain'
 export const ENV_COMMAND = '/opt/orca/bin/orca-sandbox-env'

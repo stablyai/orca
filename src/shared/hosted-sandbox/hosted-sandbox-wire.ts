@@ -248,3 +248,17 @@ export const HostedArchiveResponseSchema = z
   })
   .strict()
 export type HostedArchiveResponse = z.infer<typeof HostedArchiveResponseSchema>
+
+/** Wake on SSH setup: the scoped ProxyCommand credential (wakes this sandbox and starts its sshd only). */
+export const HostedSshSetupResponseSchema = z
+  .object({
+    wakeUrl: z.url({ protocol: /^https?$/ }).max(2048),
+    wakeSecret: z.string().regex(/^osw_[A-Za-z0-9_-]{20,100}$/),
+    /** VM login user (varies by image); absent from older control planes. */
+    user: z
+      .string()
+      .regex(/^[a-z_][a-z0-9_-]{0,31}$/)
+      .optional()
+  })
+  .strict()
+export type HostedSshSetupResponse = z.infer<typeof HostedSshSetupResponseSchema>

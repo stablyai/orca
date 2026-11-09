@@ -3,6 +3,8 @@
 import type { z } from 'zod'
 import { HostedEntitlementDeniedError } from './hosted-environment-provider'
 import {
+  HostedSshSetupResponseSchema,
+  type HostedSshSetupResponse,
   HostedArchiveResponseSchema,
   HostedWakeResponseSchema,
   HostedWorkspaceStatusResponseSchema,
@@ -51,6 +53,12 @@ export type HostedSandboxControlPlaneClient = {
   ): Promise<HostedSandboxView>
   archiveInfo(sandboxId: string, signal?: AbortSignal): Promise<HostedArchiveResponse['archive']>
   unarchive(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
+  /** Authorizes an SSH key; returns the scoped wake URL + secret the ProxyCommand uses. */
+  setupSsh(
+    sandboxId: string,
+    publicKey: string,
+    signal?: AbortSignal
+  ): Promise<HostedSshSetupResponse>
 }
 
 export type HostedSandboxControlPlaneClientOptions = {
@@ -205,6 +213,12 @@ export function createHostedSandboxControlPlaneClient(
     unarchive: (id, signal) =>
       call('POST', sandboxPath(id, '/unarchive'), HostedSandboxReadyResponseSchema, {
         kind: 'boot',
+        signal
+      }),
+    setupSsh: (id, publicKey, signal) =>
+      call('POST', sandboxPath(id, '/ssh'), HostedSshSetupResponseSchema, {
+        body: { publicKey },
+        kind: 'control',
         signal
       })
   }

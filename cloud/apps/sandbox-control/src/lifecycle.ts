@@ -16,7 +16,7 @@ import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provide
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
-import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
+import { ORCAD_PORT, SSH_BRIDGE_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
 import {
   NO_SESSION,
@@ -412,7 +412,8 @@ export async function createSandbox(
         vcpus: VCPUS[row.machine_size],
         region: row.region,
         timeoutMs: LEASE_MS,
-        ports: [ORCAD_PORT],
+        // orcad, and the SSH bridge (wake on SSH; idle unless SSH was set up).
+        ports: [ORCAD_PORT, SSH_BRIDGE_PORT],
         networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token),
         snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
         tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
@@ -659,6 +660,7 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
+  await deps.db.prepare('DELETE FROM sandbox_ssh WHERE sandbox_id = ?').bind(row.id).run()
   const destroyed = await claim(deps, destroying, {
     status: 'destroyed',
     ...NO_SESSION,
