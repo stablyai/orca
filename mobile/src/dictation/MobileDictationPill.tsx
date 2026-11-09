@@ -24,6 +24,7 @@ import {
 } from './mobile-dictation-controls-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
 import { composerInputStyles } from '../components/composer-input/composer-input-styles'
+import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
 import {
   useMobileDictationHost,
   useMobileDictationHostLive,
@@ -163,13 +164,9 @@ function MobileDictationToast({
     const timer = setTimeout(onDone, toast.open ? TOAST_WITH_OPEN_MS : TOAST_MS)
     return () => clearTimeout(timer)
   }, [onDone, toast])
-  // The live region stays mounted so a screen reader hears the message appear.
+  // The host's announcer reads the message (shell or live region), so the toast itself stays quiet.
   return (
-    <View
-      style={[styles.toastRow, { bottom }]}
-      pointerEvents="box-none"
-      accessibilityLiveRegion="polite"
-    >
+    <View style={[styles.toastRow, { bottom }]} pointerEvents="box-none">
       {toast ? (
         <View style={styles.toast}>
           <Text style={styles.toastText} numberOfLines={2}>
@@ -212,6 +209,7 @@ export function MobileDictationPillLayer(): React.JSX.Element | null {
           <MobileDictationPill title={pill.title} onOpen={pill.open} onStop={stop} />
         </View>
       ) : null}
+      <MobileDictationStatusAnnouncement liveText={pill.liveText} />
       <MobileDictationToast
         toast={pill.toast}
         onDone={pill.clearToast}

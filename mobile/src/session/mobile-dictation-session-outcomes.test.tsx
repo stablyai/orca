@@ -26,8 +26,11 @@ const seen = vi.hoisted(() => {
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   Platform: { OS: 'ios' }
 }))
+// The computer's name only words announcements; the stored host profile pulls in secure storage.
+vi.mock('../transport/hosts/use-host-profile', () => ({ useHostProfile: () => null }))
 vi.mock('@orca/expo-two-way-audio', () => ({
   addExpoTwoWayAudioEventListener: (name: string, listener: (event: { data: string }) => void) => {
     seen.audioListeners.set(name, listener)
