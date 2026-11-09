@@ -50,12 +50,19 @@ export function MobileDictationGrapes({ meter, dotSize }: MeterProps & { dotSize
   )
 }
 
-export function MobileDictationTimer({ meter }: MeterProps) {
-  useMobileColorScheme()
+export function useMobileDictationElapsed(meter: MobileDictationMeter): {
+  now: number
+  elapsedSeconds: number
+} {
   const startedAt = useSyncExternalStore(meter.subscribe, () => meter.getSnapshot().startedAt)
   const now = useNow(250)
   // The hook starts the meter in an effect, so the first recording frame may still read 0.
   const elapsedSeconds = startedAt === 0 ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000))
+  return { now, elapsedSeconds }
+}
+
+export function MobileDictationTimer({ elapsedSeconds }: { readonly elapsedSeconds: number }) {
+  useMobileColorScheme()
   const minutes = Math.floor(elapsedSeconds / 60)
   const seconds = String(elapsedSeconds % 60).padStart(2, '0')
   return <Text style={styles.timer}>{`${minutes}:${seconds}`}</Text>

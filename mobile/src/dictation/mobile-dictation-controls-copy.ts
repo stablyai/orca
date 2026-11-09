@@ -1,0 +1,70 @@
+import { translate } from '../i18n/mobile-i18n'
+import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
+
+// One set of dictation labels for the chat composer, the terminal and the pill.
+export const dictationControlsCopy = {
+  start: () => translate('dictation.controls.start', 'Dictate'),
+  starting: () => translate('dictation.controls.starting', 'Starting dictation'),
+  stop: () => translate('dictation.controls.stop', 'Stop and insert'),
+  finishing: () => translate('dictation.controls.finishing', 'Finishing dictation'),
+  cancel: () => translate('dictation.controls.cancel', 'Cancel dictation'),
+  finishingOn: (computer: string | null) =>
+    computer
+      ? translate('dictation.status.finishingOn', 'Finishing on {{computer}}', { computer })
+      : translate('dictation.status.finishingOnComputer', 'Finishing on the computer'),
+  movedTo: (computer: string | null) =>
+    computer
+      ? translate('dictation.status.movedTo', 'Moved to {{computer}}', { computer })
+      : translate('dictation.status.movedToComputer', 'Moved to the computer')
+}
+
+function spokenDuration(elapsedSeconds: number): string {
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const count = elapsedSeconds % 60
+  const seconds =
+    count === 1
+      ? translate('dictation.controls.durationSeconds_one', '{{count}} second', { count })
+      : translate('dictation.controls.durationSeconds_other', '{{count}} seconds', { count })
+  if (minutes === 0) {
+    return seconds
+  }
+  const minuteText =
+    minutes === 1
+      ? translate('dictation.controls.durationMinutes_one', '{{count}} minute', { count: minutes })
+      : translate('dictation.controls.durationMinutes_other', '{{count}} minutes', {
+          count: minutes
+        })
+  return translate('dictation.controls.durationMinutesSeconds', '{{minutes}} {{seconds}}', {
+    minutes: minuteText,
+    seconds
+  })
+}
+
+// What a screen reader hears on the meter, which shows only dots, a timer and an icon.
+export function dictationMeterLabel(
+  elapsedSeconds: number,
+  engine: MobileDictationEngineShown['kind'] | null,
+  computer: string | null
+): string {
+  const duration = spokenDuration(elapsedSeconds)
+  if (engine === 'phone') {
+    return translate('dictation.controls.meterOnPhone', 'Recording, {{duration}}, on this phone', {
+      duration
+    })
+  }
+  if (engine === 'computer') {
+    return computer
+      ? translate('dictation.controls.meterOn', 'Recording, {{duration}}, on {{computer}}', {
+          duration,
+          computer
+        })
+      : translate(
+          'dictation.controls.meterOnComputer',
+          'Recording, {{duration}}, on the computer',
+          {
+            duration
+          }
+        )
+  }
+  return translate('dictation.controls.meter', 'Recording, {{duration}}', { duration })
+}

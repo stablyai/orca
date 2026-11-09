@@ -1,10 +1,11 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
 import { MobileTerminalLiveInputStatus } from '../terminal/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../terminal/session/MobileTerminalInputActions'
+import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { MobileSessionAccessoryKeys } from '../terminal/session/MobileSessionAccessoryKeys'
 import { MobileTerminalMoreKeysSheet } from '../terminal/session/MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
@@ -13,7 +14,6 @@ import { terminalDockStyles as dockStyles } from '../terminal/session/terminal-d
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from '../terminal/session/use-mobile-session-keyboard-lift'
 import { useLiveInputCaptureText } from '../terminal/session/live-input-capture'
@@ -23,6 +23,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   useMobileColorScheme()
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
+  const dictationLive = useContext(MobileDictationLiveContext)
   const {
     insets,
     dictationMode,
@@ -63,6 +64,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
+              live={dictationLive}
               dictationMode={dictationMode}
               heard={liveDictationText}
               isAttaching={isAttaching}
@@ -76,7 +78,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           dictationMode={dictationMode}
           dictationEnabled={dictationEnabled}
           buttonStyle={inputStyles.controlButton}
-          activeButtonStyle={styles.dictationButtonActive}
+          dictationCancelRef={dictationLive?.cancelRef}
           disabledButtonStyle={inputStyles.disabled}
           onAttachImage={() => void attachImage('library')}
           onAttachFile={() => void attachImage('files')}

@@ -1,5 +1,12 @@
-import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
-import { ImagePlus, Mic } from 'lucide-react-native'
+import type { RefObject } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  type StyleProp,
+  type View,
+  type ViewStyle
+} from 'react-native'
+import { ImagePlus, Mic, Square } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -8,6 +15,8 @@ import {
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { keepHeldPressThroughLongPress } from '../../platform/held-press-long-press'
+import { dictationControlsCopy } from '../../dictation/mobile-dictation-controls-copy'
+import { useMobileDictationCancelDrop } from '../../dictation/use-mobile-dictation-cancel-drop'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -21,8 +30,9 @@ type MobileTerminalDictationButtonProps = {
   readonly dictationMode: string | undefined
   readonly dictationEnabled?: boolean
   readonly buttonStyle: StyleProp<ViewStyle>
-  readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
+  // The ✕ on the field that a held mic may be released over.
+  readonly dictationCancelRef: RefObject<View | null> | undefined
   readonly onDictationToggle: () => void
   readonly onDictationPressIn: () => void
   readonly onDictationPressOut: () => void
@@ -42,9 +52,11 @@ type MobileTerminalInputActionsProps = MobileTerminalDictationButtonProps &
   MobileTerminalAttachButtonProps
 
 export function MobileTerminalInputActions(props: MobileTerminalInputActionsProps) {
+  const { isStarting, isRecording, isProcessing } = props.dictation
+  // Attach steps aside while dictating so the words get the field's room.
   return (
     <>
-      <MobileTerminalAttachButton {...props} />
+      {isStarting || isRecording || isProcessing ? null : <MobileTerminalAttachButton {...props} />}
       <MobileTerminalDictationButton {...props} />
     </>
   )
@@ -98,15 +110,20 @@ function MobileTerminalDictationButton({
   dictationMode,
   dictationEnabled = true,
   buttonStyle,
-  activeButtonStyle,
   disabledButtonStyle,
+  dictationCancelRef,
   onDictationToggle,
   onDictationPressIn,
   onDictationPressOut,
   onDictationCancel
 }: MobileTerminalDictationButtonProps) {
   useMobileColorScheme()
-  const t = useMobileTranslation()
+  useMobileTranslation()
+  const release = useMobileDictationCancelDrop(
+    dictationCancelRef,
+    onDictationCancel,
+    onDictationPressOut
+  )
   if (!dictationEnabled) {
     return null
   }
@@ -117,7 +134,6 @@ function MobileTerminalDictationButton({
     <Pressable
       style={({ pressed }) => [
         buttonStyle,
-        dictationActive && activeButtonStyle,
         pressed && composerInputStyles.pressed,
         micDisabled && disabledButtonStyle
       ]}
@@ -125,7 +141,7 @@ function MobileTerminalDictationButton({
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
       onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
       onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
-      onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
+      onPressOut={dictationMode === 'hold' ? release : undefined}
       onLongPress={
         dictationMode === 'toggle'
           ? () => {
@@ -138,26 +154,28 @@ function MobileTerminalDictationButton({
       accessibilityRole="button"
       aria-busy={dictation.isStarting || dictation.isProcessing}
       accessibilityLabel={
-        dictation.isRecording
-          ? t('session.terminalInputActions.stopDictation', 'Stop voice dictation')
-          : dictation.isProcessing
-            ? t(
-                'session.terminalInputActions.transcribingDictation',
-                'Transcribing voice dictation'
-              )
-            : dictation.isStarting
-              ? t('session.terminalInputActions.startingDictation', 'Starting voice dictation')
-              : t('session.terminalInputActions.startDictation', 'Start voice dictation')
+        dictation.isProcessing
+          ? dictationControlsCopy.finishing()
+          : dictation.isStarting
+            ? dictationControlsCopy.starting()
+            : dictation.isRecording
+              ? dictationControlsCopy.stop()
+              : dictationControlsCopy.start()
       }
     >
+      {/* The page's touch target is the button, and the icons ignore touches, so the swap mid-hold keeps the release. */}
       {dictation.isProcessing ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : (
-        <Mic
-          size={17}
-          color={dictationActive ? colors.textPrimary : colors.textSecondary}
+        <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
+      ) : dictationActive ? (
+        <Square
+          pointerEvents="none"
+          size={16}
+          color={colors.statusRed}
           strokeWidth={2.4}
+          fill={colors.statusRed}
         />
+      ) : (
+        <Mic pointerEvents="none" size={17} color={colors.textSecondary} strokeWidth={2.4} />
       )}
     </Pressable>
   )

@@ -517,6 +517,28 @@
       "deleteFailed": "Failed to delete model",
       "updateFailed": "Failed to update dictation settings",
       "cloudModelNeedsKey": "Needs an OpenAI key"
+    },
+    "controls": {
+      "start": "Dictate",
+      "starting": "Starting dictation",
+      "stop": "Stop and insert",
+      "finishing": "Finishing dictation",
+      "cancel": "Cancel dictation",
+      "durationSeconds_one": "{{count}} second",
+      "durationSeconds_other": "{{count}} seconds",
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "meterOnPhone": "Recording, {{duration}}, on this phone",
+      "meterOn": "Recording, {{duration}}, on {{computer}}",
+      "meterOnComputer": "Recording, {{duration}}, on the computer",
+      "meter": "Recording, {{duration}}"
+    },
+    "status": {
+      "finishingOn": "Finishing on {{computer}}",
+      "finishingOnComputer": "Finishing on the computer",
+      "movedTo": "Moved to {{computer}}",
+      "movedToComputer": "Moved to the computer"
     }
   },
   "home": {
@@ -1954,8 +1976,6 @@
       "liveInput": "Live input",
       "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
-      "stopHint": "Tap mic to stop",
-      "transcribing": "Transcribing on desktop",
       "preparingMic": "Preparing microphone",
       "uploadingImage": "Uploading image to host"
     },
@@ -2126,11 +2146,7 @@
     "terminalInputActions": {
       "sendingImage": "Sending image",
       "attachPhoto": "Attach a photo",
-      "attachFileHint": "Long press to attach a file instead",
-      "stopDictation": "Stop voice dictation",
-      "transcribingDictation": "Transcribing voice dictation",
-      "startingDictation": "Starting voice dictation",
-      "startDictation": "Start voice dictation"
+      "attachFileHint": "Long press to attach a file instead"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",

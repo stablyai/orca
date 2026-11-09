@@ -1298,6 +1298,28 @@
       "sessionLimit": "這台電腦上正在聽寫的裝置過多。請等其中一台結束後再試。",
       "sessionLost": "聽寫功能與電腦的連線已中斷。請再試一次。",
       "updateFailed": "無法更新聽寫設定"
+    },
+    "controls": {
+      "start": "聽寫",
+      "starting": "正在開始聽寫",
+      "stop": "停止並插入",
+      "finishing": "正在完成聽寫",
+      "cancel": "取消聽寫",
+      "meterOnPhone": "正在錄音，{{duration}}，在此手機上",
+      "meterOn": "正在錄音，{{duration}}，在 {{computer}} 上",
+      "meterOnComputer": "正在錄音，{{duration}}，在電腦上",
+      "meter": "正在錄音，{{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} 秒",
+      "durationSeconds_other": "{{count}} 秒",
+      "durationMinutes_one": "{{count}} 分鐘",
+      "durationMinutes_other": "{{count}} 分鐘"
+    },
+    "status": {
+      "finishingOn": "正在 {{computer}} 上完成",
+      "finishingOnComputer": "正在電腦上完成",
+      "movedTo": "已轉到 {{computer}}",
+      "movedToComputer": "已轉到電腦"
     }
   },
   "files": {
@@ -2398,11 +2420,7 @@
     "terminalInputActions": {
       "attachFileHint": "長按可改為附加檔案",
       "attachPhoto": "附加照片",
-      "sendingImage": "正在傳送圖片",
-      "startDictation": "開始語音聽寫",
-      "startingDictation": "正在啟動語音聽寫",
-      "stopDictation": "停止語音聽寫",
-      "transcribingDictation": "正在轉錄語音聽寫內容"
+      "sendingImage": "正在傳送圖片"
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆聽",
@@ -2411,8 +2429,6 @@
       "processing": "處理中",
       "releaseMicHint": "放開按鈕即可停止錄音",
       "startingMic": "正在啟動麥克風",
-      "stopHint": "點一下麥克風即可停止",
-      "transcribing": "正在電腦上轉錄",
       "uploadingImage": "正在將圖片上傳至主機",
       "uploadingImageTitle": "正在上傳圖片"
     },

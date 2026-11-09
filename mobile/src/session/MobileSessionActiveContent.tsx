@@ -14,7 +14,6 @@ import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgent
 import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
-import { MobileDictationMeterContext } from '../dictation/mobile-dictation-meter-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -322,55 +321,53 @@ export function MobileSessionActiveContent({
           />
         ))}
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
-          <MobileDictationMeterContext.Provider value={dictation.meter}>
-            <MobileAgentMessageProvider
-              key={JSON.stringify([hostId, executionHost, worktreeId])}
-              tabs={controller.sessionTabs}
-              terminals={controller.terminals}
-              scopeKey={nativeChatImageSource}
-              open={openSender}
-            >
-              <MobileNativeChatForkProvider controller={controller}>
-                <MobileNativeChatOverlay
-                  controller={nativeChatController}
-                  imageSource={nativeChatImageSource}
-                  worktreePath={controller.worktreePath}
-                  connState={controller.connState}
-                  activeSessionTabId={controller.activeSessionTab?.id}
-                  onOpenFile={handleNativeChatFileTap}
-                  images={nativeChatImages}
-                  structuredComposer={nativeChatStructuredComposer}
-                  onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-                  micActive={dictation.isStarting || dictation.isRecording}
-                  micStarting={dictation.isStarting}
-                  micProcessing={dictation.isProcessing}
-                  dictationMode={dictationMode}
-                  onMicPressIn={handleDictationPressIn}
-                  onMicPressOut={handleDictationPressOut}
-                  inputLockReason={nativeChatOverlayInputLockReason}
-                  sendErrorMessage={nativeChatSendError.message}
-                  onClearSendError={nativeChatSendError.clear}
-                  sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-                  sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-                  getSendCompletionGeneration={controller.getSendCompletionGeneration}
-                  keyboardInset={keyboardLift}
-                  // A workspace routed to another server stops with that server, whose name the phone lacks.
-                  hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-                  onOpenUrlInOrca={openUrlInOrca}
-                  hostOutage={nativeChatHostOutage}
-                  onRunInTerminal={(command) =>
-                    void controller.handleCreateTerminal(undefined, {
-                      startupCommand: command,
-                      startupCommandDelivery: 'shell-ready',
-                      terminalView: true
-                    })
-                  }
-                  // Accounts open on the paired host, so a chat another server runs offers none.
-                  onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
-                />
-              </MobileNativeChatForkProvider>
-            </MobileAgentMessageProvider>
-          </MobileDictationMeterContext.Provider>
+          <MobileAgentMessageProvider
+            key={JSON.stringify([hostId, executionHost, worktreeId])}
+            tabs={controller.sessionTabs}
+            terminals={controller.terminals}
+            scopeKey={nativeChatImageSource}
+            open={openSender}
+          >
+            <MobileNativeChatForkProvider controller={controller}>
+              <MobileNativeChatOverlay
+                controller={nativeChatController}
+                imageSource={nativeChatImageSource}
+                worktreePath={controller.worktreePath}
+                connState={controller.connState}
+                activeSessionTabId={controller.activeSessionTab?.id}
+                onOpenFile={handleNativeChatFileTap}
+                images={nativeChatImages}
+                structuredComposer={nativeChatStructuredComposer}
+                onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+                micActive={dictation.isStarting || dictation.isRecording}
+                micStarting={dictation.isStarting}
+                micProcessing={dictation.isProcessing}
+                dictationMode={dictationMode}
+                onMicPressIn={handleDictationPressIn}
+                onMicPressOut={handleDictationPressOut}
+                inputLockReason={nativeChatOverlayInputLockReason}
+                sendErrorMessage={nativeChatSendError.message}
+                onClearSendError={nativeChatSendError.clear}
+                sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+                sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+                getSendCompletionGeneration={controller.getSendCompletionGeneration}
+                keyboardInset={keyboardLift}
+                // A workspace routed to another server stops with that server, whose name the phone lacks.
+                hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                onOpenUrlInOrca={openUrlInOrca}
+                hostOutage={nativeChatHostOutage}
+                onRunInTerminal={(command) =>
+                  void controller.handleCreateTerminal(undefined, {
+                    startupCommand: command,
+                    startupCommandDelivery: 'shell-ready',
+                    terminalView: true
+                  })
+                }
+                // Accounts open on the paired host, so a chat another server runs offers none.
+                onOpenAccounts={executionHost === undefined ? openNativeChatAccounts : undefined}
+              />
+            </MobileNativeChatForkProvider>
+          </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>
         {toast}
       </View>
