@@ -305,7 +305,7 @@ test('the worktree wire keeps each host identity and flags an archived twin befo
   )
 })
 
-test('usage follows the selected WSL account without assigning its quota to another login', () => {
+test('usage follows the selected runtime account, including host-only snapshots from older desktops', () => {
   const snapshot = {
     claude: { accounts: [], activeAccountId: null },
     codex: {
@@ -335,6 +335,16 @@ test('usage follows the selected WSL account without assigning its quota to anot
       ]
     )
   }
+  delete snapshot.rateLimits.codexTarget
+  snapshot.codex.activeAccountId = 'wsl'
+  const hostCards = readHomeUsage(JSON.stringify(snapshot))
+  assert.deepEqual(
+    Array.from(hostCards, (card) => [card.key, card.active, card.windows[0]?.usedPercent]),
+    [
+      ['codex:host', true, 35],
+      ['codex:wsl', false, undefined]
+    ]
+  )
   assert.equal(readHomeUsage('{"result":{"type":"error"}}'), null)
 })
 

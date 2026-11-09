@@ -3617,9 +3617,31 @@
     "es": "Nueva automatización",
     "zh-Hant": "新增自動化"
   },
-  "更新于 {{date}}": {
-    "zh": "更新于 {{date}}",
-    "en": "Updated {{date}}"
+  "home.usage.updatedJustNow": {
+    "zh": "刚刚更新",
+    "en": "Updated just now",
+    "tr": "Az önce güncellendi",
+    "ja": "たった今更新",
+    "de": "Gerade eben aktualisiert",
+    "ru": "Обновлено только что",
+    "pt": "Atualizado agora mesmo",
+    "fr": "Mis à jour à l'instant",
+    "ko": "방금 업데이트됨",
+    "es": "Actualizado ahora mismo",
+    "zh-Hant": "剛剛更新"
+  },
+  "home.usage.updatedAgo": {
+    "zh": "{{time}}前更新",
+    "en": "Updated {{time}} ago",
+    "tr": "{{time}} önce güncellendi",
+    "ja": "{{time}}前に更新",
+    "de": "Vor {{time}} aktualisiert",
+    "ru": "Обновлено {{time}} назад",
+    "pt": "Atualizado há {{time}}",
+    "fr": "Mis à jour il y a {{time}}",
+    "ko": "{{time}} 전 업데이트됨",
+    "es": "Actualizado hace {{time}}",
+    "zh-Hant": "{{time}}前更新"
   },
   "管理账户": {
     "zh": "管理账户",

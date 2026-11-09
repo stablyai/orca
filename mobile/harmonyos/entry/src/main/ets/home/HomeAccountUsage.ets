@@ -58,12 +58,12 @@ export function readHomeUsage(json: string): HomeUsageCard[] | null {
       let active = text(accounts['activeAccountId']);
       let runtimeIds = record(accounts['activeAccountIdsByRuntime']);
       let target = record(limits[`${provider}Target`]);
-      if (provider === 'codex' && runtimeIds && target) {
-        if (target['runtime'] === 'host') { active = text(runtimeIds['host']); }
+      if (provider === 'codex' && runtimeIds) {
+        if (!target || target['runtime'] === 'host') { active = text(runtimeIds['host']); }
         else if (target['runtime'] === 'wsl') {
           let wsl = record(runtimeIds['wsl']);
           let distro = text(target['wslDistro']);
-          active = wsl ? text(wsl[distro]) : '';
+          active = wsl && distro ? text(wsl[distro]) : '';
         }
       }
       let liveLimits = record(limits[provider]);

@@ -16,7 +16,7 @@ import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcCl
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection, refreshDesktopConnection } from '../transport/DesktopConnections';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
-import { AgentDesktop, AgentListRow, HomeAgentEntry, agentPreview, agentRowRevision, agentsNeedingYou } from '../home/AgentListModel';
+import { AgentDesktop, AgentListRow, HomeAgentEntry, agentPreview, agentRowRevision, agentTimeAgo, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
 import { AgentActivityWrites } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
@@ -46,6 +46,8 @@ interface HomePalette {
   textMuted: string;
   accentBlue: string;
   onAccent: string;
+  translucentFill: string;
+  skillTokenSurface: string;
   statusGreen: string;
   statusAmber: string;
   statusRed: string;
@@ -69,6 +71,8 @@ const PALETTE_DARK: HomePalette = {
   textMuted: '#898989',
   accentBlue: '#3276f2',
   onAccent: '#ffffff',
+  translucentFill: 'rgba(120, 120, 128, 0.36)',
+  skillTokenSurface: 'rgba(59, 130, 246, 0.2)',
   statusGreen: '#86efac',
   statusAmber: '#eab308',
   statusRed: '#ff6568'
@@ -85,6 +89,8 @@ const PALETTE_LIGHT: HomePalette = {
   textMuted: '#696969',
   accentBlue: '#225be3',
   onAccent: '#ffffff',
+  translucentFill: 'rgba(120, 120, 128, 0.16)',
+  skillTokenSurface: 'rgba(59, 130, 246, 0.12)',
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
   statusRed: '#e40014'
@@ -96,6 +102,10 @@ interface TabSpec {
   icon: Resource;
 }
 interface HomeSectionHeading { title: string; aside: string; first: boolean; }
+
+const USAGE_METER_LABEL_MIN_WIDTH = 26;
+const USAGE_METER_FONT_SIZE = 13;
+const USAGE_METER_GAP = 10;
 
 interface WorktreeCountProof { value: HomeWorktreeCounts; save: 'needed' | 'pending' | 'saved'; }
 interface AgentCatalog { counts: WorktreeCountProof; entries: HomeAgentEntry[] | null; at: number; }
@@ -1531,13 +1541,22 @@ struct Home {
     return used >= 80 ? this.pal().statusRed : used >= 60 ? this.pal().statusAmber : this.pal().statusGreen;
   }
 
+  private usageMeterLabelWidth(): number {
+    let context = this.getUIContext();
+    let measure = context.getMeasureUtils();
+    let session = measure.measureText({ textContent: uiText('5 小时', this.uiLocale), fontFamily: 'Geist', fontSize: USAGE_METER_FONT_SIZE });
+    let weekly = measure.measureText({ textContent: uiText('7 天', this.uiLocale), fontFamily: 'Geist', fontSize: USAGE_METER_FONT_SIZE });
+    return Math.max(USAGE_METER_LABEL_MIN_WIDTH, Math.ceil(context.px2vp(Math.max(session, weekly))));
+  }
+
   @Builder
-  usageMeter(label: string, window: HomeUsageWindow | undefined, fetching: boolean) {
-    Row({ space: 10 }) {
-      Text(label).width(26).fontFamily('Geist').fontSize(13).fontColor(this.pal().textSecondary)
+  usageMeter(label: string, window: HomeUsageWindow | undefined, fetching: boolean, labelWidth: number) {
+    Row({ space: USAGE_METER_GAP }) {
+      Text(label).width(labelWidth).fontFamily('Geist').fontSize(USAGE_METER_FONT_SIZE)
+        .fontColor(this.pal().textSecondary).maxLines(1)
       Progress({ value: Math.round(window?.usedPercent ?? 0), total: 100, type: ProgressType.Linear })
         .style({ strokeWidth: 6 }).color(this.usageMeterColor(Math.round(window?.usedPercent ?? 0)))
-        .backgroundColor(this.pal().bgRaised).layoutWeight(1)
+        .backgroundColor(this.pal().translucentFill).layoutWeight(1)
       if (!window && fetching) {
         Row() { LoadingProgress().width(15).height(15).color(this.pal().textSecondary) }
           .width(40).justifyContent(FlexAlign.End)
@@ -1545,21 +1564,26 @@ struct Home {
         Text(window ? `${Math.round(window.usedPercent)}%` : '—').width(40)
           .textAlign(TextAlign.End).fontFamily('Geist').fontSize(13).fontColor(this.pal().textPrimary)
       }
-    }.width('100%')
+    }.width('100%').margin({ top: 6 })
     if (window && window.resetsAt > 0) {
       Text(homeUsageResetCountdown(window.resetsAt, this.homeNow))
-        .fontFamily('Geist').fontSize(12).fontColor(this.pal().textMuted).margin({ left: 36 }).maxLines(1)
+        .fontFamily('Geist').fontSize(12).fontColor(this.pal().textMuted)
+        .margin({ left: labelWidth + USAGE_METER_GAP, top: 2 }).maxLines(1)
     }
   }
 
   @Builder
-  usageCard(host: HostMeta, card: HomeUsageCard, separated: boolean) {
+  usageCard(host: HostMeta, card: HomeUsageCard, separated: boolean, labelWidth: number) {
     if (separated) { this.hairline(16) }
-    Column({ space: 6 }) {
-      Row({ space: 10 }) {
+    Column() {
+      Row({ space: USAGE_METER_GAP }) {
         Row() {
-          Image($r('app.media.lucide_gauge')).supportSvg2(true).width(16).height(16)
-            .colorFilter(lucideColorFilter(this.pal().textSecondary))
+          if (card.provider === 'claude') {
+            Image($r('app.media.agent_claude')).supportSvg2(true).width(16).height(16)
+          } else {
+            Image($r('app.media.agent_codex')).supportSvg2(true).width(16).height(16)
+              .colorFilter(lucideColorFilter(this.pal().textPrimary))
+          }
         }.width(28).height(28).borderRadius(8).backgroundColor(this.pal().bgRaised).justifyContent(FlexAlign.Center)
         Column({ space: 1 }) {
           Text(card.account || uiText('系统默认', this.uiLocale)).fontFamily('Geist').fontSize(16)
@@ -1571,12 +1595,12 @@ struct Home {
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         if (card.active) {
           Text(uiText('使用中', this.uiLocale)).fontFamily('Geist').fontSize(12).fontColor(this.pal().accentBlue)
-            .backgroundColor(this.pal().bgRaised).borderRadius(20).padding({ left: 8, right: 8, top: 2, bottom: 2 })
+            .backgroundColor(this.pal().skillTokenSurface).borderRadius(20).padding({ left: 8, right: 8, top: 2, bottom: 2 })
         }
-      }.width('100%')
+      }.width('100%').margin({ bottom: 4 })
       if (card.metered) {
-        this.usageMeter(uiText('5 小时', this.uiLocale), card.windows.find((window: HomeUsageWindow): boolean => window.label === '会话'), card.fetching)
-        this.usageMeter(uiText('7 天', this.uiLocale), card.windows.find((window: HomeUsageWindow): boolean => window.label === '每周'), card.fetching)
+        this.usageMeter(uiText('5 小时', this.uiLocale), card.windows.find((window: HomeUsageWindow): boolean => window.label === '会话'), card.fetching, labelWidth)
+        this.usageMeter(uiText('7 天', this.uiLocale), card.windows.find((window: HomeUsageWindow): boolean => window.label === '每周'), card.fetching, labelWidth)
       }
     }.alignItems(HorizontalAlign.Start).width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
       .onClick(() => this.openHostRoute(host.id, '/accounts'))
@@ -1630,7 +1654,7 @@ struct Home {
         && (provider === 'claude' || this.usageCards(host.id, 'claude').length === 0) })
       Column() {
         ForEach(this.usageCards(host.id, provider), (card: HomeUsageCard, index: number) => {
-          this.usageCard(host, card, index > 0)
+          this.usageCard(host, card, index > 0, this.usageMeterLabelWidth())
         }, (card: HomeUsageCard): string => `${host.id}:${JSON.stringify(card)}`)
       }.width('100%').borderRadius(16).clip(true).backgroundColor(this.pal().bgPanel)
     }
@@ -1642,7 +1666,10 @@ struct Home {
 
   private usageUpdatedAt(hostId: string, provider: string): string {
     let time = this.usageCards(hostId, provider)[0]?.updatedAt ?? 0;
-    return time > 0 ? uiText('更新于 {{date}}', this.uiLocale).replace('{{date}}', this.displayDate(time)) : '';
+    if (time <= 0) { return ''; }
+    if (this.homeNow - time < 60000) { return uiText('home.usage.updatedJustNow', this.uiLocale); }
+    let ago = agentTimeAgo(time, this.homeNow, this.uiLocale);
+    return uiText('home.usage.updatedAgo', this.uiLocale).replace('{{time}}', ago);
   }
 
   @Builder
