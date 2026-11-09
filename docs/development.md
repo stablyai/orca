@@ -6,6 +6,8 @@ Setup details beyond [`CONTRIBUTING.md`](../.github/CONTRIBUTING.md).
 
 Install Node 24, the pnpm version in `packageManager` in [`package.json`](../package.json), and the Bun version in [`config/.bun-version`](../config/.bun-version).
 
+The server, its workers, and its packaged dependencies target Node 24. The compatibility launcher and CLI still target Node 18; the launcher hands off to bundled Node 24 before loading server code. WSL guest programs and host discovery retain their Node 18 minimum. Keep Node 24 APIs and server imports out of these host compatibility paths. Running an unpackaged server directly requires Node 24 or newer.
+
 `corepack enable` needs Corepack 0.34.5 or newer (`npm install -g corepack@latest`). On Windows it fails with `EPERM` outside an elevated shell when Node is in `C:\Program Files\nodejs`; run `npm install -g pnpm@<that version>` instead.
 
 `pnpm install` compiles native modules such as `node-pty`, so a fresh machine also needs:
@@ -31,6 +33,8 @@ Re-run `pnpm -C mobile install --frozen-lockfile` whenever `mobile/pnpm-lock.yam
 | `ORCA_DEV_USER_DATA_PATH=<dir>`                                         | Use an explicit profile directory                          |
 | `REMOTE_DEBUGGING_PORT=<port>`, `ORCA_DEV_RENDERER_PORT=<port>`         | Pin a port                                                 |
 | `pnpm dev --seed-profile[=<dir>]` or `ORCA_DEV_SEED_PROFILE=<dir or 1>` | Seed an empty profile on first launch                      |
+
+After a worktree is removed and no process still uses its profile, a later `pnpm dev` can automatically delete that profile and its saved state. Back up any state you need before removing the worktree; the `userData` field in `ORCA_DEV_INSTANCE` or `out/dev-instance.json` gives the profile directory.
 
 Seeding copies projects, workspaces, settings, SSH targets, and the Orca account session from another profile (default `orca-dev`, else the installed app's). Seed from `orca-dev` if you need to stay signed in: dev builds cannot decrypt secrets the installed app encrypted.
 
