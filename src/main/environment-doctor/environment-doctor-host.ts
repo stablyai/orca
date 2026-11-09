@@ -31,7 +31,10 @@ export function createHostEnvironmentDoctorDeps(
 ): EnvironmentDoctorDeps {
   const baseEnv = (): NodeJS.ProcessEnv => buildLocalPreflightEnv() ?? process.env
   const run: EnvironmentDoctorDeps['run'] = async (program, args, options) => {
-    const env = options.guardGitPrompts ? gitCredentialPromptGuardEnv(baseEnv()) : baseEnv()
+    // Git probes also force the C locale: folder detection reads Git's English "not a git repository".
+    const env = options.guardGitPrompts
+      ? { ...gitCredentialPromptGuardEnv(baseEnv()), LC_ALL: 'C', LANGUAGE: 'C' }
+      : baseEnv()
     // Windows npm shims are .cmd files that a bare name cannot spawn.
     const resolved =
       process.platform === 'win32'
