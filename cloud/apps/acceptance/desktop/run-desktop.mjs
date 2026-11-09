@@ -532,6 +532,10 @@ async function main() {
     const afterOpenIn = (await menuItems()).map((t) => t.replace(/\n/g, ' '))
     step.openInOptions = afterOpenIn.slice(step.contextMenu.length)
     await shot(step, 'open-in-menu')
+    // A fresh menu: hovering from one open submenu to another does not swap them reliably.
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Escape')
+    await openRowMenu(wsName)
     await page.getByRole('menuitem', { name: 'SSH', exact: true }).hover()
     await sleep(600)
     const clipBefore = spawnSync('pbpaste', { encoding: 'utf8' }).stdout
