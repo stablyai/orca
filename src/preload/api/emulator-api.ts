@@ -41,6 +41,7 @@ export type EmulatorApi = {
       deviceId: string
       config: boolean
       keyFrame: boolean
+      seed?: boolean
       bytes: ArrayBuffer
     }) => void
   ) => () => void
