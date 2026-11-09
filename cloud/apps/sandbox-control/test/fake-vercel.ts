@@ -10,6 +10,7 @@ import {
   type SandboxProviderApi
 } from '../src/sandbox-provider'
 import { DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
+import type { GoldenImageProviderApi } from '../src/golden-image-provider'
 
 type FakeBox = {
   params: CreateSandboxParams
@@ -25,9 +26,17 @@ type FakeBox = {
   files: Map<string, string>
 }
 
+export type FakeBuildCommand = { sessionId: string; env: Record<string, string>; args: string[]; exitCode: number | null; logs: string }
+
 export const READY_PATH = '/home/vercel-sandbox/.orca-sandbox/ready.json'
 
-export type FakeVercel = SandboxProviderApi & {
+export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
+  /** Environment build commands (startCommand), settable by tests. */
+  buildCommands: Map<string, FakeBuildCommand>
+  /** What `cat result.json` prints in a build VM. */
+  buildResult: string
+  /** finalize's runtime check fails (install script removed orcad). */
+  runtimeMissing: boolean
   boxes: Map<string, FakeBox>
   snapshots: Map<string, ProviderSnapshot & { sandboxName: string; creationMethod: string; createdAt: number }>
   commands: { sessionId: string; command: string; args?: string[]; env: Record<string, string> }[]
@@ -76,10 +85,51 @@ export function createFakeVercel(now: () => number): FakeVercel {
     return id
   }
 
+  const buildCommands = new Map<string, FakeBuildCommand>()
   const fake: FakeVercel = {
     boxes,
     snapshots,
     commands,
+    buildCommands,
+    buildResult: '{"repos":[]}',
+    runtimeMissing: false,
+    async createBuildSandbox(params) {
+      return fake.createSandbox({ ...params, snapshotId: `image:${params.image}`, ports: [], networkPolicy: { allow: {} }, snapshotExpirationMs: 0 })
+    },
+    async createSnapshot(sessionId) {
+      const box = bySession(sessionId)
+      box.status = 'stopped'
+      const id = next('snap_env')
+      snapshots.set(id, { id, status: 'created', sourceSessionId: sessionId, sandboxName: box.params.name, creationMethod: 'manual', createdAt: now() })
+      return id
+    },
+    async deleteBuildSandbox(name) {
+      boxes.delete(name)
+    },
+    async startCommand(sessionId, params) {
+      bySession(sessionId)
+      const id = next('cmd')
+      buildCommands.set(id, { sessionId, env: params.env ?? {}, args: params.args ?? [], exitCode: null, logs: '' })
+      return id
+    },
+    async getCommand(_sessionId, commandId) {
+      const command = buildCommands.get(commandId)
+      if (!command) {
+        throw new ProviderError(404, 'not_found')
+      }
+      return { exitCode: command.exitCode }
+    },
+    async streamCommandLogs(_sessionId, commandId) {
+      const command = buildCommands.get(commandId)
+      if (!command) {
+        throw new ProviderError(404, 'not_found')
+      }
+      return new Response(command.logs).body!
+    },
+    async getSnapshot(snapshotId) {
+      const snapshot = snapshots.get(snapshotId)
+      return snapshot ? { id: snapshot.id, status: snapshot.status, expiresAt: null } : null
+    },
     failStart: false,
     failEnvRefresh: false,
     failCreate: false,
@@ -142,12 +192,15 @@ export function createFakeVercel(now: () => number): FakeVercel {
       if (box.status !== 'running') {
         throw new ProviderError(410, 'sandbox_stopped')
       }
-      commands.push({ sessionId, command: params.command, args: params.args, env: params.env ?? {} })
+      // A first boot wraps the start script in `bash -c '<prelude>; exec <start>'`: same command to us.
+      const command =
+        params.command === 'bash' && params.args?.[1]?.endsWith(`exec ${START_COMMAND}`) ? START_COMMAND : params.command
+      commands.push({ sessionId, command, args: params.args, env: params.env ?? {} })
       const handled = fake.commandHandler?.(params, sessionId)
       if (handled) {
         return handled
       }
-      if (params.command === START_COMMAND) {
+      if (command === START_COMMAND) {
         if (fake.failStart) {
           return { exitCode: 1, stdout: '', stderr: 'orcad crashed' }
         }
@@ -167,6 +220,9 @@ export function createFakeVercel(now: () => number): FakeVercel {
         // Like the image: the offer stays in the VM, stdout only says where.
         box.files.set(READY_PATH, `${box.orcadReady}\n`)
         return { exitCode: 0, stdout: `${JSON.stringify({ schemaVersion: 1, readyFile: READY_PATH })}\n`, stderr: '' }
+      }
+      if (params.command === 'bash' && params.args?.[1]?.includes('result.json')) {
+        return fake.runtimeMissing ? { exitCode: 1, stdout: '', stderr: '' } : { exitCode: 0, stdout: `${fake.buildResult}\n`, stderr: '' }
       }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }

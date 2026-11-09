@@ -40,6 +40,11 @@ export type StartInputs = {
   gitExtraHeader?: string
   /** Secrets for orcad's (and so every agent's) process env. Never written to disk in the VM. */
   secretEnv?: Record<string, string>
+  /**
+   * First boot only: bash run before the start script (stdout redirected to stderr), e.g. linking an
+   * environment build's prebuilt repo as the project. Its failure never blocks the start.
+   */
+  prelude?: { script: string; env?: Record<string, string> }
 }
 
 /** `NAME=<base64 utf-8 value>` lines, so values with newlines or quotes survive bash intact. */
@@ -86,11 +91,19 @@ export async function startOrcad(
   if (inputs.secretEnv && Object.keys(inputs.secretEnv).length > 0) {
     env.ORCA_SECRET_ENV = encodeSecretEnv(inputs.secretEnv)
   }
-  const result = await provider.runCommand(state.session.id, {
-    command: START_COMMAND,
-    env,
-    timeoutMs: START_TIMEOUT_MS
-  })
+  // The prelude rides in an env var (the start script's `env -i` keeps it out of orcad) so one
+  // round trip both prepares the checkout and starts orcad.
+  const result = await provider.runCommand(
+    state.session.id,
+    inputs.prelude
+      ? {
+          command: 'bash',
+          args: ['-c', `bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
+          env: { ...env, ...inputs.prelude.env, ORCA_PRELUDE: inputs.prelude.script },
+          timeoutMs: START_TIMEOUT_MS
+        }
+      : { command: START_COMMAND, env, timeoutMs: START_TIMEOUT_MS }
+  )
   if (result.exitCode !== 0) {
     throw new VmCommandError('orcad_start_failed')
   }

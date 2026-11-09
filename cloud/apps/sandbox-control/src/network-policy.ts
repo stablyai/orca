@@ -74,6 +74,11 @@ export type EgressPolicyInput = {
   mode: 'allowlist' | 'open'
   allowlist?: readonly string[]
   credentials?: readonly CredentialRoute[]
+  /**
+   * Default true: a credential host answers 403 to requests without our placeholder. Environment
+   * builds (open egress anyway) turn it off so public repos still clone anonymously next to private ones.
+   */
+  denyUnclaimed?: boolean
 }
 
 const HOST = /^(\*\.)?([a-z0-9-]+\.)+[a-z]{2,63}$/
@@ -96,7 +101,7 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
         : { match, forwardURL: route.forwardURL }
     })
     const rules = allow[host]?.filter((rule) => !('response' in rule)) ?? []
-    allow[host] = [...rules, ...claims, denyRule()]
+    allow[host] = [...rules, ...claims, ...(input.denyUnclaimed === false ? [] : [denyRule()])]
   }
   if (input.mode === 'open') {
     allow['*'] = []

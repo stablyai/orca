@@ -16,7 +16,9 @@ import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provide
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
-import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
+import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
+import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
+import { resolveEnvironmentBoot, type BootSource } from './environments'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
 import {
   detachFromWorkspace,
@@ -255,6 +257,8 @@ async function boot(
     timer: ReturnType<typeof phaseTimer>
     /** A pooled VM started before the caller claimed it: usage starts at the claim, not the boot. */
     billFrom?: number
+    /** First boot only: prepares the checkout (environment build link, empty repos) before orcad. */
+    prelude?: StartInputs['prelude']
   }
 ): Promise<Ready> {
   if (state.sandbox.tags.orcaSandbox !== row.id) {
@@ -280,7 +284,8 @@ async function boot(
         // Repos hosted outside github.com get no GitHub credential, not even the placeholder.
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
         gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
-        secretEnv: prep.secrets.env
+        secretEnv: prep.secrets.env,
+        prelude: options.prelude
       })
     )
   ])
@@ -322,7 +327,16 @@ export async function refreshGitCredentials(
 export async function createSandbox(
   deps: LifecycleDeps,
   caller: { accountId: string; userId: string },
-  request: { workspaceId: string; machineSize: MachineSize; region?: string; repo?: { url: string; ref?: string } },
+  request: {
+    workspaceId: string
+    machineSize: MachineSize
+    region?: string
+    repo?: { url: string; ref?: string }
+    /** Boot from exactly this environment build (bld_...). */
+    environmentBuildId?: string
+    /** Default true: boot from the active build of the org environment that lists the repo. */
+    useEnvironment?: boolean
+  },
   options: { pool?: boolean } = {}
 ): Promise<Ready> {
   const existing = await liveSandboxForWorkspace(deps.db, caller.accountId, request.workspaceId)
@@ -341,12 +355,24 @@ export async function createSandbox(
     return { row: existing, connection }
   }
   const timer = phaseTimer(deps.now)
-  await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, request.machineSize))
+  // An environment build carries the repo prebuilt and its own machine size (Large bills 2x).
+  const source: BootSource | null =
+    request.environmentBuildId || request.useEnvironment !== false
+      ? await timer.time('environment', () =>
+          resolveEnvironmentBoot(deps.db, caller.accountId, {
+            repoUrl: request.repo?.url,
+            buildId: request.environmentBuildId
+          })
+        )
+      : null
+  const machineSize = source?.machineSize ?? request.machineSize
+  await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
   const region = request.region ?? deps.config.defaultRegion
+  // Pooled VMs run the plain golden image: a create that boots an environment build skips the pool.
   const pooled =
-    options.pool === false
+    options.pool === false || source
       ? null
-      : await timer.time('pool', () => claimPooledVm(deps, request.machineSize, region).catch(() => null))
+      : await timer.time('pool', () => claimPooledVm(deps, machineSize, region).catch(() => null))
   if (deps.config.pool) {
     // Refill behind the response, on a miss too (empty, or stale after a golden rotation), so the next
     // create finds one without waiting for the cron.
@@ -356,6 +382,9 @@ export async function createSandbox(
     deps.background?.(refill)
   }
   const claimedAt = deps.now()
+  const prelude: StartInputs['prelude'] = request.repo
+    ? { script: WORKSPACE_PRELUDE_SCRIPT, env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : {} }
+    : undefined
   const id = pooled?.id ?? randomId()
   // Write-ahead row and the VM-independent prep (secrets, repo token) run together.
   const [row, prep] = await timer.time('prepare', async () => {
@@ -368,9 +397,12 @@ export async function createSandbox(
         workspace_id: request.workspaceId,
         provider: 'vercel',
         provider_name: `orca-${deps.config.environment}-${id}`,
-        machine_size: request.machineSize,
+        machine_size: machineSize,
         region,
-        repo_url: request.repo?.url ?? null
+        repo_url: request.repo?.url ?? null,
+        environment_id: source?.environmentId ?? null,
+        environment_build_id: source?.buildId ?? null,
+        source_snapshot_id: source?.snapshotId ?? deps.config.goldenSnapshotId
       },
       deps.now()
     ).catch(async (error: unknown) => {
@@ -394,7 +426,7 @@ export async function createSandbox(
       const state = await timer.time('vm', () =>
         adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token))
       )
-      const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt })
+      const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt, prelude })
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
       return ready
     } catch (error) {
@@ -413,7 +445,7 @@ export async function createSandbox(
     state = await timer.time('vm', () =>
       deps.provider.createSandbox({
         name: row.provider_name,
-        snapshotId: deps.config.goldenSnapshotId,
+        snapshotId: source?.snapshotId ?? deps.config.goldenSnapshotId,
         vcpus: VCPUS[row.machine_size],
         region: row.region,
         timeoutMs: LEASE_MS,
@@ -428,8 +460,8 @@ export async function createSandbox(
     throw error
   }
   try {
-    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer })
-    console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', ms: timer.timings }))
+    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude })
+    console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
     return ready
   } catch (error) {
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
@@ -650,13 +682,15 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   // Persistent sandboxes leave automatic snapshots behind delete; prove none survive.
   const listed = await deps.provider.listSnapshots(destroying.provider_name)
   await recordSnapshots(deps.db, row.id, listed.map((s) => s.id), deps.now())
+  // The image it booted from (golden or an environment build) is shared: never this sandbox's to delete.
+  const shared = new Set([deps.config.goldenSnapshotId, row.source_snapshot_id].filter((id): id is string => !!id))
   for (const id of await recordedSnapshotIds(deps.db, row.id)) {
-    if (id !== deps.config.goldenSnapshotId) {
+    if (!shared.has(id)) {
       await deps.provider.deleteSnapshot(id)
     }
   }
   const remaining = (await deps.provider.listSnapshots(destroying.provider_name)).filter(
-    (s) => s.status !== 'deleted' && s.id !== deps.config.goldenSnapshotId
+    (s) => s.status !== 'deleted' && !shared.has(s.id)
   )
   if (remaining.length > 0) {
     throw new LifecycleError('provider_unavailable', 'snapshot_cleanup_incomplete')

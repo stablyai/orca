@@ -41,6 +41,10 @@ export type SandboxRow = {
   /** Comma list of custom model-provider hosts added to this session's egress allowlist. */
   egress_allow_hosts: string | null
   retention_warned_at: number | null
+  /** Environment build this sandbox first booted from (null: the golden image). Never changes. */
+  environment_id: string | null
+  environment_build_id: string | null
+  source_snapshot_id: string | null
   /** orcad's public wss endpoint for the current session. */
   orcad_endpoint: string | null
   /** When orcad last became ready (wake callers report it as `readyAt`). */
@@ -71,17 +75,20 @@ export async function insertSandbox(
   row: Pick<
     SandboxRow,
     'id' | 'account_id' | 'user_id' | 'workspace_id' | 'provider' | 'provider_name' | 'machine_size' | 'region' | 'repo_url'
-  >,
+  > &
+    Partial<Pick<SandboxRow, 'environment_id' | 'environment_build_id' | 'source_snapshot_id'>>,
   now: number
 ): Promise<SandboxRow> {
   await db
     .prepare(
       `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
-         machine_size, region, generation, created_at, updated_at, repo_url)
-       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?)`
+         machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
+         source_snapshot_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?)`
     )
     .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
-      row.machine_size, row.region, now, now, row.repo_url)
+      row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
+      row.environment_build_id ?? null, row.source_snapshot_id ?? null)
     .run()
   const inserted = await getSandbox(db, row.id)
   if (!inserted) {

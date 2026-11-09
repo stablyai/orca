@@ -38,6 +38,9 @@ function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typ
     async getCommand(_session, commandId) {
       return { exitCode: commands.get(commandId) ?? null }
     },
+    async streamCommandLogs() {
+      return new Response('').body!
+    },
     async getSnapshot(id) {
       const snapshot = vercel.snapshots.get(id)
       return snapshot ? { id, status: snapshot.status, expiresAt: expiries.get(id) ?? null } : null

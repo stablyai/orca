@@ -16,6 +16,7 @@
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
+//   /v1/environments[/...]  org environments + versioned builds (see src/environment-routes.ts)
 //   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
 // Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
 // cannot enroll devices, manage secrets or connect GitHub.
@@ -83,6 +84,10 @@ import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
+import { advanceAllBuilds, type BuildDeps } from './environment-builds'
+import { environmentErrorResponse, handleEnvironmentRoute, isEnvironmentRoute } from './environment-routes'
+import { EnvironmentError } from './environments'
+import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
@@ -110,7 +115,7 @@ const MAX_BATCH_JSON_BYTES = 160 * 1024
 const MAX_API_JSON_BYTES = 96 * 1024
 
 export type Deps = {
-  provider?: SandboxProviderApi
+  provider?: SandboxProviderApi & Partial<GoldenImageProviderApi>
   entitlements?: EntitlementClient
   credentials?: CredentialBroker
   github?: GitHubAppMinter
@@ -429,6 +434,26 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
   }
 }
 
+function buildDeps(life: LifecycleDeps, deps: Deps): BuildDeps {
+  return {
+    db: life.db,
+    // SAFETY: the Vercel client implements both; test fakes for builds do too.
+    provider: life.provider as BuildDeps['provider'],
+    github: life.github,
+    keyring: life.secrets?.keyring,
+    entitlements: life.entitlements,
+    now: life.now,
+    waitUntil: deps.waitUntil,
+    githubFetch: deps.githubFetch,
+    config: {
+      environment: life.config.environment,
+      goldenSnapshotId: life.config.goldenSnapshotId,
+      region: life.config.defaultRegion,
+      guardrails: life.config.guardrails
+    }
+  }
+}
+
 /**
  * Smart-HTTP ref advertisement, anonymous: 200 for a public repo, 401 for private or missing. Not the
  * REST API, so no 60/h anonymous quota. Network trouble counts as public: the clone then reports it.
@@ -676,6 +701,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return response
     }
+    if (isEnvironmentRoute(url.pathname)) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      const life = await lifecycleDeps(env, deps)
+      if (!life) {
+        return fail('not_configured', 503)
+      }
+      return await handleEnvironmentRoute(request, url, caller, buildDeps(life, deps), () => readJson(request))
+    }
     const match =
       /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh))?)?$/.exec(
         url.pathname
@@ -810,6 +846,9 @@ function errorResponse(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return fail('invalid_json', 400)
   }
+  if (error instanceof EnvironmentError) {
+    return environmentErrorResponse(error)
+  }
   if (error instanceof SecretError) {
     return fail(error.code, error.status, error.reason)
   }
@@ -863,6 +902,10 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
+          const builds = await advanceAllBuilds(buildDeps(life, {})).catch(() => 0)
+          if (builds > 0) {
+            console.log(JSON.stringify({ event: 'environment_builds_advanced', builds }))
+          }
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
