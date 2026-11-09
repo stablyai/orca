@@ -11,6 +11,7 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
   disposeGrabModeStateForPage,
   registerBrowserGrabHandlers,
@@ -250,6 +251,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()
 

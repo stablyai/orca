@@ -1597,6 +1597,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
+      "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
+      "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
       "deleteWorktree": "Supprimer le worktree",
       "pin": "Épingler",
       "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
@@ -2596,7 +2598,8 @@
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
-      "stoppedAfterSilence": "Arrêt après une minute de silence"
+      "stoppedAfterSilence": "Arrêt après une minute de silence",
+      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes."
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -2921,6 +2924,8 @@
       "dictationHeading": "DICTÉE",
       "dictationMode": "Mode de dictée",
       "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
+      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
+      "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
       "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",

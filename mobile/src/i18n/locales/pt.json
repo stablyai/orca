@@ -1597,6 +1597,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
+      "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
       "deleteWorktree": "Excluir Worktree",
       "pin": "Fixar",
       "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
@@ -2596,7 +2598,8 @@
       "insertFailed": "Não foi possível inserir o ditado",
       "insertFailedCopied": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência",
       "inserted": "Ditado inserido",
-      "stoppedAfterSilence": "Parou após um minuto de silêncio"
+      "stoppedAfterSilence": "Parou após um minuto de silêncio",
+      "stoppedAtCloudLimit": "O ditado foi interrompido no limite de 10 minutos da nuvem."
     },
     "useNativeChatStop": {
       "stopNotSent": "Comando de parada não enviado",
@@ -2921,6 +2924,8 @@
       "dictationHeading": "DITADO",
       "dictationMode": "Modo de Ditado",
       "dictationModeDescription": "Alternar: pressione uma vez para iniciar e novamente para parar. Manter pressionado: pressione e segure para ditar.",
+      "dictationModeWithAutoDescription": "Automático: toque para iniciar e parar; no computador, manter o atalho pressionado grava até você soltar. Manter pressionado: pressione e segure para ditar. Alternar: pressione uma vez para iniciar e novamente para parar.",
+      "autoMode": "Automático",
       "downloadFailed": "Falha no download",
       "enableDictation": "Ativar Ditado por Voz",
       "holdMode": "Manter Pressionado",

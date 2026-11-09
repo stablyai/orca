@@ -1552,6 +1552,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
+      "deleteDestroysEnvironment": "這也會銷毀 Orca 為其建立的環境「{{environment}}」，包括其中未提交的變更和正在執行的終端機。",
+      "deleteKeepsEnvironment": "Orca 為其建立的環境「{{environment}}」會繼續執行：其配方沒有銷毀步驟。",
       "deleteWorktree": "刪除工作樹",
       "pin": "固定",
       "primaryWorktreeDeleteHint": "主工作樹不能刪除。請改為移除專案。",
@@ -2522,7 +2524,8 @@
       "insertFailed": "無法插入聽寫內容",
       "insertFailedCopied": "無法插入聽寫內容，已複製到剪貼簿",
       "inserted": "已插入聽寫內容",
-      "stoppedAfterSilence": "靜音一分鐘後已停止"
+      "stoppedAfterSilence": "靜音一分鐘後已停止",
+      "stoppedAtCloudLimit": "已達 10 分鐘雲端上限。聽寫已停止。"
     },
     "useNativeChatStop": {
       "stopNotSent": "未送出停止命令",
@@ -2843,6 +2846,8 @@
       "dictationHeading": "聽寫",
       "dictationMode": "聽寫模式",
       "dictationModeDescription": "切換：按一次開始，再按一次停止。按住：按住期間進行聽寫。",
+      "dictationModeWithAutoDescription": "自動：輕按開始和停止；在電腦上按住快捷鍵會一直錄音，直到放開。按住：按住期間進行聽寫。切換：按一次開始，再按一次停止。",
+      "autoMode": "自動",
       "downloadFailed": "下載失敗",
       "enableDictation": "啟用語音聽寫",
       "holdMode": "按住",

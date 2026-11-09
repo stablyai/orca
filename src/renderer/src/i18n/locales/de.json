@@ -3720,7 +3720,6 @@
             "a3346fc6ed": "Worktree-Erstellung abbrechen",
             "532aea14ce": "Abbrechen",
             "767951265d": "Beim Erstellen des Worktrees ist ein Fehler aufgetreten.",
-            "vmProvisioningTitle": "VM wird bereitgestellt",
             "cancelProvisioning": "Abbrechen",
             "vmProvisioningLogEmpty": "Warten auf Rezeptausgabe…"
           }
@@ -23572,5 +23571,8 @@
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
     "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+  },
+  "checks": {
+    "gitlabAllowedFailure": "Fehlschlag erlaubt"
   }
 }

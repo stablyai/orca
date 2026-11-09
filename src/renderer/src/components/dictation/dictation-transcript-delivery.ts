@@ -10,6 +10,8 @@ export type DictationTranscriptDelivery = ((
 ) => void) & {
   /** Everything this session has typed into its target so far. */
   landedText: () => string
+  /** Waits for every final so far to land; false if any went to the clipboard instead. */
+  settled: () => Promise<boolean>
 }
 
 /** One session's finals, inserted in order; text that can't land goes to the clipboard so it isn't lost. */
@@ -30,7 +32,10 @@ export function createDictationTranscriptDelivery(): DictationTranscriptDelivery
       await copyMissedDictation(missed, target !== null)
     })
   }
-  return Object.assign(deliver, { landedText: () => allLanded })
+  return Object.assign(deliver, {
+    landedText: () => allLanded,
+    settled: () => queue.then(() => missed === '')
+  })
 }
 
 async function copyMissedDictation(text: string, hadTarget: boolean): Promise<void> {
