@@ -8,14 +8,21 @@ import { PlansView, isSubscribed, type PlansViewProps } from './PlansView'
  * Top-anchored so loading, plans and checkout never make the dialog jump (review M4).
  */
 export function PlansDialogContent(
-  props: PlansViewProps & { checkout?: ReactNode }
+  props: PlansViewProps & {
+    checkout?: ReactNode
+    /** Checkout state, so the dialog title says what happened (paid, canceled). */
+    checkoutState?: 'paid' | 'canceled' | 'other'
+    /** Payment landed: the Team page takes over, so this dialog leaves without its zoom-out. */
+    handingOff?: boolean
+  }
 ): React.JSX.Element {
   const t = useTranslate()
   const subscribed = isSubscribed(props.result)
-  const { checkout, ...viewProps } = props
+  const { checkout, checkoutState, handingOff, ...viewProps } = props
   return (
     <DialogContent
       scrollable
+      exitMotion={handingOff ? 'none' : 'default'}
       className={
         checkout
           ? // Checkout is one column; a narrower dialog keeps it from floating in empty space.
@@ -36,7 +43,11 @@ export function PlansDialogContent(
         </p>
         <DialogTitle size="display">
           {checkout
-            ? t('auto.components.billing.checkout.title', 'Checkout')
+            ? checkoutState === 'paid'
+              ? t('auto.components.billing.checkout.titlePaid', 'Welcome to Orca Cloud')
+              : checkoutState === 'canceled'
+                ? t('auto.components.billing.checkout.titleCanceled', 'Checkout canceled')
+                : t('auto.components.billing.checkout.title', 'Checkout')
             : subscribed
               ? t('auto.components.billing.plans.titleSubscribed', 'Your Orca Cloud plan')
               : t('auto.components.billing.plans.title', 'Cloud sandboxes for your whole team')}

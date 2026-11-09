@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import { ChevronsUpDown, User } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -15,6 +15,21 @@ import { useAppStore } from '@/store'
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
 import { openTeamPage } from '../../billing/team/team-page-store'
 
+// The pick in flight, shared across menu opens: the menu unmounts on select, so component state
+// would forget it and let a second pick race the first.
+let pendingOrg: string | null = null
+const pendingListeners = new Set<() => void>()
+function setPendingOrg(next: string | null): void {
+  pendingOrg = next
+  for (const listener of pendingListeners) {
+    listener()
+  }
+}
+function subscribePending(listener: () => void): () => void {
+  pendingListeners.add(listener)
+  return () => pendingListeners.delete(listener)
+}
+
 /**
  * Team switcher in the account menu for signed-in accounts: the teams (radio items) and
  * "Create a team…".
@@ -29,10 +44,7 @@ export function SidebarTeamSubmenu({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const selectOrg = useAppStore((state) => state.selectOrcaProfileOrg)
-  // One switch at a time, so toasts can't arrive out of order; the picked team shows as
-  // selected (and the group busy) until auth answers.
-  const switching = useRef(false)
-  const [pendingOrgId, setPendingOrgId] = useState<string | null>(null)
+  const pendingOrgId = useSyncExternalStore(subscribePending, () => pendingOrg)
   if (authStatus?.state !== 'connected') {
     return null
   }
@@ -43,11 +55,10 @@ export function SidebarTeamSubmenu({
 
   const switchTo = (orgId: string): void => {
     const org = organizations.find((candidate) => candidate.orgId === orgId)
-    if (!org || orgId === activeOrgId || switching.current) {
+    if (!org || orgId === activeOrgId || pendingOrg !== null) {
       return
     }
-    switching.current = true
-    setPendingOrgId(orgId)
+    setPendingOrg(orgId)
     void selectOrg(orgId)
       .then((result) => {
         if (result?.status === 'selected') {
@@ -63,8 +74,7 @@ export function SidebarTeamSubmenu({
         }
       })
       .finally(() => {
-        switching.current = false
-        setPendingOrgId(null)
+        setPendingOrg(null)
       })
   }
 
