@@ -19,6 +19,12 @@ describe('matchProjectHostQuery', () => {
     expect(matchProjectHostQuery('orca mac', orca)).toEqual({ hostIndexes: [2] })
   })
 
+  it('narrows by a host word that the project detail also contains', () => {
+    const buildOrca = { ...orca, detail: 'build/orca' }
+    expect(matchProjectHostQuery('build orca', buildOrca)).toEqual({ hostIndexes: [1] })
+    expect(matchProjectHostQuery('build', buildOrca)).toEqual({ hostIndexes: null })
+  })
+
   it('lists the project on a host when only the host is typed', () => {
     expect(matchProjectHostQuery('mini', orca)).toEqual({ hostIndexes: [2] })
   })

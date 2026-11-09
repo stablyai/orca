@@ -12,6 +12,25 @@ function includes(text: string | undefined, needle: string): boolean {
   return text !== undefined && text.toLowerCase().includes(needle)
 }
 
+// "build orca" for detail "build/orca": "build" also names a host, and "orca" alone still finds the project.
+function projectWordsNamingHosts(
+  words: readonly string[],
+  target: ProjectHostQueryTarget
+): number[] | null {
+  const named = words.filter((word) => target.hostLabels.some((label) => includes(label, word)))
+  const rest = words.filter((word) => !named.includes(word))
+  if (named.length === 0 || rest.length === 0) {
+    return null
+  }
+  const hostIndexes = target.hostLabels.flatMap((label, index) =>
+    named.every((word) => includes(label, word)) ? [index] : []
+  )
+  // Words split across hosts, or naming every host, say nothing about which one.
+  return hostIndexes.length > 0 && hostIndexes.length < target.hostLabels.length
+    ? hostIndexes
+    : null
+}
+
 /**
  * Match "host project" queries: words found in the project's name or detail narrow by project,
  * the rest must all appear in one host's label and narrow to those hosts.
@@ -29,7 +48,7 @@ export function matchProjectHostQuery(
     (word) => !includes(target.name, word) && !includes(target.detail, word)
   )
   if (hostWords.length === 0) {
-    return { hostIndexes: null }
+    return { hostIndexes: projectWordsNamingHosts(words, target) }
   }
   // A query made only of host words would list every project on that host; that is wanted too.
   const hostIndexes = target.hostLabels.flatMap((label, index) =>
