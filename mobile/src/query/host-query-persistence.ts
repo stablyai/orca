@@ -260,8 +260,10 @@ export function createHostQueryPersistence(
     if (event.type !== 'updated' || event.action.type !== 'success') {
       return
     }
-    // Any write but the restore's own is this launch's, whatever its clock says.
-    if (query.queryHash !== applyingRestore) {
+    // Any write but the restore's own is this launch's, whatever its clock says; a listener's write during it included.
+    if (query.queryHash === applyingRestore) {
+      applyingRestore = null
+    } else {
       restored.delete(query.queryHash)
     }
     const family = familyOf(query.queryKey)

@@ -125,32 +125,43 @@ describe('createHostQueryPersistence', () => {
     expect(relaunched.getQueryData(key)).toBe(live)
   })
 
-  it("marks restored data as an earlier launch's before anyone hears of it, until this launch's own answer", async () => {
-    const store = memoryStore('host-a')
-    await storeFromEarlierLaunch(store, [liveRow])
+  it.each([
+    { replaceOnHearing: false, expected: [true, false] },
+    { replaceOnHearing: true, expected: [true, false, false] }
+  ])(
+    "marks restored data as an earlier launch's before anyone hears of it, until this launch's own answer (a listener's replacement: $replaceOnHearing)",
+    async ({ replaceOnHearing, expected }) => {
+      const store = memoryStore('host-a')
+      await storeFromEarlierLaunch(store, [liveRow])
 
-    const relaunched = new QueryClient()
-    const persistence = createHostQueryPersistence(relaunched, store.backend)
-    relaunched.getQueryCache().build(relaunched, {
-      queryKey: key,
-      meta: { persist: hostWorktreeCatalogQuery.persist }
-    })
-    const heard: boolean[] = []
-    relaunched.getQueryCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'success') {
-        heard.push(holdsRestoredHostQueryData(relaunched, hashKey(key)))
-      }
-    })
-    const restoring = persistence.restore(firstPaint)
-    await vi.runAllTimersAsync()
-    await restoring
-    // A live answer timed before the stored one, as after a clock correction, is still this launch's.
-    relaunched.setQueryData(
-      key,
-      { snapshotId: 'snap-8', worktrees: [liveRow] },
-      { updatedAt: SAVED_AT - 1 }
-    )
+      const relaunched = new QueryClient()
+      const persistence = createHostQueryPersistence(relaunched, store.backend)
+      relaunched.getQueryCache().build(relaunched, {
+        queryKey: key,
+        meta: { persist: hostWorktreeCatalogQuery.persist }
+      })
+      const heard: boolean[] = []
+      const replacement = { snapshotId: 'snap-8', worktrees: [liveRow] }
+      relaunched.getQueryCache().subscribe((event) => {
+        if (event.type === 'updated' && event.action.type === 'success') {
+          heard.push(holdsRestoredHostQueryData(relaunched, hashKey(key)))
+          // A listener replacing the restored rows as it hears of them.
+          if (replaceOnHearing && heard.length === 1) {
+            relaunched.setQueryData(key, replacement, { updatedAt: SAVED_AT - 2 })
+          }
+        }
+      })
+      const restoring = persistence.restore(firstPaint)
+      await vi.runAllTimersAsync()
+      await restoring
+      // A live answer timed before the stored one, as after a clock correction, is still this launch's.
+      relaunched.setQueryData(
+        key,
+        { snapshotId: 'snap-8', worktrees: [liveRow] },
+        { updatedAt: SAVED_AT - 1 }
+      )
 
-    expect(heard).toEqual([true, false])
-  })
+      expect(heard).toEqual(expected)
+    }
+  )
 })
