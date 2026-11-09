@@ -498,6 +498,8 @@ test('the bridge reports a workspace location without interpreting its encoded I
   bridge.setLocationSink((pathname, params) =>
     locations.push([pathname, params.executionHost ?? ''])
   )
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
   const windowsPathname = `/h/${hostId}/session/repo%3A%3AC%3A%5CMy%20Project`
   const posixPathname = `/h/${hostId}/session/repo%3A%3A%2FUsers%2Fme%2Fproject`
   post(bridge, {
@@ -628,6 +630,8 @@ test('the bridge opens only granted native edit and diagnostics destinations for
   )
   const nativePages = []
   bridge.setNativeNavigation((page, replace) => nativePages.push([page, replace]))
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
   post(bridge, { type: 'notify', name: 'navigate', href: `/h/${hostId}/edit` })
   post(bridge, {
     type: 'notify',
@@ -662,6 +666,8 @@ test('the bridge opens only granted native edit and diagnostics destinations for
     `/h/${hostId}`
   )
   ungranted.setNativeNavigation((page, replace) => nativePages.push([page, replace]))
+  ungranted.onPushChannelReady()
+  post(ungranted, { type: 'ready' })
   post(ungranted, { type: 'notify', name: 'navigate', href: `/h/${hostId}/edit` })
   assert.deepEqual(nativePages, [
     ['edit-host', false],

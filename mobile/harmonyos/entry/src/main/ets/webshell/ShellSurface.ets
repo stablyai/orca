@@ -6,7 +6,6 @@ import { NATIVE_DEVICE_METHODS, NativeDevice } from './NativeDevice';
 import { PageStorageStore } from '../storage/PageStorageStore';
 import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR, LOG_LEVEL_WARN } from '../diagnostics/ConnectionLogStore';
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import {
   BundleCompatibilityError, BundleManifest, BundleRemedy, CachedWebBundle, DesktopBundleStatus, WebBundleFetcher
@@ -16,7 +15,8 @@ import { ShellDocument, ShellDocumentMount } from './ShellDocument';
 import { claimHomeDocument } from './HomeShellPrewarm';
 import { BridgeHost, BridgeNativePage } from './BridgeHost';
 import { HostMeta } from '../storage/HostStore';
-import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute } from '../navigation/ShellRoute';
+import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute, shellRouterParams } from '../navigation/ShellRoute';
+import { ShellNavigationFence } from '../navigation/ShellNavigationFence';
 import { lucideColorFilter } from '../settings/LucideColor';
 import { projectPageRegions, projectSideRail, readWindowRegions, WindowRegion } from './WindowRegions';
 import { TerminalKeyRail } from './TerminalKeyRail';
@@ -52,8 +52,6 @@ export struct ShellSurface {
   asDrawer: boolean = false;
   returnsToDesktop: boolean = false;
   back: ShellSurfaceBack = new ShellSurfaceBack();
-  onNativeSession: (route: ShellRoute) => void = (_route: ShellRoute): void => {};
-  onNativeRoute: (route: ShellRoute, replace: boolean) => void = (_route: ShellRoute, _replace: boolean): void => {};
   onOverlayClose: () => void = (): void => {};
   onOverlayNavigate: (route: ShellRoute) => void = (_route: ShellRoute): void => {};
   private unbindBack: (() => void) | null = null;
@@ -99,6 +97,9 @@ export struct ShellSurface {
   private disposed: boolean = false;
   private pageVisible: boolean = true;
   private foreground: boolean = true;
+  private navigation: ShellNavigationFence = new ShellNavigationFence();
+  private nativePageIndex: number = 0;
+  private nativePageName: string = '';
   private viewport: WindowRegion = { x: 0, y: 0, width: 0, height: 0 };
   private surface: WindowRegion = { x: 0, y: 0, width: 0, height: 0 };
   private pendingDrawerRoute: ShellRoute | null = null;
@@ -115,6 +116,7 @@ export struct ShellSurface {
   };
   private generation: number = 0;
   private backgroundListener: () => void = (): void => {
+    this.navigation.invalidateCallbacks();
     this.foreground = false; this.publishPageRegions(); this.clearViewing();
     if (this.nativeDevice) { this.nativeDevice.pause().catch(() => {}); }
   };
@@ -125,6 +127,7 @@ export struct ShellSurface {
     this.routeParams = this.request.params;
     this.pendingSession = this.sessionTarget;
     this.pageVisible = this.visible;
+    this.captureNativePage();
     this.unbindBack = this.back.bind((): boolean => this.handleBack());
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaBackground', this.backgroundListener);
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaForeground', this.foregroundListener);
@@ -141,6 +144,7 @@ export struct ShellSurface {
 
   aboutToDisappear(): void {
     this.disposed = true; this.generation++; this.startup.cancel();
+    this.navigation.visit();
     this.unbindBack?.(); this.unbindBack = null;
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaBackground', this.backgroundListener);
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaForeground', this.foregroundListener);
@@ -149,25 +153,88 @@ export struct ShellSurface {
     this.desktop?.release(true); this.desktop = null;
     this.releaseBridge();
   }
-  private handleBack(): boolean {
-    if (this.painted && this.bridge?.handleBack()) { return true; }
-    if (!this.asDrawer) { return false; }
-    this.onOverlayClose(); return true;
+
+  private captureNativePage(): void {
+    let router = this.getUIContext().getRouter();
+    let state = router.getState();
+    let index = state?.index ?? 0;
+    let candidates = router.getStateByUrl(this.asDrawer ? 'pages/Home' : 'pages/ShellScreen');
+    this.nativePageIndex = candidates.some((page): boolean => page.index === index) ? index : 0;
+    this.nativePageName = state?.name ?? '';
   }
 
-  private navigateBack(home: boolean = false): void {
-    if (this.disposed || !this.pageVisible || !this.foreground) { return; }
-    if (this.asDrawer) { this.onOverlayClose(); }
-    else if (home) { router.back({ url: 'pages/Home' }); }
-    else { router.back(); }
+  private ownsNavigation(): boolean {
+    if (this.disposed || !this.pageVisible || !this.foreground) { return false; }
+    if (!this.nativePageIndex) { this.captureNativePage(); }
+    let top = this.getUIContext().getRouter().getState();
+    return this.nativePageIndex > 0 && top?.index === this.nativePageIndex && top.name === this.nativePageName;
+  }
+
+  private handleBack(): boolean {
+    if (!this.ownsNavigation() || this.navigation.isPending()) { return true; }
+    let bridge = this.bridge;
+    let stamp = this.navigation.stamp();
+    if (this.painted && bridge?.handleBack((): void => {
+      if (this.bridge === bridge && this.navigation.stamp() === stamp) { this.navigateBack(); }
+    })) { return true; }
+    return this.navigateBack();
+  }
+
+  private navigateBack(home: boolean = false): boolean {
+    if (!this.ownsNavigation()) { return false; }
+    if (this.navigation.isPending()) { return true; }
+    if (this.asDrawer) {
+      this.navigation.begin();
+      this.pendingDrawerRoute = null;
+      this.onOverlayClose();
+      return true;
+    }
+    let router = this.getUIContext().getRouter();
+    let target = this.nativePageIndex - 1;
+    if (home) {
+      target = 0;
+      router.getStateByUrl('pages/Home').forEach((page): void => {
+        if (page.index < this.nativePageIndex) { target = Math.max(target, page.index); }
+      });
+      if (target === 0) { return this.openNativePage('pages/Home', {}, true); }
+    }
+    if (target < 1) { return false; }
+    let attempt = this.navigation.begin();
+    try { router.back(target); return true; }
+    catch (e) { this.navigation.reject(attempt); return false; }
+  }
+
+  private openNativePage(url: string, params: Record<string, string>, replace: boolean = false): boolean {
+    if (!this.ownsNavigation()) { return false; }
+    let attempt = this.navigation.begin();
+    if (!attempt) { return false; }
+    try {
+      let router = this.getUIContext().getRouter();
+      let operation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
+      operation.catch((): void => this.navigation.reject(attempt));
+      return true;
+    } catch (e) { this.navigation.reject(attempt); return false; }
+  }
+
+  private openNativeRoute(route: ShellRoute, replace: boolean = false): boolean {
+    let params = shellRouterParams(route);
+    if (isDesktopSession(route) && (this.request.pathname === desktopPath(route.hostId) || (replace && this.returnsToDesktop))) {
+      params['returnsToDesktop'] = '1';
+    }
+    return this.openNativePage('pages/ShellScreen', params, replace);
   }
 
   private onVisibilityChanged(): void {
     this.pageVisible = this.visible;
-    if (this.pageVisible) { this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing(); this.flushDrawerRoute(); }
+    this.navigation.visit();
+    if (this.pageVisible) {
+      this.captureNativePage();
+      this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing(); this.flushDrawerRoute();
+    }
     else {
       this.publishPageRegions();
       this.pendingSession = null;
+      this.pendingDrawerRoute = null;
       this.clearViewing();
       this.nativeDevice?.pause().catch(() => {});
     }
@@ -177,19 +244,18 @@ export struct ShellSurface {
     let target = this.pendingSession;
     if (!target || !this.opensSessionNatively || !this.painted || !this.client
       || !this.pageVisible || !this.foreground || this.disposed) { return; }
-    this.pendingSession = null;
-    this.onNativeSession(target);
+    if (this.openNativeRoute(target)) { this.pendingSession = null; }
   }
 
   private openOverlayRoute(pathname: string, params: Record<string, string>): void {
-    if (this.disposed || this.pendingDrawerRoute) { return; }
+    if (this.disposed || !this.pageVisible || this.pendingDrawerRoute || this.navigation.isPending()) { return; }
     this.pendingDrawerRoute = { hostId: this.hostId, pathname: pathname, params: params };
     this.flushDrawerRoute();
   }
 
   private flushDrawerRoute(): void {
     let route = this.pendingDrawerRoute;
-    if (!route || this.disposed || !this.pageVisible || !this.foreground) { return; }
+    if (!route || !this.ownsNavigation() || !this.navigation.begin()) { return; }
     this.pendingDrawerRoute = null;
     this.onOverlayNavigate(route);
   }
@@ -226,6 +292,7 @@ export struct ShellSurface {
     else { this.clearViewing(); }
   }
   private recordResume(pathname: string, params: Record<string, string>): void {
+    if (!this.painted || !this.ownsNavigation() || this.navigation.isPending()) { return; }
     try {
       let next = resumeFromLocation(this.hostId, pathname, params);
       if (next && this.pageVisible && this.foreground && this.painted) {
@@ -249,7 +316,6 @@ export struct ShellSurface {
     if (this.bridge) {
       this.routePathname = this.bridge.getRoute();
       this.routeParams = this.bridge.getRouteParams();
-      this.recordResume(this.routePathname, this.routeParams);
       this.bridge.publishState('disconnected', 0); this.bridge.dispose(); this.bridge = null;
     }
     let document = this.document; this.document = null;
@@ -327,7 +393,7 @@ export struct ShellSurface {
       this.painted = true;
       this.activationFallback = null;
       if (this.client) { this.rememberBundle(meta, document); this.publishPhase('已连接', 'ready'); }
-      this.updateViewing();
+      this.recordResume(this.bridge?.getRoute() ?? this.routePathname, this.bridge?.getRouteParams() ?? this.routeParams);
       this.publishPageRegions();
       if (this.opensSessionNatively) { this.openPendingNativeSession(); }
       else { this.pendingSession = null; }
@@ -562,23 +628,27 @@ export struct ShellSurface {
       if (!this.client && connected) { this.reattachDocument(connected, meta, document).catch(() => {}); }
       else { this.desktop?.connection.revive(); }
     });
-    bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
+    bridge.setLocationSink((pathname: string, params: Record<string, string>): void => {
+      if (this.bridge !== bridge || !this.ownsNavigation() || this.navigation.isPending()) { return; }
+      this.navigation.invalidateCallbacks();
+      this.recordResume(pathname, params);
+    });
     bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
-      if (this.disposed || !this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
+      if (this.bridge !== bridge) { return; }
       let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
-      let params: Record<string, string> = { 'hostId': meta.id };
-      let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
-      navigation.catch(() => {});
+      this.openNativePage(url, { 'hostId': meta.id }, replace);
     });
     bridge.setShellNavigation((pathname: string, params: Record<string, string>, replace: boolean): void => {
-      if (this.disposed || !this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
-      this.onNativeRoute({ hostId: meta.id, pathname: pathname, params: params }, replace);
+      if (this.bridge === bridge) { this.openNativeRoute({ hostId: meta.id, pathname: pathname, params: params }, replace); }
     });
-    this.recordResume(this.routePathname, this.routeParams);
-    bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
+    bridge.setDeviceNotifies((target: string): Promise<void> =>
+      this.bridge === bridge && this.ownsNavigation() && !this.navigation.isPending()
+        ? nativeDevice.notifyExternalLink(target) : Promise.resolve(),
       (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind), true);
     bridge.setNativeHandler(nativeDevice.methods, (method: string, params: ESObject): Promise<Object> => nativeDevice.serve(method, params));
-    bridge.setNavigation((home: boolean): void => this.navigateBack(home), (): void => this.pagePainted(meta, document, generation));
+    bridge.setNavigation((home: boolean): void => {
+      if (this.bridge === bridge) { this.navigateBack(home); }
+    }, (): void => this.pagePainted(meta, document, generation));
     if (this.asDrawer) {
       bridge.setOverlayNavigation((pathname: string, params: Record<string, string>): void => {
         if (this.bridge === bridge) { this.openOverlayRoute(pathname, params); }
@@ -594,7 +664,7 @@ export struct ShellSurface {
     this.publishKeyboardInset();
     this.publishPageRegions();
     document.onReady = (): void => {};
-    document.allowExternal = (): boolean => this.pageVisible && this.foreground && this.document === document;
+    document.allowExternal = (): boolean => this.document === document && this.ownsNavigation() && !this.navigation.isPending();
     document.onLoaded = (): void => {
       if (this.document === document && !this.painted) { this.publishPhase('页面已加载，正在初始化…', 'opening'); }
     };
@@ -644,14 +714,14 @@ export struct ShellSurface {
             .padding({ left: 16, right: 16 }).margin({ top: 8 })
             .onClick((): void => {
               if (this.stage === 'repair') {
-                router.pushUrl({ url: 'pages/PairScan', params: { 'repairHostId': this.hostId } }).catch(() => {});
+                this.openNativePage('pages/PairScan', { 'repairHostId': this.hostId });
               }
               else { this.retryStartup(); }
             })
           Button(this.t('网络诊断'), { type: ButtonType.Normal }).fontFamily('Geist').fontSize(14)
             .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).constraintSize({ minHeight: 40 })
             .onClick((): void => {
-              router.pushUrl({ url: 'pages/ConnectionLog', params: { 'hostId': this.hostId } }).catch(() => {});
+              this.openNativePage('pages/ConnectionLog', { 'hostId': this.hostId });
             })
         }
       }.width('100%').height('100%').justifyContent(FlexAlign.Center).padding({ left: 16, right: 16 })
@@ -660,7 +730,7 @@ export struct ShellSurface {
         Image($r('app.media.lucide_chevron_left')).width(22).height(22).supportSvg2(true)
           .colorFilter(lucideColorFilter(this.themeSecondary))
       }.width(36).height(36).borderRadius(12).backgroundColor(Color.Transparent).margin({ left: 16, top: 8 })
-        .accessibilityText(this.t('返回')).onClick((): void => this.navigateBack())
+        .accessibilityText(this.t('返回')).onClick((): void => { this.navigateBack(); })
     }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 
@@ -668,7 +738,7 @@ export struct ShellSurface {
   private overlayLoadingDrawer() {
     Stack({ alignContent: Alignment.Bottom }) {
       Column().width('100%').height('100%').backgroundColor('rgba(0,0,0,0.55)')
-        .accessibilityText(uiText('取消', this.uiLocale)).onClick(() => this.onOverlayClose())
+        .accessibilityText(uiText('取消', this.uiLocale)).onClick(() => { this.navigateBack(); })
       Column({ space: 12 }) {
         Row().width(36).height(5).borderRadius(3).backgroundColor(this.themeMuted).opacity(0.5)
         Column({ space: 8 }) {
@@ -684,7 +754,7 @@ export struct ShellSurface {
       }.width('100%').constraintSize({ maxWidth: this.wideDrawer ? 480 : '100%' })
         .padding({ left: 16, right: 16, top: 8, bottom: 16 })
         .backgroundColor(this.themeSheet).borderRadius({ topLeft: 24, topRight: 24 })
-        .gesture(PanGesture({ direction: PanDirection.Down, distance: 40 }).onActionEnd(() => this.onOverlayClose()))
+        .gesture(PanGesture({ direction: PanDirection.Down, distance: 40 }).onActionEnd(() => { this.navigateBack(); }))
     }.width('100%').height('100%')
   }
 
@@ -733,7 +803,7 @@ export struct ShellSurface {
       // Keep the viewport fixed through first paint and transport recovery.
       if (!this.painted) {
         if (this.stage === 'incompatible') {
-          BundleCompatibilityCard({ remedy: this.bundleRemedy, onBack: (): void => this.navigateBack(true) })
+          BundleCompatibilityCard({ remedy: this.bundleRemedy, onBack: (): void => { this.navigateBack(true); } })
         } else if (this.asDrawer) { this.overlayLoadingDrawer() }
         else { this.startupScreen() }
       }

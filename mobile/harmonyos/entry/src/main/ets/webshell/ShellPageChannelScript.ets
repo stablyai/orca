@@ -54,11 +54,12 @@ export const SHELL_PAGE_CHANNEL_SCRIPT = `
       orig.apply(null, arguments);
     };
   });
-  window.__orcaNativePush = function (json) {
+  window.__orcaNativePush = function (json, enqueue) {
     if (handler) {
       try { handler({ data: json }); return 'delivered'; }
       catch (e) { return 'error: ' + (e && e.message || String(e)); }
     }
+    if (enqueue === false) { return 'unavailable'; }
     queued.push(json);
     return 'queued';
   };

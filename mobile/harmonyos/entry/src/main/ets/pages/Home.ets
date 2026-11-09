@@ -148,6 +148,7 @@ struct Home {
   @State tabHostPickerOpen: boolean = false;
   @State offeredActionHosts: string[] = [];
   @State workspaceDrawer: ShellRoute | null = null;
+  private workspaceDrawerOwner: number = 0;
   @State workspacePageVisible: boolean = true;
   private pickerAction: ShellRoute | null = null;
   private workspaceBack: ShellSurfaceBack = new ShellSurfaceBack();
@@ -258,7 +259,7 @@ struct Home {
 
   onBackPress(): boolean {
     if (this.workspaceDrawer) {
-      if (!this.workspaceBack.handle()) { this.workspaceDrawer = null; }
+      if (!this.workspaceBack.handle()) { this.closeWorkspaceDrawer(this.workspaceDrawerOwner); }
       return true;
     }
     if (this.hostSheetOpen) { this.hostSheetOpen = false; return true; }
@@ -361,8 +362,18 @@ struct Home {
   }
 
   private openPickedDesktop(route: ShellRoute): void {
-    if (route.pathname.endsWith('/new-workspace')) { this.workspaceDrawer = route; }
+    if (route.pathname.endsWith('/new-workspace')) {
+      if (!this.workspaceDrawer) { this.workspaceDrawerOwner++; this.workspaceDrawer = route; }
+    }
     else { this.openShellRoute(route); }
+  }
+
+  private closeWorkspaceDrawer(owner: number): boolean {
+    if (!this.workspaceDrawer || this.workspaceDrawerOwner !== owner || !this.workspacePageVisible || !this.appInForeground) {
+      return false;
+    }
+    this.workspaceDrawer = null;
+    return true;
   }
 
   private updateTabClock(): void {
@@ -1872,18 +1883,20 @@ struct Home {
       backgroundColor: this.pal().bgBase, showClose: false, onDisappear: (): void => this.afterDesktopActions() })
   }
 
+  @Builder
+  private workspaceOverlay(request: ShellRoute, owner: number) {
+    ShellSurface({ request: request, asDrawer: true, visible: this.workspacePageVisible, back: this.workspaceBack,
+      onOverlayClose: (): void => { this.closeWorkspaceDrawer(owner); },
+      onOverlayNavigate: (route: ShellRoute): void => {
+        if (request.hostId === route.hostId && this.closeWorkspaceDrawer(owner)) { this.openShellRoute(route); }
+      } })
+  }
+
   build() {
     Stack() {
       this.homeContents()
       if (this.workspaceDrawer) {
-        ShellSurface({ request: this.workspaceDrawer!, asDrawer: true, visible: this.workspacePageVisible, back: this.workspaceBack,
-          onOverlayClose: (): void => { this.workspaceDrawer = null; },
-          onOverlayNavigate: (route: ShellRoute): void => {
-            if (this.workspaceDrawer?.hostId === route.hostId) {
-              this.workspaceDrawer = null;
-              this.openShellRoute(route);
-            }
-          } })
+        this.workspaceOverlay(this.workspaceDrawer!, this.workspaceDrawerOwner)
       }
     }.width('100%').height('100%')
       .bindSheet(this.agentSheetOpen, this.agentActionsSheet, { height: SheetSize.FIT_CONTENT,

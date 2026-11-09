@@ -194,6 +194,8 @@ export class BridgeHost {
   private pendingIds: Set<string> = new Set();
   private desktopPending: Set<string> = new Set();
   private backClaimed: boolean = false;
+  private backSendPending: boolean = false;
+  private backEpoch: number = 0;
   private nativeHandler: ((method: string, params: ESObject) => Promise<Object>) | null = null;
   private nativeMethods: string[] = [];
   private onBack: ((home: boolean) => void) | null = null;
@@ -211,7 +213,7 @@ export class BridgeHost {
   private railClaim: TerminalRailClaim | null = null;
   private railClaimSink: ((claim: TerminalRailClaim | null) => void) | null = null;
   private railFocused: boolean = false;
-  private railReady: boolean = false;
+  private pageReady: boolean = false;
   private readySink: (() => void) | null = null;
   private faultSink: ((message: string) => void) | null = null;
   private livenessSink: (() => void) | null = null;
@@ -255,7 +257,7 @@ export class BridgeHost {
 
   private canDeliverRailKey(owner: string, key: string): boolean {
     let claim = this.railClaim;
-    return !this.disposed && this.pushReady && this.railReady && this.railFocused && this.client !== null &&
+    return !this.disposed && this.pushReady && this.pageReady && this.railFocused && this.client !== null &&
       claim !== null && claim.owner === owner && this.isTerminalRailRoute(this.routePathname) &&
       this.railKeys.includes(key) && terminalRailKeyEnabled(claim, key);
   }
@@ -317,12 +319,31 @@ export class BridgeHost {
   }
   getRoute(): string { return this.routePathname; }
   getRouteParams(): Record<string, string> { return this.routeParams; }
-  handleBack(): boolean {
-    if (!this.backClaimed || this.disposed) { return false; }
-    this.pushFrame('{"v":1,"type":"back"}'); return true;
+  private navigationReady(): boolean { return this.pushReady && this.pageReady && !this.pageFaulted && !this.disposed; }
+
+  private resetBack(): void { this.backEpoch++; this.backClaimed = false; this.backSendPending = false; }
+
+  handleBack(onRefused: () => void = (): void => {}): boolean {
+    if (!this.backClaimed || !this.navigationReady()) { return false; }
+    if (this.backSendPending) { return true; }
+    this.backSendPending = true;
+    let epoch = this.backEpoch;
+    let finish = (refused: boolean): void => {
+      if (this.backEpoch !== epoch || this.disposed) { return; }
+      this.backSendPending = false;
+      if (refused) { this.backClaimed = false; onRefused(); }
+    };
+    try {
+      let frame = JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'back' });
+      this.controller.runJavaScript(`window.__orcaNativePush(${JSON.stringify(frame)}, false)`).then((value: string): void => {
+        finish(value === 'unavailable' || value === '"unavailable"' || /^"?error:/.test(value));
+      }, (): void => finish(true));
+      return true;
+    } catch (e) { this.resetBack(); return false; }
   }
   dispose(): void {
     if (this.disposed) { return; }
+    this.resetBack();
     this.railClaimSink = null;
     let ids = Array.from(this.subscriptions);
     for (let i = 0; i < ids.length; i++) { this.releaseDesktopSubscription(ids[i]); }
@@ -395,7 +416,7 @@ export class BridgeHost {
     this.connection.lastConnectedAt = Date.now();
     this.connection.activePath = path;
     this.publishState('connected', 0);
-    if (this.railReady && this.hasTerminalRail()) { this.sendInit(); }
+    if (this.pageReady && this.hasTerminalRail()) { this.sendInit(); }
     this.desktopSubs.forEach((record: DesktopSubscriptionRecord, id: string): void => {
       if (!record.cancelled) { this.openDesktopSubscription(id, record, client, true); }
     });
@@ -566,7 +587,8 @@ export class BridgeHost {
     let type: string = msg['type'];
     if (type === 'ready') {
       this.readDeclaredStorageKeys(msg);
-      this.railReady = true; this.railClaim = null; this.reportRailClaim();
+      this.resetBack();
+      this.pageReady = true; this.railClaim = null; this.reportRailClaim();
       this.sendInit(); if (this.readySink) { this.readySink(); }
       return;
     }
@@ -592,6 +614,7 @@ export class BridgeHost {
       return;
     }
     if (type === 'close') {
+      this.pageReady = false; this.resetBack();
       this.log('page closed bridge');
       return;
     }
@@ -617,7 +640,7 @@ export class BridgeHost {
   private handleNotify(msg: ESObject): void {
     let name: string = msg['name'];
     if (name === 'terminal-key-rail-claim') {
-      if (!this.railReady || !this.client || !this.hasTerminalRail() || typeof msg['claimed'] !== 'boolean') { return; }
+      if (!this.pageReady || !this.client || !this.hasTerminalRail() || typeof msg['claimed'] !== 'boolean') { return; }
       let claim = msg['claimed'] === true ? parseTerminalRailClaim(msg['inputOwner'], msg['toolbar']) : null;
       if (JSON.stringify(claim) !== JSON.stringify(this.railClaim)) {
         this.railClaim = claim; this.reportRailClaim();
@@ -654,6 +677,7 @@ export class BridgeHost {
       return;
     }
     if (name === 'route-param-clear') {
+      if (!this.navigationReady()) { return; }
       let param: string = msg['param']; let value: string = msg['value'];
       if (param === 'open' && value === this.requestedOpen) { this.requestedOpen = ''; }
       if (['paneKey', 'open'].includes(param) && typeof value === 'string' && this.routeParams[param] === value) {
@@ -672,9 +696,15 @@ export class BridgeHost {
       this.handleTerminalViewportNotify(msg);
       return;
     }
-    if (name === 'navigate-back') { if (!this.overlayNavigated) { this.onBack?.(false); } return; }
-    if (name === 'back-claim') { this.backClaimed = msg['claimed'] === true; return; }
-    if (name === 'painted') { if (this.onPaint) { this.onPaint(); } return; }
+    if (name === 'navigate-back') {
+      if (this.navigationReady() && !this.overlayNavigated && this.routeGrants().includes('navigate')) { this.onBack?.(false); }
+      return;
+    }
+    if (name === 'back-claim') {
+      if (this.navigationReady() && typeof msg['claimed'] === 'boolean') { this.backClaimed = msg['claimed']; }
+      return;
+    }
+    if (name === 'painted') { if (this.navigationReady()) { this.onPaint?.(); } return; }
     if (name === 'navigate' || name === 'location') {
       this.handleRouteNotify(name === 'navigate', msg['href'], msg['replace'] === true);
       return;
@@ -683,7 +713,7 @@ export class BridgeHost {
   }
 
   private handleRouteNotify(navigate: boolean, href: string, replace: boolean): void {
-    if (this.overlayNavigated) { return; }
+    if (!this.navigationReady() || this.overlayNavigated) { return; }
     if (typeof href !== 'string' || href.length > 2048 || /[\\#\s\x00-\x1f\x7f]/.test(href)) { return; }
     if (navigate && !this.routeGrants().includes('navigate')) { return; }
     if (navigate && href === '/') { if (this.onBack) { this.onBack(true); } return; }
@@ -728,7 +758,7 @@ export class BridgeHost {
       if (this.isTerminalRailRoute(previous)) { this.railClaim = null; }
       this.reportRailClaim();
       // A new session can claim before its location arrives. Ask it to reassert once the route is settled.
-      if (this.railReady && this.isTerminalRailRoute(previous) && this.isTerminalRailRoute(pathname)) { this.sendInit(); }
+      if (this.pageReady && this.isTerminalRailRoute(previous) && this.isTerminalRailRoute(pathname)) { this.sendInit(); }
     }
     if (this.locationSink) { this.locationSink(pathname, params); }
   }

@@ -138,6 +138,87 @@ test('a cold offline document restores its live stream after authentication and 
   client.close()
 })
 
+test('Back ignores unopened or closed bridges and falls through when a claimed press cannot reach the page', async () => {
+  const BridgeHost = bridgeClass(createRpcPeer())
+  const root = `/h/${hostId}`
+  const routed = []
+  const backFrames = []
+  const controller = {
+    runJavaScript(script) {
+      if (script.endsWith(', false)')) {
+        backFrames.push(JSON.parse(JSON.parse(script.slice('window.__orcaNativePush('.length, -8))))
+        return Promise.resolve('"unavailable"')
+      }
+      return Promise.resolve('')
+    }
+  }
+  const bridge = new BridgeHost(null, controller, manifest, { id: hostId }, root)
+  bridge.setNavigation(
+    () => routed.push('page'),
+    () => {}
+  )
+  const back = () => post(bridge, { type: 'notify', name: 'navigate-back' })
+  const claim = () => post(bridge, { type: 'notify', name: 'back-claim', claimed: true })
+  claim()
+  back()
+  assert.equal(bridge.handleBack(), false)
+  assert.deepEqual(routed, [])
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
+  claim()
+  assert.equal(
+    bridge.handleBack(() => routed.push('native')),
+    true
+  )
+  assert.equal(
+    bridge.handleBack(() => routed.push('duplicate')),
+    true
+  )
+  await new Promise(setImmediate)
+  assert.deepEqual(backFrames, [{ v: 1, type: 'back' }])
+  assert.deepEqual(routed, ['native'])
+  back()
+  claim()
+  post(bridge, { type: 'close' })
+  back()
+  assert.equal(bridge.handleBack(), false)
+  assert.deepEqual(routed, ['native', 'page'])
+  bridge.dispose()
+
+  const ungranted = new BridgeHost(
+    null,
+    controller,
+    { ...manifest, routes: [] },
+    { id: hostId },
+    root
+  )
+  ungranted.onPushChannelReady()
+  post(ungranted, { type: 'ready' })
+  ungranted.setNavigation(
+    () => routed.push('ungranted'),
+    () => {}
+  )
+  post(ungranted, { type: 'notify', name: 'navigate-back' })
+  assert.deepEqual(routed, ['native', 'page'])
+  ungranted.dispose()
+})
+
+test('a pending stack transition suppresses a second Back and an old rejection cannot release the next visit', () => {
+  const { ShellNavigationFence } = loadArkts('navigation/ShellNavigationFence.ets', [
+    'ShellNavigationFence'
+  ])
+  const fence = new ShellNavigationFence()
+  const previous = fence.begin()
+  assert.notEqual(previous, 0)
+  assert.equal(fence.begin(), 0)
+  fence.visit()
+  const current = fence.begin()
+  fence.reject(previous)
+  assert.equal(fence.begin(), 0)
+  fence.reject(current)
+  assert.notEqual(fence.begin(), 0)
+})
+
 test('a narrow legacy host list hands sessions to the native stack and refuses unavailable required grants', () => {
   const BridgeHost = bridgeClass(createRpcPeer())
   const frames = []
