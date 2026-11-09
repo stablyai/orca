@@ -2786,7 +2786,7 @@
         "untitled": "Unbenannter Chat",
         "listLabel": "Chats, die fortgesetzt würden",
         "dontAskAgain": "Nicht erneut fragen (automatisch fortsetzen)",
-        "dontAskAgainHint": "Lässt sich unter Einstellungen → Experimentell → Chat-Oberfläche deaktivieren.",
+        "dontAskAgainHint": "Lässt sich unter Einstellungen → Chat → Verhalten deaktivieren.",
         "selectAgent": "{{value0}}-Chat „{{value1}}“ in {{value2}} fortsetzen",
         "dismissAll": "Alle verwerfen",
         "viewChats": "Chats anzeigen",
