@@ -33,14 +33,13 @@ export function normalizeDictationTerms(value: unknown): DictationTerm[] | undef
   for (const entry of value) {
     const term: unknown = entry?.term
     const heardAs: unknown = entry?.heardAs
-    const hint: unknown = entry?.hint
     if (typeof term !== 'string' || !term.trim()) {
       continue
     }
     const spelling = term.trim().slice(0, MAX_DICTATION_TERM_LENGTH)
     const alias =
       typeof heardAs === 'string' ? heardAs.trim().slice(0, MAX_DICTATION_TERM_LENGTH) : ''
-    // The settings list keys a chip by its spelling and alias, so the same pair is kept once.
+    // The same spelling and alias twice is one entry; the settings list keys its chips by the pair.
     const id = `${spelling}\u0000${alias}`
     if (seen.has(id)) {
       continue
@@ -48,8 +47,7 @@ export function normalizeDictationTerms(value: unknown): DictationTerm[] | undef
     seen.add(id)
     terms.push({
       term: spelling,
-      ...(alias ? { heardAs: alias } : {}),
-      ...(hint === true ? { hint } : {})
+      ...(alias ? { heardAs: alias } : {})
     })
   }
   return terms.slice(0, MAX_DICTATION_TERMS)
@@ -63,14 +61,11 @@ export function dictationTermsFor(
   voice: { dictationTerms?: unknown; dictationRepoNameHint?: boolean } | undefined,
   repo: { dictationTerms?: unknown; displayName?: string } | undefined
 ): DictationTerm[] {
-  const nameHint =
-    repo?.displayName && voice?.dictationRepoNameHint !== false
-      ? [{ term: repo.displayName, hint: true }]
-      : []
+  const name = repo?.displayName?.trim().slice(0, MAX_DICTATION_TERM_LENGTH)
   return [
     ...(normalizeDictationTerms(repo?.dictationTerms) ?? []),
     ...(normalizeDictationTerms(voice?.dictationTerms) ?? []),
-    ...(normalizeDictationTerms(nameHint) ?? [])
+    ...(name && voice?.dictationRepoNameHint !== false ? [{ term: name, hint: true as const }] : [])
   ]
 }
 
