@@ -76,6 +76,9 @@ export type Env = {
   OPERATOR_TOKEN?: string
   /** `true` refuses every create/resume/rollover (static kill switch; the D1 flag is the runtime one). */
   SANDBOX_CREATES_DISABLED?: string
+  /** Warm pool size (pool.ts); unset or 0 = off. */
+  SANDBOX_POOL_SIZE?: string
+  SANDBOX_POOL_MAX_AGE_MS?: string
   /** Global cap on active sandboxes across all accounts (default 50). */
   SANDBOX_MAX_RUNNING?: string
   /** Per-account active cap per paid seat (default 3); billing enforces the plan limit as well. */
@@ -90,4 +93,12 @@ export type Env = {
   ORPHAN_GRACE_HOURS?: string
   /** Provider snapshot expiry after last use, days (default 104, backstop behind idle retention). */
   SNAPSHOT_EXPIRATION_DAYS?: string
+
+  // Public API, MCP and routines (src/api, src/mcp, src/routines).
+  /** Origin the in-VM CLI, docs, MCP metadata and webhook URLs use (default: the request origin). */
+  PUBLIC_API_URL?: string
+  /** Comma list of extra egress hosts every VM may reach (dev: this Worker's workers.dev host). */
+  EGRESS_EXTRA_HOSTS?: string
+  /** GitHub App webhook secret (secret): verifies X-Hub-Signature-256 on /v1/github/webhook. */
+  GITHUB_WEBHOOK_SECRET?: string
 }

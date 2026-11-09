@@ -52,7 +52,8 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     VERCEL_PROJECT_ID: 'prj_orca',
     ...overrides
   }
-  const deps: Deps = { provider: vercel, entitlements, now: clock, ...extraDeps }
+  // No live github.com from tests: repos count as public unless a test says otherwise.
+  const deps: Deps = { provider: vercel, entitlements, now: clock, publicRepoCheck: async () => true, ...extraDeps }
 
   async function token(sub: string, org?: string, purpose = 'sandbox', extra: Record<string, string> = {}) {
     const iat = Math.floor(now / 1000)

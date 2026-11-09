@@ -86,6 +86,15 @@ describe('golden image build', () => {
     expect(calls).toEqual([])
   })
 
+  it('start script: background children never keep the start lock (resume of a running VM hung 60 s)', () => {
+    const start = readFileSync(fileURLToPath(new URL('./vm/orca-sandbox-start', import.meta.url).href), 'utf8')
+    const launches = start.split('\n').filter((line) => /&\s*$/.test(line) && !/&&\s*$/.test(line))
+    expect(launches.length).toBeGreaterThanOrEqual(2)
+    for (const line of launches) {
+      expect(line, line).toMatch(/9>&- &\s*$/)
+    }
+  })
+
   it('ships VM scripts that parse', () => {
     for (const script of ['provision-golden.sh', ...VM_SCRIPTS.map((name) => `vm/${name}`)]) {
       const path = fileURLToPath(new URL(`./${script}`, import.meta.url).href)

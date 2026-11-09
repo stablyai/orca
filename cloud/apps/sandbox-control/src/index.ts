@@ -12,7 +12,13 @@
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
+import { handleApi, isApiPath, type ApiExtension } from './api/router'
+import { retryPendingMessages } from './api/messages'
+import { revokeWorkspaceTokens } from './api/keys'
+import { provisionWorkspaceToken } from './api/settings'
+import { docsPage, openApiDocument } from './api/openapi'
 import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
@@ -34,7 +40,7 @@ import {
   type LifecycleDeps,
   type Ready
 } from './lifecycle'
-import { createGitHubAppMinter, type GitHubAppMinter } from './github-app'
+import { createGitHubAppMinter, parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
   GitHubConnectError,
   authorizeUrl,
@@ -71,6 +77,18 @@ export type Deps = {
   /** GitHub OAuth/user API fetch (tests). */
   githubFetch?: typeof fetch
   retention?: RetentionConfig
+  /** Anonymous github.com reachability (tests stub it). */
+  publicRepoCheck?: (repoUrl: string) => Promise<boolean>
+  /** ctx.waitUntil from the Worker entry; tests collect the promises. */
+  waitUntil?: (work: Promise<unknown>) => void
+  /** Route groups mounted on the public API (routines, see src/routines). */
+  apiExtensions?: ApiExtension[]
+}
+
+/** The public origin: PUBLIC_API_URL when set, else the request's own origin. */
+export function publicOrigin(env: Env, url?: URL): string | undefined {
+  const configured = env.PUBLIC_API_URL ?? (env.EGRESS_PROXY_URL ? new URL(env.EGRESS_PROXY_URL).origin : undefined)
+  return configured?.replace(/\/+$/, '') ?? url?.origin
 }
 
 // Decrypted model keys for the egress proxy, per sandbox session, for a minute: one D1 read and
@@ -284,22 +302,32 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
   if (!goldenSnapshotId) {
     return null
   }
+  const provider =
+    deps.provider ??
+    createVercelSandboxApi({
+      token: env.VERCEL_TOKEN!,
+      teamId: env.VERCEL_TEAM_ID!,
+      projectId: env.VERCEL_PROJECT_ID!,
+      baseUrl: env.VERCEL_API_BASE
+    })
   return {
     db: env.SANDBOX_DB,
-    provider:
-      deps.provider ??
-      createVercelSandboxApi({
-        token: env.VERCEL_TOKEN!,
-        teamId: env.VERCEL_TEAM_ID!,
-        projectId: env.VERCEL_PROJECT_ID!,
-        baseUrl: env.VERCEL_API_BASE
-      }),
+    provider,
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
     github: deps.github ?? githubMinter(env),
     secrets: await secretsDeps(env),
     now: deps.now ?? Date.now,
     retention: deps.retention ?? retentionFromEnv(env),
+    background: deps.waitUntil,
+    publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
+    hooks: {
+      afterBoot: (row, sessionId) =>
+        provisionWorkspaceToken({ db: env.SANDBOX_DB, provider, now: deps.now ?? Date.now, apiUrl: publicOrigin(env) }, row, sessionId),
+      afterStop: (row) => revokeWorkspaceTokens(env.SANDBOX_DB, row.id, (deps.now ?? Date.now)())
+    },
     config: {
+      pool: poolConfigFromEnv(env),
+      extraEgressHosts: (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1
@@ -312,6 +340,27 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
       sessionDeadlineMs:
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
+  }
+}
+
+/**
+ * Smart-HTTP ref advertisement, anonymous: 200 for a public repo, 401 for private or missing. Not the
+ * REST API, so no 60/h anonymous quota. Network trouble counts as public: the clone then reports it.
+ */
+async function githubRepoIsPublic(repoUrl: string): Promise<boolean> {
+  const parsed = parseGitHubRepo(repoUrl)
+  if (!parsed) {
+    return true
+  }
+  try {
+    const response = await fetch(
+      `https://github.com/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}.git/info/refs?service=git-upload-pack`,
+      { redirect: 'manual', headers: { 'user-agent': 'orca-sandbox-control' }, signal: AbortSignal.timeout(5_000) }
+    )
+    await response.body?.cancel()
+    return response.status !== 401 && response.status !== 404
+  } catch {
+    return true
   }
 }
 
@@ -431,6 +480,27 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, caller, (deps.now ?? Date.now)())
       return json({ installUrl: installUrl(connect, state), authorizeUrl: authorizeUrl(connect, url.origin, state) })
     }
+    if (url.pathname === '/v1/openapi.json' && request.method === 'GET') {
+      return Response.json(openApiDocument(publicOrigin(env, url)!), { headers: { 'cache-control': 'public, max-age=300', 'access-control-allow-origin': '*' } })
+    }
+    if ((url.pathname === '/docs' || url.pathname === '/docs/') && request.method === 'GET') {
+      return docsPage(publicOrigin(env, url)!)
+    }
+    if (isApiPath(url.pathname)) {
+      const life = await lifecycleDeps(env, deps)
+      try {
+        return await handleApi(request, url, env, {
+          db: env.SANDBOX_DB,
+          now: deps.now ?? Date.now,
+          life,
+          waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
+          readJson: () => readJson(request),
+          extensions: deps.apiExtensions
+        })
+      } catch (error) {
+        return errorResponse(error)
+      }
+    }
     if (url.pathname === '/v1/secrets' || url.pathname.startsWith('/v1/secrets/')) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -457,7 +527,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const [, id, action] = match
     if (!id) {
       if (request.method === 'GET') {
-        const rows = await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)
+        // Routine runs and other machine-made workspaces stay out of the desktop's list.
+        const rows = (await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)).filter((row) => (row as { hidden?: number }).hidden !== 1)
         return json({ sandboxes: rows.map(sandboxView) })
       }
       if (request.method !== 'POST') {
@@ -572,8 +643,8 @@ function errorResponse(error: unknown): Response {
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
-    return handleRequest(request, env)
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
@@ -582,6 +653,13 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
+          // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
+          const pool = await maintainPool(life).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          console.log(JSON.stringify({ event: 'pool', ...pool }))
+          const retried = await retryPendingMessages(life).catch(() => -1)
+          if (retried !== 0) {
+            console.log(JSON.stringify({ event: 'message_retry', retried }))
+          }
         }
         await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
           console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))

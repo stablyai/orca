@@ -5,7 +5,9 @@
 //   POST   /v1/internal/housekeeping                    orphan sweep + retention now
 //   POST   /v1/internal/github/bindings {installationId, accountId}   support binding (audited as `operator`)
 //   DELETE /v1/internal/github/bindings {installationId, accountId?}
+//   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's API keys (auth calls this)
 import { z } from 'zod'
+import { audit } from './api/audit'
 import { readBearer } from './auth'
 import type { GitHubAppMinter } from './github-app'
 import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-connect'
@@ -25,6 +27,7 @@ const BindingBody = z
   })
   .strict()
   .refine((body) => (body.installationId === undefined) !== (body.repoUrl === undefined))
+const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128) }).strict()
 const UnbindBody = z.object({ installationId: z.number().int().positive(), accountId: AccountId.optional() }).strict()
 
 async function digest(value: string): Promise<Uint8Array> {
@@ -110,6 +113,19 @@ export async function handleOperator(
       const revoked = await revokeInstallation(life.db, body.data.installationId, body.data.accountId ?? null, now)
       console.log(JSON.stringify({ event: 'github_unbind_operator', installationId: body.data.installationId, revoked }))
       return Response.json({ revoked })
+    }
+    case 'POST /v1/internal/members/removed': {
+      const body = MemberRemovedBody.safeParse(await deps.readJson())
+      if (!body.success) {
+        return Response.json({ error: 'invalid_request' }, { status: 400 })
+      }
+      // A key acts as the person who made it: once they leave the org, none of theirs may work.
+      const result = await life.db
+        .prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system:member_removed' WHERE account_id = ? AND created_by = ? AND revoked_at IS NULL`)
+        .bind(now, body.data.accountId, body.data.userId)
+        .run()
+      await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.removed', detail: { keysRevoked: result.meta.changes } }, now)
+      return Response.json({ revoked: result.meta.changes })
     }
     default:
       return null

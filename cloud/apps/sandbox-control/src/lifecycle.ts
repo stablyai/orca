@@ -10,13 +10,15 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
 import { applySecretPlaceholders, egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
-import { ORCAD_PORT, drainOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
+import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
+import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
+import { parseGitHubRepo } from './github-app'
 import {
   NO_SESSION,
   countActiveSandboxes,
@@ -54,6 +56,19 @@ export type LifecycleDeps = {
   now: () => number
   /** Orphan/retention policy for the cron; defaults in retention.ts. */
   retention?: RetentionConfig
+  /**
+   * Whether a github.com repo clones anonymously (public). Asked only when no App token covers it, so a
+   * private repo without a connected GitHub fails fast with `github_not_connected` instead of a clone
+   * error after boot. Absent: no check.
+   */
+  publicRepoCheck?: (repoUrl: string) => Promise<boolean>
+  /** Work that may finish after the response (Worker ctx.waitUntil); absent means fire-and-forget. */
+  background?: (work: Promise<unknown>) => void
+  /** Best-effort side effects of a session starting or ending (workspace tokens, see api/settings.ts). */
+  hooks?: {
+    afterBoot?(row: SandboxRow, sessionId: string): Promise<unknown>
+    afterStop?(row: SandboxRow): Promise<unknown>
+  }
   config: {
     environment: string
     goldenSnapshotId: string
@@ -63,6 +78,10 @@ export type LifecycleDeps = {
     sessionDeadlineMs?: number
     guardrails?: GuardrailConfig
     snapshotExpirationMs?: number
+    /** Warm pool (pool.ts); absent or size 0 means every create boots its own VM. */
+    pool?: PoolConfig
+    /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
+    extraEgressHosts?: readonly string[]
   }
 }
 
@@ -164,7 +183,11 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         )
       ]
     : []
-  return compileNetworkPolicy({ mode: 'allowlist', credentials: [...git, ...credentials] })
+  return compileNetworkPolicy({
+    mode: 'allowlist',
+    ...(deps.config.extraEgressHosts?.length ? { allowlist: [...DEFAULT_EGRESS_ALLOWLIST, ...deps.config.extraEgressHosts] } : {}),
+    credentials: [...git, ...credentials]
+  })
 }
 
 export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {
@@ -221,7 +244,13 @@ async function boot(
   row: SandboxRow,
   state: ProviderSandboxState,
   prep: BootPrep,
-  options: { repo?: { url: string; ref?: string }; policyApplied: boolean; timer: ReturnType<typeof phaseTimer> }
+  options: {
+    repo?: { url: string; ref?: string }
+    policyApplied: boolean
+    timer: ReturnType<typeof phaseTimer>
+    /** A pooled VM started before the caller claimed it: usage starts at the claim, not the boot. */
+    billFrom?: number
+  }
 ): Promise<Ready> {
   if (state.sandbox.tags.orcaSandbox !== row.id) {
     throw new LifecycleError('conflict', 'ownership_mismatch')
@@ -253,8 +282,10 @@ async function boot(
     retention_warned_at: null,
     github_token_expires_at: git?.expiresAt ?? null,
     egress_secret_hosts: routed.egress_secret_hosts,
-    ...sessionFields(deps, state)
+    ...sessionFields(deps, state),
+    ...(options.billFrom !== undefined ? { usage_settled_at: options.billFrom } : {})
   })
+  await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
   return { row: running, connection, timings: options.timer.timings }
 }
 
@@ -295,7 +326,8 @@ export async function refreshGitCredentials(
 export async function createSandbox(
   deps: LifecycleDeps,
   caller: { accountId: string; userId: string },
-  request: { workspaceId: string; machineSize: MachineSize; region?: string; repo?: { url: string; ref?: string } }
+  request: { workspaceId: string; machineSize: MachineSize; region?: string; repo?: { url: string; ref?: string } },
+  options: { pool?: boolean } = {}
 ): Promise<Ready> {
   const existing = await liveSandboxForWorkspace(deps.db, caller.accountId, request.workspaceId)
   if (existing) {
@@ -307,11 +339,27 @@ export async function createSandbox(
     if (!state || state.session.status !== 'running') {
       throw new LifecycleError('conflict', 'sandbox_not_running')
     }
-    return { row: existing, connection: await startOrcad(deps.provider, state, { sandboxId: existing.id }) }
+    const connection =
+      (await runningOrcad(deps.provider, state.session.id)) ??
+      (await startOrcad(deps.provider, state, { sandboxId: existing.id }))
+    return { row: existing, connection }
   }
   const timer = phaseTimer(deps.now)
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, request.machineSize))
-  const id = randomId()
+  const region = request.region ?? deps.config.defaultRegion
+  const pooled =
+    options.pool === false
+      ? null
+      : await timer.time('pool', () => claimPooledVm(deps, request.machineSize, region).catch(() => null))
+  if (pooled) {
+    // Refill behind the response so the next create finds one too.
+    const refill = maintainPool(deps).catch((error: unknown) =>
+      console.log(JSON.stringify({ event: 'pool_refill_failed', error: String(error).slice(0, 200) }))
+    )
+    deps.background?.(refill)
+  }
+  const claimedAt = deps.now()
+  const id = pooled?.id ?? randomId()
   // Write-ahead row and the VM-independent prep (secrets, repo token) run together.
   const [row, prep] = await timer.time('prepare', async () => {
     const inserted = await insertSandbox(
@@ -324,13 +372,41 @@ export async function createSandbox(
         provider: 'vercel',
         provider_name: `orca-${deps.config.environment}-${id}`,
         machine_size: request.machineSize,
-        region: request.region ?? deps.config.defaultRegion,
+        region,
         repo_url: request.repo?.url ?? null
       },
       deps.now()
-    )
-    return [inserted, await prepareBoot(deps, inserted)] as const
+    ).catch(async (error: unknown) => {
+      if (pooled) {
+        await deletePooledVm(deps, pooled.provider_name).catch(() => undefined)
+      }
+      throw error
+    })
+    try {
+      const prepared = await prepareBoot(deps, inserted)
+      await assertRepoReachable(deps, inserted, prepared)
+      return [inserted, prepared] as const
+    } catch (error) {
+      // Nothing booted for this row yet (a pooled VM goes with it): fail it before any VM work.
+      await failAndRelease(deps, inserted)
+      throw error
+    }
   })
+  if (pooled) {
+    try {
+      const state = await timer.time('vm', () =>
+        adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token))
+      )
+      const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt })
+      console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
+      return ready
+    } catch (error) {
+      // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
+      console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
+      await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
+      return createSandbox(deps, caller, request, { pool: false })
+    }
+  }
   let state: ProviderSandboxState
   try {
     // The full policy (repo token, model-key routes) goes in at create: no second policy round trip.
@@ -359,6 +435,38 @@ export async function createSandbox(
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
     throw error
   }
+}
+
+async function assertRepoReachable(deps: LifecycleDeps, row: SandboxRow, prep: BootPrep): Promise<void> {
+  if (!row.repo_url || prep.minted || !deps.publicRepoCheck || !parseGitHubRepo(row.repo_url)) {
+    return
+  }
+  if (!(await deps.publicRepoCheck(row.repo_url))) {
+    throw new LifecycleError('conflict', 'github_not_connected')
+  }
+}
+
+/** Hands a pooled VM the caller's policy and a full lease; the three provider calls run together. */
+async function adoptPooledVm(
+  deps: LifecycleDeps,
+  pooled: PooledVm,
+  policy: ReturnType<typeof egressPolicy>
+): Promise<ProviderSandboxState> {
+  if (!pooled.session_id || pooled.session_started_at === null || pooled.session_timeout_ms === null) {
+    throw new LifecycleError('provider_unavailable', 'pooled_vm_incomplete')
+  }
+  const sessionId = pooled.session_id
+  const leaseEnd = deps.now() + LEASE_MS
+  const timeoutEnd = pooled.session_started_at + pooled.session_timeout_ms
+  const [state, , extended] = await Promise.all([
+    deps.provider.getSandbox(pooled.provider_name, { resume: false }),
+    deps.provider.updateNetworkPolicy(sessionId, policy),
+    leaseEnd > timeoutEnd ? deps.provider.extendTimeout(sessionId, leaseEnd - timeoutEnd) : Promise.resolve(null)
+  ])
+  if (!state || state.session.status !== 'running' || state.session.id !== sessionId) {
+    throw new LifecycleError('provider_unavailable', 'pooled_vm_gone')
+  }
+  return extended ? { ...state, session: { ...state.session, timeoutMs: extended.timeoutMs } } : state
 }
 
 /**
@@ -398,12 +506,14 @@ async function stopForSuspend(deps: LifecycleDeps, row: SandboxRow): Promise<San
     }
   }
   await queueUsage(deps.db, row, deps.now())
+  await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
 
 /** The provider ended the session on its own (lease lapsed): bill up to when it stopped. */
 export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
   await queueUsage(deps.db, row, Math.min(deps.now(), row.lease_expires_at ?? deps.now()))
+  await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
 
@@ -424,7 +534,11 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
   if (row.status === 'running') {
     const state = await deps.provider.getSandbox(row.provider_name, { resume: false })
     if (state?.session.status === 'running') {
-      return { row, connection: await startOrcad(deps.provider, state, { sandboxId: row.id }) }
+      // Idempotent: a running, serving sandbox answers at once (desktop wake-on-open after a restart).
+      const connection =
+        (await runningOrcad(deps.provider, state.session.id)) ??
+        (await startOrcad(deps.provider, state, { sandboxId: row.id }))
+      return { row, connection }
     }
     // The provider ended the session (lease lapsed): fall through to a real resume.
     row = await markProviderStopped(deps, row)
@@ -457,6 +571,7 @@ async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
     const current = await getSandbox(deps.db, row.id)
     if (current?.status === 'resuming') {
       await transition(deps.db, current, { status: 'suspended', ...NO_SESSION, last_error: 'resume_failed' }, deps.now())
+      await deps.hooks?.afterStop?.(current).catch(() => undefined)
     }
     throw error
   }
@@ -522,5 +637,6 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
     repo_url: null
   })
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
+  await deps.hooks?.afterStop?.(destroyed).catch(() => undefined)
   return destroyed
 }

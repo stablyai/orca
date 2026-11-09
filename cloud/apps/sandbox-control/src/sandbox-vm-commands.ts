@@ -97,6 +97,32 @@ export async function startOrcad(
   }
 }
 
+/**
+ * The orcad already serving this boot, read without taking the start lock (images before the fd-9 fix
+ * leaked that lock into orcad, so a second start waited 60 s and failed). Null when none is up.
+ */
+export async function runningOrcad(provider: SandboxProviderApi, sessionId: string): Promise<OrcadReady | null> {
+  const script = [
+    'S="$HOME/.orca-sandbox"',
+    '[ "$(cat "$S/boot-id" 2>/dev/null)" = "$(cat /proc/sys/kernel/random/boot_id)" ] || exit 3',
+    'kill -0 "$(cat "$S/orcad.pid" 2>/dev/null || echo 0)" 2>/dev/null || exit 3',
+    'grep -q \'"pairingCode"\' "$S/ready.json" 2>/dev/null || exit 3',
+    'tail -n 1 "$S/ready.json"'
+  ].join('\n')
+  try {
+    const result = await provider.runCommand(sessionId, { command: 'bash', args: ['-c', script], timeoutMs: 15_000 })
+    if (result.exitCode !== 0) {
+      return null
+    }
+    return ReadySchema.parse(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? ''))
+  } catch (error) {
+    if (error instanceof ProviderError || error instanceof SyntaxError || error instanceof z.ZodError) {
+      return null
+    }
+    throw error
+  }
+}
+
 /** Best effort: orcad turns working chats into durable restart offers before the VM stops. */
 export async function drainOrcad(provider: SandboxProviderApi, sessionId: string): Promise<boolean> {
   try {
