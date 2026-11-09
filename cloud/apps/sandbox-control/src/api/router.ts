@@ -10,7 +10,7 @@ import { auditCaller, auditView, consumeRate, listAudit, rateHeaders, RateLimite
 import { API_SCOPES, ADMIN_SCOPES, apiKeyView, getApiKey, listApiKeys, mintApiKey, revokeApiKey, type ApiScope } from './keys'
 import { deliverMessage, getMessage, listMessages, MAX_MESSAGE_CHARS, messageView, queueMessage } from './messages'
 import { getAccountSettings, putAccountSettings } from './settings'
-import { listSessions, VmAgentError } from './vm-agent'
+import { listSessions, readSession, VmAgentError } from './vm-agent'
 import {
   archiveProject,
   archiveWorkspace,
@@ -403,6 +403,16 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
           return json({ workspaceStatus: workspaceView(row).status, sessions: [] })
         }
         return json({ workspaceStatus: 'running', sessions: await listSessions(life().provider, row.session_id) })
+      }
+      if (sub === 'sessions' && subId && method === 'GET') {
+        requireScope(caller, 'workspaces:read')
+        if (!/^term_[A-Za-z0-9-]{1,80}$/.test(subId)) {
+          throw new ApiError(404, 'not_found')
+        }
+        if (row.status !== 'running' || !row.session_id) {
+          throw new ApiError(409, 'conflict', 'workspace_not_running')
+        }
+        return json({ session: { handle: subId, ...(await readSession(life().provider, row.session_id, subId)) } })
       }
       if (sub === 'messages' && !subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')

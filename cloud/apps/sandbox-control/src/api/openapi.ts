@@ -275,6 +275,16 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   '/v1/workspaces/{id}/sessions': {
     get: { tags: ['Agents'], scope: 'workspaces:read', summary: 'Agent sessions in a running workspace', params: [WS], responses: { 200: { description: 'Sessions (empty while sleeping)', schema: obj({ workspaceStatus: { type: 'string' }, sessions: { type: 'array', items: ref('Session') } }) } } }
   },
+  '/v1/workspaces/{id}/sessions/{handle}': {
+    get: {
+      tags: ['Agents'],
+      scope: 'workspaces:read',
+      summary: "An agent session's current screen",
+      description: 'What a person looking at the session would see right now (rendered screen, plain text). 409 while the workspace sleeps.',
+      params: [WS, idParam('handle', 'Session handle (term_…)')],
+      responses: { 200: { description: 'Screen', schema: obj({ session: obj({ handle: { type: 'string' }, status: { type: ['string', 'null'] }, screen: { type: 'string' } }) }) } }
+    }
+  },
   '/v1/routines': {
     get: { tags: ['Routines'], scope: 'routines:read', summary: 'List routines', responses: { 200: { description: 'Routines', schema: list('routines', 'Routine') } } },
     post: { tags: ['Routines'], scope: 'routines:write', summary: 'Create a routine', description: 'Webhook routines return their secret URL once, in this response.', body: ROUTINE_BODY, responses: { 201: { description: 'Created', schema: one('routine', 'Routine') } } }

@@ -26,7 +26,13 @@ if [ "$1" = "--prepare" ]; then
   C="$HOME/.claude.json"
   if command -v jq >/dev/null 2>&1; then
     [ -s "$C" ] || echo '{}' >"$C"
-    jq --arg p "$P" '.hasCompletedOnboarding = true | .theme = (.theme // "dark") | .projects[$p].hasTrustDialogAccepted = true | .projects[$p].hasCompletedProjectOnboarding = true' "$C" >"$C.tmp" && mv "$C.tmp" "$C"
+    jq --arg p "$P" '.hasCompletedOnboarding = true | .theme = (.theme // "dark") | .bypassPermissionsModeAccepted = true | .projects[$p].hasTrustDialogAccepted = true | .projects[$p].hasCompletedProjectOnboarding = true' "$C" >"$C.tmp" && mv "$C.tmp" "$C"
+    # Orca launches agents in this sandboxed VM with permissions bypassed; its one-time warning would
+    # otherwise swallow the prompt (its default answer is "No, exit").
+    S="$HOME/.claude/settings.json"
+    mkdir -p "$HOME/.claude"
+    [ -s "$S" ] || echo '{}' >"$S"
+    jq '.skipDangerousModePermissionPrompt = true' "$S" >"$S.tmp" && mv "$S.tmp" "$S"
   fi
 fi
 exec "$O" "$@" --json`
@@ -157,4 +163,19 @@ mv "$D/credentials.json.tmp" "$D/credentials.json"`
   if (result.exitCode !== 0) {
     throw new VmAgentError('token_install_failed')
   }
+}
+
+const TerminalRead = z.object({ terminal: z.object({ handle: z.string(), status: z.string().optional(), tail: z.array(z.string()) }).loose() }).loose()
+
+/** The rendered screen of one agent session (what a person would see), trailing blank lines dropped. */
+export async function readSession(provider: SandboxProviderApi, sessionId: string, handle: string): Promise<{ status: string | null; screen: string }> {
+  const parsed = TerminalRead.safeParse(await orca(provider, sessionId, ['terminal', 'read', '--terminal', handle, '--screen']))
+  if (!parsed.success) {
+    throw new VmAgentError('orca_cli_invalid_output')
+  }
+  const lines = parsed.data.terminal.tail.map((line) => line.trimEnd())
+  while (lines.length > 0 && lines.at(-1) === '') {
+    lines.pop()
+  }
+  return { status: parsed.data.terminal.status ?? null, screen: lines.join('\n').slice(-16_000) }
 }
