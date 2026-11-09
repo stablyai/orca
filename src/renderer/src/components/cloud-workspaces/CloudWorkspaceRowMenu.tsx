@@ -3,7 +3,6 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
-  Eye,
   FolderInput,
   FolderPlus,
   Link2,
@@ -42,8 +41,8 @@ export type RowActions = {
   /** The link to the chat you have in front when this workspace is in front, else the workspace. */
   copyLink: (w: CloudWorkspace) => void
   copyWorkspaceLink: (w: CloudWorkspace) => void
-  /** Open the workspace on the chat this teammate has in front. */
-  follow: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
+  /** One-time jump: open the workspace on the chat this teammate has in front. */
+  goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
   patch: (w: CloudWorkspace, patch: CloudWorkspacePatch) => void
 }
 
@@ -82,7 +81,7 @@ export function CloudWorkspaceRowMenu({
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
   const copyShortcut = formatOptionalPrimaryShortcutLabel('cloudWorkspace.copyLink', keybindings)
-  const followable = canOpen
+  const teammatesHere = canOpen
     ? presentMembers(w.presence, selfId).filter((p) => p.userId !== selfId)
     : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
@@ -133,15 +132,15 @@ export function CloudWorkspaceRowMenu({
           <Link2 />
           {t('auto.components.cloudWorkspaces.copyWorkspaceLink', 'Copy workspace link')}
         </DropdownMenuItem>
-        {followable.length > 0 && (
+        {teammatesHere.length > 0 && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
-              <Eye />
-              {t('auto.components.cloudWorkspaces.follow', 'Follow')}
+              <ArrowUpRight />
+              {t('auto.components.cloudWorkspaces.goToTeammateChat', "Go to a teammate's chat")}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-56" collisionPadding={SUBMENU_COLLISION_PADDING}>
-              {followable.map((member) => (
-                <DropdownMenuItem key={member.userId} onSelect={() => actions.follow(w, member)}>
+              {teammatesHere.map((member) => (
+                <DropdownMenuItem key={member.userId} onSelect={() => actions.goToChat(w, member)}>
                   <MemberAvatar
                     userId={member.userId}
                     directory={directory}
@@ -149,7 +148,7 @@ export function CloudWorkspaceRowMenu({
                     size="sm"
                   />
                   <span className="truncate">
-                    {t('auto.components.cloudWorkspaces.followMember', 'Follow {{value0}}', {
+                    {t('auto.components.cloudWorkspaces.goToChat', "Go to {{value0}}'s chat", {
                       value0: memberName(directory, member.userId, selfId, t)
                     })}
                   </span>

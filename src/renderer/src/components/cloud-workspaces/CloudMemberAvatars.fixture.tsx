@@ -17,7 +17,7 @@ function Line({
   )
 }
 
-/** Viewing (avatar only), typing (pulsing dot), overflow "+N"; teammates are Follow buttons. */
+/** Viewing (avatar only), typing (pulsing dot), overflow "+N"; teammates are "Go to {name}'s chat" buttons. */
 export const presenceStacks = defineFixture({
   width: 480,
   render: () => (
@@ -27,7 +27,7 @@ export const presenceStacks = defineFixture({
           presence={[presence('user_grace')]}
           directory={DIRECTORY}
           selfId={SELF_ID}
-          onFollow={() => {}}
+          onGoToChat={() => {}}
         />
       </Line>
       <Line label="Typing + viewing">
@@ -35,7 +35,7 @@ export const presenceStacks = defineFixture({
           presence={[presence('user_grace', 'typing'), presence('user_linus')]}
           directory={DIRECTORY}
           selfId={SELF_ID}
-          onFollow={() => {}}
+          onGoToChat={() => {}}
         />
       </Line>
       <Line label="With you (not a button)">
@@ -43,7 +43,7 @@ export const presenceStacks = defineFixture({
           presence={[presence(SELF_ID), presence('user_mae', 'typing')]}
           directory={DIRECTORY}
           selfId={SELF_ID}
-          onFollow={() => {}}
+          onGoToChat={() => {}}
         />
       </Line>
       <Line label="Overflow">
@@ -53,14 +53,14 @@ export const presenceStacks = defineFixture({
           )}
           directory={DIRECTORY}
           selfId={SELF_ID}
-          onFollow={() => {}}
+          onGoToChat={() => {}}
         />
       </Line>
     </div>
   )
 })
 
-/** Follow buttons show the shared focus ring on keyboard focus. */
+/** Go-to-chat buttons show the shared focus ring on keyboard focus. */
 export const followFocus = defineFixture({
   width: 320,
   render: () => (
@@ -69,7 +69,7 @@ export const followFocus = defineFixture({
         presence={[presence('user_grace', 'typing'), presence('user_linus')]}
         directory={DIRECTORY}
         selfId={SELF_ID}
-        onFollow={() => {}}
+        onGoToChat={() => {}}
       />
     </div>
   ),

@@ -1,6 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { EmptyState, ErrorState, SkeletonRows } from './CloudWorkspacesStates'
-import { describeError } from './cloud-workspace-errors'
 
 const WIDTH = 720
 
@@ -44,17 +43,19 @@ export const errors = defineFixture({
   render: () => (
     <div className="flex flex-col gap-3">
       <Card>
-        <ErrorState message={describeError('unavailable')} retrying={false} onRetry={() => {}} />
+        <ErrorState error="unavailable" retrying={false} onRetry={() => {}} onSignIn={() => {}} />
       </Card>
       <Card>
         <ErrorState
-          message={describeError('entitlement_denied', 'concurrency_limit')}
+          error="entitlement_denied"
+          reason="concurrency_limit"
+          onSignIn={() => {}}
           retrying
           onRetry={() => {}}
         />
       </Card>
       <Card>
-        <ErrorState message={describeError('unauthorized')} retrying={false} onRetry={() => {}} />
+        <ErrorState error="unauthorized" retrying={false} onRetry={() => {}} onSignIn={() => {}} />
       </Card>
     </div>
   )

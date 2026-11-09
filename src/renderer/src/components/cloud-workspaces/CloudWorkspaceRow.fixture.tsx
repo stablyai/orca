@@ -15,7 +15,7 @@ const ACTIONS: RowActions = {
   open: () => {},
   copyLink: () => {},
   copyWorkspaceLink: () => {},
-  follow: () => {},
+  goToChat: () => {},
   patch: () => {}
 }
 const SECTIONS = ['Payments', 'Platform']
@@ -99,7 +99,7 @@ export const statuses = defineFixture({
   )
 })
 
-/** Share/private, copy links, follow, move to section and reassign live in the row menu. */
+/** Share/private, copy links, go to a teammate's chat, move to section and reassign live in the row menu. */
 export const menuOpen = defineFixture({
   width: WIDTH,
   render: () => (
@@ -140,7 +140,7 @@ export const followSubmenu = defineFixture({
       <Row />
     </div>
   ),
-  interact: (frame) => openSubmenu(frame, 'Follow')
+  interact: (frame) => openSubmenu(frame, "Go to a teammate's chat")
 })
 
 /** A private workspace offers "Share with team" instead of "Make private". */

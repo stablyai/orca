@@ -54,3 +54,38 @@ export function describeError(error: string, reason?: string, t: Translate = tra
     'Something went wrong. Nothing was changed. Try again.'
   )
 }
+
+/**
+ * The same messages for an inline error that already carries the action button (Retry or Sign
+ * in), so the body does not repeat "Try again." or "Sign in again.".
+ */
+export function describeInlineError(
+  error: string,
+  reason?: string,
+  t: Translate = translate
+): string {
+  if (error === 'unauthorized') {
+    return t('auto.components.cloudWorkspaces.errorUnauthorizedInline', 'Your Orca Cloud session expired.')
+  }
+  if (error === 'timeout' || error === 'unavailable' || error === 'provider_unavailable') {
+    return t(
+      'auto.components.cloudWorkspaces.errorUnreachableInline',
+      "Orca Cloud isn't reachable right now. Nothing was changed."
+    )
+  }
+  if (error === 'conflict' && reason !== 'too_many_devices') {
+    return t(
+      'auto.components.cloudWorkspaces.errorConflictInline',
+      'This workspace is still starting or going to sleep. Nothing was changed.'
+    )
+  }
+  if (
+    error === 'not_found' ||
+    error === 'entitlement_denied' ||
+    error === 'forbidden' ||
+    error === 'conflict'
+  ) {
+    return describeError(error, reason, t)
+  }
+  return t('auto.components.cloudWorkspaces.errorUnknownInline', 'Something went wrong. Nothing was changed.')
+}

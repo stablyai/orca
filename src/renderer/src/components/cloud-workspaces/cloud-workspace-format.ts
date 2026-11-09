@@ -148,10 +148,21 @@ export function presenceSummary(
   intlLocale: string = getIntlLocale()
 ): string {
   const clauses = members.map((p) => {
+    // "You" takes its own verb form; it is never slotted into "{{name}} is …".
+    if (p.userId === selfId) {
+      return p.state === 'typing'
+        ? t('auto.components.cloudWorkspaces.youAreTyping', 'You are typing')
+        : t('auto.components.cloudWorkspaces.youAreViewing', 'You are viewing')
+    }
     const value0 = memberName(directory, p.userId, selfId, t)
     return p.state === 'typing'
       ? t('auto.components.cloudWorkspaces.memberTyping', '{{value0}} is typing', { value0 })
       : t('auto.components.cloudWorkspaces.memberViewing', '{{value0}} is viewing', { value0 })
   })
-  return new Intl.ListFormat(intlLocale, { style: 'long', type: 'conjunction' }).format(clauses)
+  return formatNameList(clauses, intlLocale)
+}
+
+/** "Grace, Linus and Mae" in the UI locale, never hand-joined. */
+export function formatNameList(names: string[], intlLocale: string = getIntlLocale()): string {
+  return new Intl.ListFormat(intlLocale, { style: 'long', type: 'conjunction' }).format(names)
 }

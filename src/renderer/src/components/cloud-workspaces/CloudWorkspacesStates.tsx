@@ -12,24 +12,35 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
+import { describeInlineError } from './cloud-workspace-errors'
 
+/** The list failed to load. An expired session offers Sign in; anything else offers Retry. */
 export function ErrorState({
-  message,
+  error,
+  reason,
   retrying,
-  onRetry
+  onRetry,
+  onSignIn
 }: {
-  message: string
+  error: string
+  reason?: string
   retrying: boolean
   onRetry: () => void
+  onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const signIn = error === 'unauthorized'
   return (
     <InlineError
       className="m-1"
-      title={message}
-      retryLabel={t('auto.components.cloudWorkspaces.retry', 'Retry')}
+      title={describeInlineError(error, reason, t)}
+      retryLabel={
+        signIn
+          ? t('auto.components.cloudWorkspaces.signIn', 'Sign in')
+          : t('auto.components.cloudWorkspaces.retry', 'Retry')
+      }
       retrying={retrying}
-      onRetry={onRetry}
+      onRetry={signIn ? onSignIn : onRetry}
     />
   )
 }
@@ -89,10 +100,10 @@ export function NewSectionDialog({
 export function SkeletonRows(): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div
-      aria-busy="true"
-      aria-label={t('auto.components.cloudWorkspaces.loading', 'Loading cloud workspaces')}
-    >
+    <div role="status" aria-busy="true">
+      <span className="sr-only">
+        {t('auto.components.cloudWorkspaces.loading', 'Loading cloud workspaces')}
+      </span>
       {[0, 1, 2].map((i) => (
         // Same height and columns as a real row (status, title + meta, cost, last active, ⋯).
         <div key={i} className="flex h-14 items-center gap-3 pl-3 pr-2">
