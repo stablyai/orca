@@ -14,10 +14,8 @@ import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-test-harness'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import './orca-runtime-tests/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from './orca-runtime'

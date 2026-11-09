@@ -23,10 +23,8 @@ import {
   hostTestMessage
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
 import { createScriptedClaudeRuntime } from './agent-session/installation/structured-claude-scripted-runtime-test-support'

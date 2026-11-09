@@ -23,10 +23,8 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import { idOf, isRecord, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../../../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../../../agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,

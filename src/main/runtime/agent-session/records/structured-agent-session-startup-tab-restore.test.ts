@@ -35,10 +35,8 @@ import {
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './agent-session-record-store-test-harness'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
