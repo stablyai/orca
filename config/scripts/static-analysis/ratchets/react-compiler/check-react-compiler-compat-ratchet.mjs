@@ -110,9 +110,9 @@ function readUncompiledFiles(root) {
     : new Set()
 }
 
-/** Listed paths that name no shipped renderer source; a renamed file would silently compile. */
-export function findStaleUncompiledFiles(uncompiled, sources) {
-  return [...uncompiled].filter((rel) => !sources.has(rel))
+/** Listed paths that name no renderer file; a renamed file would silently compile. */
+export function findStaleUncompiledFiles(uncompiled, exists) {
+  return [...uncompiled].filter((rel) => !rel.startsWith(`${SCAN_ROOT}/`) || !exists(rel))
 }
 
 /** Virtualizer hooks plus every hook that returns one, followed through wrappers of wrappers. */
@@ -209,8 +209,7 @@ async function scanFile(rel, text, result) {
 }
 
 export async function scanRenderer(root = process.cwd()) {
-  const tracked = readTrackedSources(root, [SCAN_ROOT], isScannedPath)
-  const sources = [...tracked]
+  const sources = [...readTrackedSources(root, [SCAN_ROOT], isScannedPath)]
   const uncompiled = readUncompiledFiles(root)
   const result = {
     files: 0,
@@ -218,7 +217,9 @@ export async function scanRenderer(root = process.cwd()) {
     diagnostics: new Map(),
     hazards: new Map(),
     uncompiled,
-    staleUncompiled: findStaleUncompiledFiles(uncompiled, tracked),
+    staleUncompiled: findStaleUncompiledFiles(uncompiled, (rel) =>
+      fs.existsSync(path.join(root, rel))
+    ),
     virtualizerHooks: collectVirtualizerHooks(sources),
     liveReaders: collectLiveReaders(sources)
   }
@@ -346,7 +347,7 @@ export async function main(root = process.cwd(), arg = undefined) {
   }
   for (const rel of scan.staleUncompiled) {
     console.error(
-      `::error::${UNCOMPILED_LIST}: ${rel} is not a shipped renderer source. ` +
+      `::error::${UNCOMPILED_LIST}: ${rel} is not a renderer file. ` +
         'Point it at the renamed file, or remove it once the file is gone.'
     )
   }

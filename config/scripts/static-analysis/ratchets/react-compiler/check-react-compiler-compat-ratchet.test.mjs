@@ -20,12 +20,19 @@ describe('uncompiled file list', () => {
     ])
   })
 
-  it('reports listed paths that no longer name a renderer source', () => {
-    const sources = new Map([['src/renderer/src/kept.tsx', '']])
+  it('reports listed paths that no longer name a renderer file', () => {
+    const files = new Set([
+      'src/renderer/src/kept.tsx',
+      'src/renderer/src/notification-test-delivery.ts'
+    ])
     expect(
       findStaleUncompiledFiles(
-        new Set(['src/renderer/src/kept.tsx', 'src/renderer/src/renamed.tsx']),
-        sources
+        new Set([
+          'src/renderer/src/kept.tsx',
+          'src/renderer/src/notification-test-delivery.ts',
+          'src/renderer/src/renamed.tsx'
+        ]),
+        (rel) => files.has(rel)
       )
     ).toEqual(['src/renderer/src/renamed.tsx'])
   })

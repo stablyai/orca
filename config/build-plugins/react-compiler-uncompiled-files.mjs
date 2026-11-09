@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const REPO_ROOT = resolve(import.meta.dirname, '../..')
+// Why: import.meta.url, not dirname — electron-vite's config bundle rewrites only the former.
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
 export const UNCOMPILED_LIST = 'config/react-compiler-uncompiled-files.txt'
 // Hand-kept list plus every file still in a hazard ratchet; compiled, these would run differently.
