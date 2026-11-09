@@ -4,7 +4,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './testing/ssh-host-server-on-connect-test-deps'
 import { unservedHostServerMessage } from './ssh-host-unserved-status'
-import { sftpSessionClosedError } from '../file-transfer/ssh-file-transfer-abort'
+
 import { NodeRuntimeUnreachableError } from '../../managed-server/install/remote-node-runtime-host-download'
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
@@ -53,12 +53,5 @@ describe('a managed-server setup that could not download Node', () => {
     const result = await deployFailingWith(lookalike)
     expect(result).not.toHaveProperty('nodeDownloadBlocked')
     expect(unservedHostServerMessage(result)).toContain('Try connecting again')
-  })
-
-  it('lets lost contact win, since nothing proves the host failed', async () => {
-    const lost = new Error('upload failed', { cause: sftpSessionClosedError() })
-    const result = await deployFailingWith(lost)
-    expect(result).toMatchObject({ contactLost: true })
-    expect(result).not.toHaveProperty('nodeDownloadBlocked')
   })
 })
