@@ -10,6 +10,7 @@ export type {
   JournalSqlQueueReadResult
 } from './journal-sql-queue-read'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
+import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import {
   orchestrationMailNotice,
   type AgentMessageSource

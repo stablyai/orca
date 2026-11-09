@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { AgentJournalItemBodySchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import {
   automaticSubmissionFixture,
   automaticBody,
@@ -188,13 +188,18 @@ it('keeps actionable approvals in front of sends, but lets a person recover an u
       resolvedAt: null
     }
   }
-  const write = (subject?: { kind: string }) =>
-    f.run({
+  const write = (subject?: { kind: string }) => {
+    const body = { ...prompt, ...(subject ? { subject } : {}) }
+    if (!isAdmissibleAgentJournalItemBody(body)) {
+      throw new Error('invalid approval fixture')
+    }
+    return f.run({
       kind: 'item',
       identity: { provider: 'orca', clientMessageId: 'approval' },
-      body: AgentJournalItemBodySchema.parse({ ...prompt, ...(subject ? { subject } : {}) }),
+      body,
       options: { fence: 1, turnScope: { kind: 'thread' } }
     })
+  }
   await write()
   expect((await f.send('waiting')).value).toMatchObject({
     kind: 'admitted',
