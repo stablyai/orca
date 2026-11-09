@@ -26,6 +26,29 @@ export function createMockDiscoveryChild(): MockDiscoveryChild {
   })
 }
 
+/** Answers initialize, then each `model/list` with the next page, as a Codex app-server child. */
+export function answerCodexAppServer(
+  child: { stdin: NodeJS.EventEmitter; stdout: NodeJS.EventEmitter },
+  pages: unknown[]
+): void {
+  let page = 0
+  child.stdin.on('data', (chunk: Buffer) => {
+    for (const line of chunk.toString('utf8').split('\n').filter(Boolean)) {
+      const message = JSON.parse(line) as { id?: number; method: string }
+      if (message.id !== undefined) {
+        const result = message.method === 'model/list' ? pages[page++] : {}
+        const reply = Buffer.from(`${JSON.stringify({ id: message.id, result })}\n`)
+        // Real streams may be piped onward by the spawner; plain emitters only have listeners.
+        if (child.stdout instanceof PassThrough) {
+          child.stdout.write(reply)
+        } else {
+          child.stdout.emit('data', reply)
+        }
+      }
+    }
+  })
+}
+
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })

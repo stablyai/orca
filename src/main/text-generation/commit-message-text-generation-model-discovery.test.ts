@@ -3,9 +3,11 @@ import type * as ChildProcess from 'node:child_process'
 import type * as CliCommandResolution from '../../shared/node-cli-command-resolution'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { discoverCommitMessageModelsLocal } from './commit-message-text-generation'
+import agentPickerCliRecordings from '../../shared/fixtures/agent-picker-cli-recordings.json'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import {
   createChildTerminationExpectation,
+  answerCodexAppServer,
   createMockDiscoveryChild,
   spawnedAgentArgv,
   withPlatform
@@ -336,6 +338,56 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     }
   })
 
+  it('lists Codex models from app-server model/list without hidden rows, then stops the app-server', async () => {
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child as never)
+    answerCodexAppServer(child, [
+      { data: agentPickerCliRecordings.modelList.data, nextCursor: 'page-2' },
+      {
+        data: [
+          {
+            id: 'codex-auto-review',
+            model: 'codex-auto-review',
+            displayName: 'Codex Auto Review',
+            hidden: true
+          }
+        ],
+        nextCursor: null
+      }
+    ])
+
+    await expect(
+      discoverCommitMessageModelsLocal('codex', { CODEX_HOME: '/managed/codex-model-list-home' })
+    ).resolves.toEqual({
+      success: true,
+      catalogOrigin: 'probe',
+      defaultModelId: 'gpt-5.6-sol',
+      capability: expect.objectContaining({ defaultModelId: 'gpt-5.6-sol' }),
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6-Sol',
+          description: 'Latest frontier agentic coding model.',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' },
+            { id: 'xhigh', label: 'Extra high' },
+            { id: 'max', label: 'Max' },
+            { id: 'ultra', label: 'Ultra' }
+          ],
+          defaultThinkingLevel: 'low',
+          isDefault: true
+        }
+      ]
+    })
+    expect(spawnedAgentArgv(spawnMock.mock.calls[0])).toContain('app-server')
+    // stdin EOF first; a child that ignores it is stopped after the grace.
+    expect(child.stdin.end).toHaveBeenCalled()
+    expect(child.kill).not.toHaveBeenCalled()
+    await vi.waitFor(() => expectChildTerminated(child), { timeout: 3_000 })
+  })
+
   it('keeps the Codex home locked after a discovery timeout until the child closes', async () => {
     vi.useFakeTimers()
     const firstChild = createMockDiscoveryChild()
@@ -346,7 +398,8 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     try {
       const first = discoverCommitMessageModelsLocal('codex', env)
       await vi.advanceTimersByTimeAsync(0)
-      const second = discoverCommitMessageModelsLocal('codex', env)
+      // A different command shares the home lock but not the in-flight listing.
+      const second = discoverCommitMessageModelsLocal('codex', env, 'codex')
       await vi.advanceTimersByTimeAsync(60_000)
 
       await expect(first).resolves.toMatchObject({
@@ -359,15 +412,9 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       firstChild.emit('close', null)
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
-      secondChild.stdout.emit(
-        'data',
-        Buffer.from(
-          JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }]
-          })
-        )
-      )
-      secondChild.emit('close', 0)
+      answerCodexAppServer(secondChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
       await expect(second).resolves.toMatchObject({
         success: true,
         defaultModelId: 'gpt-5.5'
@@ -387,7 +434,8 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     try {
       const first = discoverCommitMessageModelsLocal('codex', env)
       await vi.advanceTimersByTimeAsync(0)
-      const second = discoverCommitMessageModelsLocal('codex', env)
+      // A different command shares the home lock but not the in-flight listing.
+      const second = discoverCommitMessageModelsLocal('codex', env, 'codex')
       await vi.advanceTimersByTimeAsync(60_000)
       await expect(first).resolves.toMatchObject({ success: false })
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -397,15 +445,9 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
 
-      secondChild.stdout.emit(
-        'data',
-        Buffer.from(
-          JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }]
-          })
-        )
-      )
-      secondChild.emit('close', 0)
+      answerCodexAppServer(secondChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
       await expect(second).resolves.toMatchObject({
         success: true,
         defaultModelId: 'gpt-5.5'

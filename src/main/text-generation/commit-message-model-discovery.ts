@@ -14,6 +14,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {
+  discoveredModelsResult,
   finalizeModelDiscoveryOutput,
   planModelDiscovery,
   staticModelDiscoveryResult
@@ -23,6 +24,11 @@ import {
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from './source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from './source-control-local-generation'
+import { formatAgentCliFailureMessage } from './source-control-agent-failure'
+import {
+  startCodexModelListDiscovery,
+  type CodexModelListDiscovery
+} from './codex-model-list-discovery'
 import { killSourceControlAgentProcess } from './source-control-local-process'
 import type {
   DiscoverCommitMessageModelsResult,
@@ -30,6 +36,8 @@ import type {
   SpawnedSourceControlAgentProcess,
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
+
+const APP_SERVER_EXIT_GRACE_MS = 1_500
 
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
@@ -99,6 +107,8 @@ async function discoverModelsOnce(
       : {}),
     error: couldNotStart
   })
+  // The app-server answers `model/list` over the stdin it must keep open.
+  const appServer = spec.modelDiscovery !== undefined && 'listing' in spec.modelDiscovery
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {
     let markProcessClosed!: () => void
     const processClosed = new Promise<void>((resolve) => {
@@ -106,6 +116,7 @@ async function discoverModelsOnce(
     })
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: SpawnedSourceControlAgentProcess
+      let listing: CodexModelListDiscovery | null = null
       try {
         child = input.spawnAgent({
           binary,
@@ -114,10 +125,14 @@ async function discoverModelsOnce(
           env: input.options.wslDistro ? input.env : env,
           commandEnv: plan.env,
           wslDistro: input.options.wslDistro,
-          stdinMode: plan.stdinPayload === null ? 'ignore' : 'pipe',
+          stdinMode: plan.stdinPayload === null && !appServer ? 'ignore' : 'pipe',
           useCwdForNative: false
         })
-        if (plan.stdinPayload !== null) {
+        if (appServer && child.stdin) {
+          const stdin = child.stdin
+          listing = startCodexModelListDiscovery(stdin)
+          stdin.on('error', (error) => listing?.fail(error))
+        } else if (plan.stdinPayload !== null) {
           child.stdin?.on?.('error', () => {})
           child.stdin?.end(plan.stdinPayload)
         }
@@ -129,6 +144,8 @@ async function discoverModelsOnce(
       }
 
       let stdout = ''
+      // Listed output is framed, not kept, so its budget counts what was read.
+      let listedBytes = 0
       let stderr = ''
       let outputLimitExceeded = false
       let settled = false
@@ -166,7 +183,7 @@ async function discoverModelsOnce(
 
       const onData = (chunk: Buffer, append: (text: string) => void): void => {
         if (
-          stdout.length + stderr.length + chunk.byteLength >
+          stdout.length + listedBytes + stderr.length + chunk.byteLength >
           MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES
         ) {
           outputLimitExceeded = true
@@ -176,7 +193,13 @@ async function discoverModelsOnce(
         }
         append(chunk.toString('utf-8'))
       }
-      const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+      const onStdoutData = (chunk: Buffer): void =>
+        listing
+          ? onData(chunk, () => {
+              listedBytes += chunk.byteLength
+              listing?.receive(chunk)
+            })
+          : onData(chunk, (text) => (stdout += text))
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
       const onError = (error: Error): void => {
         if (!child.pid) {
@@ -195,6 +218,7 @@ async function discoverModelsOnce(
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
+        listing?.fail(new Error(`${spec.label} app-server exited`))
         const spawnFailure = outputLimitExceeded
           ? null
           : supervisedProviderSpawnFailure(code, stderr)
@@ -213,9 +237,57 @@ async function discoverModelsOnce(
         finish(
           outputLimitExceeded
             ? { success: false, error: `${spec.label} returned too much model data.` }
-            : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
+            : listing
+              ? listingFailure(code)
+              : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
         )
       }
+      const listingFailure = (code: number | null): DiscoverCommitMessageModelsResult => {
+        console.error('[commit-message] Model discovery failed:', {
+          label: spec.label,
+          exitCode: code,
+          stderr
+        })
+        return {
+          success: false,
+          error: formatAgentCliFailureMessage(spec.label, '', stderr, code)
+        }
+      }
+      // A served listing ends the app-server, which would otherwise wait on stdin forever. Codex
+      // rewrites its shared models cache at startup, so stdin EOF gets a grace before any kill.
+      const endAppServer = (): void => {
+        try {
+          child.stdin?.end()
+        } catch {
+          // A destroyed stdin still leaves the kill below.
+        }
+        const grace = setTimeout(startTermination, APP_SERVER_EXIT_GRACE_MS)
+        child.once('exit', () => clearTimeout(grace))
+      }
+      void listing?.models.then(
+        (models) => {
+          if (settled) {
+            return
+          }
+          endAppServer()
+          finish(
+            models
+              ? discoveredModelsResult(spec, models)
+              : { success: false, error: `${spec.label} returned no available models.` }
+          )
+        },
+        (error: unknown) => {
+          if (settled) {
+            return
+          }
+          endAppServer()
+          console.error('[commit-message] Model discovery failed:', error)
+          finish({
+            success: false,
+            error: `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`
+          })
+        }
+      )
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
       if (input.agentId === 'codex') {

@@ -7,11 +7,12 @@ import type { CommitMessageModelDiscoveryLocalOptions } from './commit-message-m
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import type { DiscoverCommitMessageModelsResult } from './source-control-text-generation-types'
 
-// Phone and desktop chat pickers list these on open; other agents' lists have their own catalog owners.
-// Each maps to the config-dir var that picks its login (mirrors prepareShellConfigDirEnv).
+// Pickers list these on open; Codex's listing starts an app-server. Each maps to the config-dir var
+// that picks its login (mirrors prepareShellConfigDirEnv).
 const ACCOUNT_DIR_VAR: Partial<Record<TuiAgent, string>> = {
   omp: PRIMARY_AGENT_DIR_ENV_BY_KIND.omp,
-  grok: 'GROK_HOME'
+  grok: 'GROK_HOME',
+  codex: 'CODEX_HOME'
 }
 const TTL_MS = 10 * 60_000
 const MAX_ENTRIES = 32
@@ -36,7 +37,7 @@ export type ModelDiscoveryCacheInput = {
   options: CommitMessageModelDiscoveryLocalOptions
 }
 
-/** Runs the probe; a probe-confirmed OMP or Grok list is reused for 10 min. */
+/** Runs the probe; a probe-confirmed OMP, Grok or Codex list is reused for 10 min. */
 export function discoverModelsWithHostCache(
   input: ModelDiscoveryCacheInput,
   probe: () => Promise<DiscoverCommitMessageModelsResult>
