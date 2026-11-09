@@ -70,6 +70,8 @@ export type SandboxView = {
   workspaceId: string
   status: string
   machineSize: string
+  environmentBuildId?: string
+  region?: string
   session: { id: string; startedAt: number; deadlineAt: number; leaseExpiresAt: number } | null
 }
 export type ReadyView = { sandbox: SandboxView; connection: { type: 'orca-server'; pairingCode: string; projectRoot: string } }
@@ -87,7 +89,7 @@ export class Sandboxes {
 
   async create(
     who: Identity,
-    body: { workspaceId: string; machineSize?: 'standard' | 'large'; repo?: { url: string; ref?: string } }
+    body: { workspaceId: string; machineSize?: 'standard' | 'large'; repo?: { url: string; ref?: string }; [extra: string]: unknown }
   ): Promise<Reply<ReadyView & { error?: string; reason?: string }>> {
     if (this.live.size >= config.maxConcurrentSandboxes) {
       throw new Error(`eval concurrency cap (${config.maxConcurrentSandboxes}) reached`)
