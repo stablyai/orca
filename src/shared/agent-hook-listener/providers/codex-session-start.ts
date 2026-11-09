@@ -86,7 +86,6 @@ export function reconcileCodexStatusEvent(
     // The accepted row can include a desktop-inferred end that the cached host never saw.
     const oldLead = state.codexLeadStateByPaneKey.get(event.paneKey)
     state.codexLeadStateByPaneKey.delete(event.paneKey)
-    state.codexSubagentRosterByPaneKey.delete(event.paneKey)
     seedCodexStateFromSnapshot(state, event.paneKey, previous.payload)
     const lead = state.codexLeadStateByPaneKey.get(event.paneKey)!
     setCodexMainAgentTurnState(state, event.paneKey, {
