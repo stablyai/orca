@@ -296,17 +296,19 @@ describe('federation host liveness verdicts', () => {
         { dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }
       ]
     })
-    const earlier = (
-      (await call('orchestration.federationFleetSnapshot', {
+    await expect(
+      call('orchestration.federationFleetSnapshot', {
         dispatchIds: ['ctx_from_an_earlier_pairing']
-      })) as { items: unknown[] }
-    ).items
-    expect(earlier).toEqual([
-      {
-        dispatchId: 'ctx_from_an_earlier_pairing',
-        observation: { status: 'unverifiable', exactWorker: false }
-      }
-    ])
+      })
+    ).resolves.toEqual({
+      runtimeEpoch: runtime.getRuntimeId(),
+      items: [
+        {
+          dispatchId: 'ctx_from_an_earlier_pairing',
+          observation: { status: 'unverifiable', exactWorker: false }
+        }
+      ]
+    })
   })
 
   it('keeps a disconnected verdict-less pane unverifiable rather than exited', async () => {
