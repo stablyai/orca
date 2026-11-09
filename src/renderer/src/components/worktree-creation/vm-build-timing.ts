@@ -17,8 +17,13 @@ let pending: Promise<VmBuildStepTimings> | null = null
 function loadMeasuredTimings(): Promise<VmBuildStepTimings> {
   pending ??= (window.api.orcaCloudWorkspace?.getConfig?.() ?? Promise.resolve(null))
     .then((config) => {
+      if (!config) {
+        // Unreachable now says nothing about later: the next sheet asks again.
+        pending = null
+        return NONE
+      }
       // Only "Start sandbox" is measured. Without a measurement there is no hint, never a guess.
-      measured = config?.createTiming ? { provision: config.createTiming } : NONE
+      measured = config.createTiming ? { provision: config.createTiming } : NONE
       return measured
     })
     .catch(() => {

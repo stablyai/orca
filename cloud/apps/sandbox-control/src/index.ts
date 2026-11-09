@@ -33,7 +33,7 @@
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
-import { recentCreateTiming } from './create-timing'
+import { cachedCreateTiming } from './create-timing'
 import { authenticateDesktop } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
@@ -768,8 +768,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
-      // A timing read failure must never take the constants down with it.
-      const createTiming = await recentCreateTiming(env.SANDBOX_DB).catch(() => undefined)
+      const createTiming = await cachedCreateTiming(env.SANDBOX_DB, (deps.now ?? Date.now)())
       return Response.json(
         { idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES, ...(createTiming ? { createTiming } : {}) },
         { headers: { 'cache-control': 'public, max-age=300' } }

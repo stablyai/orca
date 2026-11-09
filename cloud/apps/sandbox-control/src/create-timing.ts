@@ -36,3 +36,28 @@ export async function recentCreateTiming(db: D1Database): Promise<HostedSandboxT
     .all<{ ms: number }>()
   return summarizeStartTimes(results.map((row) => row.ms))
 }
+
+const CACHE_MS = 5 * 60_000
+let cache: { db: D1Database; at: number; value: Promise<HostedSandboxTiming | undefined> } | null = null
+
+/**
+ * GET /v1/config is public, so the query runs at most once per isolate every 5 minutes; a failed
+ * read is retried on the next request instead of being cached.
+ */
+export function cachedCreateTiming(db: D1Database, now: number): Promise<HostedSandboxTiming | undefined> {
+  if (cache && cache.db === db && now - cache.at < CACHE_MS) {
+    return cache.value
+  }
+  const entry = {
+    db,
+    at: now,
+    value: recentCreateTiming(db).catch(() => {
+      if (cache === entry) {
+        cache = null
+      }
+      return undefined
+    })
+  }
+  cache = entry
+  return entry.value
+}

@@ -44,6 +44,8 @@ type Action = {
   icon?: React.ReactNode
   onClick: () => void
   disabled?: boolean
+  /** In progress: stays focusable (aria-disabled + aria-busy) so keyboard focus isn't dropped. */
+  pending?: boolean
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -129,7 +131,7 @@ function failureActions(
               : t('auto.components.worktree.creation.VmBuildFailureCard.signIn', 'Sign in'),
             icon: signingIn ? <Loader2 className="motion-safe:animate-spin" /> : <LogIn />,
             onClick: actions.onSignIn,
-            disabled: signingIn
+            pending: signingIn
           }
         ],
         more: []
@@ -216,7 +218,7 @@ function failureActions(
                 ),
             icon: connectingGitHub ? <Loader2 className="motion-safe:animate-spin" /> : <Github />,
             onClick: actions.onConnectGitHub,
-            disabled: connectingGitHub
+            pending: connectingGitHub
           },
           tryAgain
         ],
@@ -287,8 +289,10 @@ export function FailureActionRow({
           type="button"
           size="xs"
           variant={index === 0 ? 'default' : 'outline'}
-          onClick={action.onClick}
+          onClick={action.pending ? undefined : action.onClick}
           disabled={action.disabled}
+          aria-disabled={action.pending || undefined}
+          aria-busy={action.pending || undefined}
         >
           {action.icon}
           {action.label}

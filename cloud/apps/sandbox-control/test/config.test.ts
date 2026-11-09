@@ -4,7 +4,7 @@ import {
   ORCA_CLOUD_IDLE_SLEEP_MINUTES
 } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { DEFAULT_PLANS } from '../../billing/src/plans'
-import { MIN_TIMING_SAMPLES, summarizeStartTimes } from '../src/create-timing'
+import { cachedCreateTiming, MIN_TIMING_SAMPLES, summarizeStartTimes } from '../src/create-timing'
 import { createHarness } from './harness'
 
 describe('GET /v1/config', () => {
@@ -44,5 +44,32 @@ describe('summarizeStartTimes', () => {
 
   it('shows no timing from too few starts', () => {
     expect(summarizeStartTimes([1000, 2000])).toBeUndefined()
+  })
+})
+
+describe('cachedCreateTiming', () => {
+  it('reads D1 at most once per 5 minutes, and retries after a failed read', async () => {
+    let reads = 0
+    let fail = true
+    const db = {
+      prepare: () => ({
+        bind: () => ({
+          all: async () => {
+            reads++
+            if (fail) {
+              throw new Error('d1 down')
+            }
+            return { results: [] }
+          }
+        })
+      })
+    } as unknown as D1Database
+    expect(await cachedCreateTiming(db, 0)).toBeUndefined()
+    fail = false
+    await cachedCreateTiming(db, 1_000)
+    await cachedCreateTiming(db, 2_000)
+    expect(reads).toBe(2)
+    await cachedCreateTiming(db, 1_000 + 5 * 60_000)
+    expect(reads).toBe(3)
   })
 })
