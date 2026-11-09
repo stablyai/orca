@@ -12,12 +12,12 @@ describe('DictationTranscript', () => {
     expect(
       fold([
         { type: 'final', text: '西班牙人开始了殖民时期。' },
-        { type: 'final', text: '他们来自欧洲' },
+        { type: 'final', text: '2023年他们来自欧洲' },
         { type: 'partial', text: '然后' }
       ])
     ).toMatchObject({
-      committed: '西班牙人开始了殖民时期。他们来自欧洲',
-      text: '西班牙人开始了殖民时期。他们来自欧洲然后'
+      committed: '西班牙人开始了殖民时期。2023年他们来自欧洲',
+      text: '西班牙人开始了殖民时期。2023年他们来自欧洲然后'
     })
     expect(
       fold([
