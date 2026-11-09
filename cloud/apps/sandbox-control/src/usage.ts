@@ -13,6 +13,7 @@ type OutboxRow = {
   started_at: number
   ended_at: number
   attempts: number
+  user_id: string | null
 }
 
 /** Queues the row's unsettled time up to `until`; returns the new settle cursor (unchanged if none). */
@@ -46,8 +47,9 @@ export async function flushUsage(
 ): Promise<UsageAnswer | null> {
   const { results } = await db
     .prepare(
-      `SELECT * FROM usage_outbox WHERE sent_at IS NULL AND attempts < ? ${sandboxId ? 'AND sandbox_id = ?' : ''}
-       ORDER BY started_at LIMIT 100`
+      `SELECT o.*, s.user_id FROM usage_outbox o LEFT JOIN sandboxes s ON s.id = o.sandbox_id
+       WHERE o.sent_at IS NULL AND o.attempts < ? ${sandboxId ? 'AND o.sandbox_id = ?' : ''}
+       ORDER BY o.started_at LIMIT 100`
     )
     .bind(...(sandboxId ? [MAX_ATTEMPTS, sandboxId] : [MAX_ATTEMPTS]))
     .all<OutboxRow>()
@@ -60,7 +62,8 @@ export async function flushUsage(
         sandboxId: segment.sandbox_id,
         machineSize: segment.machine_size,
         startedAt: segment.started_at,
-        endedAt: segment.ended_at
+        endedAt: segment.ended_at,
+        ...(segment.user_id ? { userId: segment.user_id } : {})
       })
       await db.prepare('UPDATE usage_outbox SET sent_at = ? WHERE usage_id = ?').bind(now, segment.usage_id).run()
     } catch {

@@ -203,7 +203,9 @@ export default function RunTargetCombobox({
   )
 
   const fieldLabel = selectedRecipe
-    ? `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`
+    ? selectedRecipe.provider
+      ? selectedRecipe.name
+      : `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`
     : (selectedHost?.label ?? '')
   const fieldDetail = selectedRecipe
     ? getRecipeDetail(selectedRecipe, t)

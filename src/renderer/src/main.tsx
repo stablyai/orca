@@ -31,11 +31,17 @@ import { handleGuestWindowCloseMessage } from './components/browser-pane/host-gu
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './lib/window-material-runtime'
+import { registerPlanBillingMenuItem } from './components/billing/register-plan-billing-menu-item'
+import { installOrcaCloudSessionEvents } from './lib/orca-cloud-session-events'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
+const disposePlanBillingMenuItem = registerPlanBillingMenuItem()
+import.meta.hot?.dispose(disposePlanBillingMenuItem)
+const disposeOrcaCloudSessionEvents = installOrcaCloudSessionEvents()
+import.meta.hot?.dispose(disposeOrcaCloudSessionEvents)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()

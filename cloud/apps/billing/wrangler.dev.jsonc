@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // DEV deployment only (workers.dev, no custom domain, Stripe TEST MODE). Deploy:
+  //   wrangler d1 migrations apply BILLING_DB --remote -c wrangler.dev.jsonc
+  //   wrangler deploy -c wrangler.dev.jsonc
+  // Secrets (wrangler secret put <NAME> -c wrangler.dev.jsonc, never here): STRIPE_SECRET_KEY (sk_test_/rk_test_),
+  // STRIPE_WEBHOOK_SECRET (the test-mode endpoint's whsec_), CONTROL_PLANE_TOKEN (shared with
+  // orca-sandbox-control-dev), BILLING_DEV_JWKS (operator key set for e2e until auth mints billing tokens).
+  "name": "orca-billing-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "BILLING_DB",
+      "database_name": "orca-billing-dev",
+      "database_id": "12aa0820-642a-4174-8504-f42d32043959",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Retries Stripe meter reports that failed inline.
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "vars": {
+    "BILLING_ENV": "dev",
+    "STRIPE_API_VERSION": "2025-09-30.clover",
+    "STRIPE_METER_EVENT_NAME": "orca_sandbox_seconds",
+    // Stripe TEST MODE objects in acct_1Or7xeKb73TzRkjk (scripts/stripe-test-setup.ts).
+    "STRIPE_PRICE_TEAM_MONTHLY": "price_1UZmKpKb73TzRkjk33aiB2th",
+    "STRIPE_PRICE_TEAM_ANNUAL": "price_1UZmKpKb73TzRkjkS7qv85NI",
+    "STRIPE_PRICE_OVERAGE": "price_1UZmKvKb73TzRkjkycTvfq0o",
+    "STRIPE_PORTAL_CONFIGURATION": "bpc_1UZmKvKb73TzRkjk59rIuHbx",
+    "BILLING_RETURN_URL": "https://orca-billing-dev.lovecast.workers.dev/return",
+    "BILLING_JWT_AUDIENCE": "orca-billing",
+    "BILLING_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
+    "BILLING_AUTH_ISSUER": "https://login.onorca.dev"
+  }
+}

@@ -31,6 +31,7 @@ import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readi
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
 import { startOrcadEventLoopWatchdog } from './orcad-event-loop-watchdog'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { installOrcadWorkProbes } from './orcad-work-verdict'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
 
@@ -350,6 +351,12 @@ async function startOrcadRuntime(
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 
+  installOrcadWorkProbes({
+    agentStates: () => agentHookServer.getStatusSnapshot(),
+    automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore),
+    emulatorsBusy: async () =>
+      (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false
+  })
   await idleExitStartup.start({
     rpc,
     agentStates: () => agentHookServer.getStatusSnapshot(),

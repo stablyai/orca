@@ -31,6 +31,8 @@ export type Env = {
   CONTROL_PLANE_TOKEN?: string
   /** `stub` allows every start and records nothing: local dev only, refused when SANDBOX_ENV=prod. */
   ENTITLEMENTS_MODE?: string
+  /** Dev only: route `dev:*` accounts through billing instead of bypassing it. */
+  SANDBOX_DEV_BILLING_PASSTHROUGH?: string
 
   /** Public URL of this Worker's /v1/egress/proxy; Vercel forwardURL rules point here. */
   EGRESS_PROXY_URL?: string

@@ -2034,6 +2034,10 @@
     "errors": {
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "cleanupStopped": "Cleanup stopped by user.",
+      "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again.",
+      "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
+      "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
+      "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "defaultStartRefUnresolved": "Could not resolve a default provisioned-root start ref.",
       "destroyDisabled": "Destroy is disabled for this recipe.",
       "destroyExited": "Destroy exited with code {{exitCode}}.",

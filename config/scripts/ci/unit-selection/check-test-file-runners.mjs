@@ -64,6 +64,12 @@ const NON_UNIT_TEST_RUNNERS = [
     sources: ['cloud/apps/sandbox-control/vitest.config.ts'],
     mirrors: ["include: ['test/**/*.test.ts', 'image/**/*.test.ts']"]
   },
+  {
+    name: 'cloud billing',
+    include: ['cloud/apps/billing/test/**/*.test.ts'],
+    sources: ['cloud/apps/billing/vitest.config.ts'],
+    mirrors: ["include: ['test/**/*.test.ts']"]
+  },
   ...[
     'cloud/apps/relay-fence-broker',
     'cloud/packages/cloud-database',

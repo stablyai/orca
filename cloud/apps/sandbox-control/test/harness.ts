@@ -21,11 +21,13 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     suspensions: [] as string[],
     down: false,
     checks: [] as { accountId: string; runningSandboxes: number }[],
+    requests: [] as Parameters<EntitlementClient['checkStart']>[0][],
     usage: [] as UsageSegment[]
   }
   const entitlements: EntitlementClient = {
     async checkStart(request) {
       billing.checks.push({ accountId: request.accountId, runningSandboxes: request.runningSandboxes })
+      billing.requests.push(request)
       return billing.decision
     },
     async reportUsage(segment) {

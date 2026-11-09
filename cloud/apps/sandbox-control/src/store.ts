@@ -115,6 +115,15 @@ export async function countActiveSandboxes(db: D1Database, accountId: string): P
   return row?.n ?? 0
 }
 
+export async function countActiveSandboxesForUser(db: D1Database, accountId: string, userId: string): Promise<number> {
+  const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ')
+  const row = await db
+    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND user_id = ? AND status IN (${placeholders})`)
+    .bind(accountId, userId, ...ACTIVE_STATUSES)
+    .first<{ n: number }>()
+  return row?.n ?? 0
+}
+
 export async function listByStatus(db: D1Database, statuses: readonly SandboxStatus[]): Promise<SandboxRow[]> {
   const placeholders = statuses.map(() => '?').join(', ')
   const { results } = await db

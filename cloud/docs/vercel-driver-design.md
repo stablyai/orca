@@ -158,6 +158,15 @@ api.github.com through the forwardURL proxy with a minted token (200, ~1s), no t
 reached over a service binding (same-account workers.dev fetches fail with 1042): an account without a subscription
 gets 403 `no_subscription`; the cron's suspensions poll runs clean. `dev:*` operator accounts bypass billing outside prod.
 
+Desktop dogfood (2026-11-09, dev app → dev Worker → Vercel Pro): "Orca Cloud" is a built-in provider in Run on
+(reserved id `cloud`); create → orcad ready in the app 8–12s with the private repo cloned via the GitHub App; shell
+work + real `git push` from the cloud workspace; 15-min cap warning toast; forced rollover at the (shortened) cap
+with reconnect and files kept; idle sleep through the ordinary Sleep flow after a (shortened) 2-min idle; wake on
+click; destroy through runtime cleanup leaves no sandbox or snapshot. Found live and fixed: agent hosts must be
+wildcard-allowlisted (platform.claude.com), the runtime store dropped `provider` (now in the feature store), remote
+keystrokes are not 'driving' input (verdict reads all input), Vercel answers 400 when deleting an
+already-deleted snapshot. Not run: agent auto-resume with a real chat (needs a Claude/Codex sign-in).
+
 ## Built (mock-tested) and next wiring
 
 - (b) `src/main/environment-providers/*`, `src/main/hosted-sandbox/*` — driver, client, contract kit, recipe adapter.

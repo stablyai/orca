@@ -11,6 +11,10 @@ import {
   type EphemeralVmFailure
 } from './ephemeral-vm-failure-copy'
 import { getEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
+import {
+  getEphemeralVmRecipeStepProvider,
+  type RecipeStepProviderResult
+} from './ephemeral-vm-recipe-step-providers'
 
 type RecipeStepArgs = Pick<
   EphemeralVmRecipeStartArgs,
@@ -32,6 +36,9 @@ export function runRecipeStep(
   context: EphemeralVmRecipeContext,
   stdin?: string
 ): Promise<ProcessRunResult> {
+  if (args.recipe.provider) {
+    return runProviderStep(args, mode, context, stdin)
+  }
   return runRecipeCommand({
     command,
     repoPath: args.repoPath,
@@ -50,11 +57,60 @@ export function runRecipeStep(
   })
 }
 
+async function runProviderStep(
+  args: RecipeStepArgs,
+  mode: OrcaVmRecipeLifecycleMode,
+  context: EphemeralVmRecipeContext,
+  stdin: string | undefined
+): Promise<RecipeStepProviderResult> {
+  const provider = getEphemeralVmRecipeStepProvider(args.recipe.provider!)
+  if (!provider) {
+    return {
+      stdout: '',
+      stderr: 'This provider is not available in this build.\n',
+      exitCode: 1,
+      signal: null
+    }
+  }
+  const timeoutMs = toTimeoutMs(getEphemeralVmRecipeTimeoutSeconds(args.recipe, mode))
+  const timeout = timeoutMs === undefined ? null : AbortSignal.timeout(timeoutMs)
+  const signals = [args.signal, timeout].filter(
+    (s): s is AbortSignal => s !== undefined && s !== null
+  )
+  args.onSpawn?.()
+  try {
+    return await provider({
+      mode,
+      repoPath: args.repoPath,
+      context,
+      ...(stdin === undefined ? {} : { stdin }),
+      ...(signals.length > 0 ? { signal: AbortSignal.any(signals) } : {}),
+      onStderr: args.onStderr
+    })
+  } catch (error) {
+    if (timeout?.aborted) {
+      return { stdout: '', stderr: '', exitCode: null, signal: null, timedOut: true }
+    }
+    if (args.signal?.aborted) {
+      return { stdout: '', stderr: '', exitCode: null, signal: null, aborted: true }
+    }
+    return {
+      stdout: '',
+      stderr: `${error instanceof Error ? error.message : String(error)}\n`,
+      exitCode: 1,
+      signal: null
+    }
+  }
+}
+
 export function getRecipeStepFailure(
   recipe: OrcaVmRecipe,
   mode: 'create' | 'suspend' | 'resume',
-  result: ProcessRunResult
+  result: RecipeStepProviderResult
 ): EphemeralVmFailure | null {
+  if (result.failure) {
+    return result.failure
+  }
   if (result.timedOut) {
     return ephemeralVmTimeoutFailure(mode, getEphemeralVmRecipeTimeoutSeconds(recipe, mode) ?? 0)
   }

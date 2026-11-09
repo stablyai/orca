@@ -6256,6 +6256,10 @@
           "selectedProjects_one": "{{count}} proje",
           "selectedProjects_other": "{{count}} proje"
         },
+        "SidebarAccountMenu": {
+          "account": "Hesap",
+          "signIn": "Oturum aç"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca'yı Yeniden Başlat",
           "29c56f30ee": "Güncellemeleri Kontrol Et",

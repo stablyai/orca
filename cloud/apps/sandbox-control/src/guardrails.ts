@@ -79,14 +79,15 @@ export async function assertStartsOpen(db: D1Database, config: GuardrailConfig):
   }
 }
 
-/** Per-account backstop (3/seat); `seats` comes from billing when it reports one, else 1. */
+/** Per-account backstop: billing's `maxConcurrentSandboxes` when it sends one, else 3 per seat (seats default 1). */
 export async function assertAccountCapacity(
   db: D1Database,
   config: GuardrailConfig,
   accountId: string,
-  seats = 1
+  limits: { seats?: number; maxConcurrentSandboxes?: number } = {}
 ): Promise<void> {
-  if ((await countActive(db, accountId)) >= config.maxActivePerSeat * Math.max(1, Math.floor(seats))) {
+  const cap = limits.maxConcurrentSandboxes ?? config.maxActivePerSeat * Math.max(1, Math.floor(limits.seats ?? 1))
+  if ((await countActive(db, accountId)) >= cap) {
     throw new GuardrailError('concurrency_limit')
   }
 }

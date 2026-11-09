@@ -25,6 +25,13 @@ import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
+import type {
+  OrcaBillingCheckoutArgs,
+  OrcaBillingOpenResult,
+  OrcaBillingOverageArgs,
+  OrcaBillingOverageResult,
+  OrcaBillingStatusResult
+} from '../../shared/orca-billing'
 
 export type OrcaProfileApi = {
   list: () => Promise<OrcaProfileListResult>
@@ -64,4 +71,12 @@ export type OrcaProfileApi = {
   orgMemberRemove: (
     args: OrcaProfileOrgMemberRemoveArgs
   ) => Promise<OrcaProfileOrgMemberMutationResult>
+  /** Plan & billing for the signed-in account (Orca Cloud billing service). */
+  billingStatus: () => Promise<OrcaBillingStatusResult>
+  /** Opens hosted Stripe Checkout in the browser. */
+  billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
+  /** Opens the Stripe Customer Portal in the browser. */
+  billingOpenPortal: () => Promise<OrcaBillingOpenResult>
+  /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */
+  billingSetOverage: (args: OrcaBillingOverageArgs) => Promise<OrcaBillingOverageResult>
 }

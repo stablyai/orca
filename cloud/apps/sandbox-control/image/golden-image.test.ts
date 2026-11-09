@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { VM_SCRIPTS, buildGoldenImage, type BuildInputs } from './golden-image'
+import { VM_SCRIPTS, buildGoldenImage, resolveReleaseBundle, type BuildInputs } from './golden-image'
 
 const manifest: BuildInputs['manifest'] = {
   imageVersion: '2026-11-08.1',
@@ -89,5 +89,15 @@ describe('golden image build', () => {
       const path = fileURLToPath(new URL(`./${script}`, import.meta.url).href)
       expect(spawnSync('bash', ['-n', path]).status, script).toBe(0)
     }
+  })
+
+  it('pins a released orca-server tarball by its published checksum', async () => {
+    const sums = `${'b'.repeat(64)}  orca-server-linux-arm64.tar.gz\n${'c'.repeat(64)}  orca-server-linux-x64.tar.gz\n`
+    const pinned = await resolveReleaseBundle('v1.4.256', 'x64', async () => new Response(sums))
+    expect(pinned).toEqual({
+      bundleUrl: 'https://github.com/stablyai/orca/releases/download/v1.4.256/orca-server-linux-x64.tar.gz',
+      sha256: 'c'.repeat(64)
+    })
+    await expect(resolveReleaseBundle('v1.4.254', 'x64', async () => new Response('', { status: 404 }))).rejects.toThrow(/source build/)
   })
 })

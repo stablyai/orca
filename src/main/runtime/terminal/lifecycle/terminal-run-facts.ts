@@ -156,6 +156,16 @@ export class TerminalRunFactsRegister {
   }
 
   /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
+  /** Latest input (not terminal replies) across every PTY; remote clients' keystrokes arrive here
+   *  without the 'driving' kind, so a session-capped host reads all input. Null if none this process. */
+  readLatestInputAt(): number | null {
+    let latest: number | null = null
+    for (const at of this.lastInputAtByPtyId.values()) {
+      latest = latest === null || at > latest ? at : latest
+    }
+    return latest
+  }
+
   readLastDrivingInputAt(ptyId: string): number | null {
     return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
   }

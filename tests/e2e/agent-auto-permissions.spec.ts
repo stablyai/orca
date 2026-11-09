@@ -7,7 +7,8 @@ test('global Auto preserves other agents’ choices and the single permission se
   orcaPage
 }) => {
   await waitForSessionReady(orcaPage)
-  await orcaPage.getByRole('button', { name: 'Settings', exact: true }).click()
+  await orcaPage.getByRole('button', { name: 'Account', exact: true }).click()
+  await orcaPage.getByRole('menuitem', { name: 'Settings', exact: true }).click()
   await orcaPage.getByRole('button', { name: 'Agents', exact: true }).click()
   const permissions = orcaPage.getByRole('button', { name: 'Permissions', exact: true })
   const group = orcaPage.getByRole('group', { name: 'Permissions', exact: true })
