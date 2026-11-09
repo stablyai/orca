@@ -21,7 +21,7 @@ export function renderOrcaAccountSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
-      title={t('auto.components.settings.orcaAccount.80f0478ea1', 'Orca account')}
+      title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
       description={t(
         'auto.components.settings.orcaAccount.description',
         'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
@@ -223,7 +223,7 @@ export function renderSessionHistorySettingsSection(
     <SettingsSection
       id="session-history"
       grouped
-      title={t('sessionHistory.settings.4f87f1dd17', 'Agent session search')}
+      title={t('sessionHistory.settings.title', 'Agent Session Search')}
       description={t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'
