@@ -65,14 +65,12 @@ export function recordRemoteStructuredChatTelemetry(value: unknown): boolean {
   return true
 }
 
-/** Only the committed acceptance observer supplies these facts; remote hosts have no desktop consent. */
+/** A paired owner retains consent authority even when this host also runs a desktop. */
 export function recordStructuredChatPromptAccepted(
   source: EventProps<'native_chat_prompt_submitted'>,
   ownerKey: string | undefined
 ): void {
-  if (isTelemetryInitialized()) {
-    track('native_chat_prompt_submitted', source)
-  } else if (ownerKey) {
+  if (ownerKey) {
     const event: StructuredChatPromptTelemetryEvent = {
       type: 'structuredChatPromptAccepted',
       id: randomUUID(),
@@ -80,6 +78,8 @@ export function recordStructuredChatPromptAccepted(
       client: source.client
     }
     relayStructuredChatTelemetry(event, ownerKey)
+  } else if (isTelemetryInitialized()) {
+    track('native_chat_prompt_submitted', source)
   }
 }
 
