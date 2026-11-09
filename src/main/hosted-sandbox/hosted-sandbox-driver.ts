@@ -41,7 +41,9 @@ const STATUS: Record<HostedSandboxView['status'], EnvironmentStatus> = {
   resuming: 'resuming',
   destroying: 'destroying',
   destroyed: 'destroyed',
-  failed: 'failed'
+  failed: 'failed',
+  // Archived = asleep with a snapshot TTL; the desktop shows it as a sleeping environment.
+  archived: 'suspended'
 }
 
 export function createHostedSandboxDriver(
@@ -141,7 +143,7 @@ function toSnapshot(view: HostedSandboxView): HostedStatusSnapshot {
   return { status: STATUS[view.status], session: toSession(view) }
 }
 
-function toReady(ready: HostedSandboxReadyResponse): HostedEnvironmentReady {
+export function toReady(ready: HostedSandboxReadyResponse): HostedEnvironmentReady {
   const session = toSession(ready.sandbox)
   if (ready.sandbox.status !== 'running' || !session) {
     throw new EnvironmentProviderError(

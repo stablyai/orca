@@ -39,15 +39,18 @@ export const ORCA_CLOUD_RECIPE: OrcaVmRecipe = {
 
 const LifecyclePayload = z.looseObject({ recipeResult: EphemeralVmRecipeResultSchema.optional() })
 
+export function createHostedSandboxRecipeClient(config: HostedSandboxConfig) {
+  return createHostedSandboxControlPlaneClient({
+    baseUrl: config.controlPlaneUrl,
+    getAccessToken: config.getAccessToken
+  })
+}
+
 export function createHostedSandboxRecipeDriver(
-  config: HostedSandboxConfig
+  config: HostedSandboxConfig,
+  client = createHostedSandboxRecipeClient(config)
 ): HostedEnvironmentProviderDriver {
-  return createHostedSandboxDriver(
-    createHostedSandboxControlPlaneClient({
-      baseUrl: config.controlPlaneUrl,
-      getAccessToken: config.getAccessToken
-    })
-  )
+  return createHostedSandboxDriver(client)
 }
 
 /** https clone URL the control plane can mint a GitHub App token for; null for non-GitHub remotes. */
@@ -101,6 +104,13 @@ export function createHostedSandboxStepProvider(
   hooks: {
     onReady?: (ready: HostedEnvironmentReady) => void
     onStopped?: (environmentId: string) => void
+    /** Wake progress for the window's "Waking…" overlay (resume only). */
+    onWake?: (event: {
+      workspaceId: string
+      phase: 'waking' | 'connecting' | 'ready' | 'failed'
+      startedAt: number
+      message?: string
+    }) => void
   } = {}
 ): RecipeStepProvider {
   return async ({ mode, repoPath, context, stdin, signal, onStderr }) => {
@@ -133,9 +143,29 @@ export function createHostedSandboxStepProvider(
         return { stdout: '', stderr: 'Not an Orca Cloud environment.\n', exitCode: 1, signal: null }
       }
       if (mode === 'resume') {
-        const ready = await driver.resume(handle, ctx)
-        hooks.onReady?.(ready)
-        return ok(JSON.stringify(ready.result))
+        const workspaceId = context.workspaceId
+        const startedAt = Date.now()
+        if (workspaceId) {
+          hooks.onWake?.({ workspaceId, phase: 'waking', startedAt })
+        }
+        try {
+          const ready = await driver.resume(handle, ctx)
+          if (workspaceId) {
+            hooks.onWake?.({ workspaceId, phase: 'connecting', startedAt })
+          }
+          hooks.onReady?.(ready)
+          return ok(JSON.stringify(ready.result))
+        } catch (error) {
+          if (workspaceId) {
+            hooks.onWake?.({
+              workspaceId,
+              phase: 'failed',
+              startedAt,
+              message: error instanceof Error ? error.message : String(error)
+            })
+          }
+          throw error
+        }
       }
       await (mode === 'suspend' ? driver.suspend(handle, ctx) : driver.destroy(handle, ctx))
       hooks.onStopped?.(handle.environmentId)

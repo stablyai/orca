@@ -11,6 +11,8 @@ export type SandboxStatus =
   | 'destroying'
   | 'destroyed'
   | 'failed'
+  /** Stopped with the snapshot kept for a TTL; unarchive resumes it, the cron destroys it after the TTL. */
+  | 'archived'
 
 export type SandboxRow = {
   id: string
@@ -39,6 +41,12 @@ export type SandboxRow = {
   /** Comma list of custom model-provider hosts added to this session's egress allowlist. */
   egress_allow_hosts: string | null
   retention_warned_at: number | null
+  /** orcad's public wss endpoint for the current session. */
+  orcad_endpoint: string | null
+  /** When orcad last became ready (wake callers report it as `readyAt`). */
+  ready_at: number | null
+  archived_at: number | null
+  archive_expires_at: number | null
 }
 
 export type SessionFields = Pick<
@@ -46,7 +54,8 @@ export type SessionFields = Pick<
   'session_id' | 'session_started_at' | 'session_deadline_at' | 'lease_expires_at' | 'usage_settled_at'
 >
 
-export const NO_SESSION: SessionFields = {
+export const NO_SESSION: SessionFields & Pick<SandboxRow, 'orcad_endpoint'> = {
+  orcad_endpoint: null,
   session_id: null,
   session_started_at: null,
   session_deadline_at: null,
@@ -139,7 +148,8 @@ type Patch = Partial<Omit<SandboxRow, 'id' | 'account_id' | 'generation' | 'crea
 const PATCHABLE = new Set<string>([
   'status', 'session_id', 'session_started_at', 'session_deadline_at', 'lease_expires_at',
   'usage_settled_at', 'last_error', 'destroyed_at', 'github_token_expires_at',
-  'egress_secret_hosts', 'egress_allow_hosts', 'repo_url', 'retention_warned_at'
+  'egress_secret_hosts', 'egress_allow_hosts', 'repo_url', 'retention_warned_at', 'orcad_endpoint', 'ready_at',
+  'archived_at', 'archive_expires_at'
 ])
 
 /** Applies `patch` only if nobody moved the row since `expected` was read; null on a lost race. */
@@ -187,4 +197,14 @@ export async function recordedSnapshotIds(db: D1Database, sandboxId: string): Pr
     .bind(sandboxId)
     .all<{ snapshot_id: string }>()
   return results.map((row) => row.snapshot_id)
+}
+
+/** Usage so far for one sandbox: settled segments plus the open one (ms). */
+export async function sandboxUsageMs(db: D1Database, row: SandboxRow, now: number): Promise<number> {
+  const settled = await db
+    .prepare('SELECT COALESCE(SUM(ended_at - started_at), 0) AS ms FROM usage_outbox WHERE sandbox_id = ?')
+    .bind(row.id)
+    .first<{ ms: number }>()
+  const open = row.status === 'running' && row.usage_settled_at !== null ? Math.max(0, now - row.usage_settled_at) : 0
+  return (settled?.ms ?? 0) + open
 }

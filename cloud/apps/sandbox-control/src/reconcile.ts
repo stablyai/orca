@@ -16,6 +16,7 @@ import { killSwitchOn } from './guardrails'
 import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './retention'
 import { listByStatus, transition, type SandboxRow } from './store'
 import { flushUsage, queueUsage } from './usage'
+import { expiredArchives } from './workspace-lifecycle'
 
 const STUCK_MS = 15 * 60_000
 /** The desktop rolls over at the deadline; the cron steps in only if it did not (provider cap is +10 min). */
@@ -29,6 +30,7 @@ export type ReconcileSummary = Record<
   | 'leaseLapsed'
   | 'released'
   | 'repaired'
+  | 'archivesExpired'
   | 'billingErrors',
   number
 > & { housekeeping?: HousekeepingSummary }
@@ -42,6 +44,7 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
     leaseLapsed: 0,
     released: 0,
     repaired: 0,
+    archivesExpired: 0,
     billingErrors: 0
   }
   const polled = await guard(async () => {
@@ -79,6 +82,12 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
         await repairTransition(deps, row)
         summary.repaired++
       }
+    })
+  }
+  for (const row of await expiredArchives(deps.db, deps.now())) {
+    await guard(async () => {
+      await destroySandbox(deps, row)
+      summary.archivesExpired++
     })
   }
   await flushUsage(deps.db, deps.entitlements, deps.now())

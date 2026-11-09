@@ -36,6 +36,10 @@ export type FakeVercel = SandboxProviderApi & {
   failStart: boolean
   failEnvRefresh: boolean
   failCreate: boolean
+  /** Answers `bash -c <script>` probes (metrics, archive capture); undefined falls through to 127. */
+  onScript?: (script: string, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
+  /** Provider snapshot expiry per sandbox name, as last set by create or update. */
+  snapshotExpirations: Map<string, number>
   /** Simulates the provider ending a session at its timeout. */
   expire(name: string): void
 }
@@ -79,6 +83,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
     failStart: false,
     failEnvRefresh: false,
     failCreate: false,
+    snapshotExpirations: new Map(),
     expire(name) {
       const box = boxes.get(name)
       if (box?.status === 'running') {
@@ -175,7 +180,19 @@ export function createFakeVercel(now: () => number): FakeVercel {
       if (params.command === '/bin/sh' && params.args?.[1]?.includes('credentials.json')) {
         return { exitCode: 0, stdout: '', stderr: '' }
       }
+      if (params.command === 'bash' && params.args?.[0] === '-c' && fake.onScript) {
+        const answered = fake.onScript(params.args[1] ?? '', sessionId)
+        if (answered) {
+          return answered
+        }
+      }
       return { exitCode: 127, stdout: '', stderr: 'not found' }
+    },
+    async updateSnapshotExpiration(name, expirationMs) {
+      if (!boxes.has(name)) {
+        throw new ProviderError(404, 'not_found')
+      }
+      fake.snapshotExpirations.set(name, expirationMs)
     },
     async readFile(sessionId, path) {
       return bySession(sessionId).files.get(path) ?? null

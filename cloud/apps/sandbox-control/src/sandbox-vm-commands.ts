@@ -149,11 +149,13 @@ export async function refreshSessionEnv(
 }
 
 /** Best effort: orcad turns working chats into durable restart offers before the VM stops. */
-export async function drainOrcad(provider: SandboxProviderApi, sessionId: string): Promise<boolean> {
+export async function drainOrcad(provider: SandboxProviderApi, sessionId: string, waitSeconds?: number): Promise<boolean> {
   try {
     const result = await provider.runCommand(sessionId, {
       command: DRAIN_COMMAND,
-      timeoutMs: DRAIN_TIMEOUT_MS
+      // The script's own default (280s) leaves room inside DRAIN_TIMEOUT_MS; Restart passes a short wait.
+      ...(waitSeconds ? { args: [String(Math.max(1, Math.floor(waitSeconds)))] } : {}),
+      timeoutMs: waitSeconds ? (waitSeconds + 20) * 1000 : DRAIN_TIMEOUT_MS
     })
     return result.exitCode === 0
   } catch (error) {

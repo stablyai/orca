@@ -104,4 +104,8 @@ export type Env = {
   EGRESS_EXTRA_HOSTS?: string
   /** GitHub App webhook secret (secret): verifies X-Hub-Signature-256 on /v1/github/webhook. */
   GITHUB_WEBHOOK_SECRET?: string
+  /** Archived workspaces are destroyed this many days after archive (default 30). */
+  ARCHIVE_TTL_DAYS?: string
+  /** Status-panel cost estimate, cents per running hour by machine size: {"standard":75,"large":150}. */
+  COST_CENTS_PER_HOUR?: string
 }

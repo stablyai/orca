@@ -89,6 +89,8 @@ export type SandboxProviderApi = {
   extendTimeout(sessionId: string, durationMs: number): Promise<ProviderSession>
   updateNetworkPolicy(sessionId: string, policy: NetworkPolicy): Promise<void>
   runCommand(sessionId: string, params: RunCommandParams): Promise<CommandResult>
+  /** Provider-side snapshot expiry after last use (archive TTL backstop). */
+  updateSnapshotExpiration(name: string, expirationMs: number): Promise<void>
   /** A small text file from the VM (files API: not kept as command logs). Null when absent. */
   readFile(sessionId: string, path: string): Promise<string | null>
   /** Resolves when already gone. */

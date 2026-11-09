@@ -60,6 +60,7 @@ import { browserApi } from './api/browser/browser-bridge'
 import { emulatorApi } from './api/emulator-bridge'
 import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
+import { orcaCloudWorkspaceApi } from './api/orca-cloud-workspace-bridge'
 import { cacheApi } from './api/cache-bridge'
 import { sessionApi } from './api/session-bridge'
 import { updaterApi } from './api/updater-bridge'
@@ -167,6 +168,7 @@ const api = {
   emulator: emulatorApi,
   hooks: hooksApi,
   ephemeralVm: ephemeralVmApi,
+  orcaCloudWorkspace: orcaCloudWorkspaceApi,
   cache: cacheApi,
   session: sessionApi,
   updater: updaterApi,

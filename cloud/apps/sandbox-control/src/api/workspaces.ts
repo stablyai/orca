@@ -3,6 +3,7 @@
 import type { MachineSize } from '../entitlements'
 import { createSandbox, destroySandbox, resumeSandbox, suspendSandbox, type LifecycleDeps } from '../lifecycle'
 import { getSandbox, type SandboxRow } from '../store'
+import { archiveSandbox, unarchiveSandbox } from '../workspace-lifecycle'
 import { ApiError } from './caller'
 import { randomId } from './keys'
 
@@ -63,6 +64,8 @@ export function apiStatus(row: Pick<SandboxRow, 'status'>): string {
       running: 'running',
       suspending: 'sleeping',
       suspended: 'sleeping',
+      // The API reports archive separately (`archived: true`); the VM itself is asleep.
+      archived: 'sleeping',
       resuming: 'waking',
       destroying: 'destroying',
       destroyed: 'destroyed',
@@ -171,19 +174,21 @@ export async function sleepWorkspace(life: LifecycleDeps, row: WorkspaceRow): Pr
 }
 
 export async function wakeWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {
-  const ready = await resumeSandbox(life, row)
+  // Waking an archived workspace brings it back (restores the snapshot TTL; boot clears archived_at).
+  const ready = row.status === 'archived' ? await unarchiveSandbox(life, row) : await resumeSandbox(life, row)
   if (row.archived_at !== null) {
-    // Waking an archived workspace brings it back.
     await life.db.prepare('UPDATE sandboxes SET archived_at = NULL WHERE id = ?').bind(row.id).run()
   }
   return (await getSandbox(life.db, ready.row.id)) as WorkspaceRow
 }
 
-/** Archive = sleep + out of default lists. The disk is kept until retention or destroy. */
+/**
+ * Archive = stop and keep the snapshot for a TTL, out of default lists (W2's archiveSandbox:
+ * repo metadata captured in the VM, provider snapshot expiry shortened, cron deletes after the TTL).
+ */
 export async function archiveWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {
-  const slept = row.status === 'running' ? await sleepWorkspace(life, row) : row
-  await life.db.prepare('UPDATE sandboxes SET archived_at = COALESCE(archived_at, ?) WHERE id = ?').bind(life.now(), row.id).run()
-  return (await getSandbox(life.db, slept.id)) as WorkspaceRow
+  const archived = await archiveSandbox(life, row, {})
+  return (await getSandbox(life.db, archived.id)) as WorkspaceRow
 }
 
 export async function destroyWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {
