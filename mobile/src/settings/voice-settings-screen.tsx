@@ -26,7 +26,6 @@ import { VoiceTranscribeOnSection, voiceTranscribeOnShown } from './voice-transc
 
 const POLL_INTERVAL_MS = 1500
 
-// Hosts that report hold-to-record have Auto; older ones only Toggle and Hold.
 function dictationModes(t: Translate, offersAuto: boolean) {
   const toggle = {
     value: 'toggle',

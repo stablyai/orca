@@ -171,7 +171,7 @@ export type RuntimeSpeechSetupState = {
   enabled: boolean
   selectedModelId: string
   dictationMode: 'toggle' | 'hold'
-  /** Toggle plus hold-to-record is Auto. Absent from older hosts, which have no Auto. */
+  /** Toggle plus hold-to-record is Auto. */
   dictationHoldToRecord: boolean
   /** Phones that recognize speech themselves clean their own text by this switch. */
   removeFillerWords: boolean

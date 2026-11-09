@@ -4,6 +4,7 @@ import type {
   RuntimeSpeechSetupState
 } from '../../../shared/runtime-worktree-contracts'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import {
   getCatalogModel,
   isLocalSpeechModel,
@@ -121,7 +122,7 @@ export class RuntimeMobileSpeechCatalog {
         ? { dictationHoldToRecord: params.dictationHoldToRecord }
         : // A phone without Auto that picks Hold leaves no hold-to-record behind for a later Toggle.
           params.dictationMode === 'hold'
-          ? { dictationHoldToRecord: false }
+          ? dictationShortcutModeSettings('hold')
           : {})
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
