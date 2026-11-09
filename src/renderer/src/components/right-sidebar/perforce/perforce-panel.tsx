@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { FolderPlus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import {

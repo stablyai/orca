@@ -1,4 +1,4 @@
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { toShelvedDiffPath } from '../../../../../shared/perforce/perforce-shelved-paths'

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
