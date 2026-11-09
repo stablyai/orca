@@ -7,6 +7,7 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { applyThemeBackground } from '../lib/theme-background'
+import { applyWindowSurfaceOpacity } from '../lib/window-material-runtime'
 import { syncThemeBackgroundVideo } from '../lib/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
@@ -171,6 +172,10 @@ export function useDocumentAppearance(): void {
       applyThemeBackground(paintsBackground ? themeBackground : null, surfaceOpacity)
     }
   }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
+
+  useEffect(() => {
+    applyWindowSurfaceOpacity(surfaceOpacity)
+  }, [surfaceOpacity])
 
   const reduceMotion = usePrefersReducedMotion()
   const video =

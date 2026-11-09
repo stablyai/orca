@@ -50,6 +50,16 @@ export function syncWindowMaterialWithThemeBackground(themeBackgroundActive: boo
   })
 }
 
+/** Background Opacity for chats over the window material; a theme image sets its own token. */
+export function applyWindowSurfaceOpacity(opacity: number): void {
+  const root = document.documentElement
+  if (activeWindowMaterial() === 'off') {
+    root.style.removeProperty('--orca-window-surface-opacity')
+    return
+  }
+  root.style.setProperty('--orca-window-surface-opacity', String(opacity))
+}
+
 /** Lets main.css clear the opaque body paint before first frame so the material shows through. */
 export function applyWindowMaterialToDocument(): void {
   const active = activeWindowMaterial()
