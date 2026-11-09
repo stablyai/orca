@@ -639,7 +639,6 @@
 1 test-no-wall-clock:src/renderer/src/components/native-chat/session/structured/delivery/NativeChatMessageList.unsent-message.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/surfaces/integration/NativeChatMessageList.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/tools/tasks/NativeChatStructuredSessionStatus.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
