@@ -3692,12 +3692,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Kapat",
             "34dd5ee38b": "Yeniden dene",
-            "ed2a664f8b": "Worktree oluşturulamadı",
             "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
-            "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "cancelProvisioning": "İptal",
-            "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
+            "cancelProvisioning": "İptal"
           }
         }
       },
@@ -19459,6 +19456,7 @@
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
         "orcaStopUnnamedServer": "uzak sunucu",
         "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
         "forkedFrom": "Çatallandığı kaynak"

@@ -10,10 +10,15 @@ export const VM_SCRIPTS = [
   'orca-sandbox-env',
   'orca-session-env.sh',
   'orca-egress-probe',
-  'orca-image-wipe'
+  'orca-image-wipe',
+  'orca-share-proxy',
+  'orca-sshd',
+  'orca-ssh-keys',
+  'orca-desktop-start'
 ] as const
 
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/)
+const Version = z.string().regex(/^\d+\.\d+\.\d+$/)
 const Package = z.string().regex(/^(@[a-z0-9-]+\/)?[a-z0-9.-]+@\d+\.\d+\.\d+[A-Za-z0-9.-]*$/)
 
 export const ManifestSchema = z
@@ -27,7 +32,15 @@ export const ManifestSchema = z
     gh: z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/).nullable(), sha256: Sha256.nullable() }).strict(),
     /** Google Chrome .deb (headless browser for agents and Orca browser automation); null skips it. */
     chrome: z.object({ version: z.string().regex(/^\d+\.\d+\.\d+\.\d+-\d+$/), sha256: Sha256 }).strict().nullable(),
-    agentCliPackages: z.array(Package).min(1)
+    agentCliPackages: z.array(Package).min(1),
+    /** Optional remote desktop (noVNC + websockify tarballs); absent = an image without it. */
+    desktop: z
+      .object({
+        novnc: z.object({ version: Version, sha256: Sha256 }).strict(),
+        websockify: z.object({ version: Version, sha256: Sha256 }).strict()
+      })
+      .strict()
+      .optional()
   })
   .strict()
 export type GoldenImageManifest = z.infer<typeof ManifestSchema>
@@ -95,6 +108,12 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
     env.CHROME_VERSION = manifest.chrome.version
     env.CHROME_SHA256 = manifest.chrome.sha256
   }
+  if (manifest.desktop) {
+    env.NOVNC_VERSION = manifest.desktop.novnc.version
+    env.NOVNC_SHA256 = manifest.desktop.novnc.sha256
+    env.WEBSOCKIFY_VERSION = manifest.desktop.websockify.version
+    env.WEBSOCKIFY_SHA256 = manifest.desktop.websockify.sha256
+  }
   for (const name of VM_SCRIPTS) {
     env[`ORCA_VM_SCRIPT_${name.replaceAll(/[-.]/g, '_')}`] = utf8Base64(inputs.vmScripts[name])
   }
@@ -102,7 +121,7 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
 }
 
 /** Runs in Node (operator CLI) and in Workers (scheduled rotation), so no Buffer. */
-function utf8Base64(text: string): string {
+export function utf8Base64(text: string): string {
   let binary = ''
   for (const byte of new TextEncoder().encode(text)) {
     binary += String.fromCharCode(byte)

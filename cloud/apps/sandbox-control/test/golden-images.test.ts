@@ -4,10 +4,11 @@ import { advanceGoldenImages, currentGoldenSnapshotId, type GoldenImageDeps } fr
 import { createFakeD1 } from './d1-fake'
 import { createFakeVercel } from './fake-vercel'
 import { createHarness } from './harness'
+import { touchesVm } from '../src/golden-source'
 
 const HOUR = 60 * 60_000
 
-function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typeof fetch } = {}) {
+function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typeof fetch; github?: GoldenImageDeps['config']['github'] } = {}) {
   const { db, raw } = createFakeD1()
   let now = 1_800_000_000_000
   const vercel = createFakeVercel(() => now)
@@ -50,7 +51,7 @@ function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typ
     db,
     provider: { ...vercel, ...golden },
     now: () => now,
-    config: { environment: 'test', region: 'iad1', expirationMs: 0, seedSnapshotId: 'snap_seed', source: options.source, fetch: options.fetch }
+    config: { environment: 'test', region: 'iad1', expirationMs: 0, seedSnapshotId: 'snap_seed', source: options.source, fetch: options.fetch, github: options.github }
   }
   return {
     deps,
@@ -130,5 +131,47 @@ describe('golden image rotation', () => {
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })
     expect([...h.vercel.boxes.values()][0]!.params.snapshotId).toBe('snap_rotated')
   })
-})
 
+  it('tracks a git branch: rebuilds orcad from HEAD when HEAD touches VM code, never for renderer-only changes', async () => {
+    const SHA_A = 'a'.repeat(40)
+    const SHA_B = 'b'.repeat(40)
+    let head = SHA_A
+    let changed: string[] = []
+    const appCalls: string[] = []
+    const github: GoldenImageDeps['config']['github'] = async (method, path) => {
+      appCalls.push(`${method} ${path}`)
+      return path.endsWith('/installation') ? Response.json({ id: 9 }) : Response.json({ token: 'ghs_read' })
+    }
+    const fetchFake = (async (url: string) => {
+      if (url.includes('/commits/')) return Response.json({ sha: head })
+      if (url.includes('/compare/')) return Response.json({ files: changed.map((filename) => ({ filename })) })
+      return new Response('nope', { status: 404 })
+    }) as typeof fetch
+    const t = setup({ source: 'git:https://github.com/acme/orca-private#cloud/integration', github, fetch: fetchFake })
+    expect(await advanceGoldenImages(t.deps)).toBe('seeded')
+    // The seed carries no commit: build HEAD.
+    expect(await advanceGoldenImages(t.deps)).toBe('source-started')
+    expect(appCalls).toEqual(['GET /repos/acme/orca-private/installation', 'POST /app/installations/9/access_tokens'])
+    t.commands.set([...t.commands.keys()][0]!, 0)
+    expect(await advanceGoldenImages(t.deps)).toBe('built')
+    expect(await advanceGoldenImages(t.deps)).toBe('activated')
+    const active = () => t.raw.prepare(`SELECT bundle_sha256 FROM golden_images WHERE status = 'active'`).get() as { bundle_sha256: string }
+    expect(active().bundle_sha256).toBe(`git:${SHA_A}`)
+    expect(await advanceGoldenImages(t.deps)).toBe('idle')
+    // Renderer-only change: no rebuild.
+    head = SHA_B
+    changed = ['src/renderer/src/components/Foo.tsx']
+    expect(await advanceGoldenImages(t.deps)).toBe('idle')
+    // A host RPC change: rebuild.
+    changed = ['src/renderer/src/components/Foo.tsx', 'src/main/runtime/rpc/methods/ports.ts']
+    expect(await advanceGoldenImages(t.deps)).toBe('source-started')
+  })
+
+  it('classifies VM paths', () => {
+    expect(touchesVm('src/main/orcad/orcad-entry.ts')).toBe(true)
+    expect(touchesVm('src/shared/hosted-sandbox/wire.ts')).toBe(true)
+    expect(touchesVm('pnpm-lock.yaml')).toBe(true)
+    expect(touchesVm('src/renderer/src/App.tsx')).toBe(false)
+    expect(touchesVm('cloud/apps/billing/src/index.ts')).toBe(false)
+  })
+})

@@ -13,7 +13,9 @@ export const CLOUD_DOT_CLASS: Record<CloudDotState, string> = {
   // Half-filled, so it differs from running even with the pulse off (reduced motion).
   waking:
     'rounded-full border-[1.5px] border-foreground bg-[linear-gradient(90deg,var(--foreground)_50%,transparent_50%)] motion-safe:animate-pulse',
-  unresponsive: 'rounded-full bg-status-warning-text',
+  // Light: amber nudged toward the foreground just enough for 3:1 on the sidebar; dark: plain amber.
+  unresponsive:
+    'rounded-full bg-[color-mix(in_srgb,var(--status-warning)_85%,var(--foreground))] dark:bg-status-warning',
   archived: 'rounded-[2px] bg-muted-foreground',
   failed: 'rounded-full bg-destructive',
   unknown: 'rounded-full border-[1.5px] border-dashed border-muted-foreground bg-transparent'

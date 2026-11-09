@@ -9,6 +9,7 @@ import type {
   AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
+import { isOrcaCloudSelection } from './new-workspace/run-target-options'
 import { agentChoicePending } from '@/lib/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -315,13 +316,13 @@ function QuickTabBody({
     }),
     [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded, selectAddedProjectGroup]
   )
-  const selectedProjectOption = cardProps.projectOptions.find(
-    (option) => option.id === cardProps.selectedProjectId
-  )
-  const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
+  const isFolderWorkspaceTarget =
+    cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
+    'project-group'
+  // An Orca Cloud sandbox is a whole workspace, not a local worktree.
   const primaryActionLabel = isFolderWorkspaceTarget
     ? getFolderWorkspacePrimaryActionLabel(t)
-    : cardProps.selectedRepoIsGit
+    : cardProps.selectedRepoIsGit && !isOrcaCloudSelection(cardProps)
       ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
@@ -358,12 +359,8 @@ function QuickTabBody({
     <>
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">
-          {isFolderWorkspaceTarget
-            ? t(
-                'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
-                'Create Folder Workspace'
-              )
-            : primaryActionLabel}
+          {/* One title for every project type and target; only the button names the result. */}
+          {t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')}
         </DialogTitle>
         <DialogDescription className="sr-only">
           {t(

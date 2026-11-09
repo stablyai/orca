@@ -92,8 +92,8 @@ export function renderPortsSettingsSection(
       id="ports"
       title={t('auto.components.settings.Settings.portsTitle', 'Ports')}
       description={t(
-        'auto.components.settings.Settings.portsDescription',
-        'Forward dev servers on remote hosts to localhost on this computer.'
+        'auto.components.settings.Settings.portsDescriptionSandboxes',
+        'Forward dev servers in sandboxes and on remote hosts to this computer.'
       )}
       searchEntries={navigation.getSectionSearchEntries('ports')}
     >

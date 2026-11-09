@@ -4,8 +4,10 @@
 #
 # - Booted from an environment build (ORCA_ENV_REPO_DIR set): the repo is already cloned with its
 #   dependencies installed under /vercel/sandbox/repos. Link it as the project (a link, not a move,
-#   so absolute paths baked into installed dependencies keep working) and bring the requested
-#   branch up to date. A failed fetch keeps the build's commit: the workspace still opens.
+#   so absolute paths baked into installed dependencies keep working). No fetch when the build is
+#   already on the requested branch: Orca fetches the base right before it adds the workspace's
+#   worktree, so a fetch here would only delay orcad (measured ~0.5-1 s). Another branch is fetched
+#   and checked out; if that fails the workspace still opens at the build's commit.
 # - Otherwise clone ORCA_REPO_URL here so a repo with no commits yet also opens: it gets an empty
 #   first commit on the requested branch, which Orca needs to create the workspace's worktree.
 set -uo pipefail
@@ -28,7 +30,7 @@ first_commit() {
 
 if [ ! -e "$P" ] && [ -n "${ORCA_ENV_REPO_DIR:-}" ] && [ -d "$ROOT/$ORCA_ENV_REPO_DIR/.git" ]; then
   ln -s "$ROOT/$ORCA_ENV_REPO_DIR" "$P"
-  if [ -n "$ref" ]; then
+  if [ -n "$ref" ] && [ "$(git -C "$P" symbolic-ref --quiet --short HEAD 2>/dev/null)" != "$ref" ]; then
     if timeout 60 git "${auth[@]}" -C "$P" fetch --quiet origin "+refs/heads/$ref:refs/remotes/origin/$ref"; then
       # -f: the install may have rewritten tracked files (a lockfile); the branch's version wins.
       git -C "$P" checkout --quiet -f -B "$ref" "origin/$ref" -- ||

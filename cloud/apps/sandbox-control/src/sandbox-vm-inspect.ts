@@ -24,6 +24,8 @@ read disk_total disk_used < <(df -B1 --output=size,used ${PROJECT} / 2>/dev/null
 uptime_s=$(awk '{printf "%d", $1}' /proc/uptime)
 oom=$(awk '/^oom_kill /{print $2}' /proc/vmstat 2>/dev/null); oom=\${oom:-0}
 victim=$(sudo -n dmesg 2>/dev/null | grep -oE 'Killed process [0-9]+ \([^)]{1,64}\)' | tail -n 1 | sed -E 's/.*\((.*)\)/\1/' | tr -cd 'A-Za-z0-9._+-' | head -c 64)
+# Node names its main thread "MainThread", which is what the kernel reports for a node process.
+[ "$victim" = MainThread ] && victim=node
 orcad=false; pid=$(cat "$HOME/.orca-sandbox/orcad.pid" 2>/dev/null || echo 0); [ "$pid" -gt 1 ] 2>/dev/null && kill -0 "$pid" 2>/dev/null && orcad=true
 load=$(awk '{print $1}' /proc/loadavg)
 printf '{"cpuPercent":%d,"cpus":%d,"load1":%s,"memTotalBytes":%d,"memUsedBytes":%d,"diskTotalBytes":%d,"diskUsedBytes":%d,"uptimeSeconds":%d,"oomKills":%d,"lastOomVictim":%s,"orcadAlive":%s}\n' \
@@ -69,7 +71,8 @@ git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10
 "$node" -e '
 const { execFileSync } = require("child_process")
 const fs = require("fs")
-const run = (cwd, args) => { try { return execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 8 << 20, timeout: 8000 }).trim() } catch { return "" } }
+// trimEnd only: porcelain status lines start with a significant space (" M path").
+const run = (cwd, args) => { try { return execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 8 << 20, timeout: 8000 }).replace(/\s+$/, "") } catch { return "" } }
 const lines = (s) => s ? s.split("\n") : []
 const checkouts = fs.readFileSync("/tmp/orca-archive-wt", "utf8").split("\n").filter(Boolean).slice(0, 20).map((dir) => {
   const counts = run(dir, ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"]).split(/\s+/)

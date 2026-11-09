@@ -244,7 +244,7 @@ export function ChatPanel({
             size="xs"
             aria-disabled={!draft.trim() || busy || undefined}
             aria-busy={busy || undefined}
-            className="aria-disabled:opacity-50"
+            className="aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:hover:bg-muted"
             onClick={send}
           >
             {busy ? <Loader2 className="motion-safe:animate-spin" /> : null}

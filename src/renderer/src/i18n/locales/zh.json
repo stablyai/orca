@@ -3186,12 +3186,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "关闭",
             "34dd5ee38b": "重试",
-            "ed2a664f8b": "无法创建工作树",
             "a3346fc6ed": "取消工作树创建",
             "532aea14ce": "取消",
-            "767951265d": "创建工作树时出现问题。",
-            "cancelProvisioning": "取消",
-            "vmProvisioningLogEmpty": "正在等待环境模板输出…"
+            "cancelProvisioning": "取消"
           }
         }
       },
@@ -19036,6 +19033,7 @@
         "orcaStopCanContinue": "你可以在此对话中继续。",
         "orcaStopUnnamedServer": "远程服务器",
         "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+        "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
         "forkedFrom": "分支来源"

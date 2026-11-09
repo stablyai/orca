@@ -93,7 +93,7 @@ export function CloudWakingOverlay({
       rootRef.current?.focus()
     }
   }, [failed, autoFocus])
-  const name = workspaceName ?? t('orcaCloudWorkspace.thisWorkspace', 'this workspace')
+  const name = workspaceName || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
   const title =
     wake.source === 'restart'
       ? t('orcaCloudWorkspace.overlay.restarting', 'Restarting…')
@@ -122,7 +122,13 @@ export function CloudWakingOverlay({
       data-cloud-waking-overlay={wake.phase}
       role="group"
       aria-label={
-        failed ? undefined : t('orcaCloudWorkspace.overlay.label', '{{name}} is waking', { name })
+        failed
+          ? undefined
+          : wake.source === 'restart'
+            ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name })
+            : wake.source === 'unarchive'
+              ? t('orcaCloudWorkspace.announce.unarchiving', 'Restoring {{name}} from archive.', { name })
+              : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })
       }
     >
       <TerminalSkeleton still={failed} />
@@ -199,7 +205,7 @@ export function CloudWakingOverlay({
                 <Button size="xs" variant="ghost" onClick={onRestart}>
                   {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
                 </Button>
-                <Button size="xs" variant="outline" onClick={onRetry}>
+                <Button size="xs" onClick={onRetry}>
                   {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
                 </Button>
               </div>

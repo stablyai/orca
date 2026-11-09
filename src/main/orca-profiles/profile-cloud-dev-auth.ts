@@ -25,7 +25,10 @@ function devCapabilities(): OrcaCloudCapabilities {
       'share.manage': true,
       'relay.use': true,
       'team.member': true,
-      'enterprise.sso': true
+      'enterprise.sso': true,
+      // Dev sessions exercise the plans/team UI and the Orca Cloud Run-on row too.
+      billing: true,
+      sandbox: true
     },
     refreshedAt: Date.now()
   }

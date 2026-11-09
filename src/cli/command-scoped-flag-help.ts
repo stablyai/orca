@@ -3,6 +3,14 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  ssh: {
+    workspace: '--workspace <name>     Orca Cloud workspace name, SSH host name (orca-…), or id',
+    command: '--command <text>       Run this command over SSH instead of an interactive shell',
+    print: '--print                Print the ssh command instead of running it'
+  },
+  'ssh-proxy': {
+    workspace: '--workspace <name>     Orca Cloud workspace name, SSH host name (orca-…), or id'
+  },
   'extension reload': {
     'extension-id':
       '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',

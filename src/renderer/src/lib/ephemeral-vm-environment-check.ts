@@ -79,7 +79,8 @@ export async function gateVmCreateOnEnvironmentCheck(
   const isPending = (): boolean =>
     Boolean(useAppStore.getState().pendingWorktreeCreations[creationId])
   if (!(await supportsEnvironmentChecks(environmentId))) {
-    update(creationId, { environmentCheck: { status: 'skipped' } })
+    const at = Date.now()
+    update(creationId, { environmentCheck: { status: 'skipped', startedAt: at, finishedAt: at } })
     return isPending()
   }
   for (;;) {
@@ -87,16 +88,31 @@ export async function gateVmCreateOnEnvironmentCheck(
     if (!isPending()) {
       return false
     }
-    update(creationId, { environmentCheck: { status: 'running' } })
+    const startedAt = Date.now()
+    update(creationId, { environmentCheck: { status: 'running', startedAt } })
     const result = await runVmEnvironmentCheck(creationId, environmentId, path)
     if (!isPending()) {
       return false
     }
     if (result.ok) {
-      update(creationId, { environmentCheck: { status: 'passed', checks: result.checks } })
+      update(creationId, {
+        environmentCheck: {
+          status: 'passed',
+          checks: result.checks,
+          startedAt,
+          finishedAt: Date.now()
+        }
+      })
       return true
     }
-    update(creationId, { environmentCheck: { status: 'failed', checks: result.checks } })
+    update(creationId, {
+      environmentCheck: {
+        status: 'failed',
+        checks: result.checks,
+        startedAt,
+        finishedAt: Date.now()
+      }
+    })
     if (useAppStore.getState().activePendingCreationId !== creationId) {
       // The paused build keeps its VM running, so a background create must say it needs the user.
       toast.error(

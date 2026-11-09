@@ -65,7 +65,7 @@ function InlineError({
           onClick={retrying ? undefined : onRetry}
           aria-disabled={retrying || undefined}
           aria-busy={retrying || undefined}
-          className="shrink-0 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          className="shrink-0 aria-disabled:pointer-events-none"
         >
           <RotateCw className={cn(retrying && 'motion-safe:animate-spin')} aria-hidden />
           {retryLabel}

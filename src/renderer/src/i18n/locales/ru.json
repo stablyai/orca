@@ -3814,12 +3814,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Скрыть",
             "34dd5ee38b": "Повторить",
-            "ed2a664f8b": "Не удалось создать рабочее дерево",
             "a3346fc6ed": "Отменить создание рабочего дерева",
             "532aea14ce": "Отмена",
-            "767951265d": "Произошла ошибка при создании рабочего дерева.",
-            "cancelProvisioning": "Отмена",
-            "vmProvisioningLogEmpty": "Ожидание вывода рецепта…"
+            "cancelProvisioning": "Отмена"
           }
         }
       },
@@ -20049,6 +20046,7 @@
         "orcaStopCanContinue": "Вы можете продолжить этот разговор.",
         "orcaStopUnnamedServer": "удалённом сервере",
         "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
+        "safetyReviewApproved": "{{agent}} одобрил это действие. Подробнее.",
         "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
         "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",

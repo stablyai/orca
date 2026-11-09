@@ -3244,12 +3244,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Descartar",
             "34dd5ee38b": "Reintentar",
-            "ed2a664f8b": "No se pudo crear el worktree",
             "a3346fc6ed": "Cancelar creación del worktree",
             "532aea14ce": "Cancelar",
-            "767951265d": "Algo salió mal al crear el worktree.",
-            "cancelProvisioning": "Cancelar",
-            "vmProvisioningLogEmpty": "Esperando output de la receta..."
+            "cancelProvisioning": "Cancelar"
           }
         }
       },
@@ -19717,6 +19714,7 @@
         "orcaStopCanContinue": "Puedes continuar en esta conversación.",
         "orcaStopUnnamedServer": "el servidor remoto",
         "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
+        "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
         "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
         "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
         "forkedFrom": "Rama creada desde"

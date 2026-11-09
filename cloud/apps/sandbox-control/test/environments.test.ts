@@ -83,6 +83,16 @@ describe('org environments', () => {
     expect(lines.at(-1)).toEqual({ type: 'end' })
   })
 
+  it('fails a build whose image cannot start orcad, keeping the active one', async () => {
+    const { h, adminCall, envId, build } = await setup()
+    const good = await build(0)
+    h.vercel.failStart = true
+    const broken = await build(0)
+    expect(broken).toMatchObject({ status: 'failed', error: 'smoke_failed', failedStep: 'snapshot', activatable: false })
+    expect((await adminCall('GET', `/v1/environments/${envId}`)).body.environment.activeBuildId).toBe(good.id)
+    expect([...h.vercel.boxes.keys()].filter((name) => name.includes('envbuild'))).toEqual([])
+  })
+
   it('refuses a second concurrent build and can cancel one', async () => {
     const { adminCall, envId } = await setup()
     const started = await adminCall('POST', `/v1/environments/${envId}/builds`)

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# `orca-ssh-keys add|remove`: adds or removes one desktop's key in the Orca-managed authorized_keys
+# of this VM's sshd, then makes sure sshd runs. The control plane passes the key in
+# ORCA_SSH_PUBLIC_KEY (`ssh-ed25519 <base64> <comment>`), never on the command line. Keys are
+# matched by their base64 blob, so a renamed comment cannot keep a revoked key alive.
+# Prints orca-sshd's {"port":...,"user":...,"hostKey":...} line on success.
+set -euo pipefail
+umask 077
+SSH_DIR="$HOME/.orca-sandbox/ssh"
+action="${1:-}"
+key="${ORCA_SSH_PUBLIC_KEY:-}"
+# grep matches per line: a second line could carry key options past the check below.
+case "$key" in *$'\n'* | *$'\r'*) echo 'invalid public key' >&2; exit 2 ;; esac
+# One line, ed25519 only, a plain comment: nothing that sshd would read as key options.
+if ! printf '%s' "$key" | grep -Eq '^ssh-ed25519 [A-Za-z0-9+/]{68} [A-Za-z0-9@._:+-]{1,200}$'; then
+  echo 'invalid public key' >&2
+  exit 2
+fi
+blob="$(printf '%s' "$key" | cut -d' ' -f2)"
+mkdir -p "$SSH_DIR"
+chmod 0700 "$HOME/.orca-sandbox" "$SSH_DIR"
+exec 7>"$SSH_DIR/keys.lock"
+flock -w 30 7
+touch "$SSH_DIR/authorized_keys"
+next="$(mktemp "$SSH_DIR/authorized_keys.XXXXXX")"
+# Drop the key wherever it appears (with or without options), then append it on add.
+awk -v blob="$blob" '{ for (i = 1; i <= NF; i++) if ($i == blob) next; print }' \
+  "$SSH_DIR/authorized_keys" >"$next"
+case "$action" in
+  add) printf '%s\n' "$key" >>"$next" ;;
+  remove) ;;
+  *) rm -f "$next"; echo 'usage: orca-ssh-keys add|remove' >&2; exit 2 ;;
+esac
+chmod 0600 "$next"
+mv -f "$next" "$SSH_DIR/authorized_keys"
+exec /opt/orca/bin/orca-sshd

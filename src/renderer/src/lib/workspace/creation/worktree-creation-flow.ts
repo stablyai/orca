@@ -137,7 +137,9 @@ export function continueBackgroundWorktreeCreation(
     status: 'creating',
     startedAt: Date.now(),
     error: undefined,
+    errorCode: undefined,
     provisioningLog: undefined,
+    provisioningLogStamps: undefined,
     checkoutProgress: undefined,
     request
   })
@@ -159,7 +161,11 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     return
   }
   if (entry.chatInputHandedOff && entry.worktreeId) {
-    store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
+    store.updatePendingWorktreeCreation(creationId, {
+      status: 'creating',
+      error: undefined,
+      errorCode: undefined
+    })
     store.setActivePendingWorktreeCreation(creationId)
     store.setActiveView('terminal')
     void retryCreatedWorktreeChat(creationId, entry.worktreeId, entry.request)
@@ -171,7 +177,9 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
+    errorCode: undefined,
     provisioningLog: undefined,
+    provisioningLogStamps: undefined,
     environmentCheck: undefined,
     checkoutProgress: undefined,
     worktreeId: undefined

@@ -125,7 +125,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           sourceRepoId: repoId,
           recipeId: activeEphemeralVmRecipeId,
           projectId: selectedWorkspaceTarget.target.projectId,
-          ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {})
+          ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {}),
+          ...(selectedRecipe?.provider ? { provider: selectedRecipe.provider } : {})
         }
       }
 

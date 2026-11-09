@@ -3469,12 +3469,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Ignorer",
             "34dd5ee38b": "Réessayer",
-            "ed2a664f8b": "Impossible de créer le worktree",
             "a3346fc6ed": "Annuler la création du worktree",
             "532aea14ce": "Annuler",
-            "767951265d": "Un problème est survenu lors de la création du worktree.",
-            "cancelProvisioning": "Annuler",
-            "vmProvisioningLogEmpty": "En attente de la sortie de la recette…"
+            "cancelProvisioning": "Annuler"
           }
         }
       },
@@ -19779,6 +19776,7 @@
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation.",
         "orcaStopUnnamedServer": "le serveur distant",
         "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+        "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
         "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
         "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
         "forkedFrom": "Branche créée à partir de"

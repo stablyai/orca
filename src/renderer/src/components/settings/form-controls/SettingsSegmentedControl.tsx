@@ -92,7 +92,7 @@ export function SettingsSegmentedControl<T extends string | number>({
       aria-describedby={ariaDescribedBy}
       className={cn(
         // A muted track with a raised chip keeps the selection visible in light, where fill alone is ~1.1:1.
-        'inline-flex items-center gap-0.5 rounded-md border border-border bg-muted p-0.5 dark:bg-white/[0.03]',
+        'inline-flex items-center gap-1 rounded-md border border-border bg-muted p-0.5 dark:bg-white/[0.03]',
         equalWidth && 'w-full',
         wrap && 'flex-wrap'
       )}
@@ -120,7 +120,8 @@ export function SettingsSegmentedControl<T extends string | number>({
             }}
             className={cn(
               // Every option is medium weight so labels keep their width when the selection moves.
-              'rounded-sm text-center font-medium outline-none transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-focus-ring',
+              // Focus replaces the chip edge (flush outline, no ring) so a focused segment never draws two rings.
+              'rounded-sm text-center font-medium outline-none transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-0 focus-visible:outline-focus-ring focus-visible:ring-0',
               size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
               equalWidth && 'flex-1',
               active

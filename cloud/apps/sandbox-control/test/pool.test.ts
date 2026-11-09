@@ -20,6 +20,34 @@ async function pooledHarness(size = '2') {
 }
 
 describe('warm pool', () => {
+  it('keeps a warm VM for the active build of an environment in use, and a create from it claims that VM', async () => {
+    const { h, deps, poolRows } = await pooledHarness('1')
+    h.vercel.buildResult = JSON.stringify({ repos: [{ url: 'https://github.com/acme/web.git', dir: 'acme/web', branch: 'main', commit: 'a'.repeat(40), lockfiles: {} }] })
+    const env = await h.call('POST', '/v1/environments', { body: { name: 'Default', repos: [{ url: 'acme/web' }] } })
+    const started = await h.call('POST', `/v1/environments/${env.body.environment.id}/builds`)
+    ;[...h.vercel.buildCommands.values()].at(-1)!.exitCode = 0
+    const build = (await h.call('GET', `/v1/environments/${env.body.environment.id}/builds/${started.body.build.id}`)).body.build
+    expect(build.status).toBe('succeeded')
+    const snapshot = h.raw.prepare('SELECT snapshot_id FROM environment_builds WHERE id = ?').get(build.id) as { snapshot_id: string }
+    // Only built, never used: no warm VM for it yet.
+    await maintainPool(deps())
+    expect(poolRows().map((r) => r.snapshot_id)).toEqual([GOLDEN])
+    // The first create from the environment misses (and boots from the build); then it is hot.
+    const first = await h.call('POST', '/v1/sandboxes', { body: { ...create, workspaceId: 'ws-first', repo: { url: 'https://github.com/acme/web.git' } } })
+    expect(first.body.sandbox.environmentBuildId).toBe(build.id)
+    await maintainPool(deps())
+    const images = poolRows().map((r) => r.snapshot_id).sort()
+    expect(images).toEqual([GOLDEN, snapshot.snapshot_id].sort())
+    const pooledFromBuild = poolRows().find((r) => r.snapshot_id === snapshot.snapshot_id)!.id
+    const res = await h.call('POST', '/v1/sandboxes', { body: { ...create, repo: { url: 'https://github.com/acme/web.git' } } })
+    expect(res.status).toBe(200)
+    expect(res.body.sandbox).toMatchObject({ id: pooledFromBuild, environmentBuildId: build.id })
+    // Two hours without use: the build's warm VM is recycled, the golden pool stays.
+    h.advance(3 * 60 * MIN)
+    await maintainPool(deps())
+    expect(poolRows().map((r) => r.snapshot_id)).toEqual([GOLDEN])
+  })
+
   it('is off unless SANDBOX_POOL_SIZE is a positive integer, and capped', () => {
     expect(poolConfigFromEnv({})).toBeUndefined()
     expect(poolConfigFromEnv({ SANDBOX_POOL_SIZE: '0' })).toBeUndefined()

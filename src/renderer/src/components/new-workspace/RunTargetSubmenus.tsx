@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, Cloud, Plus, Server } from 'lucide-react'
+import { Box, Boxes, ChevronDown, Network, Plus, Server } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,12 +7,28 @@ import { RunTargetRow } from './RunTargetComboboxRow'
 import {
   getEphemeralVmLabel,
   getRecipeDetail,
+  getRecipeSubmenuItemKey,
   RUN_TARGET_ADD_HOST_KEY,
+  RUN_TARGET_ADD_REMOTE_SERVER_ITEM,
+  RUN_TARGET_ADD_SSH_HOST_ITEM,
   type EphemeralVmRecipeOption
 } from './run-target-options'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 
 const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
+
+/** Keyboard/pointer arm inside a submenu; the combobox input points `aria-activedescendant` at it. */
+export type RunTargetSubmenuArm = {
+  /** The submenu listbox id, so the input can list it in `aria-controls`. */
+  listId: string
+  armedItemKey: string | null
+  armedItemId: string
+  onArmItem: (key: string | null) => void
+}
+
+function itemId(arm: RunTargetSubmenuArm, key: string): string | undefined {
+  return arm.armedItemKey === key ? arm.armedItemId : undefined
+}
 
 /** The "Per-Workspace Environment" row and its nested recipe list. */
 export function RecipesSubmenuRow({
@@ -22,6 +38,7 @@ export function RecipesSubmenuRow({
   optionId,
   recipes,
   selectedRecipeId,
+  submenuArm,
   onArm,
   onSelectRecipe
 }: {
@@ -31,24 +48,24 @@ export function RecipesSubmenuRow({
   optionId: string | undefined
   recipes: readonly EphemeralVmRecipeOption[]
   selectedRecipeId: string | null
+  submenuArm: RunTargetSubmenuArm
   onArm: () => void
   onSelectRecipe: (recipeId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
         <div>
           <RunTargetRow
-            icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
+            icon={<Boxes className="size-3.5 shrink-0 text-muted-foreground" />}
             label={getEphemeralVmLabel(t)}
             detail={t(
-              'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
-              'Provision an on-demand environment from a recipe'
+              'auto.components.NewWorkspaceComposerCard.customEnvironmentsHint',
+              'Create a workspace from an orca.yaml recipe'
             )}
             armed={armed}
-            current={selectedRecipeId !== null}
+            current={selectedRecipeId !== null && recipes.some((r) => r.id === selectedRecipeId)}
             optionId={optionId}
             submenu
             onArm={onArm}
@@ -63,25 +80,24 @@ export function RecipesSubmenuRow({
         className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        {/* Nested rows own hover so pointer movement updates their highlight too. */}
-        <div
-          role="listbox"
-          aria-label={getEphemeralVmLabel(t)}
-          onMouseLeave={() => setHoveredKey(null)}
-        >
-          {recipes.map((recipe) => (
-            <RunTargetRow
-              key={recipe.id}
-              icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
-              label={recipe.name}
-              detail={getRecipeDetail(recipe, t)}
-              armed={hoveredKey === recipe.id}
-              current={recipe.id === selectedRecipeId}
-              optionId={undefined}
-              onArm={() => setHoveredKey(recipe.id)}
-              onCommit={() => onSelectRecipe(recipe.id)}
-            />
-          ))}
+        {/* Hover arms like a native menu; leaving keeps the arm so keyboard users keep their place. */}
+        <div id={submenuArm.listId} role="listbox" aria-label={getEphemeralVmLabel(t)}>
+          {recipes.map((recipe) => {
+            const key = getRecipeSubmenuItemKey(recipe.id)
+            return (
+              <RunTargetRow
+                key={recipe.id}
+                icon={<Box className="size-3.5 shrink-0 text-muted-foreground" />}
+                label={recipe.name}
+                detail={getRecipeDetail(recipe, t)}
+                armed={submenuArm.armedItemKey === key}
+                current={recipe.id === selectedRecipeId}
+                optionId={itemId(submenuArm, key)}
+                onArm={() => submenuArm.onArmItem(key)}
+                onCommit={() => onSelectRecipe(recipe.id)}
+              />
+            )
+          })}
         </div>
       </PopoverContent>
     </Popover>
@@ -94,6 +110,7 @@ export function AddHostSubmenuRow({
   onOpenChange,
   armed,
   optionId,
+  submenuArm,
   onArm,
   onAddSshHost,
   onAddRemoteServer
@@ -102,12 +119,12 @@ export function AddHostSubmenuRow({
   onOpenChange: (open: boolean) => void
   armed: boolean
   optionId: string | undefined
+  submenuArm: RunTargetSubmenuArm
   onArm: () => void
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
   const addHostLabel = t('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -116,8 +133,8 @@ export function AddHostSubmenuRow({
           role="option"
           id={optionId}
           aria-selected={armed}
-          // `option` supports aria-haspopup but not aria-expanded.
-          aria-haspopup="menu"
+          // `option` supports aria-haspopup but not aria-expanded; the submenu is a listbox.
+          aria-haspopup="listbox"
           data-armed={armed || undefined}
           data-run-target-add-host="true"
           onMouseDown={(event) => event.preventDefault()}
@@ -144,7 +161,7 @@ export function AddHostSubmenuRow({
         className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div role="listbox" aria-label={addHostLabel} onMouseLeave={() => setHoveredKey(null)}>
+        <div id={submenuArm.listId} role="listbox" aria-label={addHostLabel}>
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -153,30 +170,30 @@ export function AddHostSubmenuRow({
                 'auto.components.NewWorkspaceComposerCard.addSshHostHint',
                 'Use an existing machine over SSH'
               )}
-              armed={hoveredKey === 'ssh'}
+              armed={submenuArm.armedItemKey === RUN_TARGET_ADD_SSH_HOST_ITEM}
               current={false}
               stacked
-              optionId={undefined}
-              onArm={() => setHoveredKey('ssh')}
+              optionId={itemId(submenuArm, RUN_TARGET_ADD_SSH_HOST_ITEM)}
+              onArm={() => submenuArm.onArmItem(RUN_TARGET_ADD_SSH_HOST_ITEM)}
               onCommit={onAddSshHost}
             />
           ) : null}
           {onAddRemoteServer ? (
             <RunTargetRow
-              icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
+              icon={<Network className="size-3.5 shrink-0 text-muted-foreground" />}
               label={t(
-                'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServer',
-                'Add Remote Orca Server'
+                'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServerSentence',
+                'Add remote Orca server'
               )}
               detail={t(
                 'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServerHint',
                 'Pair another Orca runtime'
               )}
-              armed={hoveredKey === 'remote'}
+              armed={submenuArm.armedItemKey === RUN_TARGET_ADD_REMOTE_SERVER_ITEM}
               current={false}
               stacked
-              optionId={undefined}
-              onArm={() => setHoveredKey('remote')}
+              optionId={itemId(submenuArm, RUN_TARGET_ADD_REMOTE_SERVER_ITEM)}
+              onArm={() => submenuArm.onArmItem(RUN_TARGET_ADD_REMOTE_SERVER_ITEM)}
               onCommit={onAddRemoteServer}
             />
           ) : null}

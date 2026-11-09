@@ -30,7 +30,10 @@ import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
-import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
+import {
+  selectVmBuildSurfaceShown,
+  selectWorktreeCreationSurfaceShown
+} from '@/lib/workspace/creation/worktree-creation-surface'
 
 function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
@@ -41,7 +44,9 @@ function RightSidebarInner(): React.JSX.Element {
     isWebClient: isPairedWebClientWindow()
   })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  // A VM build fills the window with its sheet; the empty panel would only squeeze it.
+  const vmBuildShown = useAppStore(selectVmBuildSurfaceShown)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen) && !vmBuildShown
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
@@ -56,7 +61,7 @@ function RightSidebarInner(): React.JSX.Element {
   // Creation keeps the prior worktree active until handoff, so its panels would show that worktree.
   const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
   const checksStatus = useAppStore((s) =>
-    s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
+    rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
   )
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)

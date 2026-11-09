@@ -20,6 +20,10 @@ import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/paired-server-rows'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
+import {
+  RelayHostListAnnouncer,
+  type RelayHostListAnnouncerSources
+} from './mobile-relay-host-list-announcer'
 
 export type MobileRelayRecipeEnvironmentLookup = (
   hostId: string
@@ -142,7 +146,27 @@ export class MobileRelayHostCatalog {
     return null
   }
 
+  private announcer: RelayHostListAnnouncer | null = null
+
   list(): MobileRelayHostsListResult {
+    const result = this.describe()
+    this.announcer?.listed(result)
+    return result
+  }
+
+  /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
+  publishListChanges(sources: RelayHostListAnnouncerSources): () => void {
+    const announcer = new RelayHostListAnnouncer(this.options.hosts, () => this.describe(), sources)
+    this.announcer = announcer
+    return () => {
+      announcer.dispose()
+      if (this.announcer === announcer) {
+        this.announcer = null
+      }
+    }
+  }
+
+  private describe(): MobileRelayHostsListResult {
     return {
       hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
         ({

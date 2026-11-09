@@ -76,6 +76,9 @@ function environmentTargets(
     )
 }
 
+// Success stays long enough to reach its action (WCAG 2.2.1); Sonner pauses on hover and focus.
+const FORWARDED_TOAST_MS = 8_000
+
 function announce(port: WorkspacePort, forward: RuntimePortForward): void {
   const url = runtimePortForwardUrl(forward, port.protocol === 'https' ? 'https' : 'http')
   const source = [port.processName, port.kind === 'workspace' ? port.owner.displayName : null]
@@ -83,20 +86,19 @@ function announce(port: WorkspacePort, forward: RuntimePortForward): void {
     .join(' · ')
   toast.success(
     translate(
-      'auto.components.ports.RuntimePortAutoForwarder.ready',
-      'localhost:{{value0}} is ready',
-      {
-        value0: forward.localPort
-      }
+      'auto.components.ports.RuntimePortAutoForwarder.forwarded',
+      'Forwarded :{{value0}} to localhost:{{value1}}',
+      { value0: port.port, value1: forward.localPort }
     ),
     {
       id: `runtime-port-forward:${forward.environmentId}:${forward.remotePort}`,
+      duration: FORWARDED_TOAST_MS,
       description:
         forward.localPort === port.port
           ? source
           : translate(
-              'auto.components.ports.RuntimePortAutoForwarder.remapped',
-              '{{value0}} · :{{value1}} was taken here',
+              'auto.components.ports.RuntimePortAutoForwarder.remappedInUse',
+              '{{value0}} · {{value1}} in use on this computer',
               { value0: source, value1: port.port }
             ),
       action: {
@@ -110,15 +112,38 @@ function announce(port: WorkspacePort, forward: RuntimePortForward): void {
   )
 }
 
+/** Several servers at once (a monorepo `dev`) get one toast instead of a stack. */
+function announceMany(environmentId: string, count: number): void {
+  toast.success(
+    translate('auto.components.ports.RuntimePortAutoForwarder.many', '{{value0}} ports forwarded', {
+      value0: count
+    }),
+    {
+      id: `runtime-port-forward:${environmentId}:many`,
+      duration: FORWARDED_TOAST_MS,
+      action: {
+        label: translate('auto.components.ports.RuntimePortAutoForwarder.openPorts', 'Open Ports'),
+        onClick: () => {
+          const state = useAppStore.getState()
+          state.setRightSidebarOpen(true)
+          state.setRightSidebarTab('ports')
+        }
+      }
+    }
+  )
+}
+
 function announceBusy(port: WorkspacePort, environmentId: string): void {
   toast.warning(
     translate(
-      'auto.components.ports.RuntimePortAutoForwarder.busy',
-      'localhost:{{value0}} is in use here',
+      'auto.components.ports.RuntimePortAutoForwarder.busyInUse',
+      'localhost:{{value0}} in use on this computer',
       { value0: port.port }
     ),
     {
       id: `runtime-port-forward:${environmentId}:${port.port}`,
+      // Needs a decision, so it waits for the user (WCAG 2.2.1).
+      duration: Number.POSITIVE_INFINITY,
       description: translate(
         'auto.components.ports.RuntimePortAutoForwarder.busyDescription',
         '"Same port number only" is on, so :{{value0}} was not forwarded.',
@@ -244,6 +269,7 @@ export function RuntimePortAutoForwarder({ enabled }: { enabled: boolean }): nul
       if (state.unsupported) {
         return
       }
+      const forwarded: { port: WorkspacePort; forward: RuntimePortForward }[] = []
       for (const port of plan.open) {
         state.attempted.add(port.port)
         const result = await openRuntimePortForward({
@@ -257,14 +283,19 @@ export function RuntimePortAutoForwarder({ enabled }: { enabled: boolean }): nul
           return
         }
         if (result.ok) {
-          if (settings.notify && !firstScan) {
-            announce(port, result.forward)
-          }
+          forwarded.push({ port, forward: result.forward })
         } else if (result.code === 'port_busy' && settings.notify && !firstScan) {
           announceBusy(port, target.environmentId)
         } else if (result.code === 'host_unsupported') {
           state.unsupported = true
           return
+        }
+      }
+      if (settings.notify && !firstScan && forwarded.length > 0) {
+        if (forwarded.length === 1) {
+          announce(forwarded[0]!.port, forwarded[0]!.forward)
+        } else {
+          announceMany(target.environmentId, forwarded.length)
         }
       }
     }

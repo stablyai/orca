@@ -75,6 +75,21 @@ export type Env = {
   /** HMAC key for the signed connect state (secret, >= 32 chars). */
   GITHUB_STATE_SECRET?: string
 
+  /**
+   * Share links (src/share-links.ts): HMAC secret (>= 32 chars) for link tokens, per-session VM
+   * proxy keys and viewer cookies. Unset = share routes answer 503. Rotating it voids every link.
+   */
+  SHARE_LINK_SECRET?: string
+  /**
+   * Per-link subdomain mode: `.share.example.dev` serves `<token>.share.example.dev/` at the root
+   * (needs a wildcard custom domain on this Worker). Unset = path mode `/s/<token>/` only.
+   */
+  SHARE_HOST_SUFFIX?: string
+  /** Retired SHARE_LINK_SECRET, still accepted for links, codes and cookies while a rotation drains. */
+  SHARE_LINK_SECRET_PREVIOUS?: string
+  /** `on` | `off`: path-mode links (`/s/<token>/` on this origin). Default on outside prod, off in prod. */
+  SHARE_PATH_MODE?: string
+
   /** Operator routes (/v1/internal/*): kill switch, drain, bindings. Secret, >= 32 chars; unset = no routes. */
   OPERATOR_TOKEN?: string
   /** `true` refuses every create/resume/rollover (static kill switch; the D1 flag is the runtime one). */

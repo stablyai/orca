@@ -18,6 +18,29 @@ export type NetworkPolicy = { allow: Record<string, NetworkPolicyRule[]> }
 
 export const EGRESS_DENIED_BODY = 'orca-egress-denied'
 
+/**
+ * "Open in VS Code / Cursor" over `orca ssh`: the editor's Remote-SSH installs its server in the VM
+ * and the server installs the user's remote extensions. Without these the editor falls back to
+ * downloading on the desktop and copying over SSH (slower, and extensions still fail).
+ */
+export const EDITOR_REMOTE_SERVER_HOSTS: readonly string[] = [
+  // VS Code: update.code.visualstudio.com redirects to the prss CDN; vscode-cdn serves web assets.
+  'update.code.visualstudio.com',
+  'vscode.download.prss.microsoft.com',
+  '*.vscode-cdn.net',
+  'marketplace.visualstudio.com',
+  '*.gallery.vsassets.io',
+  '*.gallerycdn.vsassets.io',
+  '*.vscode-unpkg.net',
+  // Cursor: its remote server builds (downloads.cursor.com, older builds from the blob) and its
+  // extension marketplace, which redirects to Open VSX.
+  'downloads.cursor.com',
+  'cursor.blob.core.windows.net',
+  'marketplace.cursorapi.com',
+  'open-vsx.org',
+  'openvsxorg.blob.core.windows.net'
+]
+
 /** Registries, git hosting and agent model/sign-in hosts a coding VM needs. */
 export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'registry.npmjs.org',
@@ -57,7 +80,8 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'accounts.google.com',
   // Vercel AI Gateway: Anthropic/OpenAI-compatible endpoint teams point agents at (ANTHROPIC_BASE_URL).
   'ai-gateway.vercel.sh',
-  '*.onorca.dev'
+  '*.onorca.dev',
+  ...EDITOR_REMOTE_SERVER_HOSTS
 ]
 
 export type CredentialRoute = {

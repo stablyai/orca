@@ -143,6 +143,9 @@ export type EphemeralVmRecipeDoctorCheck = {
   status: EphemeralVmRecipeDoctorCheckStatus
   message: string
   remediation?: string
+  /** Stable id for `message` + `remediation` so clients can show them in their own language. */
+  code?: string
+  params?: Record<string, string>
 }
 
 export type EphemeralVmRecipeDoctorResult = {

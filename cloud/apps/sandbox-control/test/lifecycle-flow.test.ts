@@ -26,7 +26,7 @@ describe('sandbox control plane lifecycle', () => {
       name: `orca-test-${ready.sandbox.id}`,
       snapshotId: GOLDEN,
       vcpus: 4,
-      ports: [6768],
+      ports: [6768, 6769],
       tags: { orcaSandbox: ready.sandbox.id, orcaEnv: 'test' }
     })
     expect(Object.keys(box!.policy.allow)).not.toContain('*')

@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import { BellOff, Copy, Plug, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem } from '@/components/ui/context-menu'
+import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import {
@@ -11,7 +12,8 @@ import {
   runtimePortForwardFailureText,
   runtimePortForwardingAvailable,
   runtimePortForwardUrl,
-  useRuntimePortForwardState
+  useRuntimePortForwardState,
+  wakeRuntimePortForwardHost
 } from '@/lib/runtime-port-forwards/runtime-port-forwards-store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
@@ -45,15 +47,24 @@ export type RuntimePortRowForwarding = {
   /** Forwards (if needed) and opens the port in the system browser through this computer's localhost. */
   openLocally: (port: WorkspacePort) => Promise<void>
   forwards: RuntimePortForward[]
+  /** Latest forward outcome for one always-mounted polite live region. */
+  announcement: string
 }
 
 /** Row forwarding UI for a remote environment's ports; null when the target is this computer. */
 export function useRuntimePortRowForwarding(
-  runtimeTarget: RuntimeClientTarget | null
+  runtimeTarget: RuntimeClientTarget | null,
+  /** Host actions after the forward items (Orca Cloud: Share…). */
+  extraMenuItems?: (port: WorkspacePort) => ReactNode
 ): RuntimePortRowForwarding | null {
   const t = useTranslate()
   const environmentId = runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : null
-  const { forwards: allForwards, pending, failures } = useRuntimePortForwardState()
+  const { forwards: allForwards, pending, failures, announcement } = useRuntimePortForwardState()
+  // A known host whose connection is down: forwards stay bound but nothing reaches it until it returns.
+  const hostOffline = useAppStore((s) => {
+    const entry = environmentId ? s.runtimeStatusByEnvironmentId.get(environmentId) : undefined
+    return entry ? entry.status === null : false
+  })
   const forwards = useMemo(
     () => allForwards.filter((forward) => forward.environmentId === environmentId),
     [allForwards, environmentId]
@@ -97,7 +108,7 @@ export function useRuntimePortRowForwarding(
       const key = portForwardKey(environmentId ?? '', port.port)
       const failure = failures.get(key)
       return existing
-        ? { kind: 'forwarded', forward: existing }
+        ? { kind: 'forwarded', forward: existing, hostOffline }
         : pending.has(key)
           ? { kind: 'pending' }
           : failure
@@ -114,6 +125,9 @@ export function useRuntimePortRowForwarding(
           remotePort={port.port}
           state={rowState(port)}
           onForward={() => void forward(port)}
+          onReconnect={
+            environmentId ? () => void wakeRuntimePortForwardHost(environmentId) : undefined
+          }
           onOpenLocal={(target) =>
             openAppHttpLink(localUrl(target, port), {
               worktreeId: port.kind === 'workspace' ? port.owner.worktreeId : null
@@ -132,7 +146,7 @@ export function useRuntimePortRowForwarding(
       },
       menuItems: (port) => {
         const existing = forwardFor(port)
-        return existing ? (
+        const forwardItems = existing ? (
           <>
             <ContextMenuItem
               className={MENU_ITEM_CLASS}
@@ -148,7 +162,7 @@ export function useRuntimePortRowForwarding(
               }}
             >
               <Copy size={13} />
-              {t('auto.components.right.sidebar.RuntimePortForward.copyLocal', 'Copy Local URL')}
+              {t('auto.components.right.sidebar.RuntimePortForward.copyLocalUrl', 'Copy local URL')}
             </ContextMenuItem>
             <ContextMenuItem
               className={MENU_ITEM_CLASS}
@@ -157,11 +171,14 @@ export function useRuntimePortRowForwarding(
               {existing.reason === 'auto' ? <BellOff size={13} /> : <Unplug size={13} />}
               {existing.reason === 'auto'
                 ? t(
-                    'auto.components.right.sidebar.RuntimePortForward.stopAuto',
-                    "Stop and Don't Auto-Forward :{{value0}}",
+                    'auto.components.right.sidebar.RuntimePortForward.stopAndSkip',
+                    "Stop and don't auto-forward :{{value0}}",
                     { value0: port.port }
                   )
-                : t('auto.components.right.sidebar.RuntimePortForward.stop', 'Stop Forwarding')}
+                : t(
+                    'auto.components.right.sidebar.RuntimePortForward.stopForwarding',
+                    'Stop forwarding'
+                  )}
             </ContextMenuItem>
           </>
         ) : (
@@ -170,16 +187,22 @@ export function useRuntimePortRowForwarding(
             {t('auto.components.right.sidebar.RuntimePortForward.forward', 'Forward to localhost')}
           </ContextMenuItem>
         )
+        return (
+          <>
+            {forwardItems}
+            {extraMenuItems?.(port)}
+          </>
+        )
       },
       copyAddress: (port) => {
         const existing = forwardFor(port)
         return existing ? `localhost:${existing.localPort}` : undefined
       }
     }
-  }, [environmentId, failures, forward, forwardFor, pending, t])
+  }, [environmentId, extraMenuItems, failures, forward, forwardFor, hostOffline, pending, t])
 
   if (!environmentId || !runtimePortForwardingAvailable()) {
     return null
   }
-  return { forwarding, openLocally, forwards }
+  return { forwarding, openLocally, forwards, announcement }
 }

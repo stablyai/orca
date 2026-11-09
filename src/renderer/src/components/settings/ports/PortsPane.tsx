@@ -2,6 +2,7 @@ import { useCallback, useId, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Input } from '../../ui/input'
+import { InlineError } from '../../ui/inline-error'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import {
   normalizeRuntimePortForwardSettings,
@@ -17,7 +18,8 @@ function PortBox({
   disabled,
   ariaLabel,
   describedBy,
-  onCommit
+  onCommit,
+  onInvalid
 }: {
   value: number
   min: number
@@ -26,6 +28,8 @@ function PortBox({
   ariaLabel: string
   describedBy: string
   onCommit: (value: number) => void
+  /** Called with the rejected text; null once a value commits. */
+  onInvalid: (rejected: string | null) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(String(value))
   const [previous, setPrevious] = useState(value)
@@ -37,9 +41,11 @@ function PortBox({
   const invalid = !Number.isSafeInteger(parsed) || parsed < min || parsed > max
   const commit = (): void => {
     if (invalid) {
+      onInvalid(draft)
       setDraft(String(value))
       return
     }
+    onInvalid(null)
     if (parsed !== value) {
       onCommit(parsed)
     }
@@ -83,6 +89,20 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
     [forwarding, updateSettings]
   )
   const off = !forwarding.autoForward
+  const [rangeError, setRangeError] = useState<string | null>(null)
+  const reportInvalid = useCallback(
+    (rejected: string | null) =>
+      setRangeError(
+        rejected === null
+          ? null
+          : t(
+              'auto.components.settings.ports.rangeInvalid',
+              '"{{value0}}" isn\'t a usable port. Use a port from 1 to 65535, lowest first.',
+              { value0: rejected }
+            )
+      ),
+    [t]
+  )
 
   return (
     <div className="divide-y divide-border/60">
@@ -125,6 +145,7 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
               ariaLabel={t('auto.components.settings.ports.rangeStart', 'Lowest port')}
               describedBy={rangeHelpId}
               onCommit={(rangeStart) => update({ rangeStart })}
+              onInvalid={reportInvalid}
             />
             <span aria-hidden>–</span>
             <PortBox
@@ -135,10 +156,12 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
               ariaLabel={t('auto.components.settings.ports.rangeEnd', 'Highest port')}
               describedBy={rangeHelpId}
               onCommit={(rangeEnd) => update({ rangeEnd })}
+              onInvalid={reportInvalid}
             />
           </div>
         }
       />
+      {rangeError ? <InlineError title={rangeError} className="my-2" /> : null}
       <SettingsSwitchRow
         label={t('auto.components.settings.ports.notify', 'Notify when a port is forwarded')}
         checked={forwarding.notify}

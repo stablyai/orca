@@ -181,6 +181,17 @@ export function createVercelSandboxApi(
       })
     },
 
+    async updatePorts(name, ports) {
+      // PATCH treats `ports` as the full list; a running session gets the new routes immediately
+      // (measured live: ~260 ms, route answers at once).
+      const response = await request('PATCH', `/v2/sandboxes/${encodeURIComponent(name)}`, {
+        query: { projectId: config.projectId },
+        body: { ports }
+      })
+      const body = await json(z.looseObject({ routes: z.array(Route).optional() }), response)
+      return (body.routes ?? []).map((route) => ({ port: route.port, url: route.url }))
+    },
+
     async runCommand(sessionId, params) {
       const response = await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd`, {
         body: {

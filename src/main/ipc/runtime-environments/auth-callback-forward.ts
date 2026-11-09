@@ -18,17 +18,20 @@ import {
 import { BrowserNetworkTunnelClient } from '../../browser/network/tunnels/browser-network-tunnel-client'
 import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL } from '../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
+import { pipeUpstreamToClient } from '../../browser/network/tunnels/remote-browser-socks-upstream'
 
 const ATTACH_TIMEOUT_MS = 20_000
 
-type Tunnel = { client: BrowserNetworkTunnelClient; close: () => void }
+export type AuthCallbackTunnel = { client: BrowserNetworkTunnelClient; close: () => void }
+/** Opens the host end of one sign-in's forward; injectable so tests can wire it in-process. */
+export type AuthCallbackTunnelOpener = (onClosed: () => void) => Promise<AuthCallbackTunnel>
 
 /** Opens the host end: a tunnel that reaches only this flow's callback port there. */
 async function openHostTunnel(
   userDataPath: string,
   request: AuthCallbackForwardRequest,
   onClosed: () => void
-): Promise<Tunnel> {
+): Promise<AuthCallbackTunnel> {
   await ensureOrcadManagedTunnel(userDataPath, request.environmentId)
   const connection = getPreferredPairedRuntimeConnection(
     resolveEnvironment(userDataPath, request.environmentId)
@@ -119,7 +122,7 @@ function listen(server: Server, port: number, host: string): Promise<void> {
 export class AuthCallbackForward {
   private readonly servers: Server[] = []
   private readonly sockets = new Set<Socket>()
-  private tunnel: Tunnel | null = null
+  private tunnel: AuthCallbackTunnel | null = null
   private connections = 0
   private bytes = 0
   private closed = false
@@ -132,7 +135,7 @@ export class AuthCallbackForward {
     this.ttl = setTimeout(() => this.close(), TTL_MS)
   }
 
-  async start(userDataPath: string): Promise<AuthCallbackForwardResult> {
+  async start(openTunnel: AuthCallbackTunnelOpener): Promise<AuthCallbackForwardResult> {
     const v4 = createServer((socket) => this.accept(socket))
     try {
       await listen(v4, this.request.port, '127.0.0.1')
@@ -155,7 +158,7 @@ export class AuthCallbackForward {
       () => v6.close()
     )
     try {
-      this.tunnel = await openHostTunnel(userDataPath, this.request, () => this.close())
+      this.tunnel = await openTunnel(() => this.close())
     } catch (error) {
       this.close()
       return {
@@ -196,11 +199,17 @@ export class AuthCallbackForward {
         socket.on('data', count)
         remote.on('data', count)
         socket.pipe(remote)
-        remote.pipe(socket)
+        // Settles each chunk once the local socket took it, returning flow-control credit to the host.
+        pipeUpstreamToClient(remote, socket)
         socket.on('error', () => remote.destroy())
         remote.on('error', () => socket.destroy())
         socket.on('close', () => remote.destroy())
-        remote.on('close', () => socket.destroy())
+        // A finished reply is already ending the socket; destroying it would drop unflushed bytes.
+        remote.on('close', () => {
+          if (!socket.writableEnded) {
+            socket.destroy()
+          }
+        })
         socket.resume()
       },
       () => socket.destroy()
@@ -280,7 +289,7 @@ export async function openAuthCallbackForward(
     }
   })
   forwards.set(key, forward)
-  return forward.start(userDataPath)
+  return forward.start((onClosed) => openHostTunnel(userDataPath, request, onClosed))
 }
 
 export function registerAuthCallbackForwardHandlers(getUserDataPath: () => string): void {

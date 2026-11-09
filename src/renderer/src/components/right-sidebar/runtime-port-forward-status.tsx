@@ -7,76 +7,90 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
 
 export type RuntimePortForwardRowState =
-  | { kind: 'forwarded'; forward: RuntimePortForward }
+  | { kind: 'forwarded'; forward: RuntimePortForward; hostOffline?: boolean }
   | { kind: 'pending' }
   | { kind: 'unforwarded' }
   | { kind: 'failed'; message: string; busy: boolean }
 
-const CHIP =
-  'inline-flex shrink-0 items-center gap-1 rounded-sm px-1 -mx-1 text-2xs leading-4 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring motion-safe:transition-colors'
+const FOCUS =
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring'
+const ACTION = 'h-5 px-1 text-xs font-normal text-foreground'
 
 /** The line under a remote port: where it lands on this computer, or a control to forward it. */
 export function RuntimePortForwardStatus({
   remotePort,
   state,
   onForward,
-  onOpenLocal
+  onOpenLocal,
+  onReconnect
 }: {
   remotePort: number
   state: RuntimePortForwardRowState
   onForward: () => void
   onOpenLocal: (forward: RuntimePortForward) => void
+  onReconnect?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   if (state.kind === 'forwarded') {
     const { forward } = state
-    const unreachable = Boolean(forward.lastError)
+    const offline = state.hostOffline === true
+    const unreachable = !offline && Boolean(forward.lastError)
     const remapped = forward.localPort !== remotePort
-    const note = unreachable
-      ? t('auto.components.right.sidebar.RuntimePortForward.noResponse', 'no response on host')
-      : remapped
-        ? t('auto.components.right.sidebar.RuntimePortForward.remapped', '({{value0}} taken)', {
-            value0: remotePort
-          })
-        : null
+    const note = offline
+      ? t('auto.components.right.sidebar.RuntimePortForward.hostOfflineNote', 'Host offline')
+      : unreachable
+        ? t(
+            'auto.components.right.sidebar.RuntimePortForward.notAnswering',
+            'Nothing answering on :{{value0}} yet',
+            { value0: remotePort }
+          )
+        : remapped
+          ? t(
+              'auto.components.right.sidebar.RuntimePortForward.remappedInUse',
+              '{{value0}} in use',
+              {
+                value0: remotePort
+              }
+            )
+          : null
+    const localAddress = t(
+      'auto.components.right.sidebar.RuntimePortForward.localAddress',
+      'localhost:{{value0}}',
+      { value0: forward.localPort }
+    )
     return (
       <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
         <button
           type="button"
           className={cn(
-            CHIP,
-            'max-w-full text-foreground/85 hover:bg-accent hover:text-foreground'
+            'inline-flex max-w-full shrink-0 items-center gap-1 rounded-sm px-1 -mx-1 text-2xs leading-4 text-foreground/85 hover:bg-accent hover:text-foreground motion-safe:transition-colors',
+            FOCUS
           )}
           onClick={() => onOpenLocal(forward)}
-          aria-label={
-            unreachable
-              ? t(
-                  'auto.components.right.sidebar.RuntimePortForward.unreachableLabel',
-                  'Port {{value0}} is forwarded to localhost:{{value1}}, but nothing answers on the host. Open in browser',
-                  { value0: remotePort, value1: forward.localPort }
-                )
-              : t(
-                  'auto.components.right.sidebar.RuntimePortForward.forwardedLabel',
-                  'Port {{value0}} is forwarded to localhost:{{value1}}. Open in browser',
-                  { value0: remotePort, value1: forward.localPort }
-                )
-          }
+          aria-label={[
+            t(
+              'auto.components.right.sidebar.RuntimePortForward.forwardedToLabel',
+              'Port {{value0}} is forwarded to {{value1}}. Open in browser',
+              { value0: remotePort, value1: localAddress }
+            ),
+            note
+          ]
+            .filter(Boolean)
+            .join('. ')}
         >
           {unreachable ? (
             <TriangleAlert size={11} aria-hidden className="shrink-0 text-status-warning-text" />
           ) : (
-            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-success" />
+            <span
+              aria-hidden
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                offline ? 'bg-muted-foreground/50' : 'bg-status-success'
+              )}
+            />
           )}
           <ArrowRight size={11} aria-hidden className="shrink-0 text-muted-foreground" />
-          <span className="truncate font-medium">
-            {t(
-              'auto.components.right.sidebar.RuntimePortForward.localAddress',
-              'localhost:{{value0}}',
-              {
-                value0: forward.localPort
-              }
-            )}
-          </span>
+          <span className="truncate font-medium">{localAddress}</span>
         </button>
         {note ? (
           <span
@@ -85,15 +99,20 @@ export function RuntimePortForwardStatus({
               unreachable ? 'text-status-warning-text' : 'text-muted-foreground'
             )}
           >
-            {note}
+            · {note}
           </span>
+        ) : null}
+        {offline && onReconnect ? (
+          <Button type="button" variant="ghost" size="xs" className={ACTION} onClick={onReconnect}>
+            {t('auto.components.right.sidebar.RuntimePortForward.reconnect', 'Reconnect')}
+          </Button>
         ) : null}
       </span>
     )
   }
   if (state.kind === 'pending') {
     return (
-      <span className={cn(CHIP, 'text-muted-foreground')} role="status">
+      <span className="inline-flex items-center gap-1 text-2xs leading-5 text-muted-foreground">
         <LoaderCircle size={11} aria-hidden className="shrink-0 motion-safe:animate-spin" />
         {t('auto.components.right.sidebar.RuntimePortForward.pending', 'Forwarding…')}
       </span>
@@ -103,18 +122,18 @@ export function RuntimePortForwardStatus({
     state.kind === 'failed'
       ? state.busy
         ? {
-            icon: <Plug size={11} aria-hidden className="shrink-0" />,
+            icon: <Plug aria-hidden />,
             label: t(
               'auto.components.right.sidebar.RuntimePortForward.useAnother',
               'Use another port'
             )
           }
         : {
-            icon: <RotateCw size={11} aria-hidden className="shrink-0" />,
+            icon: <RotateCw aria-hidden />,
             label: t('auto.components.right.sidebar.RuntimePortForward.retry', 'Retry')
           }
       : {
-          icon: <Plug size={11} aria-hidden className="shrink-0" />,
+          icon: <Plug aria-hidden />,
           label: t(
             'auto.components.right.sidebar.RuntimePortForward.forward',
             'Forward to localhost'
@@ -128,20 +147,26 @@ export function RuntimePortForwardStatus({
           <span>{state.message}</span>
         </span>
       ) : null}
-      <button
+      <Button
         type="button"
-        className={cn(CHIP, 'text-muted-foreground hover:bg-accent hover:text-foreground')}
+        variant="ghost"
+        size="xs"
+        className={cn(ACTION, '-mx-1')}
         onClick={onForward}
-        aria-label={`${action.label} (:${remotePort})`}
+        aria-label={t(
+          'auto.components.right.sidebar.RuntimePortForward.actionLabel',
+          '{{value0}} for port {{value1}}',
+          { value0: action.label, value1: remotePort }
+        )}
       >
         {action.icon}
         {action.label}
-      </button>
+      </Button>
     </span>
   )
 }
 
-/** Stop Forwarding as a row hover action, beside Open and Copy. */
+/** Stop forwarding as a row hover action, beside Open and Copy. */
 export function RuntimePortForwardStopButton({
   remotePort,
   onStop
@@ -170,7 +195,7 @@ export function RuntimePortForwardStopButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {t('auto.components.right.sidebar.RuntimePortForward.stop', 'Stop Forwarding')}
+        {t('auto.components.right.sidebar.RuntimePortForward.stopForwarding', 'Stop forwarding')}
       </TooltipContent>
     </Tooltip>
   )

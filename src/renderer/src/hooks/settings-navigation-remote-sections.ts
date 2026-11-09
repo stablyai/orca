@@ -75,8 +75,8 @@ export function buildRemoteSettingsSections(
             id: 'ports',
             title: t('auto.hooks.useSettingsNavigationMetadata.portsTitle', 'Ports'),
             description: t(
-              'auto.hooks.useSettingsNavigationMetadata.portsDescription',
-              'Forward dev servers on remote hosts to localhost on this computer.'
+              'auto.hooks.useSettingsNavigationMetadata.portsDescriptionSandboxes',
+              'Forward dev servers in sandboxes and on remote hosts to this computer.'
             ),
             icon: Plug,
             searchEntries: getPortsPaneSearchEntries(),

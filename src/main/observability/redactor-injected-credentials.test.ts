@@ -66,6 +66,7 @@ describe('redactor — injected credential shapes', () => {
   })
 
   it('drops env maps wholesale rather than redacting them value by value', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: redactValue preserves the input's object shape.
     const out = redactValue({
       spawn: { file: 'claude', env: { CUSTOM_VALUE: 'not-a-known-shape-1234' } }
     }) as { spawn: Record<string, unknown> }

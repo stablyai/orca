@@ -106,8 +106,6 @@ export function LocalPortRow({
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
   )
-  const confidenceLabel =
-    port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
   const canStopProcess =
     port.kind === 'workspace' && Boolean(port.pid) && port.processName !== 'Electron'
 
@@ -116,7 +114,7 @@ export function LocalPortRow({
       <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
         <ContextMenuTrigger asChild>
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             tabIndex={0}
             role="group"
             aria-label={t(
@@ -139,11 +137,11 @@ export function LocalPortRow({
                   <span className="truncate">{address}</span>
                 </div>
               )}
-              <div className="flex min-w-0 items-center gap-1.5 text-3xs text-muted-foreground/70">
+              <div
+                className="flex min-w-0 items-center gap-1.5 text-3xs text-muted-foreground/70"
+                title={port.kind === 'workspace' ? port.owner.path : undefined}
+              >
                 <span className="truncate">{ownerLabel}</span>
-                {confidenceLabel && (
-                  <span className="shrink-0 text-muted-foreground/70">{confidenceLabel}</span>
-                )}
               </div>
             </div>
           </div>

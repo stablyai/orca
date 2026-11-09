@@ -13,6 +13,8 @@
 //   GET    /v1/sandboxes/:id/archive                              -> {archive}
 //   POST   /v1/sandboxes/:id/unarchive                            -> {sandbox, connection}
 //   DELETE /v1/sandboxes/:id                                      -> {sandbox}
+//   POST, GET /v1/sandboxes/:id/shares | DELETE /v1/sandboxes/:id/shares/:shareId | POST /v1/shares/:token/visit
+//   POST | DELETE /v1/sandboxes/:id/ssh-keys {publicKey}          -> {ssh: {port, user, hostKey}}
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
@@ -22,6 +24,7 @@
 // cannot enroll devices, manage secrets or connect GitHub.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
+// Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
@@ -81,7 +84,11 @@ import { cachedProviderEnv } from './session-env'
 import { credentialTargets } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
-import { VmCommandError } from './sandbox-vm-commands'
+import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
+import { forgetShareLink, handleShareGateway } from './share-gateway'
+import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
+import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
+import { audit } from './api/audit'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, type BuildDeps } from './environment-builds'
@@ -135,6 +142,8 @@ export type Deps = {
   sleep?: (ms: number) => Promise<void>
   /** Workspace-grant cleanup for a revoked device session (wired by the workspace registry). */
   onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
+  /** Share-gateway fetch to the VM's share proxy (tests). */
+  shareFetch?: typeof fetch
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -418,6 +427,7 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
     },
     config: {
       pool: poolConfigFromEnv(env),
+      shareLinkSecret: shareSecret(env),
       extraEgressHosts: (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
@@ -495,6 +505,7 @@ async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
       region: env.VERCEL_REGION ?? 'iad1',
       expirationMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : 0,
       source: env.GOLDEN_IMAGE_SOURCE,
+      github: githubMinter(env)?.sourceRequest,
       seedSnapshotId: env.GOLDEN_SNAPSHOT_ID,
       refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
     }
@@ -529,9 +540,51 @@ async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
   }
 }
 
+/** Public share-link traffic; null when the request is not for a link. */
+async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): Promise<Response | null> {
+  const secrets = shareSecrets(env)
+  const onShareHost = env.SHARE_HOST_SUFFIX && url.hostname.endsWith(env.SHARE_HOST_SUFFIX)
+  if (!secrets || !(onShareHost || (sharePathMode(env) && url.pathname.startsWith('/s/')))) {
+    return null
+  }
+  const provider =
+    deps.provider ??
+    (env.VERCEL_TOKEN && env.VERCEL_TEAM_ID && env.VERCEL_PROJECT_ID
+      ? createVercelSandboxApi({ token: env.VERCEL_TOKEN, teamId: env.VERCEL_TEAM_ID, projectId: env.VERCEL_PROJECT_ID, baseUrl: env.VERCEL_API_BASE })
+      : null)
+  if (!provider) {
+    return null
+  }
+  return handleShareGateway(request, url, {
+    db: env.SANDBOX_DB,
+    secrets,
+    provider,
+    now: deps.now ?? Date.now,
+    hostSuffix: env.SHARE_HOST_SUFFIX,
+    pathMode: sharePathMode(env),
+    fetch: deps.shareFetch,
+    // Visitor wake (link opt-in) is the same single-flight wake as every other wake source, billed
+    // and entitlement-checked as the owner's. The page polls status, so no long-poll here.
+    wake: async (sandbox) => {
+      const life = await lifecycleDeps(env, deps)
+      if (!life) {
+        throw new Error('not_configured')
+      }
+      const answer = await wakeSandbox(life, sandbox, { waitMs: 0, ...workspaceConfig(env, deps) })
+      if (answer.state === 'failed' || answer.state === 'not_found') {
+        throw new Error(`wake_${answer.state}`)
+      }
+    }
+  })
+}
+
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
   const url = new URL(request.url)
   try {
+    const shared = await shareGateway(request, url, env, deps)
+    if (shared) {
+      return shared
+    }
     if (url.pathname === '/v1/egress/proxy' || url.pathname.startsWith('/v1/egress/proxy/')) {
       if (!env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
         return fail('not_configured', 503)
@@ -712,8 +765,31 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return await handleEnvironmentRoute(request, url, caller, buildDeps(life, deps), () => readJson(request))
     }
+    if (/^\/v1\/sandboxes\/[A-Za-z0-9_]+\/shares(?:\/|$)|^\/v1\/shares\//.test(url.pathname)) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      const secrets = shareSecrets(env)
+      // No link URL can be served without either a share domain or (dev) path mode.
+      if (!secrets || (!env.SHARE_HOST_SUFFIX && !sharePathMode(env))) {
+        return fail('not_configured', 503)
+      }
+      const answer = await handleShareRoute(request.method, url.pathname, {
+        db: env.SANDBOX_DB,
+        secret: secrets[0]!,
+        secrets,
+        caller,
+        now: (deps.now ?? Date.now)(),
+        origin: url.origin,
+        hostSuffix: env.SHARE_HOST_SUFFIX,
+        readJson: () => readJson(request),
+        forget: forgetShareLink
+      })
+      return answer ? json(answer.body, answer.status) : fail('not_found', 404)
+    }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -758,8 +834,11 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     switch (route) {
       case 'GET ':
         return json({ sandbox: view(row) })
-      case 'DELETE ':
-        return json({ sandbox: view(await destroySandbox(life, row)) })
+      case 'DELETE ': {
+        const destroyed = await destroySandbox(life, row)
+        await revokeSandboxShares(env.SANDBOX_DB, row.id, life.now())
+        return json({ sandbox: view(destroyed) })
+      }
       case 'POST suspend':
         return json({ sandbox: view(await suspendSandbox(life, row)) })
       case 'POST resume': {
@@ -795,12 +874,45 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
+      case 'POST desktop': {
+        // Runs only the image's fixed entry point; the desktop listens on the VM's loopback and is
+        // reached through the paired runtime's port forward, never a public route.
+        if (row.status !== 'running' || !row.session_id) {
+          return fail('conflict', 409, `sandbox_${row.status}`)
+        }
+        const started = Date.now()
+        const desktop = await startDesktop(life.provider, row.session_id)
+        console.log(JSON.stringify({ event: 'desktop_start', ms: Date.now() - started }))
+        return json({ desktop: { port: desktop.port, path: desktop.path, password: desktop.password } })
+      }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))
         if (!body.success) {
           return fail('invalid_request', 400)
         }
         return json({ sandbox: view(await renewLease(life, row, body.data.extendMs)) })
+      }
+      case 'POST ssh-keys':
+      case 'DELETE ssh-keys': {
+        const body = SshKeyRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        const action = request.method === 'POST' ? 'add' : 'remove'
+        const ssh = await updateSshKey(life, row, action, body.data.publicKey)
+        // Who granted or revoked shell access to which VM; the key comment names device + workspace.
+        await audit(
+          env.SANDBOX_DB,
+          { accountId: caller.accountId, type: 'user', id: caller.userId, userId: caller.userId },
+          {
+            action: action === 'add' ? 'sandbox.ssh_key_added' : 'sandbox.ssh_key_removed',
+            targetType: 'sandbox',
+            targetId: row.id,
+            detail: { key: body.data.publicKey.split(' ')[2] }
+          },
+          life.now()
+        ).catch(() => undefined)
+        return json({ ssh })
       }
       default:
         return fail('not_found', 404)
@@ -866,6 +978,11 @@ function errorResponse(error: unknown): Response {
   if (error instanceof LifecycleError) {
     const status = { not_found: 404, conflict: 409, entitlement_denied: 403, provider_unavailable: 502 }[error.code]
     return fail(error.code, status, error.reason)
+  }
+  if (error instanceof DesktopCommandError) {
+    return error.code === 'desktop_not_installed'
+      ? fail('conflict', 409, error.code)
+      : fail('provider_unavailable', 502, error.code)
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)

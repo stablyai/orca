@@ -10,6 +10,7 @@ import {
   PortForwardTunnelError,
   type PortForwardTunnelConnector
 } from './runtime-port-forward-tunnel'
+import { RuntimePortForwardActivity } from './runtime-port-forward-activity'
 import { pipeUpstreamToClient } from '../browser/network/tunnels/remote-browser-socks-upstream'
 import { listenLoopback, type ListenOutcome } from './runtime-port-forward-listen'
 import { forwardKey, isValidRuntimePortForwardRequest } from './runtime-port-forward-request'
@@ -52,9 +53,12 @@ export class RuntimePortForwardManager {
   private readonly forwards = new Map<string, ActiveForward>()
   private readonly tunnels = new Map<string, EnvironmentPortForwardTunnel>()
   private readonly pending = new Map<string, Promise<RuntimePortForwardOpenResult>>()
+  private readonly activity: RuntimePortForwardActivity
   private changeTimer: ReturnType<typeof setTimeout> | null = null
 
-  constructor(private readonly options: RuntimePortForwardManagerOptions) {}
+  constructor(private readonly options: RuntimePortForwardManagerOptions) {
+    this.activity = new RuntimePortForwardActivity(options.now)
+  }
 
   list(environmentId?: string): RuntimePortForward[] {
     return Array.from(this.forwards.values(), (forward) => ({ ...forward.state })).filter(
@@ -90,6 +94,17 @@ export class RuntimePortForwardManager {
     return attempt
   }
 
+  wake(environmentId: string): Promise<boolean> {
+    return this.tunnelFor(environmentId)
+      .warm(true)
+      .then(() => true)
+      .catch(() => (this.retireIdleTunnel(environmentId), false))
+  }
+
+  lastActivityAt(environmentId: string): number | null {
+    return this.activity.lastAt(environmentId)
+  }
+
   close(id: string): RuntimePortForward | null {
     const forward = this.forwards.get(id)
     if (!forward) {
@@ -97,9 +112,7 @@ export class RuntimePortForwardManager {
     }
     forward.close()
     this.forwards.delete(id)
-    this.options.log?.(
-      `[port-forward] closed localhost:${forward.state.localPort} -> ${forward.state.environmentId}:${forward.state.remotePort}`
-    )
+    this.options.log?.(`[port-forward] closed localhost:${forward.state.localPort}`)
     this.retireIdleTunnel(forward.state.environmentId)
     this.emitChange()
     return { ...forward.state }
@@ -112,6 +125,7 @@ export class RuntimePortForwardManager {
     }
     this.tunnels.get(environmentId)?.close()
     this.tunnels.delete(environmentId)
+    this.activity.forget(environmentId)
   }
 
   dispose(): void {
@@ -160,8 +174,8 @@ export class RuntimePortForwardManager {
   ): Promise<RuntimePortForwardOpenResult> {
     const tunnel = this.tunnelFor(request.environmentId)
     try {
-      // Fail before binding when the host cannot forward, so nothing listens for a dead tunnel.
-      await tunnel.warm()
+      // Fail before binding (nothing listens for a dead tunnel); only user/SSH requests may wake the VM.
+      await tunnel.warm(request.reason !== 'auto')
     } catch (error) {
       this.retireIdleTunnel(request.environmentId)
       return {
@@ -245,6 +259,7 @@ export class RuntimePortForwardManager {
     forward.sockets.add(socket)
     state.openConnections += 1
     state.totalConnections += 1
+    this.activity.note(state.environmentId, 0, true)
     socket.setNoDelay(true)
     socket.pause()
     let released = false
@@ -272,6 +287,7 @@ export class RuntimePortForwardManager {
           }
           socket.on('data', (chunk: Buffer) => {
             state.bytesToHost += chunk.byteLength
+            this.activity.note(state.environmentId, chunk.byteLength, false)
           })
           remote.on('data', (chunk: Buffer) => {
             state.bytesFromHost += chunk.byteLength
@@ -305,7 +321,6 @@ export class RuntimePortForwardManager {
   }
 }
 
-// Main-process callers (SSH access, share) use the singleton API.
 export {
   getRuntimePortForwardManager,
   installRuntimePortForwardManager,

@@ -9,7 +9,7 @@ import {
   type RunCommandParams,
   type SandboxProviderApi
 } from '../src/sandbox-provider'
-import { DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
+import { DESKTOP_COMMAND, DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
 
 type FakeBox = {
@@ -19,6 +19,8 @@ type FakeBox = {
   startedAt: number
   timeoutMs: number
   route: string
+  /** Extra exposed ports beyond orcad's (updatePorts / create params). */
+  ports: number[]
   policy: NetworkPolicy
   /** orcad's recipe line for the current boot, once the start command ran. */
   orcadReady?: string
@@ -44,6 +46,12 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   commandHandler?: (params: RunCommandParams, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
   failStart: boolean
   failEnvRefresh: boolean
+  /** Exit code orca-ssh-keys answers with (0 = success; 3 = image without sshd). */
+  sshKeysExit: number
+  /** authorized_keys per sandbox name, as orca-ssh-keys maintains it. */
+  authorizedKeys: Map<string, string[]>
+  /** What orca-desktop-start answers; exitCode 127 = the image has no such command. */
+  desktop: { exitCode: number; stdout: string }
   failCreate: boolean
   /** Answers `bash -c <script>` probes (metrics, archive capture); undefined falls through to 127. */
   onScript?: (script: string, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
@@ -68,7 +76,10 @@ export function createFakeVercel(now: () => number): FakeVercel {
       tags: box.params.tags
     },
     session: { id: box.sessionId, status: box.status, startedAt: box.startedAt, timeoutMs: box.timeoutMs },
-    routes: [{ port: 6768, url: box.route }]
+    routes: [6768, ...box.ports.filter((port) => port !== 6768)].map((port) => ({
+      port,
+      url: port === 6768 ? box.route : `${box.route.replace('.vercel.run', '')}-${port}.vercel.run`
+    }))
   })
   const bySession = (sessionId: string): FakeBox => {
     const box = [...boxes.values()].find((candidate) => candidate.sessionId === sessionId)
@@ -132,6 +143,9 @@ export function createFakeVercel(now: () => number): FakeVercel {
     },
     failStart: false,
     failEnvRefresh: false,
+    sshKeysExit: 0,
+    authorizedKeys: new Map(),
+    desktop: { exitCode: 0, stdout: '{"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"Ab3dE6gH"}\n' },
     failCreate: false,
     snapshotExpirations: new Map(),
     expire(name) {
@@ -154,6 +168,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
         startedAt: now(),
         timeoutMs: params.timeoutMs,
         route: `https://sb-${counter}.vercel.run`,
+        ports: params.ports,
         policy: params.networkPolicy,
         files: new Map()
       }
@@ -187,6 +202,14 @@ export function createFakeVercel(now: () => number): FakeVercel {
     async updateNetworkPolicy(sessionId, policy) {
       bySession(sessionId).policy = policy
     },
+    async updatePorts(name, ports) {
+      const box = boxes.get(name)
+      if (!box) {
+        throw new ProviderError(404, 'not_found')
+      }
+      box.ports = [...ports]
+      return state(box).routes
+    },
     async runCommand(sessionId, params: RunCommandParams) {
       const box = bySession(sessionId)
       if (box.status !== 'running') {
@@ -199,6 +222,17 @@ export function createFakeVercel(now: () => number): FakeVercel {
       const handled = fake.commandHandler?.(params, sessionId)
       if (handled) {
         return handled
+      }
+      if (params.command === '/opt/orca/bin/orca-ssh-keys') {
+        if (fake.sshKeysExit !== 0) {
+          return { exitCode: fake.sshKeysExit, stdout: '', stderr: 'ssh-keys failed' }
+        }
+        const key = params.env?.ORCA_SSH_PUBLIC_KEY ?? ''
+        const blob = key.split(' ')[1]
+        const keys = (fake.authorizedKeys.get(box.params.name) ?? []).filter((k) => k.split(' ')[1] !== blob)
+        fake.authorizedKeys.set(box.params.name, params.args?.[0] === 'add' ? [...keys, key] : keys)
+        const hostKey = `ssh-ed25519 ${'H'.repeat(68)}`
+        return { exitCode: 0, stdout: `${JSON.stringify({ port: 2222, user: 'vercel-sandbox', hostKey })}\n`, stderr: '' }
       }
       if (command === START_COMMAND) {
         if (fake.failStart) {
@@ -226,6 +260,13 @@ export function createFakeVercel(now: () => number): FakeVercel {
       }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }
+      }
+      if (params.command === DESKTOP_COMMAND) {
+        if (fake.desktop.exitCode === 127) {
+          // Real Vercel behaviour for a missing executable.
+          throw new ProviderError(400, 'command_failed')
+        }
+        return { ...fake.desktop, stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {
         return { exitCode: 0, stdout: '', stderr: '' }

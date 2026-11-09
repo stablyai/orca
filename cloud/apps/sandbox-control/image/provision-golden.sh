@@ -4,7 +4,7 @@
 # Inputs (env, from image/golden-image.manifest.json via build-golden-image.ts):
 #   ORCAD_BUNDLE_URL ORCAD_BUNDLE_SHA256 [GH_VERSION GH_SHA256] [CHROME_VERSION CHROME_SHA256]
 #   AGENT_NPM_PACKAGES (space-separated
-#   name@version) and ORCA_VM_SCRIPT_<name> (base64) for each /opt/orca/bin entry point.
+#   name@version), [NOVNC_VERSION NOVNC_SHA256 WEBSOCKIFY_VERSION WEBSOCKIFY_SHA256] and ORCA_VM_SCRIPT_<name> (base64) for each /opt/orca/bin entry point.
 set -euo pipefail
 ORCA_HOME=/opt/orca
 log() { printf '[golden] %s\n' "$*" >&2; }
@@ -14,12 +14,18 @@ sudo chown -R "$(id -u):$(id -g)" "$ORCA_HOME"
 
 log 'system packages'
 if command -v apt-get >/dev/null; then
+  # Sandbox egress is TLS-only: plain-http apt mirrors time out at runtime (W2, wake on SSH).
+  sudo sed -i 's#http://#https://#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
   # Developer basics agents expect (Conductor parity): rg, tmux, vim, git-lfs alongside the build tools.
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    ca-certificates curl git git-lfs jq ripgrep tmux vim-nox less openssh-client build-essential python3 \
+    ca-certificates curl git git-lfs jq ripgrep tmux vim-nox less openssh-client openssh-server build-essential python3 \
     unzip zip util-linux procps >/dev/null
   git lfs install --system --skip-repo >/dev/null
+  # sshd is started on demand by the wake-on-SSH bridge (key-only, loopback); never at boot.
+  sudo systemctl disable ssh.service ssh.socket >/dev/null 2>&1 || true
+  # A locked password field ("!") makes sshd refuse even key logins; '*' = no password, not locked.
+  sudo usermod -p '*' "$(id -un)"
 elif command -v dnf >/dev/null; then
   sudo dnf install -y -q ca-certificates curl-minimal git git-lfs jq tmux vim-enhanced gcc gcc-c++ make python3 \
     unzip util-linux procps-ng >/dev/null
@@ -79,8 +85,74 @@ log 'agent CLIs'
 # shellcheck disable=SC2086 # word splitting is the package list
 npm install --global --no-fund --no-audit --prefix "$ORCA_HOME/tools" $AGENT_NPM_PACKAGES
 
+log 'openssh server (binaries only)'
+# For `orca ssh`: an unprivileged sshd on loopback (see vm/orca-sshd). Only the server binaries,
+# kept out of /usr: the packages would pull in systemd units, SELinux policy (~38 MB on AL2023) and
+# system host keys a user-run sshd never uses. Its libraries are already in the base image, except
+# tcp-wrappers on Ubuntu.
+mkdir -p "$ORCA_HOME/openssh"
+pkgs="$(mktemp -d)"
+if command -v dnf >/dev/null; then
+  sudo dnf install -y -q --setopt=install_weak_deps=False cpio >/dev/null
+  sudo dnf install -y -q --downloadonly --downloaddir="$pkgs" openssh-server >/dev/null
+  (cd "$pkgs" && rpm2cpio openssh-server-[0-9]*.rpm | cpio -idm --quiet)
+  sudo dnf clean all -q >/dev/null 2>&1 || true
+  libexec="$pkgs/usr/libexec/openssh"
+else
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libwrap0 >/dev/null
+  (cd "$pkgs" && apt-get download -qq openssh-server openssh-sftp-server >/dev/null)
+  for deb in "$pkgs"/*.deb; do dpkg-deb -x "$deb" "$pkgs"; done
+  libexec="$pkgs/usr/lib/openssh"
+fi
+install -m 0755 "$pkgs/usr/sbin/sshd" "$libexec/sshd-session" "$libexec/sftp-server" "$ORCA_HOME/openssh/"
+# OpenSSH 10 splits authentication into its own binary.
+if [ -x "$libexec/sshd-auth" ]; then install -m 0755 "$libexec/sshd-auth" "$ORCA_HOME/openssh/"; fi
+sudo rm -rf "$pkgs"
+"$ORCA_HOME/openssh/sshd" -V 2>&1 | head -n 1 >&2 || true
+# sshd refuses a locked account ('!') even for key logins; '*' unlocks it with no usable password.
+sudo usermod -p '*' "$(id -un)"
+
+install_desktop() {
+  # Remote desktop (~80 MB): Xvnc + openbox + xterm from the distro, noVNC + websockify pinned
+  # tarballs. Only orca-desktop-start runs it, on demand; nothing starts at boot. Every step says
+  # `|| return 1`: errexit does not apply inside an `if` condition.
+  command -v apt-get >/dev/null || { log 'remote desktop: apt only'; return 1; }
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+    tigervnc-standalone-server tigervnc-tools openbox xterm x11-xserver-utils >/dev/null || return 1
+  local tmp dir="$ORCA_HOME/desktop"
+  tmp="$(mktemp -d)" || return 1
+  fetch_verified "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+    "$NOVNC_SHA256" "$tmp/novnc.tgz" || return 1
+  fetch_verified "https://github.com/novnc/websockify/archive/refs/tags/v${WEBSOCKIFY_VERSION}.tar.gz" \
+    "$WEBSOCKIFY_SHA256" "$tmp/websockify.tgz" || return 1
+  rm -rf "$dir" && mkdir -p "$dir/novnc" "$dir/websockify" || return 1
+  tar -xzf "$tmp/novnc.tgz" -C "$dir/novnc" --strip-components 1 || return 1
+  tar -xzf "$tmp/websockify.tgz" -C "$dir/websockify" --strip-components 1 || return 1
+  # Orca tab fit: title "Remote Desktop" (Xvnc's -desktop name), no noVNC favicon, control bar on
+  # the right (away from Orca's sidebar edge), and no reconnect loop on a stale per-boot password.
+  sed -i -e 's/document.title = e.detail.name + " - " + PAGE_TITLE;/document.title = e.detail.name;/' \
+    -e "s/WebUtil.readSetting('controlbar_pos') === 'right'/WebUtil.readSetting('controlbar_pos', 'right') === 'right'/" \
+    -e 's/securityFailed(e) {/securityFailed(e) { UI.inhibitReconnect = true;/' \
+    "$dir/novnc/app/ui.js" || return 1
+  sed -i '/rel="icon"/d; /rel="apple-touch-icon"/d' "$dir/novnc/vnc.html" || return 1
+  rm -rf "$tmp"
+  PYTHONPATH="$dir/websockify" python3 -P -c 'import websockify' >/dev/null || return 1
+  command -v Xvnc >/dev/null && test -s "$dir/novnc/vnc.html"
+}
+desktop=false
+if [ -n "${NOVNC_VERSION:-}" ]; then
+  log 'remote desktop'
+  # Optional: a failure leaves an image without the desktop, never a failed build.
+  if install_desktop; then
+    desktop=true
+  else
+    log 'remote desktop install failed; continuing without it'
+    rm -rf "$ORCA_HOME/desktop"
+  fi
+fi
+
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"
@@ -138,4 +210,4 @@ done
 command -v tmux >/dev/null && versions="$(jq -c --arg v "$(tmux -V)" '. + {tmux: $v}' <<<"$versions")"
 [ -x "$ORCA_HOME/bin/orca" ] && versions="$(jq -c '. + {orca: "bundled"}' <<<"$versions")"
 jq -c --arg node "$("$node" --version)" --arg disk "$(df -h / | awk 'NR==2{print $2}')" \
-  '{node: $node, disk: $disk, tools: .}' <<<"$versions"
+  --argjson desktop "$desktop" '{node: $node, disk: $disk, tools: ., desktop: $desktop}' <<<"$versions"

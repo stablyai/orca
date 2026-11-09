@@ -161,6 +161,33 @@ describe('RuntimePortForwardManager', () => {
     expect(manager.list()[0]?.reason).toBe('user')
   })
 
+  it('wakes the host only for user requests and records use for idle sleep', async () => {
+    const wakes: boolean[] = []
+    const inner = inProcessConnector({ sessions: 0 })
+    manager = new RuntimePortForwardManager({
+      connector: (environmentId, onClosed, options) => {
+        wakes.push(options?.wake ?? false)
+        return inner(environmentId, onClosed, options)
+      },
+      now: () => 1_000
+    })
+    const remotePort = await echoServer()
+    await manager.open({ environmentId: 'auto-env', remotePort, localPort: 0, reason: 'auto' })
+    const user = await manager.open({
+      environmentId: 'user-env',
+      remotePort,
+      localPort: 0,
+      reason: 'user'
+    })
+    expect(wakes).toEqual([false, true])
+    expect(manager.lastActivityAt('user-env')).toBeNull()
+    if (!user.ok) {
+      throw new Error('expected forward')
+    }
+    await request(user.forward.localPort, 'hi')
+    expect(manager.lastActivityAt('user-env')).toBe(1_000)
+  })
+
   it('fails without binding when the host cannot forward', async () => {
     manager = new RuntimePortForwardManager({
       connector: async () => {

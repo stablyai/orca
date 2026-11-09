@@ -22,10 +22,14 @@ import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 function createPairedRuntimePortForwardConnector(
   getUserDataPath: () => string
 ): PortForwardTunnelConnector {
-  return createPortForwardConnector(async (environmentId) => {
+  return createPortForwardConnector(async (environmentId, { wake }) => {
     const userDataPath = getUserDataPath()
-    // Wake-first: a connection to a sleeping VM wakes it (held up to the open timeout) instead of failing.
-    await prepareRecipeVm(userDataPath, resolveEnvironment(userDataPath, environmentId), 'wake')
+    // User actions wake a sleeping VM (held up to the open timeout); a stray connection is refused.
+    await prepareRecipeVm(
+      userDataPath,
+      resolveEnvironment(userDataPath, environmentId),
+      wake ? 'wake' : 'none'
+    )
     await ensureOrcadManagedTunnel(userDataPath, environmentId)
     return getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
   })
@@ -94,6 +98,10 @@ export function registerRuntimePortForwardHandlers(getUserDataPath: () => string
       ? manager().open(request)
       : { ok: false, code: 'invalid_request', message: 'Invalid port forward.' }
   })
+  ipcMain.handle('runtimePortForwards:wake', (_event, value: unknown) => {
+    const environmentId = field(value, 'environmentId')
+    return typeof environmentId === 'string' ? manager().wake(environmentId) : false
+  })
   ipcMain.handle('runtimePortForwards:close', (_event, value: unknown) => {
     const id = field(value, 'id')
     return typeof id === 'string' ? manager().close(id) : null
@@ -103,5 +111,6 @@ export function registerRuntimePortForwardHandlers(getUserDataPath: () => string
 export const RUNTIME_PORT_FORWARD_HANDLER_CHANNELS = [
   'runtimePortForwards:list',
   'runtimePortForwards:open',
-  'runtimePortForwards:close'
+  'runtimePortForwards:close',
+  'runtimePortForwards:wake'
 ] as const

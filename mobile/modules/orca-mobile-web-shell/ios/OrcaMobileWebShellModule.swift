@@ -9,14 +9,13 @@ public class OrcaMobileWebShellModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
 
-    // A spare is the first thing to give back: nothing is shown by it.
     OnCreate {
       memoryWarningObserver = NotificationCenter.default.addObserver(
         forName: UIApplication.didReceiveMemoryWarningNotification,
         object: nil,
         queue: .main
       ) { _ in
-        MobileWebShellSparePool.shared.discardAll()
+        MobileWebShellSparePool.shared.didReceiveMemoryWarning()
       }
     }
 
