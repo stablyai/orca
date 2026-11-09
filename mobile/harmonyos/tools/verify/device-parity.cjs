@@ -227,6 +227,36 @@ test('leaving while a PDF presentation is pending closes the preview and removes
   assert.ok(removed.some((path) => path.endsWith('.pdf')))
 })
 
+test('system preview can finish opening its PDF after Orca is backgrounded', async () => {
+  const presenting = deferred()
+  const finishPresent = deferred()
+  let visible = false
+  const client = pdfClient(async (request) =>
+    request.method === 'files.stat' ? fileStat : fileChunk
+  )
+  const { viewer, removed } = pdfHarness(client, {
+    open: async ({ uri }) => {
+      presenting.resolve(new URL(uri).pathname)
+      await finishPresent.promise
+      visible = true
+    },
+    close: async () => {
+      visible = false
+    }
+  })
+  const opened = viewer.serve({ action: 'open', worktreeId: 'w', relativePath: 'new.pdf' })
+  const previewPath = await presenting.promise
+  const paused = viewer.pause()
+  finishPresent.resolve()
+  await Promise.all([paused, opened])
+  await viewer.pause()
+  assert.equal(visible, true)
+  assert.equal(removed.includes(previewPath), false)
+  await viewer.dispose()
+  assert.equal(visible, false)
+  assert.equal(removed.includes(previewPath), true)
+})
+
 function preferencesHarness() {
   const values = new Map()
   let fail = false
@@ -590,7 +620,7 @@ function deviceHarness(extra = {}) {
     dispose() {}
   }
   class Pdf {
-    async cancel() {}
+    async pause() {}
     async dispose() {}
   }
   const { NativeDevice } = loadArkts('webshell/NativeDevice.ets', ['NativeDevice'], {

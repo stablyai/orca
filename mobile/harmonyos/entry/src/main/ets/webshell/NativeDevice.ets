@@ -54,10 +54,13 @@ export class NativeDevice {
   async dispose(): Promise<void> {
     this.disposed = true; this.generation++; this.selectionGeneration++; this.media.clear();
     this.speech.dispose(); this.images.dispose();
-    await this.stopCapture(); await this.pdf.dispose(); this.pcm = new Uint8Array(0);
+    let pdf = this.pdf.dispose();
+    await this.stopCapture(); await pdf; this.pcm = new Uint8Array(0);
   }
   async pause(): Promise<void> {
-    this.selectionGeneration++; this.speech.cancel(); this.images.pause(); await this.stopCapture(); await this.pdf.cancel();
+    this.selectionGeneration++; this.speech.cancel(); this.images.pause();
+    let pdf = this.pdf.pause();
+    await this.stopCapture(); await pdf;
   }
   async stopCapture(): Promise<void> {
     this.generation++; this.recording = false;

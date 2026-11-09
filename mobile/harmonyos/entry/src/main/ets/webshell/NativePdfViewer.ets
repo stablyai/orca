@@ -16,7 +16,6 @@ export class NativePdfViewer {
   private counter = 0;
   private requests: Set<string> = new Set();
   private path = '';
-  private shown = false;
   private presentation: Promise<void> = Promise.resolve();
   private disposed = false;
 
@@ -24,7 +23,7 @@ export class NativePdfViewer {
 
   setClient(client: SpikeRpcClient | null): void {
     if (this.client === client) { return; }
-    if (!this.shown) { this.cancel().catch(() => {}); }
+    this.pause().catch(() => {});
     this.client = client;
   }
 
@@ -88,35 +87,40 @@ export class NativePdfViewer {
       ready = true;
     } finally { await fs.close(file); if (!ready) { try { await fs.unlink(path); } catch (e) { } } }
     if (this.disposed || generation !== this.generation) { try { await fs.unlink(path); } catch (e) { } this.active(generation); }
-    let present = this.presentation.catch(() => {}).then(async (): Promise<void> => {
+    let present = this.presentation.then(async (): Promise<void> => {
       try {
         this.active(generation); this.path = path;
         await filePreview.openPreview(this.context, { uri: fileUri.getUriFromPath(path), mimeType: 'application/pdf',
           title: value['relativePath'].split(/[\\/]/).pop() ?? 'PDF' });
-        this.shown = true;
-        if (generation !== this.generation || this.disposed) {
-          await filePreview.closePreview(this.context); this.shown = false;
-          try { await fs.unlink(path); } catch (e) { } this.path = '';
-          throw new Error('PDF open cancelled');
-        }
       } catch (e) {
         try { await fs.unlink(path); } catch (ignored) { }
         if (this.path === path) { this.path = ''; }
         throw new Error((e as Error).message);
       }
+      this.active(generation);
     });
     this.presentation = present.catch(() => {});
     await present;
     return {};
   }
 
-  async cancel(): Promise<void> {
-    let generation = ++this.generation;
+  pause(): Promise<void> {
+    // Preview Kit itself backgrounds Orca and can still be opening the cached file.
+    return this.path ? Promise.resolve() : this.cancel();
+  }
+
+  cancel(): Promise<void> {
+    this.generation++;
     this.requests.forEach((id: string): void => { this.client?.cancelById(id); }); this.requests.clear();
-    await this.presentation;
-    if (generation !== this.generation) { return; }
-    if (this.shown) { this.shown = false; try { await filePreview.closePreview(this.context); } catch (e) { } }
-    if (this.path.length > 0) { let path = this.path; this.path = ''; try { await fs.unlink(path); } catch (e) { } }
+    let close = this.presentation.then(async (): Promise<void> => {
+      let path = this.path;
+      if (!path) { return; }
+      this.path = '';
+      try { await filePreview.closePreview(this.context); } catch (e) { }
+      try { await fs.unlink(path); } catch (e) { }
+    });
+    this.presentation = close;
+    return close;
   }
 
   async dispose(): Promise<void> { this.disposed = true; await this.cancel(); }
