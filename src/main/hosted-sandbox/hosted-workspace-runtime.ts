@@ -240,7 +240,8 @@ export async function announceWakeUsable(
       }
       return
     }
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    // Short beat: this sits on the wake's critical path until the runtime record flips to running.
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
 }
 

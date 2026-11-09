@@ -139,7 +139,12 @@ export async function resumeEphemeralVmWorkspace(
       userDataPath,
       environmentId: runtime.runtimeEnvironmentId,
       pairingCode,
-      invalidateTransport: invalidateRuntimeEnvironmentTransport
+      invalidateTransport: invalidateRuntimeEnvironmentTransport,
+      // The wake's own reconnect proves the kept token; a separate probe first would put one more
+      // connection setup between the click and the terminal.
+      confirmInBackground: true,
+      onRepairedInBackground: (repaired) =>
+        noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt, true)
     })
     noteRecipeVmWakePairing(
       environment.id,

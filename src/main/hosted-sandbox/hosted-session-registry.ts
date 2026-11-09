@@ -129,7 +129,15 @@ export function createHostedSessionRegistry(deps: {
           userDataPath: deps.userDataPath,
           environmentId: runtimeEnvironmentId,
           pairingCode: getEphemeralVmRecipeResultPairingCode(ready.result) ?? '',
-          invalidateTransport: invalidateRuntimeEnvironmentTransport
+          invalidateTransport: invalidateRuntimeEnvironmentTransport,
+          // Restart/rollover: the reconnect proves the kept token; re-pair later only if refused.
+          confirmInBackground: true,
+          onRepairedInBackground: (repaired) =>
+            noteRecipeVmWakePairing(
+              repaired.id,
+              repaired.pairingRevision ?? repaired.createdAt,
+              true
+            )
         })
         noteRecipeVmWakePairing(
           environment.id,
