@@ -3,6 +3,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { WorktreeCreateParent } from '../tasks/worktree-create-retry'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
@@ -43,11 +44,6 @@ type CreateOptions = {
 }
 
 type Composer = ReturnType<typeof useMobileComposerSource>
-
-const UNCERTAIN_FOLDER_CREATE =
-  'This worktree may have been created. Check the folder before creating another.'
-const UNCERTAIN_CREATE =
-  'This workspace may have been created. Check your workspaces before creating another.'
 
 export function useNewWorkspaceCreateSubmit(args: {
   client: RpcClient | null
@@ -115,9 +111,7 @@ export function useNewWorkspaceCreateSubmit(args: {
     let outcome: Parameters<NewWorktreeFolderSubmission['settle']>[0] = 'cancelled'
     try {
       if (admission === null) {
-        args.setError(
-          'A worktree in this repository is still being created or checked. It shows in the folder once it lands.'
-        )
+        args.setError(folderCreateBusyMessage())
         return
       }
       if (args.sshGate.requiresConnection) {
@@ -231,7 +225,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         outcome = result.replayed ? 'uncertain' : 'failed'
         if (outcome === 'uncertain') {
           // Not a failure to retry: creating again could make a second one.
-          args.setError(folder ? UNCERTAIN_FOLDER_CREATE : UNCERTAIN_CREATE)
+          args.setError(uncertainCreateMessage(folder !== undefined))
           return
         }
         if (presenting()) {
@@ -251,7 +245,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       outcome = isRpcDeliveryUnknown(error) ? 'uncertain' : 'failed'
       if (folder && outcome === 'uncertain') {
         // The folder screen refreshes and holds it until its list shows it; sending again could create a second one.
-        args.setError(UNCERTAIN_FOLDER_CREATE)
+        args.setError(uncertainCreateMessage(true))
         return
       }
       if (presenting()) {
