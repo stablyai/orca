@@ -3,8 +3,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
   return (
     commandPath[0] === 'account' ||
     commandPath[0] === 'artifacts' ||
-    // Orca Cloud commands call the cloud API directly, never a paired Orca runtime.
-    commandPath[0] === 'cloud' ||
+    // Orca Cloud API commands call the cloud API directly; `cloud env` still goes through the runtime.
+    (commandPath[0] === 'cloud' && commandPath[1] !== 'env') ||
     commandPath[0] === 'environment' ||
     // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
     commandPath.join(' ') === 'host list' ||

@@ -90,6 +90,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  cloud login               Save an Orca Cloud API key for the CLI',
   '  cloud workspace           List, show, create, sleep, wake, archive or destroy workspaces',
   '  cloud message             Send a message to an agent in a cloud workspace',
+  '  cloud messages            List or show messages sent to a cloud workspace',
   '  cloud sessions            List agent sessions in a cloud workspace',
   '  cloud projects list       List Orca Cloud projects',
   '',
