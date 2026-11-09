@@ -43,7 +43,9 @@ const worktreeListAnswer = z.object({
   truncated: z.boolean().optional()
 })
 const repoListAnswer = z.object({
-  repos: z.array(z.object({ id: z.string(), kind: z.string().optional() }))
+  repos: z.array(
+    z.object({ id: z.string(), kind: z.string().optional(), displayName: z.string().optional() })
+  )
 })
 const folderListAnswer = z.object({
   folderWorkspaces: z.array(
@@ -114,18 +116,18 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       call('folderWorkspace.list', undefined)
     ])
     const { worktrees, totalCount, truncated } = worktreeListAnswer.parse(listed)
+    const repoRows = repoListAnswer.parse(repos).repos
     const folderRepos = new Set(
-      repoListAnswer
-        .parse(repos)
-        .repos.filter((repo) => repo.kind === 'folder')
-        .map((repo) => repo.id)
+      repoRows.filter((repo) => repo.kind === 'folder').map((repo) => repo.id)
     )
+    const projectNames = new Map(repoRows.map((repo) => [repo.id, repo.displayName || null]))
     const worktreeRows = worktrees.slice(0, PLUGIN_WORKSPACE_LIST_LIMIT).map((worktree) => {
       const folder = folderRepos.has(worktree.repoId)
       return {
         id: worktree.identity ? `identity:${worktree.identity.key}` : worktree.id,
         kind: folder ? ('folder' as const) : ('worktree' as const),
         name: worktree.displayName,
+        project: projectNames.get(worktree.repoId)?.slice(0, 512) ?? null,
         path: worktree.path,
         branch: folder ? null : branchName(worktree.branch),
         hostId: worktree.hostId ?? null
@@ -136,6 +138,7 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       id: folderWorkspaceKey(folder.id),
       kind: 'folder' as const,
       name: folder.name,
+      project: null,
       path: folder.folderPath,
       branch: null,
       hostId: folder.executionHostId ?? null
@@ -159,6 +162,23 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     }
     await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
     return { opened: true as const }
+  }),
+  'workspace.rename': bind(api['workspace.rename'], async ({ workspaceId, name }, ctx) => {
+    const trimmed = name.trim()
+    const scope = parseWorkspaceKey(workspaceId)
+    if (scope?.type === 'folder') {
+      await effect(ctx, 'folderWorkspace.update', {
+        folderWorkspaceId: scope.folderWorkspaceId,
+        updates: { name: trimmed }
+      })
+      return { name: trimmed }
+    }
+    // The same update as a rename in the sidebar: the name is pinned, so a branch change keeps it.
+    await effect(ctx, 'worktree.set', {
+      worktree: workspaceSelector(workspaceId),
+      displayName: trimmed
+    })
+    return { name: trimmed }
   }),
   'terminal.create': bind(api['terminal.create'], async (params, ctx) => {
     const answer = await effect(ctx, 'terminal.create', {

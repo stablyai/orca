@@ -1,0 +1,125 @@
+import { describe, expect, it, vi } from 'vitest'
+import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
+
+function services(runtimeRpc: PluginHostServices['runtimeRpc']): PluginHostServices {
+  return {
+    resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
+    listWorktreeTerminals: vi.fn().mockResolvedValue([]),
+    sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
+    listAgentStatuses: () => [],
+    dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
+    storage: {
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+      keys: vi.fn().mockReturnValue([])
+    },
+    secrets: {
+      get: vi.fn().mockReturnValue({ ok: true, value: null }),
+      set: vi.fn().mockReturnValue({ ok: true }),
+      delete: vi.fn(),
+      protection: vi.fn().mockReturnValue('unavailable')
+    },
+    settings: {
+      getAll: vi.fn().mockReturnValue({}),
+      set: vi.fn().mockReturnValue({ ok: true })
+    },
+    runtimeRpc
+  }
+}
+
+const call = (
+  method: string,
+  params: unknown,
+  rpc: PluginHostServices['runtimeRpc'],
+  granted = ['workspace:write']
+) =>
+  executePluginHostCall({
+    pluginId: 'samples.demo',
+    method,
+    params,
+    surface: 'worker',
+    grantedCapabilities: granted as never,
+    services: services(rpc),
+    audit: { record: vi.fn().mockResolvedValue(undefined) }
+  })
+
+describe('workspace.rename', () => {
+  it('renames a worktree as the sidebar does, with the name trimmed', async () => {
+    const rpc = vi.fn().mockResolvedValue({ worktree: {} })
+    const outcome = await call(
+      'workspace.rename',
+      { workspaceId: 'identity:abc', name: '  Mac｜Login fix ' },
+      rpc
+    )
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: { name: 'Mac｜Login fix' }
+    })
+    expect(rpc).toHaveBeenCalledWith(
+      'worktree.set',
+      { worktree: 'identity:abc', displayName: 'Mac｜Login fix' },
+      expect.anything()
+    )
+  })
+
+  it('renames a project folder through its folder workspace', async () => {
+    const rpc = vi.fn().mockResolvedValue({ folderWorkspace: {} })
+    await call('workspace.rename', { workspaceId: 'folder:f1', name: 'Notes' }, rpc)
+    expect(rpc).toHaveBeenCalledWith(
+      'folderWorkspace.update',
+      { folderWorkspaceId: 'f1', updates: { name: 'Notes' } },
+      expect.anything()
+    )
+  })
+
+  it('refuses blank or multi-line names and plugins without workspace:write', async () => {
+    const rpc = vi.fn()
+    for (const name of ['   ', 'a\nb', 'x'.repeat(201)]) {
+      expect(await call('workspace.rename', { workspaceId: 'id-1', name }, rpc)).toMatchObject({
+        ok: false,
+        code: 'invalid_params'
+      })
+    }
+    expect(
+      await call('workspace.rename', { workspaceId: 'id-1', name: 'ok' }, rpc, ['workspace:read'])
+    ).toMatchObject({ ok: false })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('workspace.list project names', () => {
+  it("names each worktree's project and leaves project folders without one", async () => {
+    const rpc = vi.fn(async (method: string) => {
+      if (method === 'worktree.list') {
+        return {
+          worktrees: [
+            {
+              id: 'w1',
+              repoId: 'r1',
+              displayName: 'main',
+              path: '/src/app',
+              branch: 'refs/heads/main'
+            }
+          ]
+        }
+      }
+      if (method === 'repo.list') {
+        return { repos: [{ id: 'r1', displayName: 'App' }] }
+      }
+      return {
+        folderWorkspaces: [{ id: 'f1', name: 'Notes', folderPath: '/notes' }]
+      }
+    })
+    const outcome = await call('workspace.list', {}, rpc, ['workspace:read'])
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: {
+        workspaces: [
+          { id: 'w1', name: 'main', project: 'App', branch: 'main' },
+          { id: 'folder:f1', name: 'Notes', project: null }
+        ]
+      }
+    })
+  })
+})

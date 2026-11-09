@@ -28,6 +28,8 @@ const workspaceListResult = z.object({
         /** `folder`: a plain folder, with no Git branch. */
         kind: z.enum(['worktree', 'folder']),
         name: z.string().max(512),
+        /** The project (repository) it belongs to; null for a folder outside one. Host API 1.5+. */
+        project: z.string().max(512).nullable(),
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
@@ -42,6 +44,22 @@ const workspaceListResult = z.object({
 
 const workspaceOpenParams = z.strictObject({ workspaceId })
 const workspaceOpenResult = z.object({ opened: z.literal(true) })
+
+export const PLUGIN_WORKSPACE_NAME_MAX = 200
+const workspaceRenameParams = z.strictObject({
+  workspaceId,
+  /** The name the sidebar shows. It replaces an automatic (branch) name or a person's rename. */
+  name: z
+    .string()
+    .max(PLUGIN_WORKSPACE_NAME_MAX)
+    .refine((name) => name.trim().length > 0, 'name must not be blank')
+    // A sidebar label is one line of plain text: no newlines or other control characters.
+    .refine(
+      (name) => [...name].every((char) => char >= ' ' && char !== '\u007f'),
+      'name must be one line of plain text'
+    )
+})
+const workspaceRenameResult = z.object({ name: z.string() })
 
 const terminalCreateParams = z.strictObject({
   workspaceId,
@@ -124,6 +142,17 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     surfaces: WORKER_ONLY,
     params: workspaceOpenParams,
     result: workspaceOpenResult
+  }),
+  'workspace.rename': spec({
+    summary:
+      "Renames a workspace in Orca's sidebar, as renaming it by hand does; the name stays until it is renamed again.",
+    since: 5,
+    scope: 'any-workspace',
+    capability: 'workspace:write',
+    mutation: true,
+    surfaces: WORKER_ONLY,
+    params: workspaceRenameParams,
+    result: workspaceRenameResult
   }),
   'terminal.create': spec({
     summary: 'Opens a terminal in a workspace, optionally running a command, in the background.',
