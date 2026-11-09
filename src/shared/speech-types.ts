@@ -66,6 +66,12 @@ export type SpeechTranscriptEvent = {
   sessionId: string
 }
 
+/** Speech the engine has heard but not committed yet; only pause-cut on-device models send it. */
+export type SpeechPendingEvent = {
+  pending: boolean
+  sessionId: string
+}
+
 /** Desktop audio posted from the preload straight to the speech process; 'end' follows the last frame. */
 export type SpeechAudioPortMessage =
   | { type: 'feed'; samples: Float32Array; sampleRate: number }

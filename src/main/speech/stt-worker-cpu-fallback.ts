@@ -15,6 +15,7 @@ type Feed = Extract<SttWorkerRequest, { type: 'feed' }>
 type Open = Extract<SttWorkerRequest, { type: 'open' }>
 type ChildMessage =
   | { type: 'chunk'; streamId: string; text: string; samples: number }
+  | { type: 'speech-pending'; streamId: string; pending: boolean }
   | {
       type: 'ready' | 'stopped' | 'error' | 'partial' | 'final'
       streamId?: string

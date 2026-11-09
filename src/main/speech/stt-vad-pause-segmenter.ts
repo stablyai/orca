@@ -48,6 +48,11 @@ export class VadPauseSegmenter {
     return this.unscored.length + this.prerollLength + this.phrase.heldSamples
   }
 
+  /** Speech has started a phrase that hasn't been cut yet (after a detector error, until stop). */
+  get phraseOpen(): boolean {
+    return this.inSpeech
+  }
+
   /** Return the phrases that ended (or reached the decode bound) within these samples. */
   async push(samples: Float32Array): Promise<Float32Array[]> {
     if (this.vadFailed) {
