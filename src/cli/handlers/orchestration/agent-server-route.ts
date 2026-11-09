@@ -22,6 +22,7 @@ function serverSelector(
 
 /** Only an agent its own Orca verifies counts; a person's shell keeps --environment = run it there. */
 async function isOrcaVerifiedAgent(): Promise<boolean> {
+  // ast-grep-ignore: orchestration-agent-kind-branch -- either credential proves an Orca agent; no kind is chosen
   if (!readInjectedAgentSessionId() && !process.env.ORCA_AGENT_LAUNCH_TOKEN?.trim()) {
     return false
   }

@@ -83,6 +83,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         }
         return { message: { id: params.messageId, to } }
       }
+      // ast-grep-ignore: orchestration-agent-kind-branch -- peer mail may name a chat session on this Orca
       if (mayNameSession(to)) {
         // Recipient routing reads the session record store, which the host opens lazily.
         await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
