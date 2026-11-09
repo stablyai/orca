@@ -212,5 +212,12 @@ ${docker} rm -f ${quotePosixShell(target.containerName)} >/dev/null
     target,
     `chown -R root:root ${quotePosixShell(DOCKER_SSH_HOST_REMOTE_REPO_PATH)}`
   )
+  // Why: VM creates run the environment checks first, and a VM that cannot fetch or push its
+  // remote pauses the create. Give the VM a remote it can reach so the create proceeds unattended.
+  const vmOrigin = '/tmp/provisioned-root-origin.git'
+  execDockerSshHostTargetCommand(
+    target,
+    `git init --bare -q ${quotePosixShell(vmOrigin)} && git -C ${quotePosixShell(DOCKER_SSH_HOST_REMOTE_REPO_PATH)} remote set-url origin ${quotePosixShell(vmOrigin)}`
+  )
   return expectedRefHead
 }
