@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) }
+}))
+
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('../hosts/host-app-version-store', () => ({
@@ -22,13 +26,16 @@ describe('useHostStatusGates', () => {
   })
 
   it('fails closed when the same host reconnects on a replaced client', async () => {
+    const connected = { getState: () => 'connected', onStateChange: () => () => {} }
     const firstClient = {
+      ...connected,
       sendRequest: vi.fn().mockResolvedValue({
         ok: true,
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
     } as unknown as RpcClient
     const secondClient = {
+      ...connected,
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
     } as unknown as RpcClient
     let gates: HostStatusGates | undefined

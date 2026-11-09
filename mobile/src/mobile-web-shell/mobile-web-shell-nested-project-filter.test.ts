@@ -12,9 +12,10 @@ import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { createElement, useEffect } from 'react'
-import { type ReactTestRenderer, act, create } from 'react-test-renderer'
+import { type ReactTestRenderer, act } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { readPersistedState } from '@project-grouping-test-host/main/persistence/persistence-test-harness'
 import { createProjectGroupingSocketOwner } from '@project-grouping-test-host/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture'
 import { DirectRpcClient } from '../transport/rpc/direct-rpc-client'
@@ -126,7 +127,7 @@ it('joins normally published nested Hx through the actual Projects pending write
     ).toHaveLength(1)
     owner.store.updateUI({ filterRepoIds: ['offline'] })
     await act(async () => {
-      tree = create(createElement(GateOwner))
+      tree = createWithQueryClient(createElement(GateOwner))
     })
     const first = () =>
       tree!.root.findAllByProps({

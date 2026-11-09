@@ -12,11 +12,12 @@ import {
   mountRoute
 } from './mobile-web-shell-route-test-fixtures'
 import { createElement, useEffect } from 'react'
-import { type ReactTestRenderer, act, create } from 'react-test-renderer'
+import { type ReactTestRenderer, act } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import WebSocket from 'ws'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import {
   closeTestStores,
   createStore,
@@ -148,7 +149,7 @@ it.each(['released-page/current-native', 'current-page/released-native'] as cons
       }
       let tree!: ReactTestRenderer
       await act(async () => {
-        tree = create(createElement(GateOwner))
+        tree = createWithQueryClient(createElement(GateOwner))
       })
       renders.push(tree)
       return tree
@@ -369,7 +370,7 @@ it.each(['exact', 'legacy'] as const)(
         filterRepoIds: meaning === 'exact' ? [Q, 'offline'] : ['same', 'offline']
       })
       await act(async () => {
-        tree = create(createElement(GateOwner, { client: direct }))
+        tree = createWithQueryClient(createElement(GateOwner, { client: direct }))
       })
       const remote = () =>
         tree!.root.findByProps({ accessibilityLabel: 'Server', accessibilityRole: 'checkbox' })
