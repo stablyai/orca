@@ -14,7 +14,8 @@ export const HOSTED_SANDBOX_STATUSES = [
   'resuming',
   'destroying',
   'destroyed',
-  'failed'
+  'failed',
+  'archived'
 ] as const
 export type HostedSandboxStatus = (typeof HOSTED_SANDBOX_STATUSES)[number]
 
@@ -119,3 +120,131 @@ export const HostedSandboxErrorResponseSchema = z
     reason: z.string().max(64).optional()
   })
   .strict()
+
+/** Every wake source (open, message, SSH, preview) answers in this shape. */
+export const HOSTED_WAKE_STATES = ['ready', 'waking', 'archived', 'failed', 'not_found'] as const
+export const HostedWakeResponseSchema = z
+  .object({
+    state: z.enum(HOSTED_WAKE_STATES),
+    endpoint: z.string().startsWith('wss://').max(2048).nullable(),
+    readyAt: Millis.nullable(),
+    sandboxId: Id.nullable()
+  })
+  .strict()
+export type HostedWakeResponse = z.infer<typeof HostedWakeResponseSchema>
+
+export const HOSTED_WORKSPACE_STATES = [
+  'provisioning',
+  'sleeping',
+  'waking',
+  'ready',
+  'unresponsive',
+  'stopping',
+  'archived',
+  'failed'
+] as const
+export type HostedWorkspaceState = (typeof HOSTED_WORKSPACE_STATES)[number]
+
+const Bytes = z.number().int().nonnegative()
+export const HostedVmMetricsSchema = z
+  .object({
+    cpuPercent: z.number().int().min(0).max(100),
+    cpus: z.number().int().min(1),
+    load1: z.number().min(0),
+    memTotalBytes: Bytes,
+    memUsedBytes: Bytes,
+    diskTotalBytes: Bytes,
+    diskUsedBytes: Bytes,
+    uptimeSeconds: z.number().int().nonnegative(),
+    oomKills: z.number().int().nonnegative(),
+    lastOomVictim: z.string().max(64).nullable(),
+    orcadAlive: z.boolean()
+  })
+  .strict()
+export type HostedVmMetrics = z.infer<typeof HostedVmMetricsSchema>
+
+export const HostedWorkspaceStatusSchema = z
+  .object({
+    state: z.enum(HOSTED_WORKSPACE_STATES),
+    metrics: HostedVmMetricsSchema.nullable(),
+    uptimeMs: Millis.nullable(),
+    usage: z
+      .object({
+        totalMs: Millis,
+        centsPerHour: z.number().int().nonnegative(),
+        costCents: z.number().int().nonnegative()
+      })
+      .strict(),
+    archive: z.object({ archivedAt: Millis, expiresAt: Millis.nullable() }).strict().nullable(),
+    checkedAt: Millis
+  })
+  .strict()
+export type HostedWorkspaceStatus = z.infer<typeof HostedWorkspaceStatusSchema>
+
+export const HostedWorkspaceStatusResponseSchema = z
+  .object({ sandbox: HostedSandboxViewSchema, status: HostedWorkspaceStatusSchema })
+  .strict()
+
+const ArchiveCommit = z
+  .object({
+    sha: z.string().max(64),
+    author: z.string().max(120),
+    at: z.number(),
+    subject: z.string().max(300)
+  })
+  .strict()
+export const HostedArchiveCheckoutSchema = z
+  .object({
+    path: z.string().max(4096),
+    branch: z.string().max(255).nullable(),
+    head: z.string().max(64).nullable(),
+    upstream: z.string().max(255).nullable(),
+    ahead: z.number().int().nullable(),
+    behind: z.number().int().nullable(),
+    commits: z.array(ArchiveCommit).max(20),
+    changes: z
+      .array(z.object({ status: z.string().max(2), path: z.string().max(1024) }).strict())
+      .max(300),
+    diffStat: z.string().max(200).nullable(),
+    fileCount: z.number().int().nonnegative(),
+    files: z.array(z.string().max(1024)).max(2000)
+  })
+  .strict()
+export type HostedArchiveCheckout = z.infer<typeof HostedArchiveCheckoutSchema>
+export const HostedArchivePullRequestSchema = z
+  .object({
+    number: z.number().int().positive(),
+    title: z.string().max(300),
+    state: z.enum(['open', 'closed', 'merged', 'draft']),
+    url: z.url({ protocol: /^https$/ }).max(2048),
+    branch: z.string().max(255).optional()
+  })
+  .strict()
+export type HostedArchivePullRequest = z.infer<typeof HostedArchivePullRequestSchema>
+
+export const HostedArchiveRequestSchema = z
+  .object({
+    pullRequests: z.array(HostedArchivePullRequestSchema).max(50).optional(),
+    checkouts: z.array(HostedArchiveCheckoutSchema).max(20).optional()
+  })
+  .strict()
+export type HostedArchiveRequest = z.infer<typeof HostedArchiveRequestSchema>
+
+export const HostedArchiveResponseSchema = z
+  .object({
+    archive: z
+      .object({
+        capturedAt: Millis,
+        source: z.enum(['vm', 'client', 'none']),
+        metadata: z
+          .object({
+            checkouts: z.array(HostedArchiveCheckoutSchema).max(20),
+            pullRequests: z.array(HostedArchivePullRequestSchema).max(50).optional()
+          })
+          .strict()
+      })
+      .strict()
+      .nullable()
+  })
+  .strict()
+export type HostedArchiveResponse = z.infer<typeof HostedArchiveResponseSchema>

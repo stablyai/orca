@@ -129,6 +129,9 @@ function messageBucket(caller: ApiCaller): string {
   return caller.via === 'workspace' ? `msg:ws:${caller.sandboxId}` : `msg:${caller.accountId}:${caller.userId}`
 }
 
+import { wakeSandbox } from '../workspace-lifecycle'
+import { parseWakeWait } from '../wire'
+
 export function isApiPath(pathname: string): boolean {
   return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines)(\/|$)/.test(pathname)
 }
@@ -398,7 +401,21 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         return mutate('sleep', () => sleepWorkspace(life(), row))
       }
       if (sub === 'wake' && method === 'POST') {
-        return mutate('wake', () => wakeWorkspace(life(), row))
+        if (row.status === 'archived' || row.archived_at !== null) {
+          // The public API's wake brings an archived workspace back.
+          return mutate('wake', () => wakeWorkspace(life(), row))
+        }
+        // Every wake source shares W2's single-flight wake: idempotent, `?wait=30s` long-polls.
+        requireScope(caller, 'workspaces:write')
+        const started = performance.now()
+        const answer = await wakeSandbox(life(), row, {
+          // API callers expect the VM up when wake answers: wait the full 30 s unless `?wait=` says otherwise.
+          waitMs: url.searchParams.has('wait') ? parseWakeWait(url, null) : 30_000,
+          background: ctx.waitUntil
+        })
+        await auditCaller(ctx.db, caller, { action: 'workspace.wake', targetType: 'workspace', targetId: row.id, detail: { ms: Math.round(performance.now() - started), state: answer.state } }, ctx.now())
+        const fresh = (await getWorkspace(ctx.db, caller.accountId, id)) ?? row
+        return json({ workspace: workspaceView(fresh), ...answer })
       }
       if (sub === 'archive' && method === 'POST') {
         return mutate('archive', () => archiveWorkspace(life(), row))

@@ -5,6 +5,13 @@
 //   GET    /v1/sandboxes/:id                                      -> {sandbox}
 //   POST   /v1/sandboxes/:id/suspend | /resume | /rollover        -> {sandbox[, connection]}
 //   POST   /v1/sandboxes/:id/lease {extendMs}                     -> {sandbox}
+//   POST   /v1/sandboxes/:id/wake[?wait=30s] -> {state, endpoint, readyAt, sandboxId} (idempotent, single-flight;
+//          the public API's POST /v1/workspaces/:id/wake answers the same fields plus `workspace`)
+//   POST   /v1/sandboxes/:id/restart                              -> {sandbox, connection}
+//   GET    /v1/sandboxes/:id/status                               -> {sandbox, status} (live metrics, cost)
+//   POST   /v1/sandboxes/:id/archive {pullRequests?, checkouts?}  -> {sandbox}
+//   GET    /v1/sandboxes/:id/archive                              -> {archive}
+//   POST   /v1/sandboxes/:id/unarchive                            -> {sandbox, connection}
 //   DELETE /v1/sandboxes/:id                                      -> {sandbox}
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
@@ -62,7 +69,17 @@ import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
-import { CreateRequestSchema, LeaseRequestSchema, readyView, sandboxView } from './wire'
+import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
+import { ArchiveRequestSchema } from './sandbox-vm-inspect'
+import {
+  archiveSandbox,
+  readArchive,
+  restartSandbox,
+  unarchiveSandbox,
+  wakeSandbox,
+  workspaceStatus,
+  type WorkspaceConfig
+} from './workspace-lifecycle'
 
 const MAX_JSON_BYTES = 16 * 1024
 
@@ -83,6 +100,24 @@ export type Deps = {
   waitUntil?: (work: Promise<unknown>) => void
   /** Route groups mounted on the public API (routines, see src/routines). */
   apiExtensions?: ApiExtension[]
+  /** Long-poll sleep (tests advance a fake clock). */
+  sleep?: (ms: number) => Promise<void>
+}
+
+function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
+  const days = Number(env.ARCHIVE_TTL_DAYS)
+  let centsPerHour: WorkspaceConfig['centsPerHour']
+  try {
+    centsPerHour = env.COST_CENTS_PER_HOUR ? (JSON.parse(env.COST_CENTS_PER_HOUR) as WorkspaceConfig['centsPerHour']) : undefined
+  } catch {
+    centsPerHour = undefined
+  }
+  return {
+    archiveTtlMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : undefined,
+    centsPerHour,
+    background: deps.waitUntil,
+    sleep: deps.sleep
+  }
 }
 
 /** The public origin: PUBLIC_API_URL when set, else the request's own origin. */
@@ -512,7 +547,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return await handleSecretsRoute(request, url, env.SANDBOX_DB, secrets.keyring, caller, (deps.now ?? Date.now)(), readJson)
     }
-    const match = /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover))?)?$/.exec(url.pathname)
+    const match =
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive))?)?$/.exec(
+        url.pathname
+      )
     if (!match) {
       return fail('not_found', 404)
     }
@@ -562,6 +600,27 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       case 'POST rollover': {
         const ready = await rolloverSandbox(life, row)
         return readyResponse(ready)
+      }
+      case 'POST wake':
+        return json(await wakeSandbox(life, row, { waitMs: parseWakeWait(url, await readJson(request)), ...workspaceConfig(env, deps) }))
+      case 'POST restart': {
+        const ready = await restartSandbox(life, row)
+        return json(readyView(ready.row, ready.connection))
+      }
+      case 'GET status':
+        return json({ sandbox: sandboxView(row), status: await workspaceStatus(life, row, workspaceConfig(env, deps)) })
+      case 'POST archive': {
+        const body = ArchiveRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        return json({ sandbox: sandboxView(await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))) })
+      }
+      case 'GET archive':
+        return json({ archive: await readArchive(env.SANDBOX_DB, row.id) })
+      case 'POST unarchive': {
+        const ready = await unarchiveSandbox(life, row)
+        return json(readyView(ready.row, ready.connection))
       }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))

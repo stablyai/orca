@@ -72,3 +72,18 @@ export function readyView(row: SandboxRow, connection: OrcadReady) {
     }
   }
 }
+
+/** `?wait=30s` / `?wait=30000ms` / `?wait=30`, or body `{wait: true}` (= the 30 s max). 0 when absent. */
+export function parseWakeWait(url: URL, body: unknown): number {
+  const raw = url.searchParams.get('wait')
+  if (raw !== null) {
+    const match = /^(\d{1,6})(ms|s)?$/.exec(raw.trim())
+    if (!match) {
+      return 0
+    }
+    const value = Number(match[1])
+    return Math.min(30_000, match[2] === 'ms' ? value : value * 1000)
+  }
+  const wait = (body as { wait?: unknown } | null)?.wait
+  return wait === true ? 30_000 : typeof wait === 'number' && Number.isFinite(wait) ? Math.min(30_000, Math.max(0, wait)) : 0
+}

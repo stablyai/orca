@@ -197,6 +197,14 @@ export function createVercelSandboxApi(
       return readCommandStream(response)
     },
 
+    async updateSnapshotExpiration(name, expirationMs) {
+      // Archive shortens the provider-side backstop; unarchive restores it. Same fields as create.
+      await request('PATCH', `/v2/sandboxes/${encodeURIComponent(name)}`, {
+        query: { projectId: config.projectId },
+        body: { snapshotExpiration: expirationMs, keepLastSnapshots: { count: 2, expiration: expirationMs } }
+      })
+    },
+
     deleteSandbox: (name) =>
       missingOk(() =>
         request('DELETE', `/v2/sandboxes/${encodeURIComponent(name)}`, {

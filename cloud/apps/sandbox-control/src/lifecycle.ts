@@ -202,7 +202,7 @@ export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState):
   }
 }
 
-async function claim(deps: LifecycleDeps, row: SandboxRow, patch: Partial<SandboxRow>): Promise<SandboxRow> {
+export async function claim(deps: LifecycleDeps, row: SandboxRow, patch: Partial<SandboxRow>): Promise<SandboxRow> {
   const next = await transition(deps.db, row, patch, deps.now())
   if (!next) {
     throw new LifecycleError('conflict', 'concurrent_transition')
@@ -214,7 +214,7 @@ export function guardrails(deps: LifecycleDeps): GuardrailConfig {
   return deps.config.guardrails ?? DEFAULT_GUARDRAILS
 }
 
-async function requireStart(deps: LifecycleDeps, accountId: string, userId: string, machineSize: MachineSize) {
+export async function requireStart(deps: LifecycleDeps, accountId: string, userId: string, machineSize: MachineSize) {
   const [, runningSandboxes, runningSandboxesForUser] = await Promise.all([
     assertStartsOpen(deps.db, guardrails(deps)),
     countActiveSandboxes(deps.db, accountId),
@@ -237,6 +237,11 @@ async function requireStart(deps: LifecycleDeps, accountId: string, userId: stri
     seats: decision.seats,
     maxConcurrentSandboxes: decision.maxConcurrentSandboxes
   })
+}
+
+function orcadEndpoint(state: ProviderSandboxState): string | null {
+  const route = state.routes.find((candidate) => candidate.port === ORCAD_PORT)
+  return route ? route.url.replace(/^https:/, 'wss:') : null
 }
 
 async function boot(
@@ -279,6 +284,10 @@ async function boot(
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
+    orcad_endpoint: orcadEndpoint(state),
+    ready_at: deps.now(),
+    archived_at: null,
+    archive_expires_at: null,
     retention_warned_at: null,
     github_token_expires_at: git?.expiresAt ?? null,
     egress_secret_hosts: routed.egress_secret_hosts,
@@ -497,9 +506,13 @@ export async function failAndRelease(deps: LifecycleDeps, row: SandboxRow): Prom
   }
 }
 
-async function stopForSuspend(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
+export async function stopForSuspend(
+  deps: LifecycleDeps,
+  row: SandboxRow,
+  options: { drainSeconds?: number } = {}
+): Promise<SandboxRow> {
   if (row.session_id) {
-    await drainOrcad(deps.provider, row.session_id)
+    await drainOrcad(deps.provider, row.session_id, options.drainSeconds)
     const stopped = await deps.provider.stopSession(row.session_id)
     if (stopped.snapshotId) {
       await recordSnapshots(deps.db, row.id, [stopped.snapshotId], deps.now())
@@ -551,7 +564,7 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
   return wake(deps, resuming)
 }
 
-async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
+export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
   const timer = phaseTimer(deps.now)
   // The provider boot is the long pole; secrets and the repo token resolve alongside it.
   const [state, prep] = await Promise.all([
@@ -629,6 +642,8 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
     throw new LifecycleError('provider_unavailable', 'snapshot_cleanup_incomplete')
   }
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
+  // Archive metadata (repo state, file tree) goes with the workspace.
+  await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
   const destroyed = await claim(deps, destroying, {
     status: 'destroyed',
     ...NO_SESSION,

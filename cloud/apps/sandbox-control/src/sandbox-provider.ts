@@ -89,6 +89,8 @@ export type SandboxProviderApi = {
   extendTimeout(sessionId: string, durationMs: number): Promise<ProviderSession>
   updateNetworkPolicy(sessionId: string, policy: NetworkPolicy): Promise<void>
   runCommand(sessionId: string, params: RunCommandParams): Promise<CommandResult>
+  /** Provider-side snapshot expiry after last use (archive TTL backstop). */
+  updateSnapshotExpiration(name: string, expirationMs: number): Promise<void>
   /** Resolves when already gone. */
   deleteSandbox(name: string): Promise<void>
   listSnapshots(name: string): Promise<ProviderSnapshot[]>
