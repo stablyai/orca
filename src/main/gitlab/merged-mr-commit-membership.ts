@@ -69,11 +69,13 @@ function revisionKey(headSha: unknown, diffRefs: unknown): (string | null)[] | n
   if (typeof diffRefs !== 'object') {
     return null
   }
-  const refs = diffRefs as Record<string, unknown>
-  const parts = ['head_sha', 'base_sha', 'start_sha'].map((key) =>
-    refs[key] === undefined || refs[key] === null ? null : oid(refs[key])
-  )
-  if (['head_sha', 'base_sha', 'start_sha'].some((key, i) => refs[key] != null && !parts[i])) {
+  const refs = [
+    'head_sha' in diffRefs ? diffRefs.head_sha : undefined,
+    'base_sha' in diffRefs ? diffRefs.base_sha : undefined,
+    'start_sha' in diffRefs ? diffRefs.start_sha : undefined
+  ]
+  const parts = refs.map((value) => (value == null ? null : oid(value)))
+  if (refs.some((value, i) => value != null && !parts[i])) {
     return null
   }
   if (parts[0] && parts[0] !== head) {
