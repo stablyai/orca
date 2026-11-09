@@ -163,8 +163,17 @@ export function attributePortsToWorkspaces(
   ports: readonly RawListeningPort[],
   worktrees: readonly NormalizedWorkspacePortProbe[]
 ): AttributedListeningPort[] {
-  const index = new WorkspacePortPathIndex(worktrees)
-  return ports.map((port) => ({ port, owner: attributePortToNormalizedWorkspaces(port, index) }))
+  let index: WorkspacePortPathIndex | undefined
+  return ports.map((port) => ({
+    port,
+    owner:
+      port.cwd || port.commandLine
+        ? attributePortToNormalizedWorkspaces(
+            port,
+            (index ??= new WorkspacePortPathIndex(worktrees))
+          )
+        : undefined
+  }))
 }
 
 export function enrichPort(
