@@ -30,7 +30,9 @@ export class PairingConnection {
     if (this.closed || this.winner) { throw new Error('Pairing cancelled'); }
     let client = new SpikeRpcClient(relay ? 12000 : 8000);
     this.clients.add(client);
-    client.setLogSink((line: string): void => log(`${relay ? 'Relay' : 'Direct'}: ${line}`));
+    client.setLogSink((line: string): void => {
+      if (!this.closed && this.clients.has(client)) { log(`${relay ? 'Relay' : 'Direct'}: ${line}`); }
+    });
     return client;
   }
 

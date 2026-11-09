@@ -488,6 +488,7 @@ struct PairScan {
           }.width('100%').alignItems(HorizontalAlign.Start)
             .onSizeChange((): void => this.logScroll.scrollEdge(Edge.Bottom))
         }.scrollBar(BarState.Off).constraintSize({ maxHeight: 200 }).width('100%')
+          .nestedScroll({ scrollForward: NestedScrollMode.SELF_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
       }.alignItems(HorizontalAlign.Start).width('100%').constraintSize({ maxWidth: 520 })
         .padding({ left: 12, right: 12, top: 8, bottom: 8 }).backgroundColor(this.themeSurface)
         .border({ width: 0.5, radius: 16, color: this.themeBorder }).margin({ top: 8, bottom: 12 })
@@ -561,7 +562,8 @@ struct PairScan {
           this.permission === abilityAccessCtrl.PermissionStatus.NOT_DETERMINED)
         this.secondary('改为粘贴配对码', (): void => this.openPaste(), true)
       }
-    }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).padding({ bottom: this.openedFromLink ? 48 : 0 })
+    }.width('100%').constraintSize({ minHeight: '100%' }).justifyContent(FlexAlign.Center)
+      .padding({ bottom: this.openedFromLink ? 48 : 0 })
   }
 
   @Builder
@@ -588,7 +590,8 @@ struct PairScan {
         !this.busy && !this.pairedHostId && !this.error && !this.cameraFailed) {
         this.scanPreview()
       } else {
-        this.centeredContent()
+        Scroll() { this.centeredContent() }
+          .width('100%').layoutWeight(1).align(Alignment.Top)
       }
     }.width('100%').height('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 }).backgroundColor(this.themeBg)
       .accessibilityLevel(this.showPaste ? 'no-hide-descendants' : 'auto')

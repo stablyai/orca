@@ -15,6 +15,7 @@ const offer = {
 
 function createPairing() {
   const probes = new Map()
+  const logSinks = new Map()
   const closed = new Set()
   let notifyProbes
   const ready = new Promise((resolve) => {
@@ -23,7 +24,9 @@ function createPairing() {
   class RpcSuccess {}
   class SpikeRpcClient {
     path = 'direct'
-    setLogSink() {}
+    setLogSink(sink) {
+      this.log = sink
+    }
     configureRelay() {
       this.path = 'relay'
     }
@@ -36,6 +39,7 @@ function createPairing() {
     async connect() {}
     request(method) {
       assert.equal(method, 'status.get')
+      logSinks.set(this.path, this.log)
       return new Promise((resolve) => {
         probes.set(this.path, resolve)
         if (probes.size === 2) {
@@ -60,17 +64,22 @@ function createPairing() {
     relayConnectUrl: (origin) => origin
   })
   const connection = new PairingConnection()
-  return { connection, probes, closed, RpcSuccess, ready }
+  return { connection, probes, closed, RpcSuccess, ready, logSinks }
 }
 
 test('Relay can finish pairing while direct status is still pending', async () => {
-  const { connection, probes, closed, RpcSuccess, ready } = createPairing()
-  const selected = connection.connect(offer, () => {})
+  const { connection, probes, closed, RpcSuccess, ready, logSinks } = createPairing()
+  const logs = []
+  const selected = connection.connect(offer, (line) => logs.push(line))
   await ready
   probes.get('relay')(new RpcSuccess())
   assert.equal((await selected).client.isRelay(), true)
   assert.deepEqual([...closed], ['direct'])
+  logSinks.get('direct')('late network error')
+  logSinks.get('relay')('authenticated')
   connection.close()
+  logSinks.get('relay')('late socket error')
+  assert.deepEqual(logs, ['Relay: authenticated'])
 })
 
 test('a rejected status reply cannot beat an authenticated direct answer', async () => {
