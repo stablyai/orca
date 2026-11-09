@@ -6,6 +6,8 @@ import type { RuntimeClientEventStreamMessage } from '../../../../src/shared/run
 import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../../worktree/workspace-list-types'
+import type * as MobileWorkspaceLineage from '../../worktree/mobile-workspace-lineage'
+import type * as FolderLineageSerialization from './folder-lineage-serialization'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
 import { HOST_LIST_TARGET, hostServerWorkspacesQuery } from '../../host-screen/host-list-queries'
@@ -37,7 +39,7 @@ vi.mock('../../transport/connection/host-client-hooks', () => ({
 }))
 const lineage = vi.hoisted(() => ({ resolutions: 0, serialized: 0, rowCommits: 0 }))
 vi.mock('../../worktree/mobile-workspace-lineage', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../worktree/mobile-workspace-lineage')>()
+  const actual = await importOriginal<typeof MobileWorkspaceLineage>()
   return {
     ...actual,
     getMobileWorkspaceLineageChildren: (
@@ -50,7 +52,7 @@ vi.mock('../../worktree/mobile-workspace-lineage', async (importOriginal) => {
 })
 // Runs behind the production key cache, so each call is a row serialized.
 vi.mock('./folder-lineage-serialization', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./folder-lineage-serialization')>()
+  const actual = await importOriginal<typeof FolderLineageSerialization>()
   return {
     serializeFolderLineage: (row: Worktree) => {
       lineage.serialized += 1
