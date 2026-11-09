@@ -23,6 +23,8 @@ async function rejectUnauthorizedOpenAiKey(apiKey: string): Promise<void> {
     // An empty form is refused before any transcription, but only after OpenAI checks the key.
     response = await getMainHttpClient().fetch(OPENAI_TRANSCRIPTION_URL, {
       method: 'POST',
+      // Bearer auth only: keep OpenAI's cookies out of the shared desktop session.
+      credentials: 'omit',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: new FormData(),
       signal: AbortSignal.timeout(KEY_CHECK_TIMEOUT_MS)
