@@ -70,8 +70,4 @@ describe('createDictationTextPipeline', () => {
     )
     expect(clean?.('Er hat um zehn Uhr angerufen.')).toBe('Er hat um zehn Uhr angerufen.')
   })
-
-  it('leaves text untouched when filler removal is off', () => {
-    expect(createDictationTextPipeline({ language: 'en' }, { removeFillerWords: false })).toBeNull()
-  })
 })

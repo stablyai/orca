@@ -21,14 +21,14 @@ const LANGUAGE_NEUTRAL_FILLERS = 'u+h+m*|u+m{2,}|e+r+m+|h+m+|m{3,}'
 const WORD_CHAR = String.raw`[\p{L}\p{N}\p{M}_/'’\-]`
 // A filler stands alone: nothing joins it to a word (a dot only does inside a name like "um.txt"),
 // and "hm?" or "eh!" is a question or a call, so it stays.
-const STANDALONE = (fillers: string): string =>
+const standalone = (fillers: string): string =>
   String.raw`(?<!${WORD_CHAR}|${WORD_CHAR}\.)(${fillers})(?!${WORD_CHAR}|\.${WORD_CHAR})(?!\s*[?？!！])`
 // The comma or ellipsis after a filler goes with it.
 const TRAILING_PAUSE = String.raw`(?:\s*(?:[,，、…]|\.{3}))?\s*`
-const SENTENCE_END_RE = /^[.!?。！？]+\s*/u
+const SENTENCE_END_CHARS = '.!?。！？'
+const SENTENCE_END_RE = new RegExp(`^[${SENTENCE_END_CHARS}]+\\s*`, 'u')
 // A comma left in front of a removed filler that ended the sentence or the text.
 const TRAILING_SOFT_PUNCTUATION_RE = /[\s,，、]+$/u
-const SENTENCE_END_CHARS = '.!?。！？'
 const NON_LATIN_LETTER_RE = /(?=\p{L})\P{Script=Latin}/u
 
 function fillerPattern(languages: readonly string[] | undefined, text: string): RegExp | null {
@@ -39,7 +39,7 @@ function fillerPattern(languages: readonly string[] | undefined, text: string): 
     }
     lists.push(LANGUAGE_NEUTRAL_FILLERS)
   }
-  return new RegExp(STANDALONE(lists.join('|')) + TRAILING_PAUSE, 'giu')
+  return new RegExp(standalone(lists.join('|')) + TRAILING_PAUSE, 'giu')
 }
 
 // In mixed-case text an all-caps "UM" or "HMM" is more likely a name or acronym than a sound.
@@ -94,8 +94,11 @@ export function removeFillerWords(text: string, languages: readonly string[] | u
   if (cursor === 0) {
     return text
   }
-  // A filler at the very end leaves the comma before it dangling.
-  const endsOnFiller = cursor === text.length
-  keep(text.slice(cursor))
-  return (endsOnFiller ? out.replace(TRAILING_SOFT_PUNCTUATION_RE, '') : out).trim()
+  if (cursor === text.length) {
+    // A filler at the very end leaves the comma before it dangling.
+    out = out.replace(TRAILING_SOFT_PUNCTUATION_RE, '')
+  } else {
+    keep(text.slice(cursor))
+  }
+  return out.trim()
 }

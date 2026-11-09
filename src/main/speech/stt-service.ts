@@ -27,7 +27,7 @@ export type SttEvent =
 
 export type SttEventSink = (event: SttEvent) => void
 
-// Every host route (desktop, web client, phone through the computer) reads text from this sink, so it is cleaned once here.
+// Cleaned once here, so every route the host transcribes for gets the same text.
 function cleanTranscriptEvents(sink: SttEventSink, clean: (text: string) => string): SttEventSink {
   return (event) =>
     sink(
