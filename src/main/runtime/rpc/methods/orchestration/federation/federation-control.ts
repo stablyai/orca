@@ -1,5 +1,7 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
+import { remoteChatWorkerOf } from '../../../../orchestration/federation/remote-chat-worker'
+import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { defineMethod } from '../../../core'
 import { isUserKeptWorkerTerminalOwner } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
@@ -10,7 +12,7 @@ import { stopRemoteAttachment } from './federated-worker-stop-host'
 import {
   inspectRemoteAttachment,
   observeRemoteAttachmentLiveness,
-  refuseRemoteChatWorkerRead,
+  refuseRemoteChatTerminalRead,
   requireHomeAttachment
 } from './federation-attachment-observation'
 import { releaseRemoteAttachment } from './federated-worker-release-host'
@@ -112,7 +114,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     permission: 'workspace',
     params: FederationReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
-      refuseRemoteChatWorkerRead(
+      refuseRemoteChatTerminalRead(
         runtime,
         requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
       )
@@ -161,7 +163,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           liveness:
             attachment.stage === 'released' || archivedObservation?.status === 'exited'
               ? 'exited'
-              : archivedObservation?.exact && archivedObservation.terminal
+              : archivedObservation?.exact
                 ? archivedObservation.status === 'live'
                   ? 'live'
                   : 'unverifiable'
@@ -175,8 +177,25 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           }
         }
       }
-      refuseRemoteChatWorkerRead(runtime, attachment)
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+      const chat = remoteChatWorkerOf(runtime.getOrchestrationDb(), attachment)
+      if (chat && observation.exact) {
+        // A chat's transcript, read as a local chat worker's is.
+        const output = await readStructuredWorkerOutput({
+          db: runtime.getOrchestrationDb(),
+          dispatchId: params.dispatchId,
+          identity: chat.identity,
+          workerState: attachment.state,
+          liveness:
+            observation.status === 'live' || observation.status === 'exited'
+              ? observation.status
+              : 'unverifiable',
+          source: params.source,
+          cursor: params.cursor,
+          limit: params.limit
+        })
+        return { dispatchId: params.dispatchId, runtimeEpoch: runtime.getRuntimeId(), output }
+      }
       if (!observation.exact || !observation.terminal) {
         throw new OrchestrationError(
           'worker_identity_changed',

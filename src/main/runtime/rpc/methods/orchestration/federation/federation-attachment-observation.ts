@@ -4,10 +4,8 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
-import {
-  REMOTE_CHAT_WORKER_READ_UNSUPPORTED,
-  remoteChatWorkerOf
-} from '../../../../orchestration/federation/remote-chat-worker'
+import { remoteChatWorkerOf } from '../../../../orchestration/federation/remote-chat-worker'
+import { observeStructuredWorkerHold } from '../worker/session-worker-observation'
 
 export function requireHomeAttachment(
   runtime: WorkerTerminalReleaseRuntime,
@@ -24,13 +22,16 @@ export function requireHomeAttachment(
   return attachment
 }
 
-/** A live read of a remote chat worker is refused plainly, until reads of one are supported. */
-export function refuseRemoteChatWorkerRead(
+/** A chat has no terminal screen; its transcript is read through federationReadOutput. */
+export function refuseRemoteChatTerminalRead(
   runtime: WorkerTerminalReleaseRuntime,
   attachment: RemoteDispatchAttachmentRow
 ): void {
-  if (remoteChatWorkerOf(runtime.getOrchestrationDb(), attachment)?.exact) {
-    throw new OrchestrationError('capability_unsupported', REMOTE_CHAT_WORKER_READ_UNSUPPORTED)
+  if (remoteChatWorkerOf(runtime.getOrchestrationDb(), attachment)) {
+    throw new OrchestrationError(
+      'transcript_required',
+      `Remote Dispatch ${attachment.dispatch_id} is a chat worker with no terminal; read its transcript with orchestration worker-read.`
+    )
   }
 }
 
@@ -50,13 +51,13 @@ export async function inspectRemoteAttachment(
   const attachment = db.getRemoteDispatchAttachment(dispatchId)
   const chat = remoteChatWorkerOf(db, attachment)
   if (chat) {
-    // Said plainly rather than read through a terminal it does not have.
-    return {
-      terminal: null,
-      exact: chat.exact,
-      status: chat.exact ? 'unverifiable' : 'identity_changed',
-      ...(chat.exact ? { reason: REMOTE_CHAT_WORKER_READ_UNSUPPORTED } : {})
+    if (!chat.exact) {
+      return { terminal: null, exact: false, status: 'identity_changed' }
     }
+    // A chat's state is its session's, read as a local chat worker's is; a restart leaves its records uninstalled.
+    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+    const { status, reason } = observeStructuredWorkerHold(chat.identity, db)
+    return { terminal: null, exact: true, status, ...(reason ? { reason } : {}) }
   }
   if (!attachment?.terminal_handle) {
     return { terminal: null, exact: false, status: 'unattached' }
