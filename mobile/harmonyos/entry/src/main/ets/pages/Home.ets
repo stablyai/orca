@@ -1042,9 +1042,9 @@ struct Home {
   // ----------------------------------------------------------------- paint
 
   @Builder
-  tabHeader(title: string, usageHostId: string = '') {
+  tabHeader(titleKey: string, usageHostId: string = '') {
     Row() {
-      Text(title)
+      Text(uiText(titleKey, this.uiLocale))
         .fontFamily('Geist').fontSize(22)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.pal().textPrimary)
@@ -1242,7 +1242,7 @@ struct Home {
   feedTab() {
     Column() {
       if (!this.loaded || this.loadError.length > 0 || this.hosts.length > 0) {
-        this.tabHeader(uiText('动态', this.uiLocale))
+        this.tabHeader('动态')
       }
       if (this.loadError.length > 0) {
         Text(this.loadError).fontColor(this.pal().statusRed).fontFamily('Geist').fontSize(15).padding(16)
@@ -1541,18 +1541,19 @@ struct Home {
     return used >= 80 ? this.pal().statusRed : used >= 60 ? this.pal().statusAmber : this.pal().statusGreen;
   }
 
-  private usageMeterLabelWidth(): number {
+  private usageMeterLabelWidth(locale: string): number {
     let context = this.getUIContext();
     let measure = context.getMeasureUtils();
-    let session = measure.measureText({ textContent: uiText('5 小时', this.uiLocale), fontFamily: 'Geist', fontSize: USAGE_METER_FONT_SIZE });
-    let weekly = measure.measureText({ textContent: uiText('7 天', this.uiLocale), fontFamily: 'Geist', fontSize: USAGE_METER_FONT_SIZE });
+    let session = measure.measureText({ textContent: uiText('5 小时', locale), fontFamily: 'Geist', fontSize: USAGE_METER_FONT_SIZE });
+    let weekly = measure.measureText({ textContent: uiText('7 天', locale), fontFamily: 'Geist', fontSize: USAGE_METER_FONT_SIZE });
     return Math.max(USAGE_METER_LABEL_MIN_WIDTH, Math.ceil(context.px2vp(Math.max(session, weekly))));
   }
 
   @Builder
-  usageMeter(label: string, window: HomeUsageWindow | undefined, fetching: boolean, labelWidth: number) {
+  usageMeter(labelKey: string, window: HomeUsageWindow | undefined, fetching: boolean) {
     Row({ space: USAGE_METER_GAP }) {
-      Text(label).width(labelWidth).fontFamily('Geist').fontSize(USAGE_METER_FONT_SIZE)
+      Text(uiText(labelKey, this.uiLocale)).width(this.usageMeterLabelWidth(this.uiLocale))
+        .fontFamily('Geist').fontSize(USAGE_METER_FONT_SIZE)
         .fontColor(this.pal().textSecondary).maxLines(1)
       Progress({ value: Math.round(window?.usedPercent ?? 0), total: 100, type: ProgressType.Linear })
         .style({ strokeWidth: 6 }).color(this.usageMeterColor(Math.round(window?.usedPercent ?? 0)))
@@ -1568,12 +1569,12 @@ struct Home {
     if (window && window.resetsAt > 0) {
       Text(homeUsageResetCountdown(window.resetsAt, this.homeNow))
         .fontFamily('Geist').fontSize(12).fontColor(this.pal().textMuted)
-        .margin({ left: labelWidth + USAGE_METER_GAP, top: 2 }).maxLines(1)
+        .margin({ left: this.usageMeterLabelWidth(this.uiLocale) + USAGE_METER_GAP, top: 2 }).maxLines(1)
     }
   }
 
   @Builder
-  usageCard(host: HostMeta, card: HomeUsageCard, separated: boolean, labelWidth: number) {
+  usageCard(host: HostMeta, card: HomeUsageCard, separated: boolean) {
     if (separated) { this.hairline(16) }
     Column() {
       Row({ space: USAGE_METER_GAP }) {
@@ -1599,8 +1600,8 @@ struct Home {
         }
       }.width('100%').margin({ bottom: 4 })
       if (card.metered) {
-        this.usageMeter(uiText('5 小时', this.uiLocale), card.windows.find((window: HomeUsageWindow): boolean => window.label === '会话'), card.fetching, labelWidth)
-        this.usageMeter(uiText('7 天', this.uiLocale), card.windows.find((window: HomeUsageWindow): boolean => window.label === '每周'), card.fetching, labelWidth)
+        this.usageMeter('5 小时', card.windows.find((window: HomeUsageWindow): boolean => window.label === '会话'), card.fetching)
+        this.usageMeter('7 天', card.windows.find((window: HomeUsageWindow): boolean => window.label === '每周'), card.fetching)
       }
     }.alignItems(HorizontalAlign.Start).width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
       .onClick(() => this.openHostRoute(host.id, '/accounts'))
@@ -1620,16 +1621,19 @@ struct Home {
     } catch (e) { return new Date(timestamp).toLocaleString(); }
   }
 
-  formatAgentTime(milliseconds: number): string {
+  formatAgentTime(milliseconds: number, locale: string = ''): string {
     let minutes = Math.max(0, Math.floor(milliseconds / 60000));
     let hours = Math.floor(minutes / 60); let days = Math.floor(hours / 24);
-    return days > 0 ? `${days}d` : hours > 0 ? `${hours}h` : `${minutes}m`;
+    let unit = days > 0 ? 'days' : hours > 0 ? 'hours' : 'minutes';
+    let value = days > 0 ? days : hours > 0 ? hours : minutes;
+    return locale ? uiText(`home.stats.${unit}`, locale).replace(`{{${unit}}}`, String(value)) : `${value}${unit[0]}`;
   }
 
   @Builder
-  statsCell(value: string, label: string) {
+  statsCell(value: number, label: string, agentTime: boolean = false) {
     Column({ space: 2 }) {
-      Text(value).fontFamily('Geist').fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary).maxLines(1)
+      Text(agentTime ? this.formatAgentTime(value, this.uiLocale) : value.toLocaleString(this.uiLocale))
+        .fontFamily('Geist').fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary).maxLines(1)
       Text(uiText(label, this.uiLocale)).fontFamily('Geist').fontSize(13).fontColor(this.pal().textSecondary).maxLines(2).textAlign(TextAlign.Center)
     }.layoutWeight(1).padding({ top: 13, bottom: 12, left: 8, right: 8 })
   }
@@ -1639,9 +1643,9 @@ struct Home {
     if (this.statsTotal !== null) {
       this.sectionHeading({ title: uiText('你的统计', this.uiLocale), aside: '', first: true })
       Row() {
-        this.statsCell(this.statsTotal!.totalAgentsSpawned.toLocaleString(), '已启动智能体')
-        this.statsCell(this.formatAgentTime(this.statsTotal!.totalAgentTimeMs), '智能体工作时间')
-        this.statsCell(this.statsTotal!.totalPRsCreated.toLocaleString(), '已创建 PR')
+        this.statsCell(this.statsTotal!.totalAgentsSpawned, '已启动智能体')
+        this.statsCell(this.statsTotal!.totalAgentTimeMs, 'home.stats.agentTime', true)
+        this.statsCell(this.statsTotal!.totalPRsCreated, '已创建 PR')
       }.width('100%').borderRadius(16).backgroundColor(this.pal().bgPanel).margin({ bottom: 12 })
     }
   }
@@ -1654,7 +1658,7 @@ struct Home {
         && (provider === 'claude' || this.usageCards(host.id, 'claude').length === 0) })
       Column() {
         ForEach(this.usageCards(host.id, provider), (card: HomeUsageCard, index: number) => {
-          this.usageCard(host, card, index > 0, this.usageMeterLabelWidth())
+          this.usageCard(host, card, index > 0)
         }, (card: HomeUsageCard): string => `${host.id}:${JSON.stringify(card)}`)
       }.width('100%').borderRadius(16).clip(true).backgroundColor(this.pal().bgPanel)
     }
@@ -1675,7 +1679,7 @@ struct Home {
   @Builder
   usageTab(host: HostMeta | null) {
     Column() {
-      this.tabHeader(uiText('使用情况', this.uiLocale), host?.id ?? '')
+      this.tabHeader('使用情况', host?.id ?? '')
       Scroll() {
         Column() {
           if (host) { this.tabHostPill(host, 'usage') }
@@ -1774,7 +1778,7 @@ struct Home {
   @Builder
   automationsTab(host: HostMeta | null) {
     Column() {
-      this.tabHeader(uiText('自动化', this.uiLocale))
+      this.tabHeader('自动化')
       Scroll() {
         Column() {
           if (!host) {
@@ -1865,7 +1869,7 @@ struct Home {
   @Builder
   settingsTab() {
     Column() {
-      this.tabHeader(uiText('设置', this.uiLocale))
+      this.tabHeader('设置')
       Scroll() {
         Column({ space: 12 }) {
           this.settingsGroup(SETTINGS_MENU_ITEMS, false)

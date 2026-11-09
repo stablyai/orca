@@ -3617,6 +3617,58 @@
     "es": "Nueva automatización",
     "zh-Hant": "新增自動化"
   },
+  "home.stats.agentTime": {
+    "zh": "智能体时间",
+    "en": "Agent time",
+    "tr": "Ajan süresi",
+    "ja": "Agent 時間",
+    "de": "Agentenzeit",
+    "ru": "Время агентов",
+    "pt": "Tempo de agente",
+    "fr": "Temps agent",
+    "ko": "Agent 시간",
+    "es": "Tiempo de agentes",
+    "zh-Hant": "代理程式時間"
+  },
+  "home.stats.days": {
+    "zh": "{{days}} 天",
+    "en": "{{days}}d",
+    "tr": "{{days}} g",
+    "ja": "{{days}}日",
+    "de": "{{days}} T",
+    "ru": "{{days}} дн.",
+    "pt": "{{days}}d",
+    "fr": "{{days}} j",
+    "ko": "{{days}}일",
+    "es": "{{days}} d",
+    "zh-Hant": "{{days}} 天"
+  },
+  "home.stats.hours": {
+    "zh": "{{hours}} 小时",
+    "en": "{{hours}}h",
+    "tr": "{{hours}} sa",
+    "ja": "{{hours}}時間",
+    "de": "{{hours}} Std.",
+    "ru": "{{hours}} ч",
+    "pt": "{{hours}}h",
+    "fr": "{{hours}} h",
+    "ko": "{{hours}}시간",
+    "es": "{{hours}} h",
+    "zh-Hant": "{{hours}} 小時"
+  },
+  "home.stats.minutes": {
+    "zh": "{{minutes}} 分钟",
+    "en": "{{minutes}}m",
+    "tr": "{{minutes}} dk",
+    "ja": "{{minutes}}分",
+    "de": "{{minutes}} Min.",
+    "ru": "{{minutes}} мин",
+    "pt": "{{minutes}}min",
+    "fr": "{{minutes}} min",
+    "ko": "{{minutes}}분",
+    "es": "{{minutes}} min",
+    "zh-Hant": "{{minutes}} 分鐘"
+  },
   "home.usage.updatedJustNow": {
     "zh": "刚刚更新",
     "en": "Updated just now",
