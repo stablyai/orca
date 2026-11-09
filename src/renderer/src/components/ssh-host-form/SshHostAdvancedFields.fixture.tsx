@@ -1,4 +1,4 @@
-import { defineFixture } from '../../../../component-fixtures/component-fixture'
+import { defineFixture } from '../../component-fixtures/component-fixture'
 import { SshHostAdvancedFields } from './SshHostAdvancedFields'
 import { EMPTY_FORM } from './ssh-target-draft'
 

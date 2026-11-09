@@ -441,7 +441,7 @@
 1 src/renderer/src/components/settings/session-history/SessionHistoryServerRow.tsx
 2 src/renderer/src/components/settings/session-history/SessionHistorySettingsPane.tsx
 1 src/renderer/src/components/settings/session-history/SessionSearchAdvancedSection.tsx
-1 src/renderer/src/components/settings/session-history/use-session-search-status.ts
+1 src/renderer/src/components/session-search/use-session-search-status.ts
 1 src/renderer/src/components/settings/shortcuts/ShortcutRecorderButton.tsx
 2 src/renderer/src/components/settings/source-control/AutoRenameBranchFromWorkSetting.tsx
 1 src/renderer/src/components/settings/source-control/CommitMessageAiPane.tsx
@@ -449,7 +449,7 @@
 1 src/renderer/src/components/settings/ssh/SshPane.tsx
 1 src/renderer/src/components/settings/ssh/server-actions/SshHostDeltaMoveDialog.tsx
 1 src/renderer/src/components/settings/ssh/server-actions/SshHostKeepServerVersionDialog.tsx
-1 src/renderer/src/components/settings/ssh/server-actions/SshHostMoveAnywayAction.tsx
+1 src/renderer/src/components/ssh-host-recovery/SshHostMoveAnywayAction.tsx
 1 src/renderer/src/components/settings/ssh/server-actions/SshHostRecoverServerAction.tsx
 1 src/renderer/src/components/settings/ssh/server-actions/SshHostRestartServerAction.tsx
 1 src/renderer/src/components/settings/ssh/ssh-hosts-header-slot.tsx

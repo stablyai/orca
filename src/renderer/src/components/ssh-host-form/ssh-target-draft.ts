@@ -1,5 +1,5 @@
-import type { SshConfigHostResolution, SshTarget } from '../../../../../../shared/ssh-types'
-import { isRemoteCliControlAllowed } from '../../../../../../shared/ssh-remote-cli-control'
+import type { SshConfigHostResolution, SshTarget } from '../../../../shared/ssh-types'
+import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 
 export type EditingTarget = {
   label: string

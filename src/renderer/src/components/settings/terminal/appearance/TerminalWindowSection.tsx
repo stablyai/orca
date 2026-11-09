@@ -1,18 +1,18 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   TERMINAL_COLOR_OVERRIDES_SETTING,
   terminalColorOverridesForSlot,
   type TerminalThemeSlot
-} from '../../../../../shared/terminal-themes/terminal-color-overrides'
-import { Button } from '../../ui/button'
-import { Label } from '../../ui/label'
-import { Switch } from '../../ui/switch'
-import { ColorField, NumberField } from '../form-controls/SettingsFormControls'
-import { SearchableSetting } from '../section-layout/SearchableSetting'
+} from '../../../../../../shared/terminal-themes/terminal-color-overrides'
+import { Button } from '../../../ui/button'
+import { Label } from '../../../ui/label'
+import { Switch } from '../../../ui/switch'
+import { ColorField, NumberField } from '../../form-controls/SettingsFormControls'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { WindowMaterialSetting } from '../appearance/WindowMaterialSetting'
+import { WindowMaterialSetting } from '../../appearance/WindowMaterialSetting'
 import { useTranslate } from '@/i18n/use-translate'
 
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'

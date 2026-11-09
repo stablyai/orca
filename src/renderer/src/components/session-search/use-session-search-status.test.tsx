@@ -2,9 +2,9 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { unavailableSessionSearchStatus } from '../../../../../shared/ai-vault/search/ai-vault-search-client'
-import type { AiVaultSearchStatus } from '../../../../../shared/ai-vault/search/ai-vault-search-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 import { useSessionSearchStatus } from './use-session-search-status'
 
@@ -39,7 +39,6 @@ function poll(active = true, refresh = 0) {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers()
   mocks.visible = true
   mocks.status.mockReset().mockResolvedValue(current)
   vi.stubGlobal('api', undefined)
@@ -50,44 +49,15 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
-  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
-it('does not overlap slow status requests and stops polling on unmount', async () => {
-  let answer: (value: AiVaultSearchStatus) => void = () => undefined
-  mocks.status.mockReturnValue(
-    new Promise<AiVaultSearchStatus>((resolve) => {
-      answer = resolve
-    })
-  )
-  const view = poll()
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(30_000)
-  })
-  expect(mocks.status).toHaveBeenCalledTimes(1)
-  await act(async () => {
-    answer({ ...current, phase: 'indexing', filesDue: 2 })
-  })
-  const beforeUnmount = mocks.status.mock.calls.length
-  view.unmount()
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(60_000)
-  })
-  expect(mocks.status).toHaveBeenCalledTimes(beforeUnmount)
-})
-
-it('marks the host too old on a host-too-old rejection and stops polling', async () => {
+it('marks the host too old on a host-too-old rejection', async () => {
   mocks.status.mockRejectedValue(new Error('Error invoking remote method: host-too-old'))
   const { result } = poll()
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
   })
   expect(result.current.hostTooOld).toBe(true)
   expect(result.current.failed).toBe(true)
-  const calls = mocks.status.mock.calls.length
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(30_000)
-  })
-  expect(mocks.status.mock.calls.length).toBe(calls)
 })

@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
+import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
 
-import { AddRepoHostSelector } from '../sidebar/project-admission/host-selection/AddRepoHostSelector'
+import { AddRepoHostSelector } from './AddRepoHostSelector'
 
 // Why 13,692: the host count from the generated ~/.ssh/config in the renderer crash this guards.
 const HOST_COUNT = 13_692
