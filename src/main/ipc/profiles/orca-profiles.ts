@@ -47,6 +47,7 @@ import {
 } from '../../orca-profiles/profile-cloud-service'
 import { refreshCurrentOrcaProfileAuth } from '../../orca-profiles/profile-cloud-capability-refresh'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
+import { registerOrcaProfileBillingHandlers } from './orca-profile-billing-handlers'
 import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/profile-cloud-session-invalidation'
 import {
   broadcastOrcaProfileAuthStatusChanged,
@@ -319,4 +320,5 @@ export function registerOrcaProfileHandlers(
   )
 
   registerOrcaProfileOrgMemberHandlers()
+  registerOrcaProfileBillingHandlers()
 }
