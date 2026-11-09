@@ -91,6 +91,8 @@ interface BridgeConnectionSnapshot {
   lastInboundAt: number | null;
   generation: number;
   activePath: string;
+  pendingPath?: string;
+  relayHostReachability?: string;
 }
 
 interface BridgeRpcGrants {
@@ -404,8 +406,10 @@ export class BridgeHost {
     this.streamWindows.clear();
   }
 
-  suspendTransport(attempt: number): void {
+  suspendTransport(attempt: number, pendingPath?: string, relayHostReachability?: string): void {
     this.detachTransport();
+    this.connection.pendingPath = pendingPath;
+    this.connection.relayHostReachability = relayHostReachability;
     this.publishState('reconnecting', attempt);
   }
 
@@ -417,6 +421,8 @@ export class BridgeHost {
     this.connection.generation++;
     this.connection.lastConnectedAt = Date.now();
     this.connection.activePath = path;
+    this.connection.pendingPath = undefined;
+    this.connection.relayHostReachability = undefined;
     this.publishState('connected', 0);
     if (this.pageReady && this.hasTerminalRail()) { this.sendInit(); }
     this.desktopSubs.forEach((record: DesktopSubscriptionRecord, id: string): void => {

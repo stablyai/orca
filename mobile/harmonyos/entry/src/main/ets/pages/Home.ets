@@ -55,6 +55,8 @@ interface DesktopRowPresentation {
   verdict: DesktopConnectionVerdict;
 }
 
+interface DesktopStatusDetailPresentation { detail: string; }
+
 const PALETTE_DARK: HomePalette = {
   bgBase: '#0a0a0a',
   bgPanel: '#171717',
@@ -1082,9 +1084,9 @@ struct Home {
         .width('100%')
         .margin({ top: 1 })
         if ($$.verdict.kind === 'unreachable' && !$$.host.relay) {
-          this.desktopStatusDetail(uiText('components.hostCard.sameNetworkOnlyHint', this.uiLocale))
+          this.desktopStatusDetail({ detail: uiText('components.hostCard.sameNetworkOnlyHint', this.uiLocale) })
         }
-        if ($$.verdict.detail) { this.desktopStatusDetail($$.verdict.detail); }
+        if ($$.verdict.detail) { this.desktopStatusDetail({ detail: $$.verdict.detail }); }
       }
       .alignItems(HorizontalAlign.Start)
       .padding({ top: 9, bottom: 9 })
@@ -1119,8 +1121,8 @@ struct Home {
   }
 
   @Builder
-  private desktopStatusDetail(detail: string) {
-    Text(detail).fontFamily('Geist').fontSize(14).lineHeight(18).fontColor(this.pal().textMuted)
+  private desktopStatusDetail($$: DesktopStatusDetailPresentation) {
+    Text($$.detail).fontFamily('Geist').fontSize(14).lineHeight(18).fontColor(this.pal().textMuted)
       .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 2 })
   }
 
@@ -1136,6 +1138,7 @@ struct Home {
       endpoint: host.endpoint, hostName: host.name,
       lastConnectedAt: connection?.getConnectedAt() ?? (host.lastConnected || null),
       reconnectAttempts: connection?.getReconnectAttempt() ?? 0, pendingPath: connection?.getPendingPath(),
+      relayHostReachability: connection?.getRelayHostReachability(),
       nowMs: Math.max(this.homeNow, Date.now())
     }, this.uiLocale);
   }

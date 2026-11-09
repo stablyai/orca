@@ -62,9 +62,13 @@ const models = [
       export { displayHostEndpoint } from './mobile/src/transport/hosts/host-endpoint'
       export { resolveHostEndpointEdit } from './mobile/src/transport/hosts/host-endpoint-edit'
       export { isTailscaleEndpoint } from './src/shared/remote-runtime/remote-runtime-tailscale-hint'
+      export { relayHostCloseReasonFrom } from './src/shared/relay-host-close-reason'
+      export { relayHostReachabilityForCloseCode } from './mobile/src/transport/relay/relay-host-reachability'
       export { installRuntime } from 'orca-diagnostic-runtime'
       import { classifyConnection, verdictDisplayLabel } from './mobile/src/transport/connection/connection-health'
+      import { RelayHostReachabilityLatch } from './mobile/src/transport/relay/relay-host-reachability-latch'
       import { withTranslation } from 'orca-diagnostic-translation'
+      export const createRelayHostReachability = () => new RelayHostReachabilityLatch()
       export function describeDesktopConnection(args, translator) {
         return withTranslation(translator, () => {
           const verdict = classifyConnection(args)

@@ -112,6 +112,7 @@ export class DesktopConnection {
   getPendingPath(): string | undefined { return this.session?.getPendingPath(); }
   getConnectedAt(): number | null { return this.connectedAt; }
   getReconnectAttempt(): number { return this.session?.getReconnectAttempt() ?? 0; }
+  getRelayHostReachability(): string { return this.session?.getRelayHostReachability() ?? 'connecting'; }
 
   setViewing(owner: Object, worktree: string, executionHost: string): void {
     this.notifications.setViewing(owner, this.hostId, worktree, executionHost);

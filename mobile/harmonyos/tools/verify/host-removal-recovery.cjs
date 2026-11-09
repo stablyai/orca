@@ -563,8 +563,18 @@ test('a running supervisor dials the durable relay credential instead of an obso
     version: 8,
     expiresAt: now + 30 * 86400000
   }
+  const { RelayHostReachability } = loadArkts(
+    'diagnostics/ConnectionDiagnostics.ets',
+    ['RelayHostReachability'],
+    {
+      upstream: require('../../entry/src/main/ets/vendor/connection-diagnostics.js'),
+      url: { URL },
+      utf8Encode: (text) => new TextEncoder().encode(text)
+    }
+  )
   const { HostSession } = loadArkts('transport/HostSession.ets', ['HostSession'], {
     SpikeRpcClient: Client,
+    RelayHostReachability,
     directPath: () => 'lan',
     appendLog: async () => {},
     LOG_LEVEL_INFO: 'info',

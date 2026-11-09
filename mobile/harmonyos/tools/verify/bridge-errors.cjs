@@ -161,6 +161,29 @@ test('a refused duplicate request sends the page a readable definite failure', a
   client.close()
 })
 
+test('a cached workspace sees the relay outage and clears it on authenticated reconnect', async (t) => {
+  const peer = createRpcPeer()
+  const { bridge, frames } = createBridge(peer, null)
+  const client = new peer.SpikeRpcClient()
+  t.after(() => {
+    bridge.dispose()
+    client.close()
+  })
+  bridge.suspendTransport(3, 'relay', 'host-offline')
+  post(bridge, { type: 'ready' })
+  const init = frames.find((frame) => frame.type === 'init')
+  assert.equal(init.connection.pendingPath, 'relay')
+  assert.equal(init.connection.relayHostReachability, 'host-offline')
+
+  await client.connect('ws://test', 'test-token', 'key', 'v2')
+  bridge.attachTransport(client, 'relay')
+  const restored = frames.findLast((frame) => frame.type === 'state').connection
+  assert.equal(restored.state, 'connected')
+  assert.equal(restored.activePath, 'relay')
+  assert.equal(restored.pendingPath, undefined)
+  assert.equal(restored.relayHostReachability, undefined)
+})
+
 test('a cold offline document restores its live stream after authentication and drops its offline write', async () => {
   const peer = createRpcPeer()
   const { bridge, frames } = createBridge(peer, null)

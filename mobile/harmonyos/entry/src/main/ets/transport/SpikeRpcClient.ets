@@ -4,6 +4,8 @@ import { util as textDecoderUtil } from '@kit.ArkTS';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { E2eeV2ClientSession, LegacyE2eeChannel, buildV2TokenAuthJson } from './E2eeV2Session';
 
+const RELAY_ERROR_CLOSE_GRACE_MS = 250;
+
 /**
  * Minimal direct-connection RPC client for Spike B: WebSocket + E2EE v2 handshake +
  * authenticated JSON RPC requests. Mirrors the wire behavior of upstream
@@ -73,7 +75,9 @@ export class SpikeRpcClient {
   private resumeConfirmation: Record<string, Object> | null = null;
   private relayAcceptedVersion: number = 0;
   private relayCloseCode: number = 0;
-  private relayRejectedCredential: boolean = false;
+  private relayCloseReason: string = '';
+  private relayCloseTimer: number = -1;
+  private relayRefused: boolean = false;
   private authRejected: boolean = false;
   private deadlineFailure: string = '';
   getDeadlineFailure(): string { return this.deadlineFailure; }
@@ -86,7 +90,8 @@ export class SpikeRpcClient {
   }
   getRelayMove(): RelayMove | null { return this.relayMove; }
   getRelayCloseCode(): number { return this.relayCloseCode; }
-  relayCredentialRejected(): boolean { return this.relayRejectedCredential; }
+  getRelayCloseReason(): string { return this.relayCloseReason; }
+  relayCredentialRejected(): boolean { return this.relayRefused && this.relayCloseCode === 4401; }
   getRelayAcceptedVersion(): number { return this.relayAcceptedVersion; }
   getResumeConfirmation(): Record<string, Object> | null { return this.resumeConfirmation; }
   isRelay(): boolean { return this.relayOptions !== null; }
@@ -105,6 +110,7 @@ export class SpikeRpcClient {
 
   private terminate(reason: string): void {
     if (this.state === 'closed' && this.closedNotified) { return; }
+    if (this.relayCloseTimer >= 0) { clearTimeout(this.relayCloseTimer); this.relayCloseTimer = -1; }
     let reject = this.rejectConnect;
     this.finishConnect();
     this.state = 'closed';
@@ -118,6 +124,14 @@ export class SpikeRpcClient {
       for (let i = 0; i < this.closeListeners.length; i++) { this.closeListeners[i](); }
     }
     try { this.ws.close().catch(() => {}); } catch (e) { }
+  }
+
+  private waitForRelayClose(): void {
+    if (this.state === 'closed' || this.relayCloseTimer >= 0) { return; }
+    this.relayCloseTimer = setTimeout((): void => {
+      if (!this.relayRefused) { this.relayCloseCode = 1006; }
+      this.terminate('Relay connection closed');
+    }, RELAY_ERROR_CLOSE_GRACE_MS);
   }
   private pending: Map<string, PendingRequest> = new Map();
   private streams: Map<string, (responseJson: string) => void> = new Map();
@@ -182,7 +196,8 @@ export class SpikeRpcClient {
       this.closedNotified = false;
       this.relayAcceptedVersion = 0;
       this.relayCloseCode = 0;
-      this.relayRejectedCredential = false;
+      this.relayCloseReason = '';
+      this.relayRefused = false;
       this.rejectConnect = reject;
       this.connectTimer = setTimeout((): void => {
         this.deadlineFailure = this.state === 'connecting' ? 'connect-timeout' : 'handshake-timeout';
@@ -206,6 +221,7 @@ export class SpikeRpcClient {
       });
       this.ws.on('message', (_err: BusinessError, value: string | ArrayBuffer) => {
         try {
+          if (this.relayRefused) { return; }
           if (this.state === 'awaiting-relay') { this.acceptRelayHello(value, serverPublicKeyB64); return; }
           if (this.state !== 'closed') { this.handleMessage(value, deviceToken, connected, failed); }
         } catch (e) {
@@ -214,7 +230,9 @@ export class SpikeRpcClient {
         }
       });
       this.ws.on('close', (_err: BusinessError, value: webSocket.CloseResult) => {
-        if (!this.relayRejectedCredential) { this.relayCloseCode = value.code; }
+        if (this.state === 'closed') { return; }
+        if (!this.relayRefused) { this.relayCloseCode = value.code || 1006; }
+        if (this.relayOptions) { this.relayCloseReason = value.reason ?? ''; }
         if (this.state === 'ready' && value.code === 4001 && value.reason === 'Unauthorized') {
           this.authRejected = true;
         }
@@ -223,12 +241,14 @@ export class SpikeRpcClient {
       });
       this.ws.on('error', (_err: BusinessError) => {
         this.log('网络连接失败');
-        this.terminate('socket error');
+        if (this.relayOptions) { this.waitForRelayClose(); }
+        else { this.terminate('socket error'); }
       });
       try { this.ws.connect(endpoint, (err: BusinessError) => {
         if (err) {
           this.log(`connect failed: ${err.message}`);
-          failed(err as Error);
+          if (this.relayOptions) { this.waitForRelayClose(); }
+          else { failed(err as Error); }
         }
       }); } catch (e) { failed(e as Error); }
     });
@@ -258,8 +278,8 @@ export class SpikeRpcClient {
         throw new Error('Invalid relay refusal');
       }
       this.relayCloseCode = code;
-      this.relayRejectedCredential = code === 4401;
-      this.terminate(`Relay refused credential (${this.relayCloseCode})`); return;
+      this.relayRefused = true;
+      this.waitForRelayClose(); return;
     }
     if (hello['credentialKind'] !== this.relayOptions.credentialKind || !Number.isSafeInteger(hello['leaseExpiresAt'])
       || hello['leaseExpiresAt'] <= Date.now()) { throw new Error('Relay credential kind or lease mismatch'); }

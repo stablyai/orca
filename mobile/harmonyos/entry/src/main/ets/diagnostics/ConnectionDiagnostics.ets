@@ -31,6 +31,7 @@ export interface DesktopConnectionEvidence {
   lastConnectedAt: number | null;
   reconnectAttempts: number;
   pendingPath?: string;
+  relayHostReachability?: string;
   nowMs: number;
 }
 
@@ -45,6 +46,19 @@ export function describeDesktopConnection(evidence: DesktopConnectionEvidence, l
     let label = uiText(key, locale);
     return label === key ? fallback : label;
   }) as DesktopConnectionVerdict;
+}
+
+export class RelayHostReachability {
+  private latch: ESObject = model.createRelayHostReachability();
+
+  current(): string { return this.latch.current() as string; }
+  clear(): void { this.latch.clear(); }
+
+  record(code: number, reason: string): void {
+    let explicit = model.relayHostCloseReasonFrom(reason) as string | null;
+    if (explicit) { this.latch.assert(explicit); }
+    else { this.latch.record(model.relayHostReachabilityForCloseCode(code)); }
+  }
 }
 
 export interface ConnectionReport {

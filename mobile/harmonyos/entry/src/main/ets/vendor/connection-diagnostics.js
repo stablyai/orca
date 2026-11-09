@@ -2,6 +2,7 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -15,12 +16,14 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // orca-connection-diagnostics-entry.ts
 var orca_connection_diagnostics_entry_exports = {};
 __export(orca_connection_diagnostics_entry_exports, {
   boundConnectionDiagnosticsReport: () => boundConnectionDiagnosticsReport,
   buildConnectionDiagnosticsReport: () => buildConnectionDiagnosticsReport,
+  createRelayHostReachability: () => createRelayHostReachability,
   describeDesktopConnection: () => describeDesktopConnection,
   diagnoseConnection: () => diagnoseConnection,
   displayHostEndpoint: () => displayHostEndpoint,
@@ -30,6 +33,8 @@ __export(orca_connection_diagnostics_entry_exports, {
   installRuntime: () => installRuntime,
   isTailscaleEndpoint: () => isTailscaleEndpoint,
   redactConnectionLogText: () => redactConnectionLogText,
+  relayHostCloseReasonFrom: () => relayHostCloseReasonFrom,
+  relayHostReachabilityForCloseCode: () => relayHostReachabilityForCloseCode,
   resolveHostEndpointEdit: () => resolveHostEndpointEdit
 });
 module.exports = __toCommonJS(orca_connection_diagnostics_entry_exports);
@@ -870,6 +875,17 @@ function endpointRouteSuffix(endpoint) {
   return match?.[1] ?? "";
 }
 
+// src/shared/relay-host-close-reason.ts
+var RELAY_HOST_CLOSE_REASON = {
+  // The desktop lost its Orca Cloud session (cleared, or refused with 401).
+  SIGNED_OUT: "signed-out"
+};
+var REASONS = Object.values(RELAY_HOST_CLOSE_REASON);
+function relayHostCloseReasonFrom(value) {
+  const text = typeof value === "string" ? value : value?.toString() ?? "";
+  return REASONS.includes(text) ? text : null;
+}
+
 // mobile/src/transport/connection/connection-health.ts
 var WARNING_ATTEMPTS = 3;
 var UNREACHABLE_ATTEMPTS = 12;
@@ -1019,7 +1035,56 @@ function verdictDisplayLabel(verdict) {
   return verdict.label;
 }
 
+// mobile/src/transport/relay/relay-host-reachability-latch.ts
+var RELAY_HOST_REACHABILITY_STREAK = 2;
+var RelayHostReachabilityLatch = class {
+  constructor() {
+    __publicField(this, "candidate", "connecting");
+    __publicField(this, "streak", 0);
+    __publicField(this, "reported", "connecting");
+    __publicField(this, "reporter", null);
+  }
+  current() {
+    return this.reported;
+  }
+  reportTo(reporter) {
+    this.reporter = reporter;
+    reporter(this.reported);
+  }
+  record(next) {
+    if (this.reported === "signed-out") {
+      return;
+    }
+    if (next === "connecting") {
+      this.streak = 0;
+      return;
+    }
+    this.streak = next === this.candidate ? this.streak + 1 : 1;
+    this.candidate = next;
+    if (this.streak >= RELAY_HOST_REACHABILITY_STREAK) {
+      this.publish(next);
+    }
+  }
+  // The cell named the reason outright, so there is no streak to earn.
+  assert(reachability) {
+    this.candidate = reachability;
+    this.streak = 0;
+    this.publish(reachability);
+  }
+  clear() {
+    this.candidate = "connecting";
+    this.streak = 0;
+    this.publish("connecting");
+  }
+  // Publish unconditionally; LogicalClientConnectionPath.update owns deduplication.
+  publish(reachability) {
+    this.reported = reachability;
+    this.reporter?.(reachability);
+  }
+};
+
 // orca-connection-diagnostics-entry.ts
+var createRelayHostReachability = () => new RelayHostReachabilityLatch();
 function describeDesktopConnection(args, translator2) {
   return withTranslation(translator2, () => {
     const verdict = classifyConnection(args);

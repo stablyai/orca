@@ -1,6 +1,8 @@
 import { http } from '@kit.NetworkKit';
 import { RelayEndpoint, readRelayEndpoint } from './RelayProtocol';
 
+export class RelayDirectorRefusedError extends Error {}
+
 export async function resolveRelayEndpoint(endpoint: RelayEndpoint, token: string, publicKeyB64: string): Promise<RelayEndpoint> {
   let request = http.createHttp();
   let params: Record<string, Object> = { 'v': 1, 'relayHostId': endpoint.relayHostId, 'resumeToken': token };
@@ -10,6 +12,7 @@ export async function resolveRelayEndpoint(endpoint: RelayEndpoint, token: strin
       method: http.RequestMethod.POST, header: header, extraData: JSON.stringify(params),
       connectTimeout: 5000, readTimeout: 5000, expectDataType: http.HttpDataType.STRING
     });
+    if (response.responseCode === 401) { throw new RelayDirectorRefusedError('Relay director refused the credential'); }
     if (response.responseCode !== 200 || typeof response.result !== 'string' || response.result.length > 16384) {
       throw new Error('Relay director resolve failed');
     }

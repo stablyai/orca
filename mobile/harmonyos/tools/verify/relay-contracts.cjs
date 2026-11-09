@@ -14,7 +14,7 @@ function createRelayPeer({
   const contexts = []
   const handlers = new Map()
   const receive = (value) => handlers.get('message')(null, JSON.stringify(value))
-  const closeFromPeer = (code) => handlers.get('close')(null, { code, reason: '' })
+  const closeFromPeer = (code, reason = '') => handlers.get('close')(null, { code, reason })
   let confirm
   const webSocket = {
     createWebSocket() {
@@ -189,6 +189,106 @@ test('only an explicit valid relay refusal rejects the credential after a socket
     await assert.rejects(peer.client.connect('wss://cell.example', 'device-token', 'key', 'v2'))
     assert.equal(peer.client.relayCredentialRejected(), false)
   }
+})
+
+test('a relay refusal preserves the desktop sign-out reason from the following close', async () => {
+  const peer = createRelayPeer({ refusal: { type: 'relay-hello', ok: false, code: 4404 } })
+  let observed
+  peer.client.onSocketClosed(() => {
+    observed = {
+      code: peer.client.getRelayCloseCode(),
+      reason: peer.client.getRelayCloseReason()
+    }
+  })
+  const closed = assert.rejects(
+    peer.client.connect('wss://cell.example', 'device-token', 'key', 'v2')
+  )
+  peer.closeFromPeer(4404, 'signed-out')
+  await closed
+  assert.deepEqual(observed, { code: 4404, reason: 'signed-out' })
+})
+
+test('a failed director lookup allows the next relay dial to use the saved cell', async (t) => {
+  const { RelayHostReachability } = loadArkts(
+    'diagnostics/ConnectionDiagnostics.ets',
+    ['RelayHostReachability'],
+    {
+      upstream: require('../../entry/src/main/ets/vendor/connection-diagnostics.js'),
+      url: { URL },
+      utf8Encode: (text) => new TextEncoder().encode(text)
+    }
+  )
+  class RelayDirectorRefusedError extends Error {}
+  let cellRedirected = false
+  class Client {
+    setFflate() {}
+    setLogSink() {}
+    onSocketClosed() {}
+    configureRelay() {
+      this.relay = true
+    }
+    async connect() {
+      if (!this.relay) {
+        throw new Error('Direct connection unavailable')
+      }
+      if (!cellRedirected) {
+        cellRedirected = true
+        this.closeCode = 4409
+        throw new Error('Cell requested a new assignment')
+      }
+    }
+    getRelayCloseCode() {
+      return this.closeCode ?? 0
+    }
+    getRelayCloseReason() {
+      return ''
+    }
+    getDeadlineFailure() {
+      return ''
+    }
+    authenticationRejected() {
+      return false
+    }
+    close() {}
+  }
+  const { HostSession } = loadArkts('transport/HostSession.ets', ['HostSession'], {
+    SpikeRpcClient: Client,
+    RelayHostReachability,
+    RelayDirectorRefusedError,
+    resolveRelayEndpoint: async () => {
+      throw new RelayDirectorRefusedError()
+    },
+    directPath: () => 'lan',
+    relayConnectUrl: () => 'wss://cell.example',
+    settleRuntimeCapabilities: async () => {},
+    fflateModule: {},
+    LOG_LEVEL_INFO: 'info',
+    LOG_LEVEL_WARN: 'warn',
+    LOG_LEVEL_SUCCESS: 'success'
+  })
+  const session = new HostSession(
+    {
+      id: 'desktop',
+      name: 'Desktop',
+      endpoint: 'ws://desktop.example',
+      publicKeyB64: 'key',
+      relay: { directorUrl: 'https://director.example', cellUrl: 'https://cell.example' }
+    },
+    'test-device',
+    { token: 'resume', version: 1, expiresAt: 4102444800000 }
+  )
+  t.after(() => session.stop())
+  session.start()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await new Promise(setImmediate)
+    if (session.getPhase() === 'connected') {
+      break
+    }
+    session.revive()
+  }
+  await new Promise(setImmediate)
+  assert.equal(session.getPhase(), 'connected')
+  assert.equal(session.getActivePath(), 'relay')
 })
 
 test('relay pairing authenticates the invite before any desktop credentials are sent', async () => {

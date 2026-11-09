@@ -335,15 +335,18 @@ export struct ShellSurface {
   }
   private suspendTransport(attempt: number): void {
     this.attachingClient = null;
+    let connection = this.desktop?.connection;
+    let pendingPath = connection?.getPendingPath();
+    let reachability = connection?.getRelayHostReachability();
     if (this.cacheOnly && this.bridge) {
-      this.bridge.suspendTransport(attempt);
+      this.bridge.suspendTransport(attempt, pendingPath, reachability);
       return;
     }
     this.startup.cancel(); this.generation++;
     if (!this.painted || !this.bridge) { this.releaseBridge(); return; }
     this.client = null;
     this.nativeDevice?.setDesktopClient(null);
-    this.bridge.suspendTransport(attempt);
+    this.bridge.suspendTransport(attempt, pendingPath, reachability);
   }
   private failStartup(message: string): void {
     if (this.disposed) { return; }
@@ -629,6 +632,11 @@ export struct ShellSurface {
     let target = this.pendingSession;
     let entry = target ? root : shown.pathname;
     let bridge = new BridgeHost(client, document.controller, manifest, meta, entry, path);
+    if (!client) {
+      let connection = this.desktop?.connection;
+      bridge.suspendTransport(connection?.getReconnectAttempt() ?? 0,
+        connection?.getPendingPath(), connection?.getRelayHostReachability());
+    }
     bridge.setWideLayout(this.surface.width >= 700 && this.surface.height >= 600);
     bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale);
     if (!this.asDrawer) {
