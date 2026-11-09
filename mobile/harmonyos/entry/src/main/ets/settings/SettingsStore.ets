@@ -54,9 +54,9 @@ export const FONT_FAMILY_OPTIONS: OptionEntry[] = [
 ];
 
 export const DICTATION_ENGINE_OPTIONS: OptionEntry[] = [
-  { value: DICTATION_ENGINE_AUTOMATIC, label: '自动', desc: '可用时在本机识别，否则使用已配对电脑' },
-  { value: DICTATION_ENGINE_DESKTOP, label: '桌面转写（推荐）', desc: '音频送到已配对桌面完成识别，质量稳定' },
-  { value: DICTATION_ENGINE_ONDEVICE, label: '本机识别', desc: '仅在本机识别；当前系统支持离线普通话，不发送音频到电脑' }
+  { value: DICTATION_ENGINE_AUTOMATIC, label: '自动', desc: '' },
+  { value: DICTATION_ENGINE_ONDEVICE, label: '此手机', desc: '' },
+  { value: DICTATION_ENGINE_DESKTOP, label: '电脑', desc: '' }
 ];
 
 /** 按 value 找展示名（找不到时原样返回）。 */
@@ -150,15 +150,9 @@ export async function getBool(context: common.Context, key: string): Promise<boo
 export async function getString(context: common.Context, key: string): Promise<string> {
   let fallback = stringDefaultFor(key);
   try {
+    if (key === KEY_DICTATION_ENGINE) { return await readDictationEngine(context); }
     let prefs = await loadPrefs(context);
-    let value: preferences.ValueType = await prefs.get(key, key === KEY_DICTATION_ENGINE ? '' : fallback);
-    if (key === KEY_DICTATION_ENGINE) {
-      if (value === '') { value = await prefs.get('dictation.engine', DICTATION_ENGINE_AUTOMATIC); }
-      if (value === 'desktop') { return DICTATION_ENGINE_DESKTOP; }
-      if (value === 'ondevice') { return DICTATION_ENGINE_ONDEVICE; }
-      return [DICTATION_ENGINE_AUTOMATIC, DICTATION_ENGINE_DESKTOP, DICTATION_ENGINE_ONDEVICE].includes(value as string)
-        ? value as string : DICTATION_ENGINE_AUTOMATIC;
-    }
+    let value: preferences.ValueType = await prefs.get(key, fallback);
     if (key === KEY_THEME_MODE && ![THEME_MODE_SYSTEM, THEME_MODE_LIGHT, THEME_MODE_DARK].includes(value as string)) { return THEME_MODE_SYSTEM; }
     if (PAGE_PREFERENCE_KEYS.includes(key) && typeof value === 'string') {
       try { validatePagePreference(key, value); } catch (e) { return fallback; }
@@ -168,6 +162,15 @@ export async function getString(context: common.Context, key: string): Promise<s
   } catch (e) {
     return fallback;
   }
+}
+
+export async function readDictationEngine(context: common.Context): Promise<string> {
+  let prefs = await loadPrefs(context);
+  let value = await prefs.get(KEY_DICTATION_ENGINE, '');
+  if (value === '') { value = await prefs.get('dictation.engine', DICTATION_ENGINE_AUTOMATIC); }
+  if (value === 'desktop' || value === DICTATION_ENGINE_DESKTOP) { return DICTATION_ENGINE_DESKTOP; }
+  if (value === 'ondevice' || value === DICTATION_ENGINE_ONDEVICE) { return DICTATION_ENGINE_ONDEVICE; }
+  return DICTATION_ENGINE_AUTOMATIC;
 }
 
 export async function getNumber(context: common.Context, key: string): Promise<number> {

@@ -1,5 +1,6 @@
 import { speechRecognizer } from '@kit.CoreSpeechKit';
 import { common } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { getString, KEY_DICTATION_ENGINE } from '../settings/SettingsStore';
 
 export class NativeSpeech {
@@ -22,7 +23,7 @@ export class NativeSpeech {
   constructor(context: common.UIAbilityContext) { this.context = context; }
 
   private async engineFor(locale: string): Promise<speechRecognizer.SpeechRecognitionEngine | null> {
-    if (!/^zh(?:-CN)?$/i.test(locale) || !canIUse('SystemCapability.AI.SpeechRecognizer')) { return null; }
+    if (!/^zh(?:-Hans)?(?:-CN)?$/i.test(locale) || !canIUse('SystemCapability.AI.SpeechRecognizer')) { return null; }
     if (this.engine) { return this.engine; }
     if (this.opening) { return this.opening; }
     let opening = this.openEngine(); this.opening = opening;
@@ -83,7 +84,10 @@ export class NativeSpeech {
     let engine: speechRecognizer.SpeechRecognitionEngine | null = null;
     let status = 'unsupported';
     try { engine = await this.engineFor(value['locale']); status = engine ? engine.isBusy() ? 'busy' : 'ready' : 'unsupported'; }
-    catch (e) { status = 'unsupported'; }
+    catch (e) {
+      let code = (e as BusinessError).code;
+      status = code === 1002200006 || code === 1002200008 ? 'busy' : 'unsupported';
+    }
     if (action === 'status') {
       return { status: status, locale: engine ? 'zh-CN' : null, preference: await getString(this.context, KEY_DICTATION_ENGINE) };
     }

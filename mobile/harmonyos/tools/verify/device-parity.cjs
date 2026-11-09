@@ -98,6 +98,21 @@ test('unsupported local speech reports its real availability without claiming a 
   speech.dispose()
 })
 
+test('Simplified Chinese remains available after a busy speech service releases its engine', async () => {
+  let busy = true
+  const NativeSpeech = speechHarness(async () => {
+    if (busy) {
+      throw Object.assign(new Error('Speech service busy'), { code: 1002200006 })
+    }
+    return recognizer()
+  })
+  const speech = new NativeSpeech({})
+  assert.equal((await speech.serve({ action: 'status', locale: 'zh-Hans-CN' })).status, 'busy')
+  busy = false
+  assert.equal((await speech.serve({ action: 'start', locale: 'zh-Hans-CN' })).started, true)
+  speech.dispose()
+})
+
 class RpcSuccess {
   constructor(id, result) {
     this.id = id
@@ -632,6 +647,8 @@ test('external link handling refuses executable and file URLs and opens accepted
 
 function microphoneBindings(capturer, recordingWindow) {
   return {
+    readDictationEngine: async () => 'automatic',
+    DICTATION_ENGINE_ONDEVICE: 'phone',
     abilityAccessCtrl: {
       createAtManager: () => ({ requestPermissionsFromUser: async () => ({ authResults: [0] }) })
     },
@@ -649,6 +666,43 @@ function microphoneBindings(capturer, recordingWindow) {
     base64Encode: (value) => Buffer.from(value).toString('base64')
   }
 }
+
+test('phone-only audio reaches the local recognizer while the page receives no samples', async () => {
+  let read
+  const localAudio = []
+  const device = deviceHarness({
+    ...microphoneBindings(
+      {
+        on(name, callback) {
+          if (name === 'readData') {
+            read = callback
+          }
+        },
+        off() {},
+        start: async () => {},
+        stop: async () => {},
+        release: async () => {}
+      },
+      {
+        getWindowProperties: () => ({ isKeepScreenOn: false }),
+        setWindowKeepScreenOn: async () => {}
+      }
+    ),
+    readDictationEngine: async () => 'phone',
+    NativeSpeech: class {
+      feed(samples) {
+        localAudio.push(Array.from(samples))
+      }
+      dispose() {}
+    }
+  })
+  await device.serve('native.audio.start', { sampleRate: 16000 })
+  read(Uint8Array.from([3, 1, 4, 1]).buffer)
+  assert.deepEqual(localAudio, [[3, 1, 4, 1]])
+  assert.equal((await device.serve('native.audio.read', { maxBytes: 128 })).base64, '')
+  assert.equal((await device.serve('native.audio.stop', {})).base64, '')
+  await device.dispose()
+})
 
 test('pausing while the microphone wake lock is pending cannot begin capture or leave the screen awake', async () => {
   const locking = deferred()

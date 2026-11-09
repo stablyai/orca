@@ -259,6 +259,8 @@ test('the public microphone stop result contains the ring tail and overflow loss
   const { NativeDevice } = loadArkts('webshell/NativeDevice.ets', ['NativeDevice'], {
     ...bytes,
     ...nativeModules,
+    readDictationEngine: async () => 'computer',
+    DICTATION_ENGINE_ONDEVICE: 'phone',
     window: {
       getLastWindow: async () => ({
         setWindowKeepScreenOn: async () => {},

@@ -6,6 +6,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { window } from '@kit.ArkUI';
+import { DICTATION_ENGINE_ONDEVICE, readDictationEngine } from '../settings/SettingsStore';
 import { base64Encode } from '../transport/crypto/Bytes';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import { NativeSpeech } from './NativeSpeech';
@@ -161,6 +162,8 @@ export class NativeDevice {
     if (!Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 48000 || this.starting || this.recording) { throw new Error('Microphone unavailable'); }
     this.starting = true; let generation = ++this.generation;
     try {
+      let phoneOnly = await readDictationEngine(this.context) === DICTATION_ENGINE_ONDEVICE;
+      if (this.disposed || generation !== this.generation) { throw new Error('Capture cancelled'); }
       let permission = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(this.context, ['ohos.permission.MICROPHONE']);
       if (permission.authResults[0] !== 0) {
         this.speech.cancel();
@@ -188,7 +191,9 @@ export class NativeDevice {
       this.recording = true;
       capturer.on('readData', (data: ArrayBuffer): void => {
         if (!this.recording || generation !== this.generation) { return; }
-        let incoming = new Uint8Array(data); this.speech.feed(incoming); let size = this.pcm.length + incoming.length;
+        let incoming = new Uint8Array(data); this.speech.feed(incoming);
+        if (phoneOnly) { return; }
+        let size = this.pcm.length + incoming.length;
         let skip = Math.max(0, size - AUDIO_LIMIT); this.dropped += skip;
         let next = new Uint8Array(Math.min(size, AUDIO_LIMIT));
         if (skip < this.pcm.length) {
@@ -203,6 +208,7 @@ export class NativeDevice {
         }
       });
       capturer.on('audioInterrupt', (event: audio.InterruptEvent): void => {
+        if (!this.recording || generation !== this.generation) { return; }
         if (event.eventType === audio.InterruptType.INTERRUPT_TYPE_BEGIN) {
           this.interruption = 'began'; this.speech.cancel(); this.stopCapture().catch(() => {});
         } else { this.interruption = 'ended'; }
