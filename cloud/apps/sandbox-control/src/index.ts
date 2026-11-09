@@ -87,7 +87,8 @@ export type Deps = {
 
 /** The public origin: PUBLIC_API_URL when set, else the request's own origin. */
 export function publicOrigin(env: Env, url?: URL): string | undefined {
-  return env.PUBLIC_API_URL?.replace(/\/+$/, '') ?? url?.origin
+  const configured = env.PUBLIC_API_URL ?? (env.EGRESS_PROXY_URL ? new URL(env.EGRESS_PROXY_URL).origin : undefined)
+  return configured?.replace(/\/+$/, '') ?? url?.origin
 }
 
 // Decrypted model keys for the egress proxy, per sandbox session, for a minute: one D1 read and
