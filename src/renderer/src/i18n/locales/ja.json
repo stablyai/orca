@@ -509,8 +509,7 @@
         "parakeetJa": "日本語のみ。3.5 万時間以上の自然な音声で学習。句読点に対応。",
         "whisperTiny": "90 以上の言語に対応。Parakeet より精度は低いものの、対応言語が最も豊富。",
         "senseVoice": "中国語、英語、日本語、韓国語、広東語に対応。言語を自動検出。",
-        "gpt4oMiniTranscribe": "高精度で低コストのクラウド文字起こし。OpenAI API キーが必要です。",
-        "gpt4oTranscribe": "より高精度なクラウド文字起こし。OpenAI API キーが必要です。"
+        "gptTranscribe": "高精度なクラウド文字起こし。OpenAI API キーが必要です。"
       }
     },
     "diagnostics": {

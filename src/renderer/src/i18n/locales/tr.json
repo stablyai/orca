@@ -942,8 +942,7 @@
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
         "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
         "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
-        "gpt4oMiniTranscribe": "Yüksek doğruluk ve düşük maliyetle bulut transkripsiyonu. OpenAI API anahtarı gerektirir.",
-        "gpt4oTranscribe": "Daha yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
+        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
       }
     },
     "diagnostics": {
