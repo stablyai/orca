@@ -35,6 +35,7 @@ import {
 import { loadHostCatalog } from '../transport/hosts/host-store'
 import type { HostCatalogEntry } from '../transport/hosts/host-profile'
 import { hostObserverOptions, type HostQuery } from '../query/host-query'
+import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { HostQueryKey } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
@@ -53,15 +54,12 @@ export type MobileHomeData = ReturnType<typeof useMobileHomeData>
 // A paired desktop with its client, or none while Home holds no connection to it (disconnected, never opened).
 type HomeHost = { hostId: string; client: RpcClient | null }
 
-// Home reads one of each per paired desktop.
+// Home reads one of each per paired desktop. Reads stay on while a desktop connects: the connected edge
+// re-reads them the moment it lands, with no render in between, and a read tried before it is refused at once.
 const homeQueryOptions = <TData>(
   query: HostQuery<typeof NO_HOST_LIST_INPUT, TData>,
-  host: HomeHost,
-  enabled: boolean
-) => ({
-  ...hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT),
-  enabled
-})
+  host: HomeHost
+) => hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
 
 // Kept by the accounts stream (use-mobile-home-host-connections), never fetched.
 const homeAccountsOptions = (hostId: string) =>
@@ -75,7 +73,8 @@ const homeAccountsOptions = (hostId: string) =>
 const readOf = (result: QueryObserverResult<HomeWorktreeCounts>) => ({
   data: result.data,
   dataUpdatedAt: result.dataUpdatedAt,
-  failed: result.isError
+  // A read refused because the desktop isn't connected yet says nothing about its list.
+  failed: result.isError && !isHostNotConnectedError(result.error)
 })
 
 export function useMobileHomeData() {
@@ -120,13 +119,9 @@ export function useMobileHomeData() {
     )
   }, [hostCatalog, queryClient])
 
-  // A desktop's reads wait for its connection; one still connecting would report the list unavailable.
   const countsQueries = useMemo(
-    () =>
-      homeHosts.map((host) =>
-        homeQueryOptions(homeWorktreeCountsQuery, host, hostStates[host.hostId] === 'connected')
-      ),
-    [homeHosts, hostStates]
+    () => homeHosts.map((host) => homeQueryOptions(homeWorktreeCountsQuery, host)),
+    [homeHosts]
   )
   const combineCounts = useCallback(
     (results: QueryObserverResult<HomeWorktreeCounts>[]): Record<string, HostWorktreeInfo> => {
@@ -149,11 +144,8 @@ export function useMobileHomeData() {
     subscribed: homeFocused
   })
   const statsQueries = useMemo(
-    () =>
-      homeHosts.map((host) =>
-        homeQueryOptions(homeStatsQuery, host, hostStates[host.hostId] === 'connected')
-      ),
-    [homeHosts, hostStates]
+    () => homeHosts.map((host) => homeQueryOptions(homeStatsQuery, host)),
+    [homeHosts]
   )
   const combineStats = useCallback(
     (results: QueryObserverResult<HomeStatsRow>[]): Record<string, HomeStatsRow> =>
