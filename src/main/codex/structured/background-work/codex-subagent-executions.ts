@@ -176,7 +176,9 @@ export class CodexSubagentExecutions {
   }
 
   workingSpawnedBy(threadId: string): CodexExecutionChild[] {
-    return [...(this.workingBySpawner.get(threadId) ?? [])]
+    return [...(this.workingBySpawner.get(threadId) ?? [])].sort(
+      (a, b) => a.observationOrder - b.observationOrder
+    )
   }
 
   takeChangedThreads(): string[] {
