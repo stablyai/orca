@@ -84,6 +84,7 @@ export async function sessionSecretEnv(
   return { env: swapped.env, egressSecretHosts: encodeEgressSecretHosts(swapped.targets), egressAllowHosts }
 }
 
-export function egressAllowHosts(row: Pick<SandboxRow, 'egress_allow_hosts'>): string[] {
-  return (row.egress_allow_hosts ?? '').split(',').filter(Boolean)
+/** Provider hosts from the session's secrets plus the workspace's declared tool hosts (MCP). */
+export function egressAllowHosts(row: Pick<SandboxRow, 'egress_allow_hosts'> & Partial<Pick<SandboxRow, 'egress_user_hosts'>>): string[] {
+  return [...(row.egress_allow_hosts ?? '').split(','), ...(row.egress_user_hosts ?? '').split(',')].filter(Boolean)
 }

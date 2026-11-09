@@ -301,7 +301,7 @@ async function boot(
   // Nothing in the VM uses git or model keys before orcad answers and the desktop attaches.
   const needsPolicy =
     !options.policyApplied &&
-    (git || routed.egress_secret_hosts || row.egress_secret_hosts || routed.egress_allow_hosts || row.egress_allow_hosts)
+    (git || routed.egress_secret_hosts || row.egress_secret_hosts || routed.egress_allow_hosts || row.egress_allow_hosts || row.egress_user_hosts)
   // Members revoked while the VM slept must be gone before orcad accepts its first sign-in.
   await applyQueuedRevokes(deps.db, deps.provider, row.id, state.session.id, deps.now())
   const [, connection] = await Promise.all([
