@@ -104,14 +104,17 @@ it.each([100, 1000])(
         body: JSON.stringify(
           Array.from({ length: 100 }, (_, i) => {
             const iid = (page - 1) * 100 + i + 1
-            return { ...row(iid, 'opened', iid === count ? 1 : 8), source_branch: branch }
+            return {
+              ...row(iid, 'opened', iid === count && branch === 'renamed' ? 1 : 8),
+              source_branch: branch
+            }
           })
         ),
         headers: { 'x-next-page': page * 100 < count ? String(page + 1) : '' }
       }
     })
     const discover = createGitLabBranchDiscovery(args)
-    await expect(discover('feature')).resolves.toMatchObject({ iid: count })
+    await expect(discover('feature')).resolves.toBeNull()
     await expect(discover('renamed')).resolves.toMatchObject({
       iid: count,
       source_branch: 'renamed'
