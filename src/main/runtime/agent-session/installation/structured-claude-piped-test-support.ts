@@ -219,9 +219,11 @@ export async function claudePipedFixture() {
       expect(await send(text)).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(prompts.length).toBe(before + 1))
       await vi.waitFor(async () => {
-        const journal = await host.journalSnapshot(SESSION)
-        expect(journal.submissions.at(-1)?.dispatchState).toBe('accepted')
-        expect(JSON.stringify(journal.items)).toContain('Healthy Claude reply')
+        const outline = await host.conversationOutline(SESSION)
+        expect(outline.entries.at(-1)).toMatchObject({
+          preview: text,
+          reply: 'Healthy Claude reply'
+        })
       })
     },
     drain: () => host.collaboratorsForTests().serialize(SESSION, async () => {}),

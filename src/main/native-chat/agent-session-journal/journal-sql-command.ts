@@ -7,7 +7,7 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
 import { applyJournalSqlItemCommand } from './journal-sql-item-command'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
-import { applyJournalDomainDispatch } from './journal-domain-dispatch'
+import { applyJournalDomainDispatchCommand } from './journal-domain-dispatch-command'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery'
 import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
@@ -90,10 +90,11 @@ export class JournalSqlCommand {
           result.items.map((item) => item.itemId)
         )
       }
+      case 'handover':
       case 'dispatch':
       case 'accept-late':
       case 'late-dispatch': {
-        const result = applyJournalDomainDispatch(db, target, operation, savedAt)
+        const result = applyJournalDomainDispatchCommand(db, target, operation, savedAt)
         return finishJournalSqlCommand(
           db,
           stateDirectory,
@@ -295,7 +296,7 @@ export class JournalSqlCommand {
       case 'steps':
         return applyJournalSqlStepCommand(db, stateDirectory, { ...command, operation }, savedAt)
       default:
-        throw new Error(`journal command ${operation.kind} is not migrated`)
+        throw new Error('Unknown journal command')
     }
   }
 }

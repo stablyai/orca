@@ -17,10 +17,9 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
     permission: 'workspace',
     params: ItemParams,
     handler: async (params, ctx): Promise<{ item: AgentJournalRenderItem | null }> => {
-      const snapshot = await (
+      const item = await (
         await requireInstalledStructuredHost(ctx, params.sessionId)
-      ).journalSnapshot(params.sessionId)
-      const item = snapshot.items.find((each) => each.itemId === params.itemId)
+      ).historyItem(params.sessionId, params.itemId)
       if (!item) {
         return { item: null }
       }

@@ -11,7 +11,11 @@ import type {
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -30,10 +34,6 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
 
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -149,6 +149,7 @@ export async function createRestTestRig(
     readChildWork: vi.fn((): AgentChildWorkView[] => [])
   }
   let store = await openTestAgentSessionRecordStore(root)
+  const journalDatabase = await openTestAgentSessionDatabase(root)
   const adapter: RestTestAdapter = {
     open: async () => ({
       reportedOptions: { model: '' }
@@ -186,7 +187,7 @@ export async function createRestTestRig(
         answerPrompt: async ({ commit }) => commit(),
         setOption: async () => undefined
       }),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       probeOwner: async () => ({ outcome: 'pid-absent' }),
@@ -216,7 +217,7 @@ export async function createRestTestRig(
     },
     dispose: async () => {
       await rig.host.flushAllStreamedEvents().catch(() => undefined)
-      await closeTestJournalHostDatabases()
+      await closeTestAgentSessionRecordStores()
       await rm(root, { recursive: true, force: true })
     }
   }

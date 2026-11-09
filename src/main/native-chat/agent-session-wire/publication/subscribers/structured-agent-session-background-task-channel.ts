@@ -22,6 +22,7 @@ import type {
   StructuredAgentSessionHostSession
 } from '../../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
+import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../history/agent-session-history-page-bounds'
 
 /** Derive modern/legacy rosters from child records; null hides the strip only when no known/unlisted work remains. */
 export class StructuredAgentSessionBackgroundTaskChannel {
@@ -40,9 +41,28 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
-  /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
-  journalSnapshot = async (sessionId: string) =>
-    (await this.conversation(sessionId)).journal.snapshot()
+  forkBoundary = async (
+    sessionId: string,
+    itemId: string,
+    inheritedAnchor: string | undefined,
+    compareSubmissions: boolean
+  ) =>
+    (await this.conversation(sessionId)).journal.reads.forkBoundary(
+      itemId,
+      inheritedAnchor,
+      compareSubmissions
+    )
+
+  savedContent = async (sessionId: string) =>
+    (await this.conversation(sessionId)).journal.reads.savedContent()
+
+  historyItem = async (sessionId: string, itemId: string) =>
+    (await this.conversation(sessionId)).journal.reads.item(itemId)
+
+  conversationOutline = async (sessionId: string) =>
+    (await this.conversation(sessionId)).journal.reads.conversationOutline(
+      HISTORY_PAGE_CONTENT_BUDGET_BYTES
+    )
 
   async history(
     request: AgentSessionHistoryRequest,

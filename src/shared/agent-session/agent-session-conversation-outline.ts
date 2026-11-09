@@ -147,7 +147,11 @@ export function truncateOutlinePreview(text: string, maxChars: number): string {
 /** Project the whole journal: neighbours decide whether a user row survives, and journal position sets its order. Leave previews uncut for the reply bound. */
 export function projectAgentSessionConversationOutline(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  readReplies: (
+    messages: readonly NativeChatMessage[],
+    turnKeys: readonly (string | undefined)[]
+  ) => ReadonlyMap<string, string> = nativeChatTurnReplyPreviews
 ): AgentSessionConversationOutlineEntry[] {
   const sequences = new Map<string, number>()
   for (const item of items) {
@@ -169,7 +173,7 @@ export function projectAgentSessionConversationOutline(
     )
   )
   const { turnKeys } = nativeChatTurnMembership(transcript, { items, submissions })
-  const replies = nativeChatTurnReplyPreviews(transcript, turnKeys)
+  const replies = readReplies(transcript, turnKeys)
   for (const [index, message] of transcript.entries()) {
     const sequence = sequences.get(message.id)
     if (

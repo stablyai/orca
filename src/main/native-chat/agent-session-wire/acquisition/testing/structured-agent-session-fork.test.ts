@@ -28,6 +28,8 @@ import {
   hostTestOperationId
 } from '../../host/testing/structured-agent-session-host-test-data.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { withJournalSnapshotRead } from '../../../agent-session-journal/journal-snapshot-read.test-fixture'
+import { readJournalDomainForkBoundary } from '../../../agent-session-journal/journal-domain-fork-reads'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
 const COPY = '019e6b26-18e2-7103-b7a0-7ba6bb071124'
@@ -198,7 +200,10 @@ function source(agent: 'claude' | 'codex' = 'codex') {
       logger: { warn: vi.fn() },
       resolveWorkspacePath: async () => rig.root
     },
-    journalSnapshot: async () => snapshot
+    forkBoundary: async (_id, itemId, anchor, compare) =>
+      withJournalSnapshotRead(snapshot, (scope) =>
+        readJournalDomainForkBoundary(scope, itemId, anchor, compare)
+      )
   } as unknown as StructuredAgentSessionHost
   const intent = structuredAgentSessionCreateParams({
     sessionId: `${agent}_independent_child`,
@@ -433,7 +438,7 @@ it('coalesces concurrent fork create replay and refuses a conflicting fork inten
   const getRecord = rig.store.getRecord.bind(rig.store)
   const writable = rig.store.requireWritableRecord.bind(rig.store)
   const select = rig.store.selectWritableRecord.bind(rig.store)
-  const snapshot = rig.host.journalSnapshot.bind(rig.host)
+  const boundary = rig.host.forkBoundary.bind(rig.host)
   vi.spyOn(rig.store, 'getRecord').mockImplementation((id) =>
     id === 'source-chat' ? test.record : getRecord(id)
   )
@@ -443,8 +448,14 @@ it('coalesces concurrent fork create replay and refuses a conflicting fork inten
   vi.spyOn(rig.store, 'selectWritableRecord').mockImplementation((id) =>
     id === 'source-chat' ? { kind: 'writable', record: test.record } : select(id)
   )
-  vi.spyOn(rig.host, 'journalSnapshot').mockImplementation((id) =>
-    id === 'source-chat' ? Promise.resolve(test.snapshot) : snapshot(id)
+  vi.spyOn(rig.host, 'forkBoundary').mockImplementation((id, itemId, anchor, compare) =>
+    id === 'source-chat'
+      ? Promise.resolve(
+          withJournalSnapshotRead(test.snapshot, (scope) =>
+            readJournalDomainForkBoundary(scope, itemId, anchor, compare)
+          )
+        )
+      : boundary(id, itemId, anchor, compare)
   )
   const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
   vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {

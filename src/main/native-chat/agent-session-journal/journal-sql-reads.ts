@@ -1,4 +1,6 @@
 import type { JournalRequestMark } from './journal-request-failure'
+import type { JournalForkBoundary, JournalSavedContent } from './journal-domain-fork-reads'
+import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalGenerationRead, JournalGenerationResult } from './journal-generation-read'
 import type { JournalRewindTarget } from './journal-domain-rewind-target'
@@ -21,6 +23,13 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  forkBoundary(
+    itemId: string,
+    inheritedAnchor: string | undefined,
+    compareSubmissions: boolean
+  ): Promise<JournalForkBoundary>
+  savedContent(): Promise<JournalSavedContent>
+  conversationOutline(budgetBytes: number): Promise<AgentSessionConversationOutline>
   requestFailure(kind: JournalRequestMark['kind'], id: string): Promise<AgentJournalSnapshot>
   runningRequest(stopSettle?: JournalStopSettleFact): Promise<JournalRequestMark | null>
   rewindTarget(itemId: string): Promise<JournalRewindTarget>
@@ -90,6 +99,11 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    forkBoundary: async (itemId, inheritedAnchor, compareSubmissions) =>
+      (await read({ kind: 'fork-boundary', itemId, inheritedAnchor, compareSubmissions })).boundary,
+    savedContent: async () => (await read({ kind: 'saved-content' })).content,
+    conversationOutline: async (budgetBytes) =>
+      (await read({ kind: 'conversation-outline', budgetBytes })).outline,
     requestFailure: async (requestKind, id) =>
       (await read({ kind: 'request-failure', requestKind, id })).snapshot,
     runningRequest: async (stopSettle) =>

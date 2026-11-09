@@ -88,7 +88,13 @@ export async function prepareStructuredAgentSessionFork(input: {
     )
   }
   const sourceHead = head ?? fail(`${name} has no saved context. Send a message, then try again.`)
-  const snapshot = await host.journalSnapshot(record.sessionId)
+  const anchor = record.forkedFrom?.childBoundary
+  const { snapshot, submissionsToken: dispatch } = await host.forkBoundary(
+    record.sessionId,
+    input.throughItemId,
+    anchor?.kind === 'item' ? anchor.itemId : undefined,
+    capability === 'tip'
+  )
   const boundary = structuredAgentSessionForkBoundary(
     snapshot,
     record,
@@ -101,7 +107,6 @@ export async function prepareStructuredAgentSessionFork(input: {
       `${name} could not find this response in the current chat. Open the chat again and try again.`
     )
   const admissions = host.deps.store.admittedSendCount(record.sessionId)
-  const dispatch = JSON.stringify(snapshot.submissions)
   const cwd =
     record.launchDirectory ?? (await host.deps.resolveWorkspacePath?.(record.location.workspaceId))
   if (!cwd) {
@@ -135,7 +140,13 @@ export async function prepareStructuredAgentSessionFork(input: {
   }
   const requireCurrent = async () => {
     const current = host.deps.store.requireWritableRecord(record.sessionId)
-    const currentSnapshot = await host.journalSnapshot(record.sessionId)
+    const currentAnchor = current.forkedFrom?.childBoundary
+    const currentRead = await host.forkBoundary(
+      record.sessionId,
+      input.throughItemId,
+      currentAnchor?.kind === 'item' ? currentAnchor.itemId : undefined,
+      capability === 'tip'
+    )
     const context = activeProviderContext(current)
     const transitionPending =
       context.pendingClear ||
@@ -147,7 +158,7 @@ export async function prepareStructuredAgentSessionFork(input: {
     const currentBoundary = transitionPending
       ? null
       : structuredAgentSessionForkBoundary(
-          currentSnapshot,
+          currentRead.snapshot,
           current,
           input.throughItemId,
           capability
@@ -157,7 +168,7 @@ export async function prepareStructuredAgentSessionFork(input: {
       currentBoundary?.retained !== selected.retained ||
       (capability === 'tip' &&
         (host.deps.store.admittedSendCount(record.sessionId) !== admissions ||
-          JSON.stringify(currentSnapshot.submissions) !== dispatch ||
+          currentRead.submissionsToken !== dispatch ||
           !currentBoundary.latest))
     ) {
       fail(`${name} could not finish the copy because the source context changed. Try again.`)

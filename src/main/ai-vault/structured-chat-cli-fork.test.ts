@@ -11,6 +11,8 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
 import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { prepareLegacySharedCodexSessionResume } from '../codex/history/resume/codex-legacy-session-resume'
+import { withJournalSnapshotRead } from '../native-chat/agent-session-journal/journal-snapshot-read.test-fixture'
+import { readJournalDomainSavedContent } from '../native-chat/agent-session-journal/journal-domain-fork-reads'
 
 let root: string | undefined
 const request = {
@@ -37,7 +39,7 @@ function savedJournal(): AgentJournalSnapshot {
 function install(record: AgentSessionRecord, copy = vi.fn(), journal = savedJournal()) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation reads only these host dependencies.
   setStructuredAgentSessionHost({
-    journalSnapshot: async () => journal,
+    savedContent: async () => withJournalSnapshotRead(journal, readJournalDomainSavedContent),
     deps: {
       store: {
         getRecord: () => record,

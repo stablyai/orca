@@ -11,7 +11,7 @@ import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { structuredAgentSessionEntryDelegates } from '../acquisition/structured-agent-session-create'
 import type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
-import * as agentStart from '../startup/structured-agent-session-agent-start'
+import { claimStructuredAgentSessionAgent as claimAgent } from '../startup/structured-agent-session-agent-start'
 import * as mutationWiring from './structured-agent-session-host-mutation-wiring'
 import * as lifetime from '../termination/structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
@@ -92,8 +92,7 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       // Quit drains tracked starts before eviction so their children are stopped.
       trackStart: (start) => this.tasks.trackAttach(start),
-      startProviderChild: (sessionId, startedFor) =>
-        agentStart.claimStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
+      startProviderChild: (id, startedFor) => claimAgent(this.attachContext(), id, startedFor),
       deliveryOrder: this.runtimeState.deliveryOrder,
       startFlights: this.runtimeState.startFlights,
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
@@ -158,8 +157,7 @@ export class StructuredAgentSessionHost {
   childAccountHome = this.reads.childAccountHome
   prospectiveAccountHome = this.reads.prospectiveAccountHome
 
-  handleAdapterEvent = (event: Parameters<EventRecovery['handle']>[0]) =>
-    this.eventRecovery.handle(event)
+  handleAdapterEvent = (e: Parameters<EventRecovery['handle']>[0]) => this.eventRecovery.handle(e)
 
   // Keep inference so publishStatus stays required in the attach-context spread.
   private lifetimeContext() {
@@ -304,7 +302,10 @@ export class StructuredAgentSessionHost {
   readonly continuationContext: ReturnType<typeof contextReader>
 
   observeConversationPublications = this.sessions.observeConversationPublications
-  journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
+  forkBoundary: BackgroundTasks['forkBoundary'] = (...a) => this.backgroundTasks.forkBoundary(...a)
+  savedContent = (sessionId: string) => this.backgroundTasks.savedContent(sessionId)
+  historyItem = (id: string, itemId: string) => this.backgroundTasks.historyItem(id, itemId)
+  conversationOutline = (sessionId: string) => this.backgroundTasks.conversationOutline(sessionId)
   namingPrompt = this.reads.namingPrompt
   automationRun = this.reads.automationRun
   queuedSendAnswer = this.reads.queuedSendAnswer

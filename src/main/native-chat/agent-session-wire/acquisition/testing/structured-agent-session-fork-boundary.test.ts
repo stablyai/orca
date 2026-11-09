@@ -1,21 +1,67 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { forkSession, type SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { prepareLegacyTranscriptImport } from '../../../agent-session-journal/history-import/journal-legacy-import'
 import capture from '../../../../claude/__fixtures__/claude-plugin-recovery.json'
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { claudeConversationForkBoundary } from '../../../../claude/claude-conversation-fork-boundary'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
-import {
-  fixture,
-  appendItems,
-  item
-} from '../../publication/history/testing/agent-session-history-contract.test-fixture'
-import { structuredAgentSessionForkBoundary } from '../structured-agent-session-fork-boundary'
+import { structuredAgentSessionForkBoundary as projectForkBoundary } from '../structured-agent-session-fork-boundary'
+import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { withJournalSnapshotRead } from '../../../agent-session-journal/journal-snapshot-read.test-fixture'
+import { readJournalDomainForkBoundary } from '../../../agent-session-journal/journal-domain-fork-reads'
+
+let root: string
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-fork-boundary-'))
+})
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true })
+})
+const item = (ordinal: number) => ({
+  provider: 'codex' as const,
+  threadId: 'thread-1',
+  turnId: 'turn-1',
+  ordinal
+})
+const savedSnapshot = (count: number): AgentJournalSnapshot => ({
+  sessionId: 'session-1',
+  cursor: { epoch: 'epoch', sequence: count },
+  submissions: [],
+  items: Array.from({ length: count }, (_, index) => ({
+    itemId: agentJournalItemKey(item(index + 1)),
+    revision: 1,
+    sequence: index + 1,
+    observedAt: 1,
+    body: {
+      kind: 'message' as const,
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: 'answer' }]
+    }
+  }))
+})
+const structuredAgentSessionForkBoundary: typeof projectForkBoundary = (
+  snapshot,
+  record,
+  selected,
+  capability
+) => {
+  const anchor = record.forkedFrom?.childBoundary
+  const read = withJournalSnapshotRead(snapshot, (scope) =>
+    readJournalDomainForkBoundary(
+      scope,
+      selected,
+      anchor?.kind === 'item' ? anchor.itemId : undefined,
+      capability === 'tip'
+    )
+  )
+  return projectForkBoundary(read.snapshot, record, selected, capability)
+}
 
 it('allows the last inherited response without a new turn and rejects responses removed by rewind', async () => {
-  await appendItems(2)
+  const snapshot = savedSnapshot(2)
   const selected = agentJournalItemKey(item(2))
   const record = agentSessionRecordFixture({
     sessionId: 'session-1',
@@ -26,24 +72,20 @@ it('allows the last inherited response without a new turn and rejects responses 
       childBoundary: { kind: 'item', itemId: selected }
     }
   })
-  expect(
-    structuredAgentSessionForkBoundary(fixture.journal.snapshot(), record, selected)
-  ).toMatchObject({ latest: true, checkpoint: { turnId: 'turn-1', settled: true } })
-  await fixture.journal.replaceEpochItems('handle_forked', 1, [])
-  expect(
-    structuredAgentSessionForkBoundary(fixture.journal.snapshot(), record, selected)
-  ).toBeNull()
+  expect(structuredAgentSessionForkBoundary(snapshot, record, selected)).toMatchObject({
+    latest: true,
+    checkpoint: { turnId: 'turn-1', settled: true }
+  })
+  snapshot.items = []
+  expect(structuredAgentSessionForkBoundary(snapshot, record, selected)).toBeNull()
 })
 
 it('does not treat the presence of saved assistant content as completion of an unresolved root', async () => {
-  await appendItems(1)
+  const snapshot = savedSnapshot(1)
   const record = agentSessionRecordFixture({ sessionId: 'session-1' })
   expect(
-    structuredAgentSessionForkBoundary(
-      fixture.journal.snapshot(),
-      record,
-      agentJournalItemKey(item(1))
-    )?.checkpoint.settled
+    structuredAgentSessionForkBoundary(snapshot, record, agentJournalItemKey(item(1)))?.checkpoint
+      .settled
   ).toBe(false)
 })
 
@@ -211,7 +253,7 @@ it.each([false, true])(
     // The SDK remaps uuids but records each copied row's source uuid, so the
     // independent wake answer must not appear anywhere in the copy.
     expect(copied.some((row) => JSON.stringify(row).includes('"wake-answer"'))).toBe(false)
-    const path = join(fixture.root, 'fork.jsonl')
+    const path = join(root, 'fork.jsonl')
     await writeFile(path, `${copied.map((row) => JSON.stringify(row)).join('\n')}\n`)
     const prepared = await prepareLegacyTranscriptImport({
       agent: 'claude',

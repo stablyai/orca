@@ -20,6 +20,72 @@ const body = (text: string): AgentJournalMessageItem => ({
 const readsOf = (f: ReturnType<typeof domainLifecycleFixture>) =>
   journalSqlReads({ point: async (request) => readJournalSqlPoint(f.db, request) }, 'chat')
 
+it('reads outline prompts and the last useful reply for their owning turn without loading other bodies', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  const reads = readsOf(f)
+  await f.run({ kind: 'item', identity: identity('prompt'), body: body('First request'), options })
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    body: { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:prompt' },
+    options
+  })
+  const scope = { ...options, turnScope: { kind: 'turn' as const, turnItemId: 'orca:turn' } }
+  for (const [id, text] of [
+    ['old', 'Old reply'],
+    ['reply', '**Saved answer**'],
+    ['code', '```ts\nconst x = 1\n```']
+  ]) {
+    await f.run({
+      kind: 'item',
+      identity: identity(id),
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+      options: scope
+    })
+  }
+  await f.run({
+    kind: 'item',
+    identity: identity('steer'),
+    body: body('Follow up'),
+    options: scope
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('tool'),
+    body: { kind: 'tool-call', callId: 'call', name: 'Read', input: 'file', state: 'completed' },
+    options: scope
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('child'),
+    body: body('Child request'),
+    options: { ...scope, agentId: 'child' }
+  })
+  f.db
+    .prepare(`UPDATE journal_items SET payload_json='unrelated body must not be decoded'
+    WHERE item_id IN ('orca:old','orca:tool','orca:child')`)
+    .run()
+  const outline = await reads.conversationOutline(100_000)
+  expect(outline.entries).toEqual([
+    {
+      itemId: 'orca:prompt',
+      sequence: 1,
+      preview: 'First request',
+      imageCount: 0,
+      reply: 'Saved answer'
+    },
+    {
+      itemId: 'orca:steer',
+      sequence: 6,
+      preview: 'Follow up',
+      imageCount: 0,
+      turnKey: 'orca:prompt',
+      reply: 'Saved answer'
+    }
+  ])
+  expect(outline.omittedEntries).toBe(0)
+})
+
 it('names only the sole eligible current prompt automatically and keeps manual naming after another prompt', async () => {
   const f = domainLifecycleFixture(cleanup)
   const reads = readsOf(f)

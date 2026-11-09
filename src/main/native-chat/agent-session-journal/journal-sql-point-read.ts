@@ -1,4 +1,12 @@
 import type { JournalRequestFailureRead } from './journal-request-failure'
+import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
+import { readJournalDomainOutline } from './journal-domain-outline'
+import {
+  readJournalDomainForkBoundary,
+  readJournalDomainSavedContent,
+  type JournalForkBoundary,
+  type JournalSavedContent
+} from './journal-domain-fork-reads'
 import {
   readJournalSqlRequestFailure,
   type JournalRequestFailureResult
@@ -70,6 +78,14 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | {
+        kind: 'fork-boundary'
+        itemId: string
+        inheritedAnchor?: string
+        compareSubmissions: boolean
+      }
+    | { kind: 'saved-content' }
+    | { kind: 'conversation-outline'; budgetBytes: number }
     | { kind: 'rewind-target'; itemId: string }
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
     | { kind: 'provider-turn-in-namespace'; namespace: string }
@@ -104,6 +120,9 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'fork-boundary'; boundary: JournalForkBoundary }
+  | { kind: 'saved-content'; content: JournalSavedContent }
+  | { kind: 'conversation-outline'; outline: AgentSessionConversationOutline }
   | JournalRequestFailureResult
   | { kind: 'rewind-target'; target: JournalRewindTarget }
   | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }
@@ -161,6 +180,23 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'fork-boundary':
+      return {
+        kind: operation.kind,
+        boundary: readJournalDomainForkBoundary(
+          scope,
+          operation.itemId,
+          operation.inheritedAnchor,
+          operation.compareSubmissions
+        )
+      }
+    case 'saved-content':
+      return { kind: operation.kind, content: readJournalDomainSavedContent(scope) }
+    case 'conversation-outline':
+      return {
+        kind: operation.kind,
+        outline: readJournalDomainOutline(scope, operation.budgetBytes)
+      }
     case 'request-failure':
     case 'running-request':
       return readJournalSqlRequestFailure(scope, operation)
