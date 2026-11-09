@@ -1,4 +1,5 @@
 import { beforeJournalRequestWrite } from './journal-writer-request-events'
+import { advanceJournalDomainSubmissionRevision } from './journal-domain-submission-revision'
 import type Database from '../../sqlite/sync-database'
 import {
   JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
@@ -28,13 +29,15 @@ export function writeJournalDomainDispatchAttempt(
 ): void {
   const { submission: next, candidate, handover } = attempt
   beforeJournalRequestWrite(db, target, 'refused-send', next.clientMessageId)
+  const payload = JSON.stringify(next)
+  advanceJournalDomainSubmissionRevision(db, target, next.clientMessageId, payload)
   db.prepare(`UPDATE journal_submission_attempts SET candidate=?,payload_json=?,
       ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
       handover_fence=?,facts_json=?,
       admission_body_json=CASE WHEN ? THEN admission_body_json ELSE NULL END
       WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
     Number(candidate),
-    JSON.stringify(next),
+    payload,
     ...journalDomainSubmissionColumns(next, attempt.carries),
     handover?.fence ?? null,
     journalDomainSubmissionFactsJson(attempt),

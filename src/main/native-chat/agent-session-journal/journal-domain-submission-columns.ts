@@ -1,4 +1,5 @@
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { journalDomainOutlineSubmission } from './journal-domain-outline-source'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
@@ -18,7 +19,8 @@ export const JOURNAL_DOMAIN_SUBMISSION_COLUMNS = [
   'request_failure',
   'steer_turn_item_id',
   'stopped_history',
-  'covers_stopped_history'
+  'covers_stopped_history',
+  'outline_json'
 ] as const
 
 /** All current-attempt selectors describe the same saved dispatch and its source coverage. */
@@ -44,6 +46,7 @@ export function journalDomainSubmissionColumns(
     ),
     submission.answeredInTurn?.via === 'steer' ? submission.answeredInTurn.turnItemId : null,
     Number(stoppedHistoryCandidate(submission)),
-    Number(carries.length > 0 && !refusedBeforeWrite(submission))
+    Number(carries.length > 0 && !refusedBeforeWrite(submission)),
+    journalDomainOutlineSubmission(submission)
   ]
 }

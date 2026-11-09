@@ -24,6 +24,7 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  itemDetail(itemId: string): Promise<AgentJournalRenderItem | null>
   forkBoundary(
     itemId: string,
     inheritedAnchor: string | undefined,
@@ -167,6 +168,7 @@ export function journalSqlReads(
     lastActivityAt: async () => (await metadata()).lastActivityAt,
     historyOrigin: async () => (await metadata()).historyOrigin,
     item,
+    itemDetail: async (itemId) => (await read({ kind: 'item-detail', itemId })).item,
     itemBody: async (itemId) => (await item(itemId))?.body ?? null,
     itemFence: async (itemId) => {
       const { executionOwner, ownerFence } = await provenance(itemId)

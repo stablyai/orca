@@ -77,7 +77,7 @@ it('keeps bounded snapshot prefixes and controls in enqueue order', async () => 
           kind: 'steps',
           steps: Array.from({ length: steps }, () => ({
             kind: 'resolved-item',
-            reservedBytes: 1024,
+            reservedBytes: Buffer.byteLength(text, 'utf8') + 1024,
             resolution: { ...message(text), kind: 'text-snapshot' },
             options: { fence: 1, turnScope: { kind: 'thread' } }
           }))

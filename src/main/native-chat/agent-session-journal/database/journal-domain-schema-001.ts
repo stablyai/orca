@@ -3,12 +3,27 @@ import { JOURNAL_DOMAIN_SCHEMA_001_INDEXES } from './journal-domain-schema-001-i
 export const JOURNAL_DOMAIN_SCHEMA_001 = `
 CREATE TABLE agent_session_records (
   session_id TEXT PRIMARY KEY,
-  record_json TEXT NOT NULL
+  record_json TEXT NOT NULL,
+  adopted_native_id TEXT GENERATED ALWAYS AS (
+    CASE WHEN json_valid(record_json) THEN COALESCE(
+      json_extract(record_json,'$.providerHandleChain[#-1].handle.nativeId'),
+      json_extract(record_json,'$.providerHandleChain[#-1].handle.sessionId'),
+      json_extract(record_json,'$.providerHandleChain[#-1].handle.threadId')) END
+  ) VIRTUAL
 );
+CREATE INDEX agent_session_records_adopted_native ON agent_session_records(adopted_native_id);
 CREATE TABLE agent_session_operations (
   operation_key TEXT PRIMARY KEY,
-  row_json TEXT NOT NULL
+  row_json TEXT NOT NULL,
+  operation_id TEXT GENERATED ALWAYS AS (
+    CASE WHEN json_valid(row_json) THEN json_extract(row_json, '$.operationId') END
+  ) VIRTUAL,
+  expires_at INTEGER GENERATED ALWAYS AS (
+    CASE WHEN json_valid(row_json) THEN json_extract(row_json, '$.expiresAt') END
+  ) VIRTUAL
 );
+CREATE INDEX agent_session_operations_identity ON agent_session_operations(operation_id);
+CREATE INDEX agent_session_operations_expiry ON agent_session_operations(expires_at,operation_key);
 CREATE TABLE agent_session_retired_claim_keys (
   key_id TEXT PRIMARY KEY,
   retired_at INTEGER NOT NULL
@@ -58,6 +73,7 @@ CREATE TABLE journal_chat_state (
   history_origin_json TEXT,
   accepted_handover_sequence INTEGER NOT NULL DEFAULT 0,
   queue_revision INTEGER NOT NULL DEFAULT 0,
+  submissions_revision INTEGER NOT NULL DEFAULT 0,
   queue_latest_stop_json TEXT,
   queue_manual_stop_json TEXT,
   queue_resumed_sequence INTEGER NOT NULL DEFAULT 0,
@@ -90,6 +106,9 @@ CREATE TABLE journal_items (
   subagent_group_key TEXT,
   turn_marker INTEGER NOT NULL DEFAULT 0,
   wire_bytes INTEGER,
+  wire_json TEXT,
+  detail_json TEXT,
+  outline_source_json TEXT,
   turn_item_id TEXT,
   original_stop_note_json TEXT,
   queue_command_turn INTEGER NOT NULL DEFAULT 0,
@@ -193,6 +212,7 @@ CREATE TABLE journal_submission_attempts (
   admission_family_id TEXT,
   handover_fence INTEGER,
   facts_json TEXT NOT NULL DEFAULT '{}',
+  outline_json TEXT,
   payload_json TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, message_id, attempt_sequence, attempt_index)
 );
@@ -250,5 +270,36 @@ CREATE TABLE journal_maintenance (
   id INTEGER PRIMARY KEY CHECK(id=1),
   compacted_at INTEGER NOT NULL
 );
+CREATE TABLE journal_outline_members (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  source_revision INTEGER NOT NULL,
+  sequence INTEGER NOT NULL,
+  sequence_index INTEGER NOT NULL,
+  ordinal INTEGER NOT NULL,
+  structure_json TEXT NOT NULL,
+  turn_key TEXT,
+  reply TEXT,
+  entry_json TEXT,
+  short_json TEXT,
+  empty_json TEXT,
+  entry_bytes INTEGER NOT NULL,
+  short_bytes INTEGER NOT NULL,
+  empty_bytes INTEGER NOT NULL,
+  PRIMARY KEY(session_id,epoch,item_id)
+) WITHOUT ROWID;
+CREATE INDEX journal_outline_entries ON journal_outline_members(session_id,epoch,sequence,sequence_index,ordinal)
+  WHERE entry_json IS NOT NULL;
+CREATE INDEX journal_outline_reply_candidates ON journal_outline_members(session_id,epoch,turn_key,sequence DESC,sequence_index DESC,ordinal DESC)
+  WHERE reply IS NOT NULL;
+CREATE TABLE journal_outline_replies (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  turn_key TEXT NOT NULL,
+  reply TEXT NOT NULL,
+  reply_bytes INTEGER NOT NULL,
+  PRIMARY KEY(session_id,epoch,turn_key)
+) WITHOUT ROWID;
 ${JOURNAL_DOMAIN_SCHEMA_001_INDEXES}
 `

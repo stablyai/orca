@@ -25,7 +25,26 @@ export function prepareJournalSqlRequest(
       batch = {
         sessionId: command.command.target.sessionId,
         steps: operation.steps.length,
-        bytes: Buffer.byteLength(JSON.stringify(command.command), 'utf8')
+        // Admission already reserved identity/body bytes; only size the remaining envelope.
+        bytes:
+          operation.steps.reduce((total, step) => total + step.reservedBytes, 0) +
+          Buffer.byteLength(
+            JSON.stringify({
+              ...command.command,
+              operation: {
+                ...operation,
+                steps: operation.steps.map((step) =>
+                  step.kind === 'resolved-item' && step.resolution.kind === 'text-snapshot'
+                    ? {
+                        ...step,
+                        resolution: { ...step.resolution, body: null, identity: null }
+                      }
+                    : step
+                )
+              }
+            }),
+            'utf8'
+          )
       }
     }
   }

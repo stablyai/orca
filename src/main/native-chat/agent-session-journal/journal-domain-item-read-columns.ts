@@ -7,6 +7,7 @@ import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/a
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { claudeAgentRowFacts } from '../../claude/claude-subagent-journaled-identities'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
+import { journalDomainOutlineSource } from './journal-domain-outline-source'
 import {
   journalItemLifecycleState,
   journalItemStatusMetadata
@@ -85,6 +86,9 @@ export const JOURNAL_DOMAIN_ITEM_COLUMNS = [
   'subagent_group_key',
   'turn_marker',
   'wire_bytes',
+  'wire_json',
+  'detail_json',
+  'outline_source_json',
   'turn_item_id',
   'kind',
   'message_role',
@@ -119,6 +123,9 @@ export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: 
       metadata.subagentGroupKey,
       metadata.turnMarker,
       metadata.wireBytes,
+      metadata.wireJson,
+      metadata.detailJson,
+      journalDomainOutlineSource(item),
       item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null,
       ...journalDomainItemReadColumns(item),
       ...journalDomainItemLifecycleColumns(item),

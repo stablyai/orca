@@ -200,14 +200,14 @@ function formHistoryGroups(
 ): AgentJournalRenderItem[][] {
   const sizes = submissionBytesByItemId(submissions)
   const body = db.prepare(
-    'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
+    'SELECT COALESCE(wire_json,payload_json) AS wire_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
   )
   const kept: AgentJournalRenderItem[][] = []
   let total = 0
   for (const group of groups) {
     const formed = group.map((header) =>
       reader.form(
-        JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.payload_json))
+        JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.wire_json))
       )
     )
     const bytes = historyContentBytes(formed, [], sizes)
@@ -232,11 +232,16 @@ function itemEnvelope(
   header: JournalDomainHistoryHeader
 ): AgentJournalRenderItem {
   const row = db
-    .prepare(`SELECT json_remove(payload_json, '$.body') AS envelope FROM journal_items
+    .prepare(`SELECT placement_json AS envelope,revision,sequence,sequence_index FROM journal_items
       WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(...prefix, header.itemId)!
   // The placeholder replaces the omitted body.
-  return JSON.parse(String(row.envelope))
+  return {
+    ...JSON.parse(String(row.envelope)),
+    revision: Number(row.revision),
+    sequence: Number(row.sequence),
+    sequenceIndex: Number(row.sequence_index)
+  }
 }
 
 function latestTurnItem(
@@ -244,7 +249,7 @@ function latestTurnItem(
   head: JournalDomainHistoryHead
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0
+    .prepare(`SELECT COALESCE(wire_json,payload_json) AS payload_json FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0
       AND turn_marker=1 ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
     .get(head.sessionId, head.epoch)
   return row ? JSON.parse(String(row.payload_json)) : null
@@ -275,7 +280,7 @@ function currentRows(
     sessionId: head.sessionId,
     cursor: head.cursor,
     items: db
-      .prepare(`SELECT item.payload_json FROM json_each(?) wanted
+      .prepare(`SELECT COALESCE(item.wire_json,item.payload_json) AS payload_json FROM json_each(?) wanted
         CROSS JOIN journal_items item
         WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
         ORDER BY item.sequence, item.sequence_index, item.ordinal`)

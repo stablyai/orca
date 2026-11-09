@@ -62,6 +62,7 @@ export type JournalSqlPointRead = {
     | { kind: 'input-read'; operation: JournalInputRead }
     | { kind: 'metadata' }
     | { kind: 'item'; itemId: string }
+    | { kind: 'item-detail'; itemId: string }
     | { kind: 'submission'; clientMessageId: string }
     | { kind: 'submission-body'; clientMessageId: string }
     | { kind: 'acceptance'; clientMessageId: string }
@@ -110,6 +111,7 @@ export type JournalSqlPointReadResult =
       historyOrigin: JournalReducerState['historyOrigin']
     }
   | { kind: 'item'; item: AgentJournalRenderItem | null }
+  | { kind: 'item-detail'; item: AgentJournalRenderItem | null }
   | { kind: 'submission'; submission: AgentJournalSubmission | undefined }
   | { kind: 'submission-body'; body: AgentJournalMessageItem | null }
   | { kind: 'acceptance'; receipt: AgentJournalAcceptanceReceipt | null }

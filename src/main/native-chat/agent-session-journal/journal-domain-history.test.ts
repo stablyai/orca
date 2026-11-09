@@ -132,7 +132,7 @@ it('keeps revised naming items at their visible history position and removes obs
 })
 
 it('never splits a same-sequence group, marking it oversized backward and paging it whole forward', () => {
-  const { seedItem, head, event, read } = history()
+  const { db, seedItem, head, event, read } = history()
   const group = Array.from({ length: 200 }, (_, index) =>
     text(50, 'x'.repeat(1000), { sequenceIndex: index })
   )
@@ -150,6 +150,10 @@ it('never splits a same-sequence group, marking it oversized backward and paging
     event(sequence, [`orca:${sequence}:0`])
   }
   head(60, 48)
+  const originals = db
+    .prepare('SELECT item_id,payload_json FROM journal_items WHERE sequence=50')
+    .all()
+  db.prepare('UPDATE journal_items SET payload_json=? WHERE sequence=50').run('x'.repeat(1000))
   const small = { form: measureHistoryItem, budgetBytes: 50_000 }
   const tail = read({ direction: 'tail', limit: 40 }, small)
   expect(sequences(tail)).toEqual([51, 52, 53, 54, 55, 56, 57, 58, 59, 60])
@@ -161,6 +165,12 @@ it('never splits a same-sequence group, marking it oversized backward and paging
   expect(sequences(rest)).toEqual([49])
   expect(rest.page.hasOlder).toBe(false)
 
+  for (const row of originals) {
+    db.prepare('UPDATE journal_items SET payload_json=? WHERE item_id=?').run(
+      row.payload_json,
+      row.item_id
+    )
+  }
   const forward: string[] = []
   let cursor = { epoch: 'epoch', sequence: 48 }
   for (const expected of [true, true, false]) {

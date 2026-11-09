@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { advanceJournalDomainSubmissionRevision } from './journal-domain-submission-revision'
 import { refreshJournalDomainAcceptedHandover } from './journal-domain-input-ends'
 import type {
   AgentJournalMessageItem,
@@ -87,11 +88,18 @@ export function acceptJournalSqlMessageEcho(
     resolvedAt: row.ts
   }
   delete accepted.recovered
+  const payload = JSON.stringify(accepted)
+  advanceJournalDomainSubmissionRevision(
+    db,
+    { sessionId: prefix[0], epoch: prefix[1] },
+    accepted.clientMessageId,
+    payload
+  )
   db.prepare(`UPDATE journal_submission_attempts SET candidate=0,payload_json=?,
       ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
       echo_observed=1,admission_body_json=CASE WHEN ? THEN admission_body_json ELSE NULL END
     WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
-    JSON.stringify(accepted),
+    payload,
     ...journalDomainSubmissionColumns(accepted, facts.carries),
     Number(retainedSource),
     ...prefix,

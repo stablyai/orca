@@ -11,7 +11,11 @@ import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   isSubagentRow
 } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
-import { agentJournalItemForWire } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import {
+  agentJournalItemForWire,
+  shortenedAgentJournalItem
+} from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 
 /** Facts history selects before decoding a body; written from each current item revision. */
 export type JournalDomainHistoryMetadata = {
@@ -22,6 +26,8 @@ export type JournalDomainHistoryMetadata = {
   turnMarker: number
   /** Client-form bytes when they differ from the stored payload; null reads the stored length. */
   wireBytes: number | null
+  wireJson: string | null
+  detailJson: string | null
 }
 
 /** Pass the stored payload text when the caller already serialized it. */
@@ -39,7 +45,7 @@ export function journalDomainHistoryMetadata(
     turnMarker: Number(
       readAgentJournalTurn(item.body) !== null || isAgentSessionContextClear(item.body)
     ),
-    wireBytes: wireBytes(item, payloadJson)
+    ...journalDomainItemWire(item, payloadJson)
   }
 }
 
@@ -51,15 +57,25 @@ export function journalDomainNamedSubagentIds(item: AgentJournalRenderItem): str
 
 // The client form cuts tool/diff heads and whole items over the page budget; skipping the
 // form elsewhere only overstates a size, which shortens a page but never drops content.
-function wireBytes(item: AgentJournalRenderItem, payloadJson: string | undefined): number | null {
+export const JOURNAL_ITEM_DETAIL_MAX_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 64 * 1024
+
+export function journalDomainItemWire(item: AgentJournalRenderItem, payloadJson?: string) {
+  const bytes = Buffer.byteLength(payloadJson ?? JSON.stringify(item), 'utf8')
+  const detailJson =
+    bytes > JOURNAL_ITEM_DETAIL_MAX_BYTES
+      ? JSON.stringify(shortenedAgentJournalItem(item, JOURNAL_ITEM_DETAIL_MAX_BYTES, bytes))
+      : null
   if (
     item.body.kind !== 'tool-call' &&
     item.body.kind !== 'diff' &&
-    Buffer.byteLength(payloadJson ?? JSON.stringify(item), 'utf8') <=
-      HISTORY_PAGE_CONTENT_BUDGET_BYTES
+    bytes <= HISTORY_PAGE_CONTENT_BUDGET_BYTES
   ) {
-    return null
+    return { wireBytes: null, wireJson: null, detailJson }
   }
   const sent = agentJournalItemForWire(item)
-  return sent.item === item ? null : sent.bytes
+  return {
+    wireBytes: sent.item === item ? null : sent.bytes,
+    wireJson: sent.item === item ? null : JSON.stringify(sent.item),
+    detailJson
+  }
 }

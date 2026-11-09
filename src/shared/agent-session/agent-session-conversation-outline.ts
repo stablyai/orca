@@ -68,7 +68,7 @@ const replies = new WeakMap<readonly NativeChatBlock[], string>()
 
 /** An assistant message as preview prose: fenced code, rules and markdown markers
  *  dropped, cut to the preview cap. */
-function assistantReplyProse(blocks: readonly NativeChatBlock[]): string {
+export function assistantReplyProse(blocks: readonly NativeChatBlock[]): string {
   const cached = replies.get(blocks)
   if (cached !== undefined) {
     return cached
@@ -151,7 +151,11 @@ export function projectAgentSessionConversationOutline(
   readReplies: (
     messages: readonly NativeChatMessage[],
     turnKeys: readonly (string | undefined)[]
-  ) => ReadonlyMap<string, string> = nativeChatTurnReplyPreviews
+  ) => ReadonlyMap<string, string> = nativeChatTurnReplyPreviews,
+  facts?: {
+    projectItems: (items: readonly AgentJournalRenderItem[]) => NativeChatMessage[]
+    userPreview: (message: NativeChatMessage) => NativeChatUserMessagePreview
+  }
 ): AgentSessionConversationOutlineEntry[] {
   const sequences = new Map<string, number>()
   for (const item of items) {
@@ -168,7 +172,7 @@ export function projectAgentSessionConversationOutline(
   const entries: AgentSessionConversationOutlineEntry[] = []
   const transcript = projectNativeChatTranscriptMessages(
     // Unchanged on the wire: a not-sent row ticks only once a desktop loads its page.
-    projectStructuredAgentSessionMessages(items, [], submissions).filter(
+    projectStructuredAgentSessionMessages(items, [], submissions, facts?.projectItems).filter(
       (message) => !message.unsent
     )
   )
@@ -184,7 +188,7 @@ export function projectAgentSessionConversationOutline(
     ) {
       continue
     }
-    const preview = nativeChatUserMessagePreview(message.blocks)
+    const preview = facts?.userPreview(message) ?? nativeChatUserMessagePreview(message.blocks)
     const turnKey = turnKeys[index]
     const reply = turnKey === undefined ? undefined : replies.get(turnKey)
     entries.push({

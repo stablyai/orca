@@ -57,7 +57,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     (await this.conversation(sessionId)).journal.reads.savedContent()
 
   historyItem = async (sessionId: string, itemId: string) =>
-    (await this.conversation(sessionId)).journal.reads.item(itemId)
+    (await this.conversation(sessionId)).journal.reads.itemDetail(itemId)
 
   conversationOutline = async (sessionId: string) =>
     (await this.conversation(sessionId)).journal.reads.conversationOutline(
@@ -71,19 +71,22 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
-    const work = await this.currentWork(request.sessionId)
-    const result = await readStructuredAgentSessionHistoryResult({
-      journal,
-      record: this.deps.store.getConversation(request.sessionId),
-      forkMarker: readForkMarker(this.deps.store, request.sessionId),
-      request,
-      scope,
-      reader,
-      replaceNormalizedHistory,
-      ...(work ? { work } : {})
-    })
+    const [result, queue] = await Promise.all([
+      this.currentWork(request.sessionId).then((work) =>
+        readStructuredAgentSessionHistoryResult({
+          journal,
+          record: this.deps.store.getConversation(request.sessionId),
+          forkMarker: readForkMarker(this.deps.store, request.sessionId),
+          request,
+          scope,
+          reader,
+          replaceNormalizedHistory,
+          ...(work ? { work } : {})
+        })
+      ),
+      this.subscribers.readQueuePublication(request.sessionId)
+    ])
     const backgroundTasks = this.read(request.sessionId)
-    const queue = await this.subscribers.readQueuePublication(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,

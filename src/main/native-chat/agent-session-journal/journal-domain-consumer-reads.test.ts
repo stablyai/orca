@@ -20,6 +20,129 @@ const body = (text: string): AgentJournalMessageItem => ({
 const readsOf = (f: ReturnType<typeof domainLifecycleFixture>) =>
   journalSqlReads({ point: async (request) => readJournalSqlPoint(f.db, request) }, 'chat')
 
+it('keeps a fork validation current through streaming but invalidates a send and its later settlement', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  const reads = readsOf(f)
+  await f.run({
+    kind: 'submission',
+    input: {
+      clientMessageId: 'unrelated',
+      fence: 1,
+      body: body('Old send'),
+      payloadFingerprint: 'old'
+    }
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('selected'),
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Saved reply' }] },
+    options
+  })
+  const boundary = () => reads.forkBoundary('orca:selected', undefined, true)
+  const original = await boundary()
+  await f.run({
+    kind: 'item',
+    identity: identity('stream'),
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Streaming' }] },
+    options
+  })
+  expect((await boundary()).submissionsToken).toBe(original.submissionsToken)
+  await f.run({
+    kind: 'submission',
+    input: {
+      clientMessageId: 'send',
+      fence: 1,
+      body: body('New request'),
+      payloadFingerprint: 'send'
+    }
+  })
+  const admitted = await boundary()
+  expect(admitted.submissionsToken).not.toBe(original.submissionsToken)
+  await f.run({
+    kind: 'dispatch',
+    input: {
+      clientMessageId: 'send',
+      fence: 1,
+      state: 'accepted',
+      providerIdentity: { provider: 'claude', sessionId: 'provider', uuid: 'echo' }
+    }
+  })
+  const accepted = await boundary()
+  expect(accepted.submissionsToken).not.toBe(admitted.submissionsToken)
+  // Unrelated old dispatch data is not needed to validate the selected response.
+  f.db
+    .prepare(
+      "UPDATE journal_submission_attempts SET payload_json='unreadable historical send' WHERE message_id='unrelated'"
+    )
+    .run()
+  expect((await boundary()).submissionsToken).toBe(accepted.submissionsToken)
+})
+
+it('keeps tool echoes and harness sidecars out of the outline across neighbouring assistant rows', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  const reads = readsOf(f)
+  await f.run({ kind: 'item', identity: identity('prompt'), body: body('Real prompt'), options })
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    options,
+    body: { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:prompt' }
+  })
+  const scoped = { ...options, turnScope: { kind: 'turn' as const, turnItemId: 'orca:turn' } }
+  await f.run({
+    kind: 'item',
+    identity: identity('answer'),
+    options: scoped,
+    body: {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'Answer' },
+        { type: 'tool-call', callId: 'read', name: 'Read', input: 'x' }
+      ]
+    }
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('echo'),
+    options: scoped,
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'tool-result', callId: 'read', output: 'Large output' }]
+    }
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('tool-pair'),
+    options: scoped,
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'tool-call', callId: 'other', name: 'Read', input: 'y' },
+        { type: 'tool-result', callId: 'other', output: 'More output' }
+      ]
+    }
+  })
+  await f.run({
+    kind: 'item',
+    identity: identity('sidecar'),
+    options: scoped,
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: '<system-reminder>Injected context</system-reminder>' },
+        { type: 'tool-result', callId: 'read', output: 'Background result' }
+      ]
+    }
+  })
+  expect((await reads.conversationOutline(100_000)).entries).toEqual([
+    { itemId: 'orca:prompt', sequence: 1, preview: 'Real prompt', imageCount: 0, reply: 'Answer' }
+  ])
+})
+
 it('reads outline prompts and the last useful reply for their owning turn without loading other bodies', async () => {
   const f = domainLifecycleFixture(cleanup)
   const reads = readsOf(f)
@@ -84,6 +207,95 @@ it('reads outline prompts and the last useful reply for their owning turn withou
     }
   ])
   expect(outline.omittedEntries).toBe(0)
+  await f.run({
+    kind: 'steps',
+    steps: [
+      {
+        kind: 'resolved-item',
+        reservedBytes: 4096,
+        options: scope,
+        resolution: {
+          kind: 'text-snapshot',
+          identity: identity('reply'),
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: '**Updated answer**' }]
+          }
+        }
+      }
+    ]
+  })
+  expect((await reads.conversationOutline(100_000)).entries.map((entry) => entry.reply)).toEqual([
+    'Updated answer',
+    'Updated answer'
+  ])
+  await f.run({ kind: 'tombstone', identity: identity('reply'), fence: 1 })
+  expect((await reads.conversationOutline(100_000)).entries.map((entry) => entry.reply)).toEqual([
+    'Old reply',
+    'Old reply'
+  ])
+  f.db.prepare("UPDATE journal_items SET payload_json='originals are not outline inputs'").run()
+  f.reopen()
+  expect((await reads.conversationOutline(100_000)).entries).toEqual([
+    {
+      itemId: 'orca:prompt',
+      sequence: 1,
+      preview: 'First request',
+      imageCount: 0,
+      reply: 'Old reply'
+    },
+    {
+      itemId: 'orca:steer',
+      sequence: 6,
+      preview: 'Follow up',
+      imageCount: 0,
+      turnKey: 'orca:prompt',
+      reply: 'Old reply'
+    }
+  ])
+})
+
+it('degrades all outline previews before omitting the oldest entries', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  const reads = readsOf(f)
+  for (const id of ['first', 'second']) {
+    await f.run({ kind: 'item', identity: identity(id), options, body: body('x'.repeat(1_000)) })
+    await f.run({
+      kind: 'item',
+      identity: identity(`${id}-turn`),
+      options,
+      body: { kind: 'turn', turnId: `${id}-turn`, state: 'running', userItemId: `orca:${id}` }
+    })
+    await f.run({
+      kind: 'item',
+      identity: identity(`${id}-reply`),
+      options: { ...options, turnScope: { kind: 'turn', turnItemId: `orca:${id}-turn` } },
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'a'.repeat(1_000) }]
+      }
+    })
+  }
+  expect(
+    (await reads.conversationOutline(700)).entries.map(({ preview, reply }) => ({ preview, reply }))
+  ).toEqual([
+    { preview: 'x'.repeat(200), reply: undefined },
+    { preview: 'x'.repeat(200), reply: undefined }
+  ])
+  expect((await reads.conversationOutline(350)).entries.map((entry) => entry.preview)).toEqual([
+    'x'.repeat(60),
+    'x'.repeat(60)
+  ])
+  expect((await reads.conversationOutline(170)).entries.map((entry) => entry.preview)).toEqual([
+    '',
+    ''
+  ])
+  expect(await reads.conversationOutline(100)).toMatchObject({
+    entries: [{ itemId: 'orca:second', preview: '', imageCount: 0 }],
+    omittedEntries: 1
+  })
 })
 
 it('names only the sole eligible current prompt automatically and keeps manual naming after another prompt', async () => {

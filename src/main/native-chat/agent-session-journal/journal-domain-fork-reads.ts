@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
@@ -111,15 +110,10 @@ export function readJournalDomainForkBoundary(
     .map((row) => scope.decode<AgentJournalSubmission>(scope.examined(row).payload_json))
   let submissionsToken: string | null = null
   if (compareSubmissions) {
-    const digest = createHash('sha256').update(scope.epoch)
-    for (const row of db
-      .prepare(`SELECT payload_json FROM journal_submission_attempts
-      INDEXED BY journal_submission_ordinal WHERE session_id=? AND epoch=? AND current=1 ORDER BY ordinal`)
-      .iterate(...prefix)) {
-      const json = String(scope.examined(row).payload_json)
-      digest.update(`${Buffer.byteLength(json)}:`).update(json)
-    }
-    submissionsToken = digest.digest('hex')
+    const row = db
+      .prepare('SELECT submissions_revision FROM journal_chat_state WHERE session_id=? AND epoch=?')
+      .get(...prefix)!
+    submissionsToken = JSON.stringify([scope.epoch, Number(row.submissions_revision)])
   }
   return {
     snapshot: {

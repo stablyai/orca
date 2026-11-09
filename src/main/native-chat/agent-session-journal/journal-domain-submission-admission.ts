@@ -29,6 +29,7 @@ import {
 import { readJournalDomainTurnScope } from './journal-domain-turn-scope'
 import { writeJournalDomainQueueReopenMark } from './journal-domain-queue-pauses'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
+import { advanceJournalDomainSubmissionRevision } from './journal-domain-submission-revision'
 import {
   JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
   journalDomainSubmissionColumns
@@ -158,6 +159,8 @@ export function applyJournalDomainSubmission(
       familyId
     )
   }
+  const payload = JSON.stringify(submission)
+  advanceJournalDomainSubmissionRevision(db, target, input.clientMessageId, payload)
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,
     item_id,ordinal,candidate,admitted_personal,payload_json,
     admission_body_json,admission_family_id,facts_json,${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.join(',')})
@@ -175,7 +178,7 @@ export function applyJournalDomainSubmission(
         ? selected !== null && journalDomainAdmittedPersonal(selected.card)
         : input.source?.kind === 'user' || (input.source === undefined && input.origin === 'client')
     ),
-    JSON.stringify(submission),
+    payload,
     JSON.stringify(input.body),
     familyId ?? null,
     JSON.stringify({

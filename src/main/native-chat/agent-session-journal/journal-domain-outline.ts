@@ -1,84 +1,60 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  nativeChatTurnReplyPreviews,
-  projectAgentSessionConversationOutline
-} from '../../../shared/agent-session/agent-session-conversation-outline'
-import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import type { AgentSessionConversationOutlineEntry } from '../../../shared/agent-session/agent-session-conversation-outline'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
-import { boundJournalConversationOutline } from './journal-outline-budget'
 import type { JournalSqlScope } from './journal-sql-scope'
 
-/** Outline membership uses saved placement; only prompts, turns and winning reply prose need bodies. */
+/** Choose the global degradation before reading the admitted recent suffix. */
 export function readJournalDomainOutline(scope: JournalSqlScope, budgetBytes: number) {
   const { db, prefix } = scope
-  const rows = db
-    .prepare(`SELECT item_id,revision,sequence,placement_json,assistant_prose,
-      CASE WHEN (kind='message' AND message_role='user') OR turn_marker=1 OR context_clear=1
-        THEN payload_json END AS payload_json
-      FROM journal_items INDEXED BY journal_items_root_position
-      WHERE session_id=? AND epoch=? AND hidden=0 AND root=1
-        AND ((kind='message' AND message_role IN ('user','assistant'))
-          OR turn_marker=1 OR context_clear=1 OR turn_scope_kind='unknown')
-      ORDER BY sequence,sequence_index,ordinal`)
-    .all(...prefix)
-  const prose = new Set(
-    rows.filter((row) => row.assistant_prose === 1).map((row) => String(row.item_id))
-  )
-  const items = rows.map((row): AgentJournalRenderItem => {
+  const totals = db
+    .prepare(`SELECT COUNT(*) AS count,
+    COALESCE(SUM(member.entry_bytes + COALESCE(reply.reply_bytes,0)),0) AS with_reply,
+    COALESCE(SUM(member.entry_bytes),0) AS full,
+    COALESCE(SUM(member.short_bytes),0) AS short,
+    COALESCE(SUM(member.empty_bytes),0) AS empty
+    FROM journal_outline_members member INDEXED BY journal_outline_entries
+    LEFT JOIN journal_outline_replies reply ON reply.session_id=member.session_id
+      AND reply.epoch=member.epoch AND reply.turn_key=member.turn_key
+    WHERE member.session_id=? AND member.epoch=? AND member.entry_json IS NOT NULL`)
+    .get(...prefix)!
+  const replies = Number(totals.with_reply) <= budgetBytes
+  const variant =
+    replies || Number(totals.full) <= budgetBytes
+      ? 'entry'
+      : Number(totals.short) <= budgetBytes
+        ? 'short'
+        : 'empty'
+  const json = variant === 'entry' ? 'entry_json' : `${variant}_json`
+  const bytes = variant === 'entry' ? 'entry_bytes' : `${variant}_bytes`
+  const entries: AgentSessionConversationOutlineEntry[] = []
+  let total = 0
+  for (const row of db
+    .prepare(`SELECT member.${json} AS entry_json,
+    member.${bytes} + ${replies ? 'COALESCE(reply.reply_bytes,0)' : '0'} AS bytes,
+    ${replies ? 'reply.reply' : 'NULL'} AS reply
+    FROM journal_outline_members member INDEXED BY journal_outline_entries
+    ${
+      replies
+        ? `LEFT JOIN journal_outline_replies reply ON reply.session_id=member.session_id
+      AND reply.epoch=member.epoch AND reply.turn_key=member.turn_key`
+        : ''
+    }
+    WHERE member.session_id=? AND member.epoch=? AND member.entry_json IS NOT NULL
+    ORDER BY member.sequence DESC,member.sequence_index DESC,member.ordinal DESC`)
+    .iterate(...prefix)) {
+    const next = Number(row.bytes)
+    if (total + next > budgetBytes) {
+      break
+    }
+    total += next
     scope.examined(row)
-    if (row.payload_json !== null) {
-      return scope.decode<AgentJournalRenderItem>(row.payload_json)
-    }
-    return {
-      ...scope.decode<Omit<AgentJournalRenderItem, 'body'>>(row.placement_json),
-      revision: Number(row.revision),
-      sequence: Number(row.sequence),
-      body: { kind: 'message', role: 'assistant', blocks: [] }
-    }
-  })
-  const submissions = db
-    .prepare(`SELECT payload_json FROM journal_submission_attempts
-      INDEXED BY journal_submission_ordinal WHERE session_id=? AND epoch=? AND current=1
-      ORDER BY ordinal`)
-    .all(...prefix)
-    .map((row) => scope.decode<AgentJournalSubmission>(scope.examined(row).payload_json))
-  const body = db.prepare(`SELECT payload_json FROM journal_items
-    WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
-  const entries = projectAgentSessionConversationOutline(items, submissions, (messages, keys) => {
-    const replies = new Map<string, string>()
-    for (let index = messages.length - 1; index >= 0; index--) {
-      const message = messages[index]
-      const key = keys[index]
-      if (
-        message.role !== 'assistant' ||
-        key === undefined ||
-        replies.has(key) ||
-        !prose.has(message.id)
-      ) {
-        continue
-      }
-      const row = body.get(...prefix, message.id)
-      if (!row) {
-        continue
-      }
-      const saved = projectStructuredItemToNativeChat(
-        scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json)
-      )
-      if (saved) {
-        const reply = nativeChatTurnReplyPreviews([saved], [key]).get(key)
-        if (reply !== undefined) {
-          replies.set(key, reply)
-        }
-      }
-    }
-    return replies
-  })
-  return boundJournalConversationOutline(
-    { sessionId: scope.sessionId, cursor: journalDomainContextHead(db, scope) },
+    const entry = scope.decode<AgentSessionConversationOutlineEntry>(row.entry_json)
+    entries.push(row.reply === null ? entry : { ...entry, reply: String(row.reply) })
+  }
+  entries.reverse()
+  return {
+    sessionId: scope.sessionId,
+    cursor: journalDomainContextHead(db, scope),
     entries,
-    budgetBytes
-  )
+    omittedEntries: Number(totals.count) - entries.length
+  }
 }

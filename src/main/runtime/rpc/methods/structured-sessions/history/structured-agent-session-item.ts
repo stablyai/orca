@@ -3,13 +3,10 @@
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { ItemParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
 import { shortenedAgentJournalItem } from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from '../../../../../native-chat/agent-session-journal/journal-domain-history-metadata'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { projectReceiptDeviceItem } from '../subscriptions/structured-agent-session-receipt-devices'
-
-/** The item's share of one reply, with room for the envelope beside it. */
-const ITEM_REPLY_MAX_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 64 * 1024
 
 export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
   defineMethod({
@@ -25,7 +22,10 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
       }
       // Null only for an item whose identifiers alone exceed a reply; the client keeps its head.
       return {
-        item: shortenedAgentJournalItem(projectReceiptDeviceItem(item, ctx), ITEM_REPLY_MAX_BYTES)
+        item: shortenedAgentJournalItem(
+          projectReceiptDeviceItem(item, ctx),
+          JOURNAL_ITEM_DETAIL_MAX_BYTES
+        )
       }
     }
   })

@@ -14,7 +14,23 @@ export type JournalDomainMaintenanceResult =
 const RETIRED_PAGE_BYTES = 1024 * 1024
 // Only a ready head naming another epoch proves retirement; import shells have no epoch.
 const RETIRED_TABLES: readonly { name: string; key: string; payload?: readonly string[] }[] = [
-  { name: 'journal_items', key: 'item_id', payload: ['payload_json', 'original_stop_note_json'] },
+  {
+    name: 'journal_items',
+    key: 'item_id',
+    payload: [
+      'payload_json',
+      'original_stop_note_json',
+      'wire_json',
+      'detail_json',
+      'outline_source_json'
+    ]
+  },
+  {
+    name: 'journal_outline_members',
+    key: 'item_id',
+    payload: ['structure_json', 'entry_json', 'short_json', 'empty_json', 'reply']
+  },
+  { name: 'journal_outline_replies', key: 'turn_key', payload: ['reply'] },
   { name: 'journal_item_subagent_names', key: 'subagent_id,item_id' },
   { name: 'journal_item_tombstones', key: 'item_id' },
   { name: 'journal_removed_turns', key: 'turn_id' },

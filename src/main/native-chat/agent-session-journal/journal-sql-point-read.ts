@@ -147,6 +147,7 @@ function read(
     case 'provider-turn-in-namespace':
     case 'saved-item-ids':
     case 'item':
+    case 'item-detail':
     case 'submission':
     case 'submission-body':
     case 'acceptance':

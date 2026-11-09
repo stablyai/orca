@@ -19,6 +19,7 @@ export type JournalDomainEntityRead = Extract<
       | 'provider-turn-in-namespace'
       | 'saved-item-ids'
       | 'item'
+      | 'item-detail'
       | 'submission'
       | 'submission-body'
       | 'acceptance'
@@ -93,13 +94,14 @@ export function readJournalDomainEntity(
         historyOrigin
       }
     }
-    case 'item': {
+    case 'item':
+    case 'item-detail': {
       const row = db
-        .prepare(`SELECT payload_json FROM journal_items
+        .prepare(`SELECT ${operation.kind === 'item-detail' ? 'COALESCE(detail_json,payload_json)' : 'payload_json'} AS payload_json FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
         .get(...prefix, operation.itemId)
       const item: AgentJournalRenderItem | null = row ? JSON.parse(String(row.payload_json)) : null
-      return { kind: 'item', item }
+      return { kind: operation.kind, item }
     }
     case 'submission': {
       const row = db

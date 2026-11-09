@@ -2,7 +2,8 @@ import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
+import { journalDomainItemWire } from './journal-domain-history-metadata'
+import { journalDomainOutlineSource } from './journal-domain-outline-source'
 import { journalItemStatusMetadata } from './journal-item-status-metadata'
 
 /** Stable text placement and classifications need no membership or indexed-column rewrite. */
@@ -37,12 +38,15 @@ export function writeJournalDomainTextSnapshot(
     return false
   }
   const payload = JSON.stringify(item)
-  const { wireBytes } = journalDomainHistoryMetadata(item, payload)
-  db.prepare(`UPDATE journal_items SET payload_json=?,revision=?,wire_bytes=?
+  const { wireBytes, wireJson, detailJson } = journalDomainItemWire(item, payload)
+  db.prepare(`UPDATE journal_items SET payload_json=?,revision=?,wire_bytes=?,wire_json=?,detail_json=?,outline_source_json=?
     WHERE session_id=? AND epoch=? AND item_id=?`).run(
     payload,
     revision,
     wireBytes,
+    wireJson,
+    detailJson,
+    journalDomainOutlineSource(item),
     target.sessionId,
     target.epoch,
     item.itemId
