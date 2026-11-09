@@ -64,7 +64,8 @@ export function discoverModelsWithHostCache(
     input.agentId,
     input.agentCommandOverride ?? null,
     wslDistro ? { cwd: cwd ?? '', wslDistro } : null,
-    accountDir(input.env, accountDirVar)
+    // Why: a native probe without an env spawns with process.env; a WSL guest's env isn't ours to read.
+    accountDir(input.env ?? (wslDistro ? undefined : process.env), accountDirVar)
   ])
   const cached = cache.get(key)
   if (cached && cached.expiresAt > Date.now()) {
