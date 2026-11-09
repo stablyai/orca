@@ -7,7 +7,9 @@ vi.mock('@orca/process-host', () => ({ runProcess: run }))
 vi.mock('../wsl/execution/wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'wsl.exe'
 }))
-vi.mock('../agent-hooks/server', () => ({ agentHookServer: { endpointFilePath: null } }))
+vi.mock('../agent-hooks/server/agent-hook-server', () => ({
+  agentHookServer: { endpointFilePath: null }
+}))
 
 beforeEach(() => {
   run.mockReset().mockResolvedValue({ code: 0, stdout: '2.0.16', timedOut: false })

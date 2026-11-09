@@ -4449,18 +4449,18 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser/client-pages/orca-runtime-browser.test.ts src/renderer/src/runtime/web-session-tabs-sync/navigation/web-session-tabs-sync-focus-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync/placement/web-session-tabs-sync-browser-tabs.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/document-preview/doc-preview-grant-registry.test.ts src/main/browser/document-preview/doc-preview-file-reader.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/main/browser/document-preview/doc-preview-failure-notice.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/sessions/browser-session-partition-policies.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/sessions/browser-session-partition-policies.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/sessions/partition-policies/browser-session-partition-policies.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/sessions/partition-policies/browser-session-partition-policies.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/document-preview/doc-preview-scheme.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/main/ipc/browser/browser.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/browser-manager-annotation-bridge.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/browser-manager-annotation-bridge.test.ts src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/viewport/browser-manager-annotation-bridge.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/viewport/browser-manager-annotation-bridge.test.ts src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/link-actions/LinkActionPopover.test.tsx src/renderer/src/runtime/sync-runtime-graph/sync-runtime-graph-editor-diff-tabs.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/browser-manager-annotation-bridge.test.ts src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/viewport/browser-manager-annotation-bridge.test.ts src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/shared/document-preview/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-page-conversion.test.ts src/renderer/src/runtime/sync-runtime-graph/sync-runtime-graph-conversion-publish.test.ts src/renderer/src/lib/workspace-doc-address-input.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-preview-address-bar-convergence.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=list",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
@@ -4478,11 +4478,11 @@
         "src/renderer/src/store/slices/browser/browser.test.ts",
         "src/main/browser/document-preview/doc-preview-grant-registry.test.ts",
         "src/main/browser/document-preview/doc-preview-file-reader.test.ts",
-        "src/main/browser/sessions/browser-session-partition-policies.test.ts",
+        "src/main/browser/sessions/partition-policies/browser-session-partition-policies.test.ts",
         "src/main/browser/document-preview/doc-preview-guest-policy.test.ts",
         "src/main/browser/document-preview/doc-preview-failure-notice.test.ts",
         "src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts",
-        "src/main/browser/guest-lifecycle/manager/browser-manager-annotation-bridge.test.ts",
+        "src/main/browser/guest-lifecycle/manager/viewport/browser-manager-annotation-bridge.test.ts",
         "src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts",
         "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts",
         "src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts",
@@ -6389,7 +6389,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal/surface/orca-runtime-terminal-close-continuity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/construction/orca-runtime.test.ts",
-        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts src/main/persistence/terminal-topology/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-status/agent-pane-authority.test.ts src/renderer/src/store/terminals/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/terminals/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts src/main/persistence/terminal-topology/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-status/agent-pane-authority.test.ts src/renderer/src/store/terminals/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/terminals/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/process-retirement/pty-descendant-termination.test.ts src/main/daemon/sessions/testing/session.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/providers/local-pty/local-pty-provider-shutdown.test.ts src/main/runtime/workspaces/removal/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
@@ -6400,7 +6400,7 @@
       "testFiles": [
         "src/main/runtime/terminal/surface/orca-runtime-terminal-close-continuity.test.ts",
         "src/main/runtime/construction/orca-runtime.test.ts",
-        "src/main/agent-hooks/server-pane-authority.test.ts",
+        "src/main/agent-hooks/server/testing/authority/server-pane-authority.test.ts",
         "src/main/ipc/agent-hooks.test.ts",
         "src/main/ipc/agent-pane-authority-ownership.test.ts",
         "src/main/persistence/terminal-topology/persistence-pane-identity-migration.test.ts",
@@ -9253,7 +9253,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/protocol/ssh-multiplexer-transport-writer.test.ts src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-relay/wsl-hook-relay-sentinel.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/runtime/construction/orca-runtime.test.ts",
@@ -9263,7 +9263,7 @@
         "src/main/ssh/protocol/ssh-channel-multiplexer.test.ts",
         "src/main/ssh/protocol/ssh-channel-multiplexer-backpressure.test.ts",
         "src/wsl-guest/dispatcher-client-writer.test.ts",
-        "src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts"
+        "src/main/agent-hooks/wsl-relay/wsl-hook-relay-sentinel.test.ts"
       ],
       "assertionRefs": [
         {
@@ -9304,7 +9304,7 @@
           ]
         },
         {
-          "file": "src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts",
+          "file": "src/main/agent-hooks/wsl-relay/wsl-hook-relay-sentinel.test.ts",
           "assertions": [
             "WSL stdin forwards write(false), callback settlement, and drain without claiming a live WSL topology"
           ]

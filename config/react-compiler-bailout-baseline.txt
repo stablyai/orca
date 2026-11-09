@@ -309,7 +309,7 @@
 1 src/renderer/src/components/right-sidebar/ai-vault/panel/AiVaultPanel.tsx
 2 src/renderer/src/components/right-sidebar/ai-vault/scanning/AiVaultScanProgressStrip.tsx
 1 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-association-observation.ts
-9 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh.ts
+8 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh.ts
 1 src/renderer/src/components/right-sidebar/ai-vault/search/AiVaultPanelSearch.tsx
 1 src/renderer/src/components/right-sidebar/ai-vault/search/use-ai-vault-search.ts
 2 src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-delete-action.ts

@@ -29,7 +29,9 @@ const WORKTREE_CHANGE_EVENTS: ReadonlySet<string> = new Set([
   'worktreesChanged',
   'reposChanged',
   // The desktop Agents list changed; worktree.ps carries its verdicts.
-  'agentListChanged'
+  'agentListChanged',
+  // Agent status changes on hosts without the sidebar feed (worktree.rows-changed-event.v1).
+  'worktreeRowsChanged'
 ])
 
 export type HomeAccountsSetter = (

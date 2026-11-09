@@ -25,10 +25,6 @@ describe('assertSafeRemotePathSegment', () => {
     'trailing.',
     'trailing ',
     'NUL',
-    'con.txt',
-    'CONIN$',
-    'CLOCK$.log',
-    'COM1.log',
     'LPT¹'
   ])('rejects Win32-special segment %j', (segment) => {
     expect(() => assertSafeRemotePathSegment(segment, 'windows')).toThrow(

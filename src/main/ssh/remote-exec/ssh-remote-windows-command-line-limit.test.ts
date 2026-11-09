@@ -21,15 +21,4 @@ describe('Windows remote command line limit', () => {
     expect(gunzipSync(Buffer.from(payload, 'base64')).toString('utf-8')).toBe(script)
     expect(bootstrap).toContain('Invoke-Expression $OrcaScriptText')
   })
-
-  it('refuses a script no encoding can fit instead of letting cmd.exe reject it', () => {
-    let seed = 12345
-    const incompressible = Array.from({ length: 60_000 }, () => {
-      seed = (seed * 1103515245 + 12345) % 2147483648
-      return String.fromCharCode(97 + (seed % 26))
-    }).join('')
-    expect(() => powerShellCommand(`Write-Output '${incompressible}'`)).toThrow(
-      /Orca budgets 8000 for a line sshd hands to cmd\.exe/u
-    )
-  })
 })

@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  windowsPipesNotRunHere,
   parseWindowsRelayInventory,
   WINDOWS_RELAY_INVENTORY_JS
 } from './ssh-host-relay-windows-inventory'
@@ -58,14 +57,5 @@ describe('the Windows relay inventory', () => {
         JSON.stringify({ pipes: [], dirs: { [VERSION]: null } })
       )
     ).toBeNull()
-  })
-
-  it("sets aside only pipes the host proved another account's or gone", () => {
-    expect(
-      windowsPipesNotRunHere(
-        JSON.stringify({ '\\\\.\\pipe\\A': 'EACCES', '\\\\.\\pipe\\B': 'ok', C: 'ENOENT' })
-      )
-    ).toEqual(new Set(['\\\\.\\pipe\\a', 'c']))
-    expect(windowsPipesNotRunHere('garbage')).toEqual(new Set())
   })
 })

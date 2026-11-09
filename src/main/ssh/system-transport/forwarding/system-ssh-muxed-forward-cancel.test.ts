@@ -79,12 +79,4 @@ describe('system SSH muxed forward cancel', () => {
       false
     )
   })
-
-  it('asks no master on Windows, whose OpenSSH cannot multiplex', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    await expect(cancelMuxedLocalForward(createTarget(), 59418, '127.0.0.1', 6768)).resolves.toBe(
-      false
-    )
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
 })

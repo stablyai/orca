@@ -248,7 +248,7 @@ it.each(['workspace', 'view'] as const)(
 )
 
 it.each([false, true])(
-  'reveals the tab layout for a foreground source-aware HTTP link (reuse: %s)',
+  'reveals the tab layout for a foreground source-aware HTTP link (already open: %s)',
   async (reuse) => {
     if (reuse) {
       useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
@@ -275,7 +275,7 @@ it.each([false, true])(
     }
     expect(useAppStore.getState().activeView).toBe('terminal')
     expect(useAppStore.getState().activeGroupIdByWorktree[WORKSPACE]).toBe(outcome.result.groupId)
-    expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
+    expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(reuse ? 2 : 1)
   }
 )
 
@@ -341,7 +341,7 @@ it('keeps the main view and workspace selected when revealing a floating HTTP li
   expect(useAppStore.getState().groupsByWorktree[floating]).toHaveLength(3)
 })
 
-it('reuses an exact page for an HTTP link without source context', async () => {
+it('opens a new page for an HTTP link without source context', async () => {
   const browser = useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
     targetGroupId: 'b',
     browserRuntimeEnvironmentId: null,
@@ -350,9 +350,11 @@ it('reuses an exact page for an HTTP link without source context', async () => {
   })
   const completed = observeBrowserLinkOpen()
   openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, sourceOwner: { kind: 'local' } })
-  expect(await completed).toMatchObject({
-    status: 'opened',
-    result: { browserWorkspaceId: browser.id, browserPageId: browser.activePageId }
-  })
-  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
+  const outcome = await completed
+  expect(outcome.status).toBe('opened')
+  if (outcome.status !== 'opened') {
+    throw new Error('Expected opened link')
+  }
+  expect(outcome.result.browserWorkspaceId).not.toBe(browser.id)
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
 })

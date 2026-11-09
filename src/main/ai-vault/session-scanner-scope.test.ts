@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
 let tempRoots: string[] = []
@@ -12,27 +13,10 @@ afterEach(async () => {
   tempRoots = []
 })
 
-// Isolate Claude fixtures from every other source root.
 function scopedScanOptions(claudeProjectsDir: string, extra: Partial<AiVaultScanOptions>) {
   return {
+    ...isolatedScanRoots(claudeProjectsDir),
     claudeProjectsDir,
-    codexSessionsDir: '/nonexistent/codex',
-    geminiSessionsDir: '/nonexistent/gemini',
-    antigravityBrainDir: '/nonexistent/antigravity',
-    copilotSessionsDir: '/nonexistent/copilot',
-    cursorProjectsDir: '/nonexistent/cursor',
-    opencodeStorageDir: '/nonexistent/opencode',
-    opencodeDbPaths: [],
-    grokSessionsDir: '/nonexistent/grok',
-    devinTranscriptsDir: '/nonexistent/devin',
-    hermesSessionsDir: '/nonexistent/hermes',
-    rovoSessionsDir: '/nonexistent/rovo',
-    openclawStateDir: '/nonexistent/openclaw',
-    openclawLegacyStateDir: '/nonexistent/openclaw-legacy',
-    piSessionsDir: '/nonexistent/pi',
-    droidSessionsDir: '/nonexistent/droid',
-    droidProjectsDir: '/nonexistent/droid-projects',
-    kimiSessionsDir: '/nonexistent/kimi',
     ...extra
   } satisfies AiVaultScanOptions
 }
