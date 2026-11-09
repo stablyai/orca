@@ -23,5 +23,8 @@ export function sanitizeRendererSettingsUpdate(
   ) {
     delete sanitizedArgs.browserPasswordsFillRequiresReauth
   }
+  if (typeof sanitizedArgs.workspaceDir === 'string') {
+    sanitizedArgs.workspaceDir = sanitizedArgs.workspaceDir.trim()
+  }
   return sanitizedArgs
 }

@@ -3,7 +3,7 @@ import { parseWslUncPath } from '../wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,
   resolveConfiguredWorktreeBasePaths,
-  resolveWorkspaceLayoutPath
+  resolveHistoricalWorkspaceLayoutPaths
 } from './configured-worktree-base-path'
 import {
   isAgentScratchWorktreePath,
@@ -38,20 +38,28 @@ export function buildKnownOrcaWorkspaceLayouts(
     layouts.push({ path: basePath, nestWorkspaces: settings.nestWorkspaces })
   }
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
-    layouts.push({
-      path: repo
-        ? resolveWorkspaceLayoutPath(repo.path, settings.workspaceDir)
-        : settings.workspaceDir,
-      nestWorkspaces: settings.nestWorkspaces
-    })
+    const currentPaths = repo
+      ? resolveHistoricalWorkspaceLayoutPaths(repo.path, settings.workspaceDir)
+      : [settings.workspaceDir.trim()]
+    for (const resolvedPath of currentPaths) {
+      layouts.push({
+        path: resolvedPath,
+        nestWorkspaces: settings.nestWorkspaces
+      })
+    }
     appendWorkspaceLayouts(
       layouts,
       (settings.workspaceDirHistory ?? [])
         .filter((layout) => shouldIncludeWorkspaceLayout(repo, layout.path))
-        .map((layout) => ({
-          ...layout,
-          path: repo ? resolveWorkspaceLayoutPath(repo.path, layout.path) : layout.path
-        }))
+        .flatMap((layout) => {
+          const resolvedPaths = repo
+            ? resolveHistoricalWorkspaceLayoutPaths(repo.path, layout.path)
+            : [layout.path.trim()]
+          return resolvedPaths.map((resolvedPath) => ({
+            ...layout,
+            path: resolvedPath
+          }))
+        })
     )
   }
 

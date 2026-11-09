@@ -61,12 +61,14 @@ export function WorkspaceDirectorySetting({
     : settings.workspaceDir
   // settings:set creates directories; per-keystroke commits would create every typed prefix.
   const [draftValue, setDraftValue] = useState(value)
+  const [browseError, setBrowseError] = useState<string | null>(null)
   const draftValueRef = useRef(value)
   const skipNextBlurCommitRef = useRef(false)
 
   useEffect(() => {
     setDraftValue(value)
     draftValueRef.current = value
+    setBrowseError(null)
   }, [value])
 
   const setDraft = (next: string): void => {
@@ -90,8 +92,12 @@ export function WorkspaceDirectorySetting({
   }
 
   const commitDraftValue = (): void => {
-    const next = draftValueRef.current
-    if (next === value) {
+    setBrowseError(null)
+    const next = draftValueRef.current.trim()
+    if (next !== draftValueRef.current) {
+      setDraft(next)
+    }
+    if (next === (editingHost ? value.trim() : value)) {
       return
     }
     writeValue(next)
@@ -126,6 +132,17 @@ export function WorkspaceDirectorySetting({
     try {
       const path = await window.api.repos.pickFolder()
       if (path) {
+        if (path.trim() !== path) {
+          setBrowseError(
+            translate(
+              'auto.components.settings.WorkspaceDirectorySetting.7a8b9c0d1e',
+              'Selected directory path cannot have leading or trailing spaces.'
+            )
+          )
+          resetDraftValue()
+          return
+        }
+        setBrowseError(null)
         setDraft(path)
         writeValue(path)
         return
@@ -184,6 +201,7 @@ export function WorkspaceDirectorySetting({
           id={inputId}
           value={draftValue}
           onChange={(e) => {
+            setBrowseError(null)
             setDraft(e.target.value)
           }}
           onBlur={handleBlur}
@@ -219,6 +237,7 @@ export function WorkspaceDirectorySetting({
           {t('auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e', 'Browse')}
         </Button>
       </div>
+      {browseError && <p className="text-xs text-destructive">{browseError}</p>}
       {editingHost && (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
