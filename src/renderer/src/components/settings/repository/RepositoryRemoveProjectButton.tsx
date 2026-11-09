@@ -11,7 +11,7 @@ export type { SettingsProjectRemoval } from './settings-project-removal-descript
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
-import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh-selectors'
+import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { buildProjectGroups } from '../../../../../shared/project-grouping'
@@ -21,11 +21,11 @@ import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
-import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
+import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import { worktreeMatchesHost } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { getPtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
@@ -49,6 +49,7 @@ import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export { getRemoveProjectDescription } from './settings-project-removal-description'
 
@@ -353,6 +354,7 @@ export function RepositoryRemoveProjectButton({
   removeProject: (repoId: string, accepted?: SettingsProjectRemoval) => void
   readCurrentRemoval?: () => SettingsProjectRemoval
 }) {
+  const t = useTranslate()
   const [confirmation, setConfirmation] = useState<{
     observedKey: string
     arm: string | null
@@ -384,10 +386,10 @@ export function RepositoryRemoveProjectButton({
 
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.RepositoryPane.0909e5d650', 'Remove Project')}
+      title={t('auto.components.settings.RepositoryPane.0909e5d650', 'Remove Project')}
       description={description}
       keywords={[repo.displayName, 'delete', 'project', 'repository']}
-      className="absolute top-0 right-0 z-10 w-auto max-w-none"
+      className="w-auto"
       forceVisible={forceVisible}
     >
       <Tooltip>

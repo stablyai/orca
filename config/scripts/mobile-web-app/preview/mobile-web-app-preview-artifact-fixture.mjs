@@ -9,7 +9,7 @@ export const ENTRY_SOURCE = `
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Text } from 'react-native'
-import { RpcClientProvider } from '../transport/client-context.web'
+import { RpcClientProvider } from '../transport/connection/client-context.web'
 import {
   MobileHtmlPreview,
   MOBILE_HTML_PREVIEW_SANDBOX,

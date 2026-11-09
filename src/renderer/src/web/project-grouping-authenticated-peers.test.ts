@@ -25,7 +25,7 @@ import {
   encrypt
 } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
-import { mobileRuntimeClientCapabilityUpdateParams } from '../../../../mobile/src/transport/mobile-runtime-client-capabilities'
+import { mobileRuntimeClientCapabilityUpdateParams } from '../../../../mobile/src/transport/connection/mobile-runtime-client-capabilities'
 import WebSocket, { WebSocketServer } from 'ws'
 import { STATUS_METHODS } from '../../../main/runtime/rpc/methods/host-management/status'
 import { installBrowserGlobals } from './web-preload-api-test-harness'

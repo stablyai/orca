@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native'
 import { Edit3, Moon, Pin, PinOff } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
-import { useWorkspaceServer } from '../transport/workspace-server'
+import { useWorkspaceServer } from '../worktree/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
@@ -31,6 +31,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     connState,
     existingWorktreePaths,
     hostCapabilities,
+    hostDisplay,
     hostId,
     state
   } = controller
@@ -107,8 +108,11 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             </View>
           ) : actionTarget && renameTarget === actionTarget ? (
             <WorkspaceRenameSheet
+              hostId={hostId ?? ''}
+              hostName={hostDisplay.title}
               row={actionTarget}
               rename={actions.renameWorktree}
+              blockedOffline={actions.workspaceRenameWrite.blockedOffline}
               onClose={closeActionSheet}
             />
           ) : (

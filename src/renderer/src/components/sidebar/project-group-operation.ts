@@ -1,14 +1,14 @@
 import type { AppState } from '@/store/types'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import {
   resolveIndexedRepoOwner,
   resolveQualifiedIndexedRepoOwnerForHost
 } from '@/lib/workspace/ownership/repo-owner-index'
-import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import {
   getRuntimeTargetHostId,
   ipcOrRuntimeTargetForHostId
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -19,7 +19,7 @@ import type { GroupingSetup } from '../../../../shared/project-grouping'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
+import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 
 export type ProjectGroupEntrance =
   | { kind: 'header'; groupKey: string; catalogHostId: ExecutionHostId }

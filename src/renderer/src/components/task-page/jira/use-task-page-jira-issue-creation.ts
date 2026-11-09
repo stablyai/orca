@@ -5,8 +5,8 @@ import {
   buildJiraCreateSubmission,
   hasJiraAssigneeCreateField
 } from '@/components/task-page/jira/task-page-jira-create-fields'
-import { jiraCreateIssue } from '@/runtime/runtime-jira-user-fields-client'
-import { jiraGetIssue } from '@/runtime/runtime-jira-client'
+import { jiraCreateIssue } from '@/runtime/jira/runtime-jira-user-fields-client'
+import { jiraGetIssue } from '@/runtime/jira/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { defaultScopeSource } from '@/lib/default-creation-host'

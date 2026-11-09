@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { LocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 
 /** Counts the combined projects, naming the project when there is only one. */

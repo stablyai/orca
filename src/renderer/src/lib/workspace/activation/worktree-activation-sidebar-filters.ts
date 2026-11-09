@@ -1,4 +1,4 @@
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import {

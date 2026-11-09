@@ -44,6 +44,7 @@ export type {
   SimulatorPaletteSearchResult
 } from './simulator-palette-search-types'
 import { formatSimulatorTabLabel } from './simulator-tab-label'
+import type { Translate } from '../i18n/use-translate'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -96,13 +97,14 @@ function positionScore(entry: SearchableSimulatorTab): number {
   return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
 }
 
-export function simulatorPaletteTabTitle(tab: Tab): string {
-  return formatSimulatorTabLabel(tab.label)
+export function simulatorPaletteTabTitle(tab: Tab, t?: Translate): string {
+  return formatSimulatorTabLabel(tab.label, t)
 }
 
 function baseResult(
   entry: SearchableSimulatorTab,
-  context: PaletteSearchContext
+  context: PaletteSearchContext,
+  t?: Translate
 ): SimulatorPaletteSearchResult {
   const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
   const activity = preparePaletteActivity(
@@ -120,7 +122,7 @@ function baseResult(
     tabId: entry.tab.id,
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,
-    title: simulatorPaletteTabTitle(entry.tab),
+    title: simulatorPaletteTabTitle(entry.tab, t),
     // Why empty: the smartphone icon already says the type; a fixed label crowds the row.
     secondaryText: '',
     secondaryMatches: [],
@@ -144,19 +146,22 @@ function baseResult(
   }
 }
 
-export function buildSearchableSimulatorTabs({
-  worktrees,
-  ownershipWorktrees,
-  repoMap,
-  repoMapByHostIdentity,
-  worktreeOrder,
-  unifiedTabsByWorktree,
-  activeGroupIdByWorktree,
-  groupsByWorktree,
-  activeWorktreeId,
-  activeWorkspaceExecutionHostId,
-  activeTabType
-}: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
+export function buildSearchableSimulatorTabs(
+  {
+    worktrees,
+    ownershipWorktrees,
+    repoMap,
+    repoMapByHostIdentity,
+    worktreeOrder,
+    unifiedTabsByWorktree,
+    activeGroupIdByWorktree,
+    groupsByWorktree,
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId,
+    activeTabType
+  }: BuildSearchableSimulatorTabsOptions,
+  t?: Translate
+): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
@@ -200,7 +205,7 @@ export function buildSearchableSimulatorTabs({
         ),
         document: buildPaletteTabDocument({
           id: tab.id,
-          title: simulatorPaletteTabTitle(tab),
+          title: simulatorPaletteTabTitle(tab, t),
           secondaryTexts: [],
           worktreeName: resolveWorktreeDisplayName(worktree),
           branch: resolveWorktreeBranchLabel(worktree),
@@ -216,7 +221,8 @@ export function buildSearchableSimulatorTabs({
 export function searchSimulatorTabs(
   entries: readonly SearchableSimulatorTab[],
   query: string,
-  options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
+  options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {},
+  t?: Translate
 ): SimulatorPaletteSearchResult[] {
   const context = options.context ?? createPaletteSearchContext(Date.now())
   if (isSimulatorPaletteQueryTooLarge(query)) {
@@ -226,7 +232,7 @@ export function searchSimulatorTabs(
   if (!prepared) {
     return query.trim()
       ? []
-      : entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
+      : entries.map((entry) => baseResult(entry, context, t)).sort(compareEmptyQueryResults)
   }
 
   const results: SimulatorPaletteSearchResult[] = []
@@ -240,7 +246,7 @@ export function searchSimulatorTabs(
     const alias =
       match.typeAlias !== null ? SIMULATOR_TYPE_SEARCH_ALIASES[match.typeAlias.index] : undefined
     results.push({
-      ...baseResult(entry, context),
+      ...baseResult(entry, context, t),
       titleRanges: match.titleRanges,
       repoRanges: match.repoRanges,
       worktreeRanges: match.worktreeRanges,

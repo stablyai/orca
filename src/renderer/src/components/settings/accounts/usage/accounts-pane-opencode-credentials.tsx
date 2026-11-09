@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -11,6 +11,7 @@ type CredentialStatus = boolean | 'loading' | 'unavailable'
 
 /** Keeps late initial reads from replacing a completed credential mutation. */
 export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState('')
   const [credentialStatus, setCredentialStatus] = useState<CredentialStatus>('loading')
   const [busy, setBusy] = useState(false)
@@ -48,7 +49,7 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
       setDraft('')
       onSaved()
     } catch {
-      toast.error(translate('sessionHistory.settings.saveError', 'Could not save. Try again.'))
+      toast.error(t('sessionHistory.settings.saveError', 'Could not save. Try again.'))
     } finally {
       setBusy(false)
     }
@@ -56,38 +57,35 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
 
   return (
     <SearchableSetting
-      title={translate(
+      title={t(
         'auto.components.settings.AccountsPane.opencodeGo.apiKey.title',
         'OpenCode Go API Key'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.AccountsPane.opencodeGo.apiKey.description',
         'Optional override. Orca otherwise uses the key OpenCode saved when you ran /connect, then OPENCODE_API_KEY.'
       )}
       keywords={['opencode', 'go', 'api', 'key', 'connect', 'rate limit', 'status bar']}
-      className="space-y-2"
+      className="space-y-2 py-3"
     >
       <div className="flex items-center gap-2">
         <Label htmlFor="opencode-go-api-key">
-          {translate(
+          {t(
             'auto.components.settings.AccountsPane.opencodeGo.apiKey.label',
             'OpenCode Go API key'
           )}
         </Label>
         <Badge variant={configured ? 'secondary' : 'outline'}>
           {credentialStatus === 'loading'
-            ? translate(
-                'auto.components.settings.AccountsPane.opencodeGo.apiKey.checking',
-                'Checking…'
-              )
+            ? t('auto.components.settings.AccountsPane.opencodeGo.apiKey.checking', 'Checking…')
             : credentialStatus === 'unavailable'
-              ? translate(
+              ? t(
                   'auto.components.settings.AccountsPane.opencodeGo.apiKey.unavailable',
                   'Status unavailable'
                 )
               : configured
-                ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
-                : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
+                ? t('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
+                : t('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
         </Badge>
       </div>
       <div className="flex gap-2">
@@ -97,7 +95,7 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
           value={draft}
           disabled={busy}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.AccountsPane.opencodeGo.apiKey.placeholder',
             'Leave blank to use the key saved by /connect or OPENCODE_API_KEY'
           )}
@@ -110,8 +108,8 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
           onClick={() => void updateCredential(false)}
         >
           {configured
-            ? translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
-            : translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
+            ? t('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
+            : t('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
         </Button>
         {configured && (
           <Button
@@ -120,12 +118,12 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
             disabled={busy}
             onClick={() => void updateCredential(true)}
           >
-            {translate('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
+            {t('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
           </Button>
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.AccountsPane.opencodeGo.apiKey.help',
           'Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts.'
         )}

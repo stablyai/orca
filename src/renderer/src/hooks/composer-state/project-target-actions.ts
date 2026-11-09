@@ -1,4 +1,4 @@
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useAppStore } from '@/store'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'

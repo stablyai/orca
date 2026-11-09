@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/endpoint-catalog-adoption'
 import { getProjectRepoFilterHost } from '../../../../shared/project-repo-filter-selection'
 import { useAppStore } from '@/store'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 

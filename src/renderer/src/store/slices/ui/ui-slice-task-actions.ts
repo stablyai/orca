@@ -3,17 +3,17 @@ import {
   getTaskEligibleRepos
 } from '../../../components/task-page/task-page-default-repo-selection'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
-import { getProjectGroupingIndexFromState } from '../../project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '../../projects/project-host-setup-selector'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { findPrevLiveNonTaskStackHistoryIndex } from '../worktree-nav-history'
+import { findPrevLiveNonTaskStackHistoryIndex } from './workspace-navigation-history'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
-} from '../../../../../shared/task-providers'
-import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
+} from '../../../../../shared/work-items/task-providers'
+import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36

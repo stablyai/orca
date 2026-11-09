@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { ComposerModel } from './composer-model'
 import type { ComposerInitialTargetModel } from './initial-target-model'
 

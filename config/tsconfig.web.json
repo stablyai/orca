@@ -11,7 +11,9 @@
     "../src/shared/**/*"
   ],
   "exclude": [
-    "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-main-surface.test.ts",
+    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
+    "../tests/e2e/terminal-agent-pane-launch.unit.test.ts",
     "../src/renderer/src/app-shell/project-grouping-authored-peer-writes.test.tsx",
     "../src/renderer/src/components/sidebar/project-group-actions-test-fixtures.ts",
     "../src/renderer/src/components/sidebar/qualified-group-actions-lifetime.test.tsx",
@@ -23,11 +25,8 @@
     "../src/renderer/src/runtime/project-grouping-owner-publication.test.tsx",
     "../src/renderer/src/store/repos/repo-removal.test.ts",
     "../src/renderer/src/web/project-grouping-authenticated-peers.test.ts",
-    "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
-    "../src/renderer/src/components/native-chat/NativeChatAcpQuestionCard.test.tsx",
-    "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
-    "../src/renderer/src/runtime/provider-account-observation.test-fixture.ts"
+    "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {
     "composite": true,

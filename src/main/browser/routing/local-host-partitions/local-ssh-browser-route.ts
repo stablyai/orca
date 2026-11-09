@@ -165,7 +165,7 @@ const routesByTargetId = new Map<string, LocalSshBrowserRoute>()
 async function defaultDependencies(): Promise<LocalSshBrowserRouteDependencies> {
   const [{ resolveBrowserNetworkExecutionRoute }, authority] = await Promise.all([
     import('../../network/execution-routes/browser-network-execution-route-dispatch'),
-    import('../../../ssh/ssh-provider-authority')
+    import('../../../ssh/connection/authority/ssh-provider-authority')
   ])
   return {
     resolveExecutionRoute: resolveBrowserNetworkExecutionRoute,

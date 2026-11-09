@@ -11,13 +11,13 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
 import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
 import { useMemo, useState } from 'react'
-import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useAppStore } from '../../../../store/index'
-import { getProjectHostSetupProjectionFromState } from '../../../../store/project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
 import { cn } from '../../../../lib/utils'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -26,13 +26,13 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../../search/settings-search'
 
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
 import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
-} from '@/store/slices/runtime-environment-ssh-selectors'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
@@ -60,6 +60,7 @@ export function RepositoryHostSetupsSection({
   searchQuery,
   searchEntries
 }: RepositoryHostSetupsSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const setSettingsProjectHostSelection = useAppStore(
     (state) => state.setSettingsProjectHostSelection
   )
@@ -137,10 +138,13 @@ export function RepositoryHostSetupsSection({
     openableProjectHostSetups,
     selectedSetupKey
   )
-  const setupHostOptions = buildSetupHostOptions({
-    projectHostSetups: allProjectHostSetups,
-    hostOptions
-  })
+  const setupHostOptions = buildSetupHostOptions(
+    {
+      projectHostSetups: allProjectHostSetups,
+      hostOptions
+    },
+    t
+  )
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
   // Split clones share project IDs but need independent selections.
@@ -165,24 +169,24 @@ export function RepositoryHostSetupsSection({
 
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
-      description={translate(
+      title={t('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
+      description={t(
         'auto.components.settings.RepositoryPane.availableHostsDescription',
         'Hosts where this project is set up.'
       )}
       keywords={[displayName, 'host', 'ssh', 'remote', 'vm', 'path']}
-      className="space-y-3"
+      className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
       <div className="space-y-1">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <Label className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
+            {t('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
           </Label>
           {switchableProjectHostSetups.length > 1 ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
+                {t('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
               </span>
               <Select
                 value={selectedSetupKey}
@@ -219,7 +223,7 @@ export function RepositoryHostSetupsSection({
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryPane.availableHostsHelp',
             'Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.'
           )}
@@ -265,28 +269,25 @@ export function RepositoryHostSetupsSection({
             !runtimeOwnerRuntimeUnavailable &&
             (nestedSshStatus === undefined || nestedSshStatus === 'connected')
           const setupStateLabel = !runtimeOwnerReachable
-            ? translate(
-                'auto.components.settings.RepositoryPane.hostStateDisconnected',
-                'Disconnected'
-              )
+            ? t('auto.components.settings.RepositoryPane.hostStateDisconnected', 'Disconnected')
             : runtimeOwnerWorkspaceWindowClosed
-              ? translate(
+              ? t(
                   'auto.components.settings.RepositoryPane.hostStateWorkspaceWindowClosed',
                   'Workspace window closed'
                 )
               : runtimeOwnerRuntimeUnavailable
-                ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
+                ? t('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
                 : nestedSshStatus === null
-                  ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
+                  ? t('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
                   : nestedSshStatus !== undefined && nestedSshStatus !== 'connected'
-                    ? translate(
+                    ? t(
                         'auto.components.settings.RepositoryPane.hostStateDisconnected',
                         'Disconnected'
                       )
-                    : getSetupStateLabel(setup.setupState)
+                    : getSetupStateLabel(setup.setupState, t)
           const setupHostLabel =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
-              ? translate(
+              ? t(
                   'auto.components.settings.RepositoryPane.nestedHostLabel',
                   '{{value0}} via {{value1}}',
                   {
@@ -329,15 +330,12 @@ export function RepositoryHostSetupsSection({
                 </div>
                 <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
                   {setup.path ||
-                    translate(
-                      'auto.components.settings.RepositoryPane.setupPathPending',
-                      'Path pending'
-                    )}
+                    t('auto.components.settings.RepositoryPane.setupPathPending', 'Path pending')}
                 </p>
                 {runtimeOwnerWorkspaceWindowClosed ? (
                   // RPC cannot open a remote desktop window; direct users to the owning host.
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.settings.RepositoryPane.hostWorkspaceWindowClosedHelp',
                       'The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup.',
                       { value0: runtimeOwnerHostLabel }
@@ -347,7 +345,7 @@ export function RepositoryHostSetupsSection({
               </div>
               {isCurrentSetup ? (
                 <SettingsBadge>
-                  {translate('auto.components.settings.RepositoryPane.currentSetup', 'Current')}
+                  {t('auto.components.settings.RepositoryPane.currentSetup', 'Current')}
                 </SettingsBadge>
               ) : null}
               {!isCurrentSetup && canOpenSetup ? (
@@ -359,7 +357,7 @@ export function RepositoryHostSetupsSection({
                     selectSetup(setup)
                   }}
                 >
-                  {translate('auto.components.settings.RepositoryPane.openSetup', 'Open')}
+                  {t('auto.components.settings.RepositoryPane.openSetup', 'Open')}
                 </Button>
               ) : null}
               {canRemoveSetup ? (
@@ -373,7 +371,7 @@ export function RepositoryHostSetupsSection({
                     setDeletingSetupId(null)
                   }}
                 >
-                  {translate('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}
+                  {t('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}
                 </Button>
               ) : null}
             </div>

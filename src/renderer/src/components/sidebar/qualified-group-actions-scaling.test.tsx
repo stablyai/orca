@@ -6,7 +6,9 @@ import {
   groupRepo,
   selectGroup,
   countedProperty,
-  hasRepoIdentityRows
+  hasRepoIdentityRows,
+  openGroupDestinations,
+  queryGroupDestination
 } from './project-group-actions-test-fixtures'
 import { act, useLayoutEffect } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -16,7 +18,7 @@ import { adoptEndpointRepo } from '../../../../shared/endpoint-catalog-adoption'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 
-import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import * as groupOperations from './project-group-operation'
 import WorktreeContextMenu from './workspace-actions/context-menu/WorktreeContextMenu'
 import {
@@ -150,7 +152,10 @@ it('bounds real open/accept operations at N100/1000 with q2 independent growth a
         const user = userEvent.setup()
         await user.pointer({ target: screen.getByText('target-0 card'), keys: '[MouseRight]' })
         await waitFor(() =>
-          expect(screen.getByRole('menuitem', { name: 'Move to group' })).toBeTruthy()
+          expect(
+            screen.queryByRole('menuitem', { name: 'Move to group' }) ??
+              screen.queryByRole('menuitem', { name: 'Project Group' })
+          ).toBeTruthy()
         )
         const open = { ...counts, resolverCalls: resolver.mock.calls.length }
         expect(open.resolverCalls).toBe(1)
@@ -184,16 +189,13 @@ it('bounds real open/accept operations at N100/1000 with q2 independent growth a
           receivingCalls: fixture.moves.length
         }
         await user.pointer({ target: screen.getByText('target-0 card'), keys: '[MouseRight]' })
-        screen.getByRole('menuitem', { name: 'Move to group' }).focus()
-        await user.keyboard('{ArrowRight}')
-        await waitFor(() =>
-          expect(screen.getByRole('menuitem', { name: 'Local destination' })).toBeTruthy()
-        )
+        await openGroupDestinations(user)
+        await waitFor(() => expect(queryGroupDestination('Local destination')!).toBeTruthy())
         expect(
-          screen.getByRole('menuitem', { name: 'Local destination' }).getAttribute('data-disabled')
+          queryGroupDestination('Local destination')!.getAttribute('data-disabled')
         ).not.toBeNull()
         await act(async () => {
-          screen.getByRole('menuitem', { name: 'Local destination' }).click()
+          queryGroupDestination('Local destination')!.click()
         })
         expect(fixture.moves).toHaveLength(q)
         process.stdout.write(

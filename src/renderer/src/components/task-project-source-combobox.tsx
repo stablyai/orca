@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
 import {
@@ -43,6 +43,7 @@ export default function TaskProjectSourceCombobox({
   getRepoSourceStatus,
   triggerClassName
 }: TaskProjectSourceComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [sourceMenuProjectKey, setSourceMenuProjectKey] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -176,7 +177,7 @@ export default function TaskProjectSourceCombobox({
           aria-expanded={open}
           className={cn('h-8 w-full justify-between px-3 text-xs font-normal', triggerClassName)}
         >
-          {renderTriggerLabel(groups, selected)}
+          {renderTriggerLabel(groups, selected, t)}
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -187,7 +188,7 @@ export default function TaskProjectSourceCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate(
+            placeholder={t(
               'auto.components.task.project.source.combobox.searchProjects',
               'Search projects...'
             )}
@@ -213,17 +214,14 @@ export default function TaskProjectSourceCombobox({
                 )}
               />
               <span>
-                {translate(
-                  'auto.components.task.project.source.combobox.allProjects',
-                  'All projects'
-                )}
+                {t('auto.components.task.project.source.combobox.allProjects', 'All projects')}
               </span>
             </button>
           </div>
           <CommandList>
             {filteredGroups.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.task.project.source.combobox.noMatches',
                   'No projects match your search.'
                 )}
@@ -238,7 +236,8 @@ export default function TaskProjectSourceCombobox({
                 selected,
                 showHostLabels,
                 getRepoHostLabel,
-                hostCount
+                hostCount,
+                t
               )
               const hasSourceMenu = hostCount > 1
               return (
@@ -293,7 +292,7 @@ export default function TaskProjectSourceCombobox({
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          title={translate(
+                          title={t(
                             'auto.components.task.project.source.combobox.chooseSource',
                             'Choose task source'
                           )}

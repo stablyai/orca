@@ -131,6 +131,7 @@ export function defaultVerbAnswer(
     case 'native.audio.stop':
       return { stopped: true, base64: '', droppedBytes: 0 }
   }
+  return undefined
 }
 
 export function neutralObservation(): BridgeQueuedObservation {

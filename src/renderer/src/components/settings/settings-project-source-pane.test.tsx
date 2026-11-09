@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client'
 import { render, cleanup, screen, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 
@@ -257,7 +257,7 @@ it('visibly describes each group scope before confirming removal of exactly its 
             )
           )
         })
-        const scopeText = Array.from(container.querySelectorAll('p')).find((p) =>
+        const scopeText = Array.from(container.querySelectorAll('p, span')).find((p) =>
           p.textContent?.startsWith('Remove this')
         )?.textContent
         expect(scopeText).toContain(

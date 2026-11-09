@@ -88,6 +88,7 @@ export const SESSION_TAB_METHODS = [
           ? { resumeProviderSession: params.resumeProviderSession }
           : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+        ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
         ...(params.viewMode ? { viewMode: params.viewMode } : {}),
         activate: params.activate,
         select: params.select,

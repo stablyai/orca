@@ -58,12 +58,12 @@ import {
 } from '../../components/settings/repository/RepositoryRemoveProjectButton'
 import { TooltipProvider } from '../../components/ui/tooltip'
 import { removeCurrentSettingsProject } from '../../components/settings/page/use-settings-store-model'
-import { getProjectGroupingModelFromState } from '../project-host-setup-selector'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { getProjectGroupingModelFromState } from '../projects/project-host-setup-selector'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   type RuntimeEnvironmentCallRequest,
   createCompatibleRuntimeStatusResponseIfNeeded
-} from '../../runtime/runtime-compatibility-test-fixture'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { toast } from 'sonner'
 
 const ipc = vi.hoisted(() => ({ handlers: new Map<string, (...args: unknown[]) => unknown>() }))

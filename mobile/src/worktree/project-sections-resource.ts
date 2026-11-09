@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   projectSectionsRead,
   readServedProjectSections,

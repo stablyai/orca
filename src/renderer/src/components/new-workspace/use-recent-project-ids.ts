@@ -7,8 +7,8 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import { useMemo } from 'react'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useAllWorktrees } from '@/store/selectors'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-project-options'
 
 /** Use each project’s newest workspace creation as recency; it matches this picker’s action without separate persisted state. */

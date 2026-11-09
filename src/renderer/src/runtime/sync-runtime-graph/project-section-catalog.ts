@@ -2,11 +2,11 @@ import {
   buildMobileProjectSectionCatalog,
   type MobileProjectSectionCatalog
 } from '../../../../shared/mobile-project-sections-contract'
-import type { ProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 import {
   getProjectGroupingModelFromState,
   getProjectGroupingIndexFromState
-} from '@/store/project-host-setup-selector'
+} from '@/store/projects/project-host-setup-selector'
+import type { ProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 import type { AppState } from '@/store/types'
 
 type CatalogSource = {

@@ -12,8 +12,9 @@ import { bindStartupDraftPaste } from './startup-draft-paste'
 import { bindSessionRestoredBannerAdmission } from '../notifications/session-restored-banner-admission'
 import { bindDeferredColdRestoreAndSnapshot } from '../deferred-cold-restore-and-snapshot'
 import { installSleepingRecordAccess } from './sleeping-record-access'
-import { createTestStore } from '@/store/slices/store-test-helpers'
-import { makeTab, createStoreSessionMockApi } from '@/store/slices/store-session-test-harness'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { createStoreSessionMockApi } from '@/store/testing/app-store-session-api.test-fixture'
 import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext

@@ -4,7 +4,7 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import '@/lib/pane-manager/pane-tree-ops'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
-import { getPaneOwnedActiveHelperTextarea } from '../regular-terminal-focus-ownership'
+import { getPaneOwnedActiveHelperTextarea } from '../input/focus/regular-terminal-focus-ownership'
 import {
   clearTerminalFontSizeOverride,
   getTerminalFontSizeOverride,

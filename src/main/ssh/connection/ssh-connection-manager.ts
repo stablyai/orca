@@ -5,10 +5,10 @@ import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-conn
 import {
   createSshCredentialDeclinedError,
   isSshCredentialDeclined
-} from '../ssh-credential-decline'
-import { createSshUserDisconnectedError, isSshUserDisconnected } from '../ssh-user-disconnect'
+} from '../authentication/ssh-credential-decline'
+import { createSshUserDisconnectedError, isSshUserDisconnected } from './ssh-user-disconnect'
 import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/ssh-sign-in-required-copy'
-import { markSshSessionStartFailure } from '../ssh-session-start-failure'
+import { markSshSessionStartFailure } from './ssh-session-start-failure'
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
 function signInEndpoint(target: SshTarget): string {

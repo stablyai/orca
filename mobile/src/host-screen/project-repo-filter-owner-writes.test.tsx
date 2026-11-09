@@ -2,13 +2,16 @@
 import { act, createElement, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { HostStatusGates } from '../transport/host-status-gates'
+import type { HostStatusGates } from '../transport/connection/host-status-gates'
 import type { HostPendingViewChanges } from './use-host-pending-view-changes'
 import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
-import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
-import type { RpcClient } from '../transport/rpc-client'
-import { FakeSession, FakeLogicalClient } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import type { RpcResponse } from '../transport/types'
+import { createStableLogicalRpcClient } from '../transport/connection/stable-logical-rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  FakeSession,
+  FakeLogicalClient
+} from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 const foreground = vi.hoisted(() => ({ listeners: new Set<(state: string) => void>() }))
 vi.mock('react-native', () => ({
@@ -19,11 +22,13 @@ vi.mock('react-native', () => ({
     }
   }
 }))
-vi.mock('../transport/host-app-version-store', () => ({ recordHostAppVersion: async () => {} }))
-vi.mock('../transport/host-descriptor-recorder', () => ({
+vi.mock('../transport/hosts/host-app-version-store', () => ({
+  recordHostAppVersion: async () => {}
+}))
+vi.mock('../transport/hosts/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
 }))
-import { useHostStatusGates } from '../transport/host-status-gates'
+import { useHostStatusGates } from '../transport/connection/host-status-gates'
 import { useHostPendingViewChanges } from './use-host-pending-view-changes'
 
 let root: Root | undefined

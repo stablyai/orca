@@ -8,7 +8,7 @@ import { stripCredentialsFromMessage } from '../../../shared/git/remotes/git-rem
 import type { Project } from '../../../shared/project-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 
 const prefills = new WeakMap<ProjectGroupingIndex, Map<string, string>>()

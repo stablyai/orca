@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, ChevronLeft, SearchIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PaletteFilterOption } from './palette-filter-options'
 import type { PaletteFilterField } from './palette-filter'
 import {
@@ -35,6 +35,7 @@ function FilterOptionRow({
   isActive: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
@@ -58,7 +59,7 @@ function FilterOptionRow({
       </span>
       <span className="min-w-0 flex-1 truncate text-foreground">
         {option.label}
-        {isPartial ? ` · ${translate('projectFilter.partial', 'Partial')}` : ''}
+        {isPartial ? ` · ${t('projectFilter.partial', 'Partial')}` : ''}
       </span>
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">
         {option.count}
@@ -86,6 +87,7 @@ export function PaletteFilterFieldOptions({
   onClearField: () => void
   onSelectAllMatching: (ids: readonly string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const selected = useMemo(() => new Set(group.selected), [group.selected])
   const normalizedQuery = optionQuery.trim().toLowerCase()
   const rankMode: FilterOptionRankMode = group.field === 'host' ? 'registry' : 'popularity'
@@ -197,17 +199,17 @@ export function PaletteFilterFieldOptions({
 
   const searchPlaceholder =
     group.field === 'host'
-      ? translate('worktreeJumpPalette.filter.searchHosts', 'Filter hosts...')
-      : translate('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
+      ? t('worktreeJumpPalette.filter.searchHosts', 'Filter hosts...')
+      : t('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
   const emptyLabel =
     group.field === 'host'
-      ? translate('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
-      : translate('worktreeJumpPalette.filter.noProjects', 'No matching projects')
+      ? t('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
+      : t('worktreeJumpPalette.filter.noProjects', 'No matching projects')
   // Translate complete field-specific labels; lowercasing nouns breaks languages such as German.
   const clearLabel =
     group.field === 'host'
-      ? translate('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
-      : translate('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
+      ? t('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
+      : t('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
 
   const canSelectAll = ranked.completionIds.length > 0
   const canClear = group.selected.length > 0
@@ -222,7 +224,7 @@ export function PaletteFilterFieldOptions({
             className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" aria-hidden="true" />
-            {translate('worktreeJumpPalette.filter.back', 'Back')}
+            {t('worktreeJumpPalette.filter.back', 'Back')}
           </button>
           <span className="min-w-0 flex-1 truncate pr-2 text-[12px] font-medium text-foreground">
             {group.heading}
@@ -250,7 +252,7 @@ export function PaletteFilterFieldOptions({
       {ranked.selectedCollapsed ? (
         <div className="flex items-center justify-between gap-2 border-b border-border/55 px-2.5 py-1.5">
           <span className="text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'worktreeJumpPalette.filter.selectedCollapsed',
               '{{value0}} selected — remove via chips or Clear',
               { value0: ranked.selectedCount }
@@ -314,7 +316,7 @@ export function PaletteFilterFieldOptions({
               onClick={() => onSelectAllMatching(ranked.completionIds)}
               className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             >
-              {translate(
+              {t(
                 'worktreeJumpPalette.filter.selectAllMatching',
                 'Select all matching ({{value0}})',
                 { value0: ranked.completionIds.length }

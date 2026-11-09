@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { normalizeTaskRepoSelection } from '@/components/task-page/task-page-default-repo-selection'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
@@ -43,6 +43,7 @@ export function TaskPageGitLabFilters({
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const grouping = useAppStore(getProjectGroupingIndexFromState)
+  const t = useTranslate()
   const {
     updateSettings,
     settings,
@@ -71,10 +72,10 @@ export function TaskPageGitLabFilters({
             const active = gitlabView === view
             const label =
               view === 'issues'
-                ? translate('auto.components.TaskPage.gitlabViewIssues', 'Issues')
+                ? t('auto.components.TaskPage.gitlabViewIssues', 'Issues')
                 : view === 'mrs'
-                  ? translate('auto.components.TaskPage.gitlabViewMrs', 'MRs')
-                  : translate('auto.components.TaskPage.gitlabViewTodos', 'My Todos')
+                  ? t('auto.components.TaskPage.gitlabViewMrs', 'MRs')
+                  : t('auto.components.TaskPage.gitlabViewTodos', 'My Todos')
             return (
               <button
                 key={view}
@@ -104,10 +105,7 @@ export function TaskPageGitLabFilters({
                 defaultRepoSelection: [...normalized]
               }).catch(() => {
                 toast.error(
-                  translate(
-                    'auto.components.TaskPage.dfd72673e7',
-                    'Failed to save project selection.'
-                  )
+                  t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
                 )
               })
             }}
@@ -117,10 +115,7 @@ export function TaskPageGitLabFilters({
                 defaultRepoSelection: null
               }).catch(() => {
                 toast.error(
-                  translate(
-                    'auto.components.TaskPage.dfd72673e7',
-                    'Failed to save project selection.'
-                  )
+                  t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
                 )
               })
             }}
@@ -183,11 +178,8 @@ export function TaskPageGitLabFilters({
                   disabled={gitlabLoading || gitlabTodosLoading}
                   aria-label={
                     gitlabView === 'todos'
-                      ? translate('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
-                      : translate(
-                          'auto.components.TaskPage.d4c2830063',
-                          'Refresh GitLab work items'
-                        )
+                      ? t('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
+                      : t('auto.components.TaskPage.d4c2830063', 'Refresh GitLab work items')
                   }
                   className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                 >
@@ -200,8 +192,8 @@ export function TaskPageGitLabFilters({
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
                 {gitlabView === 'todos'
-                  ? translate('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
-                  : translate('auto.components.TaskPage.d4c2830063', 'Refresh GitLab work items')}
+                  ? t('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
+                  : t('auto.components.TaskPage.d4c2830063', 'Refresh GitLab work items')}
               </TooltipContent>
             </Tooltip>
           </div>

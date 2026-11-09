@@ -9,8 +9,8 @@ import { useAppStore } from '../store'
 import {
   getProjectGroupingModelFromState,
   getProjectGroupingIndexFromState
-} from '../store/project-host-setup-selector'
-import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
+} from '../store/projects/project-host-setup-selector'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { buildSettingsProjectList } from './settings/navigation/settings-project-list'
 import { buildNewWorkspaceProjectOptions } from '../lib/new-workspace-project-options'
 import { useProjectFilterOptions } from './sidebar/use-project-filter-options'

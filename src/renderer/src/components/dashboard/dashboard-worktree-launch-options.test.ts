@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { buildDashboardWorktreeLaunchOptions } from './dashboard-worktree-launch-options'
 
 type LaunchState = Parameters<typeof buildDashboardWorktreeLaunchOptions>[0]

@@ -9,7 +9,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agen
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus
-} from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+} from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'

@@ -1,12 +1,19 @@
 // @vitest-environment happy-dom
 import { groupCards, ShippingSidebar } from './qualified-notice-actions-test-fixtures'
-import { groupActionFixture, groupRepo, selectGroup } from './project-group-actions-test-fixtures'
+import {
+  groupActionFixture,
+  groupRepo,
+  selectGroup,
+  chooseGroupAction,
+  openGroupDestinations,
+  queryGroupDestination
+} from './project-group-actions-test-fixtures'
 import { act } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 
 import { toast } from 'sonner'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
@@ -23,8 +30,8 @@ it('joins the shipping header/group owner to exact real persistence, mixed predi
   try {
     render(<ShippingSidebar />)
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.hover(screen.getByRole('menuitem', { name: 'Move to group' }))
-    expect(screen.queryByRole('menuitem', { name: 'Remote destination' })).toBeNull()
+    await openGroupDestinations(user)
+    expect(queryGroupDestination('Remote destination')).toBeNull()
     await selectGroup(user, 'Local destination')
     try {
       await waitFor(() => expect(fixture.moves).toHaveLength(2))
@@ -61,7 +68,7 @@ it('joins the shipping header/group owner to exact real persistence, mixed predi
     expect(fixture.localDisk.getRepo('a')!.projectGroupOrder).toBe(unchangedRank)
     fixture.moves.length = 0
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Remove from group' }))
+    await chooseGroupAction(user, 'Remove from group')
     await waitFor(() => expect(fixture.moves).toHaveLength(2))
     expect((await fixture.saved()).local.every((entry) => entry.projectGroupId === null)).toBe(true)
     fixture.moves.length = 0
@@ -114,12 +121,9 @@ it('keeps actual card commands in the clicked checkout catalog below another hea
       rendered.rerender(<ShippingSidebar board={presentation === 'board'} />)
       const title = screen.getAllByText('c checkout')[0]!
       await user.pointer({ target: title, keys: '[MouseRight]' })
-      screen.getByRole('menuitem', { name: 'Move to group' }).focus()
-      await user.keyboard('{ArrowRight}')
-      await waitFor(() =>
-        expect(screen.getByRole('menuitem', { name: 'Remote destination' })).toBeTruthy()
-      )
-      expect(screen.queryByRole('menuitem', { name: 'Local destination' })).toBeNull()
+      await openGroupDestinations(user)
+      await waitFor(() => expect(queryGroupDestination('Remote destination')!).toBeTruthy())
+      expect(queryGroupDestination('Local destination')).toBeNull()
       if (presentation === 'repo') {
         await selectGroup(user, 'Remote destination')
         await waitFor(() => expect(fixture.moves).toHaveLength(2))
@@ -130,7 +134,7 @@ it('keeps actual card commands in the clicked checkout catalog below another hea
         expect((await fixture.saved()).local.every((entry) => !entry.projectGroupId)).toBe(true)
       } else {
         expect(
-          screen.getByRole('menuitem', { name: 'Remote destination' }).getAttribute('data-disabled')
+          queryGroupDestination('Remote destination')!.getAttribute('data-disabled')
         ).not.toBeNull()
         await user.keyboard('{Escape}{Escape}')
       }
@@ -151,7 +155,7 @@ it('uses the actual runtime host-copy New dialog once and retains its ID on fail
     // Actual host filtering/localization, rather than passing a desired runtime member array.
     render(<ShippingSidebar />)
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     let failD = true
     fixture.intercept(async (_catalog, id) => {
       if (id === 'd' && failD) {
@@ -212,7 +216,7 @@ it('keeps row New bound to its captured own name and draft through foreign, equa
     )
     render(<ShippingSidebar />)
     await user.pointer({ target: screen.getByText('legacy local checkout'), keys: '[MouseRight]' })
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     const dialog = screen.getByRole('dialog')
     expect(useAppStore.getState().activeRepoId).toBe('b')
     const input = screen.getByRole('textbox', { name: 'Group Name' })
@@ -421,7 +425,7 @@ it('fences an old card New continuation and dialog completion when closed and re
     })
     render(<ShippingSidebar />)
     await user.pointer({ target: screen.getByText('b checkout'), keys: '[MouseRight]' })
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     await user.clear(screen.getByRole('textbox', { name: 'Group Name' }))
     await user.type(screen.getByRole('textbox', { name: 'Group Name' }), 'Old row draft')
     await user.click(screen.getByRole('button', { name: 'Create' }))
@@ -429,7 +433,7 @@ it('fences an old card New continuation and dialog completion when closed and re
     const oldGroup = fixture.createLocal.mock.results[0]!.value
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     const successor = screen.getByRole('dialog')
     expect(screen.getByRole('textbox', { name: 'Group Name' })).toHaveProperty(
       'value',
@@ -475,7 +479,7 @@ it('prevalidates finite original sources before New, keeps create failure in the
   try {
     render(<ShippingSidebar />)
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     act(() =>
       useAppStore.setState((state) => ({ repos: state.repos.filter((entry) => entry.id !== 'b') }))
     )
@@ -488,7 +492,7 @@ it('prevalidates finite original sources before New, keeps create failure in the
     act(() => useAppStore.setState({ repos: fixture.repos }))
     fixture.createLocal.mockRejectedValueOnce(new Error('create disconnected'))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false)
@@ -498,7 +502,7 @@ it('prevalidates finite original sources before New, keeps create failure in the
     expect(fixture.moves).toEqual([])
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(fixture.createLocal).toHaveBeenCalledTimes(2)

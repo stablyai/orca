@@ -12,7 +12,7 @@ import type {
   BrowserTabInfo
 } from '../../../../../shared/runtime-types'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'

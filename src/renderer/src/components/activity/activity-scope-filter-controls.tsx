@@ -1,9 +1,9 @@
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { projectFilterSelection } from '../../../../shared/project-repo-filter-selection'
 import React from 'react'
 import { useAppStore } from '@/store'
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import SidebarRepositoryFilterSection from '@/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection'
 import { SidebarHostScopeMenuSection } from '@/components/sidebar/worktree-list/controls/SidebarHostScopeMenuSection'
 import {
@@ -14,6 +14,7 @@ import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/c
 
 /** Persisted Agents scope is separate from workspace navigation filters; the parent owns the Filters label/separator. */
 export function ActivityScopeFilterMenuItems(): React.JSX.Element {
+  const t = useTranslate()
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const setAgentsVisibleHostIds = useAppStore((s) => s.setAgentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
@@ -44,7 +45,7 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
         onCheckedChange={(checked) => setHideAutomationGenerated(checked === true)}
         onSelect={(event) => event.preventDefault()}
       >
-        {translate(
+        {t(
           'auto.components.activity.ActivityScopeFilterControls.hideAutomationCreated',
           'Hide automation-created'
         )}
@@ -54,7 +55,7 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
         onCheckedChange={(checked) => setHideCliCreated(checked === true)}
         onSelect={(event) => event.preventDefault()}
       >
-        {translate(
+        {t(
           'auto.components.activity.ActivityScopeFilterControls.hideCliCreated',
           'Hide CLI-created'
         )}
@@ -64,12 +65,12 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
           checked={hideFromOtherDevices}
           onCheckedChange={(checked) => setHideFromOtherDevices(checked === true)}
           onSelect={(event) => event.preventDefault()}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.activity.ActivityScopeFilterControls.hideOtherClientsAria',
             'Hide agents in workspaces created from other Orca clients on shared remote servers'
           )}
         >
-          {translate(
+          {t(
             'auto.components.activity.ActivityScopeFilterControls.hideOtherClients',
             'Hide other-client agents'
           )}
@@ -77,7 +78,7 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
       ) : null}
       {showHostScopeControls ? (
         <SidebarHostScopeMenuSection
-          hostVisibilityLabel={getSidebarHostVisibilityLabel(agentsVisibleHostIds, hostOptions)}
+          hostVisibilityLabel={getSidebarHostVisibilityLabel(agentsVisibleHostIds, hostOptions, t)}
           hostOptions={hostOptions}
           preserveWorkspaceBoardOpen={false}
           // Why: the section only calls this to reset to "all hosts".
@@ -97,7 +98,7 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
             setAgentsFilterRepoIds([])
           }}
         >
-          {translate(
+          {t(
             'auto.components.activity.ActivityScopeFilterControls.resetScope',
             'Show all hosts and projects'
           )}

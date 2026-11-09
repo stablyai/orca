@@ -64,9 +64,10 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   session.savedStartupAutomaticClaim = session.paneStartup?.resumeSource
     ? useAppStore.getState().automaticAgentResumeClaimsByTabId[session.deps.tabId]
     : undefined
-  session.launchToken = session.paneStartup?.launchConfig
-    ? (session.paneStartup.launchToken ?? createBrowserUuid())
-    : undefined
+  session.launchToken =
+    session.paneStartup?.launchConfig || session.paneStartup?.freshAgentLaunch
+      ? (session.paneStartup.launchToken ?? createBrowserUuid())
+      : undefined
   session.startupDraftAgent =
     session.paneStartup?.launchAgent ?? session.paneStartup?.initialAgentStatus?.agent
   session.startupDraftAgentConfig = session.startupDraftAgent
@@ -77,6 +78,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       ? session.paneStartup.draftPrompt
       : null
   session.startupDraftPromptNeedsPaste =
+    !(session.runtimeEnvironmentId && session.paneStartup?.freshAgentLaunch) &&
     session.startupDraftPrompt !== null &&
     !session.startupDraftAgentConfig?.draftPromptFlag &&
     !session.startupDraftAgentConfig?.draftPromptEnvVar

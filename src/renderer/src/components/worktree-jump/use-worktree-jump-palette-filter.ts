@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useMemo } from 'react'
 import { buildSidebarHostOptions } from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
 import { getProjectGroupExecutionHostIdForRows } from '../../../../shared/sidebar-list/host-filtering'

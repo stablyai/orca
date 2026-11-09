@@ -2,7 +2,7 @@ import {
   shouldPreserveTerminalScrollbackBuffers,
   type RepoConnection
 } from '../../../../../../shared/workspace-session/workspace-session-terminal-buffers'
-import { captureTerminalShutdownBuffersBestEffort } from '../../shutdown-buffer-captures'
+import { captureTerminalShutdownBuffersBestEffort } from '../../snapshots/shutdown-buffer-captures'
 
 type ParkedTerminalCaptureArgs = {
   worktreeId: string

@@ -2,7 +2,9 @@
 import { nestedRemovalCatalog } from './settings-project-continuity-test-fixtures'
 import * as removalProduct from './repository/RepositoryRemoveProjectButton'
 import { removeCurrentSettingsProject } from './page/use-settings-store-model'
-import { makeWorktree, makeOpenFile, makeTab } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { toast } from 'sonner'
 import {
   openProjectRemovalSettings,

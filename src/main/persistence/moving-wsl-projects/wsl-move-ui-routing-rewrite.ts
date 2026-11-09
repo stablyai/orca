@@ -29,6 +29,7 @@ export type WslMoveUiRoutingState = Pick<
   PersistedUIState,
   | 'lastActiveWorktreeId'
   | 'showDotfilesByWorktree'
+  | 'gitGraphFiltersByWorktree'
   | 'explorerDisplayRootByWorktree'
   | 'workspaceCleanup'
   | 'manualRepoOrder'
@@ -62,6 +63,15 @@ export function rewriteWslMoveUiRouting(
   )
   if (dotfiles) {
     updates.showDotfilesByWorktree = dotfiles
+  }
+  const graphFilters = withHostKeys(
+    ui.gitGraphFiltersByWorktree,
+    hostWorktreeKey,
+    (value) => value,
+    scope.inScope
+  )
+  if (graphFilters) {
+    updates.gitGraphFiltersByWorktree = graphFilters
   }
   const roots = withHostKeys(
     ui.explorerDisplayRootByWorktree,

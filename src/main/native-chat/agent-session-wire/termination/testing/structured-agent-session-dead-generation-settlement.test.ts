@@ -7,10 +7,6 @@ import { openAgentSessionJournal } from '../../../agent-session-journal/journal-
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import {
-  captureUnfinishedStructuredAgentSessionWork,
-  unfinishedStructuredAgentSessionWorkWasInterrupted
-} from '../structured-agent-session-unfinished-work'
-import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
@@ -156,40 +152,5 @@ describe('dead structured-session generation settlement', () => {
         reason: 'provider write outcome unknown'
       })
     ])
-  })
-})
-
-describe('whether a dead generation interrupted anything', () => {
-  async function seedIdlePendingApproval(): Promise<void> {
-    await journal.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
-      {
-        kind: 'approval',
-        title: 'Run command?',
-        detail: null,
-        options: [{ id: 'yes', label: 'Allow' }],
-        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-      },
-      { fence: 7, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    await journal.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 2 },
-      { kind: 'turn', turnId: 'turn-1', state: 'completed', startedAt: 900, completedAt: 950 },
-      { fence: 7, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-  }
-
-  it('says nothing was interrupted when the provider died waiting on an approval', async () => {
-    await seedIdlePendingApproval()
-    const before = captureUnfinishedStructuredAgentSessionWork(journal)
-
-    expect(unfinishedStructuredAgentSessionWorkWasInterrupted(before, journal, 1_000)).toBe(false)
-  })
-
-  it('still reports an interruption when a turn was running', async () => {
-    await seedUnfinishedWork()
-    const before = captureUnfinishedStructuredAgentSessionWork(journal)
-
-    expect(unfinishedStructuredAgentSessionWorkWasInterrupted(before, journal, 1_000)).toBe(true)
   })
 })

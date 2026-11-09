@@ -16,10 +16,10 @@ import {
   ProjectGroupCreate,
   ProjectGroupMoveProject
 } from '../../../../shared/rpc-contract/repo-params'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
-import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { type ExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -234,14 +234,41 @@ export function groupRepo(id: string, extra: Partial<Repo> = {}): Repo {
   }
 }
 
-export async function selectGroup(user: ReturnType<typeof userEvent.setup>, name: string) {
-  await user.hover(screen.getByRole('menuitem', { name: 'Move to group' }))
-  await waitFor(() => expect(screen.getByRole('menuitem', { name })).toBeTruthy())
+// Card menus nest group actions under "Project Group"; header menus list them directly.
+export async function openCardProjectGroupMenu(user: ReturnType<typeof userEvent.setup>) {
+  const trigger = screen.queryByRole('menuitem', { name: 'Project Group' })
+  if (trigger) {
+    await user.hover(trigger)
+    await waitFor(() => screen.getByRole('menuitem', { name: 'New group from project' }))
+  }
+}
+
+export async function openGroupDestinations(user: ReturnType<typeof userEvent.setup>) {
+  const moveTrigger = screen.queryByRole('menuitem', { name: 'Move to group' })
+  await (moveTrigger ? user.hover(moveTrigger) : openCardProjectGroupMenu(user))
+}
+
+// Fire the item in place: a pointer move off the submenu trigger can close it first.
+async function fireMenuItem(item: HTMLElement) {
   await act(async () => {
-    const item = screen.getByRole('menuitem', { name })
     fireEvent.pointerDown(item, { button: 0 })
     item.click()
   })
+}
+
+export async function chooseGroupAction(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await openCardProjectGroupMenu(user)
+  await fireMenuItem(screen.getByRole('menuitem', { name }))
+}
+
+export function queryGroupDestination(name: string): HTMLElement | null {
+  return screen.queryByRole('menuitem', { name }) ?? screen.queryByRole('menuitemradio', { name })
+}
+
+export async function selectGroup(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await openGroupDestinations(user)
+  await waitFor(() => expect(queryGroupDestination(name)).toBeTruthy())
+  await fireMenuItem(queryGroupDestination(name)!)
 }
 
 export function countedProperty(

@@ -4,7 +4,7 @@ import type {
   FeatureInteractionId,
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
-import type { FeatureTipId } from '../../../../../shared/feature-tips'
+import type { FeatureTipId, FeatureTipSeenId } from '../../../../../shared/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
@@ -60,7 +60,7 @@ export type UISliceContextual = {
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
-  featureTipsSeenIds: FeatureTipId[]
+  featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   projectGroupingUpgradeTipAudience: ProjectGroupingUpgradeTipAudience | null
   setProjectGroupingUpgradeTipAudience: (audience: ProjectGroupingUpgradeTipAudience) => void

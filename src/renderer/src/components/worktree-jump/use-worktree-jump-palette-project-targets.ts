@@ -3,7 +3,7 @@ import {
   getRepoHostIdentityForParts
 } from '../../../../shared/repo-host-identity'
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useMemo } from 'react'
 import { buildImportedWorktreesCardCandidates } from '@/components/sidebar/worktree-list/listing/imported-worktrees-card-candidates'
 import {

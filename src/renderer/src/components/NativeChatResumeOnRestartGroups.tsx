@@ -1,13 +1,13 @@
-import { getIndexedRepoHostMap, getIndexedRepoMap } from '@/store/worktree-repo-index'
+import { memo, useMemo } from 'react'
+import { getIndexedRepoHostMap, getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { findIndexedProjectGroupDisplay } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
-import { memo, useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
@@ -25,7 +25,7 @@ import {
   useWorkspaceWorktree
 } from './native-chat-resume-workspace-lookups'
 import { ResumeCandidateRow } from './NativeChatResumeOnRestartAgentRow'
-import { ResumeTreeGroup } from './NativeChatResumeTreeGroup'
+import { ResumeGroupNode as GroupNode } from './NativeChatResumeGroupNode'
 import {
   chatState,
   coveredKeys,
@@ -66,6 +66,7 @@ function WorkspaceNode({
   tree: TreeProps
   fallbackDisplays?: workspaceDisplay.WorkspaceFallbacks
 }): React.JSX.Element {
+  const t = useTranslate()
   const { group } = node
   const first = group.candidates[0]
   const worktree = useWorkspaceWorktree(group.workspaceId, first?.executionHostId)
@@ -76,11 +77,11 @@ function WorkspaceNode({
   const { name, controlName } = workspaceDisplay.resolveNames(worktree, fallback, group.workspaceId)
   const branch = worktree && kind === 'git-worktree' ? resolveWorktreeBranchLabel(worktree) : ''
   return (
-    <ResumeTreeGroup
+    <GroupNode
       nodeKey={`workspace:${hostId}:${group.workspaceId}`}
       depth={depth}
       name={controlName}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectWorkspace',
         'Select all chats in {{value0}}',
         { value0: controlName }
@@ -134,7 +135,7 @@ function WorkspaceNode({
           fallbackDisplays={fallbackDisplays}
         />
       ))}
-    </ResumeTreeGroup>
+    </GroupNode>
   )
 }
 
@@ -152,6 +153,7 @@ function ProjectNode({
   depth: number
   tree: TreeProps
 }): React.JSX.Element {
+  const t = useTranslate()
   const repo = useAppStore(
     (store) =>
       getIndexedRepoHostMap(store.repos).get(`${hostId}\0${repoId}`) ??
@@ -169,11 +171,11 @@ function ProjectNode({
     projectGroup ? [projectGroup] : []
   )
   return (
-    <ResumeTreeGroup
+    <GroupNode
       nodeKey={`project:${hostId}:${repoId}`}
       depth={depth}
       name={header.name}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectProject',
         'Select all chats in {{value0}}',
         { value0: header.name }
@@ -205,7 +207,7 @@ function ProjectNode({
           tree={tree}
         />
       ))}
-    </ResumeTreeGroup>
+    </GroupNode>
   )
 }
 
@@ -274,6 +276,7 @@ function MachineNode({
   workspaces: readonly ResumeWorkspaceGroup[]
   tree: TreeProps
 }): React.JSX.Element {
+  const t = useTranslate()
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
@@ -281,11 +284,11 @@ function MachineNode({
   )
   const name = getHostContextLabel(hostId, { hostLabelById })
   return (
-    <ResumeTreeGroup
+    <GroupNode
       nodeKey={`machine:${hostId}`}
       depth={0}
       name={name}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectMachine',
         'Select all chats on {{value0}}',
         { value0: name }
@@ -298,14 +301,14 @@ function MachineNode({
           <span className="min-w-0 truncate text-[13px] font-bold">{name}</span>
           {parseExecutionHostId(hostId)?.kind === 'ssh' && (
             <WorktreeHostContextBadge
-              label={translate('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
+              label={t('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
             />
           )}
         </>
       }
     >
       <MachineContents hostId={hostId} workspaces={workspaces} depth={1} tree={tree} />
-    </ResumeTreeGroup>
+    </GroupNode>
   )
 }
 

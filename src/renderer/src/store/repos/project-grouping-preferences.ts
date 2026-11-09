@@ -1,4 +1,4 @@
-import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '../projects/project-host-setup-selector'
 import {
   carryProjectStateThroughIdentityChange,
   carryProjectGroupingOverrides

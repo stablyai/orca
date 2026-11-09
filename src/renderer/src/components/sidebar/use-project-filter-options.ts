@@ -4,7 +4,7 @@ import { buildProjectGroupingIndex } from '../../../../shared/project-section-gr
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import {
   getProjectRepoFilterHost,
   projectFilterSelection,

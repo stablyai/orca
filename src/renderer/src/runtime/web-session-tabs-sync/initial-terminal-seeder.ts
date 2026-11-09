@@ -1,12 +1,13 @@
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
-import { isWebRuntimeInitialTerminalBootstrapInFlight } from '../web-runtime-initial-terminal-bootstrap'
-import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
+import { isWebRuntimeInitialTerminalBootstrapInFlight } from './initial-terminal/web-runtime-initial-terminal-bootstrap'
+import { dispatchWebRuntimeInitialTerminalBootstrap } from './initial-terminal/web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { shouldBootstrapInitialWebRuntimeTerminal } from './tracking-decisions'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { SessionTabsStreamEvent } from './state'
+import { hasSplitLandingGroup } from '../../store/slices/tabs/split-landing-groups'
 
 type SessionTabsFrame = RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' }
 
@@ -58,6 +59,10 @@ export function createInitialTerminalSeeder(
   }
 
   const seed = async (): Promise<void> => {
+    // Rechecked after the mirror applied: a waiting split chooser is the surface the user left.
+    if (hasSplitLandingGroup(useAppStore.getState(), worktreeId)) {
+      return
+    }
     if (await dispatchWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)) {
       requestedInitialTerminal = true
     }

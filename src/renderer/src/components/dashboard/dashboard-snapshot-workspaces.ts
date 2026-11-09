@@ -1,7 +1,7 @@
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { getProjectGroupForRepo } from '../../../../shared/project-section-grouping'
 import type { AppState } from '@/store/types'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardCard,
@@ -20,7 +20,7 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ActiveDashboardWorkspace = {
   projectId: string

@@ -1,34 +1,34 @@
-import type { SettingsUpdate } from '@/store/slices/settings'
+import type { SettingsUpdate } from '@/store/slices/settings/create-settings-slice'
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveProjectGroupingMode } from '../../../../shared/project-grouping'
 import { SettingsRow } from './form-controls/SettingsFormControls'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { SearchableSetting } from './section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-function groupingOptions() {
+function groupingOptions(t: Translate) {
   return [
     {
       value: 'repository' as const,
-      label: translate('settings.projectGrouping.repository', 'By repository'),
-      description: translate(
+      label: t('settings.projectGrouping.repository', 'By repository'),
+      description: t(
         'settings.projectGrouping.repositoryDescription',
         'Every checkout of the same repository is one project, on every host and in every folder.'
       )
     },
     {
       value: 'host' as const,
-      label: translate('settings.projectGrouping.host', 'Separate by host'),
-      description: translate(
+      label: t('settings.projectGrouping.host', 'Separate by host'),
+      description: t(
         'settings.projectGrouping.hostDescription',
         'Checkouts on the same host share a project. Each host gets its own project.'
       )
     },
     {
       value: 'folder' as const,
-      label: translate('settings.projectGrouping.folder', 'Separate by folder'),
-      description: translate(
+      label: t('settings.projectGrouping.folder', 'Separate by folder'),
+      description: t(
         'settings.projectGrouping.folderDescription',
         'Every checkout is its own project, so folders on different hosts are separate too.'
       )
@@ -47,15 +47,16 @@ export function ProjectGroupingSetting({
   projectId?: string
   forceVisible?: boolean
 }) {
-  const options = groupingOptions()
+  const t = useTranslate()
+  const options = groupingOptions(t)
   const mode = resolveProjectGroupingMode(projectId ?? '', settings)
-  const title = translate('settings.projectGrouping.label', 'Group checkouts')
+  const title = t('settings.projectGrouping.label', 'Group checkouts')
   const description = projectId
-    ? translate(
+    ? t(
         'settings.projectGrouping.overrideDescription',
         'Overrides the default in General for every checkout of this repository.'
       )
-    : translate(
+    : t(
         'settings.projectGrouping.description',
         'Choose which checkouts of a Git repository count as one project.'
       )
@@ -98,7 +99,7 @@ export function ProjectGroupingSetting({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="default">
-                  {translate('settings.projectGrouping.useDefault', 'Use default ({{mode}})', {
+                  {t('settings.projectGrouping.useDefault', 'Use default ({{mode}})', {
                     mode: options.find(
                       (option) => option.value === (settings.projectGroupingMode ?? 'repository')
                     )?.label

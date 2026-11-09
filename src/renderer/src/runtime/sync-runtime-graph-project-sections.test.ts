@@ -3,7 +3,7 @@ import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
-} from './sync-runtime-graph'
+} from './sync-runtime-graph/graph-sync-scheduler'
 import type { AppState } from '../store/types'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { Repo } from '../../../shared/repo-types'

@@ -10,11 +10,13 @@ import { wslDistroHoldMessage } from '../../../../../../shared/wsl-distro-stoppe
 import {
   startHeldPanesForWslDistro,
   wslDistroStoppedHoldStore
-} from '../../wsl-distro-stopped-hold-state'
+} from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
-vi.mock('../../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
+vi.mock('../../layout/reconciliation/terminal-lifecycle-diagnostics', () => ({
+  warnTerminalLifecycleAnomaly: vi.fn()
+}))
 vi.mock('../instrumentation/pty-connect-diagnostics', () => ({
   recordPtyConnectDiagnostic: vi.fn()
 }))

@@ -8,6 +8,7 @@ import { getRepoHostIdentityForParts } from '../../../../../shared/repo-host-ide
 import { RepositorySettingsSession } from '../repository/RepositorySettingsSession'
 import { RepositoryPane } from '../repository/RepositoryPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import {
   getSettingsEntryHostSelection,
   getSettingsProjectHostRepo,
@@ -15,9 +16,13 @@ import {
   getSettingsProjectRemovalScope
 } from '../navigation/settings-project-list'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-export function renderProjectSettingsSections(context: SettingsRenderContext): React.ReactNode {
+export function renderProjectSettingsSections(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.ReactNode {
   const { model, navigation, terminal, view, interactions } = context
   return model.settingsProjectList.map((settingsProject) => {
     const repoSectionId = `repo-${settingsProject.selectionKey}`
@@ -59,7 +64,8 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
             <SettingsSection
               forceVisible={!repo}
               id={repoSectionId}
-              title={translate(
+              grouped
+              title={t(
                 'auto.components.settings.Settings.3bf149e873',
                 'Project Settings > {{value0}}',
                 { value0: settingsProject.checkoutLabel ?? project.displayName }
@@ -68,7 +74,7 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
               searchEntries={navigation.getSectionSearchEntries(repoSectionId)}
             >
               {!repo ? (
-                <div className="space-y-8">
+                <SettingsGroup>
                   {model.settings && project.kind !== 'folder' ? (
                     <ProjectGroupingSetting
                       settings={model.settings}
@@ -89,7 +95,7 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
                     searchQuery=""
                     searchEntries={navigation.getSectionSearchEntries(repoSectionId)}
                   />
-                </div>
+                </SettingsGroup>
               ) : (
                 // The concrete ancestor owns inputs; only current source-backed views mount.
                 <RepositoryPane

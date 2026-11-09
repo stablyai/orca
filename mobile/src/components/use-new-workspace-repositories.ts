@@ -2,9 +2,10 @@ import { useOwnerProjectSections } from '../worktree/use-owner-project-sections'
 import { buildNewWorkspaceGrouping } from './new-workspace-project-targets'
 import type { ProjectGroupingIndex } from '../../../src/shared/project-section-grouping'
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { RpcClient } from '../transport/rpc-client'
-import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { cachedHostRepos } from '../host-screen/host-list-queries'
 import { listHostRepos } from '../worktree/server-repos'
 import { useServerRepos } from '../worktree/use-server-repos'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
@@ -35,9 +36,9 @@ export function useNewWorkspaceRepositories(args: {
   retryLoad: () => void
 } {
   const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible } = args
-  const [initialRepos] = useState(() =>
-    hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
-  )
+  const queryClient = useQueryClient()
+  // The host list's repos, so the form opens with them while repo.list answers.
+  const [initialRepos] = useState(() => cachedHostRepos<MobileWorkspaceRepo>(queryClient, hostId))
   const [desktopRepos, setDesktopRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
   const { answer: ownerCatalog } = useOwnerProjectSections(client, visible)
   const serverRepos = useServerRepos<MobileWorkspaceRepo>(serverClients, visible)
@@ -100,9 +101,6 @@ export function useNewWorkspaceRepositories(args: {
           return
         }
         setDesktopRepos(listed)
-        if (hostId) {
-          setCachedRepos(hostId, listed)
-        }
       })
       .catch((err: unknown) => {
         if (!stale) {

@@ -4,7 +4,7 @@ import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-eq
 import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
@@ -29,7 +29,7 @@ import {
   mergeDraggedHostSectionOrder,
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
-import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import {
   createSidebarHostLabelsSelector,
   buildSidebarHostOptions,
@@ -39,7 +39,7 @@ import {
   selectPendingWorktreeCreationKeys,
   decodePendingWorktreeCreationKeys
 } from './pending-worktree-creation-keys'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []

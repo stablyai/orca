@@ -1,6 +1,6 @@
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { TaskPageStoreBindingsModel } from './use-task-page-store-bindings'
 import { useMemo, useState, useCallback } from 'react'
 import {
@@ -15,7 +15,7 @@ import {
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider,
   type TaskProvider
-} from '../../../../shared/task-providers'
+} from '../../../../shared/work-items/task-providers'
 import {
   getSourceOptions,
   getGitHubModeButtons,

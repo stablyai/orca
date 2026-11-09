@@ -16,7 +16,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
-import { browserManager } from '../../browser/browser-manager'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import {
   DesktopBrowserBridgeManager,
   type DesktopBrowserBridgeCandidate

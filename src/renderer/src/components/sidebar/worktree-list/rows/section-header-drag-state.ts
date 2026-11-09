@@ -1,16 +1,22 @@
-import type { SectionHeaderRowContext } from './SectionHeader'
+import {
+  getRootProjectHeaderDragKeys,
+  getRootProjectHeaderOccurrenceKey
+} from '../drag/root-project-header-drop'
+import type { SectionHeaderRowContext } from './section-header-row-context'
 
 /** Where a header sits in its drag bucket and whether it can be, or is being, dragged. */
 export function getSectionHeaderDragState(
   headerDrag: SectionHeaderRowContext['headerDrag'],
   {
-    isRepoHeader,
+    usesRootProjectDrag,
     projectIdForHeader,
-    projectGroupDragIdForHeader
+    projectGroupDragIdForHeader,
+    hostId
   }: {
-    isRepoHeader: boolean
+    usesRootProjectDrag: boolean
     projectIdForHeader: string | undefined
     projectGroupDragIdForHeader: string | undefined
+    hostId: string | undefined
   }
 ) {
   const repoHeaderIndex =
@@ -29,33 +35,52 @@ export function getSectionHeaderDragState(
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
       : undefined
+  const rootProjectHeaderKey = usesRootProjectDrag
+    ? projectIdForHeader
+      ? `repo:${projectIdForHeader}`
+      : projectGroupDragIdForHeader
+        ? `group:${projectGroupDragIdForHeader}`
+        : undefined
+    : undefined
+  const rootProjectHeaderCount = rootProjectHeaderKey
+    ? getRootProjectHeaderDragKeys(headerDrag.rootProjectHeaderKeys, rootProjectHeaderKey, hostId)
+        ?.length
+    : undefined
   const isDraggableRepoHeader = Boolean(
     headerDrag.canReorderRepoHeaders &&
-    isRepoHeader &&
     projectIdForHeader &&
     repoHeaderBucketKey &&
-    (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
+    (rootProjectHeaderCount !== undefined
+      ? rootProjectHeaderCount > 1
+      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
   )
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
     projectGroupHeaderBucketKey &&
-    (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-      0) > 1
+    (rootProjectHeaderCount !== undefined
+      ? rootProjectHeaderCount > 1
+      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
+          0) > 1)
   )
   const isDraggingThis =
     headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId !== null &&
     headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
-    headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
+  const rootProjectHeaderSectionEnd = rootProjectHeaderKey
+    ? headerDrag.rootProjectHeaderSectionEndByKey.get(
+        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, hostId)
+      )
+    : undefined
   return {
     repoHeaderIndex,
     repoHeaderBucketKey,
     projectGroupHeaderIndex,
     projectGroupHeaderBucketKey,
+    rootProjectHeaderKey,
+    rootProjectHeaderSectionEnd,
     isDraggableRepoHeader,
     isDraggableProjectGroupHeader,
     isDraggingThis,

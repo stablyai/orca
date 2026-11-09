@@ -10,7 +10,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWebRuntimeWorkspaceSession } from '../web-workspace-session'
-import { readLocalWebUIState } from './web-preferences-store'
+import { readLocalWebUIState } from './web-local-ui-state'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { SESSION_STORAGE_KEY, readJson, writeJson } from './web-storage'
 

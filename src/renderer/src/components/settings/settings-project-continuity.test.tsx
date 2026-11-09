@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MobileWebBundleFetchError } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import { updateFailureCauseOf } from './mobile-web-shell-update-failure'
 
 const TOKENED = 'wss://relay.example/pair?token=SECRET-123 bundle asset index.html hashed'

@@ -2,10 +2,11 @@ import { createElement, useSyncExternalStore } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getProjectSectionsResource } from './project-sections-resource'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import { RpcClientRequestTracker } from '../transport/rpc-client-request-tracker'
-import type { ConnectionState, RpcResponse } from '../transport/types'
-import type { RpcRequestFrame } from '../transport/rpc-envelope-fields'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+import { RpcClientRequestTracker } from '../transport/rpc/rpc-client-request-tracker'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import type { RpcRequestFrame } from '../transport/rpc/rpc-envelope-fields'
 
 function owner(initialReady = false) {
   let generation = 1

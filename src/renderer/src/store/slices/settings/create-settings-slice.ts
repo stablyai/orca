@@ -1,0 +1,309 @@
+import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import type { StateCreator } from 'zustand'
+import type { AppState } from '../../types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { toast } from 'sonner'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { normalizeTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { assertTerminalQuickCommandsStorable } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import { normalizeTerminalCustomThemes } from '../../../../../shared/terminal-themes/terminal-custom-themes'
+import { normalizeTaskProviderSettings } from '../../../../../shared/work-items/task-providers'
+import { normalizeOpenInApplications } from '../../../../../shared/open-in-applications'
+import { verifyRuntimeEnvironmentReachable } from '../runtime-preference-reachability'
+import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
+import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-hydration'
+import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { sanitizeAgentLaunchProfileUpdates } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
+import { normalizeUiLanguage } from '../../../../../shared/ui-language'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { translate } from '@/i18n/i18n'
+import {
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
+import {
+  hydrateOwnerWorktreeVisibilityDefaults,
+  type WorktreeVisibilityDefaultsByHost
+} from './worktree-visibility-owner-settings'
+import * as ownerHydration from './settings-owner-hydration-publication'
+import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
+import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+
+export type SettingsUpdate =
+  | Partial<GlobalSettings>
+  | ((current: GlobalSettings) => Partial<GlobalSettings>)
+
+export type SettingsSlice = SettingsSearchState & {
+  settings: GlobalSettings | null
+  projectGroupingSettingsHydrated: boolean
+  worktreeVisibilityDefaultsByHost: WorktreeVisibilityDefaultsByHost
+  worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: string | null
+  worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: string | null
+  fetchSettings: (options?: ownerHydration.FetchSettingsOptions) => Promise<void>
+  awaitOwnerWorktreeVisibilityDefaultsHydration: () => Promise<void>
+  updateSettings: (updates: SettingsUpdate) => Promise<void>
+  updateSettingsOrThrow: (
+    updates: SettingsUpdate,
+    onAcknowledged?: (settings: GlobalSettings) => void
+  ) => Promise<void>
+  setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
+}
+
+type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
+  terminalScrollbackBytes?: unknown
+}
+
+function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+function normalizeSettingsUpdates(
+  updates: Partial<GlobalSettings>,
+  currentSettings: GlobalSettings | null
+): Partial<GlobalSettings> {
+  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedUpdates } =
+    updates as LegacyTerminalScrollbackSettingsUpdate
+  void _legacyScrollbackBytes
+  if ('terminalQuickCommands' in updates) {
+    sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
+      updates.terminalQuickCommands
+    )
+    // The web client stores its own list without main's check, so refuse here too, before any write.
+    assertTerminalQuickCommandsStorable(sanitizedUpdates.terminalQuickCommands)
+  }
+  if ('terminalCustomThemes' in updates) {
+    sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+      updates.terminalCustomThemes
+    )
+  }
+  if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
+    const taskProviderSettings = normalizeTaskProviderSettings({
+      visibleTaskProviders:
+        'visibleTaskProviders' in updates
+          ? updates.visibleTaskProviders
+          : currentSettings?.visibleTaskProviders,
+      defaultTaskSource:
+        'defaultTaskSource' in updates
+          ? updates.defaultTaskSource
+          : currentSettings?.defaultTaskSource
+    })
+    sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
+    sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
+  }
+  if ('openInApplications' in updates) {
+    sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
+      createId: createBrowserUuid
+    })
+  }
+  if ('nativeChatAppearance' in updates) {
+    sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
+      updates.nativeChatAppearance
+    )
+  }
+  if ('disabledTuiAgents' in updates) {
+    sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+  }
+  sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
+  if ('uiLanguage' in updates) {
+    sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
+  }
+  if ('terminalScrollbackRows' in updates) {
+    sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+      updates.terminalScrollbackRows
+    )
+  }
+  if ('mobilePairingCustomAddress' in updates) {
+    sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+      updates.mobilePairingCustomAddress
+    )
+  }
+  if ('mobilePairingCustomAddresses' in updates) {
+    sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+      updates.mobilePairingCustomAddresses
+    )
+  }
+  return sanitizedUpdates
+}
+
+async function persistSettingsUpdates(
+  set: ownerHydration.SettingsStateSetter,
+  updates: Partial<GlobalSettings>,
+  currentSettings: GlobalSettings | null,
+  supportedRuntimeEnvironmentId: string | null,
+  sourceDefaultsSupportedRuntimeEnvironmentId: string | null,
+  shouldPublish: () => boolean,
+  onAcknowledged?: (settings: GlobalSettings) => void
+): Promise<void> {
+  const normalizedUpdates = normalizeSettingsUpdates(updates, currentSettings)
+  await persistVisibilityAwareSettings({
+    normalizedUpdates,
+    currentSettings,
+    supportedRuntimeEnvironmentId,
+    sourceDefaultsSupportedRuntimeEnvironmentId,
+    shouldPublish,
+    onAcknowledged,
+    set
+  })
+}
+
+/** Every known host has a recorded status entry, and no entry survives for a host that is gone. */
+function hasCompleteRuntimeStatusCoverage(
+  runtimeEnvironments: AppState['runtimeEnvironments'],
+  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
+): boolean {
+  return (
+    new Set(runtimeEnvironments.map(({ id }) => id)).size === runtimeStatusByEnvironmentId.size &&
+    runtimeEnvironments.every(({ id }) => runtimeStatusByEnvironmentId.has(id))
+  )
+}
+
+export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => {
+  let writes: Promise<void> | null = null
+  const write = (
+    update: SettingsUpdate,
+    onAcknowledged?: (settings: GlobalSettings) => void
+  ): Promise<void> => {
+    const execute = async () => {
+      const current = get().settings
+      if (typeof update === 'function' && !current) {
+        throw new Error('Settings are not loaded.')
+      }
+      const updates = typeof update === 'function' ? update(current!) : update
+      const shouldPublish = ownerHydration.createSettingsPublicationFence(
+        'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
+      )
+      const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(current)
+      await persistSettingsUpdates(
+        set,
+        updates,
+        current,
+        get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
+        get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
+        shouldPublish,
+        onAcknowledged
+      )
+      if ('worktreeVisibilityDefaults' in updates) {
+        await get().fetchAllWorktrees({ visibilityOwnerHostId })
+      }
+    }
+    const result = writes ? writes.then(execute, execute) : execute()
+    writes = result
+    void result
+      .finally(() => {
+        if (writes === result) {
+          writes = null
+        }
+      })
+      .catch(() => {})
+    return result
+  }
+  return {
+    settings: null,
+    projectGroupingSettingsHydrated: false,
+    worktreeVisibilityDefaultsByHost: {},
+    worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
+    worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null,
+    ...createSettingsSearchState((state) => set(state)),
+
+    fetchSettings: async (options) => {
+      if (writes) {
+        await writes.catch(() => undefined)
+      }
+      await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
+      const {
+        runtimeEnvironmentCatalogHydrated,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId
+      } = get()
+      // Probe all hosts only for incomplete/stale coverage; a recorded null still counts as checked.
+      if (
+        !runtimeEnvironmentCatalogHydrated ||
+        !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
+        // Why: coverage is blind to catalog edits from another client or the orca CLI.
+        isRuntimeCatalogListingStale()
+      ) {
+        void get().hydrateRuntimeEnvironmentStatuses()
+      }
+    },
+
+    awaitOwnerWorktreeVisibilityDefaultsHydration: () =>
+      ownerHydration.awaitOwnerWorktreeVisibilityDefaultsHydration(get),
+
+    updateSettings: async (updates) => {
+      try {
+        await write(updates)
+      } catch (err) {
+        console.error('Failed to update settings:', err)
+      }
+    },
+
+    updateSettingsOrThrow: (updates, onAcknowledged) => write(updates, onAcknowledged),
+
+    setActiveRuntimeEnvironmentPreference: async (environmentId) => {
+      if (writes) {
+        await writes.catch(() => undefined)
+      }
+      const nextId = normalizeRuntimeEnvironmentId(environmentId)
+      const previousId = normalizeRuntimeEnvironmentId(get().settings?.activeRuntimeEnvironmentId)
+      if (previousId === nextId) {
+        return true
+      }
+      const shouldPublish = ownerHydration.createSettingsPublicationFence(true)
+      try {
+        clearRuntimeCompatibilityCache(nextId)
+        await verifyRuntimeEnvironmentReachable(nextId)
+        if (!shouldPublish()) {
+          return true
+        }
+        const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
+          environmentId: nextId
+        })
+        bumpProviderRuntimeSessionGeneration()
+        // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
+        const focusedSettings =
+          (nextSettings as GlobalSettings | undefined) ??
+          (get().settings ? { ...get().settings!, activeRuntimeEnvironmentId: nextId } : null)
+        if (focusedSettings) {
+          const hydrated = await hydrateOwnerWorktreeVisibilityDefaults(
+            focusedSettings,
+            get().worktreeVisibilityDefaultsByHost
+          )
+          if (!shouldPublish()) {
+            return true
+          }
+          set((state) => ({
+            settings: hydrated.settings,
+            worktreeVisibilityDefaultsByHost: {
+              ...state.worktreeVisibilityDefaultsByHost,
+              ...hydrated.defaultsByHost
+            },
+            worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId:
+              hydrated.supportedRuntimeEnvironmentId,
+            worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
+              hydrated.sourceDefaultsSupportedRuntimeEnvironmentId
+          }))
+        } else {
+          set({ settings: null })
+        }
+        // Hydrate only the newly focused host’s catalog; downstream host merges preserve other hosts.
+        await get().fetchRepos({ runtimeEnvironmentId: nextId })
+        await get().fetchAllWorktrees()
+        await get().fetchWorktreeLineage()
+        await get().fetchBrowserSessionProfiles()
+        return true
+      } catch (err) {
+        console.error('Failed to switch runtime environment:', err)
+        toast.error(
+          translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'),
+          {
+            description: err instanceof Error ? err.message : String(err)
+          }
+        )
+        return false
+      }
+    }
+  }
+}

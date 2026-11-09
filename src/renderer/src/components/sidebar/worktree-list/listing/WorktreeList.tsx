@@ -1,14 +1,17 @@
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 
 import { useProjectGroupingUpgradeTip } from '@/components/contextual-tours/use-project-grouping-upgrade-tip'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
-import { selectCrossStoreFolderChildrenById } from '@/store/cross-store-lineage-parents'
+import { selectCrossStoreFolderChildrenById } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
-import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
-
+import {
+  useAllWorktrees,
+  useWorktreeMap
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
 import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace-scope'
@@ -51,7 +54,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>

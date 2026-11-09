@@ -12,13 +12,13 @@ vi.mock('electron', () => ({
     on: (name: string, callback: (...args: unknown[]) => void) => mocks.handlers.set(name, callback)
   }
 }))
-vi.mock('../agent-hooks/server', () => ({
+vi.mock('../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: { retirePaneAuthority: mocks.retire }
 }))
 vi.mock('../agent-hooks/server/server-status-identity', () => ({
   isValidPaneKey: (key: string) => key.includes(':')
 }))
-vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+vi.mock('../agent-hooks/observations/migration-unsupported-pty-state', () => ({
   clearMigrationUnsupportedPtysForPaneKey: mocks.clear
 }))
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'

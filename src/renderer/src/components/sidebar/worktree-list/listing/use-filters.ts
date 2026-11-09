@@ -1,4 +1,4 @@
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { revealRepoInProjectFilter } from '../controls/project-filter-reveal'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
@@ -13,7 +13,6 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   activeWorkspaceRowFilterKeys,
-  isSleepingSweepExempt,
   type WorkspaceRowFilters
 } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../../shared/workspace-view/workspace-host-visibility'
@@ -35,14 +34,8 @@ import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../../../shared/workspace-creator-visibility'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
-import {
-  getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs,
-  getWorktreeIdsWithStructuredChat
-} from './visible-worktree-activity-inputs'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -104,27 +97,7 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
     }
   },
   hideSleepingWorkspaces: ({ state, worktree }) => {
-    const tabsByWorktree = getVisibleWorktreeTerminalActivityTabs(state.tabsByWorktree)
-    const browserTabsByWorktree = getVisibleWorktreeBrowserActivityTabs(state.browserTabsByWorktree)
-    const liveAgentWorktrees = getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      tabsByWorktree,
-      getAgentStatusEpochNow(state.agentStatusEpoch)
-    )
-    if (
-      !isSleepingSweepExempt(worktree.isMainWorktree, state.alwaysShowDefaultBranchWorkspace) &&
-      isInactiveWorkspace(
-        worktree.id,
-        tabsByWorktree,
-        state.ptyIdsByTabId,
-        browserTabsByWorktree,
-        liveAgentWorktrees,
-        getWorktreeIdsWithStructuredChat(
-          state.unifiedTabsByWorktree,
-          state.structuredChatSleptAtByPaneKey
-        )
-      )
-    ) {
+    if (createSleepingSweepHiddenCheck(state)(worktree)) {
       state.setShowSleepingWorkspaces(true)
     }
   },

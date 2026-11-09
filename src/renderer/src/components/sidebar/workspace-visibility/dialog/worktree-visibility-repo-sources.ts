@@ -1,7 +1,10 @@
 import { getProjectSectionRepoLookup } from '../../../../../../shared/project-section-reveal'
 import { useAppStore } from '@/store'
-import type { CustomWorktreeVisibilitySource, Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import type {
+  CustomWorktreeVisibilitySource,
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repo-types'
 import {
   normalizeCustomWorktreeVisibilitySources,
   resolveCustomWorktreeVisibilitySources

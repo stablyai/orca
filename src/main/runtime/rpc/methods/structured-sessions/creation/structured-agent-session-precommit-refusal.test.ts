@@ -1,5 +1,10 @@
+import { createRestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { forkTestSource } from '../../../../../native-chat/agent-session-wire/acquisition/testing/structured-agent-session-fork.test-fixture'
+import { agentSessionRecordFixture } from '../../../../../native-chat/agent-session-record-test-fixture'
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { resolveStructuredAgentSessionForkIntent } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
+import { structuredAgentSessionCreateParams } from '../../../../../../shared/agent-session/structured-agent-session-create'
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import '../../../unused-default-rpc-methods.test-fixture'
 // Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +19,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
-import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
+import './structured-agent-session-create'
 
 const SESSION = 'session-alpha'
 const OPERATION = '1800000000000-00000000000000000000000000000001'
@@ -131,20 +136,20 @@ afterEach(() => {
 })
 
 describe('a create refused before it commits', () => {
-  it('answers an ownership refusal before commit as a definite failed attempt', async () => {
-    const code = 'agent_session_conflict'
-    const details = {
-      reason: 'conversationHeldElsewhere' as const,
-      owner: { sessionId: 'owner', workspaceId: 'workspace' }
-    }
+  it('keeps a transcript read exception out of a coded create refusal', async () => {
     const response = await create({
       resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
-        throw agentSessionRefusalError(code, details)
+        throw agentSessionRefusalError(
+          'agent_session_identity_required',
+          { reason: 'transcriptUnreadable' },
+          "ENOENT: no such file or directory, open '/Users/private/rollout-missing.jsonl'"
+        )
       })
     })
     expect(refusalOf(response)).toMatchObject({
-      code,
-      details,
+      code: 'agent_session_identity_required',
+      details: { reason: 'transcriptUnreadable' },
+      message: 'Orca cannot open a structured agent chat for this workspace.',
       createAttemptRefusedBeforeCommit: true
     })
     expect(attach).not.toHaveBeenCalled()
@@ -164,107 +169,144 @@ describe('a create refused before it commits', () => {
     expect(refusal).not.toHaveProperty('details')
     expect(attach).not.toHaveBeenCalled()
   })
-
-  it('answers a host that will not install as a definitive envelope', async () => {
-    setStructuredAgentSessionHost(null)
-
-    const response = await create({
-      ensureStructuredAgentSessionHost: vi.fn(async () => {
-        throw new Error('private-store-detail-sentinel')
-      })
-    })
-
-    const refusal = refusalOf(response)
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-    expect(JSON.stringify(refusal)).not.toContain('private-store-detail-sentinel')
-  })
-
-  it('keeps private faults out of in-process create refusals too', async () => {
-    const params = createParams()
-    const result = await createStructuredAgentSessionForWorktree({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver throws before create can read any other runtime member.
-      runtime: {
-        resolveStructuredAgentSessionCreateIntent: async () => {
-          throw new Error('private-in-process-sentinel')
-        }
-      } as unknown as OrcaRuntimeService,
-      ensureHost: async () => hostStub(),
-      caller: { callerKey: 'in-process-client' },
-      envelope: params.envelope,
-      worktree: WORKTREE,
-      agent: 'codex',
-      activate: true
-    })
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported' }
-    })
-    expect(JSON.stringify(result)).not.toContain('private-in-process-sentinel')
-  })
-
-  it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {
-    const response = await create(
-      {},
-      createParams({ envelope: { payloadFingerprint: 'a'.repeat(64) } })
-    )
-
-    expect(refusalOf(response)?.code).toBe('agent_session_operation_conflict')
-    expect(attach).not.toHaveBeenCalled()
-  })
 })
 
-describe('the boundary the envelope stops at', () => {
-  it('leaves a failure at attach unknown, because it may have committed', async () => {
-    attach.mockRejectedValueOnce(new Error('attach exploded'))
-
-    const response = await create()
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
-    expect(refusalOf(response)).toBeNull()
-    expect(attach).toHaveBeenCalledOnce()
-  })
-
-  it('leaves a committed create whose tab could not be published unknown', async () => {
-    const response = await create({
-      publishStructuredAgentSessionTab: vi.fn(async () => {
-        throw new Error('publish failed')
-      })
-    })
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('agent_session_operation_unknown')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(false)
-    expect(attach).toHaveBeenCalledOnce()
-  })
-
-  it('keeps hiding the surface from a client that never advertised it', async () => {
-    const replies: RpcResponse[] = []
-    await new RpcDispatcher({
-      runtime: { getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService,
-      methods: STRUCTURED_AGENT_SESSION_METHODS
-    }).dispatchStreaming(
+async function forkHost() {
+  const rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
+  const test = forkTestSource(rig)
+  test.snapshot.items[2]!.itemId = 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1'
+  const child = agentSessionRecordFixture({
+    ...test.record,
+    sessionId: 'copied-chat',
+    providerHandleChain: [
       {
-        id: 'request-1',
-        authToken: 'token',
-        method: 'agentSession.create',
-        params: createParams()
+        ...test.record.providerHandleChain[0]!,
+        handle: codexProviderHandle('019e6b26-18e2-7103-b7a0-7ba6bb071124')
+      }
+    ],
+    forkedFrom: {
+      sessionId: 'source-chat',
+      itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1',
+      childBoundary: {
+        kind: 'item',
+        itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071124:completed-turn:1'
+      }
+    }
+  })
+  const childSnapshot = {
+    ...structuredClone(test.snapshot),
+    sessionId: child.sessionId,
+    items: test.snapshot.items.map((item) => ({
+      ...item,
+      itemId: item.itemId.replace(
+        '019e6b26-18e2-7103-b7a0-7ba6bb071123',
+        '019e6b26-18e2-7103-b7a0-7ba6bb071124'
+      )
+    }))
+  }
+  const records = new Map([
+    ['copied-chat', child],
+    ['source-chat', test.record]
+  ])
+  const getRecord = rig.store.getRecord.bind(rig.store)
+  const select = rig.store.selectWritableRecord.bind(rig.store)
+  const writable = rig.store.requireWritableRecord.bind(rig.store)
+  vi.spyOn(rig.store, 'getRecord').mockImplementation((id) => records.get(id) ?? getRecord(id))
+  vi.spyOn(rig.store, 'requireWritableRecord').mockImplementation(
+    (id) => records.get(id) ?? writable(id)
+  )
+  vi.spyOn(rig.store, 'selectWritableRecord').mockImplementation((id) =>
+    records.has(id) ? { kind: 'writable', record: records.get(id)! } : select(id)
+  )
+  const snapshot = rig.host.journalSnapshot.bind(rig.host)
+  vi.spyOn(rig.host, 'journalSnapshot').mockImplementation((id) =>
+    id === 'copied-chat'
+      ? Promise.resolve(childSnapshot)
+      : id === 'source-chat'
+        ? Promise.resolve(test.snapshot)
+        : snapshot(id)
+  )
+  const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
+  vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {
+    const supported = capabilities(agent)
+    return supported ? { ...supported, fork: 'checkpoint' } : null
+  })
+  rig.host.deps.adapter.copyConversation = test.copy
+  setStructuredAgentSessionHost(rig.host)
+  const createFork = (sessionId: string) =>
+    create(
+      {
+        resolveStructuredAgentSessionCreateIntent: async (
+          input: Parameters<OrcaRuntimeService['resolveStructuredAgentSessionCreateIntent']>[0]
+        ) => {
+          if (!input.forkFrom) {
+            throw new Error('Expected a fork intent')
+          }
+          return resolveStructuredAgentSessionForkIntent({
+            ...input,
+            forkFrom: input.forkFrom,
+            host: rig.host,
+            location: test.record.location
+          })
+        }
       },
-      (raw) => replies.push(JSON.parse(raw) as RpcResponse),
-      { clientKind: 'runtime', clientCapabilities: [] }
+      structuredAgentSessionCreateParams({
+        sessionId,
+        worktree: WORKTREE,
+        agent: 'codex',
+        forkFrom: {
+          sessionId: 'copied-chat',
+          throughItemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071124:completed-turn:1'
+        },
+        randomUuid: () => '00000000-0000-0000-0000-000000000001',
+        now: 1800000000000
+      })
     )
+  return { rig, test, records, createFork }
+}
 
-    expect(replies[0]).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+it('preserves source-admission proof through real fork create without publishing a destination', async () => {
+  const { rig, test, records, createFork } = await forkHost()
+  try {
+    records.delete('source-chat')
+    expect(refusalOf(await createFork('codex_missing_original'))).toMatchObject({
+      code: 'agent_session_identity_required',
+      details: { reason: 'recordMissing' },
+      createAttemptRefusedBeforeCommit: true
     })
-  })
-
-  it('keeps a client-declared fence a programming error, not a refusal', async () => {
-    const response = await create({}, createParams({ envelope: { expectedRuntimeFence: 1 } }))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'agent_session_operation_invalid' }
+    expect(rig.store.getRecord('codex_missing_original')).toBeNull()
+    records.set('source-chat', test.record)
+    test.snapshot.items = test.snapshot.items.slice(0, 1)
+    expect(refusalOf(await createFork('codex_removed_original_reply'))).toMatchObject({
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'savedConversationMissing' },
+      createAttemptRefusedBeforeCommit: true
     })
-  })
+    expect(rig.store.getRecord('codex_removed_original_reply')).toBeNull()
+  } finally {
+    setStructuredAgentSessionHost(null)
+    await rig.dispose()
+  }
+})
+
+it('does not prove no copy when source revalidation fails after the native copy', async () => {
+  const { rig, test, createFork } = await forkHost()
+  try {
+    const nativeCopy = test.copy.getMockImplementation()!
+    test.copy.mockImplementationOnce(async (input) => {
+      const copy = await nativeCopy(input)
+      test.snapshot.items = test.snapshot.items.slice(0, 1)
+      return copy
+    })
+    const refusal = refusalOf(await createFork('codex_changed_after_copy'))
+    expect(refusal).toMatchObject({
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'savedConversationMissing' }
+    })
+    expect(refusal).not.toHaveProperty('createAttemptRefusedBeforeCommit')
+    expect(rig.store.getRecord('codex_changed_after_copy')).toBeNull()
+  } finally {
+    setStructuredAgentSessionHost(null)
+    await rig.dispose()
+  }
 })

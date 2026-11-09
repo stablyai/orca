@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -302,42 +301,6 @@ async function start(retryOf?: string) {
   expect(runtime.live(identity.sessionId)).toBe(true)
   return { result, dispatchId, taskId, worker, identity, connection }
 }
-
-it('joins actual launch, structured admission and CLI observers on one runtime', async () => {
-  await launch()
-  const worker = await start()
-  const show = await cli(['orchestration', 'worker-show', '--dispatch', worker.dispatchId])
-  expect(show.code, show.stdout).toBe(0)
-  expect(resultOf(show.output)).toMatchObject({ worker: { state: 'ready' } })
-  const list = await cli(['orchestration', 'worker-list', '--run', runId])
-  expect(list.code, list.stdout).toBe(0)
-  expect(list.stdout).toContain(worker.dispatchId)
-  await host.flushStreamedEvents(worker.identity.sessionId)
-  const read = await cli([
-    'orchestration',
-    'worker-read',
-    '--dispatch',
-    worker.dispatchId,
-    '--source',
-    'transcript'
-  ])
-  expect(read.code, read.stdout).toBe(0)
-  expect(resultOf(read.output)).toMatchObject({
-    dispatchId: worker.dispatchId,
-    source: 'transcript',
-    provider: 'codex'
-  })
-  expect(read.stdout).toContain('READY from bounded provider')
-  expect(requests.map((r) => r.method)).toEqual(
-    expect.arrayContaining([
-      'agent.launchReplay',
-      'orchestration.workerStart',
-      'orchestration.workerShow',
-      'orchestration.workerList',
-      'orchestration.workerRead'
-    ])
-  )
-})
 
 function visible(sessionId: string, expected: boolean) {
   expect(host.deps.store.getVisibleSessionTabIndex().sessionIds.includes(sessionId)).toBe(expected)

@@ -1,10 +1,6 @@
 import * as chatSettings from './web-native-chat-settings'
 import type { PreloadApi } from '../../../../preload/api-types'
-import {
-  getDefaultSettings,
-  getDefaultUIState,
-  getWorktreeCardModeProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/osc52-clipboard-settings'
@@ -17,12 +13,12 @@ import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
   stripRetiredWebChatSettings,
-  mergeWebUIState,
   migrateStoredWebSettings,
   needsChatUiChoiceCarry,
   retainOriginalWebChatSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
+import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
 import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web-storage'
@@ -122,7 +118,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   try {
     // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
     const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
-    const runtimeSettings: Partial<GlobalSettings> = {}
+    const runtimeSettings = followHostVoiceSettings(local, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
@@ -254,6 +250,8 @@ export async function syncRuntimeBackedSettings(
           webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
         }
         delete runtimeSettings.worktreeVisibilityDefaults
+        // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
+        delete runtimeSettings.voice
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
         if (
@@ -295,26 +293,4 @@ export async function updateRuntimePRBotAuthorOverride(args: {
   })
   writeStoredSettings(next)
   return next
-}
-
-export function readLocalWebUIState(): PersistedUIState {
-  const defaults = getDefaultUIState()
-  // Settings migration arms OSC 52’s UI notice; reading UI first would later overwrite that arm after its one-shot stamp.
-  const storedSettings = getStoredSettings()
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  const base = {
-    ...defaults,
-    // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
-    worktreeCardProperties: getWorktreeCardModeProperties(
-      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
-    )
-  }
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(base, stored)
-  }
-  return mergeWebUIState(base, {
-    ...stored,
-    // Why: web fallback lacks main-process normalization; migrate the retired setting only when local UI preference is absent.
-    rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
-  })
 }

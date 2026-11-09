@@ -1,7 +1,7 @@
 import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type * as HostProtocolGatesModule from '../components/host-protocol-gates-context'
-import type * as RpcOperationModule from '../transport/rpc-operation'
+import type * as RpcOperationModule from '../transport/rpc/rpc-operation'
 
 import { vi } from 'vitest'
 
@@ -35,7 +35,7 @@ vi.mock('expo-crypto', async () => {
   return { getRandomBytes: (length: number) => new Uint8Array(randomBytes(length)) }
 })
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
-vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
+vi.mock('../transport/relay/mobile-relay-director-fallback', () => ({
   encodeBase64Url: () => 'session-id'
 }))
 vi.mock('../components/host-protocol-gates-context', async (importOriginal) => {
@@ -45,8 +45,10 @@ vi.mock('../components/host-protocol-gates-context', async (importOriginal) => {
     useHostProtocolGates: () => actual.useOptionalHostProtocolGates() ?? doubles.gates
   }
 })
-vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
-vi.mock('../transport/rpc-operation', async (importOriginal) => {
+vi.mock('../transport/connection/host-client-hooks', () => ({
+  useHostClient: () => doubles.connection
+}))
+vi.mock('../transport/rpc/rpc-operation', async (importOriginal) => {
   const actual = await importOriginal<typeof RpcOperationModule>()
   return {
     ...actual,
@@ -84,8 +86,10 @@ vi.mock('expo-secure-store', () => ({
   setItemAsync: async () => {},
   deleteItemAsync: async () => {}
 }))
-vi.mock('../transport/host-app-version-store', () => ({ recordHostAppVersion: async () => {} }))
-vi.mock('../transport/host-descriptor-recorder', () => ({
+vi.mock('../transport/hosts/host-app-version-store', () => ({
+  recordHostAppVersion: async () => {}
+}))
+vi.mock('../transport/hosts/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
 }))
 vi.mock('../components/AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))

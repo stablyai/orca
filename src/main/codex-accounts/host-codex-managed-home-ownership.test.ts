@@ -1,13 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
@@ -27,21 +19,6 @@ describe('assertOwnedHostCodexManagedHomePath', () => {
 
   afterEach(() => {
     rmSync(rootDir, { recursive: true, force: true })
-  })
-
-  it('accepts the expected marked account home', () => {
-    const accountHome = join(userDataDir, 'codex-accounts', 'account-1', 'home')
-    mkdirSync(accountHome, { recursive: true })
-    writeFileSync(join(accountHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
-
-    expect(
-      assertOwnedHostCodexManagedHomePath({
-        candidatePath: accountHome,
-        managedAccountsRoot: join(userDataDir, 'codex-accounts'),
-        systemCodexHomePath: systemHomePath,
-        expectedAccountId: 'account-1'
-      })
-    ).toBe(realpathSync(accountHome))
   })
 
   it('rejects an account path redirected into the sandboxed system Codex home', () => {

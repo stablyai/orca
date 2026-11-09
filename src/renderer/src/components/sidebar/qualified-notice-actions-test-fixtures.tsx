@@ -10,7 +10,7 @@ import type {
 import type {
   WorktreeFetchOptions,
   DirectSshWorktreeFetchOptions
-} from '@/store/slices/worktree-helpers'
+} from '@/store/slices/worktrees/listing/worktree-fetch-options'
 
 import type { WorktreeCardProps } from './workspace-card/controller/worktree-card-model'
 import type WorktreeCardComponent from './workspace-card/surface/WorktreeCard'

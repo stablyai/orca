@@ -1,7 +1,7 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { acpLaunchSpecFor } from '../../../acp/acp-launch-specs'
+import { acpLaunchSpecFor } from '../../../acp/launch/acp-launch-registry'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
 import {
   claudeConfigDirEnvPatch,

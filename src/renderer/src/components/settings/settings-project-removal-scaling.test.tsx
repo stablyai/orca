@@ -6,13 +6,15 @@ import {
   adoptEndpointRepo,
   adoptEndpointProjectCatalog
 } from '../../../../shared/endpoint-catalog-adoption'
-import { makeWorktree, makeOpenFile, makeTab } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { useSettingsProjectRemovalDescription } from './repository/RepositoryRemoveProjectButton'
 import { act, useLayoutEffect } from 'react'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 

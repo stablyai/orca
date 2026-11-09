@@ -3,6 +3,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { projectHostCountLabel } from './project-host-count-label'
 import {
   selectedTaskProjectGroups,
@@ -18,12 +19,13 @@ export type TaskProjectSourceStatus = {
 
 export function renderTriggerLabel(
   groups: readonly TaskProjectPickerGroup[],
-  selected: ReadonlySet<string>
+  selected: ReadonlySet<string>,
+  t: Translate = translate
 ): React.JSX.Element {
   if (groups.length === 0) {
     return (
       <span className="text-muted-foreground">
-        {translate('auto.components.task.project.source.combobox.noProjects', 'No projects')}
+        {t('auto.components.task.project.source.combobox.noProjects', 'No projects')}
       </span>
     )
   }
@@ -31,7 +33,7 @@ export function renderTriggerLabel(
   if (selectedProjectGroups.length === groups.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        {translate('auto.components.task.project.source.combobox.allProjects', 'All projects')}
+        {t('auto.components.task.project.source.combobox.allProjects', 'All projects')}
       </span>
     )
   }
@@ -56,15 +58,16 @@ export function getProjectDetail(
   selected: ReadonlySet<string>,
   showHostLabels: boolean,
   getRepoHostLabel?: (repo: Repo) => string | null | undefined,
-  sourceHostCount = getRepoSourceHostCount(group.sources)
+  sourceHostCount = getRepoSourceHostCount(group.sources),
+  t: Translate = translate
 ): string {
   const selectedSource = getSelectedTaskProjectSource(group, selected)
   if (!selectedSource) {
-    return translate('projects.unavailableSource', 'Unavailable')
+    return t('projects.unavailableSource', 'Unavailable')
   }
   const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource)?.trim() : ''
   if (sourceHostCount > 1) {
-    const hostCount = projectHostCountLabel(sourceHostCount)
+    const hostCount = projectHostCountLabel(sourceHostCount, t)
     return hostLabel ? `${hostLabel} · ${hostCount}` : hostCount
   }
   return hostLabel ? `${hostLabel} · ${selectedSource.path}` : selectedSource.path

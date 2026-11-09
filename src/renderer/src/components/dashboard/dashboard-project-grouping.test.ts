@@ -1,7 +1,7 @@
 import { it, expect } from 'vitest'
 import { useAppStore } from '../../store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 const NOW = 1_000_000_000
 const worktree = (id = 'w1') => makeWorktree({ id, repoId: 'r1' })

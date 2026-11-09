@@ -4,9 +4,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '..'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { retireRemovedProjectGroupingState } from './project-grouping-preferences'
-import type { SettingsUpdate } from '../slices/settings'
+import type { SettingsUpdate } from '../slices/settings/create-settings-slice'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 
 const repo: Repo = {

@@ -3,6 +3,7 @@ import { createElement, type ComponentType } from 'react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
 import type { SidebarHeaderIcon } from '../../../../../../shared/sidebar-list/row-types'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
@@ -83,7 +84,8 @@ type SidebarHeaderVisual = {
 export function getSidebarHeaderVisual(
   icon: SidebarHeaderIcon,
   workspaceStatuses: readonly WorkspaceStatusDefinition[],
-  workspaceStatusById?: ReadonlyMap<string, WorkspaceStatusDefinition>
+  workspaceStatusById?: ReadonlyMap<string, WorkspaceStatusDefinition>,
+  t?: Translate
 ): SidebarHeaderVisual {
   switch (icon.kind) {
     case 'pinned':
@@ -98,7 +100,8 @@ export function getSidebarHeaderVisual(
       const { icon: statusIcon, tone } = getWorkspaceStatusVisualMeta(
         (workspaceStatusById
           ? workspaceStatusById.get(icon.status)
-          : workspaceStatuses.find((status) => status.id === icon.status)) ?? icon.status
+          : workspaceStatuses.find((status) => status.id === icon.status)) ?? icon.status,
+        t
       )
       return { icon: statusIcon, tone }
     }

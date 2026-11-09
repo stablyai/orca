@@ -2,14 +2,14 @@ import type { ProjectRepoFilterWriteIntent } from '../../shared/project-repo-fil
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
-} from '../../shared/runtime-file-contracts'
+} from '../../shared/file-access/runtime-editor-file-open'
 import type { JiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import type {
   JiraSavedFilterState,
   JiraSavedFilterMutation
 } from '../../shared/jira/jira-saved-filters'
 import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
@@ -27,6 +27,10 @@ import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
 } from '../../shared/workspace-layout/terminal-pane-reveal'
+import type {
+  AgentPaneActivityReply,
+  AgentPaneActivityRequest
+} from '../../shared/agent-status/presentation/agent-list-status'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
@@ -173,9 +177,6 @@ export type UiCommandEventApi = {
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
-  onCtrlTabKeyUp: (callback: () => void) => () => void
-  onToggleStatusBar: (callback: () => void) => () => void
-  onDictationKeyDown: (callback: () => void) => () => void
   onActivateWorktree: (
     callback: (data: {
       repoId: string
@@ -228,6 +229,8 @@ export type UiCommandEventApi = {
   onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
+  onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
+  replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
   onSplitTerminal: (
     callback: (data: {
       tabId: string

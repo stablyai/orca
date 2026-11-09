@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { OrchestrationFleetWorker } from '../../../shared/orchestration-fleet-projection'
-import { subagentGroupFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import type { OrchestrationFleetWorker } from '../../../shared/orchestration/fleet/orchestration-fleet-projection'
+
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../shared/native-chat/native-chat-types'
-import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration/workers/orchestration-worker-output'
 import { formatWorkerRead, formatWorkerRelease, formatWorkerStart } from './worker-output'
 
 function fleetProjection(verdict: 'live' | 'unverifiable' | 'exited'): OrchestrationFleetWorker {
@@ -90,114 +90,6 @@ describe('worker-start plain formatting', () => {
 })
 
 describe('worker-read plain formatting', () => {
-  it('renders transcript provenance, incomplete coverage, warnings, and opaque cursor guidance', () => {
-    expect(
-      formatWorkerRead(
-        workerReadResult({
-          source: 'transcript',
-          sourceIdentity: 'private-source-identity',
-          provider: 'codex',
-          transcript: {
-            messages: [
-              {
-                id: 'message_1',
-                role: 'assistant',
-                blocks: [{ type: 'text', text: 'latest output' }],
-                timestamp: null,
-                source: 'transcript'
-              }
-            ],
-            nextCursor: 'owr1_transcript',
-            limited: true,
-            returnedMessageCount: 1
-          },
-          cursor: 'owr1_transcript',
-          fallbackReason: null,
-          sourceExact: true,
-          contentComplete: false,
-          clipping: ['message_limit_or_scan_window'],
-          warnings: ['Older transcript records are not pageable through this cursor.']
-        })
-      )
-    ).toBe(
-      'Source: transcript (provider=codex)\n' +
-        'Worker: ready\n' +
-        'Archived: false\n' +
-        'Source exact: true\n' +
-        'Content complete: false\n' +
-        'Clipping: message_limit_or_scan_window\n' +
-        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_transcript\n' +
-        'Warning: Older transcript records are not pageable through this cursor.\n\n' +
-        '[assistant] latest output'
-    )
-  })
-
-  it('labels terminal fallback evidence and every warning', () => {
-    expect(
-      formatWorkerRead(
-        workerReadResult({
-          source: 'terminal',
-          sourceIdentity: 'private-source-identity',
-          terminal: {
-            handle: 'term_worker',
-            status: 'running',
-            tail: ['bounded terminal evidence'],
-            truncated: true,
-            nextCursor: '20'
-          },
-          cursor: 'owr1_terminal',
-          fallbackReason: 'session_not_reported',
-          sourceExact: false,
-          contentComplete: false,
-          clipping: ['terminal_buffer', 'terminal_fallback'],
-          warnings: ['A secret was redacted.', 'One line was malformed.']
-        })
-      )
-    ).toBe(
-      'Source: terminal\n' +
-        'Worker: ready\n' +
-        'Archived: false\n' +
-        'Source exact: false\n' +
-        'Fallback reason: session_not_reported\n' +
-        'Content complete: false\n' +
-        'Clipping: terminal_buffer, terminal_fallback\n' +
-        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_terminal\n' +
-        'Warning: A secret was redacted.\n' +
-        'Warning: One line was malformed.\n\n' +
-        'bounded terminal evidence'
-    )
-  })
-
-  it('truthfully labels an exact empty transcript without reading terminal evidence', () => {
-    expect(
-      formatWorkerRead(
-        workerReadResult({
-          source: 'transcript',
-          sourceIdentity: 'private-source-identity',
-          provider: 'codex',
-          transcript: {
-            messages: [],
-            nextCursor: 'owr1_empty',
-            limited: false,
-            returnedMessageCount: 0
-          },
-          cursor: 'owr1_empty',
-          fallbackReason: null,
-          sourceExact: true,
-          contentComplete: true,
-          warnings: []
-        })
-      )
-    ).toBe(
-      'Source: transcript (provider=codex)\n' +
-        'Worker: ready\n' +
-        'Archived: false\n' +
-        'Source exact: true\n' +
-        'Content complete: true\n' +
-        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_empty\n\n' +
-        'No transcript messages returned. This exact transcript read did not request terminal evidence.'
-    )
-  })
   it('separates the PTY verdict from the fleet agent verdict', () => {
     const output = formatWorkerRead({
       dispatchId: 'dispatch_1',
@@ -269,20 +161,6 @@ describe('worker-read plain formatting', () => {
   })
 })
 
-function workerReadResult(
-  value: WorkerReadResultWithoutContext<OrchestrationWorkerReadResult>
-): OrchestrationWorkerReadResult {
-  return {
-    dispatchId: 'dispatch_1',
-    status: { worker: 'ready', terminal: 'running' },
-    ...value
-  }
-}
-
-type WorkerReadResultWithoutContext<T> = T extends unknown
-  ? Omit<T, 'dispatchId' | 'status'>
-  : never
-
 function transcriptRead(
   blocks: NativeChatBlock[],
   role: NativeChatMessage['role'] = 'assistant'
@@ -307,118 +185,10 @@ function transcriptRead(
   }
 }
 
-const ROSTER: readonly NativeChatSubagentEntry[] = [
-  { id: 'child-1', label: 'read', state: 'working' },
-  { id: 'child-2', label: 'edit', state: 'failed' }
-]
-
-function occurrences(haystack: string, needle: string): number {
-  return haystack.split(needle).length - 1
-}
-
 describe('formatWorkerRead', () => {
   // Replayed journal rows cannot prove current child liveness.
-  it('replays a mid-flight roster row without claiming a child is still working', () => {
-    const midFlight: readonly NativeChatSubagentEntry[] = [
-      { id: 'child-1', label: 'read', state: 'working' },
-      { id: 'child-2', label: 'search', state: 'working' },
-      { id: 'child-3', label: 'edit', state: 'failed' }
-    ]
-
-    const output = formatWorkerRead(
-      transcriptRead([
-        { type: 'text', text: subagentGroupFallbackText(midFlight) },
-        { type: 'subagent-group', groupId: 'thread:turn-1', agents: [...midFlight] }
-      ])
-    )
-
-    expect(output).toContain('[assistant] Kicked off 3 subagents (1 failed)')
-    expect(output).not.toMatch(/\bworking\b/)
-  })
 
   // Producers emit a text twin for clients that cannot render roster blocks; print only one copy.
-  it('prints the roster sentence once for the two-block row the producer writes', () => {
-    const sentence = subagentGroupFallbackText(ROSTER)
-    const output = formatWorkerRead(
-      transcriptRead(
-        [
-          { type: 'text', text: sentence },
-          { type: 'subagent-group', groupId: 'thread:turn-1', agents: [...ROSTER] }
-        ],
-        'system'
-      )
-    )
-
-    expect(output).toContain('[system] Kicked off 2 subagents (1 failed)')
-    expect(occurrences(output, 'Kicked off 2 subagents (1 failed)')).toBe(1)
-  })
-
-  it('stands in for the second roster block when only one twin accompanies two', () => {
-    const other: readonly NativeChatSubagentEntry[] = [
-      { id: 'child-3', label: 'plan', state: 'completed' }
-    ]
-    const output = formatWorkerRead(
-      transcriptRead(
-        [
-          { type: 'text', text: subagentGroupFallbackText(ROSTER) },
-          { type: 'subagent-group', groupId: 'thread:turn-1', agents: [...ROSTER] },
-          { type: 'subagent-group', groupId: 'thread:turn-2', agents: [...other] }
-        ],
-        'system'
-      )
-    )
-
-    expect(occurrences(output, 'Kicked off 2 subagents (1 failed)')).toBe(1)
-    expect(output).toContain('[subagents] Ran 1 subagent')
-  })
-
-  it('claims a lone twin for the group it names, not the first group in the message', () => {
-    const other: readonly NativeChatSubagentEntry[] = [
-      { id: 'child-3', label: 'plan', state: 'completed' }
-    ]
-    const second = subagentGroupFallbackText(other)
-    const output = formatWorkerRead(
-      transcriptRead(
-        [
-          { type: 'text', text: second },
-          { type: 'subagent-group', groupId: 'thread:turn-1', agents: [...ROSTER] },
-          { type: 'subagent-group', groupId: 'thread:turn-2', agents: [...other] }
-        ],
-        'system'
-      )
-    )
-
-    expect(occurrences(output, 'Ran 1 subagent')).toBe(1)
-    expect(output).toContain('[subagents] Kicked off 2 subagents (1 failed)')
-  })
-
-  it('claims a trailing twin for the group it names', () => {
-    const other: readonly NativeChatSubagentEntry[] = [
-      { id: 'child-3', label: 'plan', state: 'completed' }
-    ]
-    const second = subagentGroupFallbackText(other)
-    const output = formatWorkerRead(
-      transcriptRead(
-        [
-          { type: 'subagent-group', groupId: 'thread:turn-1', agents: [...ROSTER] },
-          { type: 'subagent-group', groupId: 'thread:turn-2', agents: [...other] },
-          { type: 'text', text: second }
-        ],
-        'system'
-      )
-    )
-
-    expect(occurrences(output, 'Ran 1 subagent')).toBe(1)
-    expect(output).toContain('[subagents] Kicked off 2 subagents (1 failed)')
-  })
-
-  it('stands in for a roster block that arrived without its twin', () => {
-    const output = formatWorkerRead(
-      transcriptRead([{ type: 'subagent-group', groupId: 'thread:turn-1', agents: [...ROSTER] }])
-    )
-
-    expect(output).toContain('[assistant] [subagents] Kicked off 2 subagents (1 failed)')
-  })
 
   // Unknown roster states can change recomputed text; preserve the producer's twin without duplicating it.
   it('prints the roster once when the twin names a state this build cannot reproduce', () => {

@@ -10,7 +10,7 @@ import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-p
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
 import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
-import { useHostDescriptor } from '../transport/host-descriptor-store'
+import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,

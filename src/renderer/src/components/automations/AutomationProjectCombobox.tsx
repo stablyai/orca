@@ -1,5 +1,5 @@
 import { getRepoSourceHostCount } from '../task-project-source-combobox-model'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronRight, ChevronsUpDown, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { projectHostCountLabel } from '@/components/project-host-count-label'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -44,6 +44,7 @@ export default function AutomationProjectCombobox({
   getRepoHostLabel,
   allowAddProject = true
 }: AutomationProjectComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
@@ -233,7 +234,7 @@ export default function AutomationProjectCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             ref={setInputNode}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.automations.AutomationProjectCombobox.search',
               'Search projects/folders...'
             )}
@@ -253,7 +254,7 @@ export default function AutomationProjectCombobox({
             ) : null}
             {filteredGroups.length === 0 && !recordedChoice ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.automations.AutomationProjectCombobox.empty',
                   'No projects/folders match your search.'
                 )}
@@ -266,7 +267,7 @@ export default function AutomationProjectCombobox({
               const hasHostMenu = hostCount > 1
               const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource) : null
               const detail = hasHostMenu
-                ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${projectHostCountLabel(hostCount)}`
+                ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${projectHostCountLabel(hostCount, t)}`
                 : getAutomationProjectRepoDetail(selectedSource, hostLabel)
               return (
                 <div
@@ -318,7 +319,7 @@ export default function AutomationProjectCombobox({
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          title={translate(
+                          title={t(
                             'auto.components.automations.AutomationProjectCombobox.chooseHost',
                             'Choose automation host'
                           )}
@@ -393,11 +394,11 @@ export default function AutomationProjectCombobox({
                 <FolderPlus className="size-3.5 text-muted-foreground" />
                 <span>
                   {isAdding
-                    ? translate(
+                    ? t(
                         'auto.components.automations.AutomationProjectCombobox.adding',
                         'Adding project…'
                       )
-                    : translate(
+                    : t(
                         'auto.components.automations.AutomationProjectCombobox.addProject',
                         'Add project'
                       )}

@@ -1,4 +1,7 @@
-import { selectWorktreesByRepo, selectDetectedWorktreesByRepo } from '../workspace-record-selectors'
+import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {

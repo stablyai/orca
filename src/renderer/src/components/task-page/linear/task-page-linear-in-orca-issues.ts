@@ -11,7 +11,7 @@ import { parseLinearIssueInput } from '../../../../../shared/linear/links'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import { normalizeLinearIdentifier } from '../../../lib/work-items/linear/linear-issue-workspace-attachment'
 
 export type LinkedLinearIssueRef = {

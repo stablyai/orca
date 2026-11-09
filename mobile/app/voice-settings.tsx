@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { loadHosts, peekHosts } from '../src/transport/host-store'
-import type { HostProfile } from '../src/transport/types'
-import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
+import { loadHosts, peekHosts } from '../src/transport/hosts/host-store'
+import type { HostProfile } from '../src/transport/hosts/host-profile'
+import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
 import VoiceSettingsScreen from '../src/settings/voice-settings-screen'
 import { nativeVoiceSettingsOperations } from '../src/settings/native-voice-settings-operations'
 

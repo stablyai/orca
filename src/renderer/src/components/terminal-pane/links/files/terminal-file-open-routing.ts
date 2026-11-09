@@ -1,6 +1,6 @@
 import type { FileOpenFailure } from './terminal-file-open-failure'
-import { downloadAndOpenRemoteTerminalFile } from '../../terminal-remote-file-download-open'
-import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
+import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import {
   activateAndRevealWorkspace,
@@ -29,14 +29,14 @@ import {
   type HostWorkspaceFile
 } from '../../host-files/terminal-host-workspace-file'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
-import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
+import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
 
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
 
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   httpLinkDirectClickDestination,
   type HttpLinkDestination

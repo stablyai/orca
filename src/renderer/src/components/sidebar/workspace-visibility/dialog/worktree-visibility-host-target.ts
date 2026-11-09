@@ -5,17 +5,20 @@ import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getRepoHostSummaries } from '@/store/slices/worktrees/listing/worktree-host-ownership'
-import { getRepoHostIdentityForParts } from '../../../../../../shared/repo-host-identity'
+import {
+  getRepoHostIdentity,
+  getRepoHostIdentityForParts
+} from '../../../../../../shared/repo-host-identity'
 import { useCallback } from 'react'
 import type { AppState } from '@/store/types'
-import { findRepoForHost, getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveWorktreeVisibilityHostTarget(
   state: Pick<AppState, 'repos' | 'settings' | 'detectedWorktreesByRepo'>,

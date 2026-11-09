@@ -1,7 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { getDefaultSettings } from '../../../src/shared/constants'
-import type { SettingsUpdate } from '../../../src/renderer/src/store/slices/settings'
+import type { SettingsUpdate } from '../../../src/renderer/src/store/slices/settings/create-settings-slice'
 import { CommitMessageAiPane } from '../../../src/renderer/src/components/settings/source-control/CommitMessageAiPane'
 import { TooltipProvider } from '../../../src/renderer/src/components/ui/tooltip'
 import { useAppStore } from '../../../src/renderer/src/store'

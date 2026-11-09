@@ -19,7 +19,8 @@ import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-d
 import { openHeaderCreateComposer } from './header-create-workspace-target'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
-import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './SectionHeader'
+import { renderWorktreeSectionHeaderRow } from './SectionHeader'
+import type { SectionHeaderRowContext } from './section-header-row-context'
 
 const initial = useAppStore.getInitialState()
 afterEach(() => {
@@ -112,7 +113,9 @@ function headerContext(): SectionHeaderRowContext {
       projectGroupHeaderIndexByGroupId: new Map(),
       projectGroupHeaderBucketByGroupId: new Map(),
       repoHeaderSectionEndByRepoId: new Map(),
-      projectGroupHeaderSectionEndByGroupId: new Map()
+      projectGroupHeaderSectionEndByGroupId: new Map(),
+      rootProjectHeaderKeys: undefined,
+      rootProjectHeaderSectionEndByKey: new Map()
     },
     projectActions: {
       getWorktreeVisibilityDefaults: () => undefined,

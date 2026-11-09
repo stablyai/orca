@@ -1,4 +1,4 @@
-import { getProjectGroupingIndexFromState } from '../store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '../store/projects/project-host-setup-selector'
 import { useEffect } from 'react'
 import { getSystemPrefersDarkSnapshot } from '../hooks/theme/use-system-prefers-dark'
 import {
@@ -10,7 +10,7 @@ import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
-} from '../runtime/sync-runtime-graph'
+} from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
 
 /** Keeps the mobile runtime graph republished as the store's session-visible state changes. */

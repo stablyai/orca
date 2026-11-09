@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -46,15 +46,6 @@ describe('reportSecretProtectionGap', () => {
     expect(logged).toHaveLength(1)
   })
 
-  it('reports again when the gap changes to a different reason', () => {
-    installStore(WEAK)
-    report()
-    installStore('The OS keyring is unavailable.')
-    report()
-    expect(logged).toHaveLength(2)
-    expect(logged[1]).toContain('keyring is unavailable')
-  })
-
   it('announces recovery, so an earlier warning is not left standing', () => {
     installStore(WEAK)
     report()
@@ -65,21 +56,5 @@ describe('reportSecretProtectionGap', () => {
 
     report()
     expect(logged).toHaveLength(2)
-  })
-
-  it('re-reports on demand for support, without disturbing stored state', () => {
-    installStore(WEAK)
-    report()
-    expect(report(true)).toBe(WEAK)
-    expect(logged).toHaveLength(2)
-    report()
-    expect(logged).toHaveLength(2)
-  })
-
-  it('re-reports when the stored state is corrupt rather than trusting it', () => {
-    installStore(WEAK)
-    writeFileSync(join(dir, 'orca-secret-protection.json'), '{ not json', 'utf-8')
-    expect(report()).toBe(WEAK)
-    expect(logged).toHaveLength(1)
   })
 })

@@ -1,6 +1,6 @@
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import { getProjectCheckoutPathKey } from '../../../shared/project-grouping'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import type {
   ProjectHostSetupOption,
   ProjectHostSetupSelection,

@@ -10,8 +10,10 @@ import type {
   LoadedSettingsStoreModel,
   SettingsRenderContext
 } from './page/settings-render-context'
+import { useTranslate } from '../../i18n/use-translate'
 
 function Settings(): React.JSX.Element {
+  const t = useTranslate()
   const storeModel = useSettingsStoreModel()
   const interactions = useSettingsInteractionController(storeModel)
   const navigation = useSettingsNavigationModel(storeModel, interactions)
@@ -22,10 +24,10 @@ function Settings(): React.JSX.Element {
   const actions = useSettingsNavigationActions(model, interactions)
 
   if (!model.settings) {
-    return renderSettingsLoading(interactions)
+    return renderSettingsLoading(interactions, t)
   }
 
-  const view = buildSettingsViewModel(model, navigation)
+  const view = buildSettingsViewModel(model, navigation, t)
   const context: SettingsRenderContext = {
     model: model as LoadedSettingsStoreModel,
     interactions,
@@ -34,7 +36,7 @@ function Settings(): React.JSX.Element {
     actions,
     view
   }
-  return renderSettingsPage(context)
+  return renderSettingsPage(context, t)
 }
 
 export default Settings

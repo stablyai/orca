@@ -13,7 +13,7 @@ import {
 } from '../navigation/settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsNavigationModel } from '../navigation/use-settings-navigation-model'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function useSettingsTerminalModel(
   model: SettingsStoreModel,

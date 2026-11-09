@@ -16,7 +16,7 @@ import {
   resolveProjectGroupOperation
 } from '../../project-group-operation'
 import { useAppStore } from '@/store'
-import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 
@@ -61,7 +62,8 @@ import {
 
 function getWorktreeVisibilityMenuLabel(
   repo: Repo,
-  visibilityDefaults?: WorktreeVisibilityDefaults
+  visibilityDefaults?: WorktreeVisibilityDefaults,
+  t: Translate = translate
 ): string {
   const visibility = effectiveExternalWorktreeVisibility(
     repo,
@@ -69,11 +71,11 @@ function getWorktreeVisibilityMenuLabel(
     visibilityDefaults
   )
   return visibility === 'show'
-    ? translate(
+    ? t(
         'auto.components.sidebar.repoHeaderProjectActions.hideNonOrcaWorktrees',
         'Hide non-Orca worktrees'
       )
-    : translate(
+    : t(
         'auto.components.sidebar.repoHeaderProjectActions.showHiddenWorktrees',
         'Show hidden worktrees'
       )
@@ -137,6 +139,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element | null {
+  const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
   const [open, setOpen] = useState(false)
@@ -167,7 +170,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
               size="icon-xs"
               className={REPO_HEADER_ACTION_BUTTON_CLASS}
               data-repo-header-action=""
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.sidebar.WorktreeList.609633a9e6',
                 'Project actions for {{value0}}',
                 { value0: label }
@@ -181,7 +184,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate('auto.components.sidebar.WorktreeList.2ef41bf9a7', 'Project actions')}
+          {t('auto.components.sidebar.WorktreeList.2ef41bf9a7', 'Project actions')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -206,7 +209,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           }
         >
           <SlidersHorizontal className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
+          {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
@@ -218,7 +221,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           }
         >
           <Shapes className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
+          {t('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
         </DropdownMenuItem>
         {isGitRepoKind(contextRepo) ||
         projectScope?.registrations.some((setup) => setup.kind !== 'folder') ? (
@@ -227,13 +230,14 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           >
             <Eye className="size-3.5" />
             {projectScope && projectScope.registrations.length > 1
-              ? translate(
+              ? t(
                   'auto.components.sidebar.WorktreeVisibilityDialog.83a5ba8dd1',
                   'Non-Orca worktrees'
                 )
               : getWorktreeVisibilityMenuLabel(
                   contextRepo,
-                  actions.getWorktreeVisibilityDefaults(contextRepo)
+                  actions.getWorktreeVisibilityDefaults(contextRepo),
+                  t
                 )}
           </DropdownMenuItem>
         ) : null}
@@ -242,16 +246,13 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
             <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(operation)}>
               {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
               <FolderTree className="size-3.5" />
-              {translate(
-                'auto.components.sidebar.WorktreeList.cbfd565f83',
-                'New group from project'
-              )}
+              {t('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
             </DropdownMenuItem>
             {operation.destinations.length > 0 ? (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <FolderInput className="size-3.5" />
-                  {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+                  {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   {operation.destinations.map((group) => (
@@ -269,7 +270,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
             {operation.grouped ? (
               <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(operation)}>
                 <CircleX className="size-3.5" />
-                {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
+                {t('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
               </DropdownMenuItem>
             ) : null}
           </>
@@ -281,7 +282,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           onSelect={() => actions.onRemoveProject(contextRepo, projectScope)}
         >
           <Trash2 className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}
+          {t('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -301,12 +302,13 @@ export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCre
   projectScope?: GroupHeaderRow['projectScope']
   onCreateForRepo: RepoHeaderProjectActions['onCreateForRepo']
 }): React.JSX.Element {
+  const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
   const sshGate = useRepoSshGate(repo)
   const createState =
-    projectScope && !pinHost ? undefined : getRepoHeaderCreateState({ repo, label, sshGate })
-  const fallbackLabel = translate(
+    projectScope && !pinHost ? undefined : getRepoHeaderCreateState({ repo, label, sshGate }, t)
+  const fallbackLabel = t(
     'auto.components.sidebar.WorktreeList.bb85cd86ba',
     'Create workspace for {{value0}}',
     { value0: label }

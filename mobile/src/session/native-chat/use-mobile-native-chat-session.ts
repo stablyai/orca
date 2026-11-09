@@ -13,8 +13,8 @@ import type {
 } from '../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
 import { buildNativeChatSubscriptionId } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
-import type { RpcClient } from '../../transport/rpc-client'
-import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { nativeChatSessionPageRead } from './agent-session/mobile-native-chat-page-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
@@ -39,6 +39,8 @@ export type MobileNativeChatSession = {
   /** The read failed for good (damage, or a newer Orca's chat): the error says why, once, and
    *  there is nothing to send into. */
   readFailedFinally?: boolean
+  /** This phone's /clear is out and its divider has not landed: the old rows are hidden. */
+  clearing?: boolean
   hasMore: boolean
   /** `olderPages === 'loading'`, kept because recorded RPC fixtures read it. */
   loadingEarlier: boolean

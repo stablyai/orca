@@ -1,6 +1,6 @@
-import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
-import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
+import { markRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { assertRuntimeStatusCompatible } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 
 export async function verifyRuntimeEnvironmentReachable(

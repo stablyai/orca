@@ -10,10 +10,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
+import { isMergedAwayExecutionHost } from '../../../shared/execution-host/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
@@ -21,6 +21,11 @@ import {
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  getHostHealthUnavailableDetail,
+  getPendingSetupDetail
+} from './project-host-setup-detail-labels'
 import {
   dedupeReadySetupRows,
   compareProjectHostSetupOptions,
@@ -235,9 +240,12 @@ function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
-export function getHostSetupUnavailableDetail(host: ExecutionHostRegistryEntry): string | null {
+export function getHostSetupUnavailableDetail(
+  host: ExecutionHostRegistryEntry,
+  t: Translate = translate
+): string | null {
   if (host.health === 'blocked') {
-    return translate(
+    return t(
       'auto.components.settings.RepositoryPane.hostSetupBlockedVersion',
       'Orca server version is incompatible'
     )
@@ -246,7 +254,7 @@ export function getHostSetupUnavailableDetail(host: ExecutionHostRegistryEntry):
     return null
   }
   if (!host.capabilities) {
-    return translate(
+    return t(
       'auto.components.settings.RepositoryPane.hostSetupCheckingCapability',
       'Checking host capabilities'
     )
@@ -255,29 +263,12 @@ export function getHostSetupUnavailableDetail(host: ExecutionHostRegistryEntry):
     !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
     !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
   ) {
-    return translate(
+    return t(
       'auto.components.settings.RepositoryPane.hostSetupMissingCapability',
       'Update Orca on this host to set up projects'
     )
   }
   return null
-}
-
-function getHostHealthUnavailableDetail(
-  health: ExecutionHostRegistryEntry['health']
-): string | null {
-  switch (health) {
-    case 'connecting':
-      return 'Connecting to host'
-    case 'disconnected':
-      return 'Connect this host to set up projects'
-    case 'error':
-      return 'Host connection needs attention'
-    case 'available':
-    case 'blocked':
-    case 'local':
-      return null
-  }
 }
 
 function canSetProjectLocation(
@@ -309,19 +300,4 @@ function getHostConnectAction(
     return { kind: 'runtime', environmentId: parsed.environmentId }
   }
   return undefined
-}
-
-function getPendingSetupDetail(setup: ProjectHostSetup): string {
-  switch (setup.setupState) {
-    case 'not-set-up':
-      return 'Project tracked on this host but not set up'
-    case 'setting-up':
-      return 'Project setup is in progress'
-    case 'error':
-      return 'Project setup needs attention'
-    case 'unsupported':
-      return 'Project is unsupported on this host'
-    case 'ready':
-      return setup.path
-  }
 }

@@ -65,7 +65,7 @@ const rpc = vi.hoisted(() =>
     ): Promise<unknown> => ({ items: [] })
   )
 )
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: rpc
 }))

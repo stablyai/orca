@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import { getProjectGroupingIndexFromState } from './project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from './projects/project-host-setup-selector'
 
 type CollectionCounters = {
   map: number

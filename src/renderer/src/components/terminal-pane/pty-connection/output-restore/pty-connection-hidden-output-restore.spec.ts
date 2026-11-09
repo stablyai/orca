@@ -35,7 +35,6 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -461,7 +460,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       callbacks.onData?.(hidden, { seq: hidden.length, rawLength: hidden.length })
       expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
 
-      const factsHandler = await import('../../terminal-side-effect-facts-handler')
+      const factsHandler =
+        await import('../../pty-transport/output/terminal-side-effect-facts-handler')
       const { createRemoteRuntimePtyTransport } =
         await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
       expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))

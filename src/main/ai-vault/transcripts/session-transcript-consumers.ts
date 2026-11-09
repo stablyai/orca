@@ -19,6 +19,7 @@ export type TranscriptMessageSink = {
   readonly active: boolean
   push(message: TranscriptMessage): void
   /** A later duplicate JSON array replaces every message emitted from the earlier array. */
+  drain?: () => Promise<void>
   reset?: () => void
 }
 
@@ -38,6 +39,8 @@ export type TranscriptSessionIdentity = {
 
 export type TranscriptReadStart = {
   candidate: SessionFileCandidate
+  indexing?: boolean
+  signal?: AbortSignal
   /** `replace`: the whole file is being re-read; `append`: a resumed read. */
   mode: 'replace' | 'append'
   /** Byte offset the messages of this read continue from. */
@@ -63,6 +66,7 @@ export type TranscriptReadOutcome = {
 
 export type TranscriptReadConsumer = {
   message(message: TranscriptMessage): void
+  drain?(): Promise<void>
   finish(outcome: TranscriptReadOutcome): void
   /** The read has consumed exactly [0, offset), whose bytes hash to digest. */
   prefixReached?(offset: number, digest: string): void

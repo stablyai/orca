@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/vanilla/shallow'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import {
   getExecutionHostLabel,

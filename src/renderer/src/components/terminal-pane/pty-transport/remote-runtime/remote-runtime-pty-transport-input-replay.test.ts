@@ -5,8 +5,8 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import { REMOTE_RUNTIME_DISCONNECTED_INPUT_GRACE_MS } from './input/remote-runtime-disconnected-input-grace'
@@ -213,6 +213,21 @@ describe('remote pane input across a silent outage', () => {
     expect(undelivered).toBe(true)
     transport.destroy?.()
   })
+
+  it.each([
+    ['acknowledging', { inputAck: 1 }, ['a']],
+    ['legacy', { outputPause: 1 }, []]
+  ] as const)(
+    'sends an idle key at once only to a host that acknowledges input (%s)',
+    async (_host, capabilities, immediate) => {
+      const { transport } = await connectPane(capabilities)
+      subscriptionSendBinary.mockClear()
+      transport.sendInput('a', 'driving')
+      expect(sentInputs().map((input) => input.text)).toEqual(immediate)
+      transport.sendInput('b', 'driving')
+      await vi.waitFor(() => expect(sentText()).toBe('ab'))
+    }
+  )
 
   it('preserves the acknowledged input session across reconnects', async () => {
     const { transport, streamId } = await connectPane({ inputAck: 1 })

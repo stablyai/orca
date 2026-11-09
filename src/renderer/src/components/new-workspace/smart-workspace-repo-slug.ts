@@ -1,5 +1,5 @@
 import type { RepoSlug } from '@/lib/github-links'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeTarget
@@ -8,7 +8,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repository-iden
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { RepoOption, RepoSlugTarget } from './smart-workspace-name-field-model'
 
 export function sameSlug(left: RepoSlug, right: RepoSlug): boolean {

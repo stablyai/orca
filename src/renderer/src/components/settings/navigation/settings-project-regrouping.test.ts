@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
-import { createUIStore } from '../../../store/slices/ui-slice-test-harness'
+import { createUIStore } from '../../../store/slices/ui/ui-slice-test-harness'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo

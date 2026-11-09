@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { SettingsUpdate } from '@/store/slices/settings'
+import type { SettingsUpdate } from '@/store/slices/settings/create-settings-slice'
 
 import { act, useState } from 'react'
 import { ProjectGroupingSetting } from './ProjectGroupingSetting'

@@ -6,7 +6,7 @@ import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session
 import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
-} from '../../claude-agent-teams-types'
+} from '../agent-teams/claude-agent-teams-types'
 import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin

@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { groupCards, ShippingSidebar } from './qualified-notice-actions-test-fixtures'
-import { groupActionFixture, groupRepo, selectGroup } from './project-group-actions-test-fixtures'
+import {
+  groupActionFixture,
+  groupRepo,
+  selectGroup,
+  chooseGroupAction,
+  openGroupDestinations,
+  queryGroupDestination
+} from './project-group-actions-test-fixtures'
 import { act } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -147,7 +154,7 @@ it('keeps accepted original scope through late members, mode/focus/rank changes 
     await selectGroup(user, 'Next destination')
     await waitFor(() => expect(release).toBeTypeOf('function'))
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Remove from group' }))
+    await chooseGroupAction(user, 'Remove from group')
     await waitFor(() => expect(fixture.localDisk.getRepo('b')?.projectGroupId).toBeNull())
     await act(async () => {
       release?.()
@@ -189,11 +196,9 @@ it('uses the hostless local placement registration catalog despite foreign focus
     )
     render(<ShippingSidebar />)
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.hover(screen.getByRole('menuitem', { name: 'Move to group' }))
-    await waitFor(() =>
-      expect(screen.getByRole('menuitem', { name: 'Local destination' })).toBeTruthy()
-    )
-    expect(screen.queryByRole('menuitem', { name: 'Remote equal-ID destination' })).toBeNull()
+    await openGroupDestinations(user)
+    await waitFor(() => expect(queryGroupDestination('Local destination')!).toBeTruthy())
+    expect(queryGroupDestination('Remote equal-ID destination')).toBeNull()
     await selectGroup(user, 'Local destination')
     await waitFor(() => expect(fixture.moves).toHaveLength(2))
     expect(fixture.moves.map((move) => [move.catalog, move.id])).toEqual([
@@ -208,11 +213,9 @@ it('uses the hostless local placement registration catalog despite foreign focus
       }))
     )
     await user.click(screen.getByRole('button', { name: 'Project actions for Harbor' }))
-    await user.hover(screen.getByRole('menuitem', { name: 'Move to group' }))
-    await waitFor(() =>
-      expect(screen.getByRole('menuitem', { name: 'Remote equal-ID destination' })).toBeTruthy()
-    )
-    expect(screen.queryByRole('menuitem', { name: 'Local destination' })).toBeNull()
+    await openGroupDestinations(user)
+    await waitFor(() => expect(queryGroupDestination('Remote equal-ID destination')!).toBeTruthy())
+    expect(queryGroupDestination('Local destination')).toBeNull()
     await user.keyboard('{Escape}{Escape}')
     expect(fixture.moves).toHaveLength(2)
   } finally {
@@ -278,7 +281,7 @@ it('completes row New through the existing list dialog lifetime while its first 
   try {
     render(<ShippingSidebar />)
     await user.pointer({ target: screen.getByText('b checkout'), keys: '[MouseRight]' })
-    await user.click(screen.getByRole('menuitem', { name: 'New group from project' }))
+    await chooseGroupAction(user, 'New group from project')
     await user.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(fixture.moves).toHaveLength(3))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

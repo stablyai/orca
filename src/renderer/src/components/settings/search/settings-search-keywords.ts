@@ -1,4 +1,5 @@
 import { i18n, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SearchKeywordSpec = {
   key: string
@@ -13,23 +14,35 @@ export type SearchKeywordSpec = {
 export function translateSearchKeyword(
   key: string,
   fallback: string,
-  options?: Omit<SearchKeywordSpec, 'key' | 'fallback'>
+  options?: Omit<SearchKeywordSpec, 'key' | 'fallback'>,
+  t: Translate = translate
 ): string[] {
   if (options?.englishOnly || i18n.language === 'en') {
     return uniqueKeywords([fallback, ...(options?.aliases ?? [])])
   }
 
-  const localized = translate(key, fallback)
+  const localized = t(key, fallback)
   return uniqueKeywords([localized, fallback, ...(options?.aliases ?? [])])
 }
 
-export function searchKeywords(terms: (string | SearchKeywordSpec)[]): string[] {
+export type SearchKeywordTranslator = (
+  key: string,
+  fallback: string,
+  options?: Omit<SearchKeywordSpec, 'key' | 'fallback'>
+) => string[]
+
+/** translateSearchKeyword bound to a render's `t`; name the result translateSearchKeyword so catalog extraction still sees its keys. */
+export function searchKeywordTranslator(t: Translate = translate): SearchKeywordTranslator {
+  return (key, fallback, options) => translateSearchKeyword(key, fallback, options, t)
+}
+
+export function searchKeywords(terms: (string | SearchKeywordSpec)[], t?: Translate): string[] {
   return uniqueKeywords(
     terms.flatMap((term) => {
       if (typeof term === 'string') {
         return [term]
       }
-      return translateSearchKeyword(term.key, term.fallback, term)
+      return translateSearchKeyword(term.key, term.fallback, term, t)
     })
   )
 }
@@ -48,12 +61,17 @@ export function uniqueKeywords(values: string[]): string[] {
   return result
 }
 
-export function projectGroupingSearchKeywords(): string[] {
+export function projectGroupingSearchKeywords(t: Translate = translate): string[] {
   return [
-    ...translateSearchKeyword('settings.projectGrouping.search.projects', 'projects'),
-    ...translateSearchKeyword('settings.projectGrouping.search.repository', 'repository'),
-    ...translateSearchKeyword('settings.projectGrouping.search.checkout', 'checkout'),
-    ...translateSearchKeyword('settings.projectGrouping.search.host', 'host'),
-    ...translateSearchKeyword('settings.projectGrouping.search.folder', 'folder')
+    ...translateSearchKeyword('settings.projectGrouping.search.projects', 'projects', undefined, t),
+    ...translateSearchKeyword(
+      'settings.projectGrouping.search.repository',
+      'repository',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword('settings.projectGrouping.search.checkout', 'checkout', undefined, t),
+    ...translateSearchKeyword('settings.projectGrouping.search.host', 'host', undefined, t),
+    ...translateSearchKeyword('settings.projectGrouping.search.folder', 'folder', undefined, t)
   ]
 }

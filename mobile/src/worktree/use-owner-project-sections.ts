@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { getProjectSectionsResource } from './project-sections-resource'
 
 const pending = { kind: 'pending' } as const

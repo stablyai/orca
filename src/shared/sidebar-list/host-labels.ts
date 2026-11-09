@@ -11,6 +11,7 @@ import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { getProjectGroupingForRepo, type ProjectGroupingIndex } from '../project-section-grouping'
 import type { WorktreeGroupEntry } from './worktree-group-entry'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { getFolderWorkspaceWorktree } from '../folder-workspaces/folder-workspace-worktree'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { GroupHeaderRow, RepoOfWorktree } from './row-types'
 
@@ -120,16 +121,28 @@ export function getNoticeHostContextLabels(
   return mixed.size > 0 ? mixed : undefined
 }
 
-/** Keyed by host-qualified identity: two hosts sharing an id need two labels. */
+/** Keyed by host-qualified identity: two hosts sharing an id need two labels. Folder workspaces
+ * count toward the mix and get labels under their own row identity. */
 export function getMixedWorktreeHostContextLabels(
   worktrees: readonly Worktree[],
+  folderWorkspaces: readonly RenderableFolderWorkspace[],
   repoOf: RepoOfWorktree,
   hostLabelById: ReadonlyMap<string, string> | undefined,
   defaultHostId: ExecutionHostId
 ): Map<string, string> | undefined {
-  return getSharedMixedHostContextLabels(worktrees, {
-    getHostId: (worktree) => getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId),
-    getIdentity: getWorktreeHostIdentity,
+  const rows = [
+    ...worktrees.map((worktree) => ({
+      identity: getWorktreeHostIdentity(worktree),
+      hostId: getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
+    })),
+    ...folderWorkspaces.map(({ folderWorkspace, projectGroup }) => ({
+      identity: getWorktreeHostIdentity(getFolderWorkspaceWorktree(folderWorkspace)),
+      hostId: getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+    }))
+  ]
+  return getSharedMixedHostContextLabels(rows, {
+    getHostId: (row) => row.hostId,
+    getIdentity: (row) => row.identity,
     sources: { hostLabelById }
   })
 }

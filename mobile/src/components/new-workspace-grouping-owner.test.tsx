@@ -8,9 +8,16 @@ import {
   MOBILE_PROJECT_SECTIONS_METHOD
 } from '../../../src/shared/mobile-project-sections-contract'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import { setCachedRepos } from '../cache/repo-cache'
-import type { RpcResponse } from '../transport/types'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+// The form seeds from the host list's repo.list rows in this document's query cache.
+const cachedRepos = new Map<string, unknown[]>()
+const setCachedRepos = (hostId: string, rows: unknown[]) => cachedRepos.set(hostId, rows)
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => null }))
+vi.mock('../host-screen/host-list-queries', () => ({
+  cachedHostRepos: (_queryClient: unknown, hostId: string | undefined) =>
+    (hostId && cachedRepos.get(hostId)) || null
+}))
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useNewWorkspaceRepositories } from './use-new-workspace-repositories'
 import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
 import {

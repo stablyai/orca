@@ -1,7 +1,6 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
-import type { ProjectHeaderHostContext } from './project-header-host-context'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
@@ -10,18 +9,11 @@ import {
   type FolderWorkspacePathStatus,
   isConfirmedStaleFolderPathStatus
 } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
-import type {
-  WorkspaceStatus,
-  WorkspaceStatusDefinition
-} from '../../../../../../shared/worktree/types'
+import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import {
   getHeaderDragRepo,
   isSingleHostProjectHeader,
-  type GroupHeaderRow,
-  type WorktreeGroupBy
+  type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
@@ -42,45 +34,16 @@ import {
 } from './project-group-header-actions'
 import {
   RepoHeaderCreateWorkspaceButton,
-  RepoHeaderProjectActionsMenu,
-  type RepoHeaderProjectActions
+  RepoHeaderProjectActionsMenu
 } from './repo-header-project-actions'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
   shouldIgnoreRepoHeaderToggle,
   toggleSectionHeaderCollapse
 } from './header-event-guards'
-import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
-
-export type SectionHeaderRowContext = {
-  groupBy: WorktreeGroupBy
-  projectHeaderHostContexts?: ReadonlyMap<string, ProjectHeaderHostContext>
-  collapsedGroups: Set<string>
-  workspaceStatusById?: ReadonlyMap<string, WorkspaceStatusDefinition>
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  projectGroups: readonly ProjectGroup[]
-  highlightedRevealRowKey: string | null
-  dragOverStatus: WorkspaceStatus | null
-  pinDragOver: boolean
-  headerDrag: WorktreeSidebarHeaderDrag
-  getCachedFolderWorkspacePathStatus: (request: {
-    scope: 'project-group'
-    projectGroupId: string
-  }) => FolderWorkspacePathStatus | null
-  toggleGroupWithScrollAnchor: (groupKey: string) => void
-  toggleAllProjects?: () => void
-  projectActions: RepoHeaderProjectActions
-  onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
-  onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
-  onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
-  onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
-  onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
-  onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
-  onWorkspacePinDragOver: (event: React.DragEvent) => void
-  onWorkspacePinDragLeave: (event: React.DragEvent) => void
-  onWorkspaceStatusDrop: (event: React.DragEvent, status: WorkspaceStatus) => void
-}
+import type { SectionHeaderRowContext } from './section-header-row-context'
+import type { Translate } from '@/i18n/use-translate'
 
 // The folder-scan project group whose parent path is gone can't create new workspaces.
 function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
@@ -90,15 +53,18 @@ function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | nul
   )
 }
 
-export function renderWorktreeSectionHeaderRow(args: {
-  ctx: SectionHeaderRowContext
-  row: GroupHeaderRow
-  vItem: VirtualItem
-  isActiveStickyHeader: boolean
-  hasStickyHost: boolean
-  hasHeaderTopSpacing: boolean
-  measureVirtualRowElement: (element: HTMLDivElement | null) => void
-}): React.JSX.Element {
+export function renderWorktreeSectionHeaderRow(
+  args: {
+    ctx: SectionHeaderRowContext
+    row: GroupHeaderRow
+    vItem: VirtualItem
+    isActiveStickyHeader: boolean
+    hasStickyHost: boolean
+    hasHeaderTopSpacing: boolean
+    measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  },
+  t?: Translate
+): React.JSX.Element {
   const { ctx, row, vItem, isActiveStickyHeader } = args
   const { headerDrag } = ctx
   const displayRepo = row.displayRepo ?? row.repo
@@ -107,14 +73,21 @@ export function renderWorktreeSectionHeaderRow(args: {
   const hasRepoChrome =
     ctx.groupBy === 'repo' && (displayRepo !== undefined || contextRepo !== undefined)
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
-  // Drag keys on the project's anchor and skips copies an earlier host section already drew.
-  const headerRepo = isRepoHeader ? getHeaderDragRepo(row) : undefined
+  const usesRootProjectDrag = Boolean(
+    headerDrag.rootProjectHeaderKeys && (row.projectGroupDepth ?? 0) === 0
+  )
+  const headerRepo = isRepoHeader
+    ? usesRootProjectDrag
+      ? row.repo
+      : getHeaderDragRepo(row)
+    : undefined
   const projectIdForHeader = headerRepo?.id
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
       ? row.projectGroup.id
       : undefined
-  const projectGroupDragIdForHeader = row.repeated ? undefined : projectGroupIdForHeader
+  const projectGroupDragIdForHeader =
+    row.repeated && !usesRootProjectDrag ? undefined : projectGroupIdForHeader
   // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
   const projectGroupHostIdForHeader =
     row.projectGroup && 'createdFrom' in row.projectGroup
@@ -125,14 +98,17 @@ export function renderWorktreeSectionHeaderRow(args: {
     repoHeaderBucketKey,
     projectGroupHeaderIndex,
     projectGroupHeaderBucketKey,
+    rootProjectHeaderKey,
+    rootProjectHeaderSectionEnd,
     isDraggableRepoHeader,
     isDraggableProjectGroupHeader,
     isDraggingThis,
     isDraggingThisProjectGroup
   } = getSectionHeaderDragState(headerDrag, {
-    isRepoHeader,
+    usesRootProjectDrag,
     projectIdForHeader,
-    projectGroupDragIdForHeader
+    projectGroupDragIdForHeader,
+    hostId: row.hostId
   })
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
@@ -142,7 +118,8 @@ export function renderWorktreeSectionHeaderRow(args: {
   const headerVisual = getSidebarHeaderVisual(
     row.icon,
     ctx.workspaceStatuses,
-    ctx.workspaceStatusById
+    ctx.workspaceStatusById,
+    t
   )
   const label = row.label ?? headerVisual.label ?? ''
   const hostContext =
@@ -207,6 +184,9 @@ export function renderWorktreeSectionHeaderRow(args: {
           aria-label={hostContext ? `${label} — ${hostContext.label}` : undefined}
           aria-expanded={showHeaderCollapseAffordance ? !isHeaderCollapsed : undefined}
           data-project-grouping-key={row.key}
+          data-root-project-header-key={rootProjectHeaderKey}
+          data-root-project-header-host={rootProjectHeaderKey ? (row.hostId ?? '') : undefined}
+          data-root-project-header-section-end={rootProjectHeaderSectionEnd}
           data-repo-header-id={projectIdForHeader}
           data-repo-header-index={repoHeaderIndex}
           data-repo-header-bucket={repoHeaderBucketKey}
@@ -230,7 +210,6 @@ export function renderWorktreeSectionHeaderRow(args: {
           data-workspace-status={headerWorkspaceStatus ?? undefined}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
-            // Keep grab on the title; action buttons use pointer cursors.
             'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
             !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
             ctx.highlightedRevealRowKey === row.key &&

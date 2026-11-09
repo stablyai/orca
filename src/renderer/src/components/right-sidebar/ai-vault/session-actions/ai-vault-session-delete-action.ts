@@ -5,10 +5,11 @@ import { AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY } from '../../../../../../sh
 import { translate } from '@/i18n/i18n'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useAppStore } from '@/store/index'
+import { forgetAiVaultSessionResult } from '../scanning/ai-vault-session-result-cache'
 import '../session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
@@ -135,6 +136,7 @@ export function useAiVaultSessionDeleteAction({
           // Use one failure message rather than exposing raw main-side reasons.
           throw new Error(result.outcome)
         }
+        forgetAiVaultSessionResult(session.id)
         onDeleted?.(session)
         toast.success(
           translate('auto.components.right.sidebar.AiVaultPanel.sessionDeleted', 'Session deleted')

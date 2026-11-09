@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectPanePty } from '../connect-pane-pty'
-import { restoreScrollbackBuffers } from '../../layout-serialization'
+import { restoreScrollbackBuffers } from '../../snapshots/saved-terminal-output-replay'
 import { createDeferred } from '../test-fixtures/pty-connection-test-async'
 import {
   createManager,
@@ -22,8 +22,8 @@ import {
   createInitialStoreState
 } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../../pty-transport/remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../../pty-transport/remote/remote-runtime-pty-transport-stream-fixtures'
 
 // Real options builder and real remote transport: the fresh create's own layout binding must not
 // read as an old terminal when the held typing settles.
@@ -53,7 +53,7 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -73,7 +73,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
+vi.mock('../../titles/cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 

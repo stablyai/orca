@@ -10,10 +10,10 @@ import { partialRuntimeStore } from '../../../main/runtime/orca-runtime-tests/ru
 import { registerRuntimeHandlers } from '../../../main/ipc/runtime'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../../main/runtime/rpc/methods/mobile-delivery/mobile-project-sections'
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../shared/mobile-project-sections-contract'
-import { stubRpcClient } from '../../../../mobile/src/transport/rpc-client-test-stub'
-import { RpcClientRequestTracker } from '../../../../mobile/src/transport/rpc-client-request-tracker'
+import { stubRpcClient } from '../../../../mobile/src/transport/rpc/rpc-client-test-stub'
+import { RpcClientRequestTracker } from '../../../../mobile/src/transport/rpc/rpc-client-request-tracker'
 import { mapRuntimeError, successResponse } from '../../../main/runtime/rpc/errors'
-import type { RpcRequestFrame } from '../../../../mobile/src/transport/rpc-envelope-fields'
+import type { RpcRequestFrame } from '../../../../mobile/src/transport/rpc/rpc-envelope-fields'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeRendererSyncWindowGraph } from '../../../shared/runtime-types'
 

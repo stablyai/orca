@@ -1,5 +1,5 @@
 import { federationRelayWireItem } from '../../../../orchestration/federation/relay/federation-relay-wire'
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { importFederatedControlMessage } from '../../../../orchestration/federation/relay/federation-control-message'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'

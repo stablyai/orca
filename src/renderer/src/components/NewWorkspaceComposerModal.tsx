@@ -1,14 +1,13 @@
+import type { ComposerModalData, QuickAgentPick } from './new-workspace/composer-modal-data'
+import { toast } from 'sonner'
 import {
-  agentPickerLaunchInputs,
-  type AgentPickerDraft,
-  type AgentPickerEntry
-} from '../../../shared/agent-launch/picker/agent-launch-picker'
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace-create-error-format'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
 import { agentChoicePending } from '@/lib/host-chat-program'
-import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
-import type { ComposerModalData } from './new-workspace-composer-modal-data'
+import { useAppStore } from '@/store/index'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import {
   Dialog,
@@ -25,6 +24,7 @@ import type { AddRepoDialogHostedController } from '@/components/sidebar/project
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   composerLaunchWorkspace,
+  quickWorkspacePickerInputs,
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
 } from '@/lib/quick-workspace-agent-selection'
@@ -33,6 +33,7 @@ import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
@@ -119,6 +120,7 @@ function QuickTabBody({
   isSubmissionCancelled: () => boolean
   active: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const {
     cardProps,
@@ -133,6 +135,7 @@ function QuickTabBody({
     initialName: modalData.prefilledName ?? '',
     // Quick create ignores legacy prompt-prefill payloads.
     initialPrompt: '',
+    initialNote: modalData.recovery?.note,
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
@@ -155,7 +158,7 @@ function QuickTabBody({
   const agentSettingsInvoker = useRef<HTMLButtonElement | null>(null)
   // User picks outrank newly detected preferences. Derive from an override so detection stays current without an effect-driven extra commit.
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
-    undefined
+    modalData.recovery?.agent
   )
   // The picker rows' workspace when known, so the offered list and the rows read one host.
   const launchWorkspace =
@@ -190,13 +193,9 @@ function QuickTabBody({
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
-  const [quickAgentPick, setQuickAgentPick] = useState<{
-    agent: TuiAgent | null
-    surface?: AgentLaunchSurface
-    draft?: AgentPickerDraft
-    entry?: AgentPickerEntry
-    contextKey?: string
-  }>({ agent: null })
+  const [quickAgentPick, setQuickAgentPick] = useState<QuickAgentPick>(
+    modalData.recovery ?? { agent: null }
+  )
   const observation = useAgentMenuObservation(
     cardProps.agentRows?.target ?? null,
     active && Boolean(cardProps.agentRows),
@@ -214,9 +213,9 @@ function QuickTabBody({
   const handleQuickAgentChange = useCallback(
     (
       agent: TuiAgent | null,
-      surface?: AgentLaunchSurface,
-      draft?: AgentPickerDraft,
-      entry?: AgentPickerEntry
+      surface?: QuickAgentPick['surface'],
+      draft?: QuickAgentPick['draft'],
+      entry?: QuickAgentPick['entry']
     ) => {
       setQuickAgentOverride(agent)
       setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
@@ -228,26 +227,46 @@ function QuickTabBody({
     if (createDisabled) {
       return
     }
-    let launchInputs = pickerDraft
-      ? agentPickerLaunchInputs(pickerDraft, quickAgentPick.entry)
-      : undefined
-    if (
-      launchInputs &&
-      pickerDraft?.surface === 'terminal' &&
-      pickerDraft.arguments === undefined &&
-      quickAgentPick.entry &&
-      !quickAgentPick.entry.defaultsPending
-    ) {
-      launchInputs = agentPickerLaunchInputs(
-        { ...pickerDraft, arguments: quickAgentPick.entry.arguments ?? null },
-        quickAgentPick.entry
-      )
-    }
     await submitQuick(quickAgent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
-      ...(launchInputs ? { launchInputs } : {})
+      onLegacyPreparationFailure: (error) => {
+        if (isSubmissionCancelled()) {
+          return
+        }
+        const snapshot = {
+          ...modalData,
+          prefilledName: cardProps.name,
+          initialRepoId: cardProps.repoId,
+          initialBaseBranch: cardProps.baseBranch,
+          initialWorkspaceTarget:
+            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
+              ? {
+                  projectId: cardProps.selectedProjectId,
+                  hostId: cardProps.selectedRepoExecutionHostId,
+                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
+                }
+              : modalData.initialWorkspaceTarget,
+          linkedWorkItem: cardProps.linkedWorkItem,
+          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+        }
+        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+          action: {
+            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+            onClick: () => {
+              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
+                useAppStore.getState().openModal('new-workspace-composer', snapshot)
+              }
+            }
+          }
+        })
+      },
+      ...quickWorkspacePickerInputs(
+        pickerDraft,
+        quickAgentPick.entry,
+        launchSelection.choice?.executionHostId
+      )
     })
   }, [
     createDisabled,
@@ -255,7 +274,10 @@ function QuickTabBody({
     launchSelection.choice,
     submitQuick,
     pickerDraft,
-    quickAgentPick.entry
+    quickAgentPick,
+    isSubmissionCancelled,
+    modalData,
+    cardProps
   ])
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -294,10 +316,10 @@ function QuickTabBody({
   )
   const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
   const primaryActionLabel = isFolderWorkspaceTarget
-    ? getFolderWorkspacePrimaryActionLabel()
+    ? getFolderWorkspacePrimaryActionLabel(t)
     : cardProps.selectedRepoIsGit
-      ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
@@ -333,14 +355,14 @@ function QuickTabBody({
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">
           {isFolderWorkspaceTarget
-            ? translate(
+            ? t(
                 'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
                 'Create Folder Workspace'
               )
             : primaryActionLabel}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {translate(
+          {t(
             'components.newWorkspace.createDescription',
             'Choose the project and workspace name. Select an agent if you want to start one.'
           )}

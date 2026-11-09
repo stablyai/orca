@@ -111,7 +111,10 @@ export function appendWorktreeRows(
       result.push(
         buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
           collapsedGroups: options.collapsedGroups,
-          childWorktreeIds: childIdsByParent.get(occurrence.key)
+          childWorktreeIds: childIdsByParent.get(occurrence.key),
+          hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
+            getWorktreeHostIdentity(worktree)
+          )
         })
       )
       continue
@@ -149,7 +152,11 @@ export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
   groupDepth: number,
   occurrence?: WorktreeOccurrence<Worktree>,
-  options?: { collapsedGroups: ReadonlySet<string>; childWorktreeIds?: readonly string[] }
+  options?: {
+    collapsedGroups: ReadonlySet<string>
+    childWorktreeIds?: readonly string[]
+    hostContextLabel?: string
+  }
 ): FolderWorkspaceRow {
   const lineageGroupKey =
     occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
@@ -160,6 +167,7 @@ export function buildFolderWorkspaceRow(
     projectGroup: pair.projectGroup,
     depth: occurrence?.depth ?? 0,
     groupDepth,
+    ...(options?.hostContextLabel ? { hostContextLabel: options.hostContextLabel } : {}),
     ...(occurrence && occurrence.childCount > 0 && lineageGroupKey
       ? {
           lineageChildCount: occurrence.childCount,

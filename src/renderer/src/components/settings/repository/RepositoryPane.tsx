@@ -1,6 +1,6 @@
 import type { RepositoryPaneProps } from './repository-pane-types'
 import { RepositorySettingsSession } from './RepositorySettingsSession'
-import { getRepoHostIdentity } from '../../../store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 

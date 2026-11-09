@@ -149,7 +149,7 @@ async function fetchBackendUsage(
       return abortedCodexRateLimitResult()
     }
     return result
-      ? supplementCodexRateLimitResetCredits(result, requestCodexBackend, options)
+      ? await supplementCodexRateLimitResetCredits(result, requestCodexBackend, options)
       : null
   } catch {
     return options?.signal?.aborted ? abortedCodexRateLimitResult() : null

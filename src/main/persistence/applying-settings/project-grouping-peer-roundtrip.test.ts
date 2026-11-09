@@ -35,7 +35,7 @@ import { parseRuntimeClientCapabilities } from '../../runtime/rpc/runtime-client
 import {
   MOBILE_RUNTIME_CLIENT_CAPABILITIES,
   mobileRuntimeClientCapabilityUpdateParams
-} from '../../../../mobile/src/transport/mobile-runtime-client-capabilities'
+} from '../../../../mobile/src/transport/connection/mobile-runtime-client-capabilities'
 import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { registerUIHandlers } from '../../ipc/ui'

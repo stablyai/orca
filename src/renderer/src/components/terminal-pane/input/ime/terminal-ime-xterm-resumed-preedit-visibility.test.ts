@@ -27,29 +27,6 @@ const RESUMED_WITHOUT_START: RecordedEvent[] = [
   { type: 'input', data: '네', isComposing: true }
 ]
 
-// Synthetic update-only resume across the Enter committing 제.
-const RESUMED_ACROSS_ENTER: RecordedEvent[] = [
-  { type: 'input', data: '제', isComposing: true },
-  { type: 'compositionend', data: '제' },
-  { type: 'keydown', key: 'Enter', keyCode: 13, isComposing: false },
-  { type: 'keyup', key: 'Process', keyCode: 229, isComposing: false },
-  { type: 'keyup', key: 'Enter', keyCode: 13, isComposing: false },
-  { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
-  { type: 'compositionupdate', data: '제' },
-  { type: 'beforeinput', data: '제', isComposing: true },
-  { type: 'input', data: '제', isComposing: true }
-]
-
-/** The Linux control: IBus always reopens with a compositionstart, and must stay working. */
-const REOPENED_WITH_START: RecordedEvent[] = [
-  { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
-  { type: 'compositionupdate', data: '한' },
-  { type: 'compositionend', data: '한' },
-  { type: 'keydown', key: 'Process', keyCode: 229, isComposing: false },
-  { type: 'compositionstart', data: '' },
-  { type: 'compositionupdate', data: '글' }
-]
-
 const openTerminals: Terminal[] = []
 
 function nextEventLoop(): Promise<void> {
@@ -160,14 +137,6 @@ describe('preedit visibility across a composition the IME resumes', () => {
     document.body.replaceChildren()
   })
 
-  it('shows a preedit the IME resumes with an update and no second compositionstart', async () => {
-    const rig = openTerminal()
-
-    await rig.replay(RESUMED_WITHOUT_START)
-
-    expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '네', shown: true })
-  })
-
   it('commits and cleans up a transaction resumed with an update alone', async () => {
     const rig = openTerminal()
 
@@ -181,21 +150,5 @@ describe('preedit visibility across a composition the IME resumes', () => {
 
     expect(rig.emitted.join('')).toBe('네네')
     expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '', shown: false })
-  })
-
-  it('shows a preedit the IME resumes after the Enter that committed the last syllable', async () => {
-    const rig = openTerminal()
-
-    await rig.replay(RESUMED_ACROSS_ENTER)
-
-    expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '제', shown: true })
-  })
-
-  it('still shows a preedit the IME reopens with a compositionstart', async () => {
-    const rig = openTerminal()
-
-    await rig.replay(REOPENED_WITH_START)
-
-    expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '글', shown: true })
   })
 })

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
-import { getProjectGroupingIndexFromState } from '../../store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '../../store/projects/project-host-setup-selector'
 import {
   activityThreadMatchesSearchQuery,
   buildActivityThreadGroups

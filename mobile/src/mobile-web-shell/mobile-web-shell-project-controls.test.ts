@@ -23,9 +23,9 @@ import {
   readPersistedState
 } from '@project-grouping-test-host/main/persistence/persistence-test-harness'
 import { createProjectGroupingSocketOwner } from '@project-grouping-test-host/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture'
-import { DirectRpcClient } from '../transport/direct-rpc-client'
+import { DirectRpcClient } from '../transport/rpc/direct-rpc-client'
 import { createBridgePortPair } from './bridge/bridge-port-pair-test-harness'
-import { useHostStatusGates } from '../transport/host-status-gates'
+import { useHostStatusGates } from '../transport/connection/host-status-gates'
 import {
   HostStatusGatesContext,
   useOptionalHostProtocolGates
@@ -37,7 +37,7 @@ import { ProjectsPage as ReleasedProjectsPage } from '../host-screen/project-gro
 import { WORKSPACE_OPTION_CONTROLS } from '../host-screen/workspace-option-controls'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
 import { buildFilterRepos } from '../worktree/workspace-filter-repos'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostScreenController } from '../host-screen/use-host-screen-controller'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 it.each(['released-page/current-native', 'current-page/released-native'] as const)(

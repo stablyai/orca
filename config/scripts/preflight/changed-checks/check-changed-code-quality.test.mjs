@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { collectBaseLineBlocks, collectAddedLineRanges } from './check-changed-code-quality.mjs'
+import {
+  collectBaseLineBlocks,
+  collectAddedLineRanges,
+  isUnloadedPluginDirectiveUnusedWarning
+} from './check-changed-code-quality.mjs'
 
 describe('changed-code quality line matching', () => {
   it.each(['edit', 'rename'])('treats bracketed filenames literally after %s', (change) => {
@@ -138,6 +142,37 @@ describe('moved-code exemption', () => {
       ])
     } finally {
       rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('secondary-scan directive exemption', () => {
+  it('exempts type-aware and import-plugin directives from the root scan alone', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-type-aware-'))
+    try {
+      writeFileSync(
+        path.join(root, 'a.ts'),
+        [
+          '// oxlint-disable-next-line typescript/return-await -- catch must not cover this',
+          '// oxlint-disable-next-line typescript/return-await-extra -- unknown rule',
+          '// oxlint-disable-next-line no-console -- root rule',
+          '// oxlint-disable-next-line import/no-cycle -- singleton hub'
+        ].join('\n')
+      )
+      const unused = (line) => ({
+        message: 'Unused oxlint-disable directive (no problems were reported).',
+        filename: 'a.ts',
+        labels: [{ span: { line } }]
+      })
+      const exempt = (line, scan) =>
+        isUnloadedPluginDirectiveUnusedWarning(unused(line), root, scan)
+      expect(exempt(1, 'code quality')).toBe(true)
+      expect(exempt(1, 'type-aware code quality')).toBe(false)
+      expect(exempt(2, 'code quality')).toBe(false)
+      expect(exempt(3, 'code quality')).toBe(false)
+      expect(exempt(4, 'code quality')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
     }
   })
 })

@@ -18,7 +18,7 @@ import { buildNewExternalWorktreesInboxCandidates } from '../../worktree-list/li
 import { revealRepoInProjectFilter } from '../../worktree-list/controls/project-filter-reveal'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { getProjectGroupingIndexFromState } from '../../../../store/project-host-setup-selector'
+import { getProjectGroupingIndexFromState } from '../../../../store/projects/project-host-setup-selector'
 import { projectRepoFilterMatcher } from '../../../../../../shared/project-grouping'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'

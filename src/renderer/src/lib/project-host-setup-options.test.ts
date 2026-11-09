@@ -2,7 +2,7 @@ import { buildProjectGroupingIndex } from '../../../shared/project-section-group
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as dedupeRows from './project-host-setup-row-dedupe'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { buildProjectHostSetupOptions } from './project-host-setup-options'
