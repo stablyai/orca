@@ -23,6 +23,7 @@ import {
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { setHostedSessionSync } from './hosted-session-sync'
 import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
+import { findCloudRuntime } from './hosted-workspace-runtime'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
@@ -69,7 +70,13 @@ export function installHostedSandbox(): void {
     userDataPath,
     call: (environmentId, method, params, timeoutMs) =>
       callRuntimeEnvironment(userDataPath, environmentId, method, params, timeoutMs),
-    windows: () => BrowserWindow.getAllWindows()
+    windows: () => BrowserWindow.getAllWindows(),
+    isArchived: async (workspaceId) => {
+      const found = findCloudRuntime(userDataPath, workspaceId)
+      return found
+        ? (await client.workspaceStatus(found.sandboxId)).status.state === 'archived'
+        : false
+    }
   })
   setCloudOfflineService(offline)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.

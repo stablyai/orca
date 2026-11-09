@@ -54,9 +54,6 @@ export type RuntimeRpcSuccess<TResult> = {
   result: TResult
   _meta: {
     runtimeId: string
-    /** Set when main answered from the Orca Cloud offline cache because the VM is asleep:
-     *  when that answer was read from the VM. */
-    offlineCachedAt?: number
   }
 }
 

@@ -1,8 +1,13 @@
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { createCloudOfflineCache, OFFLINE_READ_METHODS, stableKey } from './cloud-offline-cache'
+import {
+  createCloudOfflineCache,
+  OFFLINE_READ_METHODS,
+  stableKey,
+  type OfflineCacheCodec
+} from './cloud-offline-cache'
 import {
   archiveCheckoutsFromCache,
   buildOfflineSnapshot,
@@ -16,10 +21,22 @@ const ok = (result: unknown) => ({
   _meta: { runtimeId: 'rt-1' }
 })
 
+/** Stand-in for safeStorage: reversible, and never the plaintext. */
+export const testCodec: OfflineCacheCodec = {
+  encrypt: (plain) => Buffer.from(Buffer.from(plain, 'utf8').map((b) => b ^ 0x5a)),
+  decrypt: (sealed) => Buffer.from(sealed.map((b) => b ^ 0x5a)).toString('utf8')
+}
+
 function setup(limits = {}) {
   const root = mkdtempSync(join(tmpdir(), 'orca-offline-'))
   let now = 1_000
-  const cache = createCloudOfflineCache({ root, limits, now: () => now, flushDelayMs: 0 })
+  const cache = createCloudOfflineCache({
+    root,
+    codec: testCodec,
+    limits: { minRecordIntervalMs: 0, ...limits },
+    now: () => now,
+    flushDelayMs: 0
+  })
   return { root, cache, tick: (ms = 1) => (now += ms) }
 }
 
@@ -34,15 +51,51 @@ describe('cloud offline cache', () => {
     expect(cache.lookup('env', 'agentSession.send', { sessionId: 's' })).toBeNull()
   })
 
-  it('looks up by params regardless of key order and survives a reload from disk', () => {
+  it('seals files at rest and reads them back after a reload', () => {
     const { root, cache } = setup()
-    cache.record('env', 'git.history', { worktree: 'id:w', limit: 20 }, ok({ items: [1] }))
+    cache.record(
+      'env',
+      'git.history',
+      { worktree: 'id:w', limit: 20 },
+      ok({ items: ['secret subject'] })
+    )
     expect(stableKey('m', { a: 1, b: 2 })).toBe(stableKey('m', { b: 2, a: 1 }))
-    const reloaded = createCloudOfflineCache({ root, flushDelayMs: 0 })
+    const [name] = readdirSync(root)
+    expect(readFileSync(join(root, name!)).toString('utf8')).not.toContain('secret subject')
+    const reloaded = createCloudOfflineCache({ root, codec: testCodec, flushDelayMs: 0 })
     expect(reloaded.lookup('env', 'git.history', { limit: 20, worktree: 'id:w' })?.result).toEqual({
-      items: [1]
+      items: ['secret subject']
     })
-    expect(readdirSync(root).every((name) => !name.includes('env'))).toBe(true)
+  })
+
+  it('keeps nothing when the OS cannot seal files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-offline-'))
+    const cache = createCloudOfflineCache({ root, codec: null, flushDelayMs: 0 })
+    cache.record('env', 'git.status', {}, ok({ entries: [] }))
+    expect(cache.entries('env')).toEqual([])
+    expect(readdirSync(root)).toEqual([])
+  })
+
+  it('does not re-serialize a key polled again within the interval', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-offline-'))
+    let now = 0
+    const cache = createCloudOfflineCache({
+      root,
+      codec: testCodec,
+      now: () => now,
+      flushDelayMs: 0
+    })
+    cache.record('env', 'terminal.read', { terminal: 't' }, ok({ terminal: { tail: ['a'] } }))
+    now = 1_000
+    cache.record('env', 'terminal.read', { terminal: 't' }, ok({ terminal: { tail: ['b'] } }))
+    expect(cache.lookup('env', 'terminal.read', { terminal: 't' })?.result).toEqual({
+      terminal: { tail: ['a'] }
+    })
+    now = 6_000
+    cache.record('env', 'terminal.read', { terminal: 't' }, ok({ terminal: { tail: ['c'] } }))
+    expect(cache.lookup('env', 'terminal.read', { terminal: 't' })?.result).toEqual({
+      terminal: { tail: ['c'] }
+    })
   })
 
   it('evicts the oldest entries past the per-workspace bound and refuses oversized answers', () => {
@@ -57,30 +110,37 @@ describe('cloud offline cache', () => {
         .map((e) => (e.params as { terminal: string }).terminal)
         .sort()
     ).toEqual(['t2', 't3', 't4'])
-    cache.record('env', 'terminal.read', { terminal: 't4' }, ok({ tail: ['y'.repeat(500)] }))
-    // The stale smaller answer is dropped rather than served as current.
+    cache.record(
+      'env',
+      'terminal.read',
+      { terminal: 't4' },
+      ok({ terminal: { tail: ['y'.repeat(500)] } })
+    )
     expect(cache.lookup('env', 'terminal.read', { terminal: 't4' })).toBeNull()
   })
 
-  it('evicts whole least-recent workspaces past the total bound, and prunes removed ones', () => {
+  it('holds a bounded number of workspaces in memory and still reads evicted ones from disk', () => {
+    const { cache, tick } = setup({ maxLoadedEnvironments: 2 })
+    for (const env of ['a', 'b', 'c', 'd']) {
+      tick()
+      cache.record(env, 'git.status', { worktree: env }, ok({ branch: env }))
+    }
+    expect(cache.lookup('a', 'git.status', { worktree: 'a' })?.result).toEqual({ branch: 'a' })
+  })
+
+  it('evicts whole least-recent workspaces past the total bound, prunes removed ones, and clears on sign-out', () => {
     const { root, cache, tick } = setup({ maxTotalBytes: 900 })
     for (const env of ['a', 'b', 'c']) {
       tick(1000)
       cache.record(env, 'git.status', { worktree: env }, ok({ entries: ['z'.repeat(300)] }))
     }
-    expect(readdirSync(root).filter((n) => n.endsWith('.json')).length).toBeLessThan(3)
+    expect(readdirSync(root).length).toBeLessThan(3)
     expect(cache.lookup('c', 'git.status', { worktree: 'c' })).not.toBeNull()
     cache.prune(new Set(['c']))
-    expect(readdirSync(root).filter((n) => n.endsWith('.json'))).toHaveLength(1)
-    cache.forget('c')
-    expect(readdirSync(root).filter((n) => n.endsWith('.json'))).toHaveLength(0)
-  })
-
-  it('writes owner-only files', () => {
-    const { root, cache } = setup()
-    cache.record('env', 'git.status', {}, ok({}))
-    const [name] = readdirSync(root)
-    expect(JSON.parse(readFileSync(join(root, name!), 'utf8')).environmentId).toBe('env')
+    expect(readdirSync(root)).toHaveLength(1)
+    cache.clear()
+    expect(existsSync(root)).toBe(false)
+    expect(cache.lookup('c', 'git.status', { worktree: 'c' })).toBeNull()
   })
 })
 
@@ -104,7 +164,7 @@ describe('offline snapshot', () => {
       'git.status',
       { worktree: 'id:w' },
       ok({
-        branch: 'feat',
+        branch: 'refs/heads/feat',
         head: 'abcdef1',
         entries: [{ path: 'a.ts', status: 'modified', area: 'unstaged' }]
       })

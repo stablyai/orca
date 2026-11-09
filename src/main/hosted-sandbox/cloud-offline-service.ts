@@ -1,8 +1,8 @@
 // Offline reading and wake on message for Orca Cloud workspaces:
-// - a read-through cache at the window's runtime call seam (allowlisted read-only methods), served
-//   when the VM is asleep instead of the asleep refusal;
-// - a snapshot read right before Sleep, while terminals and chats are still up;
-// - the queued-prompt store that wakes the VM and delivers once orcad is ready.
+// - answers to allowlisted read-only methods are kept (sealed) as the window reads them, and a
+//   snapshot is read right before Sleep while terminals and chats are still up; the asleep view
+//   shows that copy. Nothing is served to live panes as if it were current;
+// - the queued-prompt store that wakes the VM (only when the person queues) and delivers once.
 import { join } from 'node:path'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
@@ -12,22 +12,23 @@ import {
   ORCA_CLOUD_OFFLINE_CHANNELS as CH,
   type CloudOfflineSnapshot
 } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
-import {
-  RECIPE_VM_OPEN_HOLD_MS,
-  RECIPE_VM_REFUSAL_CODES
-} from '../../shared/remote-runtime/recipe-vm-wake'
-import type {
-  RuntimeRpcFailure,
-  RuntimeRpcResponse,
-  RuntimeRpcSuccess
-} from '../../shared/runtime-rpc-envelope'
+import { RECIPE_VM_OPEN_HOLD_MS } from '../../shared/remote-runtime/recipe-vm-wake'
+import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { guardedSafeStorage } from '../host/safe-storage-availability'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
-import { createCloudMessageQueue, type CloudMessageQueue } from './cloud-message-queue'
+import {
+  createCloudMessageQueue,
+  type CloudMessageQueue,
+  type WorkspaceAvailability
+} from './cloud-message-queue'
 import {
   createCloudOfflineCache,
   OFFLINE_READ_METHODS,
-  type CloudOfflineCache
+  type CloudOfflineCache,
+  type OfflineCacheCodec
 } from './cloud-offline-cache'
+import { setCloudOfflineReset } from './cloud-offline-reset'
 import { archiveCheckoutsFromCache, buildOfflineSnapshot } from './cloud-offline-snapshot'
 import { getHostedWorkspaceService, setArchiveCheckoutsProvider } from './hosted-workspace-service'
 
@@ -38,58 +39,25 @@ type CloudRuntimeInfo = {
   projectRoot: string | null
 }
 
-/** Codes a call to a sleeping (or not yet woken) VM gets: the moment to answer from the cache. */
-const OFFLINE_FALLBACK_CODES: ReadonlySet<string> = new Set([
-  ...RECIPE_VM_REFUSAL_CODES,
-  'runtime_unreachable',
-  'runtime_unresponsive',
-  'runtime_environment_unreachable'
-])
-
 const CAPTURE_BUDGET_MS = 8_000
 const MAX_CAPTURED_TERMINALS = 12
 
-export type CloudOfflineSeam = {
-  /** After a window call answered: keep allowlisted answers from Orca Cloud environments. */
-  observe(
-    environmentId: string,
-    method: string,
-    params: unknown,
-    response: RuntimeRpcResponse<unknown>
-  ): void
-  /** A call was refused (asleep, waking, unreachable): the cached answer, marked offline, or null. */
-  fallback(
-    environmentId: string,
-    method: string,
-    params: unknown,
-    failure: RuntimeRpcFailure
-  ): RuntimeRpcSuccess<unknown> | null
-}
-
-let seam: CloudOfflineSeam | null = null
-export function getCloudOfflineSeam(): CloudOfflineSeam | null {
-  return seam
-}
-
-/** The window's call seam: record an answer, or replace a sleeping-VM refusal with the cached one. */
-export function withCloudOfflineAnswer(
-  environmentId: string,
-  method: string,
-  params: unknown,
-  response: RuntimeRpcResponse<unknown>
-): RuntimeRpcResponse<unknown> {
-  if (!seam) {
-    return response
+/** The OS keychain seals the cache and queue; without it nothing reaches disk. */
+export function safeStorageCodec(): OfflineCacheCodec | null {
+  try {
+    if (!guardedSafeStorage.isEncryptionAvailable()) {
+      return null
+    }
+  } catch {
+    return null
   }
-  if (response.ok) {
-    seam.observe(environmentId, method, params, response)
-    return response
+  return {
+    encrypt: (plain) => guardedSafeStorage.encryptString(plain),
+    decrypt: (sealed) => guardedSafeStorage.decryptString(sealed)
   }
-  return seam.fallback(environmentId, method, params, response) ?? response
 }
 
 export type CloudOfflineService = {
-  seam: CloudOfflineSeam
   cache: CloudOfflineCache
   queue: CloudMessageQueue
   /** Read the workspace's terminals, git state and known chats into the cache (before Sleep). */
@@ -104,14 +72,48 @@ type Call = (
   timeoutMs: number
 ) => Promise<RuntimeRpcResponse<unknown>>
 
+let observer:
+  | ((
+      environmentId: string,
+      method: string,
+      params: unknown,
+      response: RuntimeRpcResponse<unknown>
+    ) => void)
+  | null = null
+
+/** The window's call seam: keep allowlisted answers from Orca Cloud VMs. Never alters the answer. */
+export function observeCloudOfflineAnswer(
+  environmentId: string,
+  method: string,
+  params: unknown,
+  response: RuntimeRpcResponse<unknown>
+): RuntimeRpcResponse<unknown> {
+  if (observer && response.ok && OFFLINE_READ_METHODS.has(method)) {
+    try {
+      observer(environmentId, method, params, response)
+    } catch (error) {
+      // Caching is best effort; the window gets its answer either way.
+      console.error(`[orca-cloud] offline cache record failed: ${String(error)}`)
+    }
+  }
+  return response
+}
+
 export function installCloudOfflineService(deps: {
   userDataPath: string
   call: Call
   windows: () => readonly BrowserWindow[]
+  /** The control plane says the workspace is archived (nothing wakes or sends to it). */
+  isArchived: (workspaceId: string) => Promise<boolean>
+  codec?: OfflineCacheCodec | null
   log?: (line: string) => void
 }): CloudOfflineService {
   const log = deps.log ?? ((line: string) => console.error(line))
-  const cache = createCloudOfflineCache({ root: join(deps.userDataPath, 'orca-cloud-offline') })
+  const codec = deps.codec === undefined ? safeStorageCodec() : deps.codec
+  const cache = createCloudOfflineCache({
+    root: join(deps.userDataPath, 'orca-cloud-offline'),
+    codec
+  })
   let memo: {
     at: number
     byEnvironment: Map<string, CloudRuntimeInfo>
@@ -162,37 +164,6 @@ export function installCloudOfflineService(deps: {
     }
   }
 
-  const service: CloudOfflineSeam = {
-    observe(environmentId, method, params, response) {
-      if (
-        !response.ok ||
-        !OFFLINE_READ_METHODS.has(method) ||
-        !runtimes().byEnvironment.has(environmentId)
-      ) {
-        return
-      }
-      cache.record(environmentId, method, params, response)
-    },
-    fallback(environmentId, method, params, failure) {
-      if (!OFFLINE_READ_METHODS.has(method) || !OFFLINE_FALLBACK_CODES.has(failure.error.code)) {
-        return null
-      }
-      if (!runtimes().byEnvironment.has(environmentId)) {
-        return null
-      }
-      const hit = cache.lookup(environmentId, method, params)
-      if (!hit) {
-        return null
-      }
-      return {
-        id: failure.id,
-        ok: true,
-        result: hit.result,
-        _meta: { runtimeId: hit.runtimeId, offlineCachedAt: hit.at }
-      }
-    }
-  }
-
   async function readInto(
     environmentId: string,
     method: string,
@@ -216,6 +187,7 @@ export function installCloudOfflineService(deps: {
   }
 
   async function capture(workspaceId: string): Promise<void> {
+    invalidate()
     const info = runtimes().byWorkspace.get(workspaceId)
     if (!info || info.asleep) {
       return
@@ -256,13 +228,28 @@ export function installCloudOfflineService(deps: {
     cache.flush()
   }
 
+  async function locate(workspaceId: string): Promise<WorkspaceAvailability> {
+    invalidate()
+    const info = runtimes().byWorkspace.get(workspaceId)
+    if (!info) {
+      return { kind: 'gone' }
+    }
+    if (isRuntimeEnvironmentManuallyDisconnected(info.environmentId)) {
+      return { kind: 'blocked', reason: 'This workspace was disconnected. Reconnect it to send.' }
+    }
+    if (!info.asleep) {
+      return { kind: 'up', environmentId: info.environmentId }
+    }
+    if (await deps.isArchived(workspaceId).catch(() => false)) {
+      return { kind: 'blocked', reason: 'This workspace is archived. Unarchive it to send.' }
+    }
+    return { kind: 'asleep', environmentId: info.environmentId }
+  }
+
   const queue = createCloudMessageQueue({
-    path: join(deps.userDataPath, 'orca-cloud-queued-prompts.json'),
-    locate: (workspaceId) => {
-      invalidate()
-      const info = runtimes().byWorkspace.get(workspaceId)
-      return info ? { environmentId: info.environmentId, asleep: info.asleep } : null
-    },
+    path: join(deps.userDataPath, 'orca-cloud-queued-prompts.bin'),
+    codec,
+    locate,
     wake: async (workspaceId) => {
       const waker = getRecipeVmWaker()
       if (!waker) {
@@ -278,6 +265,15 @@ export function installCloudOfflineService(deps: {
     log
   })
 
+  observer = (environmentId, method, params, response) => {
+    if (response.ok && runtimes().byEnvironment.has(environmentId)) {
+      cache.record(environmentId, method, params, response)
+    }
+  }
+  setCloudOfflineReset(() => {
+    cache.clear()
+    queue.clear()
+  })
   setArchiveCheckoutsProvider(async (workspaceId) => {
     const info = runtimes().byWorkspace.get(workspaceId)
     return info
@@ -304,14 +300,9 @@ export function installCloudOfflineService(deps: {
   )
   ipcMain.handle(
     CH.queuePrompt,
-    (_event, args: { workspaceId: string; sessionId: string; text: string }) => {
-      if (!runtimes().byWorkspace.has(args.workspaceId)) {
-        return { ok: false, message: 'Not an Orca Cloud workspace.' }
-      }
+    async (_event, args: { workspaceId: string; sessionId: string; text: string }) => {
       try {
-        const prompt = queue.enqueue(args)
-        void queue.drive(args.workspaceId)
-        return { ok: true, prompt }
+        return { ok: true, prompt: await queue.enqueue(args) }
       } catch (error) {
         return { ok: false, message: error instanceof Error ? error.message : String(error) }
       }
@@ -325,25 +316,26 @@ export function installCloudOfflineService(deps: {
     queue.edit(args.id, args.text)
   )
 
-  // Re-drive pending prompts after a restart, and keep retrying unconfirmed ones on a slow beat.
+  // Background: deliver to VMs that are already up (never wakes), and drop removed workspaces.
   const beat = setInterval(() => {
     invalidate()
     void queue.drive()
     cache.prune(new Set(runtimes().byEnvironment.keys()))
   }, 30_000)
   beat.unref?.()
-  setTimeout(() => void queue.drive(), 5_000).unref?.()
+  const startup = setTimeout(() => void queue.drive(), 5_000)
+  startup.unref?.()
 
-  seam = service
   return {
-    seam: service,
     cache,
     queue,
     capture,
     dispose() {
       clearInterval(beat)
+      clearTimeout(startup)
       cache.flush()
-      seam = null
+      observer = null
+      setCloudOfflineReset(null)
       setArchiveCheckoutsProvider(null)
       for (const channel of Object.values(CH)) {
         ipcMain.removeHandler(channel)
@@ -356,6 +348,7 @@ let current: CloudOfflineService | null = null
 export function setCloudOfflineService(next: CloudOfflineService | null): void {
   current = next
 }
+
 /** Before a Sleep: snapshot every Orca Cloud workspace among `workspaceIds` (no-op otherwise). */
 export async function captureCloudWorkspacesBeforeSleep(
   workspaceIds: readonly string[]
@@ -365,4 +358,11 @@ export async function captureCloudWorkspacesBeforeSleep(
     return
   }
   await Promise.all(workspaceIds.map((id) => service.capture(id).catch(() => undefined)))
+}
+
+/** After a Sleep or archive: prompts still waiting fail rather than wake the VM later. */
+export function failQueuedCloudPrompts(workspaceIds: readonly string[], reason: string): void {
+  for (const id of workspaceIds) {
+    current?.queue.failPending(id, reason)
+  }
 }
