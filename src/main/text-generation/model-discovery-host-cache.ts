@@ -30,6 +30,15 @@ onAgentsRefreshedOnHost(() => {
   inFlight.clear()
 })
 
+// Windows environment names ignore case, so `codex_home` still picks the login there.
+function accountDir(env: NodeJS.ProcessEnv | undefined, name: string): string | null {
+  const key =
+    process.platform === 'win32'
+      ? Object.keys(env ?? {}).find((entry) => entry.toUpperCase() === name)
+      : name
+  return (key && env?.[key]) ?? null
+}
+
 export type ModelDiscoveryCacheInput = {
   agentId: TuiAgent
   agentCommandOverride: string | undefined
@@ -53,7 +62,7 @@ export function discoverModelsWithHostCache(
     input.agentId,
     input.agentCommandOverride ?? null,
     wslDistro ? { cwd: cwd ?? '', wslDistro } : null,
-    input.env?.[accountDirVar] ?? null
+    accountDir(input.env, accountDirVar)
   ])
   const cached = cache.get(key)
   if (cached && cached.expiresAt > Date.now()) {

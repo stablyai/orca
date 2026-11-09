@@ -26,7 +26,7 @@ export function createMockDiscoveryChild(): MockDiscoveryChild {
   })
 }
 
-/** Answers initialize, then each `model/list` with the next page, as a Codex app-server child. */
+/** Answers initialize, then each `model/list` with the next page (`{ rpcError }` replies an error), as a Codex app-server child. */
 export function answerCodexAppServer(
   child: { stdin: NodeJS.EventEmitter; stdout: NodeJS.EventEmitter },
   pages: unknown[]
@@ -36,8 +36,11 @@ export function answerCodexAppServer(
     for (const line of chunk.toString('utf8').split('\n').filter(Boolean)) {
       const message = JSON.parse(line) as { id?: number; method: string }
       if (message.id !== undefined) {
-        const result = message.method === 'model/list' ? pages[page++] : {}
-        const reply = Buffer.from(`${JSON.stringify({ id: message.id, result })}\n`)
+        const answer = message.method === 'model/list' ? pages[page++] : {}
+        const error = (answer as { rpcError?: unknown } | undefined)?.rpcError
+        const reply = Buffer.from(
+          `${JSON.stringify(error ? { id: message.id, error } : { id: message.id, result: answer })}\n`
+        )
         // Real streams may be piped onward by the spawner; plain emitters only have listeners.
         if (child.stdout instanceof PassThrough) {
           child.stdout.write(reply)

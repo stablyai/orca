@@ -338,9 +338,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     }
   })
 
-  it('lists Codex models from app-server model/list without hidden rows, then stops the app-server', async () => {
+  it('lists Codex models from app-server model/list without hidden rows, then releases the home once it stops', async () => {
+    vi.useFakeTimers()
     const child = createMockDiscoveryChild()
-    spawnMock.mockReturnValue(child as never)
+    const nextChild = createMockDiscoveryChild()
+    spawnMock.mockReturnValueOnce(child as never).mockReturnValueOnce(nextChild as never)
+    const env = { CODEX_HOME: '/managed/codex-model-list-home' }
     answerCodexAppServer(child, [
       { data: agentPickerCliRecordings.modelList.data, nextCursor: 'page-2' },
       {
@@ -356,36 +359,73 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       }
     ])
 
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(first).resolves.toEqual({
+        success: true,
+        catalogOrigin: 'probe',
+        defaultModelId: 'gpt-5.6-sol',
+        capability: expect.objectContaining({ defaultModelId: 'gpt-5.6-sol' }),
+        models: [
+          {
+            id: 'gpt-5.6-sol',
+            label: 'GPT-5.6-Sol',
+            description: 'Latest frontier agentic coding model.',
+            thinkingLevels: [
+              { id: 'low', label: 'Low' },
+              { id: 'medium', label: 'Medium' },
+              { id: 'high', label: 'High' },
+              { id: 'xhigh', label: 'Extra high' },
+              { id: 'max', label: 'Max' },
+              { id: 'ultra', label: 'Ultra' }
+            ],
+            defaultThinkingLevel: 'low',
+            isDefault: true
+          }
+        ]
+      })
+      expect(spawnedAgentArgv(spawnMock.mock.calls[0])).toContain('app-server')
+      expect(child.stdin.end).toHaveBeenCalled()
+
+      // A different command shares the home lock but not the cached listing.
+      const next = discoverCommitMessageModelsLocal('codex', env, 'codex')
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(child.kill).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      // A child that ignores stdin EOF is stopped after the grace; its exit frees the home.
+      await vi.advanceTimersByTimeAsync(1)
+      await expectChildTerminated(child)
+      child.emit('exit', null, 'SIGKILL')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+
+      answerCodexAppServer(nextChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(next).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      // An app-server that exits on stdin EOF is never killed.
+      nextChild.emit('exit', 0, null)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(nextChild.kill).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['an unsupported model/list', { rpcError: { code: -32601, message: 'Method not found' } }],
+    ['an unreadable page', { data: 'not-a-list', nextCursor: null }]
+  ])('keeps the built-in Codex list when the app-server returns %s', async (name, page) => {
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child as never)
+    answerCodexAppServer(child, [page])
+
     await expect(
-      discoverCommitMessageModelsLocal('codex', { CODEX_HOME: '/managed/codex-model-list-home' })
-    ).resolves.toEqual({
-      success: true,
-      catalogOrigin: 'probe',
-      defaultModelId: 'gpt-5.6-sol',
-      capability: expect.objectContaining({ defaultModelId: 'gpt-5.6-sol' }),
-      models: [
-        {
-          id: 'gpt-5.6-sol',
-          label: 'GPT-5.6-Sol',
-          description: 'Latest frontier agentic coding model.',
-          thinkingLevels: [
-            { id: 'low', label: 'Low' },
-            { id: 'medium', label: 'Medium' },
-            { id: 'high', label: 'High' },
-            { id: 'xhigh', label: 'Extra high' },
-            { id: 'max', label: 'Max' },
-            { id: 'ultra', label: 'Ultra' }
-          ],
-          defaultThinkingLevel: 'low',
-          isDefault: true
-        }
-      ]
-    })
-    expect(spawnedAgentArgv(spawnMock.mock.calls[0])).toContain('app-server')
-    // stdin EOF first; a child that ignores it is stopped after the grace.
-    expect(child.stdin.end).toHaveBeenCalled()
-    expect(child.kill).not.toHaveBeenCalled()
-    await vi.waitFor(() => expectChildTerminated(child), { timeout: 3_000 })
+      discoverCommitMessageModelsLocal('codex', { CODEX_HOME: `/managed/codex-${name}` })
+    ).resolves.toMatchObject({ success: false })
+    child.emit('exit', 0, null)
   })
 
   it('keeps the Codex home locked after a discovery timeout until the child closes', async () => {

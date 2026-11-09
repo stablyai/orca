@@ -5,6 +5,14 @@ import type { CommitMessageModel } from '../../shared/source-control/ai/generati
 import { createIncrementalNdjsonFramer } from '../../shared/main-process-ndjson-framer'
 import { createCodexAppServerRecordDispatcher } from '../codex/app-server/codex-app-server-record-dispatch'
 import { listCodexModelPages } from '../codex/structured/catalog/codex-structured-model-catalog'
+import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
+import { discoveredModelsResult } from './commit-message-model-discovery-policy'
+import type {
+  DiscoverCommitMessageModelsResult,
+  SpawnedSourceControlAgentProcess
+} from './source-control-text-generation-types'
+
+const APP_SERVER_EXIT_GRACE_MS = 1_500
 
 export type CodexModelListDiscovery = {
   /** Feed raw stdout; the caller owns the byte budget. */
@@ -110,4 +118,57 @@ export function startCodexModelListDiscovery(stdin: Writable): CodexModelListDis
     fail,
     models
   }
+}
+
+/** Settles discovery from the listing, then ends the app-server, which would otherwise wait on stdin
+ * forever. Codex rewrites its shared models cache at startup, so stdin EOF gets a grace before any kill. */
+export function settleCodexModelListing(input: {
+  listing: CodexModelListDiscovery
+  spec: AgentModelProbeSpec
+  child: SpawnedSourceControlAgentProcess
+  isSettled: () => boolean
+  stop: () => void
+  finish: (result: DiscoverCommitMessageModelsResult) => void
+}): void {
+  const { child, spec } = input
+  let exited = false
+  child.once('exit', () => {
+    exited = true
+  })
+  const endAppServer = (): void => {
+    try {
+      child.stdin?.end()
+    } catch {
+      // A destroyed stdin still leaves the kill below.
+    }
+    if (exited) {
+      return
+    }
+    const grace = setTimeout(input.stop, APP_SERVER_EXIT_GRACE_MS)
+    child.once('exit', () => clearTimeout(grace))
+  }
+  void input.listing.models.then(
+    (models) => {
+      if (input.isSettled()) {
+        return
+      }
+      endAppServer()
+      input.finish(
+        models
+          ? discoveredModelsResult(spec, models)
+          : { success: false, error: `${spec.label} returned an incomplete model list.` }
+      )
+    },
+    (error: unknown) => {
+      if (input.isSettled()) {
+        return
+      }
+      endAppServer()
+      console.error('[commit-message] Model discovery failed:', error)
+      input.finish({
+        success: false,
+        error: `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`
+      })
+    }
+  )
 }
