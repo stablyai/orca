@@ -325,3 +325,17 @@ describe('adopted wakes boot like real wakes', () => {
     expect((h.raw.prepare('SELECT usage_settled_at FROM sandboxes WHERE id = ?').get(id) as any).usage_settled_at).toBe(cursor)
   })
 })
+
+describe('idle sleep minutes', () => {
+  it('reports one idle-sleep value, equal to the billing plan, overridable by IDLE_SLEEP_MINUTES', async () => {
+    const { DEFAULT_PLANS } = await import('../../billing/src/plans')
+    const { DEFAULT_IDLE_SLEEP_MINUTES } = await import('../src/workspace-lifecycle')
+    expect(DEFAULT_IDLE_SLEEP_MINUTES).toBe(DEFAULT_PLANS.team.idleSleepMinutes)
+    const { h, id } = await running()
+    const status = HostedWorkspaceStatusResponseSchema.parse((await h.call('GET', `/v1/sandboxes/${id}/status`)).body).status
+    expect(status.idleSleepMinutes).toBe(15)
+    const custom = await createHarness({ IDLE_SLEEP_MINUTES: '7' })
+    const made = (await custom.call('POST', '/v1/sandboxes', { body: create })).body
+    expect((await custom.call('GET', `/v1/sandboxes/${made.sandbox.id}/status`)).body.status.idleSleepMinutes).toBe(7)
+  })
+})

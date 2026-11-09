@@ -71,9 +71,18 @@ export function installHostedSandbox(): void {
   const idleOverride = app.isPackaged
     ? Number.NaN
     : Number(process.env.ORCA_CLOUD_SANDBOX_IDLE_STOP_MS)
-  const driver = Number.isFinite(idleOverride)
-    ? { ...base, capabilities: { ...base.capabilities, idleStopMs: idleOverride } }
-    : base
+  // One mutable capabilities object: the control plane's idle minutes replace the fallback as soon
+  // as any status read reports them (dev overrides still win).
+  const capabilities = {
+    ...base.capabilities,
+    idleStopMs: Number.isFinite(idleOverride) ? idleOverride : base.capabilities.idleStopMs
+  }
+  const driver = { ...base, capabilities }
+  const noteIdleSleepMinutes = (minutes: number): void => {
+    if (!Number.isFinite(idleOverride)) {
+      capabilities.idleStopMs = minutes * 60_000
+    }
+  }
   const registry = createHostedSessionRegistry({
     userDataPath,
     driver,
@@ -84,7 +93,8 @@ export function installHostedSandbox(): void {
     client,
     windows: () => BrowserWindow.getAllWindows(),
     syncSessions: () => void registry.sync(),
-    stopSession: (environmentId) => registry.stopEnvironment(environmentId)
+    stopSession: (environmentId) => registry.stopEnvironment(environmentId),
+    onIdleSleepMinutes: noteIdleSleepMinutes
   })
   setHostedWorkspaceService(workspaces)
   const disposeTransfer = installCloudTransferHandlers({

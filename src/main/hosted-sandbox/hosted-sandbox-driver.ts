@@ -30,7 +30,8 @@ export const HOSTED_SANDBOX_CAPABILITIES: HostedEnvironmentCapabilities = Object
   maxSessionMs: 24 * 60 * 60_000,
   fsPersistOnStop: true,
   egressInjection: true,
-  idleStopMs: 20 * 60_000
+  // Fallback only: the control plane's status (`idleSleepMinutes`) wins once read.
+  idleStopMs: 15 * 60_000
 })
 
 const STATUS: Record<HostedSandboxView['status'], EnvironmentStatus> = {

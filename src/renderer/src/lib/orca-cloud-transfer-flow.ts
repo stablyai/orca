@@ -2,7 +2,7 @@
 // orcad, create the local workspace through the ordinary create path (reusing the transferred
 // branch), apply the uncommitted work and chats, then open it. The cloud workspace is left as is.
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { CloudTransferProgressEvent } from '../../../shared/hosted-sandbox/cloud-transfer-api'
@@ -14,13 +14,16 @@ const PHASE_COPY: Record<CloudTransferProgressEvent['phase'], [string, string]> 
   'creating-worktree': ['auto.lib.orcaCloudTransfer.creating', 'Creating the local workspace…'],
   applying: ['auto.lib.orcaCloudTransfer.applying', 'Applying uncommitted changes and chats…'],
   done: ['auto.lib.orcaCloudTransfer.done', 'Moved to this computer'],
-  failed: ['auto.lib.orcaCloudTransfer.failed', 'Could not move the workspace']
+  failed: ['auto.lib.orcaCloudTransfer.failed', 'Couldn’t move the workspace']
 }
 
 function formatBytes(bytes: number): string {
-  return bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    : `${Math.ceil(bytes / 1024)} KB`
+  const megabytes = bytes >= 1024 * 1024
+  return new Intl.NumberFormat(getIntlLocale(), {
+    style: 'unit',
+    unit: megabytes ? 'megabyte' : 'kilobyte',
+    maximumFractionDigits: megabytes ? 1 : 0
+  }).format(megabytes ? bytes / (1024 * 1024) : Math.ceil(bytes / 1024))
 }
 
 export async function runOrcaCloudTransferToLocal(workspaceId: string): Promise<void> {
@@ -115,10 +118,19 @@ export async function runOrcaCloudTransferToLocal(workspaceId: string): Promise<
     })
     activateAndRevealWorktree(worktree.id)
   } catch (error) {
-    toast.error(translate('auto.lib.orcaCloudTransfer.failed', 'Could not move the workspace'), {
+    // Details go to the log, not the toast (error tone: plain words, nothing lost, one action).
+    console.error('[orca-cloud] move to this computer failed', error)
+    toast.error(translate('auto.lib.orcaCloudTransfer.failed', 'Couldn’t move the workspace'), {
       id: toastId,
       duration: 12_000,
-      description: error instanceof Error ? error.message : String(error)
+      description: translate(
+        'auto.lib.orcaCloudTransfer.failedDetail',
+        'Your files are safe in the cloud workspace. Nothing was changed on this computer.'
+      ),
+      action: {
+        label: translate('auto.lib.orcaCloudTransfer.retry', 'Try again'),
+        onClick: () => void runOrcaCloudTransferToLocal(workspaceId)
+      }
     })
   } finally {
     dispose()

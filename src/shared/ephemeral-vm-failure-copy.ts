@@ -37,9 +37,9 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   cleanupInterrupted: 'Cleanup was interrupted. Retry cleanup to continue.',
   sshTargetRemoveFailed: 'Failed to remove the hidden SSH target.',
   cloudPlanRequired:
-    'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+    'Orca Cloud needs a Team plan. Open Plan & billing to choose one.',
   cloudConcurrencyLimit:
-    'You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again.',
+    'You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.',
   cloudSignInRequired: 'Sign in to Orca to use Orca Cloud workspaces.',
   cloudUnavailable: 'Orca Cloud is unavailable right now. Try again in a moment.'
 } as const

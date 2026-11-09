@@ -13,12 +13,14 @@ import {
   formatDuration,
   formatSandboxHours,
   formatShortDate,
+  isWakeActive,
   percentOf,
   showUpdatedAgo,
   type CloudDotState
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import {
   refreshCloudWorkspaceStatus,
+  useCloudWorkspace,
   type CloudStatusEntry
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { CloudStateDot } from './CloudStateDot'
@@ -139,8 +141,11 @@ export function CloudWorkspaceStatusPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const now = useNow(5_000)
-  // A restart in flight is a wake, whatever the last status read said.
-  const restarting = pending === 'restart'
+  // A restart in flight is a wake, whatever the last status read said: one this panel started, or a
+  // session rollover main is running (24h cap or "Restart now" from the toast).
+  const rollover = useCloudWorkspace((s) => s.wake[workspaceId])
+  const restarting =
+    pending === 'restart' || (rollover?.source === 'restart' && isWakeActive(rollover, now))
   const state: CloudDotState = restarting ? 'waking' : rawState
   const status = entry?.status ?? null
   const metrics = status?.metrics ?? null

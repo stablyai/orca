@@ -195,7 +195,9 @@ function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
   } catch {
     centsPerHour = undefined
   }
+  const idle = Number(env.IDLE_SLEEP_MINUTES)
   return {
+    idleSleepMinutes: Number.isInteger(idle) && idle >= 1 && idle <= 24 * 60 ? idle : undefined,
     archiveTtlMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : undefined,
     centsPerHour,
     background: deps.waitUntil,

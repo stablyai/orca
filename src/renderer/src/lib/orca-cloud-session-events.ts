@@ -8,7 +8,9 @@ import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { installOrcaCloudWorkspaceStore,
+  noteCloudRolloverState
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { HostedSessionRestartResult } from '../../../shared/hosted-sandbox/hosted-session-events'
 import {
   dismissOrcaCloudRestartWarning,
@@ -54,6 +56,7 @@ export function installOrcaCloudSessionEvents(): () => void {
     api.onCloudSessionState?.(({ workspaceId, state }) => {
       if (workspaceId) {
         noteOrcaCloudRolloverState(workspaceId, displayName(workspaceId, null), state)
+        noteCloudRolloverState(workspaceId, state)
       }
     }) ?? (() => {})
   const disposeIdle = api.onCloudIdleSleepRequested(({ workspaceId, idleMs }) => {
@@ -77,7 +80,7 @@ export function installOrcaCloudSessionEvents(): () => void {
   }
 }
 
-/** "See plans" on the create failure when the account has no plan with cloud hours. */
+/** "See plans" on the create failure when the team has no plan with sandbox hours. */
 export function showOrcaCloudPlanUpsell(message: string): void {
   toast.error(message, {
     action: {
@@ -87,7 +90,7 @@ export function showOrcaCloudPlanUpsell(message: string): void {
   })
 }
 
-/** "<name> slept after 20 minutes idle · Wake": the quiet receipt for an automatic sleep. */
+/** "<name> slept after N minutes idle · Wake" (N from the control plane): the quiet receipt for an automatic sleep. */
 export function showIdleSleepNotice(
   workspaceId: string,
   name: string,
@@ -101,7 +104,8 @@ export function showIdleSleepNotice(
           '{{name}} slept after {{count}} minutes idle',
           {
             name,
-            count: minutes
+            count: minutes,
+            defaultValue_one: '{{name}} slept after {{count}} minute idle'
           }
         )
       : translate('orcaCloudWorkspace.idleSleptNoTime', '{{name}} went to sleep while idle', {
