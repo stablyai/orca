@@ -425,7 +425,7 @@ describe('structured mailbox delivery: each message whole', () => {
     h.receive('m1', 'x'.repeat(MAX_PROMPT_BYTES))
     await h.deliver()
     expect(h.sent.map((send) => send.text)).toEqual([
-      'You have 1 orchestration message. Run `orca-dev orchestration check`.'
+      'You have 1 orchestration message. Run `orca-dev orchestration check --dispatch d1`.'
     ])
     expect(vi.mocked(h.host.send).mock.calls[0][0].body.from?.orchestration).toMatchObject({
       messages: [{ messageId: 'm1' }]

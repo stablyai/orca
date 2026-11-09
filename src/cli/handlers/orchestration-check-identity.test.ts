@@ -82,4 +82,29 @@ describe('orchestration check identity', () => {
       })
     )
   })
+
+  it('forwards --dispatch so a helper Run does not hide the parent Dispatch', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+
+    await invokeCheck(new Map<string, string | boolean>([['dispatch', 'ctx_parent']]))
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.check',
+      expect.objectContaining({ terminal: 'term_worker', dispatch: 'ctx_parent' })
+    )
+  })
+
+  it('rejects --dispatch together with --run', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+
+    await expect(
+      invokeCheck(
+        new Map<string, string | boolean>([
+          ['dispatch', 'ctx_parent'],
+          ['run', 'run_helper']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
