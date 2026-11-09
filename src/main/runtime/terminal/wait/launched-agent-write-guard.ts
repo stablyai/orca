@@ -22,9 +22,22 @@ export type LaunchedAgentWriteGuardRuntime = Pick<
 /** refuse: write only on agent proof. write-unless-shell: permit unknown. write-if-shell-provable: permit unknown only where a lone shell is provable. */
 export type UnprovableHostPolicy = 'refuse' | 'write-unless-shell' | 'write-if-shell-provable'
 
+export type LaunchedAgentWriteGuardOptions = {
+  unprovableHost?: UnprovableHostPolicy
+  /** A fresh launch can reach the writer before the agent owns the terminal's foreground; poll until here before refusing. */
+  agentForegroundWaitMs?: number
+}
+
 export type LaunchedAgentWriteGuard = {
   beforeWrite: (ptyId: string) => Promise<void>
   dispose: () => void
+}
+
+// A launcher's readiness can come from the shell prompt just before the agent claims the foreground (#40253).
+const FOREGROUND_CLAIM_RETRY_MS = 250
+
+function waitForForegroundClaim(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, FOREGROUND_CLAIM_RETRY_MS))
 }
 
 /** Require fresh agent foreground before the first prompt write; ready signals can be shell prompts.
@@ -32,7 +45,7 @@ export type LaunchedAgentWriteGuard = {
 export function createLaunchedAgentWriteGuard(
   runtime: LaunchedAgentWriteGuardRuntime,
   agent: TuiAgent,
-  { unprovableHost = 'refuse' }: { unprovableHost?: UnprovableHostPolicy } = {}
+  { unprovableHost = 'refuse', agentForegroundWaitMs = 0 }: LaunchedAgentWriteGuardOptions = {}
 ): LaunchedAgentWriteGuard {
   let disposed = false
   let current: {
@@ -90,20 +103,27 @@ export function createLaunchedAgentWriteGuard(
       }
     })
     try {
-      const foreground: LaunchedAgentForeground = await runtime.readLaunchedAgentForeground(
-        ptyId,
-        agent
-      )
-      if (
-        disposed ||
-        current !== watch ||
-        runtime.launchedAgentTerminalIdentity?.(ptyId) !== identity ||
-        (identity &&
-          typeof identity === 'object' &&
-          'incarnationId' in identity &&
-          identity.incarnationId !== incarnation)
-      ) {
-        throw new Error('request_aborted')
+      const readForeground = async (): Promise<LaunchedAgentForeground> => {
+        const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+        if (
+          disposed ||
+          current !== watch ||
+          runtime.launchedAgentTerminalIdentity?.(ptyId) !== identity ||
+          (identity &&
+            typeof identity === 'object' &&
+            'incarnationId' in identity &&
+            identity.incarnationId !== incarnation)
+        ) {
+          throw new Error('request_aborted')
+        }
+        return foreground
+      }
+      let foreground = await readForeground()
+      // Why: a fresh launch's readiness can come from the shell prompt just before the agent claims the foreground (#40253).
+      const deadline = Date.now() + Math.max(0, agentForegroundWaitMs)
+      while (foreground !== 'agent' && Date.now() < deadline) {
+        await waitForForegroundClaim()
+        foreground = await readForeground()
       }
       if (foreground === 'agent') {
         watch.proven = true
@@ -133,9 +153,13 @@ export function createLaunchedAgentWriteGuard(
 export function createWorkerBriefWriteGuard(
   runtime: LaunchedAgentWriteGuardRuntime,
   agent: string | null | undefined,
-  freshLaunch: boolean
+  freshLaunch: boolean,
+  options: Pick<LaunchedAgentWriteGuardOptions, 'agentForegroundWaitMs'> = {}
 ): LaunchedAgentWriteGuard | null {
   return freshLaunch && isTuiAgent(agent)
-    ? createLaunchedAgentWriteGuard(runtime, agent, { unprovableHost: 'write-unless-shell' })
+    ? createLaunchedAgentWriteGuard(runtime, agent, {
+        unprovableHost: 'write-unless-shell',
+        ...options
+      })
     : null
 }
