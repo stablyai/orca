@@ -34,7 +34,6 @@ import {
 } from '../transport/hosts/host-catalog-selection'
 import { loadHostCatalog } from '../transport/hosts/host-store'
 import type { HostCatalogEntry } from '../transport/hosts/host-profile'
-import { awaitFirstPaintRestore } from '../query/host-query-persistence'
 import { hostObserverOptions, type HostQuery } from '../query/host-query'
 import type { HostQueryKey } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -85,8 +84,6 @@ export function useMobileHomeData() {
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
   // Until the catalog read lands, an empty list says nothing; a paired user must not see first-run.
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
-  // Started at mount so the stored counts are in by the time the first catalog read lands.
-  const [storeRestore] = useState(() => restoreHomeQueries(queryClient))
   const onboardingCheckedRef = useRef(false)
   // Drives the agent clock and Home's reads; Home stays mounted under other screens.
   const [homeFocused, setHomeFocused] = useState(false)
@@ -192,23 +189,18 @@ export function useMobileHomeData() {
     allClientsRef.current = allClients
   }, [allClients])
 
-  const firstCatalogRef = useRef(true)
+  // Counts show only once a desktop connects, so the rows never wait for this read.
+  useEffect(() => {
+    void restoreHomeQueries(queryClient)
+  }, [queryClient])
+
   useFocusEffect(
     useCallback(() => {
       let stale = false
       setHomeFocused(true)
-      const first = firstCatalogRef.current
-      firstCatalogRef.current = false
       void loadHostCatalog()
         // A failed read proves nothing about the desktops; keep the ones already shown.
         .catch((): HostCatalogEntry[] | null => null)
-        // The first list paints with its stored counts, held back a few frames at most.
-        .then(async (catalog) => {
-          if (first) {
-            await awaitFirstPaintRestore(storeRestore)
-          }
-          return catalog
-        })
         .then(async (catalog) => {
           if (stale) {
             return
@@ -232,7 +224,7 @@ export function useMobileHomeData() {
         stale = true
         setHomeFocused(false)
       }
-    }, [router, storeRestore])
+    }, [router])
   )
 
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])

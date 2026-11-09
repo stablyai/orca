@@ -112,17 +112,6 @@ export type HostQueryPersistence = {
   stop(): void
 }
 
-// How long a first screen holds its render for stored data once everything else it waits on is ready.
-const FIRST_PAINT_STORE_WAIT_MS = 150
-
-/** Waits for the stored first screen, but never more than a short cap; a later answer still fills empty keys. */
-export function awaitFirstPaintRestore(restore: Promise<void>): Promise<void> {
-  return Promise.race([
-    restore.catch(() => undefined),
-    new Promise<void>((resolve) => setTimeout(resolve, FIRST_PAINT_STORE_WAIT_MS))
-  ])
-}
-
 // The boot read fetches every first-paint key in one store call; each key's later getItem takes its value once.
 function primedBackend(backend: OrcaQueryStoreBackend) {
   const primed = new Map<string, string | null>()

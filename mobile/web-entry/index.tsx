@@ -44,8 +44,10 @@ import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.w
 import { RpcClientProvider } from '../src/transport/connection/client-context.web'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
 import { createOrcaQueryClient } from '../src/query/orca-query-client'
-import { awaitFirstPaintRestore } from '../src/query/host-query-persistence'
-import { startPageQueryPersistence } from '../src/query/page-query-persistence'
+import {
+  awaitFirstPaintRestore,
+  startPageQueryPersistence
+} from '../src/query/page-query-persistence'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
 import { preloadBootRoutes } from './boot-route-preload'
