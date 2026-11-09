@@ -61,6 +61,10 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-b
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
+import {
+  createCliRecipeWorkspace,
+  listCliEnvironmentRecipes
+} from '../ephemeral-vm/cli-workspace-create'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -144,6 +148,18 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
+  })
+  runtime.setRecipeWorkspaceService({
+    create: (params, repo, options) =>
+      createCliRecipeWorkspace({
+        store,
+        userDataPath: app.getPath('userData'),
+        repo,
+        params,
+        pluginService: state.pluginService,
+        ...options
+      }),
+    list: (repo) => listCliEnvironmentRecipes(store, repo, state.pluginService)
   })
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
