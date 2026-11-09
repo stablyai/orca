@@ -204,9 +204,7 @@ export function useAgentLaunchPickerInventorySource(
           ...(!target ||
           !entry.surfaces.length ||
           !nativeRuntime ||
-          !(registeredAgents
-            ? registeredAgents.some(({ agent }) => agent === entry.agent)
-            : entry.agent === 'claude' || entry.agent === 'codex')
+          !(registeredAgents ? registeredAgents.some(({ agent }) => agent === entry.agent) : true)
             ? { catalogRead: 'unsupported' as const }
             : { catalogRead: 'pending' as const })
         }))

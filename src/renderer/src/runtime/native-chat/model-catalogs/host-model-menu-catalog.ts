@@ -18,6 +18,11 @@ export type HostModelMenuSnapshot = {
 }
 type Reader = (waitForListing: boolean) => Promise<AgentSessionModelCatalogResult | undefined>
 const owners = new Map<string, HostModelMenuCatalog>()
+function retained(answer: AgentSessionModelCatalogResult | undefined) {
+  return answer?.listingInProgress && (answer.origin === 'unknown' || !answer.models.length)
+    ? undefined
+    : answer
+}
 
 function keyOf(scope: HostModelMenuScope) {
   return JSON.stringify([structuredAgentSessionHostKey(scope.target), scope.agent, scope.worktree])
@@ -118,7 +123,11 @@ class HostModelMenuCatalog {
           return this.pending !== operation ? this.pending : undefined
         }
         if (plain?.listingInProgress) {
-          this.publish({ answer: plain, pending: true })
+          this.publish({
+            ...this.snapshot,
+            answer: retained(this.snapshot.answer) ?? plain,
+            pending: true
+          })
           return request(true)
         }
         return plain
@@ -128,11 +137,12 @@ class HostModelMenuCatalog {
         if (!current()) {
           return this.pending !== operation ? this.pending : undefined
         }
-        this.publish({ answer, pending: false, attempted: true })
+        const shown = answer ?? retained(this.snapshot.answer)
+        this.publish({ answer: shown, pending: false, attempted: true })
         if (answer) {
           recordHostModelCatalogSnapshot(target, agent, worktree ?? null, answer)
         }
-        return answer
+        return shown
       })
       .finally(() => {
         if (this.pending === operation) {

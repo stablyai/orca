@@ -39,9 +39,7 @@ export function HostAgentLaunchChoiceEditor({
       detectionTarget.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null
     )
   )
-  const registered = agents
-    ? agents.some(({ agent }) => agent === props.agent)
-    : props.agent === 'codex' || props.agent === 'claude'
+  const registered = agents ? agents.some(({ agent }) => agent === props.agent) : true
   const capabilities =
     detectionTarget.kind === 'runtime'
       ? lastVerifiedRuntimeStatus(status)?.capabilities

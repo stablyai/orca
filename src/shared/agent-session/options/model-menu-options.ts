@@ -31,11 +31,10 @@ export function modelMenuOptions(
     answer && input.newLaunch && !input.seedsModel
       ? withoutUnprovenNewLaunchDefault(answer)
       : answer
-  const applicable = catalog && !catalog.unavailable ? catalog : undefined
   const observed =
-    applicable?.origin === 'unknown' && input.pending
-      ? { ...applicable, listingInProgress: true as const }
-      : applicable
+    catalog?.origin === 'unknown' && input.pending
+      ? { ...catalog, listingInProgress: true as const }
+      : catalog
   const surfaced =
     observed?.origin !== 'unknown' && observed
       ? {

@@ -90,6 +90,76 @@ it('drops a late reply after an account switch and consumes a plain legacy listi
   stop()
 })
 
+it('keeps a last-good catalog through a pending refresh and transport failure', async () => {
+  const wait = Promise.withResolvers<AgentSessionModelCatalogResult>()
+  mocks.call
+    .mockResolvedValueOnce(catalog('last-good'))
+    .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
+    .mockReturnValueOnce(wait.promise)
+  const owner = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:refresh' })
+  const stop = owner.subscribe(() => {})
+  await owner.read()
+  const refresh = owner.read()
+  await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
+  expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'last-good' }] })
+  expect(owner.snapshot.pending).toBe(true)
+  wait.reject(new Error('transport offline'))
+  expect(await refresh).toMatchObject({ models: [{ id: 'last-good' }] })
+  expect(owner.snapshot).toMatchObject({
+    pending: false,
+    attempted: true,
+    answer: { models: [{ id: 'last-good' }] }
+  })
+  stop()
+})
+
+it('never restores a catalog retired or invalidated during a failed refresh', async () => {
+  for (const invalidate of ['empty', 'unknown', 'account'] as const) {
+    const wait = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    mocks.call
+      .mockResolvedValueOnce(catalog('old'))
+      .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
+      .mockReturnValueOnce(wait.promise)
+    const worktree = `id:${invalidate}`
+    const owner = hostModelMenuCatalog({ target, agent: 'codex', worktree })
+    const stop = owner.subscribe(() => {})
+    await owner.read()
+    const refresh = owner.read()
+    await vi.waitFor(() => expect(mocks.call.mock.calls.at(-1)?.[2].waitForListing).toBe(true))
+    if (invalidate !== 'account') {
+      recordHostModelCatalogSnapshot(
+        target,
+        'codex',
+        worktree,
+        invalidate === 'unknown'
+          ? { origin: 'unknown' }
+          : { origin: 'probe', fetchedAt: 2, models: [] }
+      )
+    } else {
+      forgetHostModelCatalogSnapshots(target)
+    }
+    wait.reject(new Error('transport offline'))
+    await refresh
+    expect(owner.snapshot.answer).toEqual(
+      invalidate === 'empty'
+        ? { origin: 'probe', fetchedAt: 2, models: [] }
+        : invalidate === 'unknown'
+          ? { origin: 'unknown' }
+          : undefined
+    )
+    if (invalidate === 'unknown') {
+      mocks.call
+        .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
+        .mockRejectedValueOnce(new Error('still offline'))
+      await owner.read()
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:unrelated', catalog('other'))
+      expect(owner.snapshot.answer).toEqual({ origin: 'unknown' })
+    }
+    stop()
+    mocks.call.mockReset()
+  }
+})
+
 it.each([75, 750])(
   'compares only changed catalog payloads with %i retained workspaces',
   (count) => {

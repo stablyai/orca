@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Label } from '../../ui/label'
 import { SelectTrigger, SelectValue } from '../../ui/select'
+import { LoadingSpinner } from '../../LoadingSpinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 
 export function SourceControlActionOptionField({
@@ -23,15 +24,24 @@ export function SourceControlActionOptionField({
 
 export function SourceControlActionOptionTrigger({
   label,
-  disabled
+  disabled,
+  pending
 }: {
   label: string
   disabled?: boolean
+  pending?: boolean
 }): React.JSX.Element {
   const trigger = (
-    <SelectTrigger size="sm" density="compact" className="h-8 w-full min-w-0" aria-label={label}>
+    <SelectTrigger
+      size="sm"
+      density="compact"
+      className="h-8 w-full min-w-0"
+      aria-label={label}
+      aria-busy={pending}
+    >
       <SelectValue className="min-w-0 flex-1">
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        {pending ? <LoadingSpinner className="size-3 shrink-0" /> : null}
       </SelectValue>
     </SelectTrigger>
   )

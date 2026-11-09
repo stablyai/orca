@@ -14,6 +14,7 @@ vi.mock('./AgentChoiceMenu', () => ({
     value: string
     choices: { value: string; label: string }[]
     disabled?: boolean
+    pendingLabel?: string
     onChange: (value: string) => void
     onOpenChange?: (open: boolean) => void
   }) => (
@@ -21,6 +22,7 @@ vi.mock('./AgentChoiceMenu', () => ({
       aria-label={props.label}
       value={props.value}
       disabled={props.disabled}
+      aria-busy={props.pendingLabel !== undefined}
       onFocus={() => props.onOpenChange?.(true)}
       onChange={(event) => props.onChange(event.target.value)}
     >
@@ -34,6 +36,7 @@ vi.mock('./AgentChoiceMenu', () => ({
 }))
 import { AgentChoiceControls } from './AgentChoiceControls'
 import { useAgentModelMenu } from './use-agent-model-menu'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { modelMenuOptions } from '../../../../../shared/agent-session/options/model-menu-options'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
 const source = {
@@ -42,6 +45,7 @@ const source = {
 }
 afterEach(() => {
   cleanup()
+  resetHostModelCatalogSnapshotsForTests()
   mocks.call.mockReset()
 })
 
@@ -174,4 +178,37 @@ it('does not read collapsed model menus and shares one read when Settings menus 
     models: [{ id: 'account-only', label: 'Account model', isDefault: false, efforts: [] }]
   })
   await waitFor(() => expect(screen.getAllByText('account-only')).toHaveLength(10))
+})
+
+it('shows fallback only after an eligible settled read fails, never before demand', async () => {
+  const pending = Promise.withResolvers<unknown>()
+  mocks.call.mockReturnValue(pending.promise)
+  const eligible = { ...source, scope: { ...source.scope, worktree: 'id:settings-failure' } }
+  function Editor({ applicable }: { applicable: boolean }) {
+    const [open, setOpen] = useState(false)
+    const menu = useAgentModelMenu('codex', undefined, applicable ? eligible : undefined, open)
+    return (
+      <AgentChoiceControls
+        agent="codex"
+        value={undefined}
+        modelMenu={menu}
+        onChange={() => {}}
+        onOpenChange={setOpen}
+      />
+    )
+  }
+  const view = render(<Editor applicable={false} />)
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(mocks.call).not.toHaveBeenCalled()
+  view.rerender(<Editor applicable />)
+  expect(screen.getByRole('combobox', { name: 'Model' }).getAttribute('aria-busy')).toBe('true')
+  expect(screen.queryByRole('note')).toBeNull()
+  expect(mocks.call).not.toHaveBeenCalled()
+  fireEvent.focus(screen.getByRole('combobox', { name: 'Model' }))
+  await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole('note')).toBeNull()
+  pending.reject(new Error('transport unavailable'))
+  await waitFor(() => expect(screen.queryByRole('note')).not.toBeNull())
+  view.rerender(<Editor applicable={false} />)
+  expect(screen.queryByRole('note')).toBeNull()
 })

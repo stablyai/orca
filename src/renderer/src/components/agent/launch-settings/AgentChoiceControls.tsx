@@ -23,7 +23,7 @@ const AGENT_DEFAULT_VALUE = '__agent_default__'
 export type AgentChoiceControlsProps = {
   agent: TuiAgent | null | undefined
   value: AgentDedicatedChoices | undefined
-  modelMenu?: ReturnType<typeof modelMenuOptions>
+  modelMenu?: ReturnType<typeof modelMenuOptions> & { fallbackAfterFailure?: boolean }
   disabled?: boolean
   onOpenChange?: (open: boolean) => void
   optionIds?: readonly string[]
@@ -88,6 +88,7 @@ export function AgentChoiceFields({
       (!optionIds || optionIds.includes(option.id))
   )
   const effort = modelMenu?.descriptors.find((entry) => entry.id === 'effort')
+  const modelDescriptor = modelMenu?.descriptors.find((entry) => entry.id === 'model')
   if (modelMenu && selected?.model) {
     options = options.filter(({ option }) => option.id !== 'effort')
     if (effort?.kind.type === 'select') {
@@ -112,6 +113,11 @@ export function AgentChoiceFields({
           row={layout === 'rows'}
           value={selected?.model ?? AGENT_DEFAULT_VALUE}
           disabled={disabled}
+          pendingLabel={
+            modelMenu?.status === 'listing' && modelDescriptor
+              ? (selected?.model ?? t('settings.sourceControl.actionModel.model', 'Model'))
+              : undefined
+          }
           onOpenChange={onOpenChange}
           choices={[
             {
@@ -129,8 +135,8 @@ export function AgentChoiceFields({
           onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
         />
       ) : null}
-      {modelMenu?.status === 'builtin' ? (
-        <p className="text-xs text-muted-foreground">
+      {modelMenu?.fallbackAfterFailure ? (
+        <p role="note" className="text-xs text-muted-foreground">
           {t(
             'settings.agents.modelListFallback',
             'Built-in list. Orca could not get a model list from this host.'

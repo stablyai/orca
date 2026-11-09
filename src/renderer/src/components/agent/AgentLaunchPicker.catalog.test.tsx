@@ -28,51 +28,58 @@ afterEach(() => {
   }
 })
 
-it('offers an account-only model in the dialog picker and carries it to the launch', async () => {
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: { platform: { get: () => ({ platform: 'darwin' }) } }
-  })
-  useAppStore.setState({ settings: getDefaultSettings('/synthetic') })
-  mocks.call.mockResolvedValue({
-    origin: 'probe',
-    fetchedAt: 1,
-    models: [
-      {
-        id: 'account-only',
-        label: 'Account model',
-        isDefault: false,
-        efforts: []
-      }
-    ]
-  })
-  const picks: unknown[] = []
-  render(
-    <TooltipProvider>
-      <AgentLaunchPicker
-        agent="codex"
-        model={{
-          state: 'settled',
-          rows: [{ agent: 'codex', kind: 'chat' }],
-          detection: {
-            detectedIds: ['codex'],
-            isLoading: false,
-            isRefreshing: false,
-            detectionFailed: false,
-            needsServerUpdate: false,
-            refresh: async () => ['codex']
-          }
-        }}
-        onPick={(_agent, draft) => picks.push(agentPickerLaunchInputs(draft as AgentPickerDraft))}
-      />
-    </TooltipProvider>
-  )
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Select agent' }))
-  const search = await screen.findByPlaceholderText('Search agents and setups…')
-  fireEvent.change(search, { target: { value: 'Account model' } })
-  await waitFor(() => expect(screen.getByRole('menuitem', { name: /Account model/ })).toBeTruthy())
-  fireEvent.click(screen.getByRole('menuitem', { name: /Account model/ }))
-  expect(picks).toEqual([
-    expect.objectContaining({ sessionOptions: expect.objectContaining({ model: 'account-only' }) })
-  ])
-})
+it.each(['codex', 'pi'] as const)(
+  'offers an account-only model for %s with an unlearned old-host registry and carries it to launch',
+  async (agent) => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { platform: { get: () => ({ platform: 'darwin' }) } }
+    })
+    useAppStore.setState({ settings: getDefaultSettings('/synthetic') })
+    mocks.call.mockResolvedValue({
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [
+        {
+          id: 'account-only',
+          label: 'Account model',
+          isDefault: false,
+          efforts: []
+        }
+      ]
+    })
+    const picks: unknown[] = []
+    render(
+      <TooltipProvider>
+        <AgentLaunchPicker
+          agent={agent}
+          model={{
+            state: 'settled',
+            rows: [{ agent, kind: 'chat' }],
+            detection: {
+              detectedIds: [agent],
+              isLoading: false,
+              isRefreshing: false,
+              detectionFailed: false,
+              needsServerUpdate: false,
+              refresh: async () => [agent]
+            }
+          }}
+          onPick={(_agent, draft) => picks.push(agentPickerLaunchInputs(draft as AgentPickerDraft))}
+        />
+      </TooltipProvider>
+    )
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Select agent' }))
+    const search = await screen.findByPlaceholderText('Search agents and setups…')
+    fireEvent.change(search, { target: { value: 'Account model' } })
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /Account model/ })).toBeTruthy()
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: /Account model/ }))
+    expect(picks).toEqual([
+      expect.objectContaining({
+        sessionOptions: expect.objectContaining({ model: 'account-only' })
+      })
+    ])
+  }
+)

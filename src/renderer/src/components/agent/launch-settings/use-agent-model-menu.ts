@@ -46,7 +46,7 @@ export function useAgentModelMenu(
       void hostModelMenuCatalog(scope).read()
     }
   }, [scope, open, active, snapshot.generation])
-  return modelMenuOptions(snapshot.answer, {
+  const menu = modelMenuOptions(snapshot.answer, {
     agent,
     surface: 'terminal',
     seed: getAgentSessionOptionLaunchCatalog(agent) ?? { models: [], modelApply: {} },
@@ -56,4 +56,9 @@ export function useAgentModelMenu(
     newLaunch: true,
     seedsModel: false
   })
+  return {
+    ...menu,
+    fallbackAfterFailure:
+      !!source && snapshot.attempted === true && !snapshot.pending && menu.status === 'builtin'
+  }
 }

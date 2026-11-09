@@ -409,7 +409,8 @@
       "defaultSurfaceSetAllTerminal": "全部设为终端",
       "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
       "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。",
-      "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径。"
+      "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径。",
+      "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",

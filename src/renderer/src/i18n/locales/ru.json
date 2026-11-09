@@ -906,7 +906,8 @@
       "defaultSurfaceSetAllTerminal": "Перевести все в терминал",
       "sameAsChoice": "Как у {{agent}} · {{choice}}",
       "chatUnavailableOnWindows": "{{value0}} Chat пока недоступен в Windows, поэтому {{value0}} открывается в терминале на этом хосте. Чаты на хосте macOS или Linux по-прежнему работают.",
-      "undetectedCommandHint": "Если CLI {{agent}} установлен вне PATH, укажите полный путь к исполняемому файлу на этом хосте."
+      "undetectedCommandHint": "Если CLI {{agent}} установлен вне PATH, укажите полный путь к исполняемому файлу на этом хосте.",
+      "modelListFallback": "Встроенный список. Orca не удалось получить список моделей с этого хоста."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",
