@@ -62,7 +62,7 @@ export function CloudConnectedApps({
           viewer?.orgId && viewer.role !== 'member'
             ? t(
                 'auto.components.settings.cloudApi.apps.descriptionAdmin',
-                'MCP clients anyone in your org approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.'
+                'MCP clients anyone on your team approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.'
               )
             : t(
                 'auto.components.settings.cloudApi.apps.description',

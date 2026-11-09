@@ -4,7 +4,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getCloudApiKeysSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.cloudApi.keys.title', 'API keys'),
+    title: translate('auto.components.settings.cloudApi.sectionTitle', 'Orca API Keys'),
     description: translate(
       'auto.components.settings.cloudApi.searchDescription',
       'Create and revoke Orca Cloud API keys, connect MCP clients and control agent access.'

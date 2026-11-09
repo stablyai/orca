@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { GitPullRequest, History, Loader2, MessageSquare } from 'lucide-react'
+import { ExternalLink, GitPullRequest, History, Loader2, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type {
@@ -9,12 +9,15 @@ import type {
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { cloudApiErrorCopy, routineRunTriggerLabel } from './cloud-api-copy'
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
-import { CloudApiErrorNotice, CopyValueButton, RoutineRunStatusPill } from './cloud-api-parts'
+import { CloudApiErrorNotice, RoutineRunStatusPill } from './cloud-api-parts'
+import { isActiveRunStatus } from './routine-run-status'
 
 export type LoadRoutineRuns = (
   routineId: string,
   before?: number | string
 ) => Promise<CloudApiResult<RoutineRunPage>>
+
+const POLL_MS = 5000
 
 type State =
   | { status: 'loading' }
@@ -27,47 +30,90 @@ type State =
       moreError?: string
     }
 
-/** Inline run history for one routine; loads on mount and on `refreshKey` changes. */
+// One grid for every row so status, trigger, start, duration and links line up down the list.
+const ROW_GRID =
+  'grid grid-cols-[7.5rem_minmax(0,1fr)_6.5rem_4.5rem_auto] items-center gap-x-3 text-xs'
+
+/**
+ * Inline run history for one routine. Loads on mount and on `refreshKey` changes (keeping the
+ * current rows on screen), polls while a run is in flight, and reports the newest run so the
+ * list row's status pill never disagrees with the history.
+ */
 export function RoutineRunHistory({
   routineId,
   loadRuns,
-  now,
-  refreshKey = 0
+  refreshKey = 0,
+  onLatestRun,
+  onOpenWorkspace
 }: {
   routineId: string
   loadRuns: LoadRoutineRuns
-  now: number
   refreshKey?: number
+  onLatestRun?: (run: RoutineRun | null) => void
+  /** Opens a run's cloud workspace; when absent, runs carry no workspace action. */
+  onOpenWorkspace?: (workspaceId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<State>({ status: 'loading' })
+  const [now, setNow] = useState(() => Date.now())
   const generation = useRef(0)
+  const latestRef = useRef(onLatestRun)
+  latestRef.current = onLatestRun
 
   const load = useCallback(async (): Promise<void> => {
     const mine = ++generation.current
-    setState({ status: 'loading' })
+    // Only a first load blanks the list; refreshes and polls keep the rows in place.
+    setState((current) => (current.status === 'ok' ? current : { status: 'loading' }))
     const result = await loadRuns(routineId)
     if (mine !== generation.current) {
       return
     }
-    setState(
-      result.ok
-        ? {
-            status: 'ok',
-            runs: result.data.runs,
-            nextBefore: result.data.nextBefore,
-            loadingMore: false
-          }
-        : { status: 'error', message: cloudApiErrorCopy(result.error, t, result) }
-    )
+    setNow(Date.now())
+    if (result.ok) {
+      setState((current) => ({
+        status: 'ok',
+        runs: result.data.runs,
+        nextBefore: result.data.nextBefore,
+        loadingMore: false,
+        ...(current.status === 'ok' && current.moreError ? { moreError: current.moreError } : {})
+      }))
+      latestRef.current?.(result.data.runs[0] ?? null)
+    } else {
+      setState((current) =>
+        current.status === 'ok'
+          ? current
+          : { status: 'error', message: cloudApiErrorCopy(result.error, t, result) }
+      )
+    }
   }, [loadRuns, routineId, t])
 
   useEffect(() => {
     void load()
   }, [load, refreshKey])
 
+  const active = state.status === 'ok' && state.runs.some((run) => isActiveRunStatus(run.status))
+  useEffect(() => {
+    if (!active) {
+      return
+    }
+    // In-flight runs: refetch every few seconds and tick the elapsed clock every second.
+    const poll = setInterval(() => void load(), POLL_MS)
+    const tick = setInterval(() => setNow(Date.now()), 1000)
+    return () => {
+      clearInterval(poll)
+      clearInterval(tick)
+    }
+  }, [active, load])
+
+  useEffect(
+    () => () => {
+      generation.current++
+    },
+    []
+  )
+
   const loadMore = async (): Promise<void> => {
-    if (state.status !== 'ok' || state.nextBefore === null) {
+    if (state.status !== 'ok' || state.nextBefore === null || state.loadingMore) {
       return
     }
     const mine = generation.current
@@ -128,7 +174,7 @@ export function RoutineRunHistory({
         <>
           <ol className="divide-y divide-border/50">
             {state.runs.map((run) => (
-              <RunRow key={run.id} run={run} now={now} />
+              <RunRow key={run.id} run={run} now={now} onOpenWorkspace={onOpenWorkspace} />
             ))}
           </ol>
           {state.nextBefore !== null ? (
@@ -137,7 +183,8 @@ export function RoutineRunHistory({
                 type="button"
                 variant="ghost"
                 size="xs"
-                disabled={state.loadingMore}
+                aria-disabled={state.loadingMore}
+                aria-busy={state.loadingMore}
                 onClick={() => void loadMore()}
               >
                 {state.loadingMore ? (
@@ -158,27 +205,44 @@ export function RoutineRunHistory({
   )
 }
 
-function RunRow({ run, now }: { run: RoutineRun; now: number }): React.JSX.Element {
+function RunRow({
+  run,
+  now,
+  onOpenWorkspace
+}: {
+  run: RoutineRun
+  now: number
+  onOpenWorkspace?: (workspaceId: string) => void
+}): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
   const started = run.startedAt ?? run.createdAt
+  const live = isActiveRunStatus(run.status)
+  // A run still going shows a live elapsed time instead of a frozen dash.
+  const duration = live
+    ? formatRunDuration(Math.max(0, now - started), t)
+    : formatRunDuration(run.durationMs, t)
   return (
     <li className="grid gap-1.5 px-3 py-2.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        <RoutineRunStatusPill status={run.status} />
-        <span className="text-foreground">
+      <div className={ROW_GRID}>
+        <span>
+          <RoutineRunStatusPill status={run.status} />
+        </span>
+        <span className="min-w-0 truncate" title={run.triggerDetail ?? undefined}>
           {routineRunTriggerLabel(run.trigger, t)}
           {run.triggerDetail ? (
             <span className="text-muted-foreground"> · {run.triggerDetail}</span>
           ) : null}
         </span>
-        <span className="text-muted-foreground" title={formatAbsoluteTime(started, locale)}>
+        <time
+          className="truncate text-muted-foreground"
+          dateTime={new Date(started).toISOString()}
+          title={formatAbsoluteTime(started, locale)}
+        >
           {formatRelativeFromNow(started, now, locale)}
-        </span>
-        <span className="text-muted-foreground tabular-nums">
-          {formatRunDuration(run.durationMs, t)}
-        </span>
-        <span className="ml-auto flex items-center gap-1">
+        </time>
+        <span className="text-right text-muted-foreground tabular-nums">{duration}</span>
+        <span className="flex items-center justify-end gap-1">
           {run.result?.prUrl ? (
             <Button
               type="button"
@@ -201,22 +265,16 @@ function RunRow({ run, now }: { run: RoutineRun; now: number }): React.JSX.Eleme
               {t('auto.components.settings.cloudRoutines.runs.comment', 'Comment')}
             </Button>
           ) : null}
-          {run.workspaceId ? (
-            <CopyValueButton
-              value={run.workspaceId}
+          {run.workspaceId && onOpenWorkspace ? (
+            <Button
+              type="button"
               variant="ghost"
-              idleText={t(
-                'auto.components.settings.cloudRoutines.runs.workspaceId',
-                'Workspace ID'
-              )}
-              label={t(
-                'auto.components.settings.cloudRoutines.runs.copyWorkspace',
-                'Copy workspace ID {{value0}}',
-                {
-                  value0: run.workspaceId
-                }
-              )}
-            />
+              size="xs"
+              onClick={() => onOpenWorkspace(run.workspaceId!)}
+            >
+              <ExternalLink />
+              {t('auto.components.settings.cloudRoutines.runs.openWorkspace', 'Open workspace')}
+            </Button>
           ) : null}
         </span>
       </div>

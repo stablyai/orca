@@ -159,7 +159,7 @@ export function RoutineAgentSection({
         </div>
         <FormField
           id={`${ids}-runtime`}
-          label={t('auto.components.settings.cloudRoutines.editor.runtime', 'Time limit (min)')}
+          label={t('auto.components.settings.cloudRoutines.editor.runtime', 'Time limit (minutes)')}
           error={err('maxRuntimeMinutes')}
         >
           <Input

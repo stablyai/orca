@@ -1,7 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { KeyRound, Loader2, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +18,6 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
 import {
   CLOUD_API_SCOPES,
   type CloudApiCreatedKey,
@@ -28,10 +26,11 @@ import {
   type CreateCloudApiKeyInput
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
-import { cloudApiErrorCopy, cloudApiScopeDescription } from './cloud-api-copy'
-import { isAdminScope, scopesForPreset, type ScopePreset } from './cloud-api-format'
+import { cloudApiErrorCopy } from './cloud-api-copy'
+import { scopesForPreset, type ScopePreset } from './cloud-api-format'
 import { CloudApiErrorNotice, FormField, ScopeChip } from './cloud-api-parts'
 import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
+import { ScopeMatrix } from './ScopeMatrix'
 
 const EXPIRY_OPTIONS = ['never', '7', '30', '90', '365'] as const
 type Expiry = (typeof EXPIRY_OPTIONS)[number]
@@ -64,7 +63,8 @@ export function CreateApiKeyDialog(props: CreateApiKeyDialogProps): React.JSX.El
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-[520px]"
+        // Anchored near the top so switching to Custom grows the dialog downwards, not both ways.
+        className="sm:top-[12vh] sm:max-w-[520px] sm:translate-y-0"
         // While the secret is on screen only the footer button may close it: no stray click,
         // Escape or × can throw it away.
         showCloseButton={!created}
@@ -142,18 +142,6 @@ function FormStep({
     }
   }
 
-  const toggle = (scope: CloudApiScope, on: boolean): void => {
-    setCustom((current) => {
-      const next = new Set(current)
-      if (on) {
-        next.add(scope)
-      } else {
-        next.delete(scope)
-      }
-      return next
-    })
-  }
-
   return (
     <form onSubmit={(event) => void submit(event)} className="grid gap-5" noValidate>
       <DialogHeader>
@@ -163,7 +151,7 @@ function FormStep({
         <DialogDescription>
           {t(
             'auto.components.settings.cloudApi.create.description',
-            'Keys act as you inside your Orca Cloud account. Give each script or service its own key so you can revoke it alone.'
+            'A key acts as you on your team. Give each script or service its own key so you can revoke it alone.'
           )}
         </DialogDescription>
       </DialogHeader>
@@ -229,50 +217,7 @@ function FormStep({
           ]}
         />
         {preset === 'custom' ? (
-          <fieldset className="grid gap-0.5 rounded-lg border border-border/70 p-1.5">
-            <legend className="sr-only">
-              {t('auto.components.settings.cloudApi.create.scopesLegend', 'Scopes')}
-            </legend>
-            {CLOUD_API_SCOPES.map((scope) => {
-              const locked = !availableScopes.includes(scope)
-              const id = `${ids}-scope-${scope}`
-              return (
-                <label
-                  key={scope}
-                  htmlFor={id}
-                  className={cn(
-                    'flex items-start gap-2.5 rounded-md px-2 py-1.5',
-                    locked ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-accent/50'
-                  )}
-                >
-                  <Checkbox
-                    id={id}
-                    className="mt-0.5"
-                    checked={!locked && custom.has(scope)}
-                    disabled={locked}
-                    aria-describedby={locked ? `${ids}-locked` : undefined}
-                    onCheckedChange={(checked) => toggle(scope, checked === true)}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={cn('block font-mono text-xs', locked && 'text-muted-foreground')}
-                    >
-                      {scope}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {isAdminScope(scope) && locked
-                        ? t(
-                            'auto.components.settings.cloudApi.create.adminOnlyScope',
-                            '{{value0}} (admins only)',
-                            { value0: cloudApiScopeDescription(scope, t) }
-                          )
-                        : cloudApiScopeDescription(scope, t)}
-                    </span>
-                  </span>
-                </label>
-              )
-            })}
-          </fieldset>
+          <ScopeMatrix scopes={custom} available={availableScopes} onChange={setCustom} />
         ) : (
           <div className="flex flex-wrap items-center gap-1" aria-live="polite">
             <span className="mr-1 text-xs text-muted-foreground">
@@ -291,7 +236,7 @@ function FormStep({
             <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {t(
               'auto.components.settings.cloudApi.create.restricted',
-              'Only org owners and admins can grant {{value0}}. Ask one of them if a script needs it.',
+              'Only team owners and admins can grant {{value0}}. Ask one of them if a script needs it.',
               { value0: restricted.join(', ') }
             )}
           </p>

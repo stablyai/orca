@@ -191,6 +191,7 @@ export const error = defineFixture({
         message: 'Could not reach Orca Cloud. Check your connection and try again.'
       }}
       settings={{ status: 'error', message: 'Could not reach Orca Cloud.' }}
+      grants={{ status: 'error', message: 'Could not reach Orca Cloud.' }}
       audit={null}
     />
   )

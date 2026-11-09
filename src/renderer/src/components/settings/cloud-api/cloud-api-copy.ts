@@ -27,7 +27,7 @@ export function cloudApiErrorCopy(
     case 'admin-required':
       return t(
         'auto.components.settings.cloudApi.error.adminRequired',
-        'Only an org owner or admin can do this.'
+        'Only a team owner or admin can do this.'
       )
     case 'forbidden':
       return t(
@@ -115,7 +115,7 @@ export function cloudApiScopeDescription(scope: CloudApiScope, t: Translate = tr
         'Create, edit and run routines'
       )
     case 'audit:read':
-      return t('auto.components.settings.cloudApi.scope.auditRead', 'Read the org audit log')
+      return t('auto.components.settings.cloudApi.scope.auditRead', 'Read the team audit log')
   }
 }
 
@@ -134,7 +134,7 @@ export function routineRunStatusLabel(status: RoutineRunStatus, t: Translate = t
     case 'failed':
       return t('auto.components.settings.cloudRoutines.status.failed', 'Failed')
     case 'cancelled':
-      return t('auto.components.settings.cloudRoutines.status.cancelled', 'Cancelled')
+      return t('auto.components.settings.cloudRoutines.status.cancelled', 'Canceled')
     case 'timed_out':
       return t('auto.components.settings.cloudRoutines.status.timedOut', 'Timed out')
   }

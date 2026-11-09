@@ -35,14 +35,12 @@ export function GithubAppHint({
 
 export function WebhookTriggerInfo({
   routine,
-  rotated,
   rotating,
   onAskRotate,
   onCancelRotate,
   onRotate
 }: {
   routine: Routine | null
-  rotated: string | null
   rotating: 'idle' | 'confirm' | 'busy'
   onAskRotate: () => void
   onCancelRotate: () => void
@@ -59,9 +57,6 @@ export function WebhookTriggerInfo({
         )}
       </p>
     )
-  }
-  if (rotated) {
-    return <WebhookUrlField url={rotated} />
   }
   return (
     <div className="grid gap-2.5">
@@ -142,9 +137,11 @@ function WebhookUrlField({
 
 export function WebhookUrlStep({
   url,
+  rotated = false,
   onDone
 }: {
   url: string
+  rotated?: boolean
   onDone: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -154,7 +151,9 @@ export function WebhookUrlStep({
     <div className="grid gap-5">
       <DialogHeader>
         <DialogTitle>
-          {t('auto.components.settings.cloudRoutines.webhook.title', 'Routine created')}
+          {rotated
+            ? t('auto.components.settings.cloudRoutines.webhook.rotatedTitle', 'New webhook URL')
+            : t('auto.components.settings.cloudRoutines.webhook.title', 'Routine created')}
         </DialogTitle>
         <DialogDescription>
           {t(

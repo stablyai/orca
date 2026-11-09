@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   CloudApiInstallation,
@@ -23,6 +23,8 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
   const [projects, setProjects] = useState<CloudApiProject[]>([])
   const [projectsFailed, setProjectsFailed] = useState(false)
   const begin = useRequestGeneration()
+  const [refreshing, setRefreshing] = useState(false)
+  const hasData = useRef(false)
   const [installations, setInstallations] = useState<CloudApiInstallation[] | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const timezone = useMemo(() => localTimeZone(), [])
@@ -36,7 +38,13 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
       return
     }
     const isCurrent = begin('page')
-    setRoutines({ status: 'loading' })
+    // A refresh keeps the list on screen; only a first load shows skeletons. (A ref, not state:
+    // depending on state here would re-run the load effect forever.)
+    if (hasData.current) {
+      setRefreshing(true)
+    } else {
+      setRoutines({ status: 'loading' })
+    }
     const [list, projectList, installs] = await Promise.all([
       api.listRoutines(),
       api.listProjects(),
@@ -45,6 +53,8 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
     if (!isCurrent()) {
       return
     }
+    setRefreshing(false)
+    hasData.current = list.ok
     setProjectsFailed(!projectList.ok)
     setRoutines(toCloudLoadState(list.ok ? { ok: true, data: list.data.routines } : list, word))
     setProjects(projectList.ok ? projectList.data.projects : [])
@@ -92,6 +102,14 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
       now={now}
       localTimezone={timezone}
       onRefresh={() => void load()}
+      refreshing={refreshing}
+      onLatestRun={(routine, run) => {
+        // Keep the row's pill in step with the newest run its open history just fetched.
+        const lastRun = run ? { id: run.id, status: run.status, finishedAt: run.finishedAt } : null
+        if (JSON.stringify(lastRun) !== JSON.stringify(routine.lastRun)) {
+          replace({ ...routine, lastRun })
+        }
+      }}
       onCreate={async (input) => {
         const result = await api.createRoutine(input)
         if (result.ok) {

@@ -57,7 +57,7 @@ describe('formatting', () => {
         cron: '0 9 * * 1-5',
         timezone: 'America/New_York'
       })
-    ).toMatch(/^Weekdays at 9:00.*\(America\/New_York\)$/)
+    ).toMatch(/^Weekdays at 9:00.* E[SD]T$/)
   })
 
   it('offers the local zone first', () => {

@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { SettingsBadge } from '../form-controls/SettingsFormControls'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
   CloudApiApproval,
@@ -12,6 +15,7 @@ import type {
   CloudApiKeyList,
   CloudApiMe,
   CloudApiResult,
+  CloudApiScope,
   CloudApiSettings,
   CreateCloudApiApprovalInput,
   CreateCloudApiKeyInput
@@ -23,13 +27,13 @@ import { CloudConfirmDialog } from './CloudConfirmDialog'
 import { CloudConnectedApps } from './CloudConnectedApps'
 import type { CloudLoadState } from './cloud-load-state'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
-import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
 import {
-  CloudApiEmptyState,
-  CloudApiErrorNotice,
-  CloudApiSkeletonRows,
-  ScopeChip
-} from './cloud-api-parts'
+  formatAbsoluteTime,
+  formatKeyPrefix,
+  formatRelativeFromNow,
+  scopeSummaryKind
+} from './cloud-api-format'
+import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
 
 const EXPIRY_WARNING_MS = 7 * 86_400_000
 
@@ -42,6 +46,8 @@ export type CloudApiKeysViewProps = {
   audit: CloudLoadState<CloudApiAuditPage> | null
   now: number
   onRefresh: () => void
+  /** A refresh is running while the current data stays on screen. */
+  refreshing?: boolean
   onCreate: (input: CreateCloudApiKeyInput) => Promise<CloudApiResult<CloudApiCreatedKey>>
   /** Resolves to an error message or null. */
   onRevoke: (key: CloudApiKey) => Promise<string | null>
@@ -81,11 +87,25 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
   )
   const [revokeOpen, setRevokeOpen] = useState(revoking !== null)
   const [approveOpen, setApproveOpen] = useState(Boolean(initial?.approve || initial?.approval))
+  const listRef = useRef<HTMLUListElement>(null)
+  const createRef = useRef<HTMLButtonElement>(null)
+  // After a revoke the row (and its button) is gone: land on the next row, else the previous,
+  // else Create key. A cancelled revoke keeps the row, so the dialog's default return wins.
+  const focusAfterRevoke = (): HTMLElement | null => {
+    if (!revoking || listRef.current?.querySelector(`[data-key-id="${revoking.id}"]`)) {
+      return null
+    }
+    const rows = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-key-id]') ?? [])]
+    const next = rows[revokedIndex.current] ?? rows[revokedIndex.current - 1]
+    return next?.querySelector<HTMLElement>('button[data-revoke]') ?? createRef.current
+  }
+  const revokedIndex = useRef(0)
   const available = keys.status === 'ok' ? keys.data.availableScopes : (viewer?.scopes ?? [])
   const orgAdmin = Boolean(viewer?.orgId) && isAdmin(viewer)
 
   const createButton = (
     <Button
+      ref={createRef}
       type="button"
       size="sm"
       onClick={() => setCreateOpen(true)}
@@ -105,11 +125,11 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
             ? orgAdmin
               ? t(
                   'auto.components.settings.cloudApi.keys.scopeAdmin',
-                  'As an org admin you see every key in your org and can revoke any of them.'
+                  'As a team admin you see every key on your team and can revoke any of them.'
                 )
               : t(
                   'auto.components.settings.cloudApi.keys.scopeMember',
-                  'You see the keys you created. Org admins can see every key in the org.'
+                  'You see the keys you created. Team admins see every key on the team.'
                 )
             : t(
                 'auto.components.settings.cloudApi.keys.scopePersonal',
@@ -123,12 +143,14 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
               variant="ghost"
               size="icon-sm"
               onClick={props.onRefresh}
-              disabled={keys.status === 'loading'}
+              aria-disabled={keys.status === 'loading' || props.refreshing}
+              aria-busy={props.refreshing}
               aria-label={t('auto.components.settings.cloudApi.keys.refresh', 'Refresh API keys')}
             >
               <RefreshCw
                 className={cn(
-                  keys.status === 'loading' && 'animate-spin motion-reduce:animate-none'
+                  (keys.status === 'loading' || props.refreshing) &&
+                    'animate-spin motion-reduce:animate-none'
                 )}
               />
             </Button>
@@ -155,14 +177,18 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
             action={createButton}
           />
         ) : (
-          <ul aria-label={t('auto.components.settings.cloudApi.keys.listLabel', 'API keys')}>
-            {keys.data.keys.map((key) => (
+          <ul
+            ref={listRef}
+            aria-label={t('auto.components.settings.cloudApi.keys.listLabel', 'API keys')}
+          >
+            {keys.data.keys.map((key, index) => (
               <KeyRow
                 key={key.id}
                 apiKey={key}
                 viewer={viewer}
                 now={props.now}
                 onRevoke={() => {
+                  revokedIndex.current = index
                   setRevoking(key)
                   setRevokeOpen(true)
                 }}
@@ -227,16 +253,24 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
           </p>
         }
         confirmLabel={t('auto.components.settings.cloudApi.revoke.confirm', 'Revoke key')}
-        onConfirm={async () => (revoking ? props.onRevoke(revoking) : null)}
+        returnFocusTo={focusAfterRevoke}
+        onConfirm={async () => {
+          if (!revoking) {
+            return null
+          }
+          const failure = await props.onRevoke(revoking)
+          if (!failure) {
+            toast.success(
+              t('auto.components.settings.cloudApi.revoke.done', 'Revoked “{{value0}}”', {
+                value0: revoking.name
+              })
+            )
+          }
+          return failure
+        }}
       />
     </div>
   )
-}
-
-function creatorLabel(key: CloudApiKey, viewer: CloudApiMe | null, t: Translate): string {
-  return viewer?.userId === key.createdBy
-    ? t('auto.components.settings.cloudApi.keys.createdByYou', 'you')
-    : t('auto.components.settings.cloudApi.keys.createdByTeammate', 'a teammate')
 }
 
 function KeyRow({
@@ -252,39 +286,38 @@ function KeyRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
+  const mine = viewer?.userId === apiKey.createdBy
   const expiresSoon = apiKey.expiresAt !== null && apiKey.expiresAt - now < EXPIRY_WARNING_MS
+  const created = formatRelativeFromNow(apiKey.createdAt, now, locale)
   return (
-    <li data-settings-row="" className="flex items-start gap-3 py-3.5">
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/40 text-muted-foreground">
-        <KeyRound className="size-3.5" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <p className="truncate text-sm font-medium">{apiKey.name}</p>
-          <code className="font-mono text-xs text-muted-foreground">
+    <li data-settings-row="" data-key-id={apiKey.id} className="flex items-start gap-3 py-3">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p className="truncate text-sm font-medium" title={apiKey.name}>
+            {apiKey.name}
+          </p>
+          <code className="shrink-0 font-mono text-xs text-muted-foreground">
             {formatKeyPrefix(apiKey.prefix)}
           </code>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {apiKey.scopes.map((scope) => (
-            <ScopeChip key={scope} scope={scope} />
-          ))}
+          <ScopeSummary scopes={apiKey.scopes} />
         </div>
         <p className="text-xs text-muted-foreground">
-          <span title={formatAbsoluteTime(apiKey.createdAt, locale)}>
-            {t(
-              'auto.components.settings.cloudApi.keys.created',
-              'Created by {{value0}} {{value1}}',
-              {
-                value0: creatorLabel(apiKey, viewer, t),
-                value1: formatRelativeFromNow(apiKey.createdAt, now, locale)
-              }
-            )}
-          </span>
-          <span aria-hidden> · </span>
-          <span
-            title={apiKey.lastUsedAt ? formatAbsoluteTime(apiKey.lastUsedAt, locale) : undefined}
+          <time
+            dateTime={new Date(apiKey.createdAt).toISOString()}
+            title={formatAbsoluteTime(apiKey.createdAt, locale)}
           >
+            {mine
+              ? t('auto.components.settings.cloudApi.keys.createdMine', 'Created {{value0}}', {
+                  value0: created
+                })
+              : t(
+                  'auto.components.settings.cloudApi.keys.createdByTeammate2',
+                  'Created by a teammate {{value0}}',
+                  { value0: created }
+                )}
+          </time>
+          <span aria-hidden> · </span>
+          <span>
             {apiKey.lastUsedAt
               ? t('auto.components.settings.cloudApi.keys.lastUsed', 'Last used {{value0}}', {
                   value0: formatRelativeFromNow(apiKey.lastUsedAt, now, locale)
@@ -294,10 +327,7 @@ function KeyRow({
           {apiKey.expiresAt !== null ? (
             <>
               <span aria-hidden> · </span>
-              <span
-                className={cn(expiresSoon && 'text-status-warning-text')}
-                title={formatAbsoluteTime(apiKey.expiresAt, locale)}
-              >
+              <span className={cn(expiresSoon && 'text-status-warning-text')}>
                 {apiKey.expiresAt <= now
                   ? t('auto.components.settings.cloudApi.keys.expired', 'Expired')
                   : t('auto.components.settings.cloudApi.keys.expires', 'Expires {{value0}}', {
@@ -312,6 +342,7 @@ function KeyRow({
         type="button"
         variant="ghost"
         size="xs"
+        data-revoke=""
         onClick={onRevoke}
         aria-label={t('auto.components.settings.cloudApi.keys.revokeLabel', 'Revoke {{value0}}', {
           value0: apiKey.name
@@ -321,5 +352,39 @@ function KeyRow({
         {t('auto.components.settings.cloudApi.keys.revoke', 'Revoke')}
       </Button>
     </li>
+  )
+}
+
+/** "Read only" / "Full access" / "Custom · 5 scopes", with the exact scopes one hover or focus away. */
+function ScopeSummary({ scopes }: { scopes: readonly CloudApiScope[] }): React.JSX.Element {
+  const t = useTranslate()
+  const kind = scopeSummaryKind(scopes)
+  const label =
+    kind === 'read'
+      ? t('auto.components.settings.cloudApi.create.readOnly', 'Read only')
+      : kind === 'full'
+        ? t('auto.components.settings.cloudApi.create.full', 'Full access')
+        : t('auto.components.settings.cloudApi.keys.customScopes', 'Custom · {{value0}} scopes', {
+            value0: String(scopes.length)
+          })
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="shrink-0 cursor-default rounded outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          aria-label={t(
+            'auto.components.settings.cloudApi.keys.scopesLabel',
+            '{{value0}}: {{value1}}',
+            { value0: label, value1: scopes.join(', ') }
+          )}
+        >
+          <SettingsBadge tone="muted">{label}</SettingsBadge>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">
+        <span className="font-mono text-[11px] leading-5">{scopes.join(' · ')}</span>
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -4,6 +4,7 @@ import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { formatUiAutomationSchedule } from '@/components/automations/automation-schedule-label'
 import {
   CLOUD_API_ADMIN_SCOPES,
+  CLOUD_API_SCOPES,
   CLOUD_API_READ_SCOPES,
   type CloudApiScope,
   type RoutineGithubEvent,
@@ -110,11 +111,11 @@ export function describeRoutineTrigger(
 ): string {
   if (trigger.kind === 'schedule') {
     return t(
-      'auto.components.settings.cloudRoutines.trigger.scheduleSummary',
-      '{{value0}} ({{value1}})',
+      'auto.components.settings.cloudRoutines.trigger.scheduleSummaryZone',
+      '{{value0}} {{value1}}',
       {
         value0: formatUiAutomationSchedule(trigger.cron, t, intlLocale),
-        value1: trigger.timezone
+        value1: shortTimeZoneName(trigger.timezone, intlLocale)
       }
     )
   }
@@ -155,4 +156,33 @@ export function timeZoneOptions(local: string = localTimeZone()): string[] {
 export function formatCountdown(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000))
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+/** How a key's scopes read at a glance: the two presets, else custom. */
+export function scopeSummaryKind(scopes: readonly CloudApiScope[]): ScopePreset {
+  const set = new Set(scopes)
+  const isExactly = (all: readonly CloudApiScope[]): boolean =>
+    set.size === all.length && all.every((scope) => set.has(scope))
+  const reads = CLOUD_API_SCOPES.filter((scope) => CLOUD_API_READ_SCOPES.includes(scope))
+  if (isExactly(reads)) {
+    return 'read'
+  }
+  const memberFull = CLOUD_API_SCOPES.filter((scope) => !CLOUD_API_ADMIN_SCOPES.includes(scope))
+  return isExactly(CLOUD_API_SCOPES) || isExactly(memberFull) ? 'full' : 'custom'
+}
+
+/** "EST", "GMT+1": the short name people read next to a time; the IANA id when Intl has none. */
+export function shortTimeZoneName(
+  timeZone: string,
+  intlLocale?: string,
+  at: number = Date.now()
+): string {
+  try {
+    const part = new Intl.DateTimeFormat(intlLocale, { timeZone, timeZoneName: 'short' })
+      .formatToParts(at)
+      .find((p) => p.type === 'timeZoneName')
+    return part?.value ?? timeZone
+  } catch {
+    return timeZone
+  }
 }

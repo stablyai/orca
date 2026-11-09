@@ -50,7 +50,7 @@ export function OneTimeSecret({
             aria-labelledby={`${ids}-label`}
             tabIndex={0}
             className={cn(
-              'min-h-9 flex-1 select-all rounded-md border border-input bg-muted/30 px-3 py-2 font-mono text-xs leading-5 break-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              'min-h-9 flex-1 select-all rounded-md border border-input bg-muted/30 px-3 py-2 font-mono text-xs leading-5 break-all outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring',
               expired && 'text-muted-foreground line-through'
             )}
           >
@@ -58,6 +58,7 @@ export function OneTimeSecret({
           </code>
           {expired ? null : (
             <CopyValueButton
+              autoFocus
               value={value}
               variant="default"
               size="sm"
@@ -82,7 +83,7 @@ export function OneTimeSecretDoneButton({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <Button type="button" size="sm" variant={copied ? 'default' : 'outline'} onClick={onDone}>
+    <Button type="button" size="sm" variant="outline" onClick={onDone}>
       {copied
         ? t('auto.components.settings.cloudApi.secret.done', 'Done')
         : t('auto.components.settings.cloudApi.secret.doneUncopied', 'I’ve saved it')}

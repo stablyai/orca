@@ -14,7 +14,7 @@ export function CloudApiSignedOutNotice({ onRetry }: { onRetry: () => void }): R
         title={t('auto.components.settings.cloudApi.signedOut.title', 'Sign in to Orca')}
         description={t(
           'auto.components.settings.cloudApi.signedOut.body',
-          'API keys and routines belong to your Orca Cloud account. Sign in to manage them.'
+          'Orca API keys and routines belong to your team. Sign in to manage them.'
         )}
         action={
           <div className="flex items-center gap-2">

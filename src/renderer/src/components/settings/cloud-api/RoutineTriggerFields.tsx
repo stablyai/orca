@@ -25,7 +25,6 @@ import { getUiWeekdayNames } from '@/i18n/weekday-names'
 import { cn } from '@/lib/utils'
 import { isValidAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { ROUTINE_GITHUB_EVENTS } from '../../../../../shared/cloud-api/cloud-api-types'
-import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
 import { githubEventLabel, timeZoneOptions } from './cloud-api-format'
 import { FormField } from './cloud-api-parts'
 import {
@@ -92,28 +91,24 @@ export function RoutineScheduleFields({
             </SelectContent>
           </Select>
         </FormField>
-        <div className="min-w-0 space-y-1.5">
-          <p className="text-xs font-medium">
-            {t('auto.components.settings.cloudRoutines.editor.timezone', 'Time zone')}
-          </p>
-          <div className="[&>button]:h-9 [&>button]:w-full">
-            <SettingsSearchableSelect
-              ariaLabel={t('auto.components.settings.cloudRoutines.editor.timezone', 'Time zone')}
-              value={draft.timezone}
-              onValueChange={(timezone) => update({ timezone })}
-              searchPlaceholder={t(
-                'auto.components.settings.cloudRoutines.editor.timezoneSearch',
-                'Search time zones'
-              )}
-              groups={[
-                {
-                  key: 'zones',
-                  options: zones.map((zone) => ({ value: zone, label: zone }))
-                }
-              ]}
-            />
-          </div>
-        </div>
+        <FormField
+          id={`${ids}-tz`}
+          label={t('auto.components.settings.cloudRoutines.editor.timezone', 'Time zone')}
+        >
+          {/* Same Select as Repeats (type-ahead jumps through the zone list). */}
+          <Select value={draft.timezone} onValueChange={(timezone) => update({ timezone })}>
+            <SelectTrigger id={`${ids}-tz`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" className="max-h-72">
+              {zones.map((zone) => (
+                <SelectItem key={zone} value={zone}>
+                  {zone}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
       </div>
 
       {draft.schedulePreset === 'custom' ? (
@@ -190,6 +185,8 @@ export function RoutineScheduleFields({
               time={draft.time}
               mode={draft.schedulePreset === 'hourly' ? 'minute' : 'time'}
               onTimeChange={(time) => update({ time })}
+              // Outline like every other field here (the automations shell is filled).
+              className="bg-transparent"
             />
           </div>
         </div>
@@ -234,6 +231,7 @@ export function RoutineGithubFields({
   return (
     <div className="grid gap-3">
       <fieldset
+        aria-invalid={Boolean(eventsError)}
         className="grid gap-1.5"
         aria-describedby={eventsError ? `${ids}-events-error` : undefined}
       >

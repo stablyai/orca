@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   CloudApiAuditPage,
@@ -26,6 +26,8 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
   const [audit, setAudit] = useState<CloudLoadState<CloudApiAuditPage>>({ status: 'loading' })
   const [now, setNow] = useState(() => Date.now())
   const begin = useRequestGeneration()
+  const [refreshing, setRefreshing] = useState(false)
+  const hasData = useRef(false)
 
   const word = useCallback(
     (failure: {
@@ -44,9 +46,16 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
     // A page reload supersedes any in-flight list or grant refresh.
     begin('keys')
     begin('grants')
-    setKeys({ status: 'loading' })
-    setSettings({ status: 'loading' })
-    setGrants({ status: 'loading' })
+    // A refresh keeps what is on screen; only a first load shows skeletons.
+    // (a ref, not keys.status: depending on state here would re-run the load effect forever)
+    const firstLoad = !hasData.current
+    if (firstLoad) {
+      setKeys({ status: 'loading' })
+      setSettings({ status: 'loading' })
+      setGrants({ status: 'loading' })
+    } else {
+      setRefreshing(true)
+    }
     const [me, list, current, apps] = await Promise.all([
       api.me(),
       api.listApiKeys(),
@@ -56,6 +65,8 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
     if (!isCurrent()) {
       return
     }
+    setRefreshing(false)
+    hasData.current = list.ok
     setGrants(toCloudLoadState(apps.ok ? { ok: true, data: apps.data.grants } : apps, word))
     setSignedOut(!me.ok && me.error === 'signed-out')
     setViewer(me.ok ? me.data : null)
@@ -104,6 +115,7 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
       }
       now={now}
       onRefresh={() => void load()}
+      refreshing={refreshing}
       onCreate={async (input) => {
         const result = await api.createApiKey(input)
         if (result.ok) {

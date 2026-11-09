@@ -10,13 +10,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   CloudApiInstallation,
@@ -27,16 +20,17 @@ import type {
   RoutineInput,
   RoutinePatch
 } from '../../../../../shared/cloud-api/cloud-api-types'
-import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { CloudApiErrorNotice, FormField } from './cloud-api-parts'
+import { CloudConfirmDialog } from './CloudConfirmDialog'
 import {
   RoutineGithubFields,
   RoutineScheduleFields,
   RoutineTriggerKindControl
 } from './RoutineTriggerFields'
+import { RoutineSourceSection } from './RoutineSourceSection'
 import { RoutineAgentSection, routineFieldError as fieldError } from './RoutineAgentSection'
-import { GithubAppHint, WebhookTriggerInfo, WebhookUrlStep } from './RoutineWebhookParts'
+import { WebhookTriggerInfo, WebhookUrlStep } from './RoutineWebhookParts'
 import {
   emptyRoutineDraft,
   routineDraftFromRoutine,
@@ -66,18 +60,34 @@ export type RoutineEditorDialogProps = {
 }
 
 export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.Element {
-  const [webhookUrl, setWebhookUrl] = useState<string | null>(props.initialWebhookUrl ?? null)
+  const t = useTranslate()
+  const [webhook, setWebhook] = useState<{ url: string; rotated: boolean } | null>(
+    props.initialWebhookUrl ? { url: props.initialWebhookUrl, rotated: false } : null
+  )
+  const webhookUrl = webhook?.url ?? null
   const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const close = (): void => {
+    setWebhook(null)
+    setDirty(false)
+    props.onOpenChange(false)
+  }
   // A save or rotate in flight keeps the dialog open: its result (maybe a one-time URL) must land
-  // in front of the user, never in a closed dialog.
+  // in front of the user, never in a closed dialog. Unsaved edits ask before they are thrown away.
   const change = (open: boolean): void => {
-    if (!open && busy) {
+    if (open) {
+      props.onOpenChange(true)
       return
     }
-    if (!open) {
-      setWebhookUrl(null)
+    if (busy) {
+      return
     }
-    props.onOpenChange(open)
+    if (dirty && !webhookUrl) {
+      setConfirmDiscard(true)
+      return
+    }
+    close()
   }
   return (
     <Dialog open={props.open} onOpenChange={change}>
@@ -88,10 +98,17 @@ export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.
         // showing, only its footer button may close the dialog.
         onInteractOutside={(event) => event.preventDefault()}
         showCloseButton={!webhookUrl}
-        onEscapeKeyDown={webhookUrl ? (event) => event.preventDefault() : undefined}
+        onEscapeKeyDown={(event) => {
+          if (webhookUrl || busy || dirty) {
+            event.preventDefault()
+            if (dirty && !webhookUrl && !busy) {
+              setConfirmDiscard(true)
+            }
+          }
+        }}
       >
-        {webhookUrl ? (
-          <WebhookUrlStep url={webhookUrl} onDone={() => change(false)} />
+        {webhook ? (
+          <WebhookUrlStep url={webhook.url} rotated={webhook.rotated} onDone={close} />
         ) : (
           <EditorForm
             // A fresh form per routine (and per open) so stale edits never leak between them.
@@ -99,10 +116,30 @@ export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.
             {...props}
             onCancel={() => change(false)}
             onBusyChange={setBusy}
-            onSaved={(url) => (url ? setWebhookUrl(url) : change(false))}
+            onDirtyChange={setDirty}
+            onRotated={(url) => setWebhook({ url, rotated: true })}
+            onSaved={(url) => (url ? setWebhook({ url, rotated: false }) : close())}
           />
         )}
       </DialogContent>
+      <CloudConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title={t('auto.components.settings.cloudRoutines.editor.discardTitle', 'Discard changes?')}
+        description={
+          <p>
+            {t(
+              'auto.components.settings.cloudRoutines.editor.discardBody',
+              'Your edits to this routine have not been saved.'
+            )}
+          </p>
+        }
+        confirmLabel={t('auto.components.settings.cloudRoutines.editor.discard', 'Discard')}
+        onConfirm={async () => {
+          close()
+          return null
+        }}
+      />
     </Dialog>
   )
 }
@@ -119,15 +156,19 @@ function EditorForm({
   initialDraft,
   onCancel,
   onSaved,
-  onBusyChange
+  onBusyChange,
+  onDirtyChange,
+  onRotated
 }: RoutineEditorDialogProps & {
   onBusyChange: (busy: boolean) => void
+  onDirtyChange: (dirty: boolean) => void
+  onRotated: (url: string) => void
   onCancel: () => void
   onSaved: (webhookUrl: string | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const ids = useId()
-  const [draft, setDraft] = useState<RoutineDraft>(() => ({
+  const [initial] = useState<RoutineDraft>(() => ({
     ...(routine
       ? routineDraftFromRoutine(routine, localTimezone)
       : emptyRoutineDraft(localTimezone)),
@@ -136,10 +177,10 @@ function EditorForm({
       : {}),
     ...initialDraft
   }))
+  const [draft, setDraft] = useState<RoutineDraft>(initial)
   const [errors, setErrors] = useState<Partial<Record<RoutineDraftField, string>>>({})
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const [rotated, setRotated] = useState<string | null>(null)
   const [rotating, setRotating] = useState<'idle' | 'confirm' | 'busy'>('idle')
 
   const projectOptions = withCurrentProject(
@@ -151,6 +192,10 @@ function EditorForm({
   useEffect(() => {
     onBusyChange(busy)
   }, [busy, onBusyChange])
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
+  useEffect(() => {
+    onDirtyChange(dirty)
+  }, [dirty, onDirtyChange])
 
   const update = (patch: Partial<RoutineDraft>): void => {
     setDraft((current) => ({ ...current, ...patch }))
@@ -175,7 +220,11 @@ function EditorForm({
       setErrors(validation.errors)
       // Move focus to the first invalid control so keyboard users land on the problem.
       requestAnimationFrame(() => {
-        document.querySelector<HTMLElement>('[data-routine-editor] [aria-invalid="true"]')?.focus()
+        document
+          .querySelector<HTMLElement>(
+            '[data-routine-editor] :is(input, textarea, button)[aria-invalid="true"]'
+          )
+          ?.focus()
       })
       return
     }
@@ -214,7 +263,8 @@ function EditorForm({
     const result = await onRotateWebhook(routine)
     setRotating('idle')
     if (result.ok) {
-      setRotated(result.data.url)
+      // The new URL is shown once, on the same guarded step as a new routine's URL.
+      onRotated(result.data.url)
     } else {
       setFailure(cloudApiErrorCopy(result.error, t, result))
     }
@@ -261,116 +311,15 @@ function EditorForm({
         />
       </FormField>
 
-      <section className="grid gap-3" aria-labelledby={`${ids}-where`}>
-        <h3 id={`${ids}-where`} className="text-sm font-semibold">
-          {t('auto.components.settings.cloudRoutines.editor.where', 'Where it runs')}
-        </h3>
-        <div>
-          <SettingsSegmentedControl<'project' | 'repo'>
-            size="sm"
-            equalWidth
-            value={draft.source}
-            onChange={(source) => update({ source })}
-            ariaLabelledBy={`${ids}-where`}
-            options={[
-              {
-                value: 'project',
-                label: t('auto.components.settings.cloudRoutines.editor.project', 'Project')
-              },
-              {
-                value: 'repo',
-                label: t('auto.components.settings.cloudRoutines.editor.repo', 'Repository URL')
-              }
-            ]}
-          />
-        </div>
-        {draft.source === 'project' ? (
-          <FormField
-            id={`${ids}-project`}
-            label={t('auto.components.settings.cloudRoutines.editor.projectLabel', 'Project')}
-            error={err('source')}
-            hint={
-              projectsFailed
-                ? t(
-                    'auto.components.settings.cloudRoutines.editor.projectsFailed',
-                    'Could not load your projects. Close and reopen to try again, or use a repository URL.'
-                  )
-                : projects.length === 0
-                  ? t(
-                      'auto.components.settings.cloudRoutines.editor.noProjects',
-                      'No Orca Cloud projects yet. Use a repository URL instead.'
-                    )
-                  : undefined
-            }
-          >
-            <Select
-              value={draft.projectId}
-              onValueChange={(projectId) => update({ projectId })}
-              disabled={projectOptions.length === 0}
-            >
-              <SelectTrigger
-                id={`${ids}-project`}
-                className="w-full"
-                aria-invalid={Boolean(errors.source)}
-              >
-                <SelectValue
-                  placeholder={t(
-                    'auto.components.settings.cloudRoutines.editor.pickProject',
-                    'Choose a project'
-                  )}
-                />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {projectOptions.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.name}
-                    {project.repo ? (
-                      <span className="ml-1.5 text-muted-foreground">
-                        {project.repo.url.replace(/^https:\/\/(www\.)?/, '')}
-                      </span>
-                    ) : null}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
-            <FormField
-              id={`${ids}-repo`}
-              label={t('auto.components.settings.cloudRoutines.editor.repoLabel', 'Repository')}
-              error={err('repoUrl')}
-            >
-              <Input
-                id={`${ids}-repo`}
-                value={draft.repoUrl}
-                inputMode="url"
-                spellCheck={false}
-                placeholder="https://github.com/acme/api"
-                aria-invalid={Boolean(errors.repoUrl)}
-                aria-describedby={errors.repoUrl ? `${ids}-repo-error` : undefined}
-                onChange={(event) => update({ repoUrl: event.target.value })}
-              />
-            </FormField>
-            <FormField
-              id={`${ids}-ref`}
-              label={t('auto.components.settings.cloudRoutines.editor.ref', 'Branch')}
-            >
-              <Input
-                id={`${ids}-ref`}
-                value={draft.repoRef}
-                spellCheck={false}
-                placeholder={t(
-                  'auto.components.settings.cloudRoutines.editor.refPlaceholder',
-                  'default'
-                )}
-                onChange={(event) => update({ repoRef: event.target.value })}
-              />
-            </FormField>
-          </div>
-        )}
-        <GithubAppHint installations={installations} />
-      </section>
+      <RoutineSourceSection
+        draft={draft}
+        update={update}
+        errors={errors}
+        projects={projects}
+        projectOptions={projectOptions}
+        projectsFailed={projectsFailed}
+        installations={installations}
+      />
 
       <section className="grid gap-3" aria-labelledby={`${ids}-when`}>
         <h3 id={`${ids}-when`} className="text-sm font-semibold">
@@ -389,7 +338,6 @@ function EditorForm({
           ) : (
             <WebhookTriggerInfo
               routine={routine}
-              rotated={rotated}
               rotating={rotating}
               onAskRotate={() => setRotating('confirm')}
               onCancelRotate={() => setRotating('idle')}
@@ -403,17 +351,20 @@ function EditorForm({
 
       {failure ? <CloudApiErrorNotice message={failure} /> : null}
 
-      <DialogFooter>
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
-          {t('auto.components.settings.cloudApi.cancel', 'Cancel')}
-        </Button>
-        <Button type="submit" size="sm" disabled={submitting}>
-          {submitting ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
-          {routine
-            ? t('auto.components.settings.cloudRoutines.editor.save', 'Save changes')
-            : t('auto.components.settings.cloudRoutines.editor.create', 'Create routine')}
-        </Button>
-      </DialogFooter>
+      {/* Sticky so Save stays in reach however long the form scrolls. */}
+      <div className="sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-border bg-dialog-surface px-6 py-3">
+        <DialogFooter>
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
+            {t('auto.components.settings.cloudApi.cancel', 'Cancel')}
+          </Button>
+          <Button type="submit" size="sm" disabled={submitting}>
+            {submitting ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
+            {routine
+              ? t('auto.components.settings.cloudRoutines.editor.save', 'Save changes')
+              : t('auto.components.settings.cloudRoutines.editor.create', 'Create routine')}
+          </Button>
+        </DialogFooter>
+      </div>
     </form>
   )
 }

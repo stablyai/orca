@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/utils'
 import type {
   CloudApiApproval,
   CloudApiResult,
@@ -41,7 +42,7 @@ export function ApproveAppDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const ids = useId()
-  const [access, setAccess] = useState<'read' | 'full'>('full')
+  const [access, setAccess] = useState<'read' | 'full'>('read')
   const [approval, setApproval] = useState<CloudApiApproval | null>(initialApproval ?? null)
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -104,6 +105,15 @@ export function ApproveAppDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* One announcement as the code nears expiry, not one per tick. */}
+        <span className="sr-only" role="status">
+          {approval && !expired && remaining < 60_000
+            ? t(
+                'auto.components.settings.cloudApi.approve.almost',
+                'The code expires in under a minute.'
+              )
+            : ''}
+        </span>
         {approval ? (
           <div className="grid gap-3">
             <OneTimeSecret
@@ -130,7 +140,12 @@ export function ApproveAppDialog({
                     )}
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1.5 tabular-nums">
+                  <span
+                    className={cn(
+                      'flex items-center gap-1.5 tabular-nums',
+                      remaining < 60_000 && 'text-status-warning-text'
+                    )}
+                  >
                     <Timer className="size-3.5" aria-hidden />
                     {t(
                       'auto.components.settings.cloudApi.approve.expiresIn',
@@ -166,11 +181,11 @@ export function ApproveAppDialog({
               options={[
                 {
                   value: 'read',
-                  label: t('auto.components.settings.cloudApi.approve.read', 'Look, not touch')
+                  label: t('auto.components.settings.cloudApi.create.readOnly', 'Read only')
                 },
                 {
                   value: 'full',
-                  label: t('auto.components.settings.cloudApi.approve.full', 'Do anything you can')
+                  label: t('auto.components.settings.cloudApi.create.full', 'Full access')
                 }
               ]}
             />

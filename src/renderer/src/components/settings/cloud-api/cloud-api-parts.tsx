@@ -24,7 +24,8 @@ export function CopyValueButton({
   size = 'xs',
   className,
   onCopied,
-  idleText
+  idleText,
+  autoFocus
 }: {
   value: string
   /** e.g. "Copy MCP URL". */
@@ -35,6 +36,8 @@ export function CopyValueButton({
   onCopied?: () => void
   /** Visible text before copying; defaults to "Copy". */
   idleText?: string
+  /** One-time secrets land focus on Copy, the one thing to do next. */
+  autoFocus?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -68,6 +71,7 @@ export function CopyValueButton({
         size={size}
         className={cn('min-w-[4.75rem]', className)}
         aria-label={label}
+        autoFocus={autoFocus}
         onClick={() => void copy()}
       >
         {state === 'copied' ? <Check className="text-status-success" /> : <Copy />}

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { CalendarClock, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -10,7 +11,8 @@ import type {
   Routine,
   RoutineCreated,
   RoutineInput,
-  RoutinePatch
+  RoutinePatch,
+  RoutineRun
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudConfirmDialog } from './CloudConfirmDialog'
@@ -38,6 +40,11 @@ export type CloudRoutinesViewProps = {
   onDelete: (routine: Routine) => Promise<string | null>
   onRotateWebhook: (routine: Routine) => Promise<CloudApiResult<{ url: string }>>
   loadRuns: LoadRoutineRuns
+  /** The newest run from an open history, so the row's pill matches it. */
+  onLatestRun?: (routine: Routine, run: RoutineRun | null) => void
+  onOpenWorkspace?: (workspaceId: string) => void
+  /** A refresh is running while the current list stays on screen. */
+  refreshing?: boolean
   /** Fixtures: start with the editor, history or delete confirmation open. */
   initial?: {
     editor?: { routineId: string | null; draft?: Partial<RoutineDraft>; webhookUrl?: string }
@@ -59,6 +66,9 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
   const [deleteOpen, setDeleteOpen] = useState(Boolean(initial?.deleteId))
   const [expanded, setExpanded] = useState<string | null>(initial?.historyFor ?? null)
   const [historyRefresh, setHistoryRefresh] = useState(0)
+  const listRef = useRef<HTMLUListElement>(null)
+  const newRef = useRef<HTMLButtonElement>(null)
+  const deletedIndex = useRef(0)
 
   const openEditor = (routine: Routine | null): void => {
     setEditing(routine)
@@ -66,6 +76,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
   }
   const newButton = (
     <Button
+      ref={newRef}
       type="button"
       size="sm"
       onClick={() => openEditor(null)}
@@ -93,12 +104,14 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                 variant="ghost"
                 size="icon-sm"
                 onClick={props.onRefresh}
-                disabled={routines.status === 'loading'}
+                aria-disabled={routines.status === 'loading' || props.refreshing}
+                aria-busy={props.refreshing}
                 aria-label={t('auto.components.settings.cloudRoutines.refresh', 'Refresh routines')}
               >
                 <RefreshCw
                   className={cn(
-                    routines.status === 'loading' && 'animate-spin motion-reduce:animate-none'
+                    (routines.status === 'loading' || props.refreshing) &&
+                      'animate-spin motion-reduce:animate-none'
                   )}
                 />
               </Button>
@@ -120,7 +133,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
             )}
             description={t(
               'auto.components.settings.cloudRoutines.unavailableBody',
-              'Routines aren’t enabled for your Orca Cloud account yet. There’s nothing to set up; this page fills in once they are.'
+              'Routines aren’t enabled for your team yet. There’s nothing to set up; this page fills in once they are.'
             )}
           />
         ) : routines.status === 'error' ? (
@@ -138,8 +151,11 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
             action={newButton}
           />
         ) : (
-          <ul aria-label={t('auto.components.settings.cloudRoutines.listLabel', 'Routines')}>
-            {list.map((routine) => (
+          <ul
+            ref={listRef}
+            aria-label={t('auto.components.settings.cloudRoutines.listLabel', 'Routines')}
+          >
+            {list.map((routine, index) => (
               <RoutineRow
                 key={routine.id}
                 routine={routine}
@@ -151,10 +167,13 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                 onToggleHistory={() => setExpanded(expanded === routine.id ? null : routine.id)}
                 onEdit={() => openEditor(routine)}
                 onDelete={() => {
+                  deletedIndex.current = index
                   setDeleting(routine)
                   setDeleteOpen(true)
                 }}
                 onToggle={(enabled) => props.onToggle(routine, enabled)}
+                onLatestRun={(run) => props.onLatestRun?.(routine, run)}
+                onOpenWorkspace={props.onOpenWorkspace}
                 onRunNow={async () => {
                   const failure = await props.onRunNow(routine)
                   if (!failure) {
@@ -198,7 +217,31 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
           </p>
         }
         confirmLabel={t('auto.components.settings.cloudRoutines.delete.confirm', 'Delete routine')}
-        onConfirm={async () => (deleting ? props.onDelete(deleting) : null)}
+        returnFocusTo={() => {
+          // The deleted row is gone: land on the next row's Run now, else New routine.
+          if (!deleting || listRef.current?.querySelector(`[data-routine-id="${deleting.id}"]`)) {
+            return null
+          }
+          const rows = [
+            ...(listRef.current?.querySelectorAll<HTMLElement>('[data-routine-id]') ?? [])
+          ]
+          const next = rows[deletedIndex.current] ?? rows[deletedIndex.current - 1]
+          return next?.querySelector<HTMLElement>('button') ?? newRef.current
+        }}
+        onConfirm={async () => {
+          if (!deleting) {
+            return null
+          }
+          const failure = await props.onDelete(deleting)
+          if (!failure) {
+            toast.success(
+              t('auto.components.settings.cloudRoutines.delete.done', 'Deleted “{{value0}}”', {
+                value0: deleting.name
+              })
+            )
+          }
+          return failure
+        }}
       />
     </div>
   )

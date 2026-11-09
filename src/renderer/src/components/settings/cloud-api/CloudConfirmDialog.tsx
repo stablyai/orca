@@ -20,7 +20,8 @@ export function CloudConfirmDialog({
   description,
   confirmLabel,
   onConfirm,
-  destructive = true
+  destructive = true,
+  returnFocusTo
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -30,6 +31,8 @@ export function CloudConfirmDialog({
   /** Resolves to an error message, or null on success (the dialog then closes). */
   onConfirm: () => Promise<string | null>
   destructive?: boolean
+  /** Where focus goes after closing when the trigger is gone (e.g. the neighbouring row). */
+  returnFocusTo?: () => HTMLElement | null
 }): React.JSX.Element {
   const t = useTranslate()
   const [busy, setBusy] = useState(false)
@@ -56,7 +59,17 @@ export function CloudConfirmDialog({
   }
   return (
     <Dialog open={open} onOpenChange={change}>
-      <DialogContent size="compact" className="sm:max-w-[440px]">
+      <DialogContent
+        size="compact"
+        className="sm:max-w-[440px]"
+        onCloseAutoFocus={(event) => {
+          const target = returnFocusTo?.()
+          if (target) {
+            event.preventDefault()
+            target.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription asChild>
@@ -78,8 +91,10 @@ export function CloudConfirmDialog({
             type="button"
             size="sm"
             variant={destructive ? 'destructive' : 'default'}
-            disabled={busy}
-            onClick={() => void confirm()}
+            // aria-disabled keeps focus on the button while the request runs.
+            aria-disabled={busy}
+            aria-busy={busy}
+            onClick={() => (busy ? undefined : void confirm())}
           >
             {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
             {confirmLabel}

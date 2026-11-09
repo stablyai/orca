@@ -18,11 +18,11 @@ export function renderCloudApiSettingsSections(
     <>
       <SettingsSection
         id="cloud-api-keys"
-        title={t('auto.components.settings.cloudApi.sectionTitle', 'API Keys')}
+        title={t('auto.components.settings.cloudApi.sectionTitle', 'Orca API Keys')}
         badge="Beta"
         description={t(
           'auto.components.settings.cloudApi.sectionDescription',
-          'Orca Cloud API keys, the MCP server and what agents in cloud workspaces may do.'
+          'For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets.'
         )}
         searchEntries={navigation.getSectionSearchEntries('cloud-api-keys')}
         bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"

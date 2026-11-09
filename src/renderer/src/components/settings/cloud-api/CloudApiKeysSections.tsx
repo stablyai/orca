@@ -130,7 +130,7 @@ export function OrgSettings({
       title={t('auto.components.settings.cloudApi.org.title', 'Agent access')}
       description={t(
         'auto.components.settings.cloudApi.org.description',
-        'Applies to everyone in this Orca Cloud account.'
+        'Applies to everyone on your team.'
       )}
     >
       <div data-settings-row="" className="flex items-start gap-4 py-3.5">
@@ -144,13 +144,13 @@ export function OrgSettings({
           <p id={descriptionId} className="text-xs leading-5 text-muted-foreground">
             {t(
               'auto.components.settings.cloudApi.org.vmCliBody',
-              'Agents get a short-lived token for the orca CLI inside their VM, so they can start sibling workspaces and hand work to other agents. Turning this off revokes every outstanding token at once.'
+              'Agents get a short-lived token for the orca CLI inside their sandbox, so they can start sibling workspaces and hand work to other agents. Turning this off revokes every outstanding token at once.'
             )}
             {settings.status === 'ok' && !canEdit ? (
               <span className="mt-1 block">
                 {t(
                   'auto.components.settings.cloudApi.org.adminOnly',
-                  'Only org owners and admins can change this.'
+                  'Only team owners and admins can change this.'
                 )}
               </span>
             ) : null}
