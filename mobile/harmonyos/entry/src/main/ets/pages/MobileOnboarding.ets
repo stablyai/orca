@@ -1,6 +1,7 @@
 import { lucideColorFilter } from '../settings/LucideColor';
 import { curves, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { accessibility } from '@kit.AccessibilityKit';
 import { uiText } from '../settings/NativeUi';
 import { LocalNotifier } from '../notifications/LocalNotifier';
 import { loadMobileOnboardingSteps, saveOnboardingSessionView, saveOnboardingOnlineNotifications } from '../onboarding/MobileOnboardingPlan';
@@ -20,20 +21,48 @@ struct MobileOnboarding {
   @State busyChoice: string = '';
   @State loaded: boolean = false;
   @State completed: number = 0;
+  @State visible: boolean = false;
+  @State foreground: boolean = true;
+  @State reducedMotion: boolean = true;
   private pager: SwiperController = new SwiperController();
   private hostId: string = '';
   private disposed: boolean = false;
-  private visible: boolean = false;
   private navigationEpoch: number = 0;
+  private context?: common.UIAbilityContext;
+  private watchingMotion: boolean = false;
+  private motionChanged = (reduced: boolean): void => { this.reducedMotion = reduced; };
+  private onForeground = (): void => { this.refreshMotionPreference(); this.foreground = true; };
+  private onBackground = (): void => { this.foreground = false; };
 
   aboutToAppear(): void {
     let params = (router.getParams() ?? {}) as Record<string, string>;
     this.hostId = params['hostId'] ?? '';
+    let context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    this.context = context;
+    context.eventHub.on('orcaForeground', this.onForeground);
+    context.eventHub.on('orcaBackground', this.onBackground);
+    this.refreshMotionPreference();
+    try {
+      accessibility.onAnimationReduceStateChange(this.motionChanged);
+      this.watchingMotion = true;
+    } catch (e) {}
   }
   onPageShow(): void { this.visible = true; this.navigationEpoch++; this.refresh(); }
   onPageHide(): void { this.visible = false; this.navigationEpoch++; }
-  aboutToDisappear(): void { this.disposed = true; this.visible = false; this.navigationEpoch++; }
+  aboutToDisappear(): void {
+    this.disposed = true; this.visible = false; this.navigationEpoch++;
+    this.context?.eventHub.off('orcaForeground', this.onForeground);
+    this.context?.eventHub.off('orcaBackground', this.onBackground);
+    if (this.watchingMotion) {
+      try { accessibility.offAnimationReduceStateChange(this.motionChanged); } catch (e) {}
+    }
+  }
   onBackPress(): boolean { return true; }
+
+  private refreshMotionPreference(): void {
+    try { this.reducedMotion = accessibility.isAnimationReduceEnabledSync(); }
+    catch (e) { this.reducedMotion = true; }
+  }
 
   refresh(): void {
     try {
@@ -47,7 +76,7 @@ struct MobileOnboarding {
         if (index < 0) { this.pages = steps; index = 0; }
         if (this.completed !== index) {
           this.completed = index;
-          this.pager.changeIndex(index, true);
+          this.pager.changeIndex(index, !this.reducedMotion);
         }
       }
     } catch (e) { this.error = '无法读取首次设置，请重试'; }
@@ -122,6 +151,7 @@ struct MobileOnboarding {
         Swiper(this.pager) {
           ForEach(this.pages, (page: string) => {
             MobileOnboardingPanel({ step: page, active: this.step === page, busyChoice: this.busyChoice,
+              previewActive: this.visible && this.foreground, reducedMotion: this.reducedMotion,
               error: this.step === page ? this.error : '', onChoice: (choice: string): void => {
                 if (page === 'session-view') { this.chooseSession(choice).catch(() => {}); }
                 else { this.chooseNotifications(choice === 'enable').catch(() => {}); }

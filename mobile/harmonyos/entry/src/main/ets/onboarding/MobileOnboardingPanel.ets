@@ -1,48 +1,26 @@
 import { lucideColorFilter } from '../settings/LucideColor';
 import { uiText } from '../settings/NativeUi';
+import { NotificationOnboardingPreview } from './NotificationOnboardingPreview';
 
 @Component
 export struct MobileOnboardingPanel {
   @Prop step: string = '';
   @Prop active: boolean = false;
+  @Prop previewActive: boolean = false;
+  @Prop reducedMotion: boolean = true;
   @Prop busyChoice: string = '';
   @Prop error: string = '';
   onChoice: (choice: string) => void = (_choice: string): void => {};
   @StorageProp('uiLocale') uiLocale: string = 'en';
   @StorageProp('themeScheme') scheme: string = 'dark';
-  @StorageProp('themeBorder') themeBorder: string = '#262626';
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
-  @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeRaised') themeRaised: string = '#262626';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
-  @StorageProp('themeMuted') themeMuted: string = '#898989';
   @State viewportHeight: number = 0;
   @State footerHeight: number = 0;
 
   private t(label: string): string { return uiText(label, this.uiLocale); }
-
-  @Builder
-  private notification(title: string, body: string) {
-    Row({ space: 12 }) {
-      Stack() {
-        Image($r('app.media.orca_mark')).supportSvg2(true).width(22).height(14)
-          .colorFilter(lucideColorFilter(this.themeText))
-      }.width(32).height(32).borderRadius(10).backgroundColor(this.themeRaised)
-      Column({ space: 2 }) {
-        Row() {
-          Text('Orca').fontFamily('Geist').fontSize(11).fontWeight(FontWeight.Medium)
-            .fontColor(this.themeMuted).layoutWeight(1)
-          Text(this.t('现在')).fontFamily('Geist').fontSize(11).fontColor(this.themeMuted)
-        }.width('100%')
-        Text(this.t(title)).fontFamily('Geist').fontSize(14).fontWeight(FontWeight.Medium)
-          .fontColor(this.themeText).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.t(body)).fontFamily('Geist').fontSize(11).fontColor(this.themeSecondary)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-    }.width('100%').padding(12).backgroundColor(this.themeSurface)
-      .border({ width: 1, radius: 16, color: this.themeBorder })
-  }
 
   @Builder
   private hero() {
@@ -53,11 +31,7 @@ export struct MobileOnboardingPanel {
             .colorFilter(lucideColorFilter(this.themeText))
         }.width(64).height(64).borderRadius(10).backgroundColor(this.themeRaised).margin({ bottom: 24 })
       } else {
-        Column({ space: 8 }) {
-          this.notification('Codex 已完成', '测试已通过。')
-          this.notification('Claude 需要输入', '等待您的回应。')
-        }.width('100%').constraintSize({ maxWidth: 320 }).margin({ bottom: 40 })
-          .accessibilityLevel('no-hide-descendants').hitTestBehavior(HitTestMode.None)
+        NotificationOnboardingPreview({ active: this.active && this.previewActive, reducedMotion: this.reducedMotion })
       }
       Text(this.t(this.step === 'session-view' ? '会话应如何打开？' : '开启在线智能体提醒？'))
         .fontFamily('Geist').fontSize(26).fontWeight(FontWeight.Bold).fontColor(this.themeText)
