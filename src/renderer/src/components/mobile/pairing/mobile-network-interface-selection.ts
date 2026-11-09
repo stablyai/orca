@@ -1,17 +1,12 @@
 import {
   isVirtualBridgeInterface,
-  selectAutoAdvertisedPairingAddress
-} from '../../../../../../shared/pairing-address-auto-selection'
-
-export type MobileNetworkInterface = {
-  name: string
-  address: string
-  hasDefaultRoute?: boolean
-}
+  selectAutoAdvertisedPairingAddress,
+  type PairingNetworkInterface
+} from '../../../../../shared/pairing-address-auto-selection'
 
 export function selectRefreshedNetworkAddress(
   currentAddress: string | undefined,
-  interfaces: readonly MobileNetworkInterface[],
+  interfaces: readonly PairingNetworkInterface[],
   // Preserve explicitly manual addresses through refresh instead of snapping to discovered tailnet/LAN defaults.
   currentAddressIsManual: boolean = false,
   currentAddressWasExplicitlySelected: boolean = false

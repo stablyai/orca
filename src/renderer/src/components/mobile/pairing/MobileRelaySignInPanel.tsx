@@ -1,6 +1,6 @@
-import { useTranslate } from '../../../../i18n/use-translate'
-import { useAppStore } from '../../../../store/index'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
+import { useTranslate } from '../../../i18n/use-translate'
+import { useAppStore } from '../../../store/index'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
 
 export function MobileRelaySignInPanel({
   reconnectRequired
