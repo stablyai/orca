@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
   registerLinearIssueConsumer,

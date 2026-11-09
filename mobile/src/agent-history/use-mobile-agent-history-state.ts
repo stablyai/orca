@@ -17,7 +17,7 @@ import { defineHostQuery, readHostQueryLive, useHostQuery } from '../query/host-
 import { hostScreenState } from '../query/host-query-screen-state'
 import {
   deriveMobileAiVaultScopePaths,
-  mobileAiVaultScanScopePaths
+  mobileAiVaultScanScopeArgs
 } from './agent-history-scope-paths'
 import {
   agentHistoryCapabilityRead,
@@ -65,6 +65,7 @@ type ScanScope = { scopeFilterPaths: string[]; activeWorktreePath: string | null
 
 async function readAgentHistory(
   client: RpcClient,
+  scope: AiVaultScope,
   scan: ScanScope,
   force: boolean,
   associationRevision: number
@@ -81,7 +82,8 @@ async function readAgentHistory(
   const reply = await agentHistorySessionScan.request(client, {
     limit: MOBILE_AI_VAULT_SESSION_LIMIT,
     force,
-    scopePaths: mobileAiVaultScanScopePaths(scan.scopeFilterPaths)
+    // From the query's own scope key, so rows cached under Workspace are always Workspace-only ones.
+    ...mobileAiVaultScanScopeArgs(scope, scan.scopeFilterPaths)
   })
   const result = interpretOrThrowRefusalMessage(
     () => agentHistorySessionScan.interpret(reply),
@@ -111,7 +113,7 @@ function agentHistoryQuery(
     // No desktop signal for new transcripts, so foreground revalidates once older than 30 s.
     refetchOnWindowFocus: true,
     fetch: (client, _target, input: { scope: AiVaultScope }) =>
-      readAgentHistory(client, scan, force, startRevision(input.scope))
+      readAgentHistory(client, input.scope, scan, force, startRevision(input.scope))
   })
 }
 

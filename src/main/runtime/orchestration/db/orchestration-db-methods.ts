@@ -17,6 +17,7 @@ import type { RemoteDispatchAttachmentCreateMethods } from './federation/remote-
 import type { RemoteDispatchAttachmentReleaseMethods } from './federation/remote-dispatch-attachment-release'
 import type { RemoteDispatchAttachmentStopMethods } from './federation/remote-dispatch-attachment-stop'
 import type { RemoteQuestionStoreMethods } from './federation/remote-question-store'
+import type { PeerMailStoreMethods } from './federation/peer-mail-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
 import type { LegacyCompatibilityCandidatesMethods } from './legacy/legacy-compatibility-candidates'
 import type { LegacyCompatibilityPrincipalsMethods } from './legacy/legacy-compatibility-principals'
@@ -119,6 +120,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   FederationRelayAckMethods &
   FederationRelayImportMethods &
   RemoteQuestionStoreMethods &
+  PeerMailStoreMethods &
   FederationRelayItemMethods &
   StructuredMailSendStoreMethods &
   WorkerTerminalResourceStoreMethods &

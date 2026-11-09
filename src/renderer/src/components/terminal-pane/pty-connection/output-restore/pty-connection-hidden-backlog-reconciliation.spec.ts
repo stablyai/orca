@@ -73,8 +73,9 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:

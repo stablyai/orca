@@ -169,6 +169,47 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).not.toHaveBeenCalled()
   })
 
+  it('deletes an approved nested worktree before its parent', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const main = {
+      path: TEST_REPO_PATH,
+      head: 'main',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    }
+    const parent = {
+      path: TEST_WORKTREE_PATH,
+      head: 'parent',
+      branch: 'refs/heads/parent',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const child = {
+      path: `${TEST_WORKTREE_PATH}/child`,
+      head: 'child',
+      branch: 'refs/heads/child',
+      isBare: false,
+      isMainWorktree: false
+    }
+    let registered = [main, parent, child]
+    vi.mocked(listWorktrees).mockImplementation(async () => registered)
+    vi.mocked(listWorktreesStrict).mockImplementation(async () => registered)
+    vi.mocked(removeWorktree).mockImplementation(async (_repoPath, worktreePath) => {
+      registered = registered.filter((item) => item.path !== worktreePath)
+      return {}
+    })
+
+    await runtime.removeManagedWorktreeWithNested(TEST_WORKTREE_ID, [child, parent], {
+      force: true
+    })
+
+    expect(vi.mocked(removeWorktree).mock.calls.map((call) => call[1])).toEqual([
+      `${TEST_WORKTREE_PATH}/child`,
+      TEST_WORKTREE_PATH
+    ])
+  })
+
   it('fails dirty non-force deletes before PTY teardown', async () => {
     const runtime = createWorktreeRemovalRuntime()
     const killSpy = vi.fn().mockReturnValue(true)

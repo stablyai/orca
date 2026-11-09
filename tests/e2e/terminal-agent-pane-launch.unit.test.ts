@@ -65,7 +65,9 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
 vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
   subscribeToRuntimeTerminalData: vi.fn()
 }))
-vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: async () => ({ ready: false }) }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
+  waitForAgentReady: async () => ({ ready: false })
+}))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
 const mockLaunchAgentKind = vi.hoisted(() => () => 'claude')
 vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
@@ -102,7 +104,7 @@ vi.mock('../../src/main/opencode/hook-service', () =>
 vi.mock('../../src/main/mimo/hook-service', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../src/main/agent-hooks/server', () =>
+vi.mock('../../src/main/agent-hooks/server/agent-hook-server', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../src/main/pi/titlebar-extension-service', () =>
@@ -130,7 +132,7 @@ vi.mock('../../src/main/cli/linux-terminal-orca-cli-shim', () =>
 vi.mock('../../src/main/memory/pty-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../src/main/agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.migrationUnsupportedPtyModuleMock()
   )

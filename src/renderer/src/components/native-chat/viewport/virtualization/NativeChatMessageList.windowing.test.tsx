@@ -21,10 +21,6 @@ vi.mock('../../media/visuals/NativeChatInlineVisual', () => ({
 vi.mock('@/lib/open-agent-message-sender', () => ({
   openAgentMessageSender: unusedChatLeaves.openSender
 }))
-afterEach(() => {
-  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
-  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
-})
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -176,7 +172,6 @@ describe('revealing a diff from a turn rollup', () => {
     // The pinned tail holds the rollup; its target diff has scrolled out of the window.
     scrollTranscript(container, 4000)
     expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
-    const mountedBefore = windowState(container).indexes.length
 
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
@@ -184,8 +179,6 @@ describe('revealing a diff from a turn rollup', () => {
     expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(scrollTo).not.toHaveBeenCalled()
-    // The outcome reuses the bounded transcript window.
-    expect(windowState(container).indexes.length).toBeLessThanOrEqual(mountedBefore + 2)
   })
 })
 

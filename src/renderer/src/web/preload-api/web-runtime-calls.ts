@@ -1,3 +1,7 @@
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  unwrapRuntimeRpcResult
+} from '../../runtime/rpc/calls/runtime-rpc-result'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -58,7 +62,9 @@ export function assertEnvironmentPairing(selector: string, expectedRevision?: nu
     expectedRevision !== undefined &&
     (current.pairingRevision ?? current.createdAt) !== expectedRevision
   ) {
-    throw new Error('The paired Orca server changed while the request was in progress.')
+    throw new RuntimeConnectionChangedBeforeSendError(
+      'The paired Orca server changed while the request was in progress.'
+    )
   }
 }
 
@@ -112,7 +118,7 @@ async function callPinnedToRuntime(
   }
   const probed = probedConnections.get(client)
   if (probed?.runtimeId !== expectedEnvironmentRuntimeId) {
-    throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    throw new RuntimeConnectionChangedBeforeSendError(RUNTIME_CONNECTION_CHANGED_MESSAGE)
   }
   return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probed.epoch })
 }
@@ -156,12 +162,7 @@ export async function callRuntimeResult<TResult>(
   params?: unknown,
   timeoutMs?: number
 ): Promise<TResult> {
-  const response = await callRuntimeEnvelope(method, params, timeoutMs)
-  if (!response.ok) {
-    // Preserve error codes for recoverable-failure classification; human messages need not contain the token.
-    throw Object.assign(new Error(response.error.message), { code: response.error.code })
-  }
-  return response.result as TResult
+  return unwrapRuntimeRpcResult(await callRuntimeEnvelope<TResult>(method, params, timeoutMs))
 }
 
 export async function callRuntimeResultWithOwner<TResult>(

@@ -1,11 +1,10 @@
-import type { RateLimitWindow } from '../../../shared/rate-limit-types'
+import type { RateLimitWindow, ProviderRateLimits } from '../../../shared/rate-limit-types'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   LONG_STALE_THRESHOLD_MS,
   MAX_ACTIVE_FAILURE_STREAK,
   STALE_THRESHOLD_MS,
-  type ActiveRateLimitProvider,
-  type ProviderRateLimits
+  type ActiveRateLimitProvider
 } from './service-types'
 
 export function hasUsageWindows(limits: ProviderRateLimits): boolean {

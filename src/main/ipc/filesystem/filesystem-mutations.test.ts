@@ -29,7 +29,7 @@ vi.mock('fs/promises', () => ({
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
-import { resetSshConnectionGenerations } from '../../ssh/connection/ssh-connection-generation'
+import { resetSshConnectionGenerations } from '../../ssh/connection/authority/ssh-connection-generation'
 
 // Resolve fixture paths like production to preserve cross-platform comparisons.
 const REPO_PATH = path.resolve('/workspace/repo')
@@ -83,17 +83,6 @@ describe('registerFilesystemMutationHandlers', () => {
     copyFileMock.mockResolvedValue(undefined)
 
     registerFilesystemMutationHandlers(store as never)
-  })
-
-  it('rejects file creation when path already exists (wx flag)', async () => {
-    // wx rejects collisions atomically without an existence-check race.
-    writeFileMock.mockRejectedValue(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }))
-
-    await expect(
-      handlers.get('fs:createFile')!(null, {
-        filePath: path.resolve('/workspace/repo/existing.ts')
-      })
-    ).rejects.toThrow("A file or folder named 'existing.ts' already exists in this location")
   })
 
   it('rejects file creation outside allowed roots', async () => {

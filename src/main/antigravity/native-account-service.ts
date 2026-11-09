@@ -10,7 +10,7 @@ import {
   type AntigravityUsageLogin,
   type AntigravityUsageReadFinish,
   type AntigravityUsageReadStart
-} from '../rate-limits/antigravity-account-usage'
+} from '../rate-limits/providers/antigravity/antigravity-account-usage'
 import {
   antigravityUsageLogin,
   storedAntigravityReading,

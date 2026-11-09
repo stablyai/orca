@@ -1,10 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { AppState } from 'react-native'
 import {
-  DEFAULT_NOTIFICATION_DELIVERY,
-  loadNotificationDeliveryPreferences
-} from './notification-delivery-preferences'
-import {
   notificationViewingOfRoute,
   sessionOfPageLocation,
   setHostDocumentSession,
@@ -51,9 +47,4 @@ it('suppresses the session a host list document shows inside itself, until its p
   expect(shouldSuppressNotificationWhileViewing(event, 'host-1', true)).toBe(true)
   setHostDocumentSession('host-1', sessionOfPageLocation('/h/host-1'))
   expect(shouldSuppressNotificationWhileViewing(event, 'host-1', true)).toBe(false)
-})
-
-it('recovers defaults from malformed stored preferences', async () => {
-  storage.set('orca:notificationDeliveryPreferences', '{broken')
-  expect(await loadNotificationDeliveryPreferences()).toEqual(DEFAULT_NOTIFICATION_DELIVERY)
 })

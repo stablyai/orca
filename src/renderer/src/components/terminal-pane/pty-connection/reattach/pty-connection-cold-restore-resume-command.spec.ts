@@ -76,8 +76,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -203,8 +204,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks2 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -317,8 +319,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       state: 'working' | 'done'
     ): Promise<void> {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({
@@ -375,8 +378,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
     it('keeps a contentless reattach when a live status supersedes passive sleep evidence', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({

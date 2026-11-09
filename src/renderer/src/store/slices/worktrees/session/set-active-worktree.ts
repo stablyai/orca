@@ -10,7 +10,7 @@ import {
   ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS,
   ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS
 } from '../listing/worktree-slice-constants'
-import { markWorktreeTabsForActivationSpawn } from '../../tabs/worktree-layout-lifecycle'
+import { markWorktreeTabsForActivationSpawn } from '../../tabs/worktree-terminal-tab-respawn'
 import {
   isWorkspaceKey,
   parseWorkspaceKey,

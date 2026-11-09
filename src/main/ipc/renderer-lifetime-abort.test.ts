@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
-import { abortWhenRendererGone, type RendererLifetimeSender } from './renderer-lifetime-abort'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import type { FanoutEventSource } from '../runtime/events/event-listener-fanout'
 
-function fakeSender(): RendererLifetimeSender & EventEmitter {
+function fakeSender(): FanoutEventSource & EventEmitter {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: EventEmitter implements the once/on/removeListener surface this helper uses, and those three are all it calls; WebContents' overloaded signatures cannot be satisfied structurally.
-  return new EventEmitter() as RendererLifetimeSender & EventEmitter
+  return new EventEmitter() as FanoutEventSource & EventEmitter
 }
 
 describe('abortWhenRendererGone', () => {

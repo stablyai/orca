@@ -3,7 +3,7 @@
 // Local-main rename and paired twin host_not_owned refusal must isolate each workspace regardless of listing order.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import { buildOwnedEditorFileId } from './editor-file-ids'
 import type { AppState } from '@/store/types'
 import type { LayoutCommand } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'

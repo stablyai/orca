@@ -20,7 +20,6 @@ export function useMobileTasksProjectDetailLoading<
     | 'setPrFileCommentDrafts'
     | 'resetPrFiles'
     | 'setProjectBodyDraft'
-    | 'setProjectCommentDraft'
     | 'setProjectEditingCommentDraft'
     | 'setProjectEditingCommentId'
     | 'setProjectFieldDrafts'
@@ -42,7 +41,6 @@ export function useMobileTasksProjectDetailLoading<
     setPrFileCommentDrafts,
     resetPrFiles,
     setProjectBodyDraft,
-    setProjectCommentDraft,
     setProjectEditingCommentDraft,
     setProjectEditingCommentId,
     setProjectFieldDrafts,
@@ -57,11 +55,11 @@ export function useMobileTasksProjectDetailLoading<
     resetPrFiles()
   }, [projectRowItem, client, projectRowDetailRefreshSeq, resetPrFiles])
   // Keyed on row id: field edits, merges and reconnects hand over a new object for the same row.
+  // The comment box is not reset: it is kept per row in its draft row.
   const projectRowId = projectRowItem?.id ?? null
   useEffect(() => {
     setProjectTitleDraft(projectRowItem?.content.title ?? '')
     setProjectBodyDraft(projectRowItem?.content.body ?? '')
-    setProjectCommentDraft('')
     setProjectEditingCommentId(null)
     setProjectEditingCommentDraft('')
     setProjectReviewersDraft('')
