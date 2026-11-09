@@ -25,6 +25,7 @@ import { CloudConnectedApps } from './CloudConnectedApps'
 import type { CloudLoadState } from './cloud-load-state'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
 import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
+import { PersonSentence } from './PersonName'
 import { ScopeSummary } from './ScopeSummary'
 import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
 
@@ -262,24 +263,28 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
       <CloudConfirmDialog
         open={revokeOpen}
         onOpenChange={setRevokeOpen}
-        title={t('auto.components.settings.cloudApi.revoke.title', 'Revoke “{{value0}}”?', {
-          value0: revoking?.name ?? ''
+        title={t('auto.components.settings.cloudApi.revoke.title', 'Revoke “{{keyName}}”?', {
+          keyName: revoking?.name ?? ''
         })}
         description={
           <>
             <p>
               {t(
                 'auto.components.settings.cloudApi.revoke.body',
-                'Anything using {{value0}} stops working immediately. This cannot be undone.',
-                { value0: revoking ? formatKeyPrefix(revoking.prefix) : '' }
+                'Anything using {{keyPrefix}} stops working immediately. This cannot be undone.',
+                { keyPrefix: revoking ? formatKeyPrefix(revoking.prefix) : '' }
               )}
             </p>
             {revoking && viewer && revoking.createdBy !== viewer.userId ? (
               <p>
-                {t(
-                  'auto.components.settings.cloudApi.revoke.teammate',
-                  'A teammate created this key; they may still be using it.'
-                )}
+                <PersonSentence
+                  sentence={t(
+                    'auto.components.settings.cloudApi.revoke.createdByOther',
+                    '<person></person> created this key and may still be using it.'
+                  )}
+                  name={revoking.createdByName}
+                  id={revoking.createdBy}
+                />
               </p>
             ) : null}
             {revokingApps > 0 ? (
@@ -305,8 +310,8 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
           const failure = await props.onRevoke(revoking)
           if (!failure) {
             toast.success(
-              t('auto.components.settings.cloudApi.revoke.done', 'Revoked “{{value0}}”', {
-                value0: revoking.name
+              t('auto.components.settings.cloudApi.revoke.done', 'Revoked “{{keyName}}”', {
+                keyName: revoking.name
               })
             )
           }
@@ -350,21 +355,27 @@ function KeyRow({
             dateTime={new Date(apiKey.createdAt).toISOString()}
             title={formatAbsoluteTime(apiKey.createdAt, locale)}
           >
-            {mine
-              ? t('auto.components.settings.cloudApi.keys.createdMine', 'Created {{value0}}', {
-                  value0: created
-                })
-              : t(
-                  'auto.components.settings.cloudApi.keys.createdByTeammate2',
-                  'Created by a teammate {{value0}}',
-                  { value0: created }
+            {mine ? (
+              t('auto.components.settings.cloudApi.keys.createdMine', 'Created {{time}}', {
+                time: created
+              })
+            ) : (
+              <PersonSentence
+                sentence={t(
+                  'auto.components.settings.cloudApi.keys.createdByPerson',
+                  'Created by <person></person> {{time}}',
+                  { time: created }
                 )}
+                name={apiKey.createdByName}
+                id={apiKey.createdBy}
+              />
+            )}
           </time>
           <span aria-hidden> · </span>
           <span>
             {apiKey.lastUsedAt
-              ? t('auto.components.settings.cloudApi.keys.lastUsed', 'Last used {{value0}}', {
-                  value0: formatRelativeFromNow(apiKey.lastUsedAt, now, locale)
+              ? t('auto.components.settings.cloudApi.keys.lastUsed', 'Last used {{time}}', {
+                  time: formatRelativeFromNow(apiKey.lastUsedAt, now, locale)
                 })
               : t('auto.components.settings.cloudApi.keys.neverUsed', 'Never used')}
           </span>
@@ -374,8 +385,8 @@ function KeyRow({
               <span className={cn(expiresSoon && 'text-status-warning-text')}>
                 {apiKey.expiresAt <= now
                   ? t('auto.components.settings.cloudApi.keys.expired', 'Expired')
-                  : t('auto.components.settings.cloudApi.keys.expires', 'Expires {{value0}}', {
-                      value0: formatRelativeFromNow(apiKey.expiresAt, now, locale)
+                  : t('auto.components.settings.cloudApi.keys.expires', 'Expires {{time}}', {
+                      time: formatRelativeFromNow(apiKey.expiresAt, now, locale)
                     })}
               </span>
             </>
@@ -388,8 +399,8 @@ function KeyRow({
         size="xs"
         data-revoke=""
         onClick={onRevoke}
-        aria-label={t('auto.components.settings.cloudApi.keys.revokeLabel', 'Revoke {{value0}}', {
-          value0: apiKey.name
+        aria-label={t('auto.components.settings.cloudApi.keys.revokeLabel', 'Revoke {{keyName}}', {
+          keyName: apiKey.name
         })}
       >
         <Trash2 />

@@ -46,6 +46,8 @@ export type CloudRoutinesViewProps = {
   onOpenWorkspace?: (workspaceId: string) => void
   /** Fixtures: a pinned clock for run history times. */
   fixtureNow?: number
+  /** Routines someone else created name their creator; null while unknown. */
+  viewerUserId?: string | null
   /** A refresh is running while the current list stays on screen. */
   refreshing?: boolean
   /** Fixtures: start with the editor, history or delete confirmation open. */
@@ -180,6 +182,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                 onLatestRun={(run) => props.onLatestRun?.(routine, run)}
                 onOpenWorkspace={props.onOpenWorkspace}
                 fixedNow={props.fixtureNow}
+                viewerUserId={props.viewerUserId ?? null}
                 onRunNow={async () => {
                   const failure = await props.onRunNow(routine)
                   if (!failure) {
@@ -211,9 +214,13 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
       <CloudConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={t('auto.components.settings.cloudRoutines.delete.title', 'Delete “{{value0}}”?', {
-          value0: deleting?.name ?? ''
-        })}
+        title={t(
+          'auto.components.settings.cloudRoutines.delete.title',
+          'Delete “{{routineName}}”?',
+          {
+            routineName: deleting?.name ?? ''
+          }
+        )}
         description={
           <p>
             {t(
@@ -244,8 +251,8 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
           const failure = await props.onDelete(deleting)
           if (!failure) {
             toast.success(
-              t('auto.components.settings.cloudRoutines.delete.done', 'Deleted “{{value0}}”', {
-                value0: deleting.name
+              t('auto.components.settings.cloudRoutines.delete.done', 'Deleted “{{routineName}}”', {
+                routineName: deleting.name
               })
             )
           }

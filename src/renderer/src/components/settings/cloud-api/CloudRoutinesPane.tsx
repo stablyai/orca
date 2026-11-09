@@ -43,6 +43,7 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
   const [projectsFailed, setProjectsFailed] = useState(false)
   const begin = useRequestGeneration()
   const [refreshing, setRefreshing] = useState(false)
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null)
   const hasData = useRef(false)
   const [installations, setInstallations] = useState<CloudApiInstallation[] | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -64,10 +65,11 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
     } else {
       setRoutines({ status: 'loading' })
     }
-    const [list, projectList, installs] = await Promise.all([
+    const [list, projectList, installs, me] = await Promise.all([
       api.listRoutines(),
       api.listProjects(),
-      api.listInstallations()
+      api.listInstallations(),
+      api.me()
     ])
     if (!isCurrent()) {
       return
@@ -78,6 +80,7 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
     setRoutines(toCloudLoadState(list.ok ? { ok: true, data: list.data.routines } : list, word))
     setProjects(projectList.ok ? projectList.data.projects : [])
     setInstallations(installs.ok ? installs.data.installations : null)
+    setViewerUserId(me.ok ? me.data.userId : null)
     setNow(Date.now())
   }, [api, begin, word])
 
@@ -122,6 +125,7 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
       localTimezone={timezone}
       onRefresh={() => void load()}
       refreshing={refreshing}
+      viewerUserId={viewerUserId}
       onOpenWorkspace={(sandboxId) => void openRunWorkspace(sandboxId)}
       onLatestRun={(routine, run) => {
         // Keep the row's pill in step with the newest run its open history just fetched.

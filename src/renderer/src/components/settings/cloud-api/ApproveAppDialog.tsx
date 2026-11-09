@@ -154,9 +154,9 @@ export function ApproveAppDialog({
                     <Timer className="size-3.5" aria-hidden />
                     {t(
                       'auto.components.settings.cloudApi.approve.expiresIn',
-                      'Expires in {{value0}}',
+                      'Expires in {{countdown}}',
                       {
-                        value0: formatCountdown(remaining)
+                        countdown: formatCountdown(remaining)
                       }
                     )}
                   </span>

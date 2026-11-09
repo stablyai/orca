@@ -46,6 +46,7 @@ const KEYS: CloudApiKeyList = {
       prefix: 'orca_sk_Q9zL',
       scopes: ['workspaces:read', 'projects:read', 'routines:read'],
       createdBy: 'u_grace',
+      createdByName: 'Grace Hopper',
       createdAt: NOW - 40 * DAY,
       lastUsedAt: NOW - 2 * 3_600_000,
       expiresAt: null
@@ -69,7 +70,7 @@ const AUDIT: CloudApiAuditPage = {
   entries: [
     {
       id: 'a1',
-      actor: { type: 'user', id: 'u_ada', userId: 'u_ada' },
+      actor: { type: 'user', id: 'u_7f3k', userId: 'u_7f3k', userName: null },
       action: 'api_key.create',
       target: { type: 'api_key', id: 'key_ci' },
       detail: { name: 'GitHub Actions deploy' },
@@ -77,7 +78,7 @@ const AUDIT: CloudApiAuditPage = {
     },
     {
       id: 'a2',
-      actor: { type: 'api_key', id: 'key_ci', userId: 'u_ada' },
+      actor: { type: 'api_key', id: 'key_dash', userId: 'u_grace', userName: 'Grace Hopper' },
       action: 'workspace.create',
       target: { type: 'workspace', id: 'sbx_7Hq2' },
       createdAt: NOW - 5 * MIN
@@ -111,6 +112,7 @@ const GRANTS: CloudApiGrant[] = [
     clientName: 'Cursor',
     redirectHosts: ['127.0.0.1'],
     userId: 'u_grace',
+    userName: 'Grace Hopper',
     scopes: ['workspaces:read', 'projects:read'],
     approvedWith: { apiKeyPrefix: 'orca_sk_Q9zL' },
     grantedAt: NOW - 9 * DAY,

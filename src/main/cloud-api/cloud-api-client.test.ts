@@ -135,6 +135,32 @@ describe('createCloudApiClient', () => {
   })
 })
 
+describe('teammate names', () => {
+  it('accepts optional names and degrades a bad one to null', async () => {
+    const named = { ...KEY, createdByName: 'Ada Lovelace' }
+    const bad = { ...KEY, id: 'key_2', createdByName: 42 }
+    const legacy = { ...KEY, id: 'key_3' }
+    const fetchImpl = vi.fn(async () =>
+      respond(200, { keys: [named, bad, legacy], availableScopes: [] })
+    )
+    const { keys } = await client(fetchImpl as unknown as typeof fetch).listApiKeys()
+    expect(keys.map((key) => key.createdByName)).toEqual(['Ada Lovelace', null, undefined])
+  })
+
+  it('reads audit actor names', async () => {
+    const entry = {
+      id: 'a1',
+      actor: { type: 'user', id: 'u_ada', userId: 'u_ada', userName: 'Ada Lovelace' },
+      action: 'api_key.create',
+      target: null,
+      createdAt: 1
+    }
+    const fetchImpl = vi.fn(async () => respond(200, { entries: [entry], nextBefore: null }))
+    const page = await client(fetchImpl as unknown as typeof fetch).listAudit()
+    expect(page.entries[0]?.actor.userName).toBe('Ada Lovelace')
+  })
+})
+
 describe('response hardening', () => {
   it('keeps a freshly minted secret even if the key metadata drifted', async () => {
     const secret = `orca_sk_${'b'.repeat(32)}`

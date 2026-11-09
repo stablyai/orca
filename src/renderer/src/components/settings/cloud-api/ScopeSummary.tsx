@@ -29,8 +29,8 @@ export function ScopeSummary({ scopes }: { scopes: readonly CloudApiScope[] }): 
           className="shrink-0 cursor-default rounded outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           aria-label={t(
             'auto.components.settings.cloudApi.keys.scopesLabel',
-            '{{value0}}: {{value1}}',
-            { value0: label, value1: scopes.join(', ') }
+            '{{preset}}: {{scopes}}',
+            { preset: label, scopes: scopes.join(', ') }
           )}
         >
           <SettingsBadge tone="muted">{label}</SettingsBadge>

@@ -12,6 +12,7 @@ import {
   formatList
 } from './cloud-api-format'
 import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
+import { PersonSentence } from './PersonName'
 import { ScopeSummary } from './ScopeSummary'
 import type { CloudLoadState } from './cloud-load-state'
 
@@ -130,42 +131,44 @@ export function CloudConnectedApps({
                       {'apiKeyPrefix' in grant.approvedWith
                         ? t(
                             'auto.components.settings.cloudApi.apps.viaKey',
-                            'Approved {{value0}} with {{value1}}',
+                            'Approved {{time}} with {{keyPrefix}}',
                             {
-                              value0: formatRelativeFromNow(grant.grantedAt, now, locale),
-                              value1: formatKeyPrefix(grant.approvedWith.apiKeyPrefix)
+                              time: formatRelativeFromNow(grant.grantedAt, now, locale),
+                              keyPrefix: formatKeyPrefix(grant.approvedWith.apiKeyPrefix)
                             }
                           )
                         : t(
                             'auto.components.settings.cloudApi.apps.viaCode',
-                            'Approved {{value0}} with a one-time code',
-                            { value0: formatRelativeFromNow(grant.grantedAt, now, locale) }
+                            'Approved {{time}} with a one-time code',
+                            { time: formatRelativeFromNow(grant.grantedAt, now, locale) }
                           )}
-                      {viewer && grant.userId !== viewer.userId
-                        ? ` ${t('auto.components.settings.cloudApi.apps.byTeammate', 'by a teammate')}`
-                        : null}
                     </span>
+                    {viewer && grant.userId !== viewer.userId ? (
+                      <>
+                        <span aria-hidden> · </span>
+                        <PersonSentence
+                          sentence={t(
+                            'auto.components.settings.cloudApi.apps.approvedBy',
+                            'Approved by <person></person>'
+                          )}
+                          name={grant.userName}
+                          id={grant.userId}
+                        />
+                      </>
+                    ) : null}
                     <span aria-hidden> · </span>
                     {grant.lastUsedAt
-                      ? t(
-                          'auto.components.settings.cloudApi.keys.lastUsed',
-                          'Last used {{value0}}',
-                          {
-                            value0: formatRelativeFromNow(grant.lastUsedAt, now, locale)
-                          }
-                        )
+                      ? t('auto.components.settings.cloudApi.keys.lastUsed', 'Last used {{time}}', {
+                          time: formatRelativeFromNow(grant.lastUsedAt, now, locale)
+                        })
                       : t('auto.components.settings.cloudApi.keys.neverUsed', 'Never used')}
                     {grant.expiresAt ? (
                       <>
                         <span aria-hidden> · </span>
                         <span title={formatAbsoluteTime(grant.expiresAt, locale)}>
-                          {t(
-                            'auto.components.settings.cloudApi.keys.expires',
-                            'Expires {{value0}}',
-                            {
-                              value0: formatRelativeFromNow(grant.expiresAt, now, locale)
-                            }
-                          )}
+                          {t('auto.components.settings.cloudApi.keys.expires', 'Expires {{time}}', {
+                            time: formatRelativeFromNow(grant.expiresAt, now, locale)
+                          })}
                         </span>
                       </>
                     ) : null}
@@ -177,9 +180,9 @@ export function CloudConnectedApps({
                   size="xs"
                   aria-label={t(
                     'auto.components.settings.cloudApi.apps.disconnectLabel',
-                    'Disconnect {{value0}}',
+                    'Disconnect {{appName}}',
                     {
-                      value0: appName(grant, t)
+                      appName: appName(grant, t)
                     }
                   )}
                   data-disconnect=""
@@ -200,8 +203,8 @@ export function CloudConnectedApps({
       <CloudConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={t('auto.components.settings.cloudApi.apps.confirmTitle', 'Disconnect {{value0}}?', {
-          value0: target ? appName(target, t) : ''
+        title={t('auto.components.settings.cloudApi.apps.confirmTitle', 'Disconnect {{appName}}?', {
+          appName: target ? appName(target, t) : ''
         })}
         description={
           <>
@@ -215,9 +218,9 @@ export function CloudConnectedApps({
               <p>
                 {t(
                   'auto.components.settings.cloudApi.apps.confirmHosts',
-                  'It signs in through {{value0}}.',
+                  'It signs in through {{hosts}}.',
                   {
-                    value0: formatList(target.redirectHosts)
+                    hosts: formatList(target.redirectHosts)
                   }
                 )}
               </p>

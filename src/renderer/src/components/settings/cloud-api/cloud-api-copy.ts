@@ -50,8 +50,8 @@ export function cloudApiErrorCopy(
       return options.detail && /\s/.test(options.detail)
         ? t(
             'auto.components.settings.cloudApi.error.invalidWithDetail',
-            'Orca Cloud rejected that: {{value0}}',
-            { value0: options.detail }
+            'Orca Cloud rejected that: {{reason}}',
+            { reason: options.detail }
           )
         : t(
             'auto.components.settings.cloudApi.error.invalid',
@@ -61,8 +61,8 @@ export function cloudApiErrorCopy(
       return options.retryAfterSeconds
         ? t(
             'auto.components.settings.cloudApi.error.rateLimitedFor',
-            'Too many requests. Try again in {{value0}} seconds.',
-            { value0: String(options.retryAfterSeconds) }
+            'Too many requests. Try again in {{seconds}} seconds.',
+            { seconds: String(options.retryAfterSeconds) }
           )
         : t(
             'auto.components.settings.cloudApi.error.rateLimited',

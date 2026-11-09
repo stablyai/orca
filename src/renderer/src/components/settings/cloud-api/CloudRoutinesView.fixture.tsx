@@ -43,6 +43,8 @@ const ROUTINES: Routine[] = [
   {
     ...base,
     id: 'rt_review',
+    createdBy: 'u_grace',
+    createdByName: 'Grace Hopper',
     name: 'Review PRs labeled orca',
     projectId: null,
     repo: { url: 'https://github.com/acme/web', ref: null },
@@ -71,6 +73,8 @@ const ROUTINES: Routine[] = [
   {
     ...base,
     id: 'rt_weekly',
+    createdBy: 'u_7f3k',
+    createdByName: null,
     name: 'Weekly dependency bump',
     projectId: 'prj_web',
     repo: null,
@@ -177,6 +181,7 @@ const props: CloudRoutinesViewProps = {
     ok: true,
     data: { url: 'https://api.orca.dev/hooks/rt_fix/n3wS3cr3tQz8xK' }
   }),
+  viewerUserId: 'u_ada',
   loadRuns,
   onOpenWorkspace: () => {}
 }
