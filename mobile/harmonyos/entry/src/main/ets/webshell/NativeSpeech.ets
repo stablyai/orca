@@ -16,6 +16,7 @@ export class NativeSpeech {
   private pending = new Uint8Array(0);
   private starting: ((ready: boolean) => void) | null = null;
   private finishing: ((ready: boolean) => void) | null = null;
+  private finalizing: Promise<void> | null = null;
   private closed = false;
   private opening: Promise<speechRecognizer.SpeechRecognitionEngine | null> | null = null;
   private startRequested = false;
@@ -23,7 +24,7 @@ export class NativeSpeech {
   constructor(context: common.UIAbilityContext) { this.context = context; }
 
   canCapture(): boolean {
-    return !this.closed && this.sessionId.length > 0 && !this.starting && !this.finishing && !this.failure;
+    return !this.closed && this.sessionId.length > 0 && !this.starting && !this.finalizing && !this.failure;
   }
 
   private async engineFor(locale: string): Promise<speechRecognizer.SpeechRecognitionEngine | null> {
@@ -82,7 +83,9 @@ export class NativeSpeech {
     if (action === 'read') { return { revision: this.revision, committed: this.committed, tentative: this.tentative, failure: this.failure }; }
     if (action === 'finish') { return this.finish(); }
     if (this.closed) { throw new Error('Speech session closed'); }
-    if (action === 'start' && this.startRequested) { return { started: false, locale: null, reason: 'busy' }; }
+    if (action === 'start' && (this.startRequested || this.finalizing)) {
+      return { started: false, locale: null, reason: 'busy' };
+    }
     if (action === 'start') { this.startRequested = true; }
     let requestGeneration = this.generation;
     let engine: speechRecognizer.SpeechRecognitionEngine | null = null;
@@ -117,7 +120,7 @@ export class NativeSpeech {
   }
 
   feed(bytes: Uint8Array): void {
-    if (!this.engine || this.sessionId.length === 0 || this.failure || this.starting) { return; }
+    if (!this.engine || this.sessionId.length === 0 || this.failure || this.starting || this.finalizing) { return; }
     let samples = new Uint8Array(this.pending.length + bytes.length);
     samples.set(this.pending); samples.set(bytes, this.pending.length);
     let offset = 0;
@@ -128,11 +131,21 @@ export class NativeSpeech {
   }
 
   private async finish(): Promise<ESObject> {
-    if (this.finishing) { return { text: null, failure: 'failed' }; }
-    if (!this.engine || this.sessionId.length === 0) {
-      return this.takeTranscript();
+    let generation = this.generation;
+    this.endInput();
+    await this.finalizing;
+    if (generation !== this.generation) { return { text: null, failure: 'failed' }; }
+    this.finalizing = null;
+    return this.takeTranscript();
+  }
+
+  endInput(): void {
+    if (this.engine && this.sessionId.length > 0 && !this.starting && !this.finalizing) {
+      this.finalizing = this.finalize(this.engine, this.sessionId);
     }
-    let engine = this.engine; let id = this.sessionId;
+  }
+
+  private async finalize(engine: speechRecognizer.SpeechRecognitionEngine, id: string): Promise<void> {
     let generation = this.generation;
     if (this.pending.length > 0) {
       let tail = new Uint8Array(640); tail.set(this.pending); this.pending = new Uint8Array(0);
@@ -143,9 +156,7 @@ export class NativeSpeech {
       this.finishing = (success: boolean): void => { clearTimeout(timer); resolve(success); };
       try { engine.finish(id); } catch (e) { this.finishing(false); this.finishing = null; }
     });
-    if (generation !== this.generation) { return { text: null, failure: 'failed' }; }
-    if (!complete && this.sessionId === id) { this.cancel(); }
-    return this.takeTranscript();
+    if (generation === this.generation && !complete && this.sessionId === id) { this.cancel(); }
   }
 
   private clearTranscript(): void {
@@ -160,6 +171,7 @@ export class NativeSpeech {
 
   cancel(): void {
     this.generation++;
+    this.finalizing = null;
     let id = this.sessionId; this.sessionId = '';
     if (this.engine && id.length > 0) { try { this.engine.cancel(id); } catch (e) { } }
     this.pending = new Uint8Array(0);

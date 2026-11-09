@@ -50,6 +50,7 @@ export class NativeDevice {
   private generation = 0;
   private disposed = false;
   private starting = false;
+  private captureRelease: Promise<void> | null = null;
   private recordingWindow: window.Window | null = null;
   private previousKeepScreenOn = false;
   private picking = false;
@@ -74,15 +75,31 @@ export class NativeDevice {
     await this.stopCapture(); await pdf; this.pcm = new Uint8Array(0);
   }
   async pause(covered: boolean = false): Promise<void> {
-    this.selectionGeneration++; this.speech.cancel(); this.images.pause();
+    this.selectionGeneration++; this.images.pause();
     this.clipboardPrompt?.cancel();
     let pdf = covered ? this.pdf.cancel() : this.pdf.pause();
-    await this.stopCapture(); await pdf;
+    await this.interruptCapture('blocked'); await pdf;
   }
-  async stopCapture(): Promise<void> {
+
+  private interruptCapture(reason: string): Promise<void> {
+    if (this.recording) {
+      this.interruption = reason;
+      this.speech.endInput();
+    }
+    return this.stopCapture();
+  }
+
+  private async stopCapture(): Promise<void> {
     this.generation++; this.recording = false;
+    if (this.captureRelease) { await this.captureRelease; return; }
     let capturer = this.capturer; this.capturer = null;
     let recordingWindow = this.recordingWindow; this.recordingWindow = null;
+    if (!capturer && !recordingWindow) { return; }
+    this.captureRelease = this.releaseCapture(capturer, recordingWindow).finally((): void => { this.captureRelease = null; });
+    await this.captureRelease;
+  }
+
+  private async releaseCapture(capturer: audio.AudioCapturer | null, recordingWindow: window.Window | null): Promise<void> {
     if (capturer) {
       try { capturer.off('readData'); await capturer.stop(); } catch (e) { }
       try { await capturer.release(); } catch (e) { }
@@ -127,7 +144,6 @@ export class NativeDevice {
     }
     if (method === 'native.audio.stop') {
       this.params(value, []);
-      this.generation++;
       let stopped = this.recording; await this.stopCapture();
       let result: Record<string, Object> = { 'stopped': stopped, 'base64': this.drainAudio(AUDIO_LIMIT), 'droppedBytes': this.dropped };
       this.dropped = 0; return result;
@@ -199,7 +215,8 @@ export class NativeDevice {
     let result = base64Encode(this.pcm.subarray(0, size)); this.pcm = this.pcm.slice(size); return result;
   }
   private async startAudio(sampleRate: number): Promise<Object> {
-    if (!Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 48000 || this.starting || this.recording) { throw new Error('Microphone unavailable'); }
+    if (!Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 48000
+      || this.starting || this.recording || this.captureRelease) { throw new Error('Microphone unavailable'); }
     this.starting = true; let generation = ++this.generation;
     try {
       let phoneOnly = await readDictationEngine(this.context) === DICTATION_ENGINE_ONDEVICE;
@@ -221,10 +238,11 @@ export class NativeDevice {
       let capturer = await audio.createAudioCapturer(options);
       if (this.disposed || generation !== this.generation) { await capturer.release(); throw new Error('Capture cancelled'); }
       this.capturer = capturer;
-      this.recordingWindow = await window.getLastWindow(this.context);
+      let recordingWindow = await window.getLastWindow(this.context);
       if (this.disposed || generation !== this.generation) { await this.stopCapture(); throw new Error('Capture cancelled'); }
-      this.previousKeepScreenOn = this.recordingWindow.getWindowProperties().isKeepScreenOn;
-      let recordingWindow = this.recordingWindow; let previousKeepScreenOn = this.previousKeepScreenOn;
+      this.recordingWindow = recordingWindow;
+      let previousKeepScreenOn = recordingWindow.getWindowProperties().isKeepScreenOn;
+      this.previousKeepScreenOn = previousKeepScreenOn;
       await recordingWindow.setWindowKeepScreenOn(true);
       if (this.disposed || generation !== this.generation) {
         try { await recordingWindow.setWindowKeepScreenOn(previousKeepScreenOn); } catch (e) { }
@@ -247,15 +265,17 @@ export class NativeDevice {
       });
       capturer.on('stateChange', (state: audio.AudioState): void => {
         if (generation === this.generation && this.recording
-          && (state === audio.AudioState.STATE_STOPPED || state === audio.AudioState.STATE_RELEASED)) {
-          this.interruption = 'blocked'; this.speech.cancel(); this.stopCapture().catch(() => {});
+          && (state === audio.AudioState.STATE_PAUSED || state === audio.AudioState.STATE_STOPPED
+            || state === audio.AudioState.STATE_RELEASED)) {
+          this.interruptCapture('blocked').catch(() => {});
         }
       });
       capturer.on('audioInterrupt', (event: audio.InterruptEvent): void => {
         if (!this.recording || generation !== this.generation) { return; }
-        if (event.eventType === audio.InterruptType.INTERRUPT_TYPE_BEGIN) {
-          this.interruption = 'began'; this.speech.cancel(); this.stopCapture().catch(() => {});
-        } else { this.interruption = 'ended'; }
+        if (event.eventType === audio.InterruptType.INTERRUPT_TYPE_BEGIN
+          && (event.hintType === audio.InterruptHint.INTERRUPT_HINT_PAUSE || event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP)) {
+          this.interruptCapture('began').catch(() => {});
+        }
       });
       await capturer.start();
       if (this.disposed || generation !== this.generation) { await this.stopCapture(); throw new Error('Capture cancelled'); }

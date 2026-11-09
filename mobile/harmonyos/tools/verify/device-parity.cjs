@@ -856,8 +856,9 @@ function microphoneBindings(capturer, recordingWindow) {
       AudioSampleFormat: { SAMPLE_FORMAT_S16LE: 1 },
       AudioEncodingType: { ENCODING_TYPE_RAW: 0 },
       SourceType: { SOURCE_TYPE_MIC: 1 },
-      AudioState: { STATE_STOPPED: 4, STATE_RELEASED: 5 },
-      InterruptType: { INTERRUPT_TYPE_BEGIN: 1 }
+      AudioState: { STATE_STOPPED: 3, STATE_RELEASED: 4, STATE_PAUSED: 5 },
+      InterruptType: { INTERRUPT_TYPE_BEGIN: 1 },
+      InterruptHint: { INTERRUPT_HINT_PAUSE: 2, INTERRUPT_HINT_STOP: 3, INTERRUPT_HINT_DUCK: 4 }
     },
     base64Encode: (value) => Buffer.from(value).toString('base64')
   }
@@ -949,26 +950,64 @@ test('pausing while the microphone wake lock is pending cannot begin capture or 
   await device.dispose()
 })
 
-test('an OS-stopped microphone reports a blocked interruption instead of polling as still recording', async () => {
-  const listeners = new Map()
-  const capturer = {
-    on(name, callback) {
-      listeners.set(name, callback)
-    },
-    off() {},
-    async start() {},
-    async stop() {},
-    async release() {}
-  }
-  const recordingWindow = {
-    getWindowProperties: () => ({ isKeepScreenOn: false }),
-    async setWindowKeepScreenOn() {}
-  }
-  const device = deviceHarness(microphoneBindings(capturer, recordingWindow))
-  await device.serve('native.audio.start', { sampleRate: 16000 })
-  listeners.get('stateChange')(4)
-  const chunk = await device.serve('native.audio.read', { maxBytes: 128 })
-  assert.equal(chunk.recording, false)
-  assert.equal(chunk.interruption, 'blocked')
-  await device.dispose()
-})
+for (const loss of ['focus', 'stopped', 'background']) {
+  test(`microphone loss through ${loss} preserves the local transcript and allows a fresh recording`, async () => {
+    const listeners = new Map()
+    const capturer = {
+      on(name, callback) {
+        listeners.set(name, callback)
+      },
+      off() {},
+      async start() {},
+      async stop() {},
+      async release() {}
+    }
+    const recordingWindow = {
+      getWindowProperties: () => ({ isKeepScreenOn: false }),
+      async setWindowKeepScreenOn() {}
+    }
+    const engine = recognizer()
+    const finalAudio = deferred()
+    const complete = engine.finish
+    engine.finish = (id) => {
+      void finalAudio.promise.then(() => complete(id))
+    }
+    const device = deviceHarness({
+      ...microphoneBindings(capturer, recordingWindow),
+      NativeSpeech: speechHarness(async () => engine)
+    })
+    const startSpeech = () => device.serve('native.speech.act', { action: 'start', locale: 'zh-CN' })
+    const startAudio = () => device.serve('native.audio.start', { sampleRate: 16000 })
+    const finishSpeech = () => device.serve('native.speech.act', { action: 'finish' })
+    const readAudio = () => device.serve('native.audio.read', { maxBytes: 128 })
+    assert.equal((await startSpeech()).started, true)
+    assert.equal((await startAudio()).started, true)
+    if (loss === 'focus') {
+      listeners.get('audioInterrupt')({ eventType: 1, hintType: 4 })
+      assert.equal((await readAudio()).recording, true)
+    }
+    listeners.get('readData')(Uint8Array.of(3, 1, 4, 1).buffer)
+    if (loss === 'focus') {
+      listeners.get('audioInterrupt')({ eventType: 1, hintType: 2 })
+    } else if (loss === 'stopped') {
+      listeners.get('stateChange')(3)
+    } else {
+      await device.pause()
+    }
+    const chunk = await readAudio()
+    assert.equal(chunk.recording, false)
+    assert.equal(chunk.interruption, loss === 'focus' ? 'began' : 'blocked')
+    assert.equal(chunk.base64, 'AwEEAQ==')
+    await device.serve('native.audio.stop', {})
+    const finish = finishSpeech()
+    finalAudio.resolve()
+    assert.equal((await finish).text, 'recognized locally')
+    assert.equal((await finishSpeech()).text, null)
+    assert.equal((await startSpeech()).started, true)
+    assert.equal((await startAudio()).started, true)
+    await device.serve('native.speech.act', { action: 'cancel' })
+    await device.serve('native.audio.stop', {})
+    assert.equal((await finishSpeech()).text, null)
+    await device.dispose()
+  })
+}
