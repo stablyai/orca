@@ -16298,7 +16298,8 @@
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
           "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
-          "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
+          "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
+          "retryUnmatched": "再試行で入力済みの語句を特定できなかったため、すべて挿入しました。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "音声入力を挿入できなかったため、クリップボードにコピーしました。",
@@ -16306,7 +16307,21 @@
           "lost": "音声入力を挿入もコピーもできませんでした。"
         },
         "DictationIndicator": {
-          "4977162383": "音量が大きすぎます"
+          "4977162383": "音量が大きすぎます",
+          "finishing": "仕上げ中…",
+          "listening": "聞き取り中…",
+          "cancel": "キャンセル",
+          "finish": "完了",
+          "oneMinuteLeft": "残り1分です。",
+          "sendsWhenLanded": "テキストの入力後に送信します",
+          "entersWhenLanded": "テキストの入力後に Enter を押します"
+        },
+        "DictationPillFailure": {
+          "discard": "録音を破棄",
+          "modelFailed": "音声モデルを読み込めません。",
+          "transcribeFailed": "文字起こしに失敗。録音は保持しました。",
+          "openSettings": "設定を開く",
+          "retry": "再試行"
         }
       },
       "dashboard": {

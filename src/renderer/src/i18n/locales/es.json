@@ -16700,7 +16700,8 @@
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
           "micDisconnected": "Micrófono desconectado. Dictado detenido.",
           "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
-          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio"
+          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio",
+          "retryUnmatched": "Al reintentar no se pudo saber qué palabras ya estaban escritas, así que se insertaron todas."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "No se pudo insertar el dictado, así que se copió al portapapeles.",
@@ -16708,7 +16709,21 @@
           "lost": "No se pudo insertar ni copiar el dictado."
         },
         "DictationIndicator": {
-          "4977162383": "Volumen demasiado alto"
+          "4977162383": "Volumen demasiado alto",
+          "finishing": "Terminando…",
+          "listening": "Escuchando…",
+          "cancel": "Cancelar",
+          "finish": "Terminar",
+          "oneMinuteLeft": "Queda un minuto.",
+          "sendsWhenLanded": "Se enviará cuando llegue el texto",
+          "entersWhenLanded": "Pulsará Enter cuando llegue el texto"
+        },
+        "DictationPillFailure": {
+          "discard": "Descartar grabación",
+          "modelFailed": "El modelo no cargó.",
+          "transcribeFailed": "No se transcribió. Grabación guardada.",
+          "openSettings": "Configuración",
+          "retry": "Reintentar"
         }
       },
       "dashboard": {
