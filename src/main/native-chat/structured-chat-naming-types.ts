@@ -4,9 +4,17 @@ import type { AgentSessionRecordStore } from '../runtime/agent-session/records/a
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import type { StructuredAgentSessionAdapter } from './agent-session-wire/providers/structured-agent-session-adapter'
+import type { AgentSessionJournal } from './agent-session-journal/journal-store'
 
 export type AutomaticChatTitle = {
   owner: ReturnType<NonNullable<StructuredAgentSessionAdapter['captureConversationTitleOwner']>>
+  pending?: {
+    ready: Promise<AutomaticChatTitle['owner']>
+    ended: () => boolean
+    recheck: () => void
+    unavailable: (journal: AgentSessionJournal) => void
+    dispose: () => void
+  }
   retainOwnership?: (isCurrent: (record: AgentSessionRecord) => boolean) => void
 }
 
@@ -27,7 +35,11 @@ export type StructuredChatNamingDeps = {
   readJournalFirstPrompt: (sessionId: string) => Promise<string>
   now?: () => number
   workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
-  captureAutomaticTitle?: (record: AgentSessionRecord) => AutomaticChatTitle | undefined
+  captureAutomaticTitle?: (
+    record: AgentSessionRecord,
+    firstInputSubmissionKey?: string,
+    applicable?: () => boolean
+  ) => AutomaticChatTitle | undefined
   generate: (
     record: AgentSessionRecord,
     firstPrompt: string,

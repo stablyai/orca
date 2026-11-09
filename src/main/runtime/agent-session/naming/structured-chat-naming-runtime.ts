@@ -27,6 +27,7 @@ import {
   resolveTextGenerationParams
 } from '../../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from '../../../agent-hooks/first-work/first-work-generation-target'
+import { deferredStructuredChatTitle } from '../../../native-chat/structured-chat-title-handover'
 
 type StructuredChatNamingRuntime = {
   resolveWorkspace: (
@@ -99,6 +100,7 @@ export function structuredChatNamingDeps(
     getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
       AgentLaunchProfileSettings &
       ReturnType<StructuredChatNamingDeps['getSettings']>
+    onSettingsChanged?: (changed: () => void) => () => void
   },
   runtime: StructuredChatNamingRuntime,
   logger: StructuredAgentSessionLogger
@@ -121,7 +123,7 @@ export function structuredChatNamingDeps(
         : ''
     },
     workerTaskTitle: runtime.workerTaskTitle,
-    captureAutomaticTitle: (record) => {
+    captureAutomaticTitle: (record, firstInputSubmissionKey, applicable) => {
       const current = getStore().getSettings()
       if (
         record.provider !== 'claude' ||
@@ -134,13 +136,36 @@ export function structuredChatNamingDeps(
       if (!settings.ok || !canReuseClaudeTitle(current, settings.params.model)) {
         return undefined
       }
+      const host = getStructuredAgentSessionHost()
+      const owner = host?.deps.adapter.captureConversationTitleOwner?.(record) ?? null
       return {
-        owner:
-          getStructuredAgentSessionHost()?.deps.adapter.captureConversationTitleOwner?.(record) ??
-          null
+        owner,
+        pending:
+          !owner && host && firstInputSubmissionKey && applicable
+            ? deferredStructuredChatTitle({
+                record,
+                firstInputSubmissionKey,
+                host,
+                currentHost: getStructuredAgentSessionHost,
+                applicable,
+                eligible: () => {
+                  const current = getStore().getSettings()
+                  const resolved = resolveChatNamingParams(current, record.provider)
+                  return resolved.ok && canReuseClaudeTitle(current, resolved.params.model)
+                },
+                subscribeSettings: (changed) =>
+                  getStore().onSettingsChanged?.(changed) ?? (() => {})
+              })
+            : undefined
       }
     },
     generate: async function generate(record, firstPrompt, shouldExecute, automaticTitle) {
+      const titleOwner = automaticTitle?.pending
+        ? await automaticTitle.pending.ready
+        : automaticTitle?.owner
+      if (shouldExecute?.() === false || automaticTitle?.pending?.ended()) {
+        return null
+      }
       // Unsupported execution contexts keep the seed regardless of native naming settings.
       if (record.location.wslDistro !== null) {
         return null
@@ -195,7 +220,7 @@ export function structuredChatNamingDeps(
         current.nativeChatAutoName !== false &&
         canReuseClaudeTitle(current, settings.params.model)
       ) {
-        const owner = automaticTitle.owner
+        const owner = titleOwner
         if (owner) {
           const isCurrent = (
             current = getStructuredAgentSessionHost()?.deps.store?.getRecord(record.sessionId) ??

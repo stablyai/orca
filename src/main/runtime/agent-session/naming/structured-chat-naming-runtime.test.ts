@@ -23,6 +23,14 @@ import { normalizeSourceControlAiSettings } from '../../../../shared/source-cont
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../../../text-generation/commit-message-text-generation'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { createQueuedMessageTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { holdDelivery } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-delivery-hold.test-fixture'
+import { holdUnsentSends } from '../../../native-chat/agent-session-journal/queued-messages/journal-unsent-send-hold'
+import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { HOST_TEST_SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 const mocks = vi.hoisted(() => ({
   account: vi.fn((_provider: string, id: string) => ({
@@ -31,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   })),
   native: vi.fn(async () => 'Native title'),
   titleOwner: vi.fn(),
+  host: vi.fn<() => StructuredAgentSessionHost | undefined>(),
   record: vi.fn(),
   generate: vi.fn<typeof TextGeneration.generateConversationNameFromContext>(async () => ({
     success: true as const,
@@ -49,14 +58,15 @@ vi.mock('../../../agent-hooks/first-work/first-work-generation-target', () => ({
   resolveGenerationTarget: mocks.target
 }))
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => ({
-    deps: {
-      store: { getRecord: mocks.record },
-      adapter: { generateText: mocks.native, captureConversationTitleOwner: mocks.titleOwner }
-    },
-    publishConversationName: mocks.publishConversationName,
-    journalCurrentRead: mocks.journalCurrentRead
-  })
+  getStructuredAgentSessionHost: () =>
+    mocks.host() ?? {
+      deps: {
+        store: { getRecord: mocks.record },
+        adapter: { generateText: mocks.native, captureConversationTitleOwner: mocks.titleOwner }
+      },
+      publishConversationName: mocks.publishConversationName,
+      journalCurrentRead: mocks.journalCurrentRead
+    }
 }))
 
 vi.mock('../../../managed-data-accounts/service', () => ({
@@ -74,11 +84,13 @@ afterEach(async () => {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.titleOwner.mockReset()
+  mocks.host.mockReset()
   mocks.record.mockReset()
 })
 
 function rig() {
   const settings = getDefaultSettings('/isolated')
+  const settingsListeners = new Set<() => void>()
   settings.defaultTuiAgent = 'codex'
   settings.sourceControlAi = normalizeSourceControlAiSettings(settings.sourceControlAi)
   const runtime = {
@@ -96,9 +108,22 @@ function rig() {
   const logger = { warn: vi.fn(), error: vi.fn() }
   return {
     settings,
+    settingsChanged: () => settingsListeners.forEach((changed) => changed()),
     runtime,
     logger,
-    deps: structuredChatNamingDeps(() => ({ getSettings: () => settings }), runtime, logger)
+    deps: structuredChatNamingDeps(
+      () => ({
+        getSettings: () => settings,
+        onSettingsChanged: (changed) => {
+          settingsListeners.add(changed)
+          return () => {
+            settingsListeners.delete(changed)
+          }
+        }
+      }),
+      runtime,
+      logger
+    )
   }
 }
 
@@ -468,3 +493,202 @@ it.each(['capture', 'pending result'] as const)(
     }
   }
 )
+
+async function atRestNaming() {
+  const state = rig()
+  const chat = await createQueuedMessageTestRig({
+    agent: 'claude',
+    atRest: true,
+    starting: true,
+    restartable: true
+  })
+  await vi.waitFor(() =>
+    expect(
+      chat.host.collaboratorsForTests().conversationDelivery.loop.isRunning(HOST_TEST_SESSION)
+    ).toBe(false)
+  )
+  mocks.host.mockReturnValue(chat.host)
+  const title = vi.fn(async () => 'CLI first handover title')
+  chat.host.deps.adapter.captureConversationTitleOwner = (_record) => {
+    const child = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child
+    if (!child || child.phase !== 'ready') {
+      return null
+    }
+    const isCurrent = (current: AgentSessionRecord) =>
+      current.lease.runtimeFence === child.fence &&
+      chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child === child
+    return { isCurrent, generate: title }
+  }
+  const handler = createStructuredChatNamingHandler({ ...state.deps, now: () => 0 })
+  chat.host.deps.onSessionStatusChanged = handler
+  chat.host.deps.conversationNaming = handler
+  const done = () => vi.waitFor(() => expect(handler.activeSessionIds()).toEqual([]))
+  const seeded = () =>
+    vi.waitFor(() =>
+      expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Repair login')
+    )
+  return { state, chat, title, handler, done, seeded }
+}
+
+it.each(['fresh', 'startup retry', 'projected context'] as const)(
+  'names an at-rest chat from its first ready handover (%s)',
+  async (scenario) => {
+    const { chat, title, done, seeded } = await atRestNaming()
+    try {
+      expect(chat.starts).not.toHaveBeenCalled()
+      const journal = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+      if (scenario === 'projected context') {
+        await journal.replaceEpochItems('handle_forked', 1, [])
+        expect(journal.cursor().epoch).not.toBe(journal.physicalCursor().epoch)
+      }
+      if (scenario === 'startup retry') {
+        chat.failNextStart(
+          new AgentSessionAcquisitionRootExitObservedError(
+            new AgentSessionStartFailure(new Error('Temporary start failure'), 'safe')
+          )
+        )
+      }
+      const sent = chat.send('Repair login')
+      expect(await sent.result).toMatchObject({ ok: true })
+      await seeded()
+      expect(title).not.toHaveBeenCalled()
+      expect(mocks.generate).not.toHaveBeenCalled()
+      await journal.resolveDispatch({
+        clientMessageId: 'different-input',
+        state: 'pending',
+        fence: chat.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      expect(title).not.toHaveBeenCalled()
+      await chat.proveStart()
+      await done()
+      expect(chat.dispatch).toHaveBeenCalled()
+      expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(
+        'CLI first handover title'
+      )
+      expect(title).toHaveBeenCalledOnce()
+      expect(chat.starts).toHaveBeenCalledTimes(scenario === 'startup retry' ? 2 : 1)
+      expect(mocks.generate).not.toHaveBeenCalled()
+    } finally {
+      await chat.dispose()
+    }
+  }
+)
+
+it.each(['same-text rename', 'settings', 'auto-off', 'shutdown', 'Stop', 'close', 'held'] as const)(
+  'releases a pending first-input title on %s without adopting a future child',
+  async (exit) => {
+    const { chat, state, title, handler, done, seeded } = await atRestNaming()
+    const preclaim = exit === 'Stop' || exit === 'close' || exit === 'held' ? holdDelivery() : null
+    let stopping: Promise<unknown> | undefined
+    try {
+      expect(await chat.send('Repair login').result).toMatchObject({ ok: true })
+      await seeded()
+      if (exit === 'same-text rename') {
+        await handler.setUserName(HOST_TEST_SESSION, 'Repair login', 'rename')
+      }
+      if (exit === 'settings') {
+        state.settings.sourceControlAi!.actions!.conversationName = {
+          commandInputTemplate: 'Custom {basePrompt}'
+        }
+        state.settingsChanged()
+      }
+      if (exit === 'auto-off') {
+        state.settings.nativeChatAutoName = false
+        state.settingsChanged()
+      }
+      if (exit === 'shutdown') {
+        chat.host.stopDelivery()
+      }
+      if (preclaim) {
+        await preclaim.held
+        expect(chat.starts).not.toHaveBeenCalled()
+        if (exit === 'Stop') {
+          stopping = chat.stop()
+        }
+        if (exit === 'close') {
+          stopping = chat.host.close(HOST_TEST_SESSION, 'user-close')
+        }
+        if (exit === 'held') {
+          await holdUnsentSends(
+            chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal,
+            {
+              fence: chat.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+              hold: { cause: 'chatClosed' }
+            }
+          )
+        }
+      }
+      await done()
+      const independent =
+        exit === 'settings' || exit === 'Stop' || exit === 'close' || exit === 'held'
+      expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(
+        independent ? 'Login repair' : 'Repair login'
+      )
+      expect(mocks.generate).toHaveBeenCalledTimes(independent ? 1 : 0)
+      expect(title).not.toHaveBeenCalled()
+      preclaim?.release()
+      await stopping
+      if (exit !== 'shutdown' && !preclaim) {
+        await chat.proveStart()
+      }
+      expect(title).not.toHaveBeenCalled()
+    } finally {
+      preclaim?.release()
+      await stopping
+      await chat.dispose()
+    }
+  }
+)
+
+it('retires the selected first-handover source without adopting a replacement child', async () => {
+  const { chat, title, done } = await atRestNaming()
+  const entered = Promise.withResolvers<void>()
+  const result = Promise.withResolvers<string>()
+  title.mockImplementation(async () => {
+    entered.resolve()
+    return result.promise
+  })
+  try {
+    expect(await chat.send('Repair login').result).toMatchObject({ ok: true })
+    await chat.proveStart()
+    await entered.promise
+    await chat.host.close(HOST_TEST_SESSION, 'user-close')
+    const successor = chat.send('A follow-up')
+    expect(await successor.result).toMatchObject({ ok: true })
+    await chat.proveStart()
+    result.resolve('Stale first CLI title')
+    await done()
+    expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Login repair')
+    expect(title).toHaveBeenCalledOnce()
+  } finally {
+    result.resolve('Late')
+    await chat.dispose()
+  }
+})
+
+it('finishes naming admitted during delivery even if recording its failure cannot commit', async () => {
+  const { chat, title, done, seeded } = await atRestNaming()
+  const release = chat.holdNextStart()
+  chat.failNextStart(new Error('Startup refused'))
+  try {
+    expect(await chat.send('/help').result).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledOnce())
+    const sent = chat.send('Repair login')
+    expect(await sent.result).toMatchObject({ ok: true })
+    await seeded()
+    const journal = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const failure = vi
+      .spyOn(journal, 'resolveDispatch')
+      .mockRejectedValue(new Error('Journal write unavailable'))
+    release()
+    await done()
+    expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Login repair')
+    expect((await chat.submission(sent.id))?.dispatchState).toBe('pending')
+    expect(title).not.toHaveBeenCalled()
+    failure.mockRestore()
+  } finally {
+    release()
+    await chat.dispose()
+  }
+})

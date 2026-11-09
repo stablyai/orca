@@ -8,7 +8,12 @@ export type {
 } from './structured-chat-naming-types'
 import { runStructuredChatNameGeneration } from './structured-chat-name-publication'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
-import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
+import {
+  automaticChatNamingRequest,
+  createStructuredChatNamingWork,
+  namingRequestOwnsRecord,
+  type NamingRequest
+} from './structured-chat-naming-work'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
@@ -56,6 +61,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       error
     })
   const refresh = (workspaceId: string, sessionId: string) => {
+    work.recheck(sessionId)
     try {
       deps.onNamed(workspaceId, sessionId)
     } catch (error) {
@@ -70,9 +76,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     const current = latest ?? deps.getStore()?.getRecord(request.record.sessionId)
     return (
       !!current &&
-      current.conversationNameSource !== 'user' &&
-      current.conversationName === request.record.conversationName &&
-      contextId(current) === contextId(request.record) &&
+      namingRequestOwnsRecord(request, current) &&
       (!request.automatic || deps.getSettings().nativeChatAutoName !== false)
     )
   }
@@ -226,9 +230,10 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       return { ...request, firstPrompt }
     }
     // Seeding is independent of the expensive execution owner.
+    request.seedingName = conversationNameSeed(firstPrompt)
     const seeded = await store.compareAndSetConversationName(
       record.sessionId,
-      conversationNameSeed(firstPrompt),
+      request.seedingName,
       null,
       contextId(record)
     )
@@ -236,6 +241,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       return null
     }
     request.record = seeded
+    delete request.seedingName
     request.firstPrompt = firstPrompt
     refresh(seeded.location.workspaceId, seeded.sessionId)
     return request
@@ -259,12 +265,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         return
       }
       attempted.set(summary.sessionId, contextId(record))
-      const automaticTitle =
-        record.conversationName === undefined &&
-        !(!record.providerContextBoundary && deps.workerTaskTitle(record))
-          ? deps.captureAutomaticTitle?.(record)
-          : undefined
-      work.run(record, true, automaticTitle)
+      work.run(
+        automaticChatNamingRequest(deps, record, options.firstInputSubmissionKey, applicable)
+      )
     } catch (error) {
       warn(summary.sessionId, error)
     }
@@ -272,6 +275,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
 
   const naming: StructuredAgentSessionConversationNaming = {
     publishName: refresh,
+    captureTitleSourceUnavailable: work.captureSourceUnavailable,
     activeSessionIds: work.activeSessionIds,
     failure,
     failureOutput: (sessionId) => {
@@ -284,7 +288,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       if (!store || !record) {
         return false
       }
-      work.run(record, false)
+      work.run({ record, automatic: false })
       return true
     },
     // Not a job: a pending generation must not swallow the user's rename. The record's 'user'
