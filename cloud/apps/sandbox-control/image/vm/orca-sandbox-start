@@ -12,6 +12,8 @@ PROJECT=/vercel/sandbox/project
 mkdir -p "$STATE"
 exec 9>"$STATE/start.lock"
 flock -w 60 9
+# Background children close fd 9 (`9>&-`): an orcad that inherited it would hold the lock for its whole
+# life and every later start (resume of a running sandbox, a retried create) would wait out the 60 s.
 
 boot_id="$(cat /proc/sys/kernel/random/boot_id)"
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \
@@ -32,7 +34,7 @@ clone_pid=''
 if [ ! -d "$PROJECT" ]; then
   mkdir -p "$PROJECT"
   if [ -n "${ORCA_REPO_URL:-}" ]; then
-    git clone --quiet ${ORCA_REPO_REF:+--branch "$ORCA_REPO_REF"} -- "$ORCA_REPO_URL" "$PROJECT" 2>"$STATE/clone.log" &
+    git clone --quiet ${ORCA_REPO_REF:+--branch "$ORCA_REPO_REF"} -- "$ORCA_REPO_URL" "$PROJECT" 2>"$STATE/clone.log" 9>&- &
     clone_pid=$!
   fi
 fi
@@ -62,7 +64,7 @@ env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   setsid nohup "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
   --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
   --recipe-json --project-root "$PROJECT" \
-  >"$STATE/ready.json" 2>"$STATE/orcad.log" </dev/null &
+  >"$STATE/ready.json" 2>"$STATE/orcad.log" </dev/null 9>&- &
 echo $! >"$STATE/orcad.pid"
 
 for _ in $(seq 1 1200); do

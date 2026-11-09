@@ -76,6 +76,9 @@ export type Env = {
   OPERATOR_TOKEN?: string
   /** `true` refuses every create/resume/rollover (static kill switch; the D1 flag is the runtime one). */
   SANDBOX_CREATES_DISABLED?: string
+  /** Warm pool size (pool.ts); unset or 0 = off. */
+  SANDBOX_POOL_SIZE?: string
+  SANDBOX_POOL_MAX_AGE_MS?: string
   /** Global cap on active sandboxes across all accounts (default 50). */
   SANDBOX_MAX_RUNNING?: string
   /** Per-account active cap per paid seat (default 3); billing enforces the plan limit as well. */

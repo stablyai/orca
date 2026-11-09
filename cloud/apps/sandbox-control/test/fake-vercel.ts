@@ -19,6 +19,8 @@ type FakeBox = {
   timeoutMs: number
   route: string
   policy: NetworkPolicy
+  /** orcad's recipe line for the current boot, once the start command ran. */
+  orcadReady?: string
 }
 
 export type FakeVercel = SandboxProviderApi & {
@@ -57,6 +59,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
   }
   const stop = (box: FakeBox): string => {
     box.status = 'stopped'
+    box.orcadReady = undefined
     const id = next('snap')
     snapshots.set(id, { id, status: 'created', sourceSessionId: box.sessionId, sandboxName: box.params.name, creationMethod: 'automatic', createdAt: now() })
     return id
@@ -131,7 +134,11 @@ export function createFakeVercel(now: () => number): FakeVercel {
           return { exitCode: 1, stdout: '', stderr: 'orcad crashed' }
         }
         const ready = { schemaVersion: 1, pairingCode: `orca://pair?code=${box.params.name}`, projectRoot: '/vercel/sandbox/project' }
-        return { exitCode: 0, stdout: `booting\n${JSON.stringify(ready)}\n`, stderr: '' }
+        box.orcadReady = JSON.stringify(ready)
+        return { exitCode: 0, stdout: `booting\n${box.orcadReady}\n`, stderr: '' }
+      }
+      if (params.command === 'bash' && params.args?.join(' ').includes('ready.json')) {
+        return box.orcadReady ? { exitCode: 0, stdout: `${box.orcadReady}\n`, stderr: '' } : { exitCode: 3, stdout: '', stderr: '' }
       }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }

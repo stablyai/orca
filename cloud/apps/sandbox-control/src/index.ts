@@ -12,6 +12,7 @@
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
 import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
@@ -34,7 +35,7 @@ import {
   type LifecycleDeps,
   type Ready
 } from './lifecycle'
-import { createGitHubAppMinter, type GitHubAppMinter } from './github-app'
+import { createGitHubAppMinter, parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
   GitHubConnectError,
   authorizeUrl,
@@ -71,6 +72,10 @@ export type Deps = {
   /** GitHub OAuth/user API fetch (tests). */
   githubFetch?: typeof fetch
   retention?: RetentionConfig
+  /** Anonymous github.com reachability (tests stub it). */
+  publicRepoCheck?: (repoUrl: string) => Promise<boolean>
+  /** ctx.waitUntil from the Worker entry; tests leave it unset. */
+  waitUntil?: (work: Promise<unknown>) => void
 }
 
 // Decrypted model keys for the egress proxy, per sandbox session, for a minute: one D1 read and
@@ -299,7 +304,10 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
     secrets: await secretsDeps(env),
     now: deps.now ?? Date.now,
     retention: deps.retention ?? retentionFromEnv(env),
+    background: deps.waitUntil,
+    publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
     config: {
+      pool: poolConfigFromEnv(env),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1
@@ -312,6 +320,27 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
       sessionDeadlineMs:
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
+  }
+}
+
+/**
+ * Smart-HTTP ref advertisement, anonymous: 200 for a public repo, 401 for private or missing. Not the
+ * REST API, so no 60/h anonymous quota. Network trouble counts as public: the clone then reports it.
+ */
+async function githubRepoIsPublic(repoUrl: string): Promise<boolean> {
+  const parsed = parseGitHubRepo(repoUrl)
+  if (!parsed) {
+    return true
+  }
+  try {
+    const response = await fetch(
+      `https://github.com/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}.git/info/refs?service=git-upload-pack`,
+      { redirect: 'manual', headers: { 'user-agent': 'orca-sandbox-control' }, signal: AbortSignal.timeout(5_000) }
+    )
+    await response.body?.cancel()
+    return response.status !== 401 && response.status !== 404
+  } catch {
+    return true
   }
 }
 
@@ -572,8 +601,8 @@ function errorResponse(error: unknown): Response {
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
-    return handleRequest(request, env)
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work) })
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
@@ -582,6 +611,9 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
+          // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
+          const pool = await maintainPool(life).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          console.log(JSON.stringify({ event: 'pool', ...pool }))
         }
         await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
           console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))

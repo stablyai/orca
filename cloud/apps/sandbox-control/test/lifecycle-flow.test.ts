@@ -35,6 +35,36 @@ describe('sandbox control plane lifecycle', () => {
     expect(h.billing.checks).toEqual([{ accountId: 'user:alice', runningSandboxes: 0 }])
   })
 
+  it('refuses a private repo with no connected GitHub before booting anything (github_not_connected)', async () => {
+    const checked: string[] = []
+    const h = await createHarness({}, { publicRepoCheck: async (url) => (checked.push(url), false) })
+    const repo = { url: 'https://github.com/acme/private-app.git' }
+    const res = await h.call('POST', '/v1/sandboxes', { body: { ...create, repo } })
+    expect(res.status).toBe(409)
+    expect(res.body).toMatchObject({ error: 'conflict', reason: 'github_not_connected' })
+    expect(checked).toEqual([repo.url])
+    expect(h.vercel.boxes.size).toBe(0)
+    // The failed attempt does not block the workspace: once the repo is reachable, create works.
+    const public_ = await createHarness({}, { publicRepoCheck: async () => true })
+    expect((await public_.call('POST', '/v1/sandboxes', { body: { ...create, repo } })).status).toBe(200)
+    const retry = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(retry.status).toBe(200)
+  })
+
+  it('resume of a running sandbox answers from the running orcad without another start', async () => {
+    const h = await createHarness()
+    const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
+    const starts = () => h.vercel.commands.filter((c) => c.command === START_COMMAND).length
+    const before = starts()
+    for (let i = 0; i < 2; i++) {
+      const again = await h.call('POST', `/v1/sandboxes/${body.sandbox.id}/resume`)
+      expect(again.status).toBe(200)
+      expect(again.body.connection.pairingCode).toBe(body.connection.pairingCode)
+    }
+    // Answered from the serving orcad: no second start (that path held the start lock and hung 60 s).
+    expect(starts()).toBe(before)
+  })
+
   it('refuses a start billing denies without touching the provider', async () => {
     const h = await createHarness()
     h.billing.decision = { allow: false, reason: 'concurrency_limit', suspendRunning: false }
