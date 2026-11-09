@@ -10,6 +10,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'skills/bundled-skill-install/bundled-skill-installation',
   'filesystem/macos-tree-clone',
   'orcad/orcad-stale-lock-reclaim',
+  'orcad/orcad-host-identity-reset',
   'plugins/plugin-authoring-checks',
   ...[
     'access',

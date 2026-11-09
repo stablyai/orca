@@ -88,6 +88,8 @@ export class StoreRuntimeState {
   githubCacheRetryDelayMs = 0
   /** Fingerprint of a sidecar the loaded cache imported or supersedes; retired once rows commit. */
   githubCacheLegacyFileHash: string | null = null
+  /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
+  githubCachePersistenceDisabled = false
   readonly githubCacheWriteListeners = new Set<() => void>()
   readonly staleGithubCacheTempCleanup: Promise<void>
   readonly staleProfileStateTempCleanup: Promise<void>

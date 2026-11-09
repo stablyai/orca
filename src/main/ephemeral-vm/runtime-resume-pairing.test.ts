@@ -7,8 +7,7 @@ import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairin
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
-  resolveEnvironmentPairingOffer,
-  updateEnvironmentFromPairingCode
+  resolveEnvironmentPairingOffer
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
@@ -112,17 +111,6 @@ describe('resuming a recipe VM server', () => {
     expect(new DeviceRegistry(serverDataPath).listDevices()).toHaveLength(2)
     expect(listEnvironments(desktopDataPath)).toHaveLength(1)
     expect(listEnvironments(desktopDataPath)[0]!.pairingRevision).toBe(before.pairingRevision)
-  })
-
-  it('grows one device row per resume when every resume re-pairs (previous behaviour)', () => {
-    const environmentId = provision()
-    for (let cycle = 1; cycle <= 20; cycle++) {
-      updateEnvironmentFromPairingCode(desktopDataPath, environmentId, {
-        pairingCode: bootVm(serverDataPath, `wss://vm-${cycle}.example/runtime`)
-      })
-      connect(serverDataPath, desktopDataPath, environmentId)
-    }
-    expect(new DeviceRegistry(serverDataPath).listDevices()).toHaveLength(21)
   })
 
   it('leaves the store untouched but still drops the transport when nothing moved', async () => {

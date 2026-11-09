@@ -33,7 +33,9 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure
   notifyWebRuntimeTerminalCreateFailure: notifyFailure
 }))
 vi.mock('@/lib/wsl-host-user-start', () => ({ startStoppedWslHostForUserAct: startHost }))
-vi.mock('@/lib/claude-account-sign-in', () => ({ signInToClaudeAccount: vi.fn() }))
+vi.mock('@/lib/provider-accounts/claude-account-sign-in', () => ({
+  signInToClaudeAccount: vi.fn()
+}))
 
 afterEach(() => {
   cleanup()

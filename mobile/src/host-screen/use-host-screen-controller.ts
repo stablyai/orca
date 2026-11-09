@@ -60,7 +60,8 @@ export function useHostScreenController({
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  const { hostCapabilities, floatingWorkspaceEnabled, hostInstallationId } = useHostProtocolGates()
+  const { hostCapabilities, statusReadable, floatingWorkspaceEnabled, hostInstallationId } =
+    useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
@@ -83,6 +84,7 @@ export function useHostScreenController({
     connState,
     embedded,
     hostCapabilities,
+    hostStatusReadable: statusReadable,
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,
     state,

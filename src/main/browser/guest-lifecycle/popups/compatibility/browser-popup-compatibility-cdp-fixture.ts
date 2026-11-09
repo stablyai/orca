@@ -1,3 +1,4 @@
+// @orca-isolated-worker: the Electron app, mock server and temp root live at module level, one per test file.
 import type { PopupCompatibilityStatus } from './browser-popup-compatibility-status'
 import { spawnProcess } from '@orca/process-host'
 import { createServer } from 'node:http'

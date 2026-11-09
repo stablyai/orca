@@ -236,6 +236,8 @@ const BridgeHostMessageSchema = z.union([
   }),
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
+  // Native booted this page ahead of its screen and keeps its ready for the screen that adopts it.
+  z.object({ v: versionSchema, type: z.literal('parked') }),
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
   z.object({
     v: versionSchema,

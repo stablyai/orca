@@ -304,6 +304,12 @@ timeoutSeconds:
 A timed-out `create` may still have started a VM, so make `create` idempotent per
 `ORCA_VM_INSTANCE_ID` or have it record the resource before slow work starts.
 
+Orca records each VM before `create` runs. If `create` started but never returned a result (it
+failed, timed out, or Orca quit), Settings keeps the VM listed so the user can clean it up; if it
+was cancelled or rejected before starting, nothing is kept. That destroy
+payload has `instanceId` but no `recipeResult`, so `destroy` should find the resource from the
+instance id (for example, a name built from `ORCA_VM_INSTANCE_ID`) or exit non-zero if it can't.
+
 The base result, which is what Orca-server mode prints:
 
 ```json
