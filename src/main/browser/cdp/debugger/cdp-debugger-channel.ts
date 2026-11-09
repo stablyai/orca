@@ -1,12 +1,9 @@
 import { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
-import {
-  acquireElectronDebugger,
-  type ElectronDebuggerLease
-} from '../debugger/electron-debugger-lease'
+import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 import type { CdpClientResponseWriter } from '../transport/cdp-client-response-writer'
-import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
-import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
+import type { CdpSyntheticSessionRegistry } from '../transport/cdp-synthetic-session-registry'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import { isOrcaFrameSessionTraffic } from '../input/guest-frame-input-sessions'
 
 export class CdpDebuggerChannel {
