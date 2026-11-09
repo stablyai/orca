@@ -19,7 +19,7 @@ import type { AcpSubagentUpdate } from '../acp-dialects/acp-dialect'
 type KnownSubagent = {
   /** Pin replies to the spawning turn. */
   placement: ProviderTimelineJoin
-  reply?: string
+  replyDigest?: string
   /** Preserve the first terminal state; only completed runs can publish replies. */
   ended?: NativeChatSubagentState
 }
@@ -106,10 +106,11 @@ export class AcpSubagents {
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): ProviderTimelineEvent[] {
-    if (subagent.reply === text) {
+    const digest = createHash('sha256').update(text, 'utf16le').digest('hex')
+    if (subagent.replyDigest === digest) {
       return []
     }
-    subagent.reply = text
+    subagent.replyDigest = digest
     return [
       {
         type: 'item.update',
