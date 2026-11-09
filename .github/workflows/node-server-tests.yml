@@ -14,7 +14,6 @@ jobs:
       ORCA_BACKGROUND_LAUNCH: '1'
       JOBS: max
       ORCA_VITEST_ISOLATE_EVERY_FILE: '0'
-      ORCA_DIAGNOSTIC_TRACE_DIR: ${{ runner.temp }}/conpty-diagnostic
     steps:
       - name: Parallelize Windows checkout
         shell: bash
@@ -51,6 +50,8 @@ jobs:
           Get-ChildItem out/orcad -Recurse -File | Where-Object { $_.Extension -in '.node', '.dll', '.exe' } | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String -Width 4096 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/native-sha256.txt"
       - name: Generate diagnostic-only worker trace and config
         shell: bash
+        env:
+          ORCA_DIAGNOSTIC_TRACE_DIR: ${{ runner.temp }}/conpty-diagnostic
         run: |
           node --input-type=module <<'JS'
           import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -75,6 +76,8 @@ jobs:
           git diff --exit-code
       - name: Full original artifact suite with worker identity tracing
         shell: pwsh
+        env:
+          ORCA_DIAGNOSTIC_TRACE_DIR: ${{ runner.temp }}/conpty-diagnostic
         run: |
           node -e "console.log(JSON.stringify({source: '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8', availableParallelism: require('node:os').availableParallelism(), isolation: process.env.ORCA_VITEST_ISOLATE_EVERY_FILE}))" | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/policy.json"
           node config/scripts/ci/unit-selection/run-node-server-tests.diagnostic.mjs --artifact 2>&1 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/full-suite.log"
