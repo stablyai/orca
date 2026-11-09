@@ -8,7 +8,7 @@ import {
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame,
   type BrowserNetworkTunnelOpen
-} from '../../../src/shared/browser-network-tunnel-protocol'
+} from '../../../src/shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { MobileBrowserTunnelEvent } from '../../../src/shared/mobile-browser-tunnel-protocol'
 import type { BrowserTunnelFrameChannel } from '../transport/rpc/browser-tunnel-frame-channel'
 

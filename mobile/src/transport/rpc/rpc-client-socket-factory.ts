@@ -1,4 +1,4 @@
-import { isBrowserNetworkTunnelFrameKind } from '../../../../src/shared/browser-network-tunnel-protocol'
+import { isBrowserNetworkTunnelFrameKind } from '../../../../src/shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { PairedE2EEFramingPolicy } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import {
   BrowserTunnelFrameListeners,
