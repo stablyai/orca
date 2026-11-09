@@ -551,6 +551,19 @@
       "connectionSlow": "Connection too slow",
       "phoneStopped": "Stopped on this phone",
       "stopped": "Dictation stopped"
+    },
+    "announce": {
+      "typedInto": "Typed into {{target}}",
+      "insertedIn": "Inserted in {{target}}"
+    },
+    "pill": {
+      "open": "Open",
+      "listening": "Listening",
+      "starting": "Starting",
+      "finishing": "Finishing",
+      "stopped": "Dictation stopped",
+      "label": "Dictation to {{target}}, {{duration}}",
+      "hint": "Double-tap to go back"
     }
   },
   "home": {

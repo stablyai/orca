@@ -1336,6 +1336,19 @@
       "phoneStopped": "Bu telefonda durdu",
       "stopped": "Dikte durdu",
       "recordingKept": "Kayıt saklandı"
+    },
+    "announce": {
+      "typedInto": "{{target}} içine yazıldı",
+      "insertedIn": "{{target}} içine eklendi"
+    },
+    "pill": {
+      "open": "Aç",
+      "listening": "Dinleniyor",
+      "starting": "Başlatılıyor",
+      "finishing": "Tamamlanıyor",
+      "stopped": "Dikte durdu",
+      "label": "{{target}} için dikte, {{duration}}",
+      "hint": "Geri dönmek için iki kez dokunun"
     }
   },
   "files": {
