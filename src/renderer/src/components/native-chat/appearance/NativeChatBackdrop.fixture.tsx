@@ -50,11 +50,27 @@ function TerminalPane({
 
 function Backdrops(): React.JSX.Element {
   const [covered, setCovered] = useState(false)
+  useEffect(() => {
+    const root = document.documentElement
+    const previousMaterial = root.getAttribute('data-window-material')
+    const previousOpacity = root.style.getPropertyValue('--orca-window-surface-opacity')
+    root.dataset.windowMaterial = 'blur'
+    root.style.setProperty('--orca-window-surface-opacity', '0.3')
+    return () => {
+      if (previousMaterial === null) {
+        root.removeAttribute('data-window-material')
+      } else {
+        root.setAttribute('data-window-material', previousMaterial)
+      }
+      root.style.setProperty('--orca-window-surface-opacity', previousOpacity)
+    }
+  }, [])
   const terminalBackground = 'color-mix(in srgb, var(--background) 30%, transparent)'
   return (
     <>
       <button onClick={() => setCovered(!covered)}>Toggle split chat</button>
       <div data-test-backdrop className="flex gap-4">
+        <div data-paint-sample="bare" className="size-8 shrink-0" />
         <div data-terminal-chat-pane="" style={{ background: terminalBackground }}>
           <TerminalPane covered sample="single" />
         </div>
@@ -75,10 +91,6 @@ function Backdrops(): React.JSX.Element {
 }
 
 export const material = defineFixture({
-  width: 760,
-  setup: () => {
-    document.documentElement.dataset.windowMaterial = 'blur'
-    document.documentElement.style.setProperty('--orca-window-surface-opacity', '0.3')
-  },
+  width: 800,
   render: () => <Backdrops />
 })

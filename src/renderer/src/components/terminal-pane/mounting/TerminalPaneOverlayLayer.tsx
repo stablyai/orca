@@ -173,7 +173,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isVisible={isVisible}
             isActive={isActive}
             hiddenPrewarm={assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null}
-            // Why not over a backdrop: dimming the translucent chat also dims its text.
+            // Why not over a backdrop: group dimming also fades terminal and chat text.
             dimmed={groups.length > 1 && isVisible && !isActive && !backdropActive}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}

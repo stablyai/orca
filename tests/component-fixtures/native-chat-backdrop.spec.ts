@@ -16,10 +16,17 @@ test('material reaches chat without changing the neighboring terminal or exposin
   expect(await pixels(page, 'neighbor')).toEqual(neighbor)
 
   const samples = ['single', 'split', 'structured']
+  const lightBare = await pixels(page, 'bare')
   const light = await Promise.all(samples.map((sample) => pixels(page, sample)))
+  for (const painted of light) {
+    expect(painted.equals(lightBare)).toBe(false)
+  }
   await backdrop.evaluate((element) => (element.style.background = 'black'))
+  const darkBare = await pixels(page, 'bare')
   for (const [index, sample] of samples.entries()) {
-    expect((await pixels(page, sample)).equals(light[index])).toBe(false)
+    const painted = await pixels(page, sample)
+    expect(painted.equals(light[index])).toBe(false)
+    expect(painted.equals(darkBare)).toBe(false)
   }
 
   const covered = await pixels(page, 'split')
