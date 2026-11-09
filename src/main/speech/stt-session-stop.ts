@@ -109,7 +109,17 @@ export function releaseSttSession(state: SttSessionState, session: SttSession): 
     engine.worker.postMessage({ type: 'discard', streamId: session.streamId })
   }
   if (sttEngineUsers(state, engine).length === 0) {
-    scheduleSttIdleTeardown(state)
+    if (engine.onUnloaded.length > 0) {
+      void teardownSttEngine(state, engine)
+    } else {
+      scheduleSttIdleTeardown(state)
+    }
+  }
+}
+
+function notifyUnloaded(engine: SttEngine): void {
+  for (const unloaded of engine.onUnloaded.splice(0)) {
+    unloaded()
   }
 }
 
@@ -129,7 +139,7 @@ export function failSttEngine(state: SttSessionState, engine: SttEngine, error: 
     session.sink({ type: 'error', error })
     session.sink({ type: 'stopped' })
   }
-  void engine.worker.terminate()
+  void engine.worker.terminate().finally(() => notifyUnloaded(engine))
 }
 
 export async function prepareSttModelForDeletion(
@@ -192,4 +202,5 @@ export async function teardownSttEngine(state: SttSessionState, engine: SttEngin
   engine.detach()
   // Resolves once the process is gone, so its model files are free to delete.
   await engine.worker.terminate()
+  notifyUnloaded(engine)
 }
