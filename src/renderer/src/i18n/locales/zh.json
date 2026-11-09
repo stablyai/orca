@@ -18887,6 +18887,8 @@
         "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
+      "newRowsAnnouncement": "你离开期间有新消息",
+      "newRowsMarker": "新消息",
       "find": {
         "label": "在聊天中查找",
         "noResults": "没有结果",
@@ -19915,6 +19917,9 @@
         "scrollToLatestOnSendTitle": "发送时滚动到最新消息",
         "scrollToLatestOnSendCopy": "向上滚动时发送消息会跳到最新消息并跟随回复。关闭后将保持当前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
+        "markNewMessagesTitle": "返回聊天时标记新消息",
+        "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
+        "markNewMessagesSearchUnread": "未读",
         "followUpBehaviorCopy": "智能体工作时发送的消息会作为卡片等待，直到本轮结束，而不是进入当前轮次。Cmd/Ctrl+Enter 对单条消息执行相反操作；输入框为空时，该快捷键会将第一张等待中的卡片引入当前轮次。带图片的消息也会作为卡片等待。",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
