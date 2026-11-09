@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
     reload: vi.fn(async (): Promise<BrowserExtensionActionResult> => ({ ok: true }))
   }
 })
-vi.mock('../sessions/browser-session-registry', () => ({ browserSessionRegistry: {} }))
+vi.mock('../sessions/profiles/browser-session-registry', () => ({ browserSessionRegistry: {} }))
 vi.mock('./installation/browser-extension-install-store', () => ({
   getBrowserExtensionInstallStore: () => ({ list: () => mocks.installed })
 }))
