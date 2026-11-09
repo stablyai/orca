@@ -10,11 +10,15 @@ import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/term
 import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-cleanup'
-import { ensureGroup, findTabByEntityInGroup, updateGroup } from '../slices/tabs/tab-group-state'
+import {
+  ensureWorktreeGroup,
+  findTabByEntityInGroup,
+  updateGroup
+} from '../slices/tabs/tab-group-state'
 import { pushRecentTabId, sanitizeRecentTabIds } from '../slices/tabs/tab-selection-history'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
+import { emptySplitGroup, splitGroupEntries } from '../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -25,23 +29,8 @@ import {
 } from './terminal-tab-create-through-layout-owner'
 import type { AppState } from '../types'
 import { normalizeTabStartupCommand } from './terminal-startup-queues'
-import { recordDraft, replaceRecordEntries, replaceTabBuckets } from '../keyed-record-transitions'
-
-/** Ordered set/delete operations (null deletes); returns `previous` when none changed it. */
-function applyEntries<V>(
-  previous: Record<string, V>,
-  entries: Iterable<readonly [key: string, value: V | null]>
-): Record<string, V> {
-  const draft = recordDraft(previous)
-  for (const [key, value] of entries) {
-    if (value === null) {
-      draft.delete(key)
-    } else {
-      draft.set(key, value)
-    }
-  }
-  return draft.finish()
-}
+import { replaceRecordEntries, replaceTabBuckets } from '../keyed-record-transitions'
+import { applyRecordOperations } from './terminal-companion-record-operations'
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
@@ -54,21 +43,36 @@ export function createTerminalTabCreationActions(
       const split = options?.split
       const splitGroupId = split ? createBrowserUuid() : undefined
       set((current) => {
-        const s =
+        const s = current
+        // The split's per-worktree group, layout and focus; each record is built once in the patch below.
+        const splitEntries =
           split && splitGroupId
-            ? {
-                ...current,
-                ...insertSplitGroup(
-                  current,
-                  worktreeId,
-                  split,
-                  emptySplitGroup(worktreeId, splitGroupId)
-                )
-              }
-            : current
+            ? splitGroupEntries(
+                current,
+                worktreeId,
+                split,
+                emptySplitGroup(worktreeId, splitGroupId)
+              )
+            : null
+        const worktreeGroups = splitEntries?.groups ?? current.groupsByWorktree[worktreeId]
+        const worktreeActiveGroupId =
+          splitEntries?.activeGroupId ?? current.activeGroupIdByWorktree[worktreeId]
+        const worktreeLayout = splitEntries?.layout ?? current.layoutByWorktree[worktreeId]
         const requestedGroupId = splitGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
-        const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
+        // Seam records are built once below from the orphan IDs; the builder gets only the bucket it reads.
+        const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(
+          {
+            ...s,
+            tabsByWorktree: { [worktreeId]: s.tabsByWorktree[worktreeId] ?? [] },
+            ptyIdsByTabId: {},
+            runtimePaneTitlesByTabId: {},
+            terminalLayoutsByTabId: {},
+            pendingStartupByTabId: {}
+          },
+          worktreeId,
+          orphanTerminalIds
+        )
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
@@ -139,20 +143,21 @@ export function createTerminalTabCreationActions(
           void warnIfZCodeCannotOpenSession()
         }
         const validTargetGroupId =
-          requestedGroupId &&
-          s.groupsByWorktree[worktreeId]?.some((group) => group.id === requestedGroupId)
+          requestedGroupId && worktreeGroups?.some((group) => group.id === requestedGroupId)
             ? requestedGroupId
             : undefined
-        const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
-          s.groupsByWorktree,
-          s.activeGroupIdByWorktree,
+        // Per-worktree group result; the records are built once in the patch below.
+        const { group, created: createdGroup } = ensureWorktreeGroup(
+          worktreeGroups,
           worktreeId,
-          validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
+          validTargetGroupId ?? worktreeActiveGroupId
         )
         const nextActiveGroupId =
           shouldActivate && validTargetGroupId
             ? validTargetGroupId
-            : activeGroupIdByWorktree[worktreeId]
+            : createdGroup
+              ? group.id
+              : worktreeActiveGroupId
         const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
         const existingTerminalTab = findTabByEntityInGroup(
           s.unifiedTabsByWorktree,
@@ -161,7 +166,7 @@ export function createTerminalTabCreationActions(
           id,
           'terminal'
         )
-        const groupsForWorktree = groupsByWorktree[worktreeId] ?? []
+        const groupsForWorktree = createdGroup ? [group] : (worktreeGroups ?? [])
         const cleanedGroups =
           orphanTerminalIds.size === 0
             ? groupsForWorktree
@@ -247,11 +252,11 @@ export function createTerminalTabCreationActions(
               })
             ]
           ]),
-          activeGroupIdByWorktree: applyEntries(current.activeGroupIdByWorktree, [
+          activeGroupIdByWorktree: applyRecordOperations(current.activeGroupIdByWorktree, [
             [worktreeId, nextActiveGroupId ?? null]
           ]),
           layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
-            [worktreeId, s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }]
+            [worktreeId, worktreeLayout ?? { type: 'leaf', groupId: group.id }]
           ]),
           activeTabId:
             shouldActivate && ownsGlobalSelection(s, worktreeId)
@@ -261,12 +266,15 @@ export function createTerminalTabCreationActions(
             ...orphanCleanupPatch.activeTabIdByWorktree,
             [worktreeId]: nextActiveTabIdForWorktree
           },
-          ptyIdsByTabId: applyEntries(current.ptyIdsByTabId, [
+          ptyIdsByTabId: applyRecordOperations(current.ptyIdsByTabId, [
             ...orphanDeletes,
             [tab.id, options?.initialPtyId ? [options.initialPtyId] : []]
           ]),
-          runtimePaneTitlesByTabId: applyEntries(current.runtimePaneTitlesByTabId, orphanDeletes),
-          pendingStartupByTabId: applyEntries(current.pendingStartupByTabId, [
+          runtimePaneTitlesByTabId: applyRecordOperations(
+            current.runtimePaneTitlesByTabId,
+            orphanDeletes
+          ),
+          pendingStartupByTabId: applyRecordOperations(current.pendingStartupByTabId, [
             ...orphanDeletes,
             ...(options?.pendingStartup
               ? [[tab.id, normalizeTabStartupCommand(options.pendingStartup)] as const]
@@ -278,7 +286,7 @@ export function createTerminalTabCreationActions(
                 [tab.id]: options.automaticResumeClaim
               }
             : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
-          terminalLayoutsByTabId: applyEntries(current.terminalLayoutsByTabId, [
+          terminalLayoutsByTabId: applyRecordOperations(current.terminalLayoutsByTabId, [
             ...orphanDeletes,
             [tab.id, singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)]
           ])
