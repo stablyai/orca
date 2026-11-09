@@ -324,10 +324,7 @@ export function WslAgentSkillSetupPanel({
                 {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
                 {installed && freshnessSkillName && setupCommandFailedCode === null ? (
                   <div className="mb-2">
-                    <SkillFreshnessStatusPill
-                      skillName={freshnessSkillName}
-                      hideCurrent={variant === 'row'}
-                    />
+                    <SkillFreshnessStatusPill skillName={freshnessSkillName} />
                   </div>
                 ) : null}
               </>
