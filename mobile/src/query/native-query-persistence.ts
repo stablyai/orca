@@ -64,6 +64,7 @@ export async function nativeQueryStoreReady(): Promise<boolean> {
 /** Drops a removed host's queries from this world and stops storing them; the store wipe follows. */
 export function forgetNativeHostQueries(queryClient: QueryClient, hostId: string): void {
   keptHosts.get(queryClient)?.delete(hostId)
-  hostQueryPersistenceOf(queryClient, hostId)?.stop()
+  // Removed while the persistence still listens, so it forgets what it restored for this host.
   queryClient.removeQueries({ queryKey: hostScopeKey(hostId) })
+  hostQueryPersistenceOf(queryClient, hostId)?.stop()
 }

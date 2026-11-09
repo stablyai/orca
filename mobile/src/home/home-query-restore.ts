@@ -49,11 +49,15 @@ async function readLegacySnapshot(): Promise<LegacySnapshot | null> {
   return { savedAt: 0, worktreeInfo: {} }
 }
 
-// Counts nothing stored yet answers; removes the old key once the store holds them.
+// Counts nothing stored yet answers; the old key goes once the store holds them. Without a readable host
+// list or a store that can write (web, a key that won't load), the key waits for a later launch.
 async function seedFromLegacySnapshot(
   queryClient: QueryClient,
-  hostIds: readonly string[]
+  hostIds: readonly string[] | null
 ): Promise<void> {
+  if (hostIds === null || !(await nativeQueryStoreReady())) {
+    return
+  }
   const snapshot = await readLegacySnapshot()
   if (!snapshot) {
     return
@@ -85,19 +89,18 @@ async function seedFromLegacySnapshot(
       )
     queryClient.setQueryData(key, counts, { updatedAt: info.countsProvenAt ?? snapshot.savedAt })
   }
-  await Promise.all(hostIds.map((hostId) => keepNativeHostQueries(queryClient, hostId)?.flush()))
-  // A store that can't write keeps the old key, so the next launch seeds from it again.
-  if (await nativeQueryStoreReady()) {
-    await AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined)
-  }
+  // Off the first paint's path: the seeded counts already show.
+  void Promise.all(
+    hostIds.map((hostId) => keepNativeHostQueries(queryClient, hostId)?.flush())
+  ).then(() => AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined))
 }
 
 /** Restores each paired desktop's stored counts and totals; resolves once each is applied or missed. */
 export async function restoreHomeQueries(queryClient: QueryClient): Promise<void> {
   const hosts = await loadStoredHostProfiles().catch(() => null)
-  const hostIds = hosts?.map((host) => host.id) ?? []
+  const hostIds = hosts?.map((host) => host.id) ?? null
   await Promise.all(
-    hostIds.map((hostId) =>
+    (hostIds ?? []).map((hostId) =>
       keepNativeHostQueries(queryClient, hostId)?.restore(
         [
           persistedHostQueryKey(homeStatsQuery, homeStatsKey(hostId)),

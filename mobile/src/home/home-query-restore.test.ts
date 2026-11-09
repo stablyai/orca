@@ -68,7 +68,7 @@ describe('restoreHomeQueries', () => {
       })
     )
     await restoreHomeQueries(new QueryClient())
-    expect(asyncStorage.has(LEGACY_KEY)).toBe(false)
+    await vi.waitFor(() => expect(asyncStorage.has(LEGACY_KEY)).toBe(false))
 
     const relaunched = new QueryClient()
     await restoreHomeQueries(relaunched)

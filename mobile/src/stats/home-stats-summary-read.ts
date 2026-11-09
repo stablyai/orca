@@ -31,13 +31,13 @@ type HomeStats = Exclude<HomeStatsRow, undefined>
 
 export const homeStatsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, HomeStats>({
   family: 'stats.summary',
-  fetch: async (client, _target, _input, previous) => {
+  fetch: async (client, _target, _input, previous, read) => {
     const summary = homeStatsSummaryRead.interpret(await homeStatsSummaryRead.request(client))
     if (summary.accepted) {
       return summary.value ?? null
     }
-    // Decorative totals: a refusal keeps the last shown reply.
-    if (previous !== undefined) {
+    // Decorative totals: a refusal keeps the last reply this launch read, never re-dates a stored one.
+    if (previous !== undefined && !read.previousFromStore) {
       return previous
     }
     throw new Error('stats.summary unavailable')
