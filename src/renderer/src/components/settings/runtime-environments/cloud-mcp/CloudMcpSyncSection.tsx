@@ -23,10 +23,12 @@ export function CloudMcpSyncSection({
     return null
   }
   const failed = (): void => {
-    toast.error(t('cloudMcpSync.error.failed', 'The last sync didn’t finish.'))
+    toast.error(t('cloudMcpSync.saveFailed', 'Couldn’t save the change.'))
   }
   const syncNow = (): void => {
-    void syncCloudMcpServersNow(environmentId).catch(failed)
+    void syncCloudMcpServersNow(environmentId).catch(() =>
+      toast.error(t('cloudMcpSync.startFailed', 'Couldn’t start the sync.'))
+    )
   }
   const api = window.api.runtimeEnvironments
   return (
@@ -37,9 +39,7 @@ export function CloudMcpSyncSection({
       onSyncNow={syncNow}
       onToggleServer={(key, included) => {
         // Main flips the switch everywhere at once; turning one off also removes it from the workspace.
-        void Promise.resolve(api.setMcpServerIncluded?.(key, included))
-          .then(() => syncCloudMcpServersNow(environmentId))
-          .catch(failed)
+        void Promise.resolve(api.setMcpServerIncluded?.(key, included)).then(syncNow).catch(failed)
       }}
       onToggleAutoSync={(autoSync) => {
         void Promise.resolve(api.setMcpSyncPreferences?.({ autoSync })).catch(failed)

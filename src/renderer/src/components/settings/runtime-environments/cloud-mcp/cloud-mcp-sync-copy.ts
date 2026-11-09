@@ -26,7 +26,16 @@ export function mcpSyncTimeLabel(at: number, now: number = Date.now()): string {
 /** One-line summary for the panel header and the host menu; counts stay put while a sync runs. */
 export function mcpSyncSummary(status: McpSyncStatus, t: Translate = translate): string {
   if (status.rows.length === 0) {
-    return t('cloudMcpSync.summary.none', 'None found in Claude Code or Codex on this computer')
+    return t(
+      'cloudMcpSync.summary.none',
+      'None found in Claude Code or Codex on this computer. Add one there, then sync.'
+    )
+  }
+  if (status.error === 'host-outdated' && status.lastSyncedAt === null) {
+    return t('cloudMcpSync.summary.found', '{{count}} found', {
+      count: status.rows.length,
+      defaultValue_one: '{{count}} found'
+    })
   }
   if (status.lastSyncedAt === null) {
     return t('cloudMcpSync.summary.notSynced', '{{count}} found, not synced yet', {
@@ -34,13 +43,19 @@ export function mcpSyncSummary(status: McpSyncStatus, t: Translate = translate):
       defaultValue_one: '{{count}} found, not synced yet'
     })
   }
-  const { synced, skipped } = mcpSyncCounts(status)
-  return skipped === 0
-    ? t('cloudMcpSync.summary.synced', '{{count}} synced', { count: synced })
-    : t('cloudMcpSync.summary.syncedSkipped', '{{synced}} synced, {{skipped}} skipped', {
-        synced,
-        skipped
-      })
+  const counts = mcpSyncCounts(status)
+  const synced = t('cloudMcpSync.summary.synced', '{{count}} synced', {
+    count: counts.synced,
+    defaultValue_one: '{{count}} synced'
+  })
+  if (counts.skipped === 0) {
+    return synced
+  }
+  const skipped = t('cloudMcpSync.summary.skipped', '{{count}} skipped', {
+    count: counts.skipped,
+    defaultValue_one: '{{count}} skipped'
+  })
+  return t('cloudMcpSync.summary.pair', '{{synced}}, {{skipped}}', { synced, skipped })
 }
 
 /** Errors the user can retry; an outdated sandbox needs a new workspace, not another try. */
@@ -55,13 +70,16 @@ export function mcpSyncErrorText(
   const copy: Record<NonNullable<McpSyncStatus['error']>, string> = {
     'host-outdated': t(
       'cloudMcpSync.error.hostOutdated',
-      'This sandbox runs an older version of Orca that can’t receive MCP servers. New workspaces have it.'
+      'This sandbox runs an older Orca that can’t receive MCP servers. Create a new workspace to use them.'
     ),
     'host-unreachable': t(
       'cloudMcpSync.error.hostUnreachable',
-      'Couldn’t reach the sandbox. Make sure it’s running, then sync again.'
+      'Couldn’t reach the sandbox. Servers already in the sandbox still work.'
     ),
-    failed: t('cloudMcpSync.error.failed', 'The last sync didn’t finish.')
+    failed: t(
+      'cloudMcpSync.error.failed',
+      'The last sync didn’t finish. Servers already in the sandbox still work.'
+    )
   }
   return error ? copy[error] : null
 }
@@ -72,7 +90,10 @@ type RowNoteKey = Exclude<McpSyncSkipReason, 'turned-off'> | McpSyncHostOutcome
 export function mcpSyncRowNote(row: McpSyncServerRow, t: Translate = translate): string | null {
   if (row.state === 'synced') {
     return row.unreachable
-      ? t('cloudMcpSync.row.unreachable', 'Synced, but the sandbox can’t reach it')
+      ? t(
+          'cloudMcpSync.row.unreachable',
+          'Synced, but the sandbox can’t reach this server. Sync again to reopen its host.'
+        )
       : null
   }
   if (row.state === 'pending') {
@@ -80,7 +101,10 @@ export function mcpSyncRowNote(row: McpSyncServerRow, t: Translate = translate):
     return null
   }
   const notes: Partial<Record<RowNoteKey, string>> = {
-    'in-repo': t('cloudMcpSync.row.inRepo', 'Comes from the repo’s .mcp.json'),
+    'in-repo': t(
+      'cloudMcpSync.row.inRepo',
+      'Comes from the repo’s .mcp.json, so the sandbox already has it'
+    ),
     'local-command': t('cloudMcpSync.row.localCommand', 'Command exists only on this computer'),
     'local-path': t('cloudMcpSync.row.localPath', 'Uses files on this computer'),
     'local-url': t('cloudMcpSync.row.localUrl', 'Runs on this computer’s localhost'),
@@ -90,7 +114,9 @@ export function mcpSyncRowNote(row: McpSyncServerRow, t: Translate = translate):
       'Will sync once {{command}} is installed in the sandbox',
       { command: row.target ?? '' }
     ),
-    'kept-host': t('cloudMcpSync.row.keptHost', 'The sandbox already has its own'),
+    'kept-host': t('cloudMcpSync.row.keptHost', 'The sandbox already has its own {{name}} server', {
+      name: row.name
+    }),
     'config-unreadable': t(
       'cloudMcpSync.row.configUnreadable',
       'Couldn’t update the agent’s config in the sandbox'
@@ -114,4 +140,26 @@ const FIXED_SKIPS: ReadonlySet<string> = new Set([
 export function mcpSyncRowToggleable(row: McpSyncServerRow): boolean {
   const key = row.outcome ?? row.skipReason
   return !key || !FIXED_SKIPS.has(key)
+}
+
+/** Synced first, then rows a switch can change, then skips nothing here can fix. */
+export function mcpSyncSortRows(rows: readonly McpSyncServerRow[]): McpSyncServerRow[] {
+  const rank = (row: McpSyncServerRow): number =>
+    row.state === 'synced' ? 0 : mcpSyncRowToggleable(row) ? 1 : 2
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index)
+    .map(({ row }) => row)
+}
+
+/** What the row's icon says, for screen readers. */
+export function mcpSyncRowStateLabel(row: McpSyncServerRow, t: Translate = translate): string {
+  if (row.state === 'synced') {
+    return row.unreachable
+      ? t('cloudMcpSync.state.unreachable', 'Synced, not reachable')
+      : t('cloudMcpSync.state.synced', 'Synced')
+  }
+  return row.state === 'pending' && row.included
+    ? t('cloudMcpSync.state.pending', 'Not synced yet')
+    : t('cloudMcpSync.state.skipped', 'Not synced')
 }

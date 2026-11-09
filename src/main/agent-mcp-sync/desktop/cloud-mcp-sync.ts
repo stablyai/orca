@@ -19,6 +19,7 @@ import { readLocalMcpConfig, type LocalMcpConfig } from './local-mcp-config-read
 import type { CloudMcpEgress } from './cloud-mcp-egress'
 
 const SYNC_TIMEOUT_MS = 30_000
+const MAX_EXCLUDED = 512
 
 export type { CloudMcpSyncPreferences }
 
@@ -94,7 +95,9 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
         preferences = {
           autoSync: !isMcpRecord(parsed) || parsed.autoSync !== false,
           excluded: Array.isArray(excluded)
-            ? excluded.filter((key): key is string => typeof key === 'string')
+            ? excluded
+                .filter((key): key is string => typeof key === 'string' && key.length <= 200)
+                .slice(0, MAX_EXCLUDED)
             : []
         }
       } catch {
@@ -184,7 +187,8 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       autoSync: getPreferences().autoSync,
       running: true,
       lastSyncedAt: previous?.lastSyncedAt ?? null,
-      error: null,
+      // The last error stays up (with its retry spinning) until this run answers.
+      error: previous?.error ?? null,
       rows: previous?.rows.length ? previous.rows : rows
     })
     try {
@@ -217,7 +221,7 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
     }
   }
 
-  return {
+  const self: CloudMcpSync = {
     isCloudEnvironment: (environmentId) => cloudRuntime(environmentId) !== undefined,
     async getStatus(environmentId) {
       if (!cloudRuntime(environmentId)) {
@@ -246,6 +250,11 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
         .catch(() => {})
         .then(() => run(environmentId))
       queues.set(environmentId, next)
+      void next.finally(() => {
+        if (queues.get(environmentId) === next) {
+          queues.delete(environmentId)
+        }
+      })
       return next
     },
     getPreferences,
@@ -257,14 +266,25 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       } else {
         excluded.add(key)
       }
-      return setPreferences({ excluded: [...excluded] })
+      const merged = setPreferences({ excluded: [...excluded] })
+      // The switch is global: apply it to every cloud workspace that last synced cleanly, not
+      // just the one it was flipped in, so no other row shows a stale check.
+      for (const status of statuses.values()) {
+        if (status.lastSyncedAt !== null && status.error === null) {
+          void self.sync(status.environmentId, 'manual').catch(() => {})
+        }
+      }
+      return merged
     }
   }
+  return self
 
   function setPreferences(next: Partial<CloudMcpSyncPreferences>): CloudMcpSyncPreferences {
     const merged: CloudMcpSyncPreferences = {
       autoSync: next.autoSync ?? getPreferences().autoSync,
-      excluded: [...new Set(next.excluded ?? getPreferences().excluded)].sort()
+      excluded: [...new Set(next.excluded ?? getPreferences().excluded)]
+        .sort()
+        .slice(0, MAX_EXCLUDED)
     }
     writeFileAtomically(preferencesPath, `${JSON.stringify(merged, null, 2)}\n`)
     preferences = merged

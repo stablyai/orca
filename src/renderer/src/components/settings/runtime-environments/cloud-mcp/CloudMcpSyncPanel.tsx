@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { Check, ChevronDown, CircleDashed, Minus, RefreshCw } from 'lucide-react'
+import { Check, ChevronDown, CircleDashed, Minus, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { InlineError } from '@/components/ui/inline-error'
@@ -15,7 +15,9 @@ import {
   mcpSyncErrorRetryable,
   mcpSyncErrorText,
   mcpSyncRowNote,
+  mcpSyncRowStateLabel,
   mcpSyncRowToggleable,
+  mcpSyncSortRows,
   mcpSyncSummary,
   mcpSyncTimeLabel
 } from './cloud-mcp-sync-copy'
@@ -32,6 +34,9 @@ export type CloudMcpSyncPanelProps = {
 }
 
 function RowIcon({ row }: { row: McpSyncServerRow }): React.JSX.Element {
+  if (row.state === 'synced' && row.unreachable) {
+    return <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-status-warning" />
+  }
   if (row.state === 'synced') {
     return <Check aria-hidden className="size-3.5 shrink-0 text-foreground" />
   }
@@ -65,24 +70,29 @@ function ServerRow({
           >
             {row.name}
           </span>
-          <span className="shrink-0 text-2xs text-muted-foreground">{AGENT_LABEL[row.agent]}</span>
+          <span className="sr-only">{mcpSyncRowStateLabel(row, t)}</span>
+          <span className="shrink-0 text-2xs text-muted-foreground/70">
+            {AGENT_LABEL[row.agent]}
+          </span>
           {row.target ? (
             <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
               {row.target}
             </span>
           ) : null}
         </div>
-        {note ? (
-          <p className="truncate text-2xs text-muted-foreground" title={note}>
-            {note}
-          </p>
-        ) : null}
+        {note ? <p className="line-clamp-2 text-2xs text-muted-foreground">{note}</p> : null}
       </div>
       {mcpSyncRowToggleable(row) ? (
         <Switch
           checked={row.included}
-          disabled={disabled}
-          onCheckedChange={onToggle}
+          // aria-disabled, not disabled: the switch just pressed keeps focus while its sync runs.
+          aria-disabled={disabled || undefined}
+          title={t('cloudMcpSync.appliesEverywhere', 'Applies to every cloud workspace')}
+          onCheckedChange={(next) => {
+            if (!disabled) {
+              onToggle(next)
+            }
+          }}
           aria-label={t(
             'cloudMcpSync.toggleServer',
             'Sync {{name}} ({{agent}}) to cloud workspaces',
@@ -101,9 +111,12 @@ function ServerRow({
 export function CloudMcpSyncSkeleton(): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="mt-2 flex min-h-6 items-center gap-2 border-t border-border/60 pt-2" aria-busy>
+    <div
+      className="mt-2 flex min-h-6 items-center gap-1.5 border-t border-border/60 pt-2 text-xs"
+      aria-busy
+    >
+      <span className="font-medium text-foreground">{t('cloudMcpSync.title', 'MCP servers')}</span>
       <span className="sr-only">{t('cloudMcpSync.loading', 'Loading MCP servers…')}</span>
-      <Skeleton className="h-3 w-20" />
       <Skeleton className="h-3 w-28" />
     </div>
   )
@@ -166,19 +179,26 @@ export function CloudMcpSyncPanel({
           <div className="flex min-w-0 items-center gap-1.5">{title}</div>
         )}
         <span className="sr-only" role="status">
-          {status.running ? t('cloudMcpSync.syncing', 'Syncing MCP servers…') : summary}
+          {status.running
+            ? t('cloudMcpSync.syncing', 'Syncing MCP servers…')
+            : error
+              ? null
+              : summary}
         </span>
         <span className="flex-1" />
-        {hasRows && !mcpSyncErrorRetryable(status.error) ? (
+        {hasRows && status.error !== 'host-outdated' && !mcpSyncErrorRetryable(status.error) ? (
           <Button
             type="button"
             variant="ghost"
             size="xs"
-            onClick={onSyncNow}
-            disabled={status.running || status.error === 'host-outdated'}
+            onClick={status.running ? undefined : onSyncNow}
+            aria-disabled={status.running || undefined}
+            aria-busy={status.running || undefined}
           >
             {status.running ? <LoadingSpinner className="size-3" /> : <RefreshCw />}
-            {t('cloudMcpSync.syncNow', 'Sync now')}
+            {status.running
+              ? t('cloudMcpSync.syncingShort', 'Syncing…')
+              : t('cloudMcpSync.syncNow', 'Sync now')}
           </Button>
         ) : null}
       </div>
@@ -199,7 +219,7 @@ export function CloudMcpSyncPanel({
       ) : null}
       <div id={listId} hidden={!expanded || !hasRows} className="mt-1.5 space-y-2">
         <ul className="divide-y divide-border/60">
-          {status.rows.map((row) => (
+          {mcpSyncSortRows(status.rows).map((row) => (
             <ServerRow
               key={row.key}
               row={row}
@@ -216,7 +236,7 @@ export function CloudMcpSyncPanel({
             <p id={autoSyncHintId} className="text-2xs text-muted-foreground">
               {t(
                 'cloudMcpSync.autoSyncHint',
-                'Applies to all cloud workspaces. Servers added inside a workspace are left alone.'
+                'Applies to every cloud workspace. Servers added inside the sandbox are left alone.'
               )}
             </p>
           </div>
@@ -227,13 +247,22 @@ export function CloudMcpSyncPanel({
             aria-describedby={autoSyncHintId}
           />
         </div>
-        <p className="text-2xs text-muted-foreground">
-          {t(
-            'cloudMcpSync.egressNote',
-            'Orca lets the sandbox reach each remote server’s host. Other hosts stay blocked.'
-          )}
+        <p className="border-t border-border/60 pt-2 text-2xs text-muted-foreground">
+          {lastSynced ? (
+            <>
+              <span>{lastSynced}</span>
+              <span aria-hidden className="px-1">
+                ·
+              </span>
+            </>
+          ) : null}
+          <span>
+            {t(
+              'cloudMcpSync.egressNote',
+              'Orca opens the sandbox’s network to each remote server’s host. Other hosts stay blocked.'
+            )}
+          </span>
         </p>
-        {lastSynced ? <p className="text-2xs text-muted-foreground">{lastSynced}</p> : null}
       </div>
     </div>
   )
