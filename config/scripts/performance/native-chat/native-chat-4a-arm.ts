@@ -25,6 +25,10 @@ import { installVisibilityProbe } from './native-chat-4a-probes'
 
 const HARNESS_ROOT = path.resolve(import.meta.dirname, '../../../..')
 const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
+// The envelope builders each arm bundles from its own checkout.
+const MUTATION_SOURCE = 'src/shared/agent-session/lifecycle/structured-agent-session-mutation.ts'
+const CREATE_SOURCE = 'src/shared/agent-session/structured-agent-session-create.ts'
+const SEND_SOURCE = 'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts'
 
 /** Envelope builders compiled from the arm's own source, so each host checks fingerprints it computes itself. */
 export type ArmProtocol = {
@@ -84,13 +88,13 @@ export async function resolveArm(name: string, root: string, scratch: string): P
     throw new Error(`${name}: the electron package in ${absolute} names no executable`)
   }
   const outfile = path.join(scratch, `${name}-protocol.cjs`)
-  const shared = './src/shared/agent-session'
+  const source = (file: string): string => JSON.stringify(path.join(absolute, file))
   await build({
     stdin: {
       contents: [
-        `export * from '${shared}/lifecycle/structured-agent-session-mutation'`,
-        `export { createStructuredAgentSessionId } from '${shared}/structured-agent-session-create'`,
-        `export { structuredAgentSessionMessageSendMutation, agentSessionSendBodyFingerprint } from '${shared}/requests/structured-agent-session-send-mutation'`
+        `export * from ${source(MUTATION_SOURCE)}`,
+        `export { createStructuredAgentSessionId } from ${source(CREATE_SOURCE)}`,
+        `export { structuredAgentSessionMessageSendMutation, agentSessionSendBodyFingerprint } from ${source(SEND_SOURCE)}`
       ].join(';'),
       resolveDir: absolute
     },
