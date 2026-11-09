@@ -140,6 +140,7 @@ export function useComposerSubmitOrchestration(
     selectedRepoRequiresConnection: target.runtimeTargetSelection.selectedRepoRequiresConnection,
     selectedTargetNeedsVisibleHost: target.runtimeTargetSelection.selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
+    setAdvancedOpen: target.asyncComposerState.setAdvancedOpen,
     setCreateError: target.asyncComposerState.setCreateError,
     setCreating: target.asyncComposerState.setCreating,
     setupDecision: target.asyncComposerState.setupDecision,

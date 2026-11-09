@@ -34,6 +34,7 @@ type QuickSubmitActionInput = Pick<
   | 'selectedRepoRequiresConnection'
   | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
+  | 'setAdvancedOpen'
   | 'setCreateError'
   | 'setCreating'
   | 'setupDecision'
@@ -64,6 +65,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     selectedRepoRequiresConnection,
     selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
+    setAdvancedOpen,
     setCreateError,
     setCreating,
     setupDecision,
@@ -100,9 +102,14 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
         selectedTargetNeedsVisibleHost ||
-        (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
+        return
+      }
+
+      if (requiresExplicitSetupChoice && !setupDecision) {
+        // The Run/Skip choice lives in collapsed Advanced; reveal it rather than refuse silently.
+        setAdvancedOpen(true)
         return
       }
 
@@ -219,6 +226,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       selectedRepoRequiresConnection,
       selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
+      setAdvancedOpen,
       setCreateError,
       setCreating,
       setupDecision,

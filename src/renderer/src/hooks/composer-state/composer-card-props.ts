@@ -136,8 +136,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     workspaceSeedName,
     creating,
     sourceIntentBlocksCreate,
-    requiresExplicitSetupChoice,
-    hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
     selectedTargetNeedsVisibleHost,
     sparseError
