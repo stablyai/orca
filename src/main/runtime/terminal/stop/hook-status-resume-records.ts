@@ -14,7 +14,9 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -63,6 +65,42 @@ function tabOf(
   return (worktreeId) => session.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
 }
 
+/** Whether a hook-reported agent folder lies inside another worktree that has its own tabs in the
+ *  same window session. A long-lived tmux server (or any env-freezing ancestor) hands every session
+ *  it spawns the creating pane's identity, so a hook's claimed pane key and worktree are inherited
+ *  claims, while the conversation folder the agent itself reports is not: a folder inside another
+ *  tabbed worktree marks a hook that never ran in the claimed pane (#37799). */
+export function cwdInsideOtherTabbedWorktree(
+  session: Pick<WorkspaceSessionState, 'tabsByWorktree'> | null | undefined,
+  worktreeId: string,
+  cwd: string | null | undefined
+): boolean {
+  const folder = cwd ? normalizeRuntimePathForComparison(cwd) : ''
+  if (!folder) {
+    return false
+  }
+  const ownPath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+  const own = ownPath ? normalizeRuntimePathForComparison(ownPath) : ''
+  for (const otherId of Object.keys(session?.tabsByWorktree ?? {})) {
+    if (worktreeIdsEqual(otherId, worktreeId)) {
+      continue
+    }
+    const otherPath = splitWorktreeIdForFilesystem(otherId)?.worktreePath
+    const other = otherPath ? normalizeRuntimePathForComparison(otherPath) : ''
+    if (!other || !(folder === other || folder.startsWith(`${other}/`))) {
+      continue
+    }
+    // Longest matching worktree path owns the folder: when this pane's worktree nests below the
+    // other tabbed worktree, its own match is the longer prefix, so a cwd inside the pane's own
+    // tree stays theirs instead of reading as foreign (#37799).
+    const ownMatchLength = own && (folder === own || folder.startsWith(`${own}/`)) ? own.length : -1
+    if (other.length > ownMatchLength) {
+      return true
+    }
+  }
+  return false
+}
+
 /**
  * The record-only sleep or wake that applies a hook status to the resume record of a pane the
  * partition holds, by the window's rule; null when the record stays as it is.
@@ -96,6 +134,11 @@ export function hookStatusResumeCommand(args: {
   if (!change) {
     return null
   }
+  // A hook whose conversation folder belongs to another tabbed worktree speaks through inherited
+  // pane identity; it must leave this pane's record exactly as it is (#37799).
+  if (cwdInsideOtherTabbedWorktree(session, worktreeId, status.providerSession?.cwd)) {
+    return null
+  }
   const target = { workspace: worktreeId, tabId: tab.id, paneKeys: [status.paneKey] }
   return change === 'clear'
     ? { type: 'wake', ...target, recordOnly: true }
@@ -124,6 +167,13 @@ export function quitResumeRecords(args: {
         args.launchConfigOf(status.paneKey, status.agentType) ??
         recordLaunchConfigForStatus(existing, status)
     })
+    // A conversation from another tabbed worktree never replaces this pane's capture (#37799).
+    if (
+      record &&
+      cwdInsideOtherTabbedWorktree(args.session, record.worktreeId, record.providerSession.cwd)
+    ) {
+      return []
+    }
     // Only a pane this partition holds keeps a record here.
     return record && tabFor(record.worktreeId) ? [record] : []
   })
