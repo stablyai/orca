@@ -151,3 +151,9 @@ export class FakeRateLimitWindow extends EventEmitter {
 export function asRateLimitWindow(window: FakeRateLimitWindow): RateLimitWindow {
   return window as unknown as RateLimitWindow
 }
+
+export async function flushMicrotasks(times = 4): Promise<void> {
+  for (let i = 0; i < times; i += 1) {
+    await Promise.resolve()
+  }
+}

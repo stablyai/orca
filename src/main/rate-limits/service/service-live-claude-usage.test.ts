@@ -1,12 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import {
+  deferred,
   errorProvider,
+  flushMicrotasks,
   mockFreshBackgroundProviderFetches,
   okProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
+
+class ObservedRateLimitService extends RateLimitService {
+  get claudeCheckCompletedAt(): number | null {
+    return this.lastClaudeCheckCompletedAt
+  }
+
+  get activeRefreshPlan() {
+    return this.getActiveWindowRefreshPlan(Date.now())
+  }
+}
 
 const profileRouter = vi.hoisted((): { userConfigDir?: string } => ({}))
 vi.mock('../../claude-accounts/claude-profile-installed-router', () => ({
@@ -111,6 +124,80 @@ describe('RateLimitService', () => {
         sevenDay: null
       })
       expect(service.getState().claude?.session?.usedPercent).toBe(33)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['full', 'claude-only'])('isolates %s checks on switch', async (cycle) => {
+    vi.useFakeTimers()
+    try {
+      const staleClaudeFetch = deferred<ProviderRateLimits>()
+      const incomingFetch = deferred<ProviderRateLimits>()
+      vi.mocked(fetchActiveClaudeRateLimits)
+        .mockImplementationOnce(async () => okProvider('claude', 9))
+        .mockImplementationOnce(() => staleClaudeFetch.promise)
+        .mockImplementationOnce(() => incomingFetch.promise)
+      mockFreshBackgroundProviderFetches()
+
+      const authGate = deferred<void>()
+      let resolverCalls = 0
+      const service = new ObservedRateLimitService()
+      await service.refresh()
+      expect(service.claudeCheckCompletedAt).toBe(Date.now())
+      service.setClaudeAuthPreparationResolver(async () => {
+        resolverCalls += 1
+        const outgoing = resolverCalls === 1
+        if (outgoing) {
+          await authGate.promise
+        }
+        return {
+          configDir: outgoing ? '/outgoing/.claude' : '/incoming/.claude',
+          runtime: 'host',
+          wslDistro: null,
+          wslLinuxConfigDir: null,
+          envPatch: {
+            CLAUDE_CONFIG_DIR: outgoing ? '/outgoing/.claude' : '/incoming/.claude'
+          },
+          provenance: outgoing ? 'managed:outgoing' : 'managed:incoming'
+        }
+      })
+
+      // Switch while the outgoing account resolver is suspended.
+      const firstRefresh = cycle === 'full' ? service.refresh() : service.refreshClaudeForTarget()
+      await flushMicrotasks()
+      const switchPromise =
+        cycle === 'full'
+          ? service.refreshForClaudeAccountChange('outgoing-account')
+          : service.refreshClaudeForTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      await flushMicrotasks()
+      authGate.resolve()
+      await flushMicrotasks(8)
+
+      // The stale resumed cycle must not authorize outgoing live posts on the new account.
+      const beforeOutgoingPost = service.getState().claude?.session?.usedPercent
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/outgoing/.claude',
+        fiveHour: { used_percentage: 99 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(beforeOutgoingPost)
+
+      staleClaudeFetch.resolve(okProvider('claude', 18))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.claudeCheckCompletedAt).toBeNull()
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/incoming/.claude',
+        fiveHour: { used_percentage: 55 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(55)
+      expect(service.activeRefreshPlan).toEqual({ kind: 'full' })
+      incomingFetch.resolve(okProvider('claude', 18))
+      await Promise.all([firstRefresh, switchPromise])
+      expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(3)
+      expect(service.claudeCheckCompletedAt).toBe(Date.now())
     } finally {
       vi.useRealTimers()
     }
