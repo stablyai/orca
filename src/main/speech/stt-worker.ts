@@ -9,6 +9,8 @@ import type { SttWorkerRequest } from './stt-worker-process'
 type AudioPortInput = {
   port: MessagePortMain
   onEnded: (() => void) | null
+  /** 'end' arrived; its frames may still wait behind a decode. */
+  ending: boolean
 }
 
 const parentPort = connectSttWorkerParentPort()
@@ -46,8 +48,7 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
   if (!port) {
     return
   }
-  const input: AudioPortInput = { port, onEnded: null }
-  // The renderer closes its end after 'end'; a close alone means it went away.
+  const input: AudioPortInput = { port, onEnded: null, ending: false }
   const end = (): void => {
     if (audioPorts.get(streamId) !== input) {
       return
@@ -59,6 +60,7 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
   port.on('message', ({ data }) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the desktop preload holds the other end, and it sends SpeechAudioPortMessage.
     const msg = data as SpeechAudioPortMessage
+    input.ending ||= msg.type === 'end'
     enqueue(() => {
       // A discard or end ran first; a late frame must not reopen the stream.
       if (audioPorts.get(streamId) !== input) {
@@ -69,7 +71,13 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
         : handleFeed({ type: 'feed', streamId, samples: msg.samples, sampleRate: msg.sampleRate })
     })
   })
-  port.on('close', end)
+  // The renderer closes its end right after 'end', so that close must leave the queued frames to decode.
+  // A close alone means it canceled or went away.
+  port.on('close', () => {
+    if (!input.ending) {
+      end()
+    }
+  })
   audioPorts.set(streamId, input)
   port.start()
 }

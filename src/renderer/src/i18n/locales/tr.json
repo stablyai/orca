@@ -240,6 +240,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Parola kaydetme önerisi",
+        "updateTitle": "Parola güncellensin mi?",
+        "saveTitle": "Parola kaydedilsin mi?",
+        "username": "Kullanıcı adı",
+        "password": "Parola",
+        "never": "Bu site için asla",
+        "notNow": "Şimdi değil",
+        "update": "Güncelle",
+        "save": "Kaydet"
+      },
+      "fill": {
+        "noUsername": "(kullanıcı adı yok)",
+        "title": "Kaydedilmiş girişler",
+        "otherLogins": "Bu sitedeki diğer girişler"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "Bağlantı güvenli değil",
       "cantReachHost": "{{value0}} adresine ulaşılamıyor",
@@ -2760,7 +2778,7 @@
         "untitled": "Başlıksız sohbet",
         "listLabel": "Devam edilecek sohbetler",
         "dontAskAgain": "Bir daha sorma (otomatik devam et)",
-        "dontAskAgainHint": "Bu seçeneği Ayarlar → Deneysel → Sohbet Arayüzü bölümünden kapatabilirsiniz.",
+        "dontAskAgainHint": "Bu seçeneği Ayarlar → Sohbet → Davranış bölümünden kapatabilirsiniz.",
         "selectAgent": "{{value2}} içindeki \"{{value1}}\" adlı {{value0}} sohbetine devam et",
         "dismissAll": "Tümünü kapat",
         "viewChats": "Sohbetleri görüntüle",

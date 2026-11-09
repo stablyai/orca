@@ -240,6 +240,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aufforderung zum Speichern des Passworts",
+        "updateTitle": "Passwort aktualisieren?",
+        "saveTitle": "Passwort speichern?",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "never": "Nie für diese Website",
+        "notNow": "Jetzt nicht",
+        "update": "Aktualisieren",
+        "save": "Speichern"
+      },
+      "fill": {
+        "noUsername": "(kein Benutzername)",
+        "title": "Gespeicherte Anmeldungen",
+        "otherLogins": "Weitere Anmeldungen auf dieser Website"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "Die Verbindung ist nicht sicher",
       "cantReachHost": "{{value0}} ist nicht erreichbar",
@@ -2784,7 +2802,7 @@
         "untitled": "Unbenannter Chat",
         "listLabel": "Chats, die fortgesetzt würden",
         "dontAskAgain": "Nicht erneut fragen (automatisch fortsetzen)",
-        "dontAskAgainHint": "Lässt sich unter Einstellungen → Experimentell → Chat-Oberfläche deaktivieren.",
+        "dontAskAgainHint": "Lässt sich unter Einstellungen → Chat → Verhalten deaktivieren.",
         "selectAgent": "{{value0}}-Chat „{{value1}}“ in {{value2}} fortsetzen",
         "dismissAll": "Alle verwerfen",
         "viewChats": "Chats anzeigen",

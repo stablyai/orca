@@ -89,6 +89,7 @@ export function createWebSpeechApi(): Pick<
   | 'cancelDictation'
   | 'onPartialTranscript'
   | 'onFinalTranscript'
+  | 'onSpeechPending'
   | 'onStopped'
   | 'onError'
 > {
@@ -250,6 +251,8 @@ export function createWebSpeechApi(): Pick<
     },
     onPartialTranscript: (callback) => subscribe(partialListeners, callback),
     onFinalTranscript: (callback) => subscribe(finalListeners, callback),
+    // Chunk replies carry no pause-cut signal, so the paired client keeps the plain pill.
+    onSpeechPending: () => () => undefined,
     onStopped: (callback) => subscribe(stoppedListeners, callback),
     onError: (callback) => subscribe(errorListeners, callback)
   }

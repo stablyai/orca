@@ -46,5 +46,5 @@ export function confirmStructuredLaunchFirstMessagePublication(
     })
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
 }

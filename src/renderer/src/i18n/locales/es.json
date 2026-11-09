@@ -13252,8 +13252,8 @@
             "9845a71e17": "Más acciones",
             "2bfaf4379c": "Más acciones de {{value0}}",
             "377269db6f": "{{value0}} reabierto",
-            "78f5ff294c": "Esto reabrirá el {{value0}}.",
-            "a3d572a4de": "Esto cerrará el {{value0}}.",
+            "78f5ff294c": "Esto reabrirá la solicitud de revisión ({{value0}}).",
+            "a3d572a4de": "Esto cerrará la solicitud de revisión ({{value0}}).",
             "e4aca40024": "Eliminar espacio de trabajo",
             "eefd50457e": "Eliminando…",
             "3ce211ece6": "Reabrir {{value0}}",
@@ -13424,7 +13424,7 @@
             "dd43c47089": "Elija un agente para este error de commit",
             "30b8d4f181": "Solucionar error de commit con IA",
             "4b37ae99b0": "Iniciar el agente de IA predeterminado para solucionar este error de commit",
-            "ae743199cd": "Elige una rama base diferente antes de crear un {{value0}}.",
+            "ae743199cd": "Elige una rama base diferente antes de crear una solicitud de revisión ({{value0}}).",
             "318e2a7f88": "Espere a que termine la generación con IA.",
             "f76307c1f7": "Elige una rama base.",
             "4f76c0a9de": "La rama base debe ser distinta de la rama HEAD.",
@@ -13811,21 +13811,21 @@
               "review": {
                 "detail": {
                   "positive": "Orca también tiene información de {{reviewLabel}} guardada que no pudo verificar.",
-                  "rate_limited": "Orca también no pudo verificar el estado de {{reviewLabel}} porque {{provider}} está limitando temporalmente las solicitudes.",
-                  "network": "Orca también no pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
-                  "untyped": "Orca también no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                  "rate_limited": "Orca tampoco pudo verificar el estado de {{reviewLabel}} porque {{provider}} está limitando temporalmente las solicitudes.",
+                  "network": "Orca tampoco pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
+                  "untyped": "Orca tampoco pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}})."
                 },
                 "positive": {
                   "title": "Detalles de {{reviewLabelCap}} no disponibles",
                   "body": "Orca ha guardado información de {{reviewLabel}} para esta rama pero no pudo confirmar su estado actual."
                 },
                 "no_review": {
-                  "title": "No se encontró ningún {{reviewLabel}}",
-                  "body": "Crea un {{reviewLabel}} para iniciar las verificaciones y la revisión."
+                  "title": "No se encontró ninguna solicitud de revisión ({{reviewLabel}})",
+                  "body": "Crea una solicitud de revisión ({{reviewLabel}}) para iniciar las verificaciones y la revisión."
                 },
                 "active": {
                   "title": "Verificando estado de {{reviewLabel}}",
-                  "body": "Orca está verificando {{provider}} para un {{reviewLabel}} en esta rama."
+                  "body": "Orca está comprobando en {{provider}} si esta rama tiene una solicitud de revisión ({{reviewLabel}})."
                 },
                 "git_loading": {
                   "title": "Verificando estado de la rama",
@@ -13833,7 +13833,7 @@
                 },
                 "git_error": {
                   "title": "No se pudo verificar el estado de la rama",
-                  "body": "Orca no pudo confirmar el upstream de esta rama desde este entorno. Reintenta antes de publicar o crear un {{reviewLabel}}."
+                  "body": "Orca no pudo confirmar el upstream de esta rama desde este entorno. Reintenta antes de publicar o crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "unknown": {
                   "title": "Estado de {{reviewLabelCap}} no disponible",
@@ -13849,11 +13849,11 @@
                 },
                 "unknown_error": {
                   "title": "No se pudo verificar el estado de {{reviewLabel}}",
-                  "body": "La búsqueda falló, por lo que Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                  "body": "La búsqueda falló, por lo que Orca no pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}})."
                 },
                 "untyped": {
                   "title": "Estado de {{reviewLabelCap}} no disponible",
-                  "body": "Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}. Reintenta para verificar de nuevo."
+                  "body": "Orca no pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}}). Reintenta para verificar de nuevo."
                 },
                 "auth": {
                   "title": "Autenticación de {{provider}} fallida",
@@ -13861,7 +13861,7 @@
                 },
                 "permission": {
                   "title": "Acceso denegado por {{provider}}",
-                  "body": "Las credenciales actuales de {{provider}} no pueden leer los {{reviewLabel}} de este repositorio. Verifica la cuenta, los alcances del token y el acceso al repositorio, luego reintenta."
+                  "body": "Las credenciales actuales de {{provider}} no pueden leer las solicitudes de revisión ({{reviewLabel}}) de este repositorio. Verifica la cuenta, los alcances del token y el acceso al repositorio, luego reintenta."
                 },
                 "repo": {
                   "title": "Repositorio de {{provider}} no disponible",
@@ -13895,47 +13895,47 @@
                 },
                 "no_upstream": {
                   "title": "Sin upstream configurado",
-                  "body": "Publica esta rama para configurar su upstream antes de crear un {{reviewLabel}}."
+                  "body": "Publica esta rama para configurar su upstream antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "needs_sync": {
                   "title": "La rama necesita sincronizarse",
-                  "body": "Sincroniza esta rama con su upstream antes de crear un {{reviewLabel}}."
+                  "body": "Sincroniza esta rama con su upstream antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "auth_required": {
                   "title": "Conecta {{provider}}",
-                  "body": "{{provider}} debe estar conectado en este entorno antes de que Orca pueda crear un {{reviewLabel}}."
+                  "body": "{{provider}} debe estar conectado en este entorno antes de que Orca pueda crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "needs_push": {
                   "title": "La rama tiene commits sin enviar",
-                  "body": "Envía los últimos commits antes de crear un {{reviewLabel}}."
+                  "body": "Envía los últimos commits antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "existing": {
                   "title": "{{reviewLabelCap}} ya existe",
-                  "body": "Orca encontró un {{reviewLabel}} existente para esta rama."
+                  "body": "Orca encontró una solicitud de revisión existente ({{reviewLabel}}) para esta rama."
                 },
                 "detached": {
                   "title": "Sin rama actual",
-                  "body": "Selecciona una rama antes de crear un {{reviewLabel}}."
+                  "body": "Selecciona una rama antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "dirty": {
                   "title": "Primero confirma los cambios",
-                  "body": "Confirma o guarda tus cambios antes de crear un {{reviewLabel}}."
+                  "body": "Confirma o guarda tus cambios antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "default_branch": {
                   "title": "En la rama por defecto",
-                  "body": "Cambia a una rama de características antes de crear un {{reviewLabel}}."
+                  "body": "Cambia a una rama de características antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "fork": {
                   "title": "Fork head no soportado",
-                  "body": "Orca no puede crear un {{reviewLabel}} desde este fork head aquí."
+                  "body": "Orca no puede crear una solicitud de revisión ({{reviewLabel}}) desde este fork head aquí."
                 },
                 "base_missing": {
                   "title": "La rama base no está en el remote",
-                  "body": "La base de esta rama aún no está en el remote, por lo que un {{reviewLabel}} no puede apuntar a ella."
+                  "body": "La base de esta rama aún no está en el remote, por lo que una solicitud de revisión ({{reviewLabel}}) no puede apuntar a ella."
                 },
                 "unsupported": {
-                  "title": "{{reviewLabelCap}} no soportado aquí",
-                  "body": "Este proveedor de repositorio no soporta la creación de un {{reviewLabel}} desde Orca."
+                  "title": "No se admiten solicitudes de revisión ({{reviewLabelCap}}) aquí",
+                  "body": "Este proveedor de repositorio no soporta la creación de una solicitud de revisión ({{reviewLabel}}) desde Orca."
                 }
               },
               "loadFailedOnMachine": "No se pudo cargar desde {{machine}}: {{detail}}",
@@ -14100,11 +14100,11 @@
                   "titleLinkedReviewBranchExists": "La rama de review vinculada ya existe",
                   "titleCheckOutBranchToPublish": "Haz checkout de una rama antes de publicar commits",
                   "titleBranchAlreadyPublished": "La rama ya está publicada",
-                  "titleCreateReviewForBranch": "Crear un {{reviewLabel}} para esta rama",
+                  "titleCreateReviewForBranch": "Crear una solicitud de revisión ({{reviewLabel}}) para esta rama",
                   "forcePushBeforeReview": "Force Push antes de {{shortLabel}}",
                   "pushBeforeReview": "Push antes de {{shortLabel}}",
-                  "titleForcePushBeforeCreatingReview": "Haz force push con lease antes de crear un {{reviewLabel}}",
-                  "titlePushBeforeCreatingReview": "Haz push de los commits locales antes de crear un {{reviewLabel}}",
+                  "titleForcePushBeforeCreatingReview": "Haz force push con lease antes de crear una solicitud de revisión ({{reviewLabel}})",
+                  "titlePushBeforeCreatingReview": "Haz push de los commits locales antes de crear una solicitud de revisión ({{reviewLabel}})",
                   "pushCount_one": "Hacer push de {{count}} commit",
                   "pushCount_other": "Hacer push de {{count}} commits",
                   "pushCount_many": "Hacer push de {{count}} commits",
@@ -14150,7 +14150,7 @@
                   "blockedForcePushFirst": "Haz force push primero",
                   "blockedSyncFirst": "Sincroniza primero",
                   "blockedUnsupportedProvider": "Proveedor no compatible",
-                  "blockedExistingReview": "Ya existe un {{reviewLabel}}",
+                  "blockedExistingReview": "Ya existe una solicitud de revisión ({{reviewLabel}})",
                   "blockedForkHeadUnsupported": "Head de fork no compatible",
                   "blockedBaseNotOnRemote": "La rama base no está en el remoto",
                   "blockedBranchNotReady": "La rama no está lista"
@@ -14159,7 +14159,7 @@
               "primary": {
                 "action": {
                   "ed93b4f14f": "Commit",
-                  "946a8a05ea": "Crear un {{value0}} para esta rama",
+                  "946a8a05ea": "Crear una solicitud de revisión ({{value0}}) para esta rama",
                   "e7ffa46946": "Crear {{value0}}",
                   "95550cff15": "Push",
                   "d64292a938": "Pull",
@@ -14184,19 +14184,19 @@
                   "1d47e850cf": "Haz push de actualizaciones a la rama de review vinculada",
                   "c39d0c75c3": "El destino de la rama de review vinculada no está disponible.",
                   "d37e68f61d": "Preparando la rama para revisión…",
-                  "c72e5e65d1": "Prepara esta rama y crea un {{value0}}",
+                  "c72e5e65d1": "Prepara esta rama y crea una solicitud de revisión ({{value0}})",
                   "b8e4f2a901": "Espera a que termine la operación remota.",
-                  "c9f3a1b802": "Resuelve los conflictos antes de crear un {{value0}}.",
-                  "e3b9d5f814": "No se puede crear un {{value0}} desde la rama predeterminada.",
-                  "f4c0e6a925": "Haz commit de los cambios antes de crear un {{value0}}.",
-                  "a5d1f7b036": "Publica los commits antes de crear un {{value0}}.",
-                  "b6e2a8c147": "Haz push de los commits antes de crear un {{value0}}.",
-                  "c7f3b9d258": "Sincroniza esta rama antes de crear un {{value0}}.",
-                  "d8a4c0e369": "Autentícate antes de crear un {{value0}}.",
-                  "e9b5d1f470": "Haz checkout de una rama antes de crear un {{value0}}.",
-                  "f0c6e2a581": "Esta rama aún no está lista para un {{value0}}.",
+                  "c9f3a1b802": "Resuelve los conflictos antes de crear una solicitud de revisión ({{value0}}).",
+                  "e3b9d5f814": "No se puede crear una solicitud de revisión ({{value0}}) desde la rama predeterminada.",
+                  "f4c0e6a925": "Haz commit de los cambios antes de crear una solicitud de revisión ({{value0}}).",
+                  "a5d1f7b036": "Publica los commits antes de crear una solicitud de revisión ({{value0}}).",
+                  "b6e2a8c147": "Haz push de los commits antes de crear una solicitud de revisión ({{value0}}).",
+                  "c7f3b9d258": "Sincroniza esta rama antes de crear una solicitud de revisión ({{value0}}).",
+                  "d8a4c0e369": "Autentícate antes de crear una solicitud de revisión ({{value0}}).",
+                  "e9b5d1f470": "Haz checkout de una rama antes de crear una solicitud de revisión ({{value0}}).",
+                  "f0c6e2a581": "Esta rama aún no está lista para una solicitud de revisión ({{value0}}).",
                   "8f9a0b1c2d": "No hay nada para hacer commit. La rama está actualizada.",
-                  "h3i4j5k607": "Comprobando si esta rama puede crear un {{value0}}…"
+                  "h3i4j5k607": "Comprobando si esta rama puede crear una solicitud de revisión ({{value0}})…"
                 }
               },
               "branch": {
@@ -20824,6 +20824,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aviso para guardar contraseña",
+        "updateTitle": "¿Actualizar contraseña?",
+        "saveTitle": "¿Guardar contraseña?",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "never": "Nunca para este sitio",
+        "notNow": "Ahora no",
+        "update": "Actualizar",
+        "save": "Guardar"
+      },
+      "fill": {
+        "noUsername": "(sin nombre de usuario)",
+        "title": "Inicios de sesión guardados",
+        "otherLogins": "Otros inicios de sesión en este sitio"
+      }
+    },
     "newTab": {
       "emptyHint": "Busca o introduce una dirección arriba. Aquí aparecerán los sitios que visites, los servidores de desarrollo que se ejecuten en este espacio de trabajo, y su PR e incidencia.",
       "openServerFailed": "No se pudo abrir {{address}}",

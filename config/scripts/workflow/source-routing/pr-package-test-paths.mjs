@@ -170,6 +170,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/agent-launch/startup/omp-fresh-launch-cmd.win32.test.ts',
   'src/shared/windows-batch-spawn.win32.test.ts',
+  'src/main/claude/structured/launch/claude-structured-child-env.test.ts',
   'src/main/agent-hooks/installation/commands/windows-hook-payload-delivery.test.ts',
   'src/main/agent-hooks/installation/scripts/managed-hook-stdin-lifecycle.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
