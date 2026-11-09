@@ -244,11 +244,6 @@ describe('a replacement after its earlier attach failed to open the journal', ()
     expect(await warnings()).toHaveLength(1)
     const firstWarning = (await warnings())[0]
     await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
-    expect(loads).toEqual([PROVIDER_SESSION, FRESH, FRESH_2])
-    expect(await warnings()).toEqual([firstWarning])
-    await host.close(SESSION, 'user-close')
 
     for (const missing of [FRESH_2, FRESH_3]) {
       lost.set(missing, { code: -32002, message: 'Resource not found' })
@@ -259,6 +254,11 @@ describe('a replacement after its earlier attach failed to open the journal', ()
         await host.close(SESSION, 'user-close')
       }
     }
+    await host.close(SESSION, 'user-close')
+    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    await ready()
+    expect(loads).toEqual([PROVIDER_SESSION, FRESH, FRESH_2, FRESH_3, FRESH_4])
+    expect(await warnings()).toEqual([firstWarning])
     await exchange('remember this', 'saved', FRESH_4)
     await host.close(SESSION, 'user-close')
     lost.set(FRESH_4, { code: -32603, message: 'session file is corrupt' })
