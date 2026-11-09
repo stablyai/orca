@@ -1,4 +1,4 @@
-/** Google publishes no Windows Antigravity chat server Orca can run (#30817); relax this once one ships. */
+/** Google publishes no Windows Antigravity chat server Orca can install (#30817); there it runs only on agy. */
 export function structuredChatUnavailableOnPlatform(
   agent: string,
   platform: string | null | undefined

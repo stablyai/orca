@@ -1628,7 +1628,7 @@
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}",
-      "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
+      "chatUnavailableOnWindows": "No Windows, o {{value0}} Chat é executado pelo agy. Atualize o agy e entre com uma conta pessoal do Google executando o agy neste computador; até lá, o {{value0}} abre em um terminal.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -17186,7 +17186,7 @@
             "agentsLoading": "Carregando agentes",
             "terminalListNeedsServerUpdate": "Atualize o Orca neste servidor para listar os agentes de terminal",
             "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho",
-            "chatNotOnWindows": "Ainda sem chat no Windows"
+            "chatNotOnWindows": "Requer login no agy"
           },
           "TabWorkspaceLayoutMenuSection": {
             "right": "Direita",
@@ -21159,7 +21159,7 @@
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",
+      "explicitChatWindows": "No Windows, este chat é executado pelo agy. Atualize o agy, execute-o e entre com uma conta pessoal do Google; depois tente novamente ou abra-o em um terminal.",
       "fork": {
         "action": "Criar ramificação a partir desta resposta",
         "hostUnsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente.",
