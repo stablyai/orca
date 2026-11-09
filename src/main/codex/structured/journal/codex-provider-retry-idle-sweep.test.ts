@@ -126,7 +126,7 @@ describe('a Codex reconnecting a dropped stream', () => {
       expect(host.hasSession(SESSION)).toBe(true)
     }
 
-    const items = (await readTestJournalItems(host['sessions'].get(SESSION)?.journal)) ?? []
+    const items = await readTestJournalItems(host['sessions'].get(SESSION)!.journal)
     const retryRows = items.filter(
       (item) => item.body.kind === 'status' && item.body.failure?.kind === 'providerRetrying'
     )

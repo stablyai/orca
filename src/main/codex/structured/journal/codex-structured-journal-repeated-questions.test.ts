@@ -1,3 +1,4 @@
+import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   readTestJournalItems,
   readTestJournalSnapshot
@@ -42,7 +43,7 @@ it.each([
       now: () => 1_000
     })
     const onFailed = vi.fn()
-    const published: ReturnType<typeof journal.snapshot>[] = []
+    const published: Promise<AgentJournalSnapshot>[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(SESSION),
       onFailed
@@ -51,7 +52,7 @@ it.each([
       journal,
       fence: 7,
       publish: () => {
-        published.push(journal.snapshot())
+        published.push(readTestJournalSnapshot(journal))
       }
     })
     const translator = createCodexJournalTranslator({
@@ -92,7 +93,7 @@ it.each([
       saved.map((item) => (item.body.kind === 'question' ? item.body.question : null))
     ).toEqual(questions)
     expect(saved.map((item) => item.revision)).toEqual(ids[0] === ids[1] ? [2] : [1, 1])
-    expect(published.at(-1)).toEqual(await readTestJournalSnapshot(journal))
+    expect(await published.at(-1)).toEqual(await readTestJournalSnapshot(journal))
     translator.dispose()
     deferred.close()
   }

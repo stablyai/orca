@@ -50,7 +50,7 @@ export function registerCodexHistoryBoundsTests(input: {
       ],
       paginate: false
     })
-    expect(c.texts()).not.toContain('assistant:Must not commit through stale anchor')
+    expect(await c.texts()).not.toContain('assistant:Must not commit through stale anchor')
     expect((await c.journal.reads.item(old.itemId))?.body).toMatchObject({
       contextUsage: { window: { tokens: 500, capturedAt: 2_000 } }
     })

@@ -1,3 +1,4 @@
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   readTestJournalItems,
   readTestJournalSnapshot
@@ -351,14 +352,18 @@ describe('Codex chat catch-up', () => {
     await c.reopen()
     await c.open([turn(1), turn(2), turn(3)])
     expect((await readTestJournalItems(c.journal)).slice(0, before.length)).toEqual(before)
-    expect(c.texts().slice(-4)).toEqual([
+    expect((await c.texts()).slice(-4)).toEqual([
       '(continued-outside)',
       'user:ask 2',
       'assistant:answer 2',
       'assistant:answer 3'
     ])
     await c.open([turn(1), turn(2), turn(3), turn(4)])
-    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 4', 'assistant:answer 4'])
+    expect((await c.texts()).slice(-3)).toEqual([
+      '(continued-outside)',
+      'user:ask 4',
+      'assistant:answer 4'
+    ])
   })
 
   it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
@@ -373,21 +378,25 @@ describe('Codex chat catch-up', () => {
         text: `answer ${n}`
       }))
     }
-    const seq = c.journal.cursor().sequence
-    c.db.exec(
-      `CREATE TRIGGER fail_later_partition BEFORE INSERT ON journal_rows WHEN NEW.seq > ${seq + 1} BEGIN SELECT RAISE(ABORT, 'injected later partition failure'); END`
+    // Let one more item in, then fail the import's later items inside the same command.
+    await withTestAgentSessionDatabase(c.root, (db) =>
+      db.exec(`CREATE TRIGGER fail_later_partition BEFORE INSERT ON journal_items
+        WHEN (SELECT COUNT(*) FROM journal_items WHERE session_id = NEW.session_id) > ${
+          before.items.length
+        }
+        BEGIN SELECT RAISE(ABORT, 'injected later partition failure'); END`)
     )
     expect((await c.open([turn(1), large])).ok).toBe(false)
     expect(c.deferred.state().failed).toBe(true)
     expect(await readTestJournalSnapshot(c.journal)).toEqual(before)
-    c.db.exec('DROP TRIGGER fail_later_partition')
+    await withTestAgentSessionDatabase(c.root, (db) => db.exec('DROP TRIGGER fail_later_partition'))
     await c.reopen()
     expect(await readTestJournalSnapshot(c.journal)).toEqual(before)
     await c.open([turn(1), large])
-    expect(c.texts()).toHaveLength(603)
+    expect(await c.texts()).toHaveLength(603)
     await c.reopen()
     await c.open([turn(1), large])
-    expect(c.texts()).toHaveLength(603)
+    expect(await c.texts()).toHaveLength(603)
   })
 
   it('keeps rollback reasoning and message identities immutable across turns', async () => {
@@ -403,7 +412,7 @@ describe('Codex chat catch-up', () => {
     const before = await readTestJournalItems(c.journal)
     await c.open([withReasoning(2)])
     expect((await readTestJournalItems(c.journal)).slice(0, before.length)).toEqual(before)
-    expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
+    expect((await c.texts()).filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:answer 1',
       'assistant:answer 2'
     ])
@@ -508,8 +517,9 @@ describe('Codex chat catch-up', () => {
       fingerprint: 'rewind',
       now: 500_000
     })
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
+    await store.updateRecord(SESSION, {
+      kind: 'rewind',
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
       rewind: {
         operationId,
         callerKey,
@@ -517,7 +527,7 @@ describe('Codex chat catch-up', () => {
         expectedEpoch: c.journal.physicalCursor().epoch,
         phase: 'provider-succeeded'
       }
-    }))
+    })
     clock.now = 500_000
     const deps = () => ({ store, logger: testEventSinkLogging().logger })
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
@@ -537,9 +547,11 @@ describe('Codex chat catch-up', () => {
     store = await openTestAgentSessionRecordStore(c.root)
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
-    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
+    expect(usableJournalHistoryOrigin(await c.journal.reads.historyOrigin())?.importedAt).toBe(
+      200_000
+    )
     await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
-    expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
+    expect((await c.texts()).filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:old A answer',
       'assistant:answer 250',
       'assistant:answer 600'
@@ -573,7 +585,12 @@ describe('Codex chat catch-up', () => {
         blocks: [{ type: 'text' as const, text: 'legacy' }]
       }
     }
-    await c.journal.replaceEpochItems('session_created', 1, [kept])
+    await c.journal.write({
+      kind: 'epoch-replace',
+      reason: 'session_created',
+      fence: 1,
+      items: [kept]
+    })
     await c.reopen()
     await c.journal.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'native', ordinal: 0 },
@@ -581,7 +598,7 @@ describe('Codex chat catch-up', () => {
       { fence: 1, turnScope: { kind: 'thread' } }
     )
     await c.open([turn(3)])
-    expect(c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
+    expect(await c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
   })
 })
 

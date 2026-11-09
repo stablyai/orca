@@ -58,7 +58,7 @@ function goalFrame(goal: Record<string, unknown> = {}) {
 
 function journalSink(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  const published: AgentSessionHistoryPage[] = []
+  const pages: Promise<AgentSessionHistoryPage | null>[] = []
   let subscriberCursor: AgentJournalCursor | null = null
   deferred.bind({
     journal,
@@ -67,14 +67,13 @@ function journalSink(journal: AgentSessionJournal) {
       if (subscriberCursor === null) {
         return
       }
-      const result = readAgentSessionHistory(journal, {
-        sessionId: IDENTITY.sessionId,
-        direction: 'after',
-        cursor: subscriberCursor
-      })
-      if (result.ok) {
-        published.push(result.page)
-      }
+      pages.push(
+        readAgentSessionHistory(journal, {
+          sessionId: IDENTITY.sessionId,
+          direction: 'after',
+          cursor: subscriberCursor
+        }).then((result) => (result.ok ? result.page : null))
+      )
     }
   })
   return {
@@ -83,7 +82,8 @@ function journalSink(journal: AgentSessionJournal) {
     subscribe: () => {
       subscriberCursor = journal.cursor()
     },
-    published
+    published: async () =>
+      (await Promise.all(pages)).filter((page): page is AgentSessionHistoryPage => page !== null)
   }
 }
 
@@ -116,7 +116,7 @@ describe('codex goal accounting revisions', () => {
     })
     await drained()
     expect((await readTestJournalItems(journal))[1]?.revision).toBe(created?.revision)
-    expect(published).toEqual([])
+    expect(await published()).toEqual([])
 
     goals.handle({
       threadId: THREAD,
@@ -139,7 +139,7 @@ describe('codex goal accounting revisions', () => {
       timeUsedSeconds: 45,
       updatedAt: 1789068033_000
     })
-    expect(published).toEqual([
+    expect(await published()).toEqual([
       expect.objectContaining({
         items: [
           expect.objectContaining({
