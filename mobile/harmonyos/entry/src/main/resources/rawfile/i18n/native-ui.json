@@ -2804,10 +2804,6 @@
     "tr": "Geçerli bir Orca QR kodu değil",
     "zh-Hant": "無效的 Orca QR Code"
   },
-  "此链接缺少有效的配对码": {
-    "zh": "此链接缺少有效的配对码",
-    "en": "This link is missing a valid pairing code"
-  },
   "要与这台桌面配对吗？": {
     "zh": "要与这台桌面配对吗？",
     "de": "Mit diesem Desktop koppeln?",
@@ -6733,5 +6729,31 @@
   "components.customKeyModal.saveFailed": {
     "en": "Could not add the shortcut. Try again.",
     "zh": "无法添加快捷键，请重试。"
+  },
+  "connection.pairConfirmState.missingCode": {
+    "de": "Kopplungscode fehlt",
+    "en": "Missing pairing code",
+    "es": "Falta el código de emparejamiento",
+    "fr": "Code d'appairage manquant",
+    "ja": "ペアリングコードがありません。",
+    "ko": "페어링 코드가 없습니다.",
+    "pt": "Código de pareamento ausente",
+    "ru": "Не указан код сопряжения",
+    "tr": "Eşleştirme kodu eksik",
+    "zh-Hant": "缺少配對碼",
+    "zh": "缺少配对码"
+  },
+  "connection.pairConfirmState.invalidCode": {
+    "de": "Kein gültiger Kopplungscode",
+    "en": "Not a valid pairing code",
+    "es": "El código de emparejamiento no es válido",
+    "fr": "Code d'appairage invalide",
+    "ja": "無効なペアリングコードです。",
+    "ko": "유효한 페어링 코드가 아닙니다.",
+    "pt": "Código de pareamento inválido",
+    "ru": "Некорректный код сопряжения",
+    "tr": "Geçerli bir eşleştirme kodu değil",
+    "zh-Hant": "配對碼無效",
+    "zh": "配对码无效"
   }
 }

@@ -12,6 +12,7 @@ function hostStorage() {
   let now = 1800000000000
   let failJournalRemove = false
   let failJournalWrite = false
+  let waitAfterTokenUpdate
   let recoveryDial
   let randomSequence = 0
   const sha256 = (value) => Uint8Array.from(createHash('sha256').update(value).digest())
@@ -57,7 +58,13 @@ function hostStorage() {
       return [new Map([[tag.SECRET, records.get(key)]])]
     },
     async update(query, value) {
-      records.set(alias(query), value.get(tag.SECRET))
+      const key = alias(query)
+      records.set(key, value.get(tag.SECRET))
+      if (waitAfterTokenUpdate && key.startsWith('orca.token.')) {
+        const wait = waitAfterTokenUpdate
+        waitAfterTokenUpdate = undefined
+        await wait()
+      }
     },
     async remove(query) {
       const key = alias(query)
@@ -233,6 +240,9 @@ function hostStorage() {
     lastConnected: 0
   }
   return {
+    onTokenUpdate(wait) {
+      waitAfterTokenUpdate = wait
+    },
     host,
     pairing,
     offer,
@@ -360,6 +370,36 @@ test('invite recovery retries the original install only after an authenticated n
   disconnected = false
   assert.deepEqual(Array.from(await fixture.openPairing().recoverRelayPairings({})), [meta.id])
   assert.equal((await host.getRelayCredential({}, meta.id)).hash, journal.hash)
+})
+
+test('cancelled direct re-pair restores the existing host and credential before publication', async () => {
+  const { host, meta, advance, onTokenUpdate } = hostStorage()
+  const firstPairing = advance()
+  await host.saveHost({}, meta, 'existing-device-token', undefined, firstPairing)
+  let allowed = true
+  const updated = Promise.withResolvers()
+  const resume = Promise.withResolvers()
+  onTokenUpdate(() => {
+    updated.resolve()
+    return resume.promise
+  })
+  const replacement = host.saveHost(
+    {},
+    { ...meta, endpoint: 'ws://127.0.0.1:6769' },
+    'replacement-device-token',
+    undefined,
+    advance(),
+    false,
+    undefined,
+    () => allowed
+  )
+  await updated.promise
+  allowed = false
+  resume.resolve()
+  await assert.rejects(replacement, /Pairing was cancelled/)
+  assert.equal((await host.listHosts({}))[0].endpoint, 'ws://127.0.0.1:6768')
+  assert.equal(await host.getDeviceToken({}, meta.id), 'existing-device-token')
+  assert.equal(host.hostPairingTimestamp({}, meta.id), firstPairing)
 })
 
 test('removing a desktop while invite recovery checks its status prevents a new remote install', async () => {

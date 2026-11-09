@@ -102,9 +102,13 @@ struct PairScan {
   }
 
   aboutToDisappear(): void {
-    this.disposed = true; this.visible = false; this.navigationEpoch++; this.restoreKeyboardMode();
+    this.cancelPairing(); this.visible = false; this.navigationEpoch++; this.restoreKeyboardMode();
     this.context?.eventHub.off('orcaForeground', this.onForeground);
     this.context?.eventHub.off('orcaBackground', this.onBackground);
+  }
+
+  private cancelPairing(): void {
+    this.disposed = true;
     if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
     this.attempt?.close(); this.attempt = null;
   }
@@ -201,9 +205,8 @@ struct PairScan {
 
   onBackPress(): boolean {
     if (this.showPaste) { this.closePaste(); return true; }
+    this.cancelPairing();
     if (this.openedFromLink) {
-      this.disposed = true;
-      this.attempt?.close();
       let navigation = this.getUIContext().getRouter();
       if (navigation.getStateByUrl('pages/Home').length > 0) {
         navigation.back({ url: 'pages/Home' });
@@ -231,7 +234,8 @@ struct PairScan {
       } else if (!fromLink) { this.doPair().catch(() => {}); }
     } catch (e) {
       this.confirmedOffer = null; this.confirming = false;
-      this.error = fromLink ? '此链接缺少有效的配对码' : fromCamera ? scanErrorLabel(input) :
+      this.error = fromLink ? ((e as Error).message === 'Missing pairing code'
+        ? 'connection.pairConfirmState.missingCode' : 'connection.pairConfirmState.invalidCode') : fromCamera ? scanErrorLabel(input) :
         '配对码无效，请从电脑复制后重新粘贴';
       this.updateCamera();
     }
@@ -271,7 +275,8 @@ struct PairScan {
     }, PAIR_TIMEOUT_MS);
     let context = getContext(this);
     let hostId = hostIdFor(offer.publicKeyB64);
-    let isActive = (): boolean => !this.disposed && !this.timedOut && pairingStartedAt > hostRemovalTimestamp(context, hostId)
+    let isActive = (): boolean => this.attempt === attempt && !this.disposed && !this.timedOut
+      && pairingStartedAt > hostRemovalTimestamp(context, hostId)
       && pairingStartedAt > hostPairingTimestamp(context, hostId);
     let journal: PairingJournal | null = null;
     try {
@@ -310,7 +315,7 @@ struct PairScan {
       if (this.timedOut) { throw new Error('Pairing timed out'); }
       if (prepared) { await commitRelayPairing(context, meta, token, prepared, isActive); }
       else {
-        await saveHost(context, meta, token, undefined, pairingStartedAt, false, journal ?? undefined);
+        await saveHost(context, meta, token, undefined, pairingStartedAt, false, journal ?? undefined, isActive);
         if (journal) { await clearHostPairingJournal(context, hostId, journal).catch(() => {}); }
       }
       refreshDesktopConnection(meta.id, 'paired');

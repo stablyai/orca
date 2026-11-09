@@ -104,13 +104,14 @@ async function readHostList(context: common.Context): Promise<HostMeta[]> {
   return parseHosts(raw);
 }
 
-async function writeHostList(context: common.Context, hosts: HostMeta[]): Promise<void> {
+async function writeHostList(context: common.Context, hosts: HostMeta[], beforeWrite?: () => void): Promise<void> {
   let prefs = await loadPrefs(context);
   let texts: string[] = [];
   for (let i = 0; i < hosts.length; i++) {
     texts.push(JSON.stringify(hosts[i]));
   }
   let previous = await prefs.get(PREFS_KEY, '[]');
+  beforeWrite?.();
   try { await prefs.put(PREFS_KEY, `[${texts.join(',')}]`); await prefs.flush(); }
   catch (e) { await prefs.put(PREFS_KEY, previous); throw e as Error; }
 }
@@ -148,7 +149,8 @@ async function removeToken(hostId: string): Promise<void> {
 }
 
 export function saveHost(context: common.Context, meta: HostMeta, deviceToken: string, relayCredential?: RelayCredential,
-  pairingStartedAt: number = Date.now(), recovering: boolean = false, expectedJournal?: PairingJournal): Promise<void> {
+  pairingStartedAt: number = Date.now(), recovering: boolean = false, expectedJournal?: PairingJournal,
+  canCommit?: () => boolean): Promise<void> {
   return mutateHost(async (): Promise<void> => {
     let removedAt = hostRemovalTimestamp(context, meta.id);
     if (!Number.isSafeInteger(pairingStartedAt) || pairingStartedAt < 0 || (removedAt > 0 && pairingStartedAt <= removedAt)) { throw new Error('Pairing was superseded by desktop removal'); }
@@ -175,12 +177,15 @@ export function saveHost(context: common.Context, meta: HostMeta, deviceToken: s
       if (previous.personalName) { meta.personalName = previous.personalName; meta.name = previous.personalName; }
       hosts[at] = meta;
     } else { meta.machineName = meta.machineName ?? meta.name; hosts.push(meta); }
+    if (canCommit && !canCommit()) { throw new Error('Pairing was cancelled'); }
     await putToken(meta.id, deviceToken);
     try {
       if (relayCredential) { await putRelayCredential(meta.id, relayCredential); }
       else if (!meta.relay) { await removeRelayCredential(meta.id); }
-      prefs.putSync(`paired.${meta.id}`, pairingStartedAt);
-      await writeHostList(context, hosts);
+      await writeHostList(context, hosts, (): void => {
+        if (canCommit && !canCommit()) { throw new Error('Pairing was cancelled'); }
+        prefs.putSync(`paired.${meta.id}`, pairingStartedAt);
+      });
     }
     catch (e) {
       prefs.putSync(`paired.${meta.id}`, lastPairing);
