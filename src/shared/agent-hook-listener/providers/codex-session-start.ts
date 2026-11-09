@@ -145,8 +145,7 @@ export function reconcileCodexStatusEvent(
     event.hookEventName === 'SessionStart' &&
     ((!event.isReplay && !event.hasExplicitPrompt) || (event.isReplay && !event.payload.mainAgent))
   ) {
-    const codexPrevious = context?.payload.agentType === 'codex'
-    if (!codexPrevious) {
+    if (context?.payload.agentType !== 'codex') {
       clearCodexSessionState(state, event.paneKey)
     } else {
       seedCodexStateFromSnapshot(state, event.paneKey, context.payload)
