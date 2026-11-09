@@ -71,10 +71,11 @@ export function updateDurableDraftField(
   const slot = slotFor(key)
   const current = slot.fields[field] ?? ''
   const next = typeof update === 'function' ? update(current) : update
+  // Even an unchanged value is the user's choice: a read still pending must not overwrite it.
+  slot.touched.add(field)
   if (next === current) {
     return
   }
-  slot.touched.add(field)
   const rest = Object.fromEntries(Object.entries(slot.fields).filter(([name]) => name !== field))
   slot.fields = next ? { ...rest, [field]: next } : rest
   notify(slot)
