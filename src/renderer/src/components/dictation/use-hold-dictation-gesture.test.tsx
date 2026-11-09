@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 
 const originalUserAgent = navigator.userAgent
@@ -26,13 +27,10 @@ function setUserAgent(userAgent: string): void {
 
 function holdSettings(): GlobalSettings {
   return {
+    ...getDefaultSettings('/home/test'),
     terminalShortcutPolicy,
-    voice: {
-      enabled: true,
-      sttModel: 'test-model',
-      dictationMode
-    }
-  } as GlobalSettings
+    voice: { ...getDefaultVoiceSettings(), enabled: true, sttModel: 'test-model', dictationMode }
+  }
 }
 
 function Probe(): null {

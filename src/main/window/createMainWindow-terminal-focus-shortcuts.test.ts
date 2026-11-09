@@ -109,18 +109,15 @@ describe('createMainWindow', () => {
 
     voice.dictationMode = 'auto'
     const autoPreventDefault = vi.fn()
-    windowHandlers['before-input-event'](
-      { preventDefault: autoPreventDefault } as never,
-      dictationInput as never
-    )
+    windowHandlers['before-input-event']({ preventDefault: autoPreventDefault }, dictationInput)
     expect(autoPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
     voice.dictationMode = 'toggle'
     const composingPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
-      { preventDefault: composingPreventDefault } as never,
-      { ...dictationInput, isComposing: true } as never
+      { preventDefault: composingPreventDefault },
+      { ...dictationInput, isComposing: true }
     )
     expect(composingPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
