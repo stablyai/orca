@@ -18945,7 +18945,9 @@
         "linkActions": "Acciones de enlace"
       },
       "install": {
-        "checking": "Comprobando si {{agent}} está listo en este host…"
+        "checking": "Comprobando si {{agent}} está listo en este host…",
+        "cliInstall": "Instalar",
+        "cliRecheck": "Verificar de nuevo"
       },
       "reasoning": "Razonamiento",
       "contextMenu": {

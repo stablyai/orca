@@ -1,4 +1,4 @@
-import { NativeChatSignInButton } from '../../host-access/NativeChatSignInButton'
+import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -160,7 +160,7 @@ export function NativeChatUserMessageRow({
       {deliveryNotice?.text !== undefined ? (
         <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
-          <NativeChatSignInButton failureKind={deliveryNotice.failureKind} />
+          <NativeChatSetupButton failureKind={deliveryNotice.failureKind} />
           {deliveryNotice.onSend ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
               {t('components.native-chat.queuedMessages.send', 'Send')}

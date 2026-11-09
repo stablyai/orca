@@ -19218,7 +19218,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…"
+        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
+        "cliInstall": "Installieren",
+        "cliRecheck": "Erneut prüfen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {

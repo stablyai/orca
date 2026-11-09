@@ -19202,7 +19202,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "{{agent}} ajanının bu ana makinede hazır olup olmadığı denetleniyor…"
+        "checking": "{{agent}} ajanının bu ana makinede hazır olup olmadığı denetleniyor…",
+        "cliInstall": "Yükle",
+        "cliRecheck": "Yeniden kontrol et"
       },
       "reasoning": "Akıl yürütme",
       "failureWords": {

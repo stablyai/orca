@@ -18957,7 +18957,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…"
+        "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
+        "cliInstall": "安裝",
+        "cliRecheck": "再次檢查"
       },
       "reasoning": "推理",
       "failureWords": {
