@@ -1,7 +1,7 @@
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../../../shared/tab-types'
-import { readTabMapChanges } from '@/store/keyed-record-transitions'
+import { readTabMapChanges } from '@/store/keyed-record-change-reads'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -22,6 +22,8 @@ type Lineage = {
   rank: Map<string, number>
   nextRank: number
   chats: Map<string, readonly StructuredTab[]>
+  /** Chat-bearing workspaces in rank order; changes only when one gains its first or loses its last chat. */
+  order: string[] | null
   list: readonly StructuredTab[] | null
   /** The last materialized list, reused when a rebuild yields the same chats. */
   stale: readonly StructuredTab[] | null
@@ -47,9 +49,43 @@ function structuredTabsOf(
   return result
 }
 
-function setChats(target: Lineage, worktreeId: string, tabs: readonly StructuredTab[]): void {
-  if (tabs === (target.chats.get(worktreeId) ?? NO_TABS)) {
+function rankOf(target: Lineage, worktreeId: string): number {
+  return target.rank.get(worktreeId) ?? 0
+}
+
+// Insert or drop one workspace in the cached order: O(log K) to find, one splice to place.
+function placeInOrder(target: Lineage, worktreeId: string, present: boolean): void {
+  const order = target.order
+  if (!order) {
     return
+  }
+  const rank = rankOf(target, worktreeId)
+  let low = 0
+  let high = order.length
+  while (low < high) {
+    const middle = (low + high) >> 1
+    if (rankOf(target, order[middle]) < rank) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+  if (present) {
+    order.splice(low, 0, worktreeId)
+  } else if (order[low] === worktreeId) {
+    order.splice(low, 1)
+  } else {
+    target.order = null
+  }
+}
+
+function setChats(target: Lineage, worktreeId: string, tabs: readonly StructuredTab[]): void {
+  const before = target.chats.get(worktreeId) ?? NO_TABS
+  if (tabs === before) {
+    return
+  }
+  if (!before.length !== !tabs.length) {
+    placeInOrder(target, worktreeId, tabs.length > 0)
   }
   if (tabs.length) {
     target.chats.set(worktreeId, tabs)
@@ -67,6 +103,7 @@ function rebuildFromSnapshot(source: TabsByWorktree, previous: Lineage | null): 
     rank: new Map(),
     nextRank: 0,
     chats: new Map(),
+    order: null,
     list: null,
     stale: previous?.list ?? previous?.stale ?? null
   }
@@ -89,9 +126,6 @@ function applyAddressed(
   if (changes.addedWorkspaceIds.some((worktreeId) => INDEX_KEY.test(worktreeId))) {
     return false
   }
-  for (const worktreeId of changes.deletedWorkspaceIds) {
-    target.rank.delete(worktreeId)
-  }
   for (const worktreeId of changes.addedWorkspaceIds) {
     target.rank.set(worktreeId, target.nextRank++)
   }
@@ -102,6 +136,10 @@ function applyAddressed(
       worktreeId,
       bucket ? structuredTabsOf(bucket, target.chats.get(worktreeId)) : NO_TABS
     )
+  }
+  // Ranks of deleted workspaces go after their chats leave the cached order.
+  for (const worktreeId of changes.deletedWorkspaceIds) {
+    target.rank.delete(worktreeId)
   }
   target.source = source
   return true
@@ -120,10 +158,11 @@ function advance(source: TabsByWorktree): Lineage {
 
 function materialize(current: Lineage): readonly StructuredTab[] {
   if (!current.list) {
-    const rank = (worktreeId: string) => current.rank.get(worktreeId) ?? 0
-    const built = [...current.chats.keys()]
-      .sort((a, b) => rank(a) - rank(b))
-      .flatMap((worktreeId) => current.chats.get(worktreeId) ?? NO_TABS)
+    // Sorted only after a full resync; ordinary chat edits reuse the cached order.
+    current.order ??= [...current.chats.keys()].sort(
+      (a, b) => rankOf(current, a) - rankOf(current, b)
+    )
+    const built = current.order.flatMap((worktreeId) => current.chats.get(worktreeId) ?? NO_TABS)
     current.list = current.stale && sameTabs(current.stale, built) ? current.stale : built
     current.stale = null
   }
