@@ -124,7 +124,8 @@ export class KeyedJsonRowCache {
 
   /** One read-only snapshot: another connection's write lock cannot block it. */
   private readSnapshot(
-    busyTimeoutMs: number
+    busyTimeoutMs: number,
+    readonly = true
   ):
     | { kind: 'rows'; rows: KeyedJsonRow[]; receipt: unknown }
     | { kind: 'unavailable'; error: unknown } {
@@ -134,7 +135,7 @@ export class KeyedJsonRowCache {
     }
     let db: SyncDatabase | null = null
     try {
-      db = new SyncDatabase(this.path, { readonly: true, fileMustExist: true })
+      db = new SyncDatabase(this.path, { readonly, fileMustExist: true })
       db.pragma(`busy_timeout = ${busyTimeoutMs}`)
       db.exec('BEGIN')
       try {
@@ -157,6 +158,13 @@ export class KeyedJsonRowCache {
         rollback(db)
       }
     } catch (error) {
+      if (readonly && needsWritableRecovery(error)) {
+        db?.close()
+        db = null
+        // A crash left a hot journal or WAL that only a writer can replay; reading after
+        // that recovery takes no write lock in WAL mode.
+        return this.readSnapshot(busyTimeoutMs, false)
+      }
       if (classifyRowCacheFailure(error) !== 'corrupt') {
         return { kind: 'unavailable', error }
       }
@@ -228,6 +236,9 @@ export class KeyedJsonRowCache {
       this.dataVersion = version
     } catch (error) {
       rollback(db)
+      // COMMIT can report an error after the rows landed; our own commit leaves data_version
+      // unchanged, so drop the baseline and re-read it before the next diff.
+      this.dataVersion = undefined
       throw error
     }
   }
@@ -346,4 +357,11 @@ function receiptNames(stored: unknown, receipt: string): boolean {
     return false
   }
   return stored === receipt || /^\d+:\d+:([0-9a-f]{64})$/.exec(stored)?.[1] === receipt
+}
+
+/** SQLITE_READONLY_RECOVERY and SQLITE_READONLY_ROLLBACK: recovery needs a writable connection. */
+function needsWritableRecovery(error: unknown): boolean {
+  const errcode =
+    error && typeof error === 'object' && 'errcode' in error ? error.errcode : undefined
+  return errcode === 264 || errcode === 776
 }

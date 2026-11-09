@@ -9,6 +9,7 @@ import {
   writeFileSync,
   writeSync
 } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -163,5 +164,32 @@ describe('keyed JSON row cache', () => {
 
     new KeyedJsonRowCache(path, { schemaVersion: 1, holdConnection: false }).write([row('b', '2')])
     expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['2'])
+  })
+
+  it('recovers rows a crashed rollback-journal writer left behind', () => {
+    const { path } = paths()
+    new KeyedJsonRowCache(path, {
+      schemaVersion: 1,
+      holdConnection: false
+    }).write([row('a', '1')])
+    // Leave a hot journal, which a read-only connection cannot roll back.
+    const crashed = spawnSync(process.execPath, [
+      '-e',
+      `const { DatabaseSync } = require('node:sqlite')
+       const db = new DatabaseSync(process.argv[1])
+       db.exec('PRAGMA journal_mode = DELETE')
+       db.exec('PRAGMA cache_size = 1')
+       db.exec('BEGIN IMMEDIATE')
+       // Spill pages to the database file so the journal is hot, not merely present.
+       db.exec("UPDATE rows SET value = '\\"lost\\"'")
+       db.exec(\`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000)
+         INSERT INTO rows SELECT 'k' || i, i + 1, hex(randomblob(200)) FROM n\`)
+       process.kill(process.pid, 'SIGKILL')`,
+      path
+    ])
+    expect(crashed.signal).toBe('SIGKILL')
+    expect(existsSync(`${path}-journal`)).toBe(true)
+
+    expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['1'])
   })
 })
