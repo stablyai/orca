@@ -106,14 +106,14 @@ export function TerminalPaneAppearanceSection({
                 options={[
                   {
                     value: 'always',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.TerminalAppearanceSection.linkUnderlines.always',
                       'Always'
                     )
                   },
                   {
                     value: 'hover',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.TerminalAppearanceSection.linkUnderlines.hover',
                       'On hover'
                     )
