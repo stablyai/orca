@@ -73,7 +73,7 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
   )
   // The status read the shown snapshot was built from; AWAITING while a build waits for its first read.
   const builtFromRef = useRef<GitStatusRead | typeof AWAITING | undefined>(undefined)
-  // The compare the current build read, so a git change that marked it stale rebuilds even when status held.
+  // The compare the current build has read, so a git change that marked it stale rebuilds even when status held.
   const builtCompareRef = useRef<ReviewBranchCompareKey | null>(null)
   // Reloads after a write wait for the rebuild they cause, so the screen's buttons match the new files.
   const buildWaitersRef = useRef<(() => void)[]>([])
@@ -175,8 +175,21 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
         if (!isCurrent()) {
           return { result: null }
         }
-        builtCompareRef.current = key
-        return readCachedReviewBranchCompare(queryClient, { hostId, client }, target, key, read)
+        try {
+          return await readCachedReviewBranchCompare(
+            queryClient,
+            { hostId, client },
+            target,
+            key,
+            read,
+            isCurrent
+          )
+        } finally {
+          // Only now: until it settles, this build reads the compare again itself after a git change.
+          if (isCurrent()) {
+            builtCompareRef.current = key
+          }
+        }
       }
       const { snapshot, branch } = startMobileDiffReviewSnapshot(client, worktreeId, {
         status: statusInput,
@@ -233,9 +246,18 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
     )
   }, [client, commitOid, connState, queryClient, reloadNonce, statusKey, worktreeReview])
 
+  // Closing Review ends its build, so a compare it is still reading is not read again for later git changes.
+  useEffect(
+    () => () => {
+      loadGenerationRef.current += 1
+      settleWaiters()
+    },
+    []
+  )
+
   // A status read that changed what Changes shows rebuilds the snapshot; one in flight already brings its own.
   // A read that lands unchanged rebuilds too once a git change marked the shown compare stale; a compare
-  // still out is read again by its own build when it lands marked.
+  // its build has not settled yet is read again by that build.
   const rebuildOnStatusRead = useEffectEvent((read: GitStatusRead) => {
     const built = builtFromRef.current
     if (built === AWAITING) {

@@ -19,7 +19,8 @@ export async function readCachedReviewBranchCompare(
   host: { hostId: string; client: RpcClient },
   target: HostQueryTarget,
   key: ReviewBranchCompareKey,
-  read: () => Promise<BranchCompareLoadResult>
+  read: () => Promise<BranchCompareLoadResult>,
+  isCurrent: () => boolean
 ): Promise<BranchCompareLoadResult> {
   const loaded = await fetchHostQuery(
     queryClient,
@@ -27,10 +28,12 @@ export async function readCachedReviewBranchCompare(
     host,
     target,
     key,
-    read
+    read,
+    isCurrent
   )
   // Only a compare that landed for this head is worth reusing; cached status can trail a commit.
-  if (loaded.result?.summary.headOid !== key.head) {
+  // A superseded build's answer may predate the entry a newer build is reading, so only the current one evicts.
+  if (isCurrent() && loaded.result?.summary.headOid !== key.head) {
     queryClient.removeQueries({
       queryKey: hostQueryKey(host.hostId, reviewBranchCompareQuery.family, target, key),
       exact: true
