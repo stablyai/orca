@@ -36,7 +36,7 @@ beforeEach(() => {
   mocks.requestDetails.mockReset()
 })
 
-it('keeps an absent skill installable with planned-location details', async () => {
+it('keeps an absent skill installable without installed-copy details', async () => {
   const pending = planOf([
     planEntry('orca-cli', [
       planOp('write', '/home/u/.agents/skills/orca-cli'),
@@ -59,13 +59,13 @@ it('keeps an absent skill installable with planned-location details', async () =
     />
   )
 
-  const details = await screen.findByRole('button', { name: 'Details' })
+  await screen.findByText('Not installed', { exact: true })
   const install = screen.getByRole('button', { name: 'Install' })
   expect(install.hasAttribute('disabled')).toBe(false)
   expect(screen.getByText('Not installed', { exact: true })).toBeDefined()
   expect(screen.queryByText('Installed', { exact: true })).toBeNull()
-  fireEvent.click(details)
-  expect(mocks.requestDetails).toHaveBeenCalledWith(TARGET)
+  expect(screen.getByRole('button', { name: 'Re-check' }).hasAttribute('disabled')).toBe(false)
+  expect(screen.queryByRole('button', { name: 'Details' })).toBeNull()
   fireEvent.click(install)
   await waitFor(() =>
     expect(mocks.execute).toHaveBeenCalledWith(TARGET, 'b'.repeat(64), { names: ['orca-cli'] })

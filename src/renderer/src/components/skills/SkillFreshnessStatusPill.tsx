@@ -117,8 +117,8 @@ export function SkillPlanStatusPill({
   const status = getSkillFreshnessDisplayStatus(plan, skillName)
   const entry = plan?.skills.find((skill) => skill.name === skillName)
   const needsAttention = hasSkillCopyNeedingAttention(plan, skillName)
-  // Offer Details for any planned location/action, including adding an agent link.
-  const hasDetails = needsAttention || skillPlanHasDetails(plan, skillName)
+  // Details reviews installed copies; pending installs use the panel's Install action.
+  const hasDetails = needsAttention || (installed && skillPlanHasDetails(plan, skillName))
   return (
     <span className="inline-flex items-center gap-2">
       {!needsAttention && !installed ? (
