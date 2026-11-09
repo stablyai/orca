@@ -1,10 +1,9 @@
-import type { RateLimitRuntimeTarget } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits, RateLimitRuntimeTarget } from '../../../shared/rate-limit-types'
 import type {
   AntigravityAccountUsageRecorder,
   AntigravityUsageReadStart
 } from '../providers/antigravity/antigravity-account-usage'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 type AntigravityAccountRead = AntigravityUsageReadStart & { target: RateLimitRuntimeTarget }
 
