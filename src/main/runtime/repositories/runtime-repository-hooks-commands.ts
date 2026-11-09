@@ -1,4 +1,4 @@
-import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
@@ -30,8 +30,8 @@ export class RuntimeRepositoryHooksCommands {
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
     const connectionId = getRepoDialableSshTargetId(repo)
-    // Why: an `ssh:` repo is not served here; it reports no hooks file.
-    if (connectionId) {
+    // Why: an `ssh:` repo is not served here, nor a folder another host owns; neither reports hooks.
+    if (connectionId || (isFolderRepo(repo) && !isRepoOnCatalogHost(repo))) {
       return {
         hasHooksFile: false,
         hooks: null,
@@ -62,6 +62,9 @@ export class RuntimeRepositoryHooksCommands {
 
   async checkRepoHooks(repoSelector: string, options: { background?: boolean } = {}) {
     const repo = await this.deps.resolveRepo(repoSelector)
+    if (isFolderRepo(repo) && !isRepoOnCatalogHost(repo)) {
+      return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
+    }
     const connectionId = getRepoDialableSshTargetId(repo)
     if (connectionId) {
       return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }

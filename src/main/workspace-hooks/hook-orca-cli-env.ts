@@ -41,10 +41,14 @@ export function applyHostHookOrcaCliEnv(env: Record<string, string | undefined>)
   Object.assign(env, childEnv)
 }
 
-/** The guest env and a script prefix that puts the managed WSL CLI first on PATH. */
+/**
+ * The guest env and a script prefix that puts the managed WSL CLI first on PATH. Inherited pane
+ * identity is blanked, since wsl.exe would otherwise carry the host's values in through WSLENV.
+ */
 export function wslHookOrcaCliEnv(): { env: Record<string, string>; scriptPrefix: string } {
+  const blankedIdentity = Object.fromEntries(INHERITED_PANE_IDENTITY_KEYS.map((key) => [key, '']))
   if (!hasAppEnvironment()) {
-    return { env: {}, scriptPrefix: '' }
+    return { env: blankedIdentity, scriptPrefix: '' }
   }
   const app = getAppEnvironment()
   const userDataPath = app.getPath('userData')
@@ -54,10 +58,11 @@ export function wslHookOrcaCliEnv(): { env: Record<string, string>; scriptPrefix
     ...(process.resourcesPath ? { resourcesPath: process.resourcesPath } : {})
   })
   if (!managedCliDir) {
-    return { env: {}, scriptPrefix: '' }
+    return { env: blankedIdentity, scriptPrefix: '' }
   }
   return {
     env: {
+      ...blankedIdentity,
       ORCA_WSL_CLI_DIR: toLinuxPath(managedCliDir),
       ORCA_CLI_COMMAND: getWslCliCommandName(app.isPackaged()),
       ORCA_USER_DATA_PATH: toLinuxPath(userDataPath)

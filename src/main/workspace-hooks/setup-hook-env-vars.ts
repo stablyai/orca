@@ -6,7 +6,8 @@ import { isFolderRepo } from '../../shared/repo-kind'
 /** The workspace a hook runs for; folder workspaces share one directory, so the path can't name them. */
 export type HookWorkspaceIdentity = {
   worktreeId: string
-  displayName: string
+  /** Names a folder workspace; a worktree's name is its directory's. */
+  displayName?: string
 }
 
 // Keep WSL path translation in pty/wsl-orca-env.ts in sync; names and policies are not paths.
@@ -26,7 +27,9 @@ export function getSetupEnvVars(
     ORCA_ROOT_PATH: repo.path,
     ORCA_WORKTREE_PATH: worktreePath,
     ORCA_WORKSPACE_NAME:
-      identity && isFolderRepo(repo) ? identity.displayName : getRuntimePathBasename(worktreePath),
+      identity?.displayName && isFolderRepo(repo)
+        ? identity.displayName
+        : getRuntimePathBasename(worktreePath),
     // Same values a pane sets, so `orca worktree create` in the hook attaches to this workspace.
     ...(identity
       ? { ORCA_WORKSPACE_ID: identity.worktreeId, ORCA_WORKTREE_ID: identity.worktreeId }

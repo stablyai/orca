@@ -5,6 +5,7 @@ import { removeFolderSetupRunnerFiles } from '../../workspace-hooks/folder-setup
 import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
 import type { HookRuntimeTarget } from '../../workspace-hooks/hook-runtime-target'
 import { gateWorktreeRemovalOnArchiveHook } from './worktree-archive-hook-gate'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 /**
  * Run a folder workspace's archive script before anything is torn down, as worktree removal does.
@@ -34,7 +35,13 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
 
 /** Runner files are per launch; drop this workspace's once its processes have stopped. */
 export function removeFolderWorkspaceRunnerFiles(repo: Repo, worktreeId: string): void {
-  if (isRepoOnCatalogHost(repo)) {
-    void removeFolderSetupRunnerFiles(repo.path, worktreeId)
+  if (!isRepoOnCatalogHost(repo)) {
+    return
   }
+  // A stopped distro keeps its leftover runners rather than starting for cleanup.
+  void blockedWslDistroForPath(repo.path)
+    .then((blocked) => (blocked ? undefined : removeFolderSetupRunnerFiles(repo.path, worktreeId)))
+    .catch((error: unknown) => {
+      console.warn(`[hooks] could not clean setup runners in ${repo.path}:`, error)
+    })
 }

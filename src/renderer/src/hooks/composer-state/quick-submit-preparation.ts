@@ -41,6 +41,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     setAdvancedOpen,
     settings,
     setupConfig,
+    setupSupported,
     setupDecision,
     setupPolicy,
     smartNameMode
@@ -77,6 +78,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       let submitResolvedSetupDecision = resolvedSetupDecision
 
       if (
+        setupSupported &&
         setupPolicy === 'ask' &&
         selectedRepoHookContextKey &&
         checkedHooksContextKey !== selectedRepoHookContextKey
@@ -103,8 +105,10 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         return null
       }
 
-      // Folder projects inherit too; a host without folder setup ignores it for them.
-      const effectiveSetupDecision: SetupDecision = submitResolvedSetupDecision ?? 'inherit'
+      // A folder host that predates folder setup keeps the old explicit skip.
+      const effectiveSetupDecision: SetupDecision = setupSupported
+        ? (submitResolvedSetupDecision ?? 'inherit')
+        : 'skip'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
         ? getLinkedWorkItemProvider(submitLinkedWorkItem)
         : null
@@ -219,6 +223,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       setAdvancedOpen,
       settings,
       setupConfig,
+      setupSupported,
       setupDecision,
       setupPolicy,
       smartNameMode,

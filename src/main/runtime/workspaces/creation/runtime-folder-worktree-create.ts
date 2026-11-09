@@ -276,6 +276,10 @@ export async function createRuntimeFolderWorktree(args: {
     ...(preparedSetup && request.awaitTerminalProvisioning
       ? { setupReceipt: buildRuntimeSetupReceipt(preparedSetup, false, null) }
       : {}),
+    // The window re-asks with this content, then runs the approved setup.
+    ...(preparedSetup?.setupTrustMismatch
+      ? { setupTrustMismatch: preparedSetup.setupTrustMismatch }
+      : {}),
     ...(warning ? { warning } : {})
   }
 }

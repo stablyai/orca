@@ -1,6 +1,11 @@
 import { ipcMain } from 'electron'
-import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
+import { isFolderRepo } from '../../../shared/repo-kind'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
@@ -23,6 +28,11 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           mayNeedUpdate: false
         }
       }
+      // A folder owned by another host has no hooks here; its own host reports them.
+      if (isFolderRepo(repo) && !isRepoOnCatalogHost(repo)) {
+        return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
+      }
+
       if (getRepoDialableSshTargetId(repo)) {
         return {
           status: 'error',

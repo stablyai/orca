@@ -9,6 +9,7 @@ import { isRepoOnCatalogHost, parseExecutionHostId } from '../../../../shared/ex
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   gateFolderWorkspaceRemovalOnArchiveHook,
@@ -130,9 +131,11 @@ export async function removeOrphanOrFolderWorktree({
     allowFailure: archive.allowFailedArchiveHook,
     runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
   })
+  // Without --run-hooks, look at the folder only to warn, and never start its stopped WSL distro for that.
   const archiveSkipped =
     !archive.runHooks &&
     isRepoOnCatalogHost(repo) &&
+    !(await blockedWslDistroForPath(repo.path)) &&
     Boolean(getEffectiveHooks(repo)?.scripts.archive)
   // Use the resolved SSH owner, including executionHostId-only rows; runtime-nested targets belong to that environment's namespace.
   const folderHost = parseExecutionHostId(removalHostId)

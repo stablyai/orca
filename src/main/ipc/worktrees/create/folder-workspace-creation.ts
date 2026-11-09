@@ -72,7 +72,8 @@ export async function createFolderWorkspace(
   const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
   // The window opens the Setup tab from `setup`, as for a new worktree.
   const prepared = await prepareFolderWorktreeSetup({
-    request: args,
+    // A desktop create is the user's act, as for a new worktree.
+    request: { ...args, wslUserAct: true },
     repo,
     worktree,
     settings: store.getSettings(),

@@ -22,6 +22,7 @@ export type QuickSubmitPreparationInput = Pick<
   | 'setAdvancedOpen'
   | 'settings'
   | 'setupConfig'
+  | 'setupSupported'
   | 'setupDecision'
   | 'setupPolicy'
   | 'smartNameMode'

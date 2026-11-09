@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { readdir, unlink } from 'node:fs/promises'
+import { readdir, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 
 const FOLDER_RUNNER_DIR = '.orca'
 
@@ -27,12 +28,19 @@ export function newFolderSetupRunnerPath(
   )
 }
 
+/** A folder may itself be a Git checkout; keep its runners out of `git status` without editing its files. */
+export async function ignoreFolderSetupRunners(runnerDirFsPath: string): Promise<void> {
+  await writeFile(join(runnerDirFsPath, '.gitignore'), 'setup-runner-*\n.gitignore\n', {
+    flag: 'wx'
+  }).catch(() => undefined)
+}
+
 /** Call after the workspace's processes stopped, so no running script loses its file. */
 export async function removeFolderSetupRunnerFiles(
   folderPath: string,
   worktreeId: string
 ): Promise<void> {
-  const dir = join(folderPath, FOLDER_RUNNER_DIR)
+  const dir = windowsFsPath(join(folderPath, FOLDER_RUNNER_DIR))
   const prefix = runnerPrefix(worktreeId)
   const names: string[] = await readdir(dir).catch((): string[] => [])
   await Promise.all(

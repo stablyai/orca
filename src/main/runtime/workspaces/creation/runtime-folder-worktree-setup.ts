@@ -17,8 +17,10 @@ import type {
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import {
   buildRuntimeSetupReceipt,
-  prepareRuntimeLocalWorktreeSetup
+  prepareRuntimeLocalWorktreeSetup,
+  resolveRuntimeSetupDecision
 } from './runtime-local-worktree-setup'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export type RuntimeFolderWorktreeSetupDeps = {
   runtimeTarget: () => { wslDistro?: string } | undefined
@@ -32,16 +34,23 @@ type PreparedFolderSetup = Awaited<ReturnType<typeof prepareRuntimeLocalWorktree
  * The workspace already exists, so a setup problem becomes a warning, never a failed create.
  */
 export async function prepareFolderWorktreeSetup(args: {
-  request: Parameters<typeof prepareRuntimeLocalWorktreeSetup>[0]['request']
+  request: Parameters<typeof prepareRuntimeLocalWorktreeSetup>[0]['request'] & {
+    wslUserAct?: true
+  }
   repo: Repo
   worktree: Pick<Worktree, 'id' | 'path' | 'displayName'>
   settings: ReturnType<RuntimeStore['getSettings']>
   runtimeTarget: () => { wslDistro?: string } | undefined
   shouldUseSetupRunner: boolean
 }): Promise<PreparedFolderSetup | { warning: string } | undefined> {
-  const { repo, worktree } = args
-  if (!isRepoOnCatalogHost(repo)) {
+  const { repo, worktree, request } = args
+  // A skipped setup needs no file access, so metadata-only creates stay metadata-only.
+  if (!isRepoOnCatalogHost(repo) || resolveRuntimeSetupDecision(request) === 'skip') {
     return undefined
+  }
+  // Only a create someone started may start the folder's stopped WSL distro.
+  if (!request.wslUserAct && (await blockedWslDistroForPath(repo.path))) {
+    return { warning: "Setup did not run because the folder's WSL distro isn't running." }
   }
   try {
     return await prepareRuntimeLocalWorktreeSetup({

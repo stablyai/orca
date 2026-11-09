@@ -1,3 +1,4 @@
+import { useFolderSetupSupported } from '@/lib/use-folder-setup-supported'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
 import { useMemo } from 'react'
@@ -119,11 +120,13 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
 
   const currentYamlHooks = checkedHooksContextKey === selectedRepoHookContextKey ? yamlHooks : null
 
+  const setupSupported = useFolderSetupSupported(selectedRepo)
   const setupConfig = useMemo(
-    () => (selectedRepo ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
-    [currentYamlHooks, selectedRepo]
+    () => (selectedRepo && setupSupported ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
+    [currentYamlHooks, selectedRepo, setupSupported]
   )
   const isSetupCheckPending =
+    setupSupported &&
     Boolean(selectedRepo) &&
     Boolean(selectedRepoHookContextKey) &&
     checkedHooksContextKey !== selectedRepoHookContextKey
@@ -136,7 +139,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     selectedRepo,
     setupConfig,
     setupDecision,
-    selectedRepoIsGit,
+    setupSupported,
     isSetupCheckPending
   )
   const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
@@ -239,6 +242,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     effectiveLinkedPR,
     currentYamlHooks,
     setupConfig,
+    setupSupported,
     setupPolicy,
     linkedWorkItemProvider,
     requiresExplicitSetupChoice,

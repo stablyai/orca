@@ -15,6 +15,8 @@ export type ComposerDerivedModel = {
   effectiveLinkedPR: number | null
   currentYamlHooks: OrcaHooks | null
   setupConfig: SetupConfig | null
+  /** False for a folder project whose host predates folder setup; its setup controls stay hidden. */
+  setupSupported: boolean
   setupPolicy: SetupRunPolicy
   linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | null
   requiresExplicitSetupChoice: boolean

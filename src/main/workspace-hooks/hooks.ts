@@ -210,7 +210,7 @@ export function runHook(
     // Forward unattended Git flags to WSL; keep host askpass out of the guest.
     const guardedEnv = promptGuardShellEnv(wslEnv)
     const wslCli = wslHookOrcaCliEnv()
-    const guestEnv: Record<string, string> = { ...wslEnv, ...wslCli.env }
+    const guestEnv: Record<string, string> = { ...wslCli.env, ...wslEnv }
     for (const [key, value] of Object.entries(guardedEnv)) {
       if (value !== undefined && (key === 'GIT_TERMINAL_PROMPT' || key === 'GCM_INTERACTIVE')) {
         guestEnv[key] = value

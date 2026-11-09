@@ -14,6 +14,7 @@ import { readWorktreeGitPath } from '../git/worktrees/catalog/worktree-git-path'
 import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree-git-path'
 import { knownWslAutomountRoots } from '../wsl/filesystem/wsl-automount-root'
 import { isWslPath } from '../wsl/filesystem/unc-path-access'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import { toWindowsWslPath, toLinuxPath } from '../../shared/wsl-paths'
 import {
   getHookRuntimeTarget,
@@ -25,7 +26,7 @@ import {
   getSetupRunnerEnvVars,
   type HookWorkspaceIdentity
 } from './setup-hook-env-vars'
-import { newFolderSetupRunnerPath } from './folder-setup-runner-files'
+import { ignoreFolderSetupRunners, newFolderSetupRunnerPath } from './folder-setup-runner-files'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
 
@@ -112,14 +113,19 @@ async function createWorktreeRunnerScript(args: {
       )
     : await resolveGitRunnerScriptPath(worktreePath, runnerBaseName, runnerExtension, runtimeTarget)
 
-  await mkdir(dirname(runnerScriptPath), { recursive: true })
+  // Write through the drive path when WSL refuses its drive mounts over UNC; launch keeps the UNC spelling.
+  const runnerFsPath = windowsFsPath(runnerScriptPath)
+  await mkdir(dirname(runnerFsPath), { recursive: true })
+  if (isFolderRepo(repo)) {
+    await ignoreFolderSetupRunners(dirname(runnerFsPath))
+  }
 
   if (runnerShell.family === 'cmd') {
-    await writeFile(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
+    await writeFile(runnerFsPath, buildWindowsRunnerScript(script), 'utf-8')
   } else {
-    await writeFile(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
+    await writeFile(runnerFsPath, buildPosixRunnerScript(script), 'utf-8')
     if (!nativeWindowsWorktree) {
-      await chmod(runnerScriptPath, 0o755)
+      await chmod(runnerFsPath, 0o755)
     }
   }
 
