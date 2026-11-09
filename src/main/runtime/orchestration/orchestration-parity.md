@@ -30,7 +30,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported: refused `session_caller_not_live` while the chat is released
-- Terminal · Paired: supported: only `--peek`, which reads the paired Orca's mailbox; a consuming check is refused `stable_pane_required`, since that mailbox can never receive this caller's mail
+- Terminal · Paired: supported: only reads that consume nothing (`--peek`, `--all`) of the paired Orca's mailbox; a consuming check is refused `stable_pane_required`, since that mailbox can never receive this caller's mail
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
