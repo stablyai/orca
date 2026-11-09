@@ -191,6 +191,42 @@ describe('NewWorktreeModal project targets', () => {
     ).toBe('/srv/orca')
   })
 
+  it("offers only the folder host's copy of a repo when opened from a folder", async () => {
+    const serverRepo = { ...repos[0]!, path: '/srv/orca' }
+    const listing = (listed: unknown[]) =>
+      vi.fn((method: string) =>
+        method === 'repo.list' ? replied({ repos: listed }) : new Promise<never>(() => {})
+      )
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(listing(repos)),
+          serverClients: new Map<ExecutionHostId, RpcClient>([
+            ['runtime:env-1', requestsOnly(listing([serverRepo]))]
+          ]),
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {},
+          folderLaunch: {
+            repoId: 'repo-1',
+            executionHostId: 'runtime:env-1',
+            name: 'payments',
+            parentWorkspace: 'folder:f-1',
+            submit: { begin: () => null, presenting: () => true }
+          }
+        })
+      )
+    })
+    await flushUpdates()
+
+    // The desktop's same-id repo is not offered: its store doesn't hold this folder.
+    expect(pickerItems(renderer, 'Run on').map((item) => item.detail)).toEqual(['/srv/orca'])
+    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
+  })
+
   it('ignores a stale repo list after the client changes', async () => {
     let resolveOldList: ((value: unknown) => void) | undefined
     const oldList = new Promise((resolve) => {

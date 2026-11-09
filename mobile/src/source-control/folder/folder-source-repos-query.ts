@@ -7,6 +7,8 @@ import {
   getSshTargetIdForExecutionHost
 } from '../../../../src/shared/execution-host'
 import { defineHostQuery } from '../../query/host-query'
+import type { HostQueryTarget } from '../../query/host-query-key'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { hostProjectGroupsRead } from '../../worktree/project-sections-operations'
 import { listHostRepos, listServerRepos } from '../../worktree/server-repos'
 
@@ -14,36 +16,46 @@ export type FolderSourceCatalog = { repos: Repo[]; groups: ProjectGroup[] }
 
 const NO_REPOS: Repo[] = []
 
-/** The repositories and project groups of the host a folder lives on; a relayed server's are stamped with its host. */
+const fetchFolderSourceCatalog = async (
+  client: RpcClient,
+  target: HostQueryTarget
+): Promise<FolderSourceCatalog> => {
+  const server = target.exec === LOCAL_EXECUTION_HOST_ID ? null : target.exec
+  const [repos, groupsRead] = await Promise.all([
+    server ? listServerRepos<Repo>(server, client) : listHostRepos<Repo>(client),
+    hostProjectGroupsRead.request(client).then((reply) => hostProjectGroupsRead.interpret(reply))
+  ])
+  if (!repos || !groupsRead.accepted) {
+    throw new Error('Folder repositories unavailable')
+  }
+  // Repos from a server come stamped with it; its groups must match, or the host check drops every repo.
+  const groups = server
+    ? groupsRead.value.map((group) => ({ ...group, executionHostId: server }))
+    : groupsRead.value
+  return { repos, groups }
+}
+
+/** The paired desktop's own repositories and project groups, re-read when its repos change. */
 export const folderSourceCatalogQuery = defineHostQuery<Record<string, never>, FolderSourceCatalog>(
   {
     family: 'folder.sourceCatalog',
-    fetch: async (client, target) => {
-      const server = target.exec === LOCAL_EXECUTION_HOST_ID ? null : target.exec
-      const [repos, groupsRead] = await Promise.all([
-        server ? listServerRepos<Repo>(server, client) : listHostRepos<Repo>(client),
-        hostProjectGroupsRead
-          .request(client)
-          .then((reply) => hostProjectGroupsRead.interpret(reply))
-      ])
-      if (!repos || !groupsRead.accepted) {
-        throw new Error('Folder repositories unavailable')
-      }
-      // Repos from a server come stamped with it; its groups must match, or the host check drops every repo.
-      const groups = server
-        ? groupsRead.value.map((group) => ({ ...group, executionHostId: server }))
-        : groupsRead.value
-      return { repos, groups }
-    },
-    // Only the desktop's own repo changes are signalled; a server's re-read when the screen returns.
+    fetch: fetchFolderSourceCatalog,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
-    signal: {
-      events: ['reposChanged'],
-      matches: (_event, target) => target.exec === LOCAL_EXECUTION_HOST_ID
-    }
+    signal: { events: ['reposChanged'] }
   }
 )
+
+// A relayed server's changes are not signalled, so its reads hold no event stream; focus and refresh read again.
+export const serverFolderSourceCatalogQuery = defineHostQuery<
+  Record<string, never>,
+  FolderSourceCatalog
+>({
+  family: 'folder.sourceCatalog.server',
+  fetch: fetchFolderSourceCatalog,
+  staleTime: 60_000,
+  refetchOnWindowFocus: true
+})
 
 /** The folder's repositories a worktree can be created in, as desktop's empty state lists them. */
 export function selectFolderSourceRepos(

@@ -25,7 +25,14 @@ import {
   type NewWorktreeAgentOption,
   type NewWorktreeRuntimeSettings
 } from './new-worktree-agent-selection'
-import type { MobileWorkspaceRepo, SetupRunPolicy } from './new-worktree-modal-types'
+import type {
+  MobileWorkspaceRepo,
+  NewWorktreeFolderSubmission,
+  NewWorktreeFolderSubmit,
+  SetupRunPolicy
+} from './new-worktree-modal-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import type { OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -66,8 +73,11 @@ export function useNewWorkspaceCreateSubmit(args: {
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
-  /** Attaches the new worktree to this workspace, on whichever source the user creates from. */
-  parent?: WorktreeCreateParent
+  /** Opened from a folder: creates on that folder's host, attached to it, owned by the folder screen. */
+  folderLaunch?: NewWorktreeFolderSubmit & {
+    executionHostId: ExecutionHostId
+    parent: WorktreeCreateParent
+  }
 }): {
   creating: boolean
   setupTrustPrompt: OrcaHookTrustPrompt | null
@@ -89,7 +99,20 @@ export function useNewWorkspaceCreateSubmit(args: {
     createInFlightRef.current = true
     setCreating(true)
     args.setError('')
+    const folder = args.folderLaunch
+    // Admitted for the repo actually picked, before anything is sent; the folder screen owns it until it settles.
+    const admission = folder
+      ? getRepoExecutionHostId(selectedRepo) === folder.executionHostId
+        ? folder.begin(selectedRepo)
+        : null
+      : undefined
+    const presenting = (): boolean => folder?.presenting() ?? true
+    let outcome: Parameters<NewWorktreeFolderSubmission['settle']>[0] = 'cancelled'
     try {
+      if (admission === null) {
+        args.setError('A worktree is already being created in this repository.')
+        return
+      }
       if (args.sshGate.requiresConnection) {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
@@ -182,7 +205,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             branchIntentSupported: args.getBranchIntentSupport(
               selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
             ),
-            parent: args.parent
+            parent: folder?.parent
           })
         : await createBlankWorkspace({
             client,
@@ -194,20 +217,31 @@ export function useNewWorkspaceCreateSubmit(args: {
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport(),
-            parent: args.parent
+            parent: folder?.parent
           })
       if ('error' in result) {
-        triggerError()
+        outcome = 'failed'
+        if (presenting()) {
+          triggerError()
+        }
         args.setError(result.error)
         return
       }
-      triggerSuccess()
+      outcome = 'created'
+      if (presenting()) {
+        triggerSuccess()
+      }
       args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
-      triggerError()
+      // A lost reply may still have created it.
+      outcome = isRpcDeliveryUnknown(error) ? 'uncertain' : 'failed'
+      if (presenting()) {
+        triggerError()
+      }
       args.setError(error instanceof Error ? error.message : 'Failed to create workspace')
     } finally {
+      admission?.settle(outcome)
       createInFlightRef.current = false
       setCreating(false)
     }

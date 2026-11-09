@@ -179,9 +179,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onClose,
     ...(folderLaunch
       ? {
-          parent: {
-            parentWorkspace: folderLaunch.parentWorkspace,
-            parentWorkspaceOrigin: 'manual' as const
+          folderLaunch: {
+            ...folderLaunch.submit,
+            executionHostId: folderLaunch.executionHostId,
+            parent: {
+              parentWorkspace: folderLaunch.parentWorkspace,
+              parentWorkspaceOrigin: 'manual' as const
+            }
           }
         }
       : {})

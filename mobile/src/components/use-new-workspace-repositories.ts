@@ -53,15 +53,21 @@ export function useNewWorkspaceRepositories(args: {
         : [...desktopRepos, ...[...serverRepos.values()].flat()],
     [desktopRepos, serverRepos]
   )
-  const repos = useMemo(() => getNewWorkspaceDialogEligibleRepos(allRepos), [allRepos])
+  const initialRepoId = initialRepo?.id
+  const initialRepoHost = initialRepo?.executionHostId
+  // Opened for one host's folder: every picker offers only that host, whose store holds the folder.
+  const repos = useMemo(() => {
+    const eligible = getNewWorkspaceDialogEligibleRepos(allRepos)
+    return initialRepoHost
+      ? eligible.filter((repo) => getRepoExecutionHostId(repo) === initialRepoHost)
+      : eligible
+  }, [allRepos, initialRepoHost])
   // Derive the pick so it follows updated listings and disappears when its host stops listing it.
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
     [pickedRepo, repos]
   )
 
-  const initialRepoId = initialRepo?.id
-  const initialRepoHost = initialRepo?.executionHostId
   useEffect(() => {
     if (!visible || selectedRepo || !initialRepoId) {
       return

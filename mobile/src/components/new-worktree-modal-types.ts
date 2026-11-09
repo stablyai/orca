@@ -26,6 +26,20 @@ export type NewWorktreeFolderLaunch = {
   name: string
   /** The folder's workspace key, `folder:<id>`. */
   parentWorkspace: string
+  submit: NewWorktreeFolderSubmit
+}
+
+/** A folder's create, kept from admission until its outcome is known. */
+export type NewWorktreeFolderSubmission = {
+  settle: (outcome: 'created' | 'uncertain' | 'failed' | 'cancelled') => void
+}
+
+/** How the folder screen owns its composer's creates. */
+export type NewWorktreeFolderSubmit = {
+  /** Admits a create for the picked repo before anything is sent; null while another is out for it. */
+  begin: (repo: MobileWorkspaceRepo) => NewWorktreeFolderSubmission | null
+  /** False once the folder screen is left: the create runs on, without haptics. */
+  presenting: () => boolean
 }
 
 export type NewWorktreeModalProps = {

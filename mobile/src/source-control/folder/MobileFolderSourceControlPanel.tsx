@@ -25,6 +25,7 @@ import { MobileSourceControlHeader } from '../MobileSourceControlHeader'
 import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
 import { styles as sourceControlStyles } from '../mobile-source-control-styles'
 import { MobileFolderEmptyState } from './MobileFolderEmptyState'
+import { useFolderCreateFlow } from './use-folder-create-flow'
 import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
 import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import { useMobileFolderAttachedWorktrees } from './use-mobile-folder-attached-worktrees'
@@ -69,6 +70,16 @@ export function MobileFolderSourceControlPanel({
   const folderHostGates = useOptionalHostProtocolGates()
   const forceReconnect = useForceReconnect()
   const [refreshers] = useState(() => new Set<() => void>())
+  const createFlow = useFolderCreateFlow({
+    hostId,
+    folderWorktreeId,
+    executionHost: folder?.hostId?.startsWith('runtime:') ? folder.hostId : undefined,
+    desktopCapabilities,
+    members: worktrees,
+    observing,
+    refetch,
+    bottomInset: insets.bottom
+  })
   const refresh = () => {
     refetch()
     for (const refreshNow of refreshers) {
@@ -130,7 +141,10 @@ export function MobileFolderSourceControlPanel({
         desktopCapabilities={desktopCapabilities}
         folderHostCapabilities={folderHostGates?.hostCapabilities ?? NO_CAPABILITIES}
         observing={observing}
-        refetch={refetch}
+        refreshers={refreshers}
+        onCreate={(repo, target, client, createName) =>
+          void createFlow.onCreate(repo, target, client, createName)
+        }
         bottomInset={insets.bottom}
       />
     ) : (
@@ -167,6 +181,8 @@ export function MobileFolderSourceControlPanel({
       )}
       {/* Every state shares the sheet surface the cards sit on, as the phone's option sheets do. */}
       <View style={styles.body}>{body}</View>
+      {createFlow.toastElement}
+      {createFlow.composerElement}
     </View>
   )
   return (

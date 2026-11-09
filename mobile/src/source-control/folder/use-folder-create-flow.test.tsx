@@ -1,0 +1,186 @@
+import { createElement, Fragment } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { NewWorktreeModalProps } from '../../components/new-worktree-modal-types'
+import type { FolderListRow } from './mobile-folder-attached-worktrees'
+import type { FolderRepoTarget } from './folder-repo-worktree-create'
+import { useFolderCreateFlow, type FolderCreateRepo } from './use-folder-create-flow'
+
+const seen = vi.hoisted(() => {
+  const state: { composer: NewWorktreeModalProps | null; toasts: string[]; haptics: number } = {
+    composer: null,
+    toasts: [],
+    haptics: 0
+  }
+  return state
+})
+vi.mock('react-native', () => ({ AppState: {} }))
+vi.mock('../../components/NewWorktreeModalController', () => ({
+  NewWorktreeModalController: (props: NewWorktreeModalProps) => {
+    seen.composer = props
+    return null
+  }
+}))
+vi.mock('../../components/TransientToast', () => ({
+  TransientToast: () => null,
+  useTransientToast: () => ({
+    message: null,
+    showToast: (text: string) => seen.toasts.push(text)
+  })
+}))
+vi.mock('../../platform/haptics', () => ({
+  triggerSuccess: () => (seen.haptics += 1),
+  triggerError: () => (seen.haptics += 1)
+}))
+vi.mock('../../platform/external-link', () => ({ openExternalLink: () => {} }))
+vi.mock('../../transport/connection/host-client-hooks', () => ({
+  useHostClient: () => ({ client: null, state: 'connected' })
+}))
+vi.mock('../../tasks/worktree-create-capability', () => ({
+  readNewWorktreeRuntimeCapabilities: async () => ({ worktreeCreateIdempotency: false })
+}))
+vi.mock('../../i18n/use-mobile-translation', () => ({
+  useMobileTranslation: () => (_key: string, fallback: string) => fallback
+}))
+
+const FOLDER = 'folder:f-1'
+const TAKEN = 'Branch payments already exists\nworktree_create_exact_name_taken'
+const CREATED: RpcResponse = {
+  id: '1',
+  ok: true,
+  result: { worktree: { id: 'repo::/w/payments', displayName: 'payments' } },
+  _meta: { runtimeId: 'r' }
+}
+
+let repoCount = 0
+function repoIn(): { repo: FolderCreateRepo; target: FolderRepoTarget } {
+  repoCount += 1
+  const repoId = `flow-repo-${repoCount}`
+  return {
+    repo: { id: repoId, displayName: repoId },
+    target: { hostId: 'host-1', executionHost: undefined, folderWorktreeId: FOLDER, repoId }
+  }
+}
+
+function replying(reply: RpcResponse) {
+  const client = new FakeSession('connected')
+  let answer: () => void = () => {}
+  client.sendRequest.mockReturnValue(
+    new Promise<RpcResponse>((resolve) => (answer = () => resolve(reply)))
+  )
+  return { client, answer: () => answer() }
+}
+
+type Flow = ReturnType<typeof useFolderCreateFlow>
+let renderer: ReactTestRenderer | null = null
+
+function mountFlow(refetch: () => void) {
+  const flow: { current: Flow | null } = { current: null }
+  let members: FolderListRow[] = []
+  function Harness() {
+    flow.current = useFolderCreateFlow({
+      hostId: 'host-1',
+      folderWorktreeId: FOLDER,
+      executionHost: undefined,
+      desktopCapabilities: [],
+      members,
+      observing: true,
+      refetch,
+      bottomInset: 0
+    })
+    return createElement(Fragment, null, flow.current.composerElement)
+  }
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
+  return {
+    flow,
+    rerender: (next: FolderListRow[]) => {
+      members = next
+      act(() => renderer?.update(createElement(Harness)))
+    }
+  }
+}
+
+const composer = (): NewWorktreeModalProps => {
+  if (!seen.composer) {
+    throw new Error('the composer never rendered')
+  }
+  return seen.composer
+}
+
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+  seen.composer = null
+  seen.toasts = []
+  seen.haptics = 0
+})
+
+describe('useFolderCreateFlow', () => {
+  it("keeps an open form when another repository's create lands", async () => {
+    const { flow, rerender } = mountFlow(() => {})
+    const b = repoIn()
+    const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
+    const opening = flow.current!.onCreate(b.repo, b.target, refusal.client, 'payments')
+    refusal.answer()
+    await act(() => opening)
+    expect(composer().folderLaunch?.repoId).toBe(b.target.repoId)
+
+    const a = repoIn()
+    const creating = replying(CREATED)
+    const created = flow.current!.onCreate(a.repo, a.target, creating.client, 'payments')
+    creating.answer()
+    await act(() => created)
+    rerender([
+      {
+        worktreeId: 'a-child',
+        repoId: a.target.repoId,
+        repo: 'a',
+        displayName: 'payments',
+        branch: 'payments'
+      }
+    ])
+
+    expect(composer().visible).toBe(true)
+    expect(composer().folderLaunch?.repoId).toBe(b.target.repoId)
+  })
+
+  it('shows nothing for a create that lands after the screen is left, and still refreshes', async () => {
+    const refetch = vi.fn()
+    const { flow } = mountFlow(refetch)
+    const a = repoIn()
+    const creating = replying(CREATED)
+    const created = flow.current!.onCreate(a.repo, a.target, creating.client, 'payments')
+
+    act(() => renderer?.unmount())
+    renderer = null
+    creating.answer()
+    await created
+
+    expect(refetch).toHaveBeenCalled()
+    expect(seen.toasts).toEqual([])
+    expect(seen.haptics).toBe(0)
+  })
+
+  it("doesn't let an earlier form's close end a newer one", async () => {
+    const { flow } = mountFlow(() => {})
+    const open = async () => {
+      const repo = repoIn()
+      const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
+      const opening = flow.current!.onCreate(repo.repo, repo.target, refusal.client, 'payments')
+      refusal.answer()
+      await act(() => opening)
+      return composer()
+    }
+    const first = await open()
+    act(() => first.onClose())
+    const second = await open()
+
+    act(() => first.onClose())
+    expect(composer().visible).toBe(true)
+    expect(composer().folderLaunch?.repoId).toBe(second.folderLaunch?.repoId)
+  })
+})

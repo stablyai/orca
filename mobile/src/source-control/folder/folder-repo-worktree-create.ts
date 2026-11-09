@@ -1,27 +1,53 @@
 import { WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE } from '../../../../src/shared/new-workspace/worktree-create-collision'
 import { hasRuntimeRpcErrorCode } from '../../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import { readNewWorktreeRuntimeCapabilities } from '../../tasks/worktree-create-capability'
 import { createWorktreeWithNameRetry } from '../../tasks/worktree-create-retry'
 
 // The host's refusal before creating, when the repo asks to run or skip setup; desktop matches the same text.
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'
 
-// A created worktree reaches the list on the next catalog read; until then a second tap would be refused as taken.
-const CREATED_HOLD_MS = 15_000
+// How long a created or unconfirmed card stays busy waiting for the list; the outcome itself is kept until it shows.
+const HELD_BUSY_MS = 15_000
 
-export type FolderRepoCreateState = 'creating' | 'created'
+/** One repository of one folder on one host. */
+export type FolderRepoTarget = {
+  hostId: string
+  /** The folder's server; undefined for the paired desktop's own. */
+  executionHost: string | undefined
+  /** `folder:<id>`. */
+  folderWorktreeId: string
+  repoId: string
+}
 
-const states = new Map<string, FolderRepoCreateState>()
+type Phase =
+  /** The direct exact-name create is out. */
+  | 'creating'
+  /** Refused before creating; a composer for it is open and nothing has been sent from it. */
+  | 'composing'
+  /** The composer sent its create. */
+  | 'submitting'
+  /** Created, or possibly created: kept until the folder's members show it. */
+  | 'held'
+
+type Operation = FolderRepoTarget & { id: number; phase: Phase; busy: boolean }
+
+// In memory and shared across screens, so a remount or a reopened composer can't send a second create.
+const operations = new Map<string, Operation>()
 const listeners = new Set<() => void>()
+let nextId = 1
+let version = 0
 
-function setState(key: string, state: FolderRepoCreateState | null): void {
-  if (state) {
-    states.set(key, state)
-  } else {
-    states.delete(key)
-  }
+function notify(): void {
+  version += 1
   listeners.forEach((listener) => listener())
+}
+
+export function folderRepoCreateKey(target: FolderRepoTarget): string {
+  return [target.hostId, target.executionHost ?? '', target.folderWorktreeId, target.repoId].join(
+    '\0'
+  )
 }
 
 export function subscribeFolderRepoCreates(listener: () => void): () => void {
@@ -29,25 +55,82 @@ export function subscribeFolderRepoCreates(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-export function getFolderRepoCreateState(key: string): FolderRepoCreateState | null {
-  return states.get(key) ?? null
+export function getFolderRepoCreatesVersion(): number {
+  return version
 }
 
-/** One create per repo of one folder on one host, whichever screen started it. */
-export function folderRepoCreateKey(args: {
-  hostId: string
-  executionHost: string | undefined
-  folderWorktreeId: string
-  repoId: string
-}): string {
-  return [args.hostId, args.executionHost ?? '', args.folderWorktreeId, args.repoId].join('\0')
+/** The card shows a spinner and takes no taps while its repository's create is busy. */
+export function isFolderRepoCreateBusy(target: FolderRepoTarget): boolean {
+  return operations.get(folderRepoCreateKey(target))?.busy === true
+}
+
+function start(target: FolderRepoTarget, phase: Phase): Operation {
+  const operation = { ...target, id: nextId++, phase, busy: true }
+  operations.set(folderRepoCreateKey(target), operation)
+  notify()
+  return operation
+}
+
+function isCurrent(operation: Operation): boolean {
+  return operations.get(folderRepoCreateKey(operation))?.id === operation.id
+}
+
+function release(operation: Operation): void {
+  if (isCurrent(operation)) {
+    operations.delete(folderRepoCreateKey(operation))
+    notify()
+  }
+}
+
+function hold(operation: Operation): void {
+  if (!isCurrent(operation)) {
+    return
+  }
+  // A new identity, so an earlier hold's timer can't end this one.
+  const held = { ...operation, id: nextId++, phase: 'held' as const, busy: true }
+  operations.set(folderRepoCreateKey(held), held)
+  notify()
+  setTimeout(() => {
+    if (isCurrent(held)) {
+      operations.set(folderRepoCreateKey(held), { ...held, busy: false })
+      notify()
+    }
+  }, HELD_BUSY_MS)
+}
+
+/** Forgets created or unconfirmed creates once the folder lists a worktree from that repository on that host. */
+export function reconcileFolderRepoCreates(
+  folder: Pick<FolderRepoTarget, 'hostId' | 'executionHost' | 'folderWorktreeId'>,
+  members: readonly { repoId: string; hostId?: string }[]
+): void {
+  let changed = false
+  for (const [key, operation] of operations) {
+    if (
+      operation.phase === 'held' &&
+      operation.hostId === folder.hostId &&
+      operation.executionHost === folder.executionHost &&
+      operation.folderWorktreeId === folder.folderWorktreeId &&
+      members.some(
+        (member) =>
+          member.repoId === operation.repoId &&
+          (member.hostId?.startsWith('runtime:') ? member.hostId : undefined) ===
+            operation.executionHost
+      )
+    ) {
+      operations.delete(key)
+      changed = true
+    }
+  }
+  if (changed) {
+    notify()
+  }
 }
 
 export type FolderRepoCreateOutcome =
   | { kind: 'created'; name: string; warning?: string }
-  /** Refused before creating: a branch with that name exists, or the repo asks to run or skip setup. */
-  | { kind: 'needs-composer' }
-  /** A resent create was refused as taken: the first send may have made it, so read the list again. */
+  /** Refused before creating: a branch with that name exists, or the repo asks to run or skip setup. The repository stays reserved for the composer. */
+  | { kind: 'needs-composer'; reservation: number }
+  /** The host may have created it: the reply was lost, or a resend was refused as taken. */
   | { kind: 'maybe-created' }
   | { kind: 'failed'; message: string }
   | { kind: 'already-running' }
@@ -57,19 +140,22 @@ export type FolderRepoCreateOutcome =
  * way desktop's empty state does. Only for hosts that advertise exact-name creation.
  */
 export async function createFolderRepoWorktree(args: {
-  key: string
+  target: FolderRepoTarget
   /** The client that creates: the desktop's own, or scoped to the folder's server. */
   client: RpcClient
-  repoId: string
-  /** `folder:<id>`. */
-  folderWorktreeId: string
   name: string
 }): Promise<FolderRepoCreateOutcome> {
-  if (states.has(args.key)) {
+  const existing = operations.get(folderRepoCreateKey(args.target))
+  if (existing && (existing.phase !== 'held' || existing.busy)) {
     return { kind: 'already-running' }
   }
-  setState(args.key, 'creating')
-  let created = false
+  // An unconfirmed create is retried as the same exact name: a taken name may be its own.
+  const unresolved = existing !== undefined
+  const operation = start(args.target, 'creating')
+  const settleUnresolved = (outcome: FolderRepoCreateOutcome): FolderRepoCreateOutcome => {
+    hold(operation)
+    return outcome
+  }
   try {
     const result = await createWorktreeWithNameRetry({
       client: args.client,
@@ -81,18 +167,18 @@ export async function createFolderRepoWorktree(args: {
         (capabilities) => capabilities?.worktreeCreateIdempotency ?? false
       ),
       buildParams: (name) => ({
-        repo: `id:${args.repoId}`,
+        repo: `id:${args.target.repoId}`,
         name,
         displayName: name,
         displayNameKind: 'user',
         branchIntent: 'create-exact',
         setupDecision: 'inherit',
-        parentWorkspace: args.folderWorktreeId,
+        parentWorkspace: args.target.folderWorktreeId,
         parentWorkspaceOrigin: 'manual'
       })
     })
     if (!('error' in result)) {
-      created = true
+      hold(operation)
       return {
         kind: 'created',
         name: result.name,
@@ -100,26 +186,80 @@ export async function createFolderRepoWorktree(args: {
       }
     }
     const taken = hasRuntimeRpcErrorCode(result.error, WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE)
-    if (taken && result.replayed) {
-      created = true
-      return { kind: 'maybe-created' }
+    if (taken && (result.replayed || unresolved)) {
+      return settleUnresolved({ kind: 'maybe-created' })
+    }
+    if (unresolved) {
+      return settleUnresolved({ kind: 'failed', message: result.error })
     }
     if (taken || result.error.includes(SETUP_DECISION_REQUIRED)) {
-      return { kind: 'needs-composer' }
+      const reserved = { ...operation, phase: 'composing' as const }
+      operations.set(folderRepoCreateKey(reserved), reserved)
+      notify()
+      return { kind: 'needs-composer', reservation: reserved.id }
     }
+    release(operation)
     return { kind: 'failed', message: result.error }
   } catch (error) {
+    // Delivery unknown: the host may have created it, and a fresh create would be refused as taken.
+    if (isRpcDeliveryUnknown(error) || unresolved) {
+      return settleUnresolved({ kind: 'maybe-created' })
+    }
+    release(operation)
     return { kind: 'failed', message: error instanceof Error ? error.message : String(error) }
-  } finally {
-    if (created) {
-      setState(args.key, 'created')
-      setTimeout(() => {
-        if (states.get(args.key) === 'created') {
-          setState(args.key, null)
-        }
-      }, CREATED_HOLD_MS)
-    } else {
-      setState(args.key, null)
+  }
+}
+
+/** A composer closed before sending anything gives its repository back. */
+export function releaseFolderComposerReservation(
+  target: FolderRepoTarget,
+  reservation: number
+): void {
+  const operation = operations.get(folderRepoCreateKey(target))
+  if (operation?.id === reservation && operation.phase === 'composing') {
+    release(operation)
+  }
+}
+
+export type FolderComposerSubmission = {
+  /** `created` and `uncertain` are kept until the folder shows them; `failed` and `cancelled` give the repository back. */
+  settle: (outcome: 'created' | 'uncertain' | 'failed' | 'cancelled') => void
+}
+
+/**
+ * Admits the composer's create for the repository it actually picked, before anything is sent.
+ * Null while another create for that repository is out.
+ */
+export function beginFolderComposerSubmission(
+  target: FolderRepoTarget,
+  launch: { target: FolderRepoTarget; reservation: number },
+  /** Whether the composer is still open to retry a refused create. */
+  formOpen: () => boolean
+): FolderComposerSubmission | null {
+  const key = folderRepoCreateKey(target)
+  const existing = operations.get(key)
+  const ownsReservation =
+    key === folderRepoCreateKey(launch.target) &&
+    existing?.id === launch.reservation &&
+    existing.phase === 'composing'
+  if (existing && !ownsReservation) {
+    return null
+  }
+  const operation = start(target, 'submitting')
+  return {
+    settle: (outcome) => {
+      if (outcome === 'created' || outcome === 'uncertain') {
+        hold(operation)
+        return
+      }
+      // A refusal leaves the form to try again; the reservation is back with the launch's repository.
+      if (ownsReservation && formOpen() && isCurrent(operation)) {
+        const reserved = { ...operation, phase: 'composing' as const, id: launch.reservation }
+        operations.set(key, reserved)
+        notify()
+        return
+      }
+      release(operation)
     }
   }
 }

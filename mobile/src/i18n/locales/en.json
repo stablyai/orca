@@ -3594,7 +3594,8 @@
       "createIn": "Create a worktree in {{repo}}",
       "created": "Created worktree {{name}} in {{repo}}",
       "createdNamed": "Created worktree {{name}}",
-      "createFailed": "Could not create a worktree in {{repo}}."
+      "createFailed": "Could not create a worktree in {{repo}}.",
+      "loadReposRetry": "Load repositories"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",
