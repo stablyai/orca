@@ -17,6 +17,7 @@ import {
   assertElectronResolvedIsolatedHome
 } from '../../../../tests/e2e/helpers/electron-home-isolation'
 import { getOrcaElectronLaunchArgs } from '../../../../tests/e2e/helpers/electron-launch-args'
+import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electron-main-evaluate-retry'
 import { closeElectronAppForE2E } from '../../../../tests/e2e/helpers/electron-process-shutdown'
 import { getE2ECompletedOnboardingProfile } from '../../../../tests/e2e/helpers/e2e-completed-onboarding-profile'
 import { buildFakeAgentCommandOverride } from '../../../../tests/e2e/helpers/fake-agent-command-override'
@@ -157,7 +158,9 @@ export async function launchArm(
   const startedAt = processStart(pid)
   try {
     assertElectronResolvedIsolatedHome(
-      await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
+      await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+      ),
       isolation
     )
     const page = await app.firstWindow({ timeout: 120_000 })
