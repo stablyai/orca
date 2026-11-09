@@ -9,6 +9,7 @@ import type {
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
+  SpeechPendingEvent,
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
 import type { PreloadApi } from '../api-types'
@@ -110,6 +111,12 @@ export const speechApi = {
       callback(data)
     ipcRenderer.on('speech:final', listener)
     return () => ipcRenderer.removeListener('speech:final', listener)
+  },
+  onSpeechPending: (callback: (data: SpeechPendingEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: SpeechPendingEvent): void =>
+      callback(data)
+    ipcRenderer.on('speech:pending', listener)
+    return () => ipcRenderer.removeListener('speech:pending', listener)
   },
   onDownloadProgress: (
     callback: (data: { modelId: string; progress: number }) => void

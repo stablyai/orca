@@ -12,7 +12,9 @@ export type SttRecognizerInit = {
 
 export type SttRecognizerEvent =
   /** One decoded offline chunk; `samples` counts the stream's input-rate samples decoded so far. */
-  { type: 'chunk'; streamId: string; text: string; samples: number }
+  | { type: 'chunk'; streamId: string; text: string; samples: number }
+  /** Pause-cut streams only: speech was heard that no chunk has committed yet. */
+  | { type: 'speech-pending'; streamId: string; pending: boolean }
 
 export type SttRecognizerPost = (event: SttRecognizerEvent) => void
 

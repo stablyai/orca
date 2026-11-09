@@ -17,6 +17,7 @@ function performanceCoreThreads(): number {
 // Without the detector, audio is still cut at the decode bound, just not at pauses.
 type AudioSegmenter = {
   readonly heldSamples: number
+  readonly phraseOpen?: boolean
   push(samples: Float32Array): Float32Array[] | Promise<Float32Array[]>
   flush(): Float32Array[] | Promise<Float32Array[]>
 }
@@ -44,6 +45,7 @@ type StreamCoverage = {
   resampledSamples: number
   reportedSamples: number
   slowPhraseDecodes: number
+  speechPending: boolean
 }
 
 // Whisper pads every decode to a 30 s window, so each phrase costs a full decode. Where that takes longer than the
@@ -121,7 +123,8 @@ export async function createTranscribeCppRecognizer(
       inputSamples: 0,
       resampledSamples: 0,
       reportedSamples: 0,
-      slowPhraseDecodes: 0
+      slowPhraseDecodes: 0,
+      speechPending: false
     }
     if (vad && vadModel) {
       stream.segmenter = new VadPauseSegmenter(
@@ -201,6 +204,14 @@ export async function createTranscribeCppRecognizer(
     }
   }
 
+  // Only pause-cut streams report it: without the detector, nothing tells speech from silence.
+  const notePendingSpeech = (streamId: string, stream: StreamCoverage, pending: boolean) => {
+    if (stream.vad && stream.speechPending !== pending) {
+      stream.speechPending = pending
+      post({ type: 'speech-pending', streamId, pending })
+    }
+  }
+
   const closeStream = (streamId: string): StreamCoverage | undefined => {
     const stream = streams.get(streamId)
     streams.delete(streamId)
@@ -219,7 +230,11 @@ export async function createTranscribeCppRecognizer(
       )
       stream.inputSamples += samples.length
       stream.resampledSamples += resampled.length
-      await decode(streamId, stream, await stream.segmenter.push(resampled))
+      const phrases = await stream.segmenter.push(resampled)
+      // A cut phrase stays pending until its text is posted.
+      notePendingSpeech(streamId, stream, phrases.length > 0 || !!stream.segmenter.phraseOpen)
+      await decode(streamId, stream, phrases)
+      notePendingSpeech(streamId, stream, !!stream.segmenter.phraseOpen)
     },
     async finish(streamId) {
       const stream = closeStream(streamId)
@@ -228,6 +243,7 @@ export async function createTranscribeCppRecognizer(
       }
       try {
         await decode(streamId, stream, await stream.segmenter.flush())
+        notePendingSpeech(streamId, stream, false)
       } finally {
         stream.vad?.dispose()
       }
