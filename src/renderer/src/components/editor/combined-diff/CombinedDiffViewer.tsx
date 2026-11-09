@@ -2,10 +2,10 @@ import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-plac
 import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
+import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import '@/lib/monaco-setup'
+import '@/lib/editor/monaco/monaco-setup'
 import type { DiffSection } from '../diff/sections/diff-section-types'
 import {
   EMPTY_GIT_BRANCH_ENTRIES,
