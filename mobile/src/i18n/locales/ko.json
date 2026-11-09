@@ -1332,6 +1332,19 @@
       "phoneStopped": "이 휴대폰에서 중지됨",
       "stopped": "받아쓰기 중지됨",
       "recordingKept": "녹음 보관됨"
+    },
+    "announce": {
+      "typedInto": "{{target}}에 입력됨",
+      "insertedIn": "{{target}}에 삽입됨"
+    },
+    "pill": {
+      "open": "열기",
+      "listening": "듣는 중",
+      "starting": "시작 중",
+      "finishing": "마무리 중",
+      "stopped": "받아쓰기 중지됨",
+      "label": "{{target}}에 받아쓰기, {{duration}}",
+      "hint": "두 번 탭하여 돌아가기"
     }
   },
   "files": {

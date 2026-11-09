@@ -36,7 +36,8 @@ export type UseMobileDictationResult = {
   failure: MobileDictationKeptFailure | null
   // Null until recording starts on an engine.
   engine: MobileDictationEngineShown | null
-  start: () => Promise<void>
+  // client: the starting session's client, when one hook serves several sessions.
+  start: (client?: RpcClient | null) => Promise<void>
   stop: () => Promise<void>
   retry: () => Promise<void>
   cancel: () => Promise<void>

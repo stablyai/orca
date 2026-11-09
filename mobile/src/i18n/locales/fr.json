@@ -1377,6 +1377,19 @@
       "phoneStopped": "Arrêté sur ce téléphone",
       "stopped": "Dictée arrêtée",
       "recordingKept": "Enregistrement conservé"
+    },
+    "announce": {
+      "typedInto": "Saisi dans {{target}}",
+      "insertedIn": "Inséré dans {{target}}"
+    },
+    "pill": {
+      "open": "Ouvrir",
+      "listening": "Écoute",
+      "starting": "Démarrage",
+      "finishing": "Finalisation",
+      "stopped": "Dictée arrêtée",
+      "label": "Dictée vers {{target}}, {{duration}}",
+      "hint": "Touchez deux fois pour revenir"
     }
   },
   "files": {

@@ -1332,6 +1332,19 @@
       "phoneStopped": "このスマートフォンで停止しました",
       "stopped": "音声入力が停止しました",
       "recordingKept": "録音は保持されています"
+    },
+    "announce": {
+      "typedInto": "{{target}} に入力しました",
+      "insertedIn": "{{target}} に挿入しました"
+    },
+    "pill": {
+      "open": "開く",
+      "listening": "聞き取り中",
+      "starting": "開始中",
+      "finishing": "仕上げ中",
+      "stopped": "音声入力が停止しました",
+      "label": "{{target}} への音声入力、{{duration}}",
+      "hint": "ダブルタップで戻る"
     }
   },
   "files": {

@@ -1377,6 +1377,19 @@
       "phoneStopped": "Detenido en este teléfono",
       "stopped": "Dictado detenido",
       "recordingKept": "Grabación guardada"
+    },
+    "announce": {
+      "typedInto": "Escrito en {{target}}",
+      "insertedIn": "Insertado en {{target}}"
+    },
+    "pill": {
+      "open": "Abrir",
+      "listening": "Escuchando",
+      "starting": "Iniciando",
+      "finishing": "Terminando",
+      "stopped": "Dictado detenido",
+      "label": "Dictado en {{target}}, {{duration}}",
+      "hint": "Toca dos veces para volver"
     }
   },
   "files": {
