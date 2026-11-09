@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { link, lstat, mkdir, rm } from 'node:fs/promises'
+import { link, lstat, mkdir, open, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/codex-history-sharing'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { contentRelation, openContent } from './codex-rollout-content'
+import { asBuffer, contentRelation, openContent } from './codex-rollout-content'
 import {
   CodexHistoryConflictError,
   CodexHistoryNotSharedError,
@@ -149,9 +149,34 @@ function sameHome(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
 }
 
+/** Appends what an older copy lacks. Extending in place keeps any append handle on it valid. */
+async function appendMissingTail(source: ThreadCopy, older: ThreadCopy): Promise<void> {
+  const handle = await open(older.path, 'a')
+  try {
+    const now = await handle.stat()
+    if (now.dev !== older.dev || now.ino !== older.ino || now.size !== older.size) {
+      throw new CodexHistoryConflictError(
+        'This Codex conversation changed in the selected account while Orca was updating it.'
+      )
+    }
+    let skip = older.size
+    for await (const chunk of openContent(source)) {
+      const bytes = asBuffer(chunk)
+      if (skip >= bytes.length) {
+        skip -= bytes.length
+        continue
+      }
+      await handle.appendFile(bytes.subarray(skip))
+      skip = 0
+    }
+  } finally {
+    await handle.close()
+  }
+}
+
 /**
- * Make `targetHome` hold the newest copy of the thread, or refuse visibly. Never replaces,
- * renames or deletes an existing rollout: Codex writers keep their append handle open.
+ * Make `targetHome` hold the newest copy of the thread, or refuse visibly. An existing rollout file
+ * is only ever extended, never replaced: Codex writers keep their append handle open.
  */
 export async function prepareLatestCodexThreadCopy(args: {
   threadId: string
@@ -182,21 +207,34 @@ export async function prepareLatestCodexThreadCopy(args: {
   const source = await proveLatestCopy(args.threadId, candidates)
   const plainTargetPath = join(args.targetHome, 'sessions', relativePlainPath)
   const plainOccupant = targetCopies.find((copy) => copy.path === plainTargetPath)
-  if (plainOccupant?.symlink) {
-    // Replacing a link is not conditional on it staying that link, so Orca never does.
-    throw new CodexHistoryConflictError(
-      'The selected Codex account links this conversation from another account.'
-    )
-  }
-  const regularTargetCopies = targetCopies.filter((copy) => !copy.symlink)
-  if (regularTargetCopies.length > 0) {
-    for (const copy of regularTargetCopies) {
-      if ((await contentRelation(source, copy)) !== 'same') {
-        throw new CodexHistoryConflictError(
-          'The selected Codex account has an older or different copy of this conversation.'
-        )
-      }
+  const otherTargetCopies = targetCopies.filter((copy) => !copy.symlink && copy !== plainOccupant)
+  for (const copy of otherTargetCopies) {
+    if ((await contentRelation(source, copy)) !== 'same') {
+      throw new CodexHistoryConflictError(
+        'The selected Codex account has an older or different copy of this conversation.'
+      )
     }
+  }
+  // Codex resumes a bridge link through to the copy it names and appends there.
+  const resumed = plainOccupant && (await resolveRegularCopies([plainOccupant]))[0]
+  if (resumed) {
+    const relation = await contentRelation(source, resumed)
+    if (relation === 'same') {
+      return
+    }
+    // A return to an account an earlier move could only copy into, not link.
+    if (relation !== 'left-extends') {
+      throw new CodexHistoryConflictError(
+        'The selected Codex account has an older or different copy of this conversation.'
+      )
+    }
+    if (!args.historyShared) {
+      throw new CodexHistoryNotSharedError()
+    }
+    await appendMissingTail(source, resumed)
+    return
+  }
+  if (!plainOccupant && otherTargetCopies.length > 0) {
     return
   }
   if (!args.historyShared) {

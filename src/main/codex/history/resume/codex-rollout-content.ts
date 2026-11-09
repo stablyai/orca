@@ -69,7 +69,7 @@ export async function contentRelation(
 }
 
 // File and zstd streams emit Buffers; anything else is a stream misuse.
-function asBuffer(chunk: unknown): Buffer {
+export function asBuffer(chunk: unknown): Buffer {
   if (!Buffer.isBuffer(chunk)) {
     throw new TypeError('Expected a Buffer chunk from a rollout stream')
   }
