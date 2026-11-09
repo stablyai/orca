@@ -1,4 +1,4 @@
-// Bound ONNX allocations: Chromium kills the app on a single allocation >=2GiB (#7925).
+// Parakeet has no long-form mode, and bounded chunks keep the decode left for stop short.
 export const OFFLINE_DECODE_CHUNK_SECONDS = 30
 
 // Split near quiet tail pauses to avoid mid-word cuts; ~100ms windows exclude short intra-word closures.

@@ -22,21 +22,23 @@ function resourcesWith(files: string[]): string {
   return resources
 }
 
-describe("finding the app's speech engines (#31174)", () => {
-  it('answers nothing when the app ships no engine for this platform', () => {
+describe("finding the app's speech engine (#31174)", () => {
+  it('answers nothing when the app ships no native package for this platform', () => {
     const resources = resourcesWith([
       'transcribe-cpp/package.json',
-      '@transcribe-cpp/linux-arm64-cpu-vulkan/contract.json',
-      'sherpa-onnx-linux-arm64/sherpa-onnx.node'
+      '@transcribe-cpp/linux-arm64-cpu-vulkan/contract.json'
     ])
     expect(
       findAppSpeechRecognizerDir(join(resources, 'app.asar.unpacked'), 'linux', 'x64')
     ).toBeUndefined()
   })
 
-  // A loaded addon is locked on Windows; orcad holding the app's copy would block app updates.
-  it('never hands orcad the engines on Windows', () => {
-    const resources = resourcesWith(['sherpa-onnx-win-x64/sherpa-onnx.node'])
+  // A loaded library is locked on Windows; orcad holding the app's copy would block app updates.
+  it('never hands orcad the engine on Windows', () => {
+    const resources = resourcesWith([
+      'transcribe-cpp/package.json',
+      '@transcribe-cpp/win32-x64-cpu-vulkan/contract.json'
+    ])
     expect(
       findAppSpeechRecognizerDir(join(resources, 'app.asar.unpacked'), 'win32', 'x64')
     ).toBeUndefined()
