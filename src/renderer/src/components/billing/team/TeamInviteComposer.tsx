@@ -311,7 +311,13 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                 : undefined
             }
           >
-            <Button type="submit" size="sm" disabled={sending || valid.length === 0}>
+            <Button
+              type="submit"
+              size="sm"
+              // aria-disabled keeps focus here while sending; submit ignores it meanwhile.
+              disabled={!sending && valid.length === 0}
+              aria-disabled={sending || undefined}
+            >
               {sending ? <LoadingSpinner className="size-3.5" /> : <Send />}
               {valid.length === 0
                 ? // Nothing to count yet: a plain verb, not "Send 1 invite".

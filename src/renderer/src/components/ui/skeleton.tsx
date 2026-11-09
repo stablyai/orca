@@ -10,7 +10,9 @@ const SKELETON_SHAPES = {
   rounded: 'rounded-md',
   /** Thin lines (terminal rows, labels) that read better with a tighter corner. */
   small: 'rounded-sm',
-  circle: 'rounded-full'
+  circle: 'rounded-full',
+  /** Large blocks (a panel or log area) that match a card's corner. */
+  card: 'rounded-lg'
 } as const
 
 const SKELETON_MOTION = {

@@ -9,7 +9,7 @@ export const SERVE_PAIRING_HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'pair',
-    keys: ['pair'],
+    keys: ['pair', 'sender'],
     load: async () => (await import('./handlers/pair.js')).PAIR_HANDLERS
   }
 ]

@@ -17,6 +17,7 @@ import {
   type NativeChatSendHandle
 } from '../../session/terminal/send/native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from '../../session/terminal/send/native-chat-runtime-image-send'
+import { withPtyCloudSender } from '../../session/terminal/send/native-chat-cloud-sender'
 import { resolveNativeChatLaunchDraftSend } from '../../drafts/native-chat-launch-draft-send'
 import {
   nativeChatComposerTargetIsRemote,
@@ -114,6 +115,11 @@ export function useNativeChatPtyComposerSend(args: {
             }
           : launchSendOptions
       let pendingHandle: NativeChatSendHandle | null = null
+      // Chat text (not slash commands) names its sender in shared cloud workspaces.
+      const chatText =
+        classification === 'chat' && text.trim().length > 0
+          ? withPtyCloudSender(target.ptyId, text)
+          : text
       // Why: slash-like text must not silently drop its attached images.
       if (classification !== 'chat' && imagePaths.length === 0) {
         pendingHandle =
@@ -124,12 +130,12 @@ export function useNativeChatPtyComposerSend(args: {
         pendingHandle = sendNativeChatMessageWithImageAttachments(
           args.agent,
           target.ptyId,
-          text,
+          chatText,
           imagePaths,
           sendOptions
         )
       } else if (text.trim().length > 0) {
-        pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)
+        pendingHandle = sendNativeChatMessage(target.ptyId, chatText, sendOptions)
       } else {
         submitNativeChatPrompt(target.ptyId)
       }

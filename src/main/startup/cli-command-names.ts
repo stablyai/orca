@@ -13,6 +13,7 @@ export const CLI_COMMAND_NAMES = [
   'check',
   'claude-teams',
   'clear',
+  'cloud',
   'click',
   'clipboard',
   'computer',

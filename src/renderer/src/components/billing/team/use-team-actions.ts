@@ -12,8 +12,7 @@ import type {
 } from '../../../../../shared/orca-profiles'
 import type { InviteBatchOutcome } from './TeamInviteComposer'
 import type { TeamRowState } from './TeamMemberList'
-import { mutationFailureCopy } from './team-copy'
-import { roleLabel } from './team-roles'
+import { mutationFailureCopy, roleChangedCopy } from './team-copy'
 import { currentRosterReadSeq } from './use-org-roster'
 
 type Overlay = (roster: OrcaOrgMembersRoster) => OrcaOrgMembersRoster
@@ -115,18 +114,12 @@ export function useTeamActions({
       () => api.orgMemberChangeRole({ orgId, userId, role })
     ).then((outcome) => {
       if (outcome.status === 'ok' && undoable) {
-        toast.success(
-          t('auto.components.billing.team.roleToast', '{{value0}} is now {{value1}}', {
-            value0: member.displayName ?? member.email,
-            value1: roleLabel(role, t).toLowerCase()
-          }),
-          {
-            action: {
-              label: t('auto.components.billing.team.undo', 'Undo'),
-              onClick: () => changeRole({ ...member, role }, previous, false)
-            }
+        toast.success(roleChangedCopy(member.displayName ?? member.email, role, t), {
+          action: {
+            label: t('auto.components.billing.team.undo', 'Undo'),
+            onClick: () => changeRole({ ...member, role }, previous, false)
           }
-        )
+        })
       }
     })
   }

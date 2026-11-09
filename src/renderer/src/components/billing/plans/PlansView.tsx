@@ -12,6 +12,7 @@ import {
 } from '../../../../../shared/orca-billing'
 import { PaymentIssueNotice } from '../PaymentIssueNotice'
 import { PlanStatusBadge } from '../PlanStatusBadge'
+import type { PlanBillingNotice } from '../PlanBillingSection'
 import { seatCountLabel } from '../team/team-copy'
 import { formatHours, includedUsagePercent } from '../plan-billing-format'
 import { EnterprisePlanCard } from './EnterprisePlanCard'
@@ -22,7 +23,7 @@ import { annualSavingsPercent, clampSeats } from './plans-pricing'
 export type PlansViewProps = {
   result: OrcaBillingStatusResult | null
   busy: boolean
-  notice: string | null
+  notice: PlanBillingNotice | null
   /** Seats Checkout will bill: org members, or 1 for a personal account. */
   seats: number
   onCheckout: (args: { interval: OrcaBillingInterval; seats: number }) => void
@@ -55,8 +56,8 @@ function ValueProps(): React.JSX.Element {
       icon: Zap,
       title: t('auto.components.billing.plans.vpWakeTitle', 'Wake in seconds'),
       body: t(
-        'auto.components.billing.plans.vpWakeBody',
-        'Idle sandboxes sleep to save hours and resume right where they left off.'
+        'auto.components.billing.plans.vpWakeBody2',
+        'Idle sandboxes sleep to save hours and wake with your files as you left them.'
       )
     },
     {
@@ -69,7 +70,7 @@ function ValueProps(): React.JSX.Element {
     }
   ]
   return (
-    <ul className="grid gap-4 sm:grid-cols-3">
+    <ul className="grid gap-4 sm:grid-cols-3 [@media(max-height:900px)]:hidden">
       {items.map((item) => (
         <li key={item.title} className="flex items-start gap-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -112,7 +113,8 @@ function CurrentPlanStrip({
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
-        aria-label={t('auto.components.billing.usageLabel', 'Included hours used')}
+        tone={includedUsagePercent(entitlement) >= 100 ? 'warning' : 'default'}
+        aria-label={t('auto.components.billing.sandboxHoursUsedLabel', 'Sandbox hours used')}
       />
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground tabular-nums">
         <span>
@@ -146,7 +148,13 @@ function SkeletonLine({ className }: { className: string }): React.JSX.Element {
   return <Skeleton className={className} />
 }
 
-function SkeletonCard({ lines }: { lines: number }): React.JSX.Element {
+function SkeletonCard({
+  lines,
+  seatRow = false
+}: {
+  lines: number
+  seatRow?: boolean
+}): React.JSX.Element {
   return (
     <div className="flex h-full flex-col gap-5 rounded-xl border border-border bg-card p-5 shadow-xs">
       <SkeletonLine className="h-4 w-24" />
@@ -154,6 +162,7 @@ function SkeletonCard({ lines }: { lines: number }): React.JSX.Element {
         <SkeletonLine className="h-8 w-32" />
         <SkeletonLine className="h-3 w-28" />
       </div>
+      {seatRow ? <SkeletonLine className="h-9 w-full" /> : null}
       <div className="flex-1 space-y-3">
         {Array.from({ length: lines }, (_, index) => (
           <SkeletonLine key={index} className={index % 2 ? 'h-3 w-4/5' : 'h-3 w-11/12'} />
@@ -181,7 +190,7 @@ function PlansSkeleton(): React.JSX.Element {
         <Skeleton shape="circle" className="h-8 w-72" />
       </div>
       <div className="grid items-stretch gap-4 md:grid-cols-2">
-        <SkeletonCard lines={5} />
+        <SkeletonCard lines={5} seatRow />
         <SkeletonCard lines={4} />
       </div>
       <div className="mx-auto max-w-xl space-y-1.5">
@@ -297,8 +306,8 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
       <div className="space-y-1 text-center text-xs text-muted-foreground text-pretty">
         <p>
           {t(
-            'auto.components.billing.plans.footHours2',
-            'Hours reset monthly, including on annual plans.'
+            'auto.components.billing.plans.footHours3',
+            'Hours reset every month, including on annual plans.'
           )}
         </p>
         <p>

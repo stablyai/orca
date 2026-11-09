@@ -24,6 +24,9 @@ const badgeVariants = cva(
         /** A task label inside a dense reference row's metadata line. */
         // Quiet outline tag beside a row label (e.g. a plan requirement).
         tag: 'border-border px-1.5 py-0 text-2xs text-muted-foreground',
+        /** Small uppercase success chip marking the live item in a list (e.g. the active build). */
+        statusActive:
+          'h-4 border-status-success-border bg-status-success-background px-1.5 text-[10px] font-semibold tracking-wide text-status-success uppercase',
         referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:

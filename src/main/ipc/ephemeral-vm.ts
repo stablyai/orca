@@ -77,7 +77,7 @@ export type EphemeralVmProvisionIpcResult =
     } & EphemeralVmFailure)
 
 export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
-  installHostedSandbox()
+  installHostedSandbox(store)
   ipcMain.removeHandler('ephemeralVm:listRecipes')
   ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
   ipcMain.removeHandler('ephemeralVm:doctor')

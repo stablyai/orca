@@ -155,7 +155,7 @@ if [ -n "${NOVNC_VERSION:-}" ]; then
 fi
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-git-as; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-git-as orca-git-identity git; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"

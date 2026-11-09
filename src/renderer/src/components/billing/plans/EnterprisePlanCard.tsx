@@ -22,7 +22,7 @@ export function EnterprisePlanCard({
         </>
       }
       price={<p className="text-xl font-semibold tracking-tight">{enterprise.priceLabel}</p>}
-      priceNote={t('auto.components.billing.plans.entPriced', 'Priced for your organization')}
+      priceNote={t('auto.components.billing.plans.entPriced2', 'Priced for your team')}
       featuresLead={t('auto.components.billing.plans.entLead', 'Everything in Team, plus:')}
       features={[
         t('auto.components.billing.plans.entByoc', 'Run sandboxes in your own cloud account'),

@@ -36,6 +36,8 @@ export type CloudWorkspacesApi = {
   listGrants: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspaceGrant[]>>
   revokeGrant: (id: string, grantId: string) => Promise<CloudWorkspacesResult<void>>
   localWorkspaces: () => Promise<LocalCloudWorkspace[]>
+  /** "I just sent a message here" (opens my git-as-sender window on the control plane). */
+  noteSent: (id: string) => Promise<void>
   /** Remembers which local runtime environment a granted workspace was added as. */
   bindEnvironment: (
     sandboxId: string,

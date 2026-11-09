@@ -314,6 +314,30 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
 
 /** Wipe identity, snapshot (stops the box), drop the build box; the snapshot then waits for its smoke test. */
 /** Rewrites /opt/orca/bin/<entry point> from VM_SCRIPT_SOURCES (same bytes a release build installs). */
+/** Stable fingerprint of the control plane's VM entry points (FNV-1a over names and bytes). */
+export function entryPointsVersion(): string {
+  let hash = 0x811c9dc5
+  for (const name of VM_SCRIPTS) {
+    for (const char of `${name}\u0000${VM_SCRIPT_SOURCES[name]}\u0000`) {
+      hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0
+    }
+  }
+  return hash.toString(16).padStart(8, '0')
+}
+
+/**
+ * Sandboxes booted from an older image get the control plane's current entry points (grant, revoke,
+ * member identities, sender-aware git) once per boot: a marker check, and an install only if stale.
+ */
+export async function ensureEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
+  const probe = await deps.provider
+    .runCommand(sessionId, { command: 'test', args: ['-e', `/opt/orca/bin/.entry-points-${entryPointsVersion()}`], timeoutMs: 15_000 })
+    .catch(() => null)
+  if (probe?.exitCode !== 0) {
+    await installEntryPoints(deps, sessionId)
+  }
+}
+
 export async function installEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
   const env = provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: 'sync' })
   const scriptEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('ORCA_VM_SCRIPT_')))
@@ -325,6 +349,8 @@ export async function installEntryPoints(deps: { provider: Pick<SandboxProviderA
     '  sudo install -o root -g root -m 0755 "/tmp/$name.new" "/opt/orca/bin/$name"',
     '  rm -f "/tmp/$name.new"',
     'done',
+    // Marks this set of entry points as installed (ensureEntryPoints skips the install next time).
+    `sudo rm -f /opt/orca/bin/.entry-points-* && sudo touch /opt/orca/bin/.entry-points-${entryPointsVersion()}`,
     'echo synced'
   ].join('\n')
   const result = await deps.provider.runCommand(sessionId, { command: 'bash', args: ['-c', install], env: scriptEnv, timeoutMs: 60_000 })

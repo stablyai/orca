@@ -26,6 +26,7 @@ export function PlanBillingSection(): React.JSX.Element | null {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<PlanBillingNotice | null>(null)
   const [userRefreshing, setUserRefreshing] = useState(false)
+  const [overageFailures, setOverageFailures] = useState(0)
 
   const run = async (open: () => Promise<OrcaBillingOpenResult>): Promise<void> => {
     setBusy(true)
@@ -66,6 +67,7 @@ export function PlanBillingSection(): React.JSX.Element | null {
     } else {
       const failure = overageFailureCopy(outcome, t)
       setNotice(failure ? { kind: 'error', text: failure } : null)
+      setOverageFailures((count) => count + 1)
     }
   }
 
@@ -83,6 +85,7 @@ export function PlanBillingSection(): React.JSX.Element | null {
         window.setTimeout(() => setUserRefreshing(false), 400)
       }}
       onPortal={() => void run(() => window.api.orcaProfiles.billingOpenPortal())}
+      overageFailures={overageFailures}
       onSetOverage={(args) => void setOverage(args)}
       onSeePlans={() => openPlansPage('settings')}
     />
@@ -101,6 +104,7 @@ export type PlanBillingViewProps = {
   onRefresh: () => void
   onPortal: () => void
   onSetOverage: (args: OrcaBillingOverageArgs) => void
+  overageFailures?: number
   /** Opens the plans page (pricing, Checkout, Enterprise contact). */
   onSeePlans: () => void
 }
@@ -114,6 +118,7 @@ export function PlanBillingView({
   onRefresh,
   onPortal,
   onSetOverage,
+  overageFailures = 0,
   onSeePlans
 }: PlanBillingViewProps): React.JSX.Element | null {
   const t = useTranslate()
@@ -171,20 +176,27 @@ export function PlanBillingView({
             <CreditCard className="size-4 text-muted-foreground" />
             <p className="text-sm font-medium">{entitlement.planLabel}</p>
             <span className="text-xs text-muted-foreground">
-              {t('auto.components.billing.seatsInterval', '{{value0}} seats · {{value1}}', {
-                value0: String(entitlement.seats),
-                value1:
-                  entitlement.interval === 'year'
-                    ? t('auto.components.billing.annual', 'Annual')
-                    : t('auto.components.billing.monthly', 'Monthly')
-              })}
+              {entitlement.interval === 'year'
+                ? t('auto.components.billing.seatsAnnual', '{{count}} seats · Annual', {
+                    count: entitlement.seats,
+                    defaultValue_one: '{{count}} seat · Annual'
+                  })
+                : t('auto.components.billing.seatsMonthly', '{{count}} seats · Monthly', {
+                    count: entitlement.seats,
+                    defaultValue_one: '{{count}} seat · Monthly'
+                  })}
             </span>
             <PlanStatusBadge entitlement={entitlement} />
           </div>
           <UsageSummary entitlement={entitlement} />
           {/* Overage is moot while sandboxes are suspended for a failed payment. */}
           {entitlement.payment.suspendRunning ? null : (
-            <OverageControls entitlement={entitlement} busy={busy} onSetOverage={onSetOverage} />
+            <OverageControls
+              entitlement={entitlement}
+              busy={busy}
+              failures={overageFailures}
+              onSetOverage={onSetOverage}
+            />
           )}
         </div>
       ) : null}
@@ -203,8 +215,8 @@ export function PlanBillingView({
         <p className="text-sm text-muted-foreground text-pretty">
           {teamPrice
             ? t(
-                'auto.components.billing.upsellLine',
-                'Orca Cloud runs agents in hosted sandboxes. Team is {{value0}} per seat / month.',
+                'auto.components.billing.upsellLine2',
+                'Orca Cloud runs agents in sandboxes. Team is {{value0}} per seat per month.',
                 { value0: teamPrice }
               )
             : t(
@@ -221,7 +233,13 @@ export function PlanBillingView({
           </Button>
         )}
         {hasPlan && entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onPortal}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-disabled={busy || undefined}
+            onClick={busy ? undefined : onPortal}
+          >
             {t('auto.components.billing.manageBilling', 'Manage billing')}
             <ExternalLink />
           </Button>

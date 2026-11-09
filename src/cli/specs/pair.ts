@@ -34,5 +34,16 @@ export const PAIR_COMMAND_SPECS: CommandSpec[] = [
       'orca pair --address 100.64.1.20',
       'orca pair --mobile --rotate --json'
     ]
+  },
+  {
+    path: ['sender'],
+    summary: 'Show which paired device sent the latest message to the agent running this command',
+    usage: 'orca sender [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Run it from inside an agent terminal or chat: Orca identifies the caller from its own launch evidence, not from arguments, so an agent only ever learns who drove it.',
+      'Prints nothing useful outside an agent Orca launched. Shared Orca Cloud workspaces use it to run git as the teammate who asked for the work.'
+    ],
+    examples: ['orca sender --json']
   }
 ]
