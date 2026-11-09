@@ -198,7 +198,7 @@ vi.mock('./ensure-virtual-display', () => ({
 vi.mock('./gpu-lifecycle')
 vi.mock('./main-process-state', () => ({ mainProcessState: {} }))
 vi.mock('./synthetic-title-runtime')
-vi.mock('../browser/identity/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/mode/browser-identity-mode-store', () => ({
   initializeBrowserIdentityModeStore: (path: string) => {
     mocks.events.push(`read-mode:${path}`)
     return {

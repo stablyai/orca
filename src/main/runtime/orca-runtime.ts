@@ -3,6 +3,7 @@ import { conversationRecordReader } from './orchestration/addressing/session-lin
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
+import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
 import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
 import {
   OrcaRuntimeWithSidebarTemporal,
@@ -175,6 +176,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
+    publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>

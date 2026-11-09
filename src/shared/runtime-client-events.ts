@@ -23,6 +23,12 @@ export type RuntimeClientEvent =
   | { type: 'nativeChatCiResultLinesChanged'; ciResultLines: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
+  // Index, HEAD or refs moved in a watched local repo; without `worktreeIds` any of its checkouts may have changed.
+  | { type: 'gitStatusChanged'; repoId: string; worktreeIds?: string[] }
+  /** Top-level settings whose values changed; a phone re-reads only the settings it shows. */
+  | { type: 'settingsChanged'; keys: string[] }
+  /** The desktop Agents list's verdicts changed; worktree.ps carries them. */
+  | { type: 'agentListChanged' }
   | {
       type: 'worktreesChanged'
       repoId: string

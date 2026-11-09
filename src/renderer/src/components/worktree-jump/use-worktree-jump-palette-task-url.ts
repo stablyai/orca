@@ -41,9 +41,15 @@ export type CmdJGitHubWorkItemPreview = {
   sourceContext: TaskSourceContext | null
 }
 
+/** The target New workspace would default to, used to scope task-link lookups to the same checkout. */
 function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.getState>) {
   const eligibleRepos = getComposerEligibleRepos(state.repos)
-  const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
+  const activeRepoId = resolveComposerActiveRepoId(
+    state.repos,
+    eligibleRepos,
+    state.activeRepoId,
+    state.runtimeEnvironments
+  )
   const resolution = resolveWorkspaceCreationTarget({
     eligibleRepos,
     projects: state.projects,

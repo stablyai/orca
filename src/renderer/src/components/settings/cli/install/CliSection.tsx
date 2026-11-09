@@ -180,7 +180,7 @@ export function CliSection({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <TooltipProvider delayDuration={250}>
+              <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

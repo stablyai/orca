@@ -2,7 +2,7 @@ import {
   lastVerifiedRuntimeStatus,
   type RuntimeHostStatusSnapshot
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry

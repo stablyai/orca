@@ -9,7 +9,7 @@ import { electronMocks } from '../../orca-runtime-test-mocks/setup.spec'
 import { TEST_WORKTREE_ID, store } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import '../../../../shared/constants'
 
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 
@@ -51,7 +51,10 @@ function browserRuntime(closeTab = vi.fn(async (_pageId: string) => {}), runtime
     ownsTab: (pageId) => livePages.has(pageId) && !desktopPageIds.has(pageId)
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the bridge inventory is used by this lifecycle test.
-  runtime.setAgentBrowserBridge({ tabList: () => ({ tabs: [...livePages.values()] }) } as never)
+  runtime.setAgentBrowserBridge({
+    tabList: () => ({ tabs: [...livePages.values()] }),
+    getRemoteTabFaviconUrl: () => null
+  } as never)
   electronMocks.BrowserWindow.fromId.mockImplementation((id: number) =>
     id === 1 ? { isDestroyed: () => false } : null
   )

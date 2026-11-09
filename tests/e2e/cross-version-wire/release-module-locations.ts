@@ -55,5 +55,18 @@ export function releaseModuleLocation(
   }
   const name = posix.basename(named)
   const moved = tree.list(sourceRoot).filter((path) => posix.basename(path) === name)
-  return moved.length === 1 ? moved[0]! : named
+  if (moved.length === 1) {
+    return moved[0]!
+  }
+  if (
+    moved.length === 0 &&
+    named ===
+      'src/renderer/src/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry.ts'
+  ) {
+    const legacyRegistry = 'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+    if (tree.exists(legacyRegistry)) {
+      return legacyRegistry
+    }
+  }
+  return named
 }

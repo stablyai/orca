@@ -103,6 +103,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedRepoRequiresConnection,
     sourceIntentBlocksCreate,
     sparseError,
+    selectedTargetNeedsVisibleHost,
     selectedRepoSshStatus,
     setAdvancedOpen,
     setAgentPrompt,
@@ -138,6 +139,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     sparseError
   })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled

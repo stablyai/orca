@@ -60,6 +60,8 @@ export type ComposerRuntimeTargetModel = {
   selectedRepoSshState: SshConnectionState | null
   selectedRepoSshStatus: SshConnectionStatus | null
   selectedRepoRequiresConnection: boolean
+  /** The resolved target is a per-workspace VM, which Run on never lists. */
+  selectedTargetNeedsVisibleHost: boolean
   selectedRepoConnectInProgress: boolean
   repoIdRef: RefObject<string>
 }

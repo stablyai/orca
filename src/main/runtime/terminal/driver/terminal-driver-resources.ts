@@ -20,7 +20,7 @@ import type {
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import type {
   ApplyLayoutResult,
   PtyLayoutTarget,
@@ -121,7 +121,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     providerSnapshot?: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead>
 
-  abstract getDriver(ptyId: string): DriverState
+  abstract getDriver(ptyId: string): RuntimeTerminalDriverState
   protected abstract enqueueLayout(
     ptyId: string,
     target: PtyLayoutTarget
@@ -129,7 +129,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   abstract mobileTookFloor(
     ptyId: string,
     clientId: string,
-    previousFloor?: DriverState,
+    previousFloor?: RuntimeTerminalDriverState,
     isCurrent?: () => boolean
   ): Promise<void>
   protected abstract resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number }

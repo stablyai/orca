@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
 import {
   REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE,
+  releaseTerminalFocusForOutsidePointerDown,
   releaseTerminalFocusForWindowBlur,
   resyncTerminalFocusForWindowFocus
 } from './regular-terminal-focus-ownership'
@@ -23,6 +25,29 @@ describe('regular terminal focus ownership', () => {
   beforeEach(() => {
     document.body.replaceChildren()
     document.documentElement.removeAttribute(REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE)
+  })
+
+  it('keeps terminal focus for a press on a focus-keeping control, and releases it elsewhere', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const pill = document.createElement('div')
+    pill.setAttribute(KEEPS_FOCUS_ATTRIBUTE, '')
+    const pillButton = document.createElement('button')
+    pill.appendChild(pillButton)
+    document.body.append(pill)
+    helper.focus()
+    const press = (pointerTarget: EventTarget) =>
+      releaseTerminalFocusForOutsidePointerDown({
+        container: pane,
+        activeElement: document.activeElement,
+        pointerTarget,
+        syncFocused: vi.fn()
+      })
+
+    expect(press(pillButton)).toBe(false)
+    expect(document.activeElement).toBe(helper)
+    expect(press(document.body)).toBe(true)
+    expect(document.activeElement).not.toBe(helper)
   })
 
   it('reclaims the exact split helper that was released, not the first one in the container', () => {

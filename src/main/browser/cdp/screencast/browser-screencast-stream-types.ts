@@ -1,7 +1,7 @@
 import type {
   BrowserScreencastFormat,
   BrowserScreencastFrameMetadata
-} from '../../../../shared/browser-screencast-protocol'
+} from '../../../../shared/browser/screencast/browser-screencast-protocol'
 
 export type BrowserScreencastOptions = {
   format: BrowserScreencastFormat

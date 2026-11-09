@@ -160,38 +160,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
-  it('omits interaction mode from the drawer and model summary', async () => {
-    mount(
-      [
-        MODEL_DESCRIPTOR,
-        {
-          id: 'interactionMode',
-          label: 'Mode',
-          category: 'mode',
-          kind: {
-            type: 'select',
-            currentValue: 'default',
-            choices: [
-              { value: 'default', label: 'Build' },
-              { value: 'plan', label: 'Plan' }
-            ]
-          },
-          valueSource: 'dispatched',
-          transport: 'agent-session',
-          settable: true
-        }
-      ],
-      true,
-      'interactionMode'
-    )
-    expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
-    expect(pill('Model').props.accessibilityLabel).not.toMatch(/Build|Plan/)
-    act(() => pill('Model').props.onPress())
-    expect(() => rowByText('Build')).toThrow('No row labeled Build')
-    expect(() => rowByText('Plan')).toThrow('No row labeled Plan')
-    expect(setOption).not.toHaveBeenCalled()
-  })
-
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,

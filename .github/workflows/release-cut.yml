@@ -2305,6 +2305,17 @@ jobs:
           echo "::error::Failed to dispatch docs deployment for $TAG after 3 attempts."
           exit 1
 
+  release-mirror-r2:
+    needs:
+      - cut
+      - publish-release
+    # Why stable-only: onorca.dev's mirror link tracks GitHub's latest release, which skips RCs.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' && !contains(needs.cut.outputs.tag, '-rc.') && startsWith(needs.cut.outputs.tag, 'v') }}
+    uses: ./.github/workflows/release-mirror-r2.yml
+    with:
+      tag: ${{ needs.cut.outputs.tag }}
+    secrets: inherit
+
   homebrew-bump-published-rc-draft:
     needs:
       - cut

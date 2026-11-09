@@ -1,8 +1,8 @@
+import type { CdpTabState } from './cdp-tab-state'
 import type { WebContents } from 'electron'
 import type {
   BrowserCaptureStartResult,
   BrowserCaptureStopResult,
-  BrowserConsoleEntry,
   BrowserConsoleResult,
   BrowserCookie,
   BrowserCookieDeleteResult,
@@ -12,27 +12,10 @@ import type {
   BrowserInterceptDisableResult,
   BrowserInterceptEnableResult,
   BrowserInterceptedRequest,
-  BrowserNetworkEntry,
   BrowserNetworkLogResult,
   BrowserViewportResult
-} from '../../../../shared/runtime-browser-contracts'
-import type { CdpCommandSender, SnapshotResult } from '../snapshots/snapshot-engine'
-
-export type CdpTabState = {
-  navigationId: string | null
-  snapshotResult: SnapshotResult | null
-  debuggerAttached: boolean
-  debuggerDetachListener: (() => void) | null
-  debuggerMessageListener: ((_event: unknown, method: string, params: unknown) => void) | null
-  iframeSessions: Map<string, string>
-  capturing: boolean
-  consoleLog: BrowserConsoleEntry[]
-  networkLog: BrowserNetworkEntry[]
-  intercepting: boolean
-  interceptPatterns: string[]
-  pausedRequests: Map<string, BrowserInterceptedRequest>
-  networkRequestMap: Map<string, BrowserNetworkEntry>
-}
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 type ActiveCdpContext = {
   guest: WebContents
