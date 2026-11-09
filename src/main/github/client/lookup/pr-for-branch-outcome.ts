@@ -12,6 +12,7 @@ import { hostedReviewLocalGitOptionArgs, githubPRStackExecutionScope } from './.
 import type { GitHubPRBranchLookupOptions } from './pull-request-lookup-data'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
 import { resolvePRForBranchOutcome } from './branch-lookup-resolution'
+import { readRecentOpenPROutcome, recordPRLastOutcome } from './pr-last-outcome'
 const reads: CoalescedProbes<PRRefreshOutcome> = new Map()
 
 export async function getPRForBranchOutcome(
@@ -42,10 +43,30 @@ export async function getPRForBranchOutcome(
       const ghOptions = ghRepoExecOptions(context)
       const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
 
+      const generation = scopeGeneration(
+        hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))
+      )
+      const readScope = githubReadExecutionScope(ghOptions)
+      const lastOutcomeKey = JSON.stringify([
+        executionScope,
+        repoPath,
+        generation,
+        branchName,
+        readScope
+      ])
+      if (options.reuseRecentOpenPR === true && options.userRefresh !== true) {
+        const recent = readRecentOpenPROutcome(lastOutcomeKey, {
+          linkedPRNumber: linkedPRNumber ?? null,
+          currentHeadOid: options.currentHeadOid ?? null
+        })
+        if (recent) {
+          return recent
+        }
+      }
       const key = JSON.stringify([
         executionScope,
         repoPath,
-        scopeGeneration(hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))),
+        generation,
         branchName,
         linkedPRNumber ?? null,
         fallbackPRNumber ?? null,
@@ -53,15 +74,17 @@ export async function getPRForBranchOutcome(
         options.currentHeadOid ?? null,
         options.checkPageLimit ?? null,
         options.exactRepository ?? null,
-        githubReadExecutionScope(ghOptions)
+        readScope
       ])
       return runCoalescedProbe(
         reads,
         key,
         async () => {
           await acquire()
+          const startedAt = Date.now()
+          let outcome: PRRefreshOutcome
           try {
-            return await resolvePRForBranchOutcome({
+            outcome = await resolvePRForBranchOutcome({
               repoPath,
               branchName,
               linkedPRNumber,
@@ -73,10 +96,17 @@ export async function getPRForBranchOutcome(
               executionScope
             })
           } catch (err) {
-            return prRefreshUpstreamError(err)
+            outcome = prRefreshUpstreamError(err)
           } finally {
             release()
           }
+          const narrowed = options.checkPageLimit !== undefined || options.exactRepository
+          recordPRLastOutcome(lastOutcomeKey, {
+            startedAt,
+            linkedPRNumber: linkedPRNumber ?? null,
+            outcome: narrowed ? null : outcome
+          })
+          return outcome
         },
         2 * 60_000,
         options
