@@ -6,10 +6,12 @@ import { window, router } from '@kit.ArkUI';
 import { loadUiLanguage, applyUiLanguage, setUiLocaleListener } from '../settings/NativeUi';
 import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { loadAppearance, setSystemAppearance, setAppearanceListener } from '../settings/Appearance';
+import { ShellWindowRegions } from '../webshell/WindowRegions';
 
 export default class EntryAbility extends UIAbility {
   private windowReady: boolean = false;
   private mainWindow: window.Window | null = null;
+  private windowRegions: ShellWindowRegions | null = null;
   private appliedColorMode: number = -99;
   private readonly keyboardAreaChanged = (change: window.AvoidAreaOptions): void => {
     if (change.type === window.AvoidAreaType.TYPE_KEYBOARD) { this.publishKeyboardArea(change.area); }
@@ -72,6 +74,8 @@ export default class EntryAbility extends UIAbility {
       if (err.code) { hilog.error(0x0000, 'OrcaEntry', 'loadContent failed'); return; }
       let mainWindow = windowStage.getMainWindowSync();
       this.mainWindow = mainWindow;
+      this.windowRegions = new ShellWindowRegions(mainWindow);
+      this.windowRegions.start();
       setAppearanceListener((): void => { this.styleSystemBars(); this.context.eventHub.emit('orcaAppearanceChanged'); });
       this.styleSystemBars();
       try {
@@ -93,11 +97,13 @@ export default class EntryAbility extends UIAbility {
     closeIdleDesktopConnections(); dropHomePrewarm(); this.windowReady = false;
     try { this.mainWindow?.off('avoidAreaChange', this.keyboardAreaChanged); } catch (e) {}
     this.mainWindow = null;
+    this.windowRegions?.dispose(); this.windowRegions = null;
     AppStorage.setOrCreate('shellKeyboardOverlay', false); AppStorage.setOrCreate('shellKeyboardTop', -1);
     setAppearanceListener(null); setUiLocaleListener(null);
   }
   onForeground(): void {
-    reviveDesktopConnections(); this.refreshKeyboardArea(); this.context.eventHub.emit('orcaForeground'); this.styleSystemBars();
+    reviveDesktopConnections(); this.refreshKeyboardArea(); this.windowRegions?.refresh();
+    this.context.eventHub.emit('orcaForeground'); this.styleSystemBars();
   }
   onBackground(): void {
     closeIdleDesktopConnections(); dropHomePrewarm(); this.context.eventHub.emit('orcaBackground'); this.publishKeyboardArea();

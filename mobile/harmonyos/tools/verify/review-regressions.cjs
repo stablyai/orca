@@ -42,6 +42,43 @@ function createController() {
   }
 }
 
+test('a measured cutout and single crossing hinge reach the page and clear when the window moves', () => {
+  const { projectPageRegions } = loadArkts('webshell/WindowRegions.ets', ['projectPageRegions'])
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
+  const controller = createController()
+  const bridge = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    controller,
+    manifest,
+    meta,
+    `/h/${hostId}`
+  )
+  const regions = {
+    occlusions: [{ x: 25, y: 4, width: 40, height: 28 }],
+    creases: [{ x: 322, y: 0, width: 18, height: 640 }]
+  }
+  const send = (frame) => {
+    const page = projectPageRegions(regions, frame)
+    bridge.setPageGeometry({ occlusions: page.occlusions, sideRail: false }, page.division)
+  }
+  send({ x: 40, y: 20, width: 560, height: 580 })
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
+  assert.deepEqual(controller.replies.at(-1).pageGeometry.occlusions, [
+    { x: 0, y: 0, width: 25, height: 12 }
+  ])
+  assert.deepEqual(controller.replies.at(-1).foldDivision, {
+    axis: 'vertical',
+    start: 282,
+    end: 300
+  })
+  send({ x: 345, y: 20, width: 255, height: 580 })
+  assert.deepEqual(controller.replies.at(-1).pageGeometry.occlusions, [])
+  assert.equal(controller.replies.at(-1).foldDivision, null)
+  bridge.dispose()
+})
+
 test('closing during handshake rejects the connection', async () => {
   const peer = createRpcPeer({ authenticate: false })
   const client = new peer.SpikeRpcClient()

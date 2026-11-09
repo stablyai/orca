@@ -44,6 +44,10 @@ test('synchronous system theme callbacks do not reenter appearance configuration
   const { EntryAbility } = loadArkts('entryability/EntryAbility.ets', ['EntryAbility'], {
     UIAbility,
     AppStorage,
+    ShellWindowRegions: class {
+      start() {}
+      dispose() {}
+    },
     ...appearance,
     ConfigurationConstant: {
       ColorMode: { COLOR_MODE_NOT_SET: -1, COLOR_MODE_DARK: 0, COLOR_MODE_LIGHT: 1 }

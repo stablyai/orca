@@ -210,9 +210,6 @@ struct TerminalSettings {
           }.width('100%').backgroundColor(this.themeSurface).borderRadius(12)
           this.sectionTitle('快捷键 · 拖动或使用箭头调整顺序')
           Column() {
-            Row() { Text(uiText('方向键盘', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.directionPad }).selectedColor(this.themeAccent).onChange((on: boolean): void => { this.saveLayout(this.ordered, this.visible, on); })
-            }.width('100%').height(48).padding({ left: 16, right: 16 })
             ForEach(this.ordered, (id: string) => {
               Row({ space: 8 }) {
                 Text(shortcutLabel(id)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).layoutWeight(1)

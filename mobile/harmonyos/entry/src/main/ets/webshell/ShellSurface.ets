@@ -16,6 +16,7 @@ import { BridgeHost, BridgeNativePage } from './BridgeHost';
 import { HostMeta } from '../storage/HostStore';
 import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute } from '../navigation/ShellRoute';
 import { lucideColorFilter } from '../settings/LucideColor';
+import { projectPageRegions, WindowRegion, WindowRegions } from './WindowRegions';
 
 type ShellStage = 'checking' | 'downloading' | 'opening' | 'offline' | 'repair' | 'failed' | 'ready';
 
@@ -45,6 +46,7 @@ export struct ShellSurface {
   @StorageProp('uiLocale') @Watch('onLocaleChanged') uiLocale: string = 'en';
   @StorageProp('themeScheme') @Watch('onThemeChanged') scheme: string = 'dark';
   @StorageProp('shellKeyboardTop') @Watch('publishKeyboardInset') keyboardTop: number = -1;
+  @StorageProp('shellWindowRegions') @Watch('publishPageRegions') windowRegions: string = '';
   @StorageProp('themeBg') themeBg: string = '#111111';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeSheet') themeSheet: string = '#171717';
@@ -76,13 +78,12 @@ export struct ShellSurface {
   private disposed: boolean = false;
   private pageVisible: boolean = true;
   private foreground: boolean = true;
-  private viewportTop: number = 0;
-  private viewportHeight: number = 0;
+  private viewport: WindowRegion = { x: 0, y: 0, width: 0, height: 0 };
   private pendingDrawerRoute: ShellRoute | null = null;
   private pendingSession: ShellRoute | null = null;
   private opensSessionNatively: boolean = false;
   private foregroundListener: () => void = (): void => {
-    this.foreground = true; this.publishKeyboardInset(); this.updateViewing();
+    this.foreground = true; this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing();
     this.flushDrawerRoute();
     this.openPendingNativeSession();
   };
@@ -137,7 +138,7 @@ export struct ShellSurface {
 
   private onVisibilityChanged(): void {
     this.pageVisible = this.visible;
-    if (this.pageVisible) { this.publishKeyboardInset(); this.updateViewing(); this.flushDrawerRoute(); }
+    if (this.pageVisible) { this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing(); this.flushDrawerRoute(); }
     else {
       this.pendingSession = null;
       this.clearViewing();
@@ -167,8 +168,15 @@ export struct ShellSurface {
 
   private publishKeyboardInset(): void {
     if (!this.pageVisible || !this.foreground || !this.bridge) { return; }
-    let covered = this.keyboardTop < 0 ? 0 : this.viewportTop + this.viewportHeight - this.keyboardTop;
-    this.bridge.setKeyboardInset(Math.max(0, Math.min(this.viewportHeight, covered)));
+    let covered = this.keyboardTop < 0 ? 0 : this.viewport.y + this.viewport.height - this.keyboardTop;
+    this.bridge.setKeyboardInset(Math.max(0, Math.min(this.viewport.height, covered)));
+  }
+
+  private publishPageRegions(): void {
+    if (!this.pageVisible || !this.foreground || !this.bridge) { return; }
+    let regions: WindowRegions = this.windowRegions ? JSON.parse(this.windowRegions) as WindowRegions : { occlusions: [], creases: [] };
+    let page = projectPageRegions(regions, this.viewport);
+    this.bridge.setPageGeometry({ occlusions: page.occlusions, sideRail: false, directionPadAvailable: false }, page.division);
   }
   private clearViewing(): void { this.desktop?.connection.clearViewing(this.viewingOwner); }
   private updateViewing(): void {
@@ -356,6 +364,7 @@ export struct ShellSurface {
       bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
       this.bridge = bridge;
       this.publishKeyboardInset();
+      this.publishPageRegions();
       document.onReady = (): void => {};
       document.allowExternal = (): boolean => this.pageVisible && this.foreground && this.document === document;
       document.onLoaded = (): void => {
@@ -461,9 +470,11 @@ export struct ShellSurface {
         .accessibilityLevel(this.painted ? 'auto' : 'no-hide-descendants')
         .opacity(this.asDrawer && !this.painted ? 0 : 1)
         .onAreaChange((_previous: Area, area: Area): void => {
-          this.viewportTop = Number(area.globalPosition.y); this.viewportHeight = Number(area.height);
-          if (this.asDrawer) { this.wideDrawer = Number(area.width) >= 700 && this.viewportHeight >= 600; }
+          this.viewport = { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
+            width: Number(area.width), height: Number(area.height) };
+          if (this.asDrawer) { this.wideDrawer = this.viewport.width >= 700 && this.viewport.height >= 600; }
           this.publishKeyboardInset();
+          this.publishPageRegions();
         })
       // Keep the viewport fixed through first paint and transport recovery.
       if (!this.painted) {

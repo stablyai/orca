@@ -17,6 +17,7 @@ import {
   OP_OUTPUT_SPAN
 } from '../transport/TerminalBinaryFrame';
 import { HostMeta } from '../storage/HostStore';
+import { FoldDivision } from './WindowRegions';
 
 /**
  * Bridge host (Phase 2b): the page↔shell JSON protocol from
@@ -138,7 +139,7 @@ interface BridgeInitWire {
   safeAreaInsets: BridgeSafeAreaInsets;
   keyboardInset: number;
   pageGeometry: BridgePageGeometry;
-  foldDivision: Object | null;
+  foldDivision: FoldDivision | null;
 }
 
 /** A forwarded terminal.subscribe: the handle its params named, for viewport routing. */
@@ -198,6 +199,7 @@ export class BridgeHost {
   private safeAreaInsets: BridgeSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   private keyboardInset: number = 0;
   private pageGeometry: BridgePageGeometry = { occlusions: [], sideRail: false, directionPadAvailable: false };
+  private foldDivision: FoldDivision | null = null;
   private readySink: (() => void) | null = null;
   private faultSink: ((message: string) => void) | null = null;
   private livenessSink: (() => void) | null = null;
@@ -215,12 +217,15 @@ export class BridgeHost {
     if (!this.validInset(value) || value === this.keyboardInset) { return; }
     this.keyboardInset = value; if (this.pushReady && !this.disposed) { this.sendInit(); }
   }
-  setPageGeometry(value: BridgePageGeometry): void {
+  setPageGeometry(value: BridgePageGeometry, fold: FoldDivision | null): void {
+    if (fold && (!['vertical', 'horizontal'].includes(fold.axis) || !this.validInset(fold.start)
+      || !this.validInset(fold.end) || fold.end <= fold.start)) { return; }
     if (!Array.isArray(value.occlusions) || value.occlusions.length > 16 || typeof value.sideRail !== 'boolean'
       || (value.directionPadAvailable !== undefined && typeof value.directionPadAvailable !== 'boolean')
       || value.occlusions.some((rect: BridgePageOcclusion): boolean => ![rect.x, rect.y, rect.width, rect.height].every((coordinate: number): boolean => this.validInset(coordinate)))
-      || JSON.stringify(value) === JSON.stringify(this.pageGeometry)) { return; }
-    this.pageGeometry = value; if (this.pushReady && !this.disposed) { this.sendInit(); }
+      || (JSON.stringify(value) === JSON.stringify(this.pageGeometry) && JSON.stringify(fold) === JSON.stringify(this.foldDivision))) { return; }
+    this.pageGeometry = value; this.foldDivision = fold;
+    if (this.pushReady && !this.disposed) { this.sendInit(); }
   }
   private locale: string = 'en';
   private externalLink: ((url: string) => Promise<void>) | null = null;
@@ -1235,7 +1240,7 @@ export class BridgeHost {
       safeAreaInsets: this.safeAreaInsets,
       keyboardInset: this.keyboardInset,
       pageGeometry: this.pageGeometry,
-      foldDivision: null
+      foldDivision: this.foldDivision
     };
     this.pushFrame(JSON.stringify(init));
     this.log(`init sent (v1) grants=${grants.length} storage=${count}`);
