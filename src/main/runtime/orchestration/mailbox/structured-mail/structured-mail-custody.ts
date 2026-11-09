@@ -26,13 +26,19 @@ export type StructuredMailResend = { row: StructuredMailSendRow; renew: boolean 
 const REUSABLE_OPERATION_AGE_MS =
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 
-/** A mailbox nothing can own again: its Dispatch settled or is gone, or its Run is gone. */
+/** A mailbox nothing can own again: its Dispatch (or remote attachment) settled or is gone, or its Run is gone. */
 export function structuredMailboxEnded(
   mailboxHandle: string,
   db: OrchestrationDb | null | undefined
 ): boolean {
   if (mailboxHandle.startsWith('dispatch:')) {
-    const status = db?.getDispatchContextById?.(mailboxHandle.slice('dispatch:'.length))?.status
+    const dispatchId = mailboxHandle.slice('dispatch:'.length)
+    const status = db?.getDispatchContextById?.(dispatchId)?.status
+    if (status === undefined) {
+      // A coordinator on another computer runs this Dispatch; here it is only an attachment.
+      const remote = db?.getRemoteDispatchAttachment?.(dispatchId)?.state
+      return remote !== 'starting' && remote !== 'ready'
+    }
     return status !== 'pending' && status !== 'dispatched'
   }
   return mailboxHandle.startsWith('run:') && !db?.getRun?.(mailboxHandle.slice('run:'.length))

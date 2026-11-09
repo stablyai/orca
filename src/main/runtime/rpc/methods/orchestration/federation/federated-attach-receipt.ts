@@ -1,4 +1,5 @@
 import type { OrchestrationWorkerLaunchReceipt } from '../worker/worker-launch-preferences'
+import type { AgentLaunchModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 
 export type RemoteFederatedWorkerStartReceipt = {
   dispatchId: string
@@ -8,6 +9,8 @@ export type RemoteFederatedWorkerStartReceipt = {
   terminalHandle?: string
   setup?: { state: string }
   launch?: OrchestrationWorkerLaunchReceipt
+  /** Chat or terminal, as the server decided; absent from servers that start terminals only. */
+  mode?: AgentLaunchModeReceipt
   effects?: unknown[]
   residualResources?: unknown[]
   failedStage?: string
@@ -42,6 +45,16 @@ export function isReadyRemoteFederatedWorkerStartReceipt(
   receipt: RemoteFederatedWorkerStartReceipt
 ): receipt is ReadyRemoteFederatedWorkerStartReceipt {
   return receipt.state === 'ready'
+}
+
+/** The ready receipt's parts the server reports as is. */
+export function readyRemoteReceiptFields(remote: ReadyRemoteFederatedWorkerStartReceipt) {
+  return {
+    setup: remote.setup,
+    ...(remote.mode ? { mode: remote.mode } : {}),
+    effects: remote.effects ?? [],
+    residualResources: remote.residualResources ?? []
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
