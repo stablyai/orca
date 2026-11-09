@@ -93,7 +93,14 @@ export function CloudWorkspacesHome({
     })
   }, [])
 
-  const all = useMemo(() => (state.status === 'ready' ? state.workspaces : []), [state])
+  // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
+  const all = useMemo(
+    () =>
+      state.status === 'ready'
+        ? state.workspaces.filter((w) => w.status !== 'destroying' && w.status !== 'destroyed')
+        : [],
+    [state]
+  )
   const repos = useMemo(
     () => [...new Set(all.flatMap((w) => (w.repo ? [w.repo.url] : [])))].sort(),
     [all]
@@ -226,9 +233,10 @@ export function CloudWorkspacesHome({
         metaStale={stale}
         meta={
           state.status === 'ready'
-            ? t('auto.components.cloudWorkspaces.listMeta', '{{value0}} workspaces · {{value1}}', {
-                value0: visible.length,
-                value1: formatUsdMicros(totalCost, intlLocale)
+            ? t('auto.components.cloudWorkspaces.listMeta', '{{count}} workspaces · {{cost}}', {
+                count: visible.length,
+                cost: formatUsdMicros(totalCost, intlLocale),
+                defaultValue_one: '{{count}} workspace · {{cost}}'
               })
             : null
         }
@@ -271,8 +279,15 @@ export function CloudWorkspacesHome({
                     className="px-3 py-2 text-xs font-medium text-muted-foreground"
                   >
                     {section || t('auto.components.cloudWorkspaces.noSection', 'No section')}
-                    <span className="ml-1.5 tabular-nums text-muted-foreground/70">
+                    {/* The bare number is visual; screen readers get the counted phrase. */}
+                    <span aria-hidden className="ml-1.5 tabular-nums text-muted-foreground/70">
                       {rows.length}
+                    </span>{' '}
+                    <span className="sr-only">
+                      {t('auto.components.cloudWorkspaces.sectionCount', '{{count}} workspaces', {
+                        count: rows.length,
+                        defaultValue_one: '{{count}} workspace'
+                      })}
                     </span>
                   </h3>
                 )}

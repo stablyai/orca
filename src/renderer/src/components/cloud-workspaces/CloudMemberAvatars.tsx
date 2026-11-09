@@ -1,6 +1,6 @@
 import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { CloudWorkspacePresence } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import {
@@ -70,13 +70,14 @@ export function PresenceStack({
   max?: number
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const members = presentMembers(presence, selfId)
   if (members.length === 0) {
     return null
   }
   const shown = members.slice(0, max)
   const extra = members.length - shown.length
-  const summary = presenceSummary(members, directory, selfId, t)
+  const summary = presenceSummary(members, directory, selfId, t, intlLocale)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -108,7 +109,7 @@ export function PresenceStack({
               <span
                 key={p.userId}
                 role="img"
-                aria-label={presenceSummary([p], directory, selfId, t)}
+                aria-label={presenceSummary([p], directory, selfId, t, intlLocale)}
                 className="relative rounded-full ring-2 ring-background"
               >
                 {avatar}

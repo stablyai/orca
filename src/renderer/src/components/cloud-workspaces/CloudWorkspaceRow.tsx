@@ -11,13 +11,14 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
 import { CloudWorkspaceRowMenu, type RowActions } from './CloudWorkspaceRowMenu'
 import {
-  formatComputeHours,
+  formatSandboxHours,
   formatRelative,
   formatUsdMicros,
   memberName,
   presenceSummary,
   presentMembers,
   repoLabel,
+  sandboxHours,
   type MemberDirectory
 } from './cloud-workspace-format'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
@@ -33,8 +34,12 @@ const STATUS_DOT: Record<CloudWorkspace['status'], string> = {
   failed: 'bg-destructive'
 }
 
-function statusLabel(status: CloudWorkspace['status'], t: Translate): string {
-  switch (status) {
+/** Glossary lifecycle states only: a sandbox going to sleep already reads as Asleep. */
+function statusLabel(w: CloudWorkspace, t: Translate): string {
+  if (w.archivedAt !== null) {
+    return t('auto.components.cloudWorkspaces.statusArchived', 'Archived')
+  }
+  switch (w.status) {
     case 'running':
       return t('auto.components.cloudWorkspaces.statusRunning', 'Running')
     case 'creating':
@@ -42,15 +47,14 @@ function statusLabel(status: CloudWorkspace['status'], t: Translate): string {
     case 'resuming':
       return t('auto.components.cloudWorkspaces.statusWaking', 'Waking')
     case 'suspending':
-      return t('auto.components.cloudWorkspaces.statusGoingToSleep', 'Going to sleep')
     case 'suspended':
       return t('auto.components.cloudWorkspaces.statusAsleep', 'Asleep')
-    case 'destroying':
-      return t('auto.components.cloudWorkspaces.statusDeleting', 'Deleting')
-    case 'destroyed':
-      return t('auto.components.cloudWorkspaces.statusDeleted', 'Deleted')
     case 'failed':
-      return t('auto.components.cloudWorkspaces.statusNeedsAttention', 'Needs attention')
+      return t('auto.components.cloudWorkspaces.statusCouldntStart', "Couldn't start")
+    case 'destroying':
+    case 'destroyed':
+      // Home never lists these (see CloudWorkspacesHome); a stray one is not usable.
+      return t('auto.components.cloudWorkspaces.statusNotResponding', 'Not responding')
   }
 }
 
@@ -81,27 +85,37 @@ export function CloudWorkspaceRow({
   const intlLocale = useIntlLocale()
   const descriptionId = useId()
   const [menuOpen, setMenuOpen] = useState(false)
-  const status = statusLabel(w.status, t)
+  const status = statusLabel(w, t)
+  const showStatus = w.archivedAt !== null || w.status !== 'running'
   const canManage = w.access === 'owner' || canAdmin
   const title = cloudWorkspaceTitle(w, t)
   const ownerName = memberName(directory, w.ownerUserId, selfId, t)
   const canOpen = w.access !== 'none'
   const cost = formatUsdMicros(w.cost.totalUsdMicros, intlLocale)
   const lastActive = formatRelative(w.lastActivityAt, now, t, intlLocale)
-  const presence = presenceSummary(presentMembers(w.presence, selfId), directory, selfId, t)
+  const presence = presenceSummary(
+    presentMembers(w.presence, selfId),
+    directory,
+    selfId,
+    t,
+    intlLocale
+  )
   const revealOpen = opening || menuOpen
-  const description = [
-    t('auto.components.cloudWorkspaces.costValue', 'Cost {{value0}}', { value0: cost }),
-    t('auto.components.cloudWorkspaces.lastActiveValue', 'Last active {{value0}}', {
-      value0: lastActive
-    }),
+  const visibility =
     w.visibility === 'private'
       ? t('auto.components.cloudWorkspaces.private', 'Private')
-      : t('auto.components.cloudWorkspaces.sharedWithTeam', 'Shared with team'),
-    presence
-  ]
-    .filter(Boolean)
-    .join('. ')
+      : t('auto.components.cloudWorkspaces.sharedWithTeam', 'Shared with team')
+  const description = presence
+    ? t(
+        'auto.components.cloudWorkspaces.rowDescriptionWithPresence',
+        'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.',
+        { cost, lastActive, visibility, presence }
+      )
+    : t('auto.components.cloudWorkspaces.rowDescription', 'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}.', {
+        cost,
+        lastActive,
+        visibility
+      })
 
   return (
     <li
@@ -161,7 +175,7 @@ export function CloudWorkspaceRow({
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
             <span className="shrink-0">{ownerName}</span>
-            {w.status !== 'running' && (
+            {showStatus && (
               <>
                 <span aria-hidden>·</span>
                 <span className={cn('shrink-0', w.status === 'failed' && 'text-destructive')}>
@@ -198,15 +212,13 @@ export function CloudWorkspaceRow({
         <TooltipContent side="top">
           <div className="font-medium">{t('auto.components.cloudWorkspaces.cost', 'Cost')}</div>
           <div>
-            {t(
-              'auto.components.cloudWorkspaces.computeCost',
-              'Compute {{value0}} × {{value1}}/h = {{value2}}',
-              {
-                value0: formatComputeHours(w.cost.computeMs, t),
-                value1: formatUsdMicros(w.cost.rateUsdMicrosPerHour, intlLocale),
-                value2: formatUsdMicros(w.cost.computeUsdMicros, intlLocale)
-              }
-            )}
+            {t('auto.components.cloudWorkspaces.sandboxHoursCost', '{{hours}} sandbox hours × {{rate}}/hour = {{cost}}', {
+              count: sandboxHours(w.cost.computeMs),
+              hours: formatSandboxHours(w.cost.computeMs, intlLocale),
+              rate: formatUsdMicros(w.cost.rateUsdMicrosPerHour, intlLocale),
+              cost: formatUsdMicros(w.cost.computeUsdMicros, intlLocale),
+              defaultValue_one: '{{hours}} sandbox hour × {{rate}}/hour = {{cost}}'
+            })}
           </div>
           {w.cost.tokenUsdMicros !== null && (
             <div>

@@ -54,7 +54,7 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
       resolved.error === 'not_found'
         ? translate(
             'auto.components.cloudWorkspaces.linkNotFound',
-            'This link points to a private workspace, another org, or one that was deleted.'
+            'This link points to a private workspace, another team, or a workspace that was deleted.'
           )
         : describeError(resolved.error, resolved.reason)
     )

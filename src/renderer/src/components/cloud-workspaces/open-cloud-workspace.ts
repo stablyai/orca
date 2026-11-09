@@ -70,7 +70,7 @@ async function connectAndReveal(environmentId: string, name: string): Promise<Op
       ok: false,
       message: translate(
         'auto.components.cloudWorkspaces.serverNotSaved',
-        'The workspace server was not saved.'
+        "Couldn't add the workspace to this computer. Your files are safe. Try again."
       )
     }
   }
@@ -156,7 +156,7 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
       ok: false,
       message: translate(
         'auto.components.cloudWorkspaces.verifyFailed',
-        'Could not verify the workspace server. Try again.'
+        "Couldn't connect this computer to the workspace. Your files are safe. Try again."
       )
     }
   }
@@ -199,7 +199,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
         ok: false,
         message: translate(
           'auto.components.cloudWorkspaces.noAccess',
-          'You do not have access to this workspace.'
+          "You don't have access to this workspace. Ask its owner to share it with the team."
         )
       }
     }
@@ -209,10 +209,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
     console.warn('[cloud-workspaces] open failed', error)
     return {
       ok: false,
-      message: translate(
-        'auto.components.cloudWorkspaces.openFailed',
-        'Could not open the workspace.'
-      )
+      message: translate('auto.components.cloudWorkspaces.openFailed', "Couldn't open the workspace. Your files are safe. Try again.")
     }
   }
 }
@@ -236,7 +233,9 @@ export async function copyCloudWorkspaceLink(id: string, chatId?: string | null)
     await navigator.clipboard.writeText(cloudWorkspaceLink(id, chatId))
   } catch (error) {
     console.warn('[cloud-workspaces] copy link failed', error)
-    toast.error(translate('auto.components.cloudWorkspaces.copyFailed', 'Could not copy the link.'))
+    toast.error(
+      translate('auto.components.cloudWorkspaces.copyFailed', "Couldn't copy the link. Try again.")
+    )
     return
   }
   toast.success(

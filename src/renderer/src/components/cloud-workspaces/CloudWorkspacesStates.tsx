@@ -138,7 +138,7 @@ export function EmptyState({
             t('auto.components.cloudWorkspaces.emptyTeamTitle', 'No team workspaces yet'),
             t(
               'auto.components.cloudWorkspaces.emptyTeamBody',
-              'Share a cloud workspace from its menu and everyone in your org can open it here.'
+              'Share a cloud workspace from its menu and everyone on your team can open it here.'
             )
           ]
         : [
