@@ -6245,7 +6245,10 @@
           "69f5b5380d": "Cloning...",
           "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
           "cloneParentFolder": "Parent folder",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Folder name",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" in this folder is already a different repository, so this clone needs its own folder.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
           "dismissError": "Dismiss error",
@@ -11613,7 +11616,10 @@
               "modelUnloadTitle": "Unload Speech Model",
               "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
               "modelUnloadKeyword": "unload",
-              "modelMemoryKeyword": "memory"
+              "modelMemoryKeyword": "memory",
+              "fillerWordsTitle": "Remove Filler Words",
+              "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
+              "fillerWordsKeyword": "filler words"
             }
           }
         },
@@ -20044,6 +20050,7 @@
         "noCommands": "No matching commands",
         "commands": "Commands",
         "skills": "Skills",
+        "checkingSkills": "Checking for new skills...",
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
         "clearDescription": "Clear conversation context",
@@ -21316,6 +21323,10 @@
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
           "immediately": "Immediately"
+        },
+        "fillerWords": {
+          "title": "Remove Filler Words",
+          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
         }
       }
     },
@@ -21534,7 +21545,16 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "New Agent"
+        "browser": "Browser",
+        "chooseAgent": "Choose agent",
+        "closePane": "Close pane",
+        "goToFile": "Go to file",
+        "heading": "Open in this pane",
+        "markdown": "Markdown",
+        "mobileEmulator": "Mobile emulator",
+        "newAgent": "New Agent",
+        "reopenClosedTab": "Reopen closed tab",
+        "terminal": "Terminal"
       }
     }
   },

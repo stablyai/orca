@@ -86,7 +86,7 @@ src/main/providers/macos-login-session-pty-probe.ts
 src/main/providers/process-cwd.ts
 src/main/pty/process-retirement/pty-descendant-fresh-table.ts
 src/main/pty/environment/windows-environment-path.ts
-src/main/rate-limits/gemini-cli-oauth-extractor.ts
+src/main/rate-limits/providers/gemini/gemini-cli-oauth-extractor.ts
 src/main/runtime/rpc/server/pairing/network/windows-default-route-interfaces.ts
 src/main/runtime/rpc/server/pairing/network/windows-mobile-firewall.ts
 src/main/ssh/connection/ssh-connection.ts

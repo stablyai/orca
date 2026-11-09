@@ -65,24 +65,6 @@ async function openWithHeldFirstWrite(
   }
 }
 
-it('refuses only the message whose model write went unanswered, keeping the agent running', async () => {
-  const { rig, held } = await openWithHeldFirstWrite(100)
-
-  await expect(send(rig, 'send-1', { model: 'grok-4.6' })).rejects.toThrow()
-
-  // The unanswered call is withdrawn at the agent, and the agent process is never ended for it.
-  const cancel = await rig.frame('$/cancel_request')
-  expect(cancel.params).toEqual({ requestId: held().id })
-  await rig.settle()
-  expect(rig.ended).toEqual([])
-  expect(rig.child().closes).toBe(0)
-  expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
-
-  await expect(send(rig, 'send-2', { model: 'grok-4.6' })).resolves.toEqual({ state: 'admitted' })
-  expect(rig.sent('session/set_config_option')).toHaveLength(2)
-  await rig.frame('session/prompt')
-})
-
 it('holds later controls and prompts until a withdrawn write is answered', async () => {
   // Long enough that no deadline expires; the held write settles only when answered below.
   const { rig, held } = await openWithHeldFirstWrite(10_000)

@@ -225,7 +225,7 @@
 1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
 1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/local-preflight-context.ts
-2 src/renderer/src/lib/provider-runtime-context.ts
+2 src/renderer/src/runtime/hosts/observations/provider-runtime-context.ts
 2 src/renderer/src/lib/repo-runtime-owner.ts
 1 src/renderer/src/lib/runtime-session-mirror-owners.ts
 1 src/renderer/src/lib/runtime-session-mirror-targets.ts

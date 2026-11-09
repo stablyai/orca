@@ -138,7 +138,7 @@ function claudeRoster(id: string, email: string, active: boolean): ClaudeRateLim
   }
 }
 
-vi.mock('@/lib/claude-account-switch-sessions', () => ({
+vi.mock('@/lib/provider-accounts/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn(async () => 'no-running-sessions')
 }))
 vi.mock('../../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({

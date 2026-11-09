@@ -4,7 +4,7 @@ import { Label } from '../../../ui/label'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
 import { getExperimentalSearchEntry } from '../../advanced/experimental-search'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 
 type EphemeralVmsExperimentalSettingProps = {
   settings: GlobalSettings
@@ -39,13 +39,13 @@ export function EphemeralVmsExperimentalSetting({
             )}
           </p>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={enabled}
-          ariaLabel={t(
+          aria-label={t(
             'auto.components.settings.ephemeralVmsExperimentalSetting.cloudVmToggleLabel',
             'Toggle Cloud VM'
           )}
-          onChange={() => updateSettings({ experimentalEphemeralVms: !enabled })}
+          onCheckedChange={() => updateSettings({ experimentalEphemeralVms: !enabled })}
         />
       </div>
       {enabled ? <EphemeralVmsPane /> : null}

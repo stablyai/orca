@@ -6611,7 +6611,10 @@
               "modelUnloadTitle": "Descarregar modelo de voz",
               "modelUnloadDescription": "Escolha quando o modelo de voz local é descarregado da memória.",
               "modelUnloadKeyword": "descarregar",
-              "modelMemoryKeyword": "memória"
+              "modelMemoryKeyword": "memória",
+              "fillerWordsTitle": "Remover hesitações",
+              "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
+              "fillerWordsKeyword": "hesitações"
             }
           }
         },
@@ -11951,7 +11954,10 @@
           "69f5b5380d": "Clonando...",
           "cloneOnHostDescription": "Digite a URL do Git e escolha onde cloná-lo em {{value0}}.",
           "cloneParentFolder": "Pasta pai",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Nome da pasta",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" nesta pasta já é outro repositório, então este clone precisa da sua própria pasta.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" já existe nesta pasta, então este clone precisa da sua própria pasta."
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar o Orca",
@@ -20219,6 +20225,7 @@
         "noCommands": "Nenhum comando correspondente",
         "commands": "Comandos",
         "skills": "Skills",
+        "checkingSkills": "Procurando novas habilidades…",
         "loadingSkills": "Carregando skills...",
         "skillsLoaded": "Skills carregadas",
         "skillsUnavailableHost": "As skills não estão disponíveis para este host",
@@ -21649,6 +21656,10 @@
           "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
           "never": "Nunca",
           "immediately": "Imediatamente"
+        },
+        "fillerWords": {
+          "title": "Remover hesitações",
+          "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado."
         }
       }
     },

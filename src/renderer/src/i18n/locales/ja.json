@@ -5341,7 +5341,10 @@
           "69f5b5380d": "クローン作成中…",
           "cloneOnHostDescription": "Git URL を入力し、{{value0}} 上のクローン先を選択してください。",
           "cloneParentFolder": "親フォルダー",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "フォルダー名",
+          "cloneFolderTakenByRepo": "このフォルダー内の「{{value0}}」はすでに別のリポジトリのため、このクローンには専用のフォルダーが必要です。",
+          "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",
@@ -10642,7 +10645,10 @@
               "modelUnloadTitle": "音声モデルの解放",
               "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
               "modelUnloadKeyword": "解放",
-              "modelMemoryKeyword": "メモリ"
+              "modelMemoryKeyword": "メモリ",
+              "fillerWordsTitle": "フィラーを削除",
+              "fillerWordsDescription": "「えーと」「うーん」などのつなぎ言葉を音声入力のテキストから取り除きます。",
+              "fillerWordsKeyword": "フィラー"
             }
           }
         },
@@ -18808,6 +18814,7 @@
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
         "skills": "スキル",
+        "checkingSkills": "新しいスキルを確認しています…",
         "loadingSkills": "スキルを読み込み中…",
         "clearDescription": "会話のコンテキストをクリア",
         "skillsUnavailableHost": "SSH チャットではスキルを一覧表示できません",
@@ -19959,6 +19966,10 @@
           "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
           "never": "しない",
           "immediately": "すぐに"
+        },
+        "fillerWords": {
+          "title": "フィラーを削除",
+          "description": "音声入力の言語に合わせて、「えーと」「うーん」などのつなぎ言葉を入力テキストから取り除きます。"
         }
       }
     },

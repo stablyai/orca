@@ -6225,7 +6225,10 @@
           "69f5b5380d": "Клонирование…",
           "cloneOnHostDescription": "Введите URL Git и выберите, куда клонировать репозиторий на {{value0}}.",
           "cloneParentFolder": "Родительская папка",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Имя папки",
+          "cloneFolderTakenByRepo": "«{{value0}}» в этой папке уже является другим репозиторием, поэтому для этого клона нужна отдельная папка.",
+          "cloneFolderNotEmpty": "«{{value0}}» уже существует в этой папке, поэтому для этого клона нужна отдельная папка."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Закрыть",
@@ -11651,7 +11654,10 @@
               "modelUnloadTitle": "Выгрузка речевой модели",
               "modelUnloadDescription": "Выберите, когда локальная речевая модель выгружается из памяти.",
               "modelUnloadKeyword": "выгрузить",
-              "modelMemoryKeyword": "память"
+              "modelMemoryKeyword": "память",
+              "fillerWordsTitle": "Удалять слова-паразиты",
+              "fillerWordsDescription": "Убирает «э», «эм» и похожие звуки из надиктованного текста.",
+              "fillerWordsKeyword": "паразиты"
             }
           }
         },
@@ -20062,6 +20068,7 @@
         "noCommands": "Подходящих команд нет",
         "commands": "Команды",
         "skills": "Навыки",
+        "checkingSkills": "Поиск новых навыков…",
         "loadingSkills": "Загрузка навыков…",
         "skillsLoaded": "Навыки загружены",
         "clearDescription": "Очистить контекст разговора",
@@ -21349,6 +21356,10 @@
           "cloud": "Облачные модели работают на серверах провайдера, поэтому здесь ничего не загружается.",
           "never": "Никогда",
           "immediately": "Сразу"
+        },
+        "fillerWords": {
+          "title": "Удалять слова-паразиты",
+          "description": "Убирает звуки вроде «э» и «эм» из надиктованного текста с учётом языка диктовки."
         }
       }
     },

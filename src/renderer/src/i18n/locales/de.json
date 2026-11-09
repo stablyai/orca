@@ -5973,7 +5973,10 @@
           "69f5b5380d": "Wird geklont…",
           "cloneOnHostDescription": "Die Git-URL eingeben und einen Speicherort zum Klonen auf {{value0}} auswählen.",
           "cloneParentFolder": "Übergeordneter Ordner",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Ordnername",
+          "cloneFolderTakenByRepo": "„{{value0}}“ in diesem Ordner ist bereits ein anderes Repository, daher braucht dieser Klon einen eigenen Ordner.",
+          "cloneFolderNotEmpty": "„{{value0}}“ existiert in diesem Ordner bereits, daher braucht dieser Klon einen eigenen Ordner."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Schließen",
@@ -11297,7 +11300,10 @@
               "modelUnloadTitle": "Sprachmodell entladen",
               "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
               "modelUnloadKeyword": "entladen",
-              "modelMemoryKeyword": "speicher"
+              "modelMemoryKeyword": "speicher",
+              "fillerWordsTitle": "Füllwörter entfernen",
+              "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
+              "fillerWordsKeyword": "füllwörter"
             }
           }
         },
@@ -19484,6 +19490,7 @@
         "noCommands": "Keine passenden Befehle",
         "commands": "Befehle",
         "skills": "Skills",
+        "checkingSkills": "Nach neuen Skills wird gesucht…",
         "loadingSkills": "Skills werden geladen…",
         "skillsLoaded": "Skills geladen",
         "clearDescription": "Unterhaltungskontext leeren",
@@ -20660,6 +20667,10 @@
           "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
           "never": "Nie",
           "immediately": "Sofort"
+        },
+        "fillerWords": {
+          "title": "Füllwörter entfernen",
+          "description": "Entfernt Laute wie „äh“ und „ähm“ aus diktiertem Text, passend zur Diktiersprache."
         }
       }
     },
