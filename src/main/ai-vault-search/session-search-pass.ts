@@ -1,4 +1,4 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
@@ -20,7 +20,7 @@ import {
   sessionSearchRootListings,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
-import type { SessionSearchFileRow, SessionSearchStore } from './session-search-store'
+import type { SessionSearchFileRow, SessionSearchIndexStore } from './session-search-store'
 import { sessionSearchEnumeratedContainers } from './session-search-synthetic-sources'
 
 // Bound recent-cycle retirement work and prioritize rows within the recency window.
@@ -30,7 +30,7 @@ const RETIREMENT_ROWS_PER_CYCLE = 512
 const RETIREMENT_DIRECTORIES_PER_PASS = 512
 
 export type SessionSearchPassArgs = {
-  store: SessionSearchStore
+  store: SessionSearchIndexStore
   roots: SessionSearchScanRoots
   /** A sweep lists every root; a cycle lists the newest N per agent. */
   full: boolean
@@ -60,6 +60,7 @@ export async function runSessionSearchPass(
   args: SessionSearchPassArgs
 ): Promise<SessionSearchPassResult> {
   const { store, signal } = args
+  await store.prepare?.()
   if (args.full) {
     // Apply narrowed retention before the new instance’s first discovery.
     await store.purgeOlderThan(store.retentionCutoff, signal)
@@ -131,6 +132,7 @@ export async function runSessionSearchPass(
         )
       : []
 
+    await store.flush?.()
     return {
       rootsWithFiles,
       degradedRoots: mergeDegradedRoots(

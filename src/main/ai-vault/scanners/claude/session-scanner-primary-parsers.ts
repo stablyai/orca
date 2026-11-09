@@ -4,10 +4,10 @@ import {
 } from '../../transcripts/remote-session-content-lines'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
-import { normalizePromptField } from '../../../../shared/agent-status-field-normalization'
+import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -30,6 +30,7 @@ import { extractMessageText, normalizeTitleText } from '../../session-scanner-te
 import { extractString, parseJsonObject } from '../../session-scanner-values'
 
 type ParserSessionOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }
@@ -173,10 +174,13 @@ export async function finalizeClaudeSessionParseState(
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (ownsTranscriptDisk) {
     snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
-      snapshot.accumulator.filePath
+      snapshot.accumulator.filePath,
+      options.signal
     )
   }
-  return finalizeSession(snapshot.accumulator, platform, options)
+  // A rename (custom-title) or Claude's generated name is the session's own; prompts and metadata are stand-ins.
+  const titleKind = snapshot.accumulator.title || snapshot.generatedTitle ? 'named' : 'fallback'
+  return finalizeSession(snapshot.accumulator, platform, { ...options, titleKind })
 }
 
 export function createClaudeSessionResumeState(

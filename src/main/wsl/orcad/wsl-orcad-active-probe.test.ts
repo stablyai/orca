@@ -5,20 +5,15 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/orcad-local-build-hash', () => ({
+vi.mock('../../managed-server/install/orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import {
-  OrcadActiveReadinessError,
-  probeActiveOrcadReadiness
-} from '../../ssh/orcad-active-readiness'
-import { orcadLivenessProbeCommand } from '../../managed-server/install/orcad-remote-launch'
-import { readOrcadReadinessNowCommand } from '../../managed-server/install/orcad-remote-readiness-wait'
+import { OrcadActiveReadinessError } from '../../managed-server/activation/orcad-active-readiness'
 import { probeWslActiveOrcad, wslOrcadActiveProbeCommand } from './wsl-orcad-active-probe'
 
 const mockExec = vi.mocked(execCommand)
@@ -94,18 +89,5 @@ describe('probeWslActiveOrcad', () => {
     const error = await probe().catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(OrcadActiveReadinessError)
     expect(error).toMatchObject({ verdict: 'unverifiable' })
-  })
-
-  it('leaves the SSH probe its two separate reads, byte for byte', async () => {
-    const dir = '/home/u/.orca-remote/orcad-0.1.0+aa'
-    mockExec.mockResolvedValueOnce('LIVE\n').mockResolvedValueOnce(`${READY}\n`)
-    await probeActiveOrcadReadiness(
-      { conn: context.connection, host, remoteInstallDir: dir },
-      { buildHash: 'abc123def4567890', fullVersion: VERSION }
-    )
-    expect(mockExec.mock.calls.map(([, command]) => command)).toEqual([
-      orcadLivenessProbeCommand(host, dir),
-      readOrcadReadinessNowCommand(host, dir)
-    ])
   })
 })

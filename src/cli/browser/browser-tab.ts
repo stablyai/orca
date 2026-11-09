@@ -3,7 +3,7 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { formatTabList, formatTabListWithProfiles, formatTabShow } from './browser-format'
 import { printResult } from '../format'

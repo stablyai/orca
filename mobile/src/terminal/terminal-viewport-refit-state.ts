@@ -1,5 +1,5 @@
-import type { RpcResponse } from '../transport/types'
-import { isMethodNotFoundRefusal } from '../transport/rpc-acceptance-policies'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { isMethodNotFoundRefusal } from '../transport/rpc/rpc-acceptance-policies'
 
 export type TerminalUpdateViewportCapability = 'unknown' | 'supported' | 'unsupported'
 

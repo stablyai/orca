@@ -1,6 +1,6 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
-import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
+import { isBrokenCheck } from '../../../src/shared/source-control/checks/pr-checks-fix-prompt'
 import {
   View,
   colors,
@@ -85,6 +85,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     actionItem,
     addHostedItemComment,
     addLinearComment,
+    commentSendNotice,
     createLinearSubIssue,
     detailCommentGroups,
     detailError,
@@ -167,7 +168,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   onPress={() => void rerunGitHubChecks(actionItem, true)}
                 >
                   <Text style={styles.inlineSaveText}>
-                    {translate('tasks.itemDetailContent.rerunFailed', 'Rerun failed')}
+                    {translate('tasks.rerunUnsuccessful', 'Retry checks')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -338,6 +339,9 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
         ) : (
           detailCommentGroups.map(renderDetailCommentGroup)
         )}
+        {commentSendNotice ? (
+          <Text style={styles.detailError}>{commentSendNotice.text}</Text>
+        ) : null}
         {(detailPayload.provider === 'github' && actionItem.provider === 'github') ||
         (detailPayload.provider === 'gitlab' && actionItem.provider === 'gitlab')
           ? renderCommentComposer({

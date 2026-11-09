@@ -9,7 +9,7 @@ import {
   type SmartWorkspaceSourceRow
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraIssue, JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { fanOutSmartSearch, type SmartFanOutResult } from './smart-source-fan-out'
 import { lookupJiraIssueByUrl } from './jira-mobile-url-lookup'
 import type { MrStateFilter } from './mobile-composer-source-types'

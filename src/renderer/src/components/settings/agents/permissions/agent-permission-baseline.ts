@@ -1,8 +1,8 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   AUTO_TUI_AGENT_ARGS,
   type AgentPermissionMode
-} from '../../../../../../shared/tui-agent-permissions'
+} from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 
 type PresetMode = Exclude<AgentPermissionMode, 'mixed'>
 

@@ -1,25 +1,15 @@
 import { applyAppend, replaceList } from '../../../../src/shared/native-chat/native-chat-merge'
 import { translate } from '../../i18n/mobile-i18n'
 import type { NativeChatMerger } from '../../../../src/shared/native-chat/native-chat-merge'
-import type {
-  NativeChatMessage,
-  NativeChatTurnLifecycle
-} from '../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTranscriptFrame } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
 
-export type MobileNativeChatStreamFrame = {
-  type?: string
-  messages?: NativeChatMessage[]
-  hasMore?: boolean
-  beforeOffset?: number
-  // No transcript exists yet; render the empty window without treating it as settled history.
-  pending?: boolean
-  // The page starts at the row named by the subscribe's resumeAfter.
-  resumed?: boolean
-  error?: string
-  message?: string
-  // Provider turn boundary; hosts before #9121 omit it.
-  lifecycle?: NativeChatTurnLifecycle
-}
+type SnapshotFrame = Extract<NativeChatTranscriptFrame, { type: 'snapshot' }>
+
+// Every field optional: a frame is read before it is checked. `message` is a transport error's text.
+export type MobileNativeChatStreamFrame = { type?: string; message?: string } & Partial<
+  Omit<SnapshotFrame, 'type'>
+>
 
 export type AppliedMobileNativeChatFrame =
   | { kind: 'ignored' }

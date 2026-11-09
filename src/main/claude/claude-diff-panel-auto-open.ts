@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveClaudeGlobalConfigFile } from './claude-folder-trust-file'
 import { claudeVersionReaches } from './claude-hook-event-versions'
-import { isRecord } from '../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 export const CLAUDE_DIFF_PANEL_FIRST_VERSION = '2.1.260'
 

@@ -59,6 +59,34 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
   }
 ])
 
+export const getTerminalScrollOnUserInputSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'components.settings.TerminalInteraction.scrollOnUserInput',
+      'Scroll to Bottom on Input'
+    ),
+    description: translate(
+      'components.settings.TerminalInteraction.scrollOnUserInputDescription',
+      'Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.scroll', 'scroll'),
+      ...translateSearchKeyword('components.settings.terminal.search.typing', 'typing'),
+      ...translateSearchKeyword('components.settings.terminal.search.input', 'input'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.5fb3512e8c',
+        'paste'
+      ),
+      ...translateSearchKeyword('components.settings.terminal.search.jump', 'jump'),
+      ...translateSearchKeyword('components.settings.terminal.search.bottom', 'bottom'),
+      ...translateSearchKeyword('components.settings.terminal.search.scrollback', 'scrollback'),
+      ...translateSearchKeyword('components.settings.terminal.search.snap', 'snap'),
+      ...translateSearchKeyword('components.settings.terminal.search.position', 'position')
+    ]
+  }
+])
+
 export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.scrollSpeed.title', 'Scroll Speed'),
@@ -77,6 +105,7 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
       ...translateSearchKeyword('auto.components.settings.terminal.search.tui', 'tui')
     ]
   },
+  ...getTerminalScrollOnUserInputSearchEntry(),
   {
     title: translate(
       'auto.components.settings.terminal.search.ask_before_closing_running_terminals_title',

@@ -9,7 +9,7 @@ import {
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { getTerminalPaneAppearanceSearchEntries } from './terminal-pane-appearance-search'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalPaneAppearanceSectionProps = {
   settings: GlobalSettings
@@ -20,36 +20,34 @@ export function TerminalPaneAppearanceSection({
   settings,
   updateSettings
 }: TerminalPaneAppearanceSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const paneStyleOptions = resolvePaneStyleOptions(settings)
   const linkUnderlinesEntry = getTerminalPaneAppearanceSearchEntries()[2]!
 
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.TerminalAppearanceSection.e1a5c25555',
-          'Terminal Panes'
-        )}
+        title={t('auto.components.settings.TerminalAppearanceSection.e1a5c25555', 'Terminal Panes')}
       />
 
       <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
             'Inactive Pane Opacity'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalAppearanceSection.db632cb50e',
             'Opacity applied to panes that are not currently active.'
           )}
           keywords={['pane', 'opacity', 'dimming']}
         >
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
               'Inactive Pane Opacity'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.TerminalAppearanceSection.dimUnfocusedPanes',
               'Dim unfocused panes.'
             )}
@@ -67,18 +65,18 @@ export function TerminalPaneAppearanceSection({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.TerminalAppearanceSection.f27a99978d',
             'Divider Thickness'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalAppearanceSection.a14a427ae4',
             'Thickness of the pane divider line.'
           )}
           keywords={['pane', 'divider', 'thickness']}
         >
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.settings.TerminalAppearanceSection.f27a99978d',
               'Divider Thickness'
             )}

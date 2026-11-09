@@ -1,25 +1,27 @@
+import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import {
   transportActionArgumentChoices,
   demoteActionArgumentChoices,
   type ActionArgumentChoices
-} from '../../../../../../shared/source-control-action-argument-document'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import type { Dispatch, SetStateAction } from 'react'
 import type {
   SourceControlActionId,
   SourceControlActionLaunchPreferences,
   SourceControlActionRecipe
-} from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type {
   RepoSourceControlAiOverrides,
+  SourceControlAiModelChoice,
   SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
-import { liftActionPermissionArgs } from '../../../../../../shared/source-control-action-permission-lift'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { liftActionPermissionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import {
   readActionRecipeTextDraft,
   type ActionRecipeTextDraft
-} from './repository-source-control-ai-draft'
+} from './repository-source-control-ai-recipe-text'
 import { retireActionLaunchPreferences } from '../../source-control/source-control-ai-action-recipe-draft'
-import { readInheritedCommandTemplate } from './repository-source-control-ai-labels'
+import { resolveSourceControlActionCommandTemplate } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export function resetActionDraftLaunchPreferences(
   current: Partial<Record<SourceControlActionId, ActionRecipeTextDraft>>,
@@ -134,7 +136,8 @@ export function createRepoActionTextDraftEditors(
       const draft =
         current[actionId] ?? readActionRecipeTextDraft(immediateRepoAiRef.current, actionId)
       const currentTemplate =
-        draft.commandInputTemplate || readInheritedCommandTemplate(source, actionId)
+        draft.commandInputTemplate ||
+        resolveSourceControlActionCommandTemplate(source.actions, actionId)
       const separator = currentTemplate.endsWith('\n') || currentTemplate.length === 0 ? '' : ' '
       return patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
         commandInputTemplate: `${currentTemplate}${separator}{${variable}}`
@@ -143,6 +146,20 @@ export function createRepoActionTextDraftEditors(
   }
 
   return {
+    updateActionTextModelChoice: (
+      actionId: SourceControlActionId,
+      modelChoice: SourceControlAiModelChoice | undefined,
+      agentArgs: string,
+      modelEdits: SourceControlAiModelEdits | undefined
+    ) => {
+      setActionTextDrafts((current) =>
+        patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
+          modelChoice,
+          agentArgs,
+          modelEdits
+        })
+      )
+    },
     updateActionLaunchPreferences,
     updateActionTemplate,
     updateActionAgentArgs,

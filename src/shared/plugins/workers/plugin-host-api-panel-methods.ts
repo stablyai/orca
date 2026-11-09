@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
-import { AGENT_STATUS_STATES } from '../../agent-status-types'
+import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
 import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema

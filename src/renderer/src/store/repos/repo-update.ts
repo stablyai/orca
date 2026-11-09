@@ -5,19 +5,17 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
 import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
-import {
-  findRepoForHost,
-  getRepoHostIdentityForParts,
-  repoMatchesHostIdentity
-} from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
+import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../../shared/worktree/visibility-sources'
 import type { RepoSlice, RepoUpdate } from './repo-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 
@@ -58,6 +56,12 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     sanitized.forkSyncMode !== 'off'
   ) {
     delete sanitized.forkSyncMode
+  }
+  if (
+    'agentWorkspaceTrust' in sanitized &&
+    sanitizeAgentWorkspaceTrustDecision(sanitized.agentWorkspaceTrust) === undefined
+  ) {
+    delete sanitized.agentWorkspaceTrust
   }
   if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
     const normalized = normalizeGhAccountBinding(sanitized.ghAccount)
@@ -125,6 +129,10 @@ export function createRepoUpdateActions(
       const ownerTarget = getProjectSetupRuntimeTarget(ownerHostId)
       const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
       const applyRepoUpdate = async () => {
+        // Why at dispatch: an earlier queued update (an account change) may legitimately replace the owner.
+        const sourceOwner = get().githubSourceCollections?.capture(
+          get().repos.find((r) => repoMatchesHostIdentity(r, projectId, ownerHostId)) ?? ownerRepo
+        )
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)
           const target = ownerTarget
@@ -143,6 +151,13 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          if (
+            sanitizedUpdates.projectGroupOrder !== undefined &&
+            (!updatedRepo ||
+              (updatedRepo.projectGroupOrder ?? null) !== sanitizedUpdates.projectGroupOrder)
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -151,11 +166,19 @@ export function createRepoUpdateActions(
               if (!matchesOwner) {
                 return r
               }
+              if (sourceOwner && !s.githubSourceCollections?.owns(sourceOwner)) {
+                return r
+              }
               if (updatedRepo) {
-                return adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                return (
+                  s.githubSourceCollections?.adopt(
+                    adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                  ) ?? adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+                )
               }
               let mergedRepo: Repo = r
               const {
+                projectGroupOrder: _projectGroupOrder,
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
                 ghAccount,
@@ -200,7 +223,7 @@ export function createRepoUpdateActions(
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
               }
-              return mergedRepo
+              return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })
             return {
               repos: nextRepos,

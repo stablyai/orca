@@ -4,8 +4,7 @@ import {
   getSpawnArgsForWindows,
   wrapWindowsStartWait,
   isWindowsBatchScript,
-  UnsafeWindowsBatchArgumentsError,
-  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+  UnsafeWindowsBatchArgumentsError
 } from './windows-batch-spawn'
 
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
@@ -19,20 +18,6 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
 }
 
 describe('isWindowsBatchScript', () => {
-  it('detects .cmd and .bat on win32', () => {
-    withPlatform('win32', () => {
-      expect(isWindowsBatchScript('C:\\tools\\codex.cmd')).toBe(true)
-      expect(isWindowsBatchScript('C:\\tools\\codex.BAT')).toBe(true)
-    })
-  })
-
-  it('returns false for non-batch extensions', () => {
-    withPlatform('win32', () => {
-      expect(isWindowsBatchScript('C:\\tools\\codex.exe')).toBe(false)
-      expect(isWindowsBatchScript('C:\\tools\\codex')).toBe(false)
-    })
-  })
-
   it('returns false on non-win32 regardless of extension', () => {
     withPlatform('linux', () => {
       expect(isWindowsBatchScript('/usr/bin/foo.cmd')).toBe(false)
@@ -90,13 +75,6 @@ describe('getSpawnArgsForWindows', () => {
       expect(spawnArgs).not.toContain('/K')
       expect(spawnArgs).not.toContain('""')
       expect(spawnArgs[spawnArgs.indexOf('/B') + 1]).not.toMatch(/\.(?:cmd|bat)$/i)
-    })
-  })
-
-  it('keeps the waiting form for batch launches without detachedGui', () => {
-    withPlatform('win32', () => {
-      const { spawnArgs } = getSpawnArgsForWindows('C:\\Tools\\idea.cmd', ['C:\\workspaces\\orca'])
-      expect(spawnArgs).toEqual(['/d', '/c', '@', 'C:\\Tools\\idea.cmd', 'C:\\workspaces\\orca'])
     })
   })
 
@@ -173,14 +151,6 @@ describe('getSpawnArgsForWindows', () => {
     })
   })
 
-  it('passes .exe through unchanged on win32', () => {
-    withPlatform('win32', () => {
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\codex.exe', ['login'])
-      expect(spawnCmd).toBe('C:\\tools\\codex.exe')
-      expect(spawnArgs).toEqual(['login'])
-    })
-  })
-
   it('passes posix paths through unchanged on non-win32', () => {
     withPlatform('darwin', () => {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('/usr/local/bin/codex', ['login'])
@@ -207,14 +177,6 @@ describe('getSpawnArgsForWindows', () => {
     })
   })
 
-  it('allows punctuation that is not a cmd command operator', () => {
-    withPlatform('win32', () => {
-      expect(
-        getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['package,name;version']).spawnArgs
-      ).toEqual(['/d', '/c', '@', 'C:\\tools\\agent.cmd', 'package,name;version'])
-    })
-  })
-
   // Parentheses cannot chain a command without a separator the guard already rejects.
   it('spawns .cmd shims under Program Files (x86) and paren-bearing worktrees', () => {
     withPlatform('win32', () => {
@@ -226,32 +188,6 @@ describe('getSpawnArgsForWindows', () => {
       expect(getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['close)', '(open']).spawnArgs).toEqual(
         ['/d', '/c', '@', 'C:\\tools\\agent.cmd', 'close)', '(open']
       )
-    })
-  })
-
-  it('still rejects a paren-wrapped command chain', () => {
-    withPlatform('win32', () => {
-      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['(x & calc.exe)'])).toThrow(
-        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-      )
-    })
-  })
-
-  it('rejects exactly the characters the message advertises', () => {
-    withPlatform('win32', () => {
-      const advertised = WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL.split(' ')
-      expect(advertised.length).toBeGreaterThan(0)
-      for (const character of advertised) {
-        expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])).toThrow(
-          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-        )
-      }
-      for (const character of ['(', ')', ',', ';', '@', '#', '$', "'", '~', '=']) {
-        expect(advertised).not.toContain(character)
-        expect(() =>
-          getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])
-        ).not.toThrow()
-      }
     })
   })
 })

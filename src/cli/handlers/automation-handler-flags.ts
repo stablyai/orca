@@ -1,16 +1,19 @@
-import type { AutomationPrecheck, AutomationSchedulePreset } from '../../shared/automations-types'
+import type {
+  AutomationPrecheck,
+  AutomationSchedulePreset
+} from '../../shared/automations/automation-definition'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../shared/task-source-context'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/work-items/task-source-context'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
-} from '../../shared/automation-precheck'
-import { buildAutomationRrule } from '../../shared/automation-schedule-occurrences'
-import { isValidAutomationSchedule } from '../../shared/automation-schedule-parsing'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+} from '../../shared/automations/launch/automation-precheck'
+import { buildAutomationRrule } from '../../shared/automations/scheduling/automation-schedule-occurrences'
+import { isValidAutomationSchedule } from '../../shared/automations/scheduling/automation-schedule-parsing'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

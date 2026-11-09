@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { generateConversationNameFromContext } from './commit-message-text-generation'
 
 const homes: string[] = []
@@ -30,7 +30,10 @@ describe.runIf(process.platform !== 'win32')('chat naming CLI discovery', () => 
     mkdirSync(bin, { recursive: true })
     symlinkSync(process.execPath, join(bin, 'node'))
     const codex = join(bin, 'codex')
-    writeFileSync(codex, "#!/usr/bin/env node\nconsole.log('Fix login flow')\n")
+    writeFileSync(
+      codex,
+      "#!/usr/bin/env node\nconsole.log(process.argv.includes('mcp') ? '[]' : 'Fix login flow')\n"
+    )
     chmodSync(codex, 0o755)
 
     const result = await generateConversationNameFromContext(

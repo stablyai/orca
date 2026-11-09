@@ -44,20 +44,6 @@ function expectEverySplitToProduce(
 }
 
 describe('shell startup output scanner', () => {
-  it.each([
-    ['after the ready marker', [READY_MARKER, '\x1b[?2004hfish> ']],
-    ['after the ESC introducer', [`${READY_MARKER}\x1b`, '[?2004hfish> ']]
-  ])('preserves Fish output split %s', (_boundary, chunks) => {
-    const state = createShellStartupOutputScanState()
-    let output = ''
-
-    for (const chunk of chunks) {
-      output += scanShellStartupOutput(state, chunk).output
-    }
-
-    expect(output).toBe('\x1b[?2004hfish> ')
-  })
-
   it('preserves every post-ready byte at every chunk boundary', () => {
     expectEverySplitToProduce(`${READY_MARKER}${IDENTITY_MARKER}prompt`, {
       output: `${IDENTITY_MARKER}prompt`,

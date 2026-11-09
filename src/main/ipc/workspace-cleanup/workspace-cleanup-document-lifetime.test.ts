@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusResult } from '../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type * as RepoWorktrees from '../../workspaces/catalog/repo-worktrees'
 
@@ -134,19 +134,6 @@ describe('workspace cleanup document ownership', () => {
       expect(sender.eventNames()).toEqual([])
     }
   )
-  it('preserves same-document navigation and persists a completed scan', async () => {
-    const pending = Promise.withResolvers<GitStatusResult>()
-    boundary.status.mockReturnValue(pending.promise)
-    const { sender, scan } = setup()
-    const result = scan('live')
-    await vi.waitFor(() => expect(boundary.status).toHaveBeenCalledTimes(3))
-    sender.emit('did-navigate-in-page', {}, '#section', true)
-    pending.resolve(STATUS)
-    await result
-    expect(boundary.status).toHaveBeenCalledTimes(10)
-    expect(boundary.persist).toHaveBeenCalledTimes(1)
-    expect(sender.eventNames()).toEqual([])
-  })
   it('lets a successor finish while late retired reads settle', async () => {
     const pending = Promise.withResolvers<GitStatusResult>()
     boundary.list

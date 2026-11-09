@@ -1,9 +1,12 @@
-import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
-import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
+import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type {
+  StructuredAgentSessionForkSource,
+  StructuredAgentSessionResumeSource
+} from '../../../../../shared/agent-session/structured-agent-session-create'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -15,6 +18,7 @@ import {
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
+  updateStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
 import {
@@ -39,6 +43,8 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   selection: StructuredLaunchSelection
   /** A host list showed the chat, so its create reply needs no protection from older lists. */
   hostListed?: true
+  /** The bounded caller finished; this identity may still observe exact late evidence. */
+  operationEnded?: true
 }
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -63,9 +69,16 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
 }
 
 export function notifyStructuredLaunchListeners(): void {
-  for (const state of structuredLaunchesBySessionId.values()) {
-    persistStructuredLaunchState(state)
+  function* changes(): Generator<readonly [string, StructuredAgentLaunchPersistedRecord | null]> {
+    for (const state of structuredLaunchesBySessionId.values()) {
+      yield [state.intent.sessionId, structuredLaunchRecord(state)]
+    }
   }
+  updateStructuredAgentLaunchRecords(changes())
+  publishStructuredLaunchChange()
+}
+
+export function publishStructuredLaunchChange(): void {
   for (const listener of structuredLaunchListeners) {
     listener()
   }
@@ -80,9 +93,16 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
-  scope: { resumeFrom?: StructuredAgentSessionResumeSource; executionHostId?: string } = {}
+  scope: {
+    resumeFrom?: StructuredAgentSessionResumeSource
+    forkFrom?: StructuredAgentSessionForkSource
+    executionHostId?: string
+  } = {}
 ): string {
-  const { resumeFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  const { resumeFrom, forkFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  if (forkFrom) {
+    return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.throughItemId}`
+  }
   // A conversation id names a transcript on one host; never join a resume running on another.
   return resumeFrom
     ? `${agent}:${worktreeId}:resume:${executionHostId}:${resumeFrom.providerSessionId}`
@@ -110,15 +130,25 @@ export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchStat
 }
 
 function persistStructuredLaunchState(state: StructuredLaunchState): void {
+  const record = structuredLaunchRecord(state)
+  if (record) {
+    writeStructuredAgentLaunchRecord(record)
+  } else {
+    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
+  }
+}
+
+function structuredLaunchRecord(
+  state: StructuredLaunchState
+): StructuredAgentLaunchPersistedRecord | null {
   const lifecycle = launchStateLifecycle(state)
   if (lifecycle === 'published' || lifecycle === 'cancelled') {
-    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
-    return
+    return null
   }
-  writeStructuredAgentLaunchRecord({
+  return {
     ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
     ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
-  })
+  }
 }
 
 export function getPersistedStructuredAgentLaunchRecord(
@@ -145,6 +175,12 @@ export function getStructuredAgentSessionLaunchLifecycle(
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
 
+export {
+  getStructuredAgentSessionLaunchResumes,
+  structuredAgentSessionLaunchHasRetainedInput,
+  settleStructuredLaunchFirstMessageFromJournal
+} from './structured-agent-session-launch-input'
+
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
 export function getStructuredAgentSessionLaunchOwner(
   sessionId: string
@@ -155,21 +191,17 @@ export function getStructuredAgentSessionLaunchOwner(
   )
 }
 
-/** The launch adopts an existing conversation, which may keep a model of its own. */
-export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  const resumeFrom = state
-    ? state.intent.params.resumeFrom
-    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
-  return resumeFrom !== undefined
-}
-
 export function getStructuredAgentSessionLaunchFailure(
   worktreeId: string,
   sessionId: string
 ): StructuredLaunchFailure | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  return state && state.intent.worktreeId === worktreeId && launchStateLifecycle(state) === 'failed'
+  if (!state || state.intent.worktreeId !== worktreeId) {
+    return null
+  }
+  const lifecycle = launchStateLifecycle(state)
+  return lifecycle === 'failed' ||
+    (lifecycle === 'visibility-unknown' && !!state.intent.params.firstMessage)
     ? (state.failure ?? null)
     : null
 }

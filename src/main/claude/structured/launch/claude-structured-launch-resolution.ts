@@ -11,7 +11,7 @@ import type {
 import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
-} from '../../../../shared/agent-chat-permission-mode'
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
@@ -30,7 +30,7 @@ import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from '../../claude-cli-
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
-import type { StructuredAgentLaunchPartResolver } from '../../../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
@@ -39,10 +39,23 @@ import {
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
+const CLAUDE_ARTIFACT_ENV = 'CLAUDE_CODE_ARTIFACT'
 
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
-  resolvePermissionModeInCli?: true
+// SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins,
+// matched case-insensitively on Windows, where claude_code_artifact=0 is the same opt-out.
+export function withClaudeArtifactDefault(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
+): Record<string, string> {
+  const chosen = Object.keys(env).some(
+    (key) =>
+      key === CLAUDE_ARTIFACT_ENV ||
+      (platform === 'win32' && key.toUpperCase() === CLAUDE_ARTIFACT_ENV)
+  )
+  return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
 }
+
+type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -85,8 +98,8 @@ export function claudeStructuredPermissionOptions(
   mode: AgentChatPermissionChoice
 ): ClaudePermissionOptions {
   if (mode === 'own') {
-    // upstream request: https://github.com/anthropics/claude-agent-sdk-typescript/issues/519
-    return { resolvePermissionModeInCli: true }
+    // An omitted mode lets the CLI apply the user's settings defaultMode.
+    return {}
   }
   return mode === 'full-access'
     ? { extraArgs: { 'dangerously-skip-permissions': null } }
@@ -230,6 +243,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId,
         claudeConfigDir,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       }))
     // Fixed homes can be checked before the final account-routing recheck.
@@ -240,7 +254,7 @@ export function claudeStructuredLaunchPart(
       (base) =>
         withNativeChatVisualsEnv(
           {
-            ...base,
+            ...withClaudeArtifactDefault(base),
             // The turn translator relies on Claude's authoritative idle frame when no result arrives.
             [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
           },
@@ -260,6 +274,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId: fork.sourceSessionId,
         claudeConfigDir: launchHome,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       })
     }

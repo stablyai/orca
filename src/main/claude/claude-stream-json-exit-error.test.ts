@@ -4,8 +4,11 @@ import {
   claudeStartupResultError,
   claudeStreamJsonExitError
 } from './claude-stream-json-exit-error'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { retryableStructuredAgentSessionStart } from '../native-chat/agent-session-wire/structured-agent-session-start-retry'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import { claudeStartFailure } from './claude-startup-failure'
+
+const retryableStructuredAgentSessionStart = (error: unknown): boolean =>
+  claudeStartFailure(error).retry === 'safe'
 
 const frame = JSON.parse(
   readFileSync(new URL('./__fixtures__/claude-missing-conversation.jsonl', import.meta.url), 'utf8')
@@ -24,7 +27,7 @@ it('treats the recorded missing-conversation exit as an explained final refusal'
   expect(retryableStructuredAgentSessionStart(error)).toBe(false)
 })
 
-it('reads the same refusal from the recorded result, and leaves other startup results retryable', () => {
+it('reads the same refusal from the recorded result, and makes other startup results final', () => {
   const refusal = claudeStartupResultError(frame)
   expect(providerStartupFailureFact(refusal)).toEqual({
     kind: 'savedConversationMissing',
@@ -36,5 +39,5 @@ it('reads the same refusal from the recorded result, and leaves other startup re
     kind: 'startFailed',
     detail: { text: 'managed settings failed', audience: 'log' }
   })
-  expect(retryableStructuredAgentSessionStart(generic)).toBe(true)
+  expect(retryableStructuredAgentSessionStart(generic)).toBe(false)
 })

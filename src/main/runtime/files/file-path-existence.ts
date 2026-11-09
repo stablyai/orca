@@ -1,8 +1,8 @@
 import {
   capturePathExistence,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
-import { isPathAbsentError } from '../../ipc/filesystem/filesystem-path-containment'
+} from '../../../shared/file-access/path-existence-batch'
+import { isPathAbsentError } from '../../ipc/filesystem/access/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
   type RuntimeFileExplorerPath,

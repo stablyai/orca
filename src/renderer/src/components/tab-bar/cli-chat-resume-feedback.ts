@@ -6,8 +6,8 @@ import {
   structuredLaunchFailure
 } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import { agentSessionWriteFailureText } from '../native-chat/agent-session-write-notice-text'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import { agentSessionWriteFailureText } from '../native-chat/messages/notices/agent-session-write-notice-text'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
@@ -56,12 +56,12 @@ export async function reportCliChatResumeFailureInChat(
   }
 }
 
-/** Said in the chat that took the terminal's place, since that terminal is gone. */
-export function cliChatResumeExitUnprovenText(source: CliChatResumeSource): string {
-  return translate(
-    'components.native-chat.resumeInNewChat.terminalExitUnprovenInChat',
-    "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
-    { agent: agentLabel(source.agent) }
+/** The host found no history to open for the conversation: none saved, or none it can reach. */
+export function canRestartMissingConversation(error: unknown): boolean {
+  const refusal = structuredLaunchFailure(error)
+  return (
+    refusal?.code === 'agent_session_identity_required' &&
+    refusal.details?.reason === 'transcriptNotFound'
   )
 }
 

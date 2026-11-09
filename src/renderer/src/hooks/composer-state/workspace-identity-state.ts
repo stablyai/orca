@@ -3,6 +3,7 @@ import type { ComposerModel } from './composer-model'
 type WorkspaceIdentityStateInput = Pick<
   ComposerModel,
   | 'initialBaseBranch'
+  | 'initialParentWorktreeId'
   | 'initialLinearBranchName'
   | 'initialLinkedWorkItem'
   | 'linkedWorkItem'
@@ -23,9 +24,12 @@ import {
   isBlockingJiraUrlIntent
 } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 
 /** Older drafts lack naming intent; restore baseBranch as the branch pick it represented when saved. */
@@ -39,6 +43,7 @@ export function resolveDraftBaseBranchNamesWorkspace(args: {
 export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const {
     initialBaseBranch,
+    initialParentWorktreeId,
     initialLinearBranchName,
     initialLinkedWorkItem,
     linkedWorkItem,
@@ -120,7 +125,9 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     updateBranchNameOverride(value)
   }, [])
 
-  const [parentWorktreeId, setParentWorktreeId] = useState<string | null>(null)
+  const [parentWorktreeId, setParentWorktreeId] = useState<string | null>(
+    initialParentWorktreeId ?? null
+  )
 
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] = useState(
     Boolean(initialLinearBranchName)

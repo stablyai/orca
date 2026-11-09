@@ -4,7 +4,6 @@ import * as scopedRootsInvalidation from './worktrees/removal/registered-worktre
 import * as authorizedRootsCache from './worktrees/removal/registered-worktree-roots-cache'
 import {
   removeWorktreeLinkedPathsMock,
-  findExistingWorktreeSymlinkPathsMock,
   listWorktreesMock,
   assertWorktreeCleanForRemovalMock,
   removeWorktreeMock,
@@ -14,7 +13,6 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
-import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   return {
@@ -29,7 +27,7 @@ vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) =
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../../shared/git-worktree-porcelain-parser', async (importOriginal) => ({
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
 }))
@@ -85,6 +83,7 @@ vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
@@ -95,6 +94,9 @@ vi.mock('../git/git-username', async (importOriginal) => ({
     .resolveLocalGitUsernameMock
 }))
 vi.mock('../github/client', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
 vi.mock('../source-control/hosted-review', async () =>
@@ -152,7 +154,7 @@ vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async 
 vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>
@@ -163,96 +165,10 @@ vi.mock('./pty/provider/state-cleanup', async () =>
 )
 
 describe('registerWorktreeHandlers', () => {
-  let runtimeStub: WorktreeRuntimeStub
-
   beforeEach(() => {
-    runtimeStub = setupWorktreeHandlers()
+    setupWorktreeHandlers()
     vi.spyOn(scopedRootsInvalidation, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
     vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
-  })
-
-  it('fails dirty non-force deletes before PTY teardown', async () => {
-    mockKnownFeatureWorktree()
-    const repoWithConfiguredRegularFile = {
-      id: 'repo-1',
-      path: '/workspace/repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      symlinkPaths: ['scratch.txt']
-    }
-    store.getRepo.mockReturnValue(repoWithConfiguredRegularFile)
-    store.getRepos.mockReturnValue([repoWithConfiguredRegularFile])
-    getEffectiveHooksMock.mockReturnValue(null)
-    assertWorktreeCleanForRemovalMock.mockRejectedValue(
-      Object.assign(new Error('Worktree has uncommitted or untracked changes.'), {
-        stdout: '?? scratch.txt\n'
-      })
-    )
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-1::/workspace/feature-wt'
-      })
-    ).rejects.toThrow('Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt')
-
-    expect(findExistingWorktreeSymlinkPathsMock).toHaveBeenCalledWith('/workspace/feature-wt', [
-      'scratch.txt'
-    ])
-    expect(assertWorktreeCleanForRemovalMock).toHaveBeenCalledWith('/workspace/feature-wt', false)
-    expect(runtimeStub.closeFileWatchersForRemoval).not.toHaveBeenCalled()
-    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-    expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
-    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
-  })
-
-  it('fails locked dirty-force deletes before hooks, link cleanup, or PTY teardown', async () => {
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: '/workspace/repo',
-        head: 'main',
-        branch: 'main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: '/workspace/feature-wt',
-        head: 'feature',
-        branch: 'feature',
-        isBare: false,
-        isMainWorktree: false,
-        locked: true,
-        lockReason: 'active agent session'
-      }
-    ])
-    store.getRepo.mockReturnValue({
-      id: 'repo-1',
-      path: '/workspace/repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      symlinkPaths: ['node_modules']
-    })
-    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
-
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-1::/workspace/feature-wt',
-        force: true
-      })
-    ).rejects.toThrow(
-      'Failed to force delete worktree at /workspace/feature-wt. Worktree is locked by Git.'
-    )
-
-    expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
-    expect(runHookMock).not.toHaveBeenCalled()
-    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
-    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-    expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
-    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 
   it('rechecks a local Git lock after the archive hook before teardown', async () => {

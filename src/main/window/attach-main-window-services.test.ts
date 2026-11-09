@@ -108,7 +108,7 @@ vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
 }))
 
-vi.mock('../ipc/worktree-change-invalidators', () => ({
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
@@ -135,7 +135,7 @@ vi.mock('../ipc/worktrees/creation/worktree-base-directory-watcher', () => ({
   scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))
 
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     unregisterAll: browserManagerUnregisterAllMock
   }

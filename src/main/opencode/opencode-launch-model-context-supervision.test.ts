@@ -6,7 +6,7 @@ import {
   createSupervisedProbeRig,
   waitFor,
   type SupervisedProbeRig
-} from '../codex/supervised-probe-owner.test-fixture'
+} from '../codex/structured/session-lifecycle/supervised-probe-owner.test-fixture'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 
 // Delay beyond stdin grace like a slow opencode serve startup; stdin EOF must not stop it.

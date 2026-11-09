@@ -3,13 +3,13 @@ import {
   probeThenWatchWslOrcadBridges,
   type WslOrcadBridgeActivity
 } from './wsl-orcad-bridge-activity'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../../shared/orcad-terminal-census'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../../power/system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,

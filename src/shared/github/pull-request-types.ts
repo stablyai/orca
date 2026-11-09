@@ -53,6 +53,7 @@ export type PRInfo = {
   state: PRState
   url: string
   checksStatus: CheckStatus
+  checksSummary?: ProviderCheckSummary
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
@@ -74,6 +75,12 @@ export type PRInfo = {
   baseRefName?: string
   /** PR branch name detects worktrees switching branches and stale durable links. */
   headRefName?: string
+  baseSha?: string
+  /** The whole rollup was read, within the page bound. */
+  checksReadComplete?: boolean
+  /** Complete, non-empty, nothing pending and no check waiting for approval. */
+  checksFinal?: boolean
+  failingCheckNames?: string[]
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
@@ -105,6 +112,8 @@ export type ProviderCheckSummary = {
   total: number
   passed: number
   failed: number
+  /** Subset of failed; absent when cancellation detail is unavailable. */
+  cancelled?: number
   pending: number
   neutral: number
   /** 'pipeline' when the state is a GitLab pipeline's own verdict, so its counts are not check counts. */

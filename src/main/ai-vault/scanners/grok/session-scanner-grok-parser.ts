@@ -1,3 +1,4 @@
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
@@ -5,8 +6,8 @@ import {
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
 import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { grokTranscriptPathForMetadata } from '../../../../shared/ai-vault-session-log-resource'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { grokTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import {
@@ -30,9 +31,13 @@ const GROK_PREVIEW_SCAN_LIMIT = 4096
 export async function parseGrokSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
+  const parsed: unknown = JSON.parse(
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal)
+  )
+  const record = asRecord(parsed)
   if (!record) {
     return null
   }
@@ -50,7 +55,7 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.created_at))
   updateTimeline(accumulator, extractString(record.updated_at))
   updateTimeline(accumulator, extractString(record.last_active_at))
-  await consumeGrokChatHistory(accumulator, grokTranscriptPathForMetadata(file.path))
+  await consumeGrokChatHistory(accumulator, grokTranscriptPathForMetadata(file.path), signal)
   return finalizeSession(accumulator, platform)
 }
 
@@ -61,12 +66,14 @@ export function grokSessionCwd(summary: Record<string, unknown>): string | null 
 
 async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
-  transcriptPath: string
+  transcriptPath: string,
+  signal?: AbortSignal
 ): Promise<void> {
-  const input = openTranscriptReadStream(transcriptPath, { encoding: 'utf-8' }, 'scan')
+  const input = openTranscriptReadStream(transcriptPath, { encoding: 'utf-8' }, 'scan', signal)
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
+      await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -101,8 +108,12 @@ async function consumeGrokChatHistory(
       )
     }
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Summary-only sessions can list; WSL refusal must propagate so incomplete history is not cached as current.
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw error
     }
   } finally {

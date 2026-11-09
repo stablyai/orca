@@ -12,19 +12,19 @@ import type { PRComment } from '../../../../src/shared/github/comment-types'
 import {
   getPRCommentGroupRoot,
   type PRCommentGroup
-} from '../../../../src/shared/pr-comment-groups'
-import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
+import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-link'
-import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
+import { canEditComment, isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../ActionSheetModal'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrThreadCode } from './PrThreadCode'
@@ -44,6 +44,8 @@ export type PrThreadActions = {
   isResolveBusy: (threadId: string) => boolean
   isEditBusy: (commentId: number) => boolean
   isDeleteBusy: (commentId: number) => boolean
+  // Where a reply to a comment waits until it is posted.
+  draftKey: (replyTo: number) => string | null
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }
@@ -192,7 +194,7 @@ export function PrThreadRow({
             autoFocus
           />
         ) : (
-          <CommentMarkdown content={root.body} />
+          <PrMarkdown content={root.body} url={root.url} />
         )}
         {lastReply ? (
           <View style={styles.reply}>

@@ -89,9 +89,6 @@
   "auto.components.GitHubItemDialog.e15a8b77ef": {
     "ko": "이 검사에는 인라인 세부정보가 없습니다."
   },
-  "auto.components.GitHubItemDialog.e31651a224": {
-    "ko": "실패한 체크 다시 실행"
-  },
   "auto.components.GitHubItemDialog.e45324fbed": {
     "ko": "검사 세부정보를 로드하지 못했습니다."
   },
@@ -256,9 +253,6 @@
   },
   "auto.components.PullRequestPage.54cddd1858": {
     "ko": "모든 체크 다시 실행"
-  },
-  "auto.components.PullRequestPage.68605516dd": {
-    "ko": "실패한 체크 다시 실행"
   },
   "auto.components.PullRequestPage.6885c619e7": {
     "ko": "repos 경로가 없으면 답글을 달 수 없습니다."
@@ -863,9 +857,6 @@
   "auto.components.feature.wall.AiCommitPrSettingsCard.1c0cb4fabb": {
     "ko": "AI 작성자"
   },
-  "auto.components.feature.wall.AiCommitPrSettingsCard.4b2fc4b80c": {
-    "ko": "사고 강도"
-  },
   "auto.components.feature.wall.AiCommitPrSettingsCard.8d4152701a": {
     "ko": "예: ollama run llama3.1 {{value0}}"
   },
@@ -1267,9 +1258,6 @@
   },
   "auto.components.onboarding.IntegrationsStep.0b4a7d23ab": {
     "ko": "로그인 중"
-  },
-  "auto.components.onboarding.OnboardingFlow.322fc50a18": {
-    "ko": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다."
   },
   "auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle": {
     "ko": "새 창에서 사용할 기본 셸과 terminal에서 오른쪽 클릭이 동작하는 방식을 선택하세요."
@@ -2068,18 +2056,6 @@
   },
   "auto.components.settings.Settings.c2ee313198": {
     "ko": "SSH를 통해 기존 머신의 파일, 터미널, Git, 워크스페이스를 사용합니다."
-  },
-  "auto.components.settings.SettingsFormControls.c822571b2e": {
-    "ko": " \"{{value0}}\"과(와) 일치"
-  },
-  "auto.components.settings.SettingsFormControls.cb330ef7f8": {
-    "ko": "/{{value0}}"
-  },
-  "auto.components.settings.SettingsFormControls.fbb428db98": {
-    "ko": "선택됨:"
-  },
-  "auto.components.settings.SettingsFormControls.imported_from": {
-    "ko": "{{value0}}에서 가져옴"
   },
   "auto.components.settings.SettingsFormControls.search_terminal_themes": {
     "ko": "터미널 테마 검색"
@@ -4745,9 +4721,6 @@
   "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
     "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
   },
-  "accounts.antigravity.scope": {
-    "ko": "{{host}}의 agy 자체 계정을 관리합니다."
-  },
   "accounts.antigravity.signIn": {
     "ko": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요."
   },
@@ -5113,9 +5086,6 @@
   },
   "auto.components.settings.RepositoryPane.nestedHostLabel": {
     "ko": "{{value0}} ({{value1}} 경유)"
-  },
-  "auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a": {
-    "ko": "기본 에이전트 사용"
   },
   "auto.components.settings.RepositorySourceControlAiCustomCommand.0704dd55cd": {
     "ko": "저장소 명령"
@@ -5517,9 +5487,6 @@
     "ko": "실패"
   },
   "auto.components.settings.CommitMessageAiPane.47e45cbd5a": {
-    "ko": "사용자 지정 명령"
-  },
-  "auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b": {
     "ko": "사용자 지정 명령"
   },
   "auto.components.settings.RepositorySourceControlAiCustomCommand.ebffc5a28c": {

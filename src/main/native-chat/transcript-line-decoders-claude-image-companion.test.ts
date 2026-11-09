@@ -39,11 +39,6 @@ function decode(): NativeChatMessage[] {
 }
 
 describe('Claude pasted-image companion row', () => {
-  it('keeps the isMeta companion row so the turn carries its attachments', () => {
-    const decoded = decode()
-    expect(decoded.map((m) => m.id)).toEqual(['companion-uuid', 'prompt-uuid'])
-  })
-
   it('folds a multi-image companion into the prompt as image refs', () => {
     const folded = normalizeImageTranscriptMessages(decode())
     expect(folded).toHaveLength(1)

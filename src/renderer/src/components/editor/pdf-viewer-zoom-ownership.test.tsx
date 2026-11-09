@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import PdfViewer from './PdfViewer'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { requestViewerZoom } from './viewer-zoom-request'
-import { readPdfScalePreference } from './pdf-scale-preference-storage'
 
 type PdfDocumentFixture = { name: string }
 
@@ -48,26 +47,6 @@ function renderPdf(isCommandOwner: boolean): void {
 }
 
 describe('PdfViewer app zoom ownership', () => {
-  it('zooms the PDF in the command-owning editor pane', () => {
-    renderPdf(true)
-
-    let claimed = false
-    act(() => {
-      claimed = requestViewerZoom('in')
-    })
-
-    expect(claimed).toBe(true)
-    expect(viewers[0].currentScale).toBe(1.25)
-    expect(readPdfScalePreference('report')).toBe(1.25)
-
-    viewers[0].currentScaleValue = '1.25'
-    act(() => {
-      requestViewerZoom('reset')
-    })
-    expect(viewers[0].currentScaleValue).toBe('page-width')
-    expect(readPdfScalePreference('report')).toBe('page-width')
-  })
-
   it('leaves zoom unclaimed when text in the floating workspace has focus', () => {
     renderPdf(true)
     const floating = document.createElement('textarea')

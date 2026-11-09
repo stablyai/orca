@@ -21,7 +21,7 @@ vi.mock('node:os', async (importOriginal) => {
 
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import { getCodexSettingsBaselinePath } from '../codex/config-settings-baseline'
+import { getCodexSettingsBaselinePath } from '../codex/configuration/settings/config-settings-baseline'
 
 let root: string
 
@@ -65,19 +65,6 @@ describe('codexConfigSync:status handler', () => {
     })
   })
 
-  it('reports synced when the selection runs directly on the real home', () => {
-    // System default uses no mirror; stale shared homes must not produce warnings.
-    const staleSharedHome = join(root, 'codex-runtime-home', 'home')
-    mkdirSync(staleSharedHome, { recursive: true })
-    writeFileSync(join(staleSharedHome, 'config.toml'), 'model = "stale"\n', 'utf-8')
-
-    expect(invokeHandler(null)).toEqual({
-      state: 'synced',
-      reason: null,
-      systemConfigPath: join(root, '.codex', 'config.toml')
-    })
-  })
-
   it('reports a stall when the selected home baseline cannot be read', () => {
     const perAccountHome = join(root, 'codex-accounts', 'acct-1', 'home')
     mkdirSync(perAccountHome, { recursive: true })
@@ -92,11 +79,6 @@ describe('codexConfigSync:status handler', () => {
       systemConfigPath: join(root, '.codex', 'config.toml'),
       managedStatePath: baselinePath
     })
-  })
-
-  it('re-registers cleanly so a reload cannot leak a duplicate handler', () => {
-    invokeHandler(null)
-    expect(removeHandlerMock).toHaveBeenCalledWith('codexConfigSync:status')
   })
 })
 

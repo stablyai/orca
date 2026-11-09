@@ -8,7 +8,7 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-import { fetchNudge, versionMatchesRange, shouldApplyNudge } from './nudge-campaign'
+import { fetchNudge, versionMatchesRange } from './nudge-campaign'
 
 describe('updater-nudge', () => {
   beforeEach(() => {
@@ -79,32 +79,6 @@ describe('updater-nudge', () => {
       expect(versionMatchesRange('1.2.0', { minVersion: '1.1.0', maxVersion: '1.1.19' })).toBe(
         false
       )
-    })
-  })
-
-  describe('shouldApplyNudge', () => {
-    const nudge = { id: 'campaign-1', minVersion: '1.0.0' }
-
-    it('returns false when campaign already dismissed', () => {
-      expect(
-        shouldApplyNudge({
-          nudge,
-          appVersion: '1.5.0',
-          pendingUpdateNudgeId: null,
-          dismissedUpdateNudgeId: 'campaign-1'
-        })
-      ).toBe(false)
-    })
-
-    it('returns false when campaign is already pending', () => {
-      expect(
-        shouldApplyNudge({
-          nudge,
-          appVersion: '1.5.0',
-          pendingUpdateNudgeId: 'campaign-1',
-          dismissedUpdateNudgeId: null
-        })
-      ).toBe(false)
     })
   })
 })

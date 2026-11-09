@@ -1,12 +1,13 @@
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
-import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
-import { importFederatedControlMessage } from '../../../../orchestration/federation-control-message'
+import { federationRelayWireItem } from '../../../../orchestration/federation/relay/federation-relay-wire'
+import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
+import { importFederatedControlMessage } from '../../../../orchestration/federation/relay/federation-control-message'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   areFederatedLifecycleSettlementsEqual,
   publishFederatedLifecycleSettlement,
   type FederatedLifecycleSettlement
-} from '../../../../orchestration/federation-lifecycle-settlement'
+} from '../../../../orchestration/federation/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
 import {
   FederationAckParams,
@@ -24,7 +25,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
-        items: params.replayUnacknowledged
+        items: (params.replayUnacknowledged
           ? runtime
               .getOrchestrationDb()
               .listPendingFederationRelay(params.dispatchId, 'to_home', params.limit)
@@ -34,6 +35,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
               afterSequence: params.afterSequence ?? 0,
               limit: params.limit
             })
+        ).map(federationRelayWireItem)
       }
     }
   }),
@@ -137,45 +139,58 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             `Remote Dispatch ${params.dispatchId} is not active.`
           )
         }
-        if (item.kind === 'reply') {
-          const reply = parseFederatedReply(item.payload)
-          db.answerRemoteQuestion({
-            messageId: reply.questionId,
-            dispatchId: params.dispatchId,
-            answerMessageId: reply.answerMessageId,
-            body: reply.body
-          })
-          deliverQuestionAnswer(runtime, {
-            message_id: reply.questionId,
-            dispatch_id: params.dispatchId
-          })
-        } else if (item.kind === 'control_message') {
-          if (
-            currentAttachment.protocol_version <
-            ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-          ) {
+        db.db.exec('SAVEPOINT received_relay_item')
+        let notify: (() => void) | undefined
+        try {
+          if (item.kind === 'reply') {
+            const reply = parseFederatedReply(item.payload)
+            db.answerRemoteQuestion({
+              messageId: reply.questionId,
+              dispatchId: params.dispatchId,
+              answerMessageId: reply.answerMessageId,
+              body: reply.body,
+              answerSenderReport: item.answerSenderReport
+            })
+            notify = () =>
+              deliverQuestionAnswer(runtime, {
+                message_id: reply.questionId,
+                dispatch_id: params.dispatchId
+              })
+          } else if (item.kind === 'control_message') {
+            if (
+              currentAttachment.protocol_version <
+              ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+            ) {
+              throw new OrchestrationError(
+                'capability_unsupported',
+                `Remote Dispatch ${params.dispatchId} does not support coordinator control mail.`
+              )
+            }
+            const controlMessage = importFederatedControlMessage(db, {
+              dispatchId: params.dispatchId,
+              messageId: item.message_id,
+              payload: item.payload
+            })
+            imported += controlMessage.imported ? 1 : 0
+            if (controlMessage.imported) {
+              notify = () =>
+                runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, controlMessage.type)
+            }
+          } else {
             throw new OrchestrationError(
-              'capability_unsupported',
-              `Remote Dispatch ${params.dispatchId} does not support coordinator control mail.`
+              'invalid_argument',
+              `Federated worker relay kind ${item.kind} is not supported.`
             )
           }
-          const controlMessage = importFederatedControlMessage(db, {
-            dispatchId: params.dispatchId,
-            messageId: item.message_id,
-            payload: item.payload
-          })
-          imported += controlMessage.imported ? 1 : 0
-          if (controlMessage.imported) {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, controlMessage.type)
-          }
-        } else {
-          throw new OrchestrationError(
-            'invalid_argument',
-            `Federated worker relay kind ${item.kind} is not supported.`
-          )
+          cursor = item.sequence
+          db.setRemoteWorkerImportSequence(params.dispatchId, cursor)
+          db.db.exec('RELEASE received_relay_item')
+        } catch (error) {
+          db.db.exec('ROLLBACK TO received_relay_item')
+          db.db.exec('RELEASE received_relay_item')
+          throw error
         }
-        cursor = item.sequence
-        db.setRemoteWorkerImportSequence(params.dispatchId, cursor)
+        notify?.()
       }
       return { dispatchId: params.dispatchId, acknowledgedThrough: cursor, imported }
     }

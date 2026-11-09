@@ -1,4 +1,4 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { withReconnectJitter } from '../../../shared/reconnect-jitter'
 import { WebRuntimeConnectionHeartbeat } from './web-runtime-connection-heartbeat'
 import {
@@ -12,7 +12,7 @@ import {
 } from './web-runtime-connection-auth'
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import { WebRuntimeConnectionTimers } from './web-runtime-connection-timers'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { withWebClientUpgradeMarker } from '../../../shared/web-origin-security'
 import type { WebRuntimeTransportSubscription } from './web-runtime-subscription-contract'
 import { WebRuntimeSubscriptionRegistry } from './web-runtime-subscription-registry'
@@ -26,7 +26,7 @@ import { WebRuntimeConnectionWaiters } from './web-runtime-connection-waiters'
 import {
   runtimeEnvironmentSetupFailure,
   type RuntimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 
@@ -120,22 +120,27 @@ export class WebRuntimeConnectionTransport {
   private handleAuthenticated(): void {
     const socket = this.ws
     const handshake = this.handshake
+    const begin = (): void => this.setState('migrating')
+    const call: WebRuntimeRequestRegistry['callNow'] = (method, params) =>
+      this.requestRegistry.callNow(method, params)
+    // Why reconnect either way: the next socket authenticates with the key, the token, or v2 again.
+    const reconnect = (resetBackoff: boolean) => (): void => {
+      if (socket && this.ws === socket) {
+        this.reconnectAttempt = resetBackoff ? 0 : this.reconnectAttempt
+        socket.close()
+        this.handleSocketClosed(socket)
+      }
+    }
     if (
       socket &&
-      handshake &&
-      this.auth.migrateIfPlanned({
-        handshake,
-        beginMigration: () => this.setState('migrating'),
-        call: (method, params) => this.requestRegistry.callNow(method, params),
-        // Why reconnect either way: the next socket authenticates with the key or the token.
-        reconnect: () => {
-          if (this.ws === socket) {
-            this.reconnectAttempt = 0
-            socket.close()
-            this.handleSocketClosed(socket)
-          }
-        }
-      })
+      (this.auth.checkLatchedHostIfPlanned({ begin, call, reconnect: reconnect(false) }) ||
+        (handshake &&
+          this.auth.migrateIfPlanned({
+            handshake,
+            beginMigration: begin,
+            call,
+            reconnect: reconnect(true)
+          })))
     ) {
       return
     }
@@ -166,11 +171,11 @@ export class WebRuntimeConnectionTransport {
     })
   }
 
-  handleSocketClosed(closedWs: WebSocket): void {
+  handleSocketClosed(closedWs: WebSocket, closeCode?: number): void {
     if (this.ws !== closedWs) {
       return
     }
-    this.auth.socketClosed()
+    this.auth.socketClosed(closeCode)
     this.ws = null
     this.handshake = null
     this.timers.clear('connect')
@@ -233,7 +238,6 @@ export class WebRuntimeConnectionTransport {
     this.handshake = null
     installWebRuntimeSocket({
       socket,
-      connection: this.connection,
       plan,
       auth: this.auth,
       timers: this.timers,

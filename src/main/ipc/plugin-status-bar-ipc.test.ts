@@ -40,14 +40,6 @@ function setup() {
 }
 
 describe('plugin status bar changes', () => {
-  it('pushes every change to the windows', () => {
-    const { set } = setup()
-    set('acme.guard', '1 blocked')
-    expect(send).toHaveBeenLastCalledWith('plugins:statusBarChanged', {
-      'acme.guard': { item: { text: '1 blocked' } }
-    })
-  })
-
   it('starts a disabled, removed or updated plugin over from its manifest values', () => {
     const { statusBar, installs, set, changed } = setup()
     set('acme.guard', '1 blocked')

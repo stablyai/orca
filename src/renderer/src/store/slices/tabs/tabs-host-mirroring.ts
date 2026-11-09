@@ -1,7 +1,7 @@
 import type { AppState } from '../../types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
-import { findTabAndWorktree } from '../tab-group-state'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { findTabAndWorktree } from './tab-group-state'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
 
 /** Mirror host-tracked fields onto terminal rows: reconciliation derives unified fields there and recovery reads row ownership, so unified-only writes revert or remount hidden chat. */
@@ -31,8 +31,8 @@ export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: 
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
+  void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+    ({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
   )
 }
 
@@ -52,7 +52,7 @@ export function mirrorTabViewModeToHost(
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
+  void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+    ({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }

@@ -7,7 +7,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, Check, X, LoaderCircle } from 'lucide-react'
@@ -18,6 +18,7 @@ export function TaskPageLinearProjectDialog({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     availableTeams,
     newLinearProjectOpen,
@@ -48,10 +49,10 @@ export function TaskPageLinearProjectDialog({
         }}
       >
         <DialogTitle className="sr-only">
-          {translate('auto.components.TaskPage.1361275ec3', 'New Linear project')}
+          {t('auto.components.TaskPage.1361275ec3', 'New Linear project')}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {translate(
+          {t(
             'auto.components.TaskPage.bdebffcbfe',
             'Create a Linear project for the selected team.'
           )}
@@ -59,7 +60,7 @@ export function TaskPageLinearProjectDialog({
         <div className="flex items-center justify-between border-b border-border/60 bg-muted/10 px-5 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {translate('auto.components.TaskPage.02f67c0d09', 'New Project')}
+              {t('auto.components.TaskPage.02f67c0d09', 'New Project')}
             </span>
             <span className="text-xs text-muted-foreground/40">/</span>
             {availableTeams.length > 1 ? (
@@ -73,14 +74,14 @@ export function TaskPageLinearProjectDialog({
                     <span className="truncate">
                       {newLinearProjectTargetTeam
                         ? `${newLinearProjectTargetTeam.key} - ${newLinearProjectTargetTeam.name}`
-                        : translate('auto.components.TaskPage.5af6f0ae5b', 'Select team')}
+                        : t('auto.components.TaskPage.5af6f0ae5b', 'Select team')}
                     </span>
                     <ChevronDown className="size-3 flex-none text-muted-foreground" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-72" wheelScroll>
                   <div className="mx-1 mt-1 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {translate('auto.components.TaskPage.a98cbe7664', 'Team')}
+                    {t('auto.components.TaskPage.a98cbe7664', 'Team')}
                   </div>
                   <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                     {availableTeams.map((team) => (
@@ -119,7 +120,7 @@ export function TaskPageLinearProjectDialog({
             onClick={() => setNewLinearProjectOpen(false)}
             className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
             disabled={newLinearProjectSubmitting}
-            aria-label={translate('auto.components.TaskPage.b6795e65fd', 'Close')}
+            aria-label={t('auto.components.TaskPage.b6795e65fd', 'Close')}
           >
             <X className="size-4" />
           </button>
@@ -133,7 +134,7 @@ export function TaskPageLinearProjectDialog({
             onClick={() => setNewLinearProjectOpen(false)}
             disabled={newLinearProjectSubmitting}
           >
-            {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
+            {t('auto.components.TaskPage.ff69a30681', 'Cancel')}
           </Button>
           <Button
             onClick={() => void handleCreateNewLinearProject()}
@@ -146,10 +147,10 @@ export function TaskPageLinearProjectDialog({
             {newLinearProjectSubmitting ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                {translate('auto.components.TaskPage.1b59a07674', 'Creating...')}
+                {t('auto.components.TaskPage.1b59a07674', 'Creating...')}
               </>
             ) : (
-              translate('auto.components.TaskPage.5301ca0f20', 'Create project')
+              t('auto.components.TaskPage.5301ca0f20', 'Create project')
             )}
           </Button>
         </DialogFooter>

@@ -6,7 +6,7 @@
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { LocalWindowsRuntimePreference } from '../../../shared/project-execution-runtime'
+import type { LocalWindowsRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import type { Project } from '../../../shared/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
@@ -14,14 +14,16 @@ import {
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
 import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 import {
   createWslDriveUncRewriter,
+  mergeWslDriveUncKeyedEntries,
   rewriteWslDriveUncValue,
   type WslDriveUncRewriter
 } from './wsl-drive-unc-identity-rewrite'
@@ -59,6 +61,12 @@ export function rewriteWslDriveUncState(
       Object.assign(next, { [field]: rewriteWslDriveUncValue(state[field], rewriter) })
     }
   }
+  if (state.crossStoreLineageByChildKey) {
+    next.crossStoreLineageByChildKey = withRewrittenChildKeys(
+      state.crossStoreLineageByChildKey,
+      rewriter
+    )
+  }
   next.projects = sameIfUnchanged(
     next.projects,
     withWindowsGit(next.projects, repoIds, scope.distro)
@@ -78,6 +86,31 @@ export function rewriteWslDriveUncState(
     )
   }
   return { state: next, worktreeIds }
+}
+
+/** 'rewrite-child-key': the parent names a workspace in another store, so it is never mapped. */
+function withRewrittenChildKeys(
+  record: Record<string, unknown>,
+  rewriter: WslDriveUncRewriter
+): Record<string, unknown> {
+  let changed = false
+  const entries = new Map<string, { child: unknown; rekeyed: boolean }>()
+  for (const [key, lineage] of Object.entries(record)) {
+    const mapped = rewriter.identity(key)
+    const rekeyed = mapped !== key && isWorkspaceKey(mapped)
+    const nextKey = rekeyed ? mapped : key
+    const entry = {
+      child: rekeyed ? withCrossStoreChildKey(lineage, mapped) : lineage,
+      rekeyed
+    }
+    changed ||= rekeyed
+    const other = entries.get(nextKey)
+    // A UNC key and its drive key with different records is a collision, as for any rewritten field.
+    entries.set(nextKey, other ? mergeWslDriveUncKeyedEntries(nextKey, other, entry) : entry)
+  }
+  return changed
+    ? Object.fromEntries([...entries].map(([key, entry]) => [key, entry.child]))
+    : record
 }
 
 /** Keeps the original array when no row changed, so an unchanged field is not written. */
@@ -140,6 +173,9 @@ function collectRewrittenWorktreeIds(
     if (disposition === 'rewrite' && isStateField(field)) {
       rewriteWslDriveUncValue(state[field], recorder)
     }
+  }
+  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
+    recorder.identity(childKey)
   }
   for (const repo of state.repos) {
     recorder.identity(getRepoMainWorktreeId(repo))

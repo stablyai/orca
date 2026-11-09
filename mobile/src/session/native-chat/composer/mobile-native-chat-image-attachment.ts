@@ -1,5 +1,5 @@
-import { saveMobileClipboardImageAsTempFile } from '../../mobile-clipboard-image'
-import type { MobileClipboardImageRpcSender } from '../../mobile-clipboard-image-operations'
+import { saveMobileClipboardImageAsTempFile } from '../../../files/attachments/mobile-clipboard-image'
+import type { MobileClipboardImageRpcSender } from '../../../files/attachments/mobile-clipboard-image-operations'
 // Keep picker dependencies type-only so this upload module stays free of Expo/React Native at runtime.
 import type { MobileImageSource, PickedMobileImage } from '../../../platform/media-picker-contract'
 
@@ -24,12 +24,12 @@ export function appendPendingNativeChatImages(
   ]
 }
 
-export type UploadNativeChatImagesDeps = {
+export type UploadNativeChatImagesDeps<S = MobileImageSource> = {
   readonly canContinue?: () => boolean
   readonly client: MobileClipboardImageRpcSender
   readonly getConnectionId: () => Promise<string | null>
   readonly pickImages: (
-    source: MobileImageSource
+    source: S
   ) =>
     | Iterable<PickedMobileImage>
     | AsyncIterable<PickedMobileImage>
@@ -40,8 +40,8 @@ export type UploadNativeChatImagesDeps = {
 }
 
 // Upload without pasting: chat holds composer chips until submit so visible attachments cannot diverge from agent input.
-export async function uploadMobileNativeChatImages(
-  source: MobileImageSource,
+export async function uploadMobileNativeChatImages<S>(
+  source: S,
   {
     client,
     canContinue,
@@ -49,7 +49,7 @@ export async function uploadMobileNativeChatImages(
     pickImages,
     onUploadStart,
     onImageUploaded
-  }: UploadNativeChatImagesDeps
+  }: UploadNativeChatImagesDeps<S>
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
   const picked = await pickImages(source)
   const uploaded: Omit<PendingNativeChatImage, 'id'>[] = []

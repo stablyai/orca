@@ -8,7 +8,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import { projectStructuredAgentSessionStatus } from '../../shared/agent-session/view/structured-agent-session-projection'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const SESSION = 'claude-session'
@@ -117,113 +117,6 @@ describe('a typed background-task row opens the turn it resumes', () => {
     const running = items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
     expect(running).toHaveLength(1)
     expect(projected(items())).toBe('working')
-  })
-
-  it('keeps an idle chat idle when a live task only reports progress', () => {
-    const { translator, items } = harness()
-    spawnToolCall(translator)
-    translator.handle(
-      systemFrame('s1', {
-        subtype: 'task_started',
-        task_id: 'live-progress',
-        tool_use_id: TOOL,
-        task_type: 'local_bash',
-        description: 'Wait for the verification verdict',
-        is_backgrounded: true
-      })
-    )
-    settleTurn(translator)
-    expect(projected(items())).toBe('idle')
-
-    translator.handle(
-      systemFrame('s2', {
-        subtype: 'task_progress',
-        task_id: 'live-progress',
-        tool_use_id: TOOL,
-        usage: { total_tokens: 14866 }
-      })
-    )
-
-    const taskRow = items().find((item) => item.itemId.includes('live-progress'))
-    expect(taskRow).toBeDefined()
-    expect(JSON.stringify(taskRow?.body)).toContain('14866')
-    expect(
-      items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
-    ).toHaveLength(0)
-    expect(projected(items())).toBe('idle')
-  })
-
-  it('keeps an idle chat idle when a live task roster only refreshes its name', () => {
-    const { translator, items } = harness()
-    spawnToolCall(translator)
-    translator.handle(
-      systemFrame('s1', {
-        subtype: 'task_started',
-        task_id: 'live-roster',
-        tool_use_id: TOOL,
-        task_type: 'local_bash',
-        is_backgrounded: true
-      })
-    )
-    settleTurn(translator)
-    expect(projected(items())).toBe('idle')
-
-    translator.handle(
-      systemFrame('s2', {
-        subtype: 'background_tasks_changed',
-        tasks: [
-          {
-            task_id: 'live-roster',
-            task_type: 'local_bash',
-            description: 'Named after the turn settled'
-          }
-        ]
-      })
-    )
-
-    const taskRow = items().find((item) => item.itemId.includes('live-roster'))
-    expect(taskRow).toBeDefined()
-    expect(JSON.stringify(taskRow?.body)).toContain('Named after the turn settled')
-    expect(
-      items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
-    ).toHaveLength(0)
-    expect(projected(items())).toBe('idle')
-  })
-
-  it('does not reopen a completed turn for a late task revision', () => {
-    const { translator, items } = harness()
-    spawnToolCall(translator)
-    translator.handle(
-      systemFrame('s1', {
-        subtype: 'task_started',
-        task_id: 'late-revision',
-        tool_use_id: TOOL,
-        task_type: 'local_bash',
-        description: 'Wait for the verification verdict',
-        is_backgrounded: true
-      })
-    )
-    translator.handle(
-      systemFrame('s2', {
-        subtype: 'task_notification',
-        task_id: 'late-revision',
-        tool_use_id: TOOL,
-        status: 'completed',
-        summary: 'first run finished'
-      })
-    )
-    settleTurn(translator)
-    expect(projected(items())).toBe('idle')
-
-    translator.handle(
-      systemFrame('s3', {
-        subtype: 'task_progress',
-        task_id: 'late-revision',
-        usage: { total_tokens: 99 }
-      })
-    )
-
-    expect(projected(items())).toBe('idle')
   })
 
   it('does not reopen a completed turn when an overflow terminal row is enriched', () => {

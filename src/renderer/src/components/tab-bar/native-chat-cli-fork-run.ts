@@ -5,24 +5,24 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   prepareNativeChatCliFork,
   type NativeChatCliForkSubject
-} from '@/lib/native-chat-cli-fork-preparation'
+} from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import {
   assertAiVaultCopiedSessionLaunchAllowed,
   buildAiVaultCopiedSessionStartupForWorktree,
   buildAiVaultForkStartupForWorktree
-} from '@/lib/ai-vault-session-fork-startup'
+} from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
-import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault-session-launch-feedback'
-import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault-session-cli-fork'
+import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
+import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-cli-fork'
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
-} from '@/runtime/web-runtime-session-environment'
+} from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
-} from '@/runtime/runtime-environment-revision'
-import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveNativeChatCliForkIdentity,
   type NativeChatCliForkIdentity

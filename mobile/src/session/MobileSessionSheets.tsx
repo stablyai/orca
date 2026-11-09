@@ -3,22 +3,22 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
-import { MobileSessionTerminalLayoutSheet } from './MobileSessionTerminalLayoutSheet'
-import { QuickCommandsSheet } from './QuickCommandsSheet'
+import { MobileSessionTerminalLayoutSheet } from '../terminal/session/MobileSessionTerminalLayoutSheet'
+import { QuickCommandsSheet } from '../terminal/quick-commands/QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { TextInputModal } from '../components/TextInputModal'
-import { MobileTerminalRenameModal } from './MobileTerminalRenameModal'
+import { MobileTerminalRenameModal } from '../terminal/session/MobileTerminalRenameModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CustomKeyModal } from '../components/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
-import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
-import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
-import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
+import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
+import { getMobileTerminalActionSheetActions } from '../terminal/session/mobile-terminal-action-sheet-actions'
+import { isTerminalPhoneDisplayMode } from '../terminal/session/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { useMobileAllowAutoCloseActions } from './mobile-worker-auto-close'
-import { MobileAgentSessionTabActionSheet } from './MobileAgentSessionTabActionSheet'
+import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
+import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -71,7 +71,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     toggleTabChatView,
     toggleDisplayMode,
     readFileTab,
-    leaveSession,
+    leaveSessionDroppingDrafts,
     discardMarkdownLocalContent,
     copyMarkdownPath,
     confirmDiscardMarkdown,
@@ -304,7 +304,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                 .writeText(combined)
                 .then(() => {
                   setLeaveDrafts(null)
-                  leaveSession()
+                  leaveSessionDroppingDrafts(drafts)
                 })
                 .catch(() => {
                   triggerError()
@@ -318,7 +318,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             destructive: true,
             onPress: () => {
               setLeaveDrafts(null)
-              leaveSession()
+              leaveSessionDroppingDrafts(leaveDrafts ?? [])
             }
           }
         ]}

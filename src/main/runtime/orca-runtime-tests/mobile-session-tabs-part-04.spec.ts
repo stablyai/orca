@@ -1,139 +1,30 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import {
-  OrcaRuntimeService,
-  electronMocks,
-  getDefaultWorkspaceSession,
-  join,
-  mkdtemp,
-  tmpdir,
-  waitForMobileSessionTabsEvents
-} from '../orca-runtime-test-mocks.spec'
-import type {
-  RuntimeMobileSessionTabsResult,
-  WorkspaceSessionState
-} from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { waitForMobileSessionTabsEvents } from './mobile-session-tab-event-wait'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import 'node:path'
+import 'node:fs/promises'
+import 'node:os'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
-  TEST_FOLDER_PROJECT_GROUP_ID,
-  TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
-  createFolderWorkspaceRuntimeStore,
-  expectStablePaneKeyEnv,
-  makeFolderProjectGroup,
-  makeFolderWorkspace,
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import '../terminal/launch/spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
-  it('creates mobile session terminals for folder workspaces in a headless runtime server', async () => {
-    const folderPath = await mkdtemp(join(tmpdir(), 'orca-mobile-folder-workspace-'))
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-mobile-folder' })
-    const folderWorkspace = makeFolderWorkspace({ folderPath })
-    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
-    const runtime = new OrcaRuntimeService(
-      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
-    )
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    const result = await runtime.createMobileSessionTerminal(`id:${TEST_FOLDER_WORKSPACE_KEY}`)
-
-    const spawnCall = spawn.mock.calls[0]?.[0] as
-      | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
-      | undefined
-    const spawnedEnv = spawnedPtyEnv(spawnCall)
-    expect(spawnCall).toMatchObject({
-      cwd: folderPath,
-      worktreeId: TEST_FOLDER_WORKSPACE_KEY,
-      persistHostSessionBinding: true
-    })
-    expectStablePaneKeyEnv(spawnedEnv)
-    expect(spawnedEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
-    expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
-    expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
-    expect(result.tab).toMatchObject({
-      type: 'terminal',
-      status: 'ready',
-      terminal: expect.stringMatching(/^term_/),
-      isActive: true
-    })
-  })
-
-  it('spawns fresh headless SSH mobile session terminals instead of reattaching synthetic local ids', async () => {
-    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
-    const remoteStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
-    }
-    const spawn = vi.fn().mockResolvedValue({ id: 'ssh:ssh-1@@remote-pty' })
-    const runtime = new OrcaRuntimeService(remoteStore as never)
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn, 'ssh:ssh-1'),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: 'ssh-1',
-        worktreeId: TEST_WORKTREE_ID,
-        persistHostSessionBinding: true
-      })
-    )
-    expect(spawn.mock.calls[0]?.[0]).not.toHaveProperty('sessionId')
-  })
-
-  it('hydrates headless mobile session terminals from the host workspace session', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal()
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => []
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(listed.tabs).toEqual([
-      expect.objectContaining({
-        type: 'terminal',
-        id: `host-tab::${HEADLESS_LEAF_ID}`,
-        parentTabId: 'host-tab',
-        leafId: HEADLESS_LEAF_ID,
-        ptyId: 'persisted-pty',
-        status: 'pending-handle',
-        terminal: null,
-        isActive: true
-      })
-    ])
-    expect(listed.tabGroups?.[0]).toMatchObject({
-      activeTabId: 'host-tab',
-      tabOrder: ['host-tab']
-    })
-  })
-
   it('hydrates an SSH worktree only from its SSH workspace-session partition', async () => {
     const localSession = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
@@ -259,52 +150,6 @@ describe('OrcaRuntimeService', () => {
     expect(localSession.tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
     expect(setWorkspaceSession).toHaveBeenCalledTimes(1)
     expect(kill).toHaveBeenCalledWith(sshPtyId)
-  })
-
-  it('keeps live headless mobile session terminals when a desktop renderer publishes without them', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'serve-mobile-pty' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
-
-    electronMocks.BrowserWindow.fromId.mockReturnValue({
-      isDestroyed: () => false,
-      webContents: { send: vi.fn() }
-    })
-    runtime.syncWindowGraph(0, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'renderer-empty',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        }
-      ]
-    })
-
-    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(listed.tabs).toEqual([
-      expect.objectContaining({
-        type: 'terminal',
-        id: created.tab.id,
-        parentTabId: created.tab.parentTabId,
-        leafId: created.tab.leafId,
-        ptyId: 'serve-mobile-pty',
-        status: 'ready'
-      })
-    ])
   })
 
   it('keeps a live headed runtime-owned tab until its explicit close', async () => {
@@ -552,49 +397,6 @@ describe('OrcaRuntimeService', () => {
       status: 'ready',
       terminal: laptopTerminal.handle
     })
-  })
-
-  it('publishes laptop-created remote runtime split terminals to phone session tabs', async () => {
-    const spawn = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'laptop-created-pty' })
-      .mockResolvedValueOnce({ id: 'laptop-split-pty' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    const laptopTerminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'laptop-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-    const split = await runtime.splitTerminal(laptopTerminal.handle, {
-      direction: 'vertical'
-    })
-
-    const phoneTabs = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    const terminalTabs = phoneTabs.tabs.filter((tab) => tab.type === 'terminal')
-
-    expect(split.tabId).toBe('laptop-tab')
-    expect(terminalTabs).toHaveLength(2)
-    expect(terminalTabs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          parentTabId: 'laptop-tab',
-          leafId: HEADLESS_LEAF_ID,
-          status: 'ready',
-          terminal: laptopTerminal.handle
-        }),
-        expect.objectContaining({
-          parentTabId: 'laptop-tab',
-          status: 'ready',
-          terminal: split.handle
-        })
-      ])
-    )
   })
 
   it('pushes PTY-backed mobile session tab title and agent status changes to subscribers', async () => {

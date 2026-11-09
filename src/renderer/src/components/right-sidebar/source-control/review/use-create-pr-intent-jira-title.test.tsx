@@ -6,15 +6,13 @@ import { useAppStore } from '@/store'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import {
-  getDefaultSourceControlAiSettings,
-  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-} from '../../../../../../shared/source-control-ai-settings'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
+import { getDefaultSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
+import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 
 const runtime = vi.hoisted(() => ({ generate: vi.fn() }))
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   generateRuntimePullRequestFields: runtime.generate
 }))
 afterEach(() => {
@@ -60,6 +58,9 @@ it.each(['github', 'gitlab'] as const)(
       title: 'Fix login',
       body: 'Details'
     }
+    const operationStore = getWorktreeOperationStore(`wt-1-${provider}`, null, undefined)
+    operationStore.setState({ createPrIntentRun: token, createPrIntentTarget: token })
+    const imagePending = { current: true }
     const create = vi
       .fn()
       .mockResolvedValue({ ok: true, number: 100, url: 'https://example.com/reviews/100' })
@@ -67,6 +68,7 @@ it.each(['github', 'gitlab'] as const)(
       ...getDefaultSettings('/fixture'),
       sourceControlAi: { ...getDefaultSourceControlAiSettings(), agentId: 'cursor' as const }
     }
+    useAppStore.setState({ settings: null })
     const { result, rerender } = renderHook<
       {
         createHostedReviewForCreatePrIntent: ReturnType<
@@ -75,14 +77,10 @@ it.each(['github', 'gitlab'] as const)(
       },
       { settings: typeof settings | null }
     >(
-      ({ settings }) =>
+      () =>
         useSourceControlCreatePrIntentReview({
           activeRepo: { ...makeRepo(), connectionId: 'owner' },
           createHostedReview: create,
-          createPrInFlightRef: { current: {} },
-          createPrIntentActiveTargetConflicts: () => false,
-          createPrIntentCurrentTargetRef: { current: token },
-          createPrIntentRunStillOwnsWorktree: () => true,
           getCreatePrIntentOperationTarget: () => ({
             target: { kind: 'local' },
             worktreeId: 'wt-1',
@@ -90,15 +88,21 @@ it.each(['github', 'gitlab'] as const)(
           }),
           handlePullRequestCreated: vi.fn(),
           hostedReviewCreateCopy: localizedHostedReviewCopy(provider),
+          operationStore,
           prBase: 'main',
-          prBody: '',
-          resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-          setCreatePrInFlightByWorktree: vi.fn(),
-          setCreatePrIntentNoticeForWorktree: vi.fn(),
-          settings
+          prImageUploadPendingRef: imagePending,
+          prBody: ''
         }),
       { initialProps: { settings: null } }
     )
+    await expect(
+      result.current.createHostedReviewForCreatePrIntent(token, eligibility)
+    ).resolves.toBe(false)
+    expect(create).not.toHaveBeenCalled()
+    expect(operationStore.getState().createPrIntentNotice).toEqual(
+      expect.objectContaining({ tone: 'muted', message: expect.any(String) })
+    )
+    imagePending.current = false
     await expect(
       result.current.createHostedReviewForCreatePrIntent(token, eligibility)
     ).resolves.toBe(true)
@@ -111,6 +115,7 @@ it.each(['github', 'gitlab'] as const)(
       success: true,
       fields: { base: 'main', title: 'alt-42 ALT-42 Better login', body: 'Generated', draft: false }
     })
+    useAppStore.setState({ settings })
     rerender({ settings })
     await expect(
       result.current.createHostedReviewForCreatePrIntent(token, eligibility)

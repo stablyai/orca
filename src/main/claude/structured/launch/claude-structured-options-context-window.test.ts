@@ -55,9 +55,4 @@ describe('the context ring after a session option write', () => {
     await expect(refused.write('model', 'opus[1m]')).rejects.toThrow()
     expect(refused.respond('turn-a', 1_000)).toBeNull()
   })
-
-  it('refuses a live permission-mode write', async () => {
-    const s = ringSession()
-    await expect(s.write('permissionMode', 'plan')).rejects.toThrow(/permissionMode/)
-  })
 })

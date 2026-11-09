@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 export function buildEncodedWslBashCommand(command: string): string {
   // Encode multiline payloads intact; --exec separately preserves the wsl.exe argument boundary.

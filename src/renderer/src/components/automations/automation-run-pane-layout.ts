@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AutomationRunPaneTarget } from './automation-run-open-target'
 
 export function buildAutomationRunOpenLayout({

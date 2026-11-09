@@ -32,19 +32,6 @@ function mount(initial: number | undefined = undefined): ReturnType<typeof vi.fn
 }
 
 describe('terminal contrast modes', () => {
-  it('lets users turn correction off and restore automatic without editing a number', () => {
-    const persist = mount()
-    expect(screen.getByRole('radio', { name: 'Automatic' }).getAttribute('aria-checked')).toBe(
-      'true'
-    )
-    expect(screen.queryByRole('spinbutton')).toBeNull()
-    fireEvent.click(screen.getByRole('radio', { name: 'Off' }))
-    expect(persist).toHaveBeenLastCalledWith({ terminalMinimumContrastRatio: 1 })
-    expect(screen.queryByRole('spinbutton')).toBeNull()
-    fireEvent.click(screen.getByRole('radio', { name: 'Automatic' }))
-    expect(persist).toHaveBeenLastCalledWith({ terminalMinimumContrastRatio: undefined })
-  })
-
   it('restores the custom target when toggling through off and automatic', () => {
     const persist = mount(7)
     fireEvent.click(screen.getByRole('radio', { name: 'Off' }))

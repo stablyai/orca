@@ -11,8 +11,9 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import type { BrowserExtensionInstallPromptRequest } from '../../../shared/browser-extension-webstore'
+import type { BrowserExtensionInstallPromptRequest } from '../../../shared/browser/extensions/browser-extension-webstore'
 import {
   describeBrowserExtensionAccess,
   describeUnsupportedBrowserExtensionFeatures
@@ -24,13 +25,14 @@ function InstallBody({
 }: {
   request: BrowserExtensionInstallPromptRequest
 }): React.JSX.Element {
-  const access = describeBrowserExtensionAccess(request.permissions, request.hostPermissions)
-  const unsupported = describeUnsupportedBrowserExtensionFeatures(request.permissions)
+  const t = useTranslate()
+  const access = describeBrowserExtensionAccess(request.permissions, request.hostPermissions, t)
+  const unsupported = describeUnsupportedBrowserExtensionFeatures(request.permissions, t)
   return (
     <div className="space-y-2">
       {access.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {translate(
+          {t(
             'browserExtensions.install.noAccess',
             'It does not ask to read or change data on websites.'
           )}
@@ -38,7 +40,7 @@ function InstallBody({
       ) : (
         <>
           <p className="text-sm font-medium">
-            {translate('browserExtensions.install.canHeading', 'It can:')}
+            {t('browserExtensions.install.canHeading', 'It can:')}
           </p>
           <ul className="scrollbar-sleek max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-sm">
             {access.map((message) => (
@@ -52,28 +54,32 @@ function InstallBody({
   )
 }
 
-function promptDescription(request: BrowserExtensionInstallPromptRequest): string {
+function promptDescription(
+  request: BrowserExtensionInstallPromptRequest,
+  t: Translate = translate
+): string {
   if (request.kind === 'permissions') {
-    return translate(
+    return t(
       'browserExtensions.permissions.description',
       'It is asking for access it did not have when you added it.'
     )
   }
   if (request.kind === 'uninstall') {
     // Why the Settings wording: removing from the store page removes it from every profile too.
-    return browserExtensionRemovalDescription('webstore')
+    return browserExtensionRemovalDescription('webstore', t)
   }
   return request.profileLabel
-    ? translate(
+    ? t(
         'browserExtensions.install.profileDescription',
         'It runs in tabs that use the {{profile}} profile.',
         { profile: request.profileLabel }
       )
-    : translate('browserExtensions.install.description', 'It runs in Orca browser tabs.')
+    : t('browserExtensions.install.description', 'It runs in Orca browser tabs.')
 }
 
 /** Orca's confirmation for store installs and store-page removals; main waits on the answer. */
 export function BrowserExtensionInstallDialog(): React.JSX.Element {
+  const t = useTranslate()
   const [requests, setRequests] = useState<BrowserExtensionInstallPromptRequest[]>([])
   const [respondingRequestId, setRespondingRequestId] = useState<string | null>(null)
   const requestsRef = useRef(requests)
@@ -168,19 +174,15 @@ export function BrowserExtensionInstallDialog(): React.JSX.Element {
             <div className="min-w-0 space-y-1">
               <DialogTitle className="break-words">
                 {isPermissionRequest
-                  ? translate(
-                      'browserExtensions.permissions.title',
-                      'Allow {{name}} more access?',
-                      {
-                        name
-                      }
-                    )
+                  ? t('browserExtensions.permissions.title', 'Allow {{name}} more access?', {
+                      name
+                    })
                   : isInstall
-                    ? translate('browserExtensions.install.title', 'Add {{name}}?', { name })
-                    : translate('browserExtensions.uninstall.title', 'Remove {{name}}?', { name })}
+                    ? t('browserExtensions.install.title', 'Add {{name}}?', { name })
+                    : t('browserExtensions.uninstall.title', 'Remove {{name}}?', { name })}
               </DialogTitle>
               <DialogDescription>
-                {displayed ? promptDescription(displayed) : null}
+                {displayed ? promptDescription(displayed, t) : null}
               </DialogDescription>
             </div>
           </div>
@@ -191,14 +193,14 @@ export function BrowserExtensionInstallDialog(): React.JSX.Element {
         <DialogFooter>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => respond(false)}>
             {isPermissionRequest
-              ? translate('browserExtensions.permissions.deny', 'Deny')
-              : translate('browserExtensions.install.cancel', 'Cancel')}
+              ? t('browserExtensions.permissions.deny', 'Deny')
+              : t('browserExtensions.install.cancel', 'Cancel')}
           </Button>
           {isInstall ? (
             <Button ref={confirmRef} type="button" disabled={busy} onClick={() => respond(true)}>
               {isPermissionRequest
-                ? translate('browserExtensions.permissions.confirm', 'Allow')
-                : translate('browserExtensions.install.confirm', 'Add extension')}
+                ? t('browserExtensions.permissions.confirm', 'Allow')
+                : t('browserExtensions.install.confirm', 'Add extension')}
             </Button>
           ) : (
             <Button
@@ -208,7 +210,7 @@ export function BrowserExtensionInstallDialog(): React.JSX.Element {
               disabled={busy}
               onClick={() => respond(true)}
             >
-              {translate('browserExtensions.uninstall.confirm', 'Remove')}
+              {t('browserExtensions.uninstall.confirm', 'Remove')}
             </Button>
           )}
         </DialogFooter>

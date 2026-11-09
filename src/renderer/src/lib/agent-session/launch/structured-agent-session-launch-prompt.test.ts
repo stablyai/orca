@@ -1,34 +1,51 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   // Sends reach the runtime RPC through this wrapper, as in the app.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     mocks.call(target, method, params)
 }))
 
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostSupports: vi.fn(async () => true)
+  })
+)
+
 import {
   resetStructuredAgentSessionSendsForTests,
   sendStructuredAgentSessionMessage,
-  settleStructuredAgentSessionSendsFromJournal
-} from '@/components/native-chat/structured-agent-session-message-sender'
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+  settleStructuredAgentSessionSendsFromJournal,
+  stopStructuredAgentSessionSends
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   getStructuredAgentSessionPendingSends,
+  getStructuredAgentSessionSendNotice,
   subscribeToStructuredAgentSessionPendingSends
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import {
+  captureNativeChatStagedInput,
+  releaseNativeChatStagedFiles,
+  stageNativeChatDraftFile
+} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   discardStructuredLaunchPrompts,
   hasStagedStructuredLaunchPrompt,
@@ -38,6 +55,7 @@ import {
 } from './structured-agent-session-launch-prompt'
 
 const SESSION = 'session-1'
+const STAGING_SCOPE = 'pending-launch-attachments'
 const target = { kind: 'local' } as const
 
 function accepted(clientMessageId: string) {
@@ -77,6 +95,29 @@ function draft(): string {
   return readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(SESSION))
 }
 
+function launchWaitingForAttachments() {
+  const input = {
+    text: 'review the screenshot',
+    attachments: [{ path: '/client/paste.png', previewUri: '' }]
+  }
+  const upload = Promise.withResolvers<typeof input>()
+  const preparing = Promise.withResolvers<void>()
+  const stagedPrompt = stageStructuredLaunchPrompt(SESSION, input.text, {
+    attachments: input.attachments,
+    prepare: () => {
+      preparing.resolve()
+      return upload.promise
+    }
+  })
+  const settled = settleStructuredAgentLaunchPrompt({
+    launchResult: Promise.resolve({ sessionId: SESSION, fence: 1 }),
+    target,
+    options: { prompt: input.text, promptAttachments: input.attachments },
+    stagedPrompt
+  })
+  return { input, upload, preparing: preparing.promise, stagedPrompt, settled }
+}
+
 describe('settleStructuredAgentLaunchPrompt', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -87,6 +128,12 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     mocks.call.mockImplementation(async (_target, _method, params) =>
       accepted(params.envelope.clientOperationId)
     )
+  })
+
+  afterEach(() => {
+    releaseNativeChatStagedFiles(STAGING_SCOPE)
+    replaceRuntimeEnvironmentRevisions([])
+    vi.unstubAllGlobals()
   })
 
   it('sends the prompt once after the launch publishes, under its receipt fence', async () => {
@@ -109,6 +156,146 @@ describe('settleStructuredAgentLaunchPrompt', () => {
       envelope: { sessionId: SESSION, expectedRuntimeFence: 7 },
       body: { blocks: [{ type: 'text', text: 'review this' }] }
     })
+    expect(hasStagedStructuredLaunchPrompt(SESSION)).toBe(false)
+  })
+
+  it.each([
+    {
+      name: 'an image-only first message',
+      text: '',
+      skills: undefined,
+      blocks: [{ type: 'image-ref', path: '/client/paste.png' }]
+    },
+    {
+      name: 'a first message with an image and a selected skill',
+      text: 'review $audit',
+      skills: [{ name: 'audit', path: '/repo/.agents/skills/audit/SKILL.md' }],
+      blocks: [
+        { type: 'text', text: 'review $audit' },
+        { type: 'image-ref', path: '/client/paste.png' }
+      ]
+    }
+  ])('sends $name without losing its rich input', async ({ text, skills, blocks }) => {
+    const attachments = [{ path: '/client/paste.png', previewUri: '' }]
+    const stagedPrompt = stageStructuredLaunchPrompt(SESSION, text, { attachments, skills })
+
+    await expect(
+      settleStructuredAgentLaunchPrompt({
+        launchResult: Promise.resolve({ sessionId: SESSION, fence: 1 }),
+        target,
+        options: { prompt: text, promptAttachments: attachments, promptSkills: skills },
+        stagedPrompt
+      })
+    ).resolves.toMatchObject({ delivered: true })
+
+    expect(sends()).toHaveLength(1)
+    expect(sends()[0]?.[2]).toMatchObject({
+      body: { kind: 'message', role: 'user', blocks, ...(skills ? { skills } : {}) }
+    })
+    expect(draft()).toBe('')
+  })
+
+  it('uploads staged files before sending their host paths and selected skills', async () => {
+    const remoteTarget = { kind: 'environment', environmentId: 'env-1' } as const
+    const attachments = [{ path: '/client/paste.png', previewUri: '' }]
+    const skills = [{ name: 'audit', path: '/repo/.agents/skills/audit/SKILL.md' }]
+    const text = 'review $audit with @"/client/brief notes.txt"'
+    stageNativeChatDraftFile(STAGING_SCOPE, '/client/paste.png')
+    stageNativeChatDraftFile(STAGING_SCOPE, '/client/brief notes.txt')
+    const preparation = captureNativeChatStagedInput(STAGING_SCOPE)
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
+    const upload = vi.fn(async () => ({
+      uploaded: [
+        { sourcePath: '/client/paste.png', path: '/host/attachments/paste.png' },
+        { sourcePath: '/client/brief notes.txt', path: '/host/attachments/brief notes.txt' }
+      ],
+      skipped: [],
+      failed: []
+    }))
+    vi.stubGlobal('api', { fs: { uploadPathsToAgentSessionAttachments: upload } })
+    mocks.call.mockImplementation(async (_target, method, params) =>
+      method === 'status.get'
+        ? { runtimeId: 'runtime-1', capabilities: [AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY] }
+        : accepted(params.envelope.clientOperationId)
+    )
+    const stagedPrompt = stageStructuredLaunchPrompt(SESSION, text, {
+      attachments,
+      skills,
+      prepare: (sessionId, destination) =>
+        preparation.prepare(
+          { text, attachments, skills },
+          {
+            sessionId,
+            runtimeEnvironmentId:
+              destination.kind === 'environment' ? destination.environmentId : null
+          }
+        )
+    })
+
+    await expect(
+      settleStructuredAgentLaunchPrompt({
+        launchResult: Promise.resolve({ sessionId: SESSION, fence: 1 }),
+        target: remoteTarget,
+        options: { prompt: text, promptAttachments: attachments, promptSkills: skills },
+        stagedPrompt
+      })
+    ).resolves.toMatchObject({ delivered: true })
+
+    expect(upload).toHaveBeenCalledOnce()
+    expect(upload).toHaveBeenCalledWith({
+      paths: ['/client/paste.png', '/client/brief notes.txt'],
+      environmentId: 'env-1',
+      sessionId: SESSION,
+      expectedEnvironmentPairingRevision: 7,
+      expectedEnvironmentRuntimeId: 'runtime-1'
+    })
+    expect(sends()).toHaveLength(1)
+    expect(sends()[0]?.[2]).toMatchObject({
+      body: {
+        blocks: [
+          { type: 'text', text: 'review $audit with @"/host/attachments/brief notes.txt"' },
+          { type: 'image-ref', path: '/host/attachments/paste.png' }
+        ],
+        skills
+      }
+    })
+  })
+
+  it('returns rich input on Stop during upload and never sends it after upload completes', async () => {
+    const launch = launchWaitingForAttachments()
+    await launch.preparing
+
+    stopStructuredAgentSessionSends(SESSION)
+    launch.upload.resolve({
+      ...launch.input,
+      attachments: [{ path: '/host/attachments/paste.png', previewUri: '' }]
+    })
+    await Promise.all([launch.settled, launch.stagedPrompt.delivery])
+
+    expect(sends()).toHaveLength(0)
+    expect(draft()).toBe('review the screenshot')
+    expect(
+      readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(SESSION)).images
+    ).toMatchObject([{ path: '/client/paste.png' }])
+    expect(pendingTexts()).toEqual([])
+    expect(hasStagedStructuredLaunchPrompt(SESSION)).toBe(false)
+  })
+
+  it('does not restore closed chat input or a notice when its pending upload rejects', async () => {
+    const launch = launchWaitingForAttachments()
+    await launch.preparing
+
+    discardStructuredLaunchPrompts(SESSION)
+    launch.upload.reject(new Error('upload interrupted'))
+    await Promise.all([launch.settled, launch.stagedPrompt.delivery])
+
+    expect(sends()).toHaveLength(0)
+    expect(draft()).toBe('')
+    expect(
+      readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(SESSION)).images
+    ).toEqual([])
+    expect(getStructuredAgentSessionSendNotice(SESSION)).toBeNull()
+    expect(pendingTexts()).toEqual([])
     expect(hasStagedStructuredLaunchPrompt(SESSION)).toBe(false)
   })
 

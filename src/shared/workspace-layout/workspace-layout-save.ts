@@ -2,12 +2,15 @@
 
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
-import type { ClosedTerminalTabTombstonesByTabId } from '../closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../tab-types'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile, WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalTab } from './terminal-tab-types'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../workspace-session/workspace-session-state-types'
 import { pickStoredFields } from './stored-record-fields'
-import { pruneGroupLayout } from '../workspace-session-terminal-tab-close'
+import { pruneGroupLayout } from '../workspace-session/workspace-session-terminal-tab-close'
 import {
   BLANK_BROWSER_TAB_STATE,
   CARRIED_SESSION_FIELDS,

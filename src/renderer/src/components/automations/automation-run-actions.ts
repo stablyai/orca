@@ -1,6 +1,6 @@
 import { capturedAutomationOwner } from './automation-captured-owner'
 import { toast } from 'sonner'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getAutomationTargetAvailability } from './automation-target-availability'
@@ -15,7 +15,6 @@ export function createAutomationRunActions({
   store,
   local,
   destination,
-  sourceAvailability,
   pageRefresh
 }: {
   store: Pick<
@@ -38,10 +37,6 @@ export function createAutomationRunActions({
     | 'reportOwnerAction'
     | 'invalidateRowHost'
   >
-  sourceAvailability: Pick<
-    AutomationsPageActionContext['sourceAvailability'],
-    'automationSourceHostAvailabilityByRowKey'
-  >
   pageRefresh: Pick<
     AutomationsPageActionContext['pageRefresh'],
     'hydratePersistedUIState' | 'refresh'
@@ -62,7 +57,6 @@ export function createAutomationRunActions({
     reportOwnerAction,
     invalidateRowHost
   } = destination
-  const { automationSourceHostAvailabilityByRowKey } = sourceAvailability
 
   const runNow = async (row: AutomationListRow): Promise<void> => {
     const repo = repoForRow(row) ?? null
@@ -79,8 +73,7 @@ export function createAutomationRunActions({
       sshConnectionStates,
       sshStateByEnvironment,
       runtimeStatusByEnvironmentId,
-      automationHostTarget: rowHostTarget,
-      sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(row.key)
+      automationHostTarget: rowHostTarget
     })
     if (!availability.canRunNow) {
       toast.error(availability.message)

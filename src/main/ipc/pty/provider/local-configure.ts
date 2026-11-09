@@ -3,7 +3,7 @@ import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import type { LocalPtyProviderOptions } from '../../../providers/local-pty/local-pty-provider-types'
@@ -15,7 +15,7 @@ import {
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
-import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
+import { getRuntimeSourceStamp } from '../../../runtime/hosts/platform-probe/host-descriptor'
 import {
   getCompatibleSelectedCodexHomePath,
   shouldStripInheritedOrcaCodexHome
@@ -26,7 +26,7 @@ import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 import { visibleRendererPtys } from '../delivery/visibility-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { awaitExplicitAgentPluginGuestReadiness } from '../../../agent-hooks/wsl-agent-plugin-readiness'
+import { awaitExplicitAgentPluginGuestReadiness } from '../../../agent-hooks/wsl-relay/wsl-agent-plugin-readiness'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 export function configureLocalPtyProvider(args: {

@@ -9,8 +9,8 @@ import {
   orcadBunRuntimeFilename
 } from '../../../shared/orcad-artifacts'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 // Assign the long slot path once to reduce command size on the wire.
 function assignOrcadSlot(directory: string): string {
@@ -44,7 +44,11 @@ export function orcadNodeSlotRuntimeCommand(host: RemoteHostPlatform, directory:
   )
 }
 
-/** Legacy host Node fallback must never hide an incomplete Node or Bun slot. */
+/** Keeps address space small under RLIMIT_AS: undici's WASM memory otherwise reserves 4-9 GiB (#37538).
+ * Caps any WASM memory in orcad at 64 MiB. Pinned Node only: older host Node rejects the flag. */
+const ORCAD_PINNED_NODE_FLAGS = '--disable-wasm-trap-handler --wasm-max-mem-pages=1024'
+
+/** Also sets $orcad_runtime_flags. Legacy host Node fallback must never hide an incomplete Node or Bun slot. */
 export function selectOrcadSlotRuntimeCommand(
   host: RemoteHostPlatform,
   directory: string,
@@ -57,9 +61,11 @@ export function selectOrcadSlotRuntimeCommand(
   const runtime = quotePosixShell(joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)))
   const target = quotePosixShell(joinRemotePath(host, directory, ORCAD_BUILD_TARGET_FILENAME))
   return (
+    // One compound command: launch chains it with && after cd.
     `if [ -e ${nodeMarker} ]; then ${orcadNodeSlotRuntimeCommand(host, directory)}` +
+    `orcad_runtime_flags=${quotePosixShell(ORCAD_PINNED_NODE_FLAGS)}; ` +
     `elif [ -e ${target} ] || [ -e ${runtime} ]; then ` +
-    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
-    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; fi`
+    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; orcad_runtime_flags=; ` +
+    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; orcad_runtime_flags=; fi`
   )
 }

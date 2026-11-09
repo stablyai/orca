@@ -7,9 +7,9 @@ import {
   normalizeNativeChatProviderChoices
 } from '../../../../../shared/native-chat/native-chat-providers'
 import { nativeChatPreferenceFor } from '../../../../../shared/structured-native-chat-launch-route'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgentEnabled } from '../../../../../shared/tui-agent-selection'
-import { chatProviderAgents } from '@/lib/chat-provider-agents'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { chatProviderAgents } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { useAppStore } from '../../../store/index'
 import { createAgentSettingsUpdateQueue } from './agent-settings-update-queue'
 

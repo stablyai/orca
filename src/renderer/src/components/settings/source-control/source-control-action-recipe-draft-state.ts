@@ -2,19 +2,22 @@ import {
   transportActionArgumentChoices,
   demoteActionArgumentChoices,
   type ActionArgumentChoices
-} from '../../../../../shared/source-control-action-argument-document'
-import { liftActionPermissionArgs } from '../../../../../shared/source-control-action-permission-lift'
-import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
+} from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
+import { liftActionPermissionArgs } from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
+import { useEffect, useMemo, useState, type SetStateAction } from 'react'
 import type {
   SourceControlAiSettings,
+  SourceControlAiModelChoice,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   setSourceControlActionDefault,
+  SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionId
-} from '../../../../../shared/source-control-ai-actions'
-
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
+import { replayGlobalTextModelEdits } from './text-actions/source-control-text-action-model-replay'
 import {
   type ActionRecipeDraftState,
   readActionRecipeInputValues,
@@ -28,6 +31,42 @@ type UseSourceControlActionRecipeDraftStateArgs = {
   writeConfig: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
+/** A model choice the user did not edit in the menu follows the saved one, so another editor's newer pick shows. */
+function rebaseUneditedModelChoices(
+  draft: ActionRecipeDraftState['values'],
+  persisted: ActionRecipeDraftState['values']
+): ActionRecipeDraftState['values'] {
+  const values = { ...draft }
+  for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
+    const value = values[actionId]
+    if (!value.modelEdits?.length) {
+      values[actionId] = { ...value, modelChoice: persisted[actionId].modelChoice }
+    }
+  }
+  return values
+}
+
+/**
+ * Follow a newly saved recipe unless the user still has their own change. Both the draft and its
+ * old base take unedited model choices from the new save, so another editor's model pick is never
+ * mistaken for a local edit.
+ */
+function followPersistedRecipeValues(
+  current: ActionRecipeDraftState,
+  persisted: ActionRecipeDraftState['values']
+): ActionRecipeDraftState {
+  const values = rebaseUneditedModelChoices(current.values, persisted)
+  const serialized = serializeActionRecipeInputValues(values)
+  if (
+    serialized ===
+      serializeActionRecipeInputValues(rebaseUneditedModelChoices(current.baseValues, persisted)) ||
+    serialized === serializeActionRecipeInputValues(persisted)
+  ) {
+    return { values: persisted, baseValues: persisted }
+  }
+  return { values, baseValues: persisted }
+}
+
 export function useSourceControlActionRecipeDraftState({
   config,
   customPromptDiscardSignal,
@@ -35,18 +74,32 @@ export function useSourceControlActionRecipeDraftState({
   writeConfig
 }: UseSourceControlActionRecipeDraftStateArgs) {
   const persistedActionRecipeValues = useMemo(() => readActionRecipeInputValues(config), [config])
-  const persistedActionRecipeSerialized = useMemo(
-    () => serializeActionRecipeInputValues(persistedActionRecipeValues),
-    [persistedActionRecipeValues]
-  )
-  const persistedActionRecipeValuesRef = useRef(persistedActionRecipeValues)
-  persistedActionRecipeValuesRef.current = persistedActionRecipeValues
-  const [actionRecipeDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(
-    () => ({
+  const [storedDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(() => ({
+    values: persistedActionRecipeValues,
+    baseValues: persistedActionRecipeValues
+  }))
+  // Adjusted during render so a newer save shows in the same frame the settings change.
+  const [followedPersisted, setFollowedPersisted] = useState(persistedActionRecipeValues)
+  let actionRecipeDraftState = storedDraftState
+  if (followedPersisted !== persistedActionRecipeValues) {
+    actionRecipeDraftState = followPersistedRecipeValues(
+      storedDraftState,
+      persistedActionRecipeValues
+    )
+    setFollowedPersisted(persistedActionRecipeValues)
+    setActionRecipeDraftState((current) =>
+      followPersistedRecipeValues(current, persistedActionRecipeValues)
+    )
+  }
+  const [seenDiscardSignal, setSeenDiscardSignal] = useState(customPromptDiscardSignal)
+  if (seenDiscardSignal !== customPromptDiscardSignal) {
+    actionRecipeDraftState = {
       values: persistedActionRecipeValues,
       baseValues: persistedActionRecipeValues
-    })
-  )
+    }
+    setSeenDiscardSignal(customPromptDiscardSignal)
+    setActionRecipeDraftState(actionRecipeDraftState)
+  }
   const [savingActionTemplateIds, setSavingActionTemplateIds] = useState<
     Partial<Record<SourceControlActionId, boolean>>
   >({})
@@ -59,33 +112,6 @@ export function useSourceControlActionRecipeDraftState({
     [actionRecipeDraftState.baseValues]
   )
   const actionTemplateDirty = actionRecipeDraftSerialized !== actionRecipeBaseSerialized
-
-  useEffect(() => {
-    setActionRecipeDraftState((current) => {
-      const currentSerialized = serializeActionRecipeInputValues(current.values)
-      const baseSerialized = serializeActionRecipeInputValues(current.baseValues)
-      if (
-        currentSerialized === baseSerialized ||
-        currentSerialized === persistedActionRecipeSerialized
-      ) {
-        return {
-          values: persistedActionRecipeValues,
-          baseValues: persistedActionRecipeValues
-        }
-      }
-      return {
-        values: current.values,
-        baseValues: persistedActionRecipeValues
-      }
-    })
-  }, [persistedActionRecipeSerialized, persistedActionRecipeValues])
-
-  useEffect(() => {
-    setActionRecipeDraftState({
-      values: persistedActionRecipeValuesRef.current,
-      baseValues: persistedActionRecipeValuesRef.current
-    })
-  }, [customPromptDiscardSignal])
 
   useEffect(() => {
     onCustomPromptDirtyChange?.(actionTemplateDirty)
@@ -168,6 +194,21 @@ export function useSourceControlActionRecipeDraftState({
     })
   }
 
+  const onTextModelChoiceChange = (
+    actionId: SourceControlActionId,
+    modelChoice: SourceControlAiModelChoice | undefined,
+    agentArgs: string,
+    modelEdits: SourceControlAiModelEdits | undefined
+  ): void => {
+    setActionRecipeDraftState((current) => ({
+      ...current,
+      values: {
+        ...current.values,
+        [actionId]: { ...current.values[actionId], modelChoice, agentArgs, modelEdits }
+      }
+    }))
+  }
+
   const retireActionAgentDocument = (actionId: SourceControlActionId, agentId: unknown): void => {
     setActionRecipeDraftState((current) => {
       const value = current.values[actionId]
@@ -182,7 +223,7 @@ export function useSourceControlActionRecipeDraftState({
   }
 
   const saveActionTemplateDraft = async (actionId: SourceControlActionId): Promise<void> => {
-    const submitted = actionRecipeDraftState.values[actionId]
+    const submitted = storedDraftState.values[actionId]
     const { agentId: _binding, ...nextValue } = liftActionPermissionArgs(
       { ...actionRecipeDraftState.values[actionId], agentId: config.actions?.[actionId]?.agentId },
       true,
@@ -194,10 +235,30 @@ export function useSourceControlActionRecipeDraftState({
     ) {
       return
     }
+    const textAction = SOURCE_CONTROL_TEXT_ACTION_IDS.find((id) => id === actionId)
+    const { modelEdits, ...recipeValue } = nextValue
+    const replayEdits = textAction && modelEdits?.length ? modelEdits : undefined
+    let savedValue = recipeValue
     setSavingActionTemplateIds((current) => ({ ...current, [actionId]: true }))
     try {
       await writeConfig((current) => {
+        const choices: Partial<Record<string, SourceControlAiModelChoice>> =
+          current.modelOverridesByOperation ?? {}
+        // Menu edits replay against this write's settings and hosts; without them the saved model stays.
+        const modelChoice =
+          textAction && replayEdits
+            ? replayGlobalTextModelEdits(current, textAction, replayEdits)
+            : choices[actionId]
+        savedValue = { ...recipeValue, modelChoice }
         return {
+          ...(textAction && replayEdits
+            ? {
+                modelOverridesByOperation: {
+                  ...current.modelOverridesByOperation,
+                  [textAction]: modelChoice
+                }
+              }
+            : {}),
           actions: setSourceControlActionDefault(current.actions, actionId, {
             commandInputTemplate: nextValue.commandInputTemplate,
             agentArgs: nextValue.agentArgs,
@@ -209,9 +270,9 @@ export function useSourceControlActionRecipeDraftState({
       setActionRecipeDraftState((current) => ({
         values:
           JSON.stringify(current.values[actionId]) === JSON.stringify(submitted)
-            ? { ...current.values, [actionId]: nextValue }
+            ? { ...current.values, [actionId]: savedValue }
             : current.values,
-        baseValues: { ...current.baseValues, [actionId]: nextValue }
+        baseValues: { ...current.baseValues, [actionId]: savedValue }
       }))
     } finally {
       setSavingActionTemplateIds((current) => ({ ...current, [actionId]: false }))
@@ -252,6 +313,7 @@ export function useSourceControlActionRecipeDraftState({
     onActionAgentArgsChange,
     onActionLaunchPreferencesChange,
     retireActionAgentDocument,
+    onTextModelChoiceChange,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable

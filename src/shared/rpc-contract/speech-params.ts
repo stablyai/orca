@@ -1,9 +1,12 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 export const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 export const DICTATION_SAMPLE_RATE = 16_000
+
+/** Cloud transcription takes at most this much audio per dictation. */
+export const CLOUD_DICTATION_MAX_SECONDS = 10 * 60
 
 export const PCM_BYTES_PER_SAMPLE = 2
 
@@ -57,7 +60,8 @@ export const SpeechModelAction = z.object({
 export const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
-  dictationMode: z.enum(['toggle', 'hold']).optional()
+  dictationMode: z.enum(['toggle', 'hold']).optional(),
+  dictationHoldToRecord: z.boolean().optional()
 })
 
 /** Why the cap: an OpenAI key is ~200 characters; anything far longer is a paste mistake. */

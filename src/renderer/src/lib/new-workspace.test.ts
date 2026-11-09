@@ -70,28 +70,29 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftToAgentPtyWhenReady: mockPasteDraftToAgentPtyWhenReady
 }))
 
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: () => 'launch-token-1'
+const mockLaunchUuid = vi.hoisted(() => () => 'launch-token-1')
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
 }))
 
 vi.mock('@/lib/telemetry', () => ({
   track: mockTrack
 }))
 
-vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
+vi.mock('@/lib/agent-session/launch/background/agent-background-session-timeout-toast', () => ({
   showAutomationPromptNotSentToast: mockShowAutomationPromptNotSentToast
 }))
 
 import { ensureAgentStartupInTerminal } from './new-workspace'
-import { resetAgentStartupDelayedDeliveryForTests } from './agent-startup-delayed-delivery'
+import { resetAgentStartupDelayedDeliveryForTests } from './agent-session/launch/startup/agent-startup-delayed-delivery'
 
 describe('ensureAgentStartupInTerminal prompt delivery', () => {
   beforeEach(() => {

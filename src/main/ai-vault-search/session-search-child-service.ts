@@ -1,5 +1,5 @@
-import type { AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 import {
   reconcileSessionSearchInService,
   searchSessionsInService,
@@ -7,7 +7,7 @@ import {
 } from '../ai-vault/scan-service/session-scanner-service-spawn'
 import type { SessionSearchService } from './session-search-service'
 
-/** Forward to the database-owning child; failed searches return not-ready while logging the error. */
+/** Forward to the database-owning child, preserving query failures for the caller. */
 export function createChildSessionSearchService(
   calls = {
     search: searchSessionsInService,
@@ -16,14 +16,7 @@ export function createChildSessionSearchService(
   }
 ): SessionSearchService {
   return {
-    search: async (request, hostScope) => {
-      try {
-        return await calls.search(request, hostScope)
-      } catch (error) {
-        console.warn('[ai-vault-search] search failed', error)
-        return { kind: 'unavailable', reason: 'not-ready' }
-      }
-    },
+    search: (request, hostScope) => calls.search(request, hostScope),
     status: async (): Promise<AiVaultSearchStatus> => {
       try {
         return await calls.status()

@@ -4,8 +4,8 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationManager,
   ExternalAutomationProvider
-} from '../../../../shared/automations-types'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/external/external-automation'
+import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { EXTERNAL_AUTOMATION_PROVIDERS } from '../../../../shared/external-automation-scope'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import { resolveExternalAutomationScopeGate } from './external-automation-scope-gating'

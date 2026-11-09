@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
-import { normalizeAndAccept } from '../../agent-hook-listener-test-harness'
+import { normalizeAndAccept } from '../normalization/agent-hook-listener-test-harness'
 
 // Real @deepseek-ai/dsh-hooks-claude-code0.1.5-rc.3 payloads: session/cwd/event fields and empty transcript_path, mounted through DSH_HOME/cordis.patch.yml.
 const SESSION_ID = '9478e2d8-29bc-4009-ab32-657efa2bd763'

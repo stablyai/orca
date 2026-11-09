@@ -24,7 +24,11 @@ export const OUT_OF_STORE_DISPOSITIONS: readonly (WslMoveFieldDisposition & {
     newManifestSection: true,
     note: 'Blob; re-keyed by the Linux worktree id on the host.'
   },
-  { store: 'agent-hooks/last-status.json', disposition: 'rederive', item: 51 },
+  {
+    store: 'agent-hooks/last-status.db (was last-status.json)',
+    disposition: 'rederive',
+    item: 51
+  },
   {
     store: 'agent-session-journal.db',
     disposition: 'not-applicable',

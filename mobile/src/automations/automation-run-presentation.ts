@@ -1,7 +1,7 @@
 import {
   AUTOMATION_RUN_FAILURE_COPY as EN,
   type AutomationRunFailureCode
-} from '../../../src/shared/automation-run-failure-copy'
+} from '../../../src/shared/automations/history/automation-run-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { MobileAutomationRun } from './automation-reply-schema'
@@ -93,6 +93,12 @@ const COPY: Record<
     translate('automations.runFailures.wslMoveInProgress', EN.wslMoveInProgress),
   wslMoveOwnedByHost: () =>
     translate('automations.runFailures.wslMoveOwnedByHost', EN.wslMoveOwnedByHost),
+  managedHostServer: (params) => {
+    const host = params?.host
+    return typeof host === 'string'
+      ? translate('automations.runFailures.managedHostServer', EN.managedHostServer, { host })
+      : null
+  },
   missedGraceWindow: () =>
     translate('automations.runFailures.missedGraceWindow', EN.missedGraceWindow),
   targetMissing: () => translate('automations.runFailures.targetMissing', EN.targetMissing),
@@ -131,6 +137,8 @@ const COPY: Record<
     translate('automations.runFailures.agentNeverStarted', EN.agentNeverStarted),
   agentNoCompletion: () =>
     translate('automations.runFailures.agentNoCompletion', EN.agentNoCompletion),
+  agentInterrupted: () =>
+    translate('automations.runFailures.agentInterrupted', EN.agentInterrupted),
   watchTimedOut: () => translate('automations.runFailures.watchTimedOut', EN.watchTimedOut),
   wslDistroStopped: (params) => {
     const distro = params?.distro
