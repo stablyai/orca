@@ -6667,6 +6667,9 @@
           "needsInput": "需要输入",
           "running": "运行中",
           "idle": "空闲"
+        },
+        "projectCollapse": {
+          "expandActive": "只展开活跃项目"
         }
       },
       "shared": {

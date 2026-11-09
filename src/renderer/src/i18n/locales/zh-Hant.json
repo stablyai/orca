@@ -7122,6 +7122,9 @@
           "needsInput": "需要輸入",
           "running": "執行中",
           "idle": "閒置"
+        },
+        "projectCollapse": {
+          "expandActive": "只展開活躍專案"
         }
       },
       "shared": {

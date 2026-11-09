@@ -168,6 +168,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
       },
       projectActions: {
         getWorktreeVisibilityDefaults: () => undefined,
+        getSidebarRows: () => [],
         onOpenRepoSettings: vi.fn(),
         onOpenWorktreeVisibility: vi.fn(),
         onCreateGroupFromRepo: vi.fn(),

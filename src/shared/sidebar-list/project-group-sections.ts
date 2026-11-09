@@ -19,6 +19,7 @@ import {
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from './folder-workspace-occurrences'
 import { compareRootProjectEntries } from '../root-project-order'
+import type { CollapsedProjectGroupSubtree } from './row-types'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -103,10 +104,29 @@ export function appendProjectGroupSections(
     )
   }
 
+  // Why: a collapsed group emits no rows for its projects; "expand only active" still has to reach them.
+  const collectCollapsedSubtree = (
+    groupId: string,
+    groupKeys: readonly string[],
+    subtree: { projects: CollapsedProjectGroupSubtree['projects'][number][] }
+  ): void => {
+    for (const [key, group] of groupByProjectGroupId.get(groupId) ?? []) {
+      subtree.projects.push({ key, worktreeIds: group.items.map((w) => w.id), groupKeys })
+    }
+    for (const child of childGroupsByParentId.get(groupId) ?? []) {
+      collectCollapsedSubtree(child.id, [...groupKeys, getProjectGroupHeaderKey(child.id)], subtree)
+    }
+  }
+
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
     const key = getProjectGroupHeaderKey(projectGroup.id)
+    const isCollapsed = collapsedGroups.has(key)
+    const collapsedSubtree = isCollapsed ? { projects: [] } : undefined
+    if (collapsedSubtree) {
+      collectCollapsedSubtree(projectGroup.id, [key], collapsedSubtree)
+    }
     result.push({
       type: 'header',
       key,
@@ -114,9 +134,10 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      ...(collapsedSubtree ? { collapsedSubtree } : {})
     })
-    if (!collapsedGroups.has(key)) {
+    if (!isCollapsed) {
       // The group's folders, with whatever is nested under them, precede its projects.
       appendWorktreeRows(result, ctx.repoOf, ctx.occurrencePlan, {
         collapsedGroups,

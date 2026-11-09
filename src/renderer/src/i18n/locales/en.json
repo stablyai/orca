@@ -7591,7 +7591,10 @@
           "running": "Running",
           "idle": "Idle"
         },
-        "projectOrderSaveFailed": "Could not save the complete project order"
+        "projectOrderSaveFailed": "Could not save the complete project order",
+        "projectCollapse": {
+          "expandActive": "Expand only active projects"
+        }
       },
       "shared": {
         "useDaemonActions": {

@@ -28,6 +28,11 @@ export type SidebarHeaderIcon =
 /** A worktree's PR lane, read by each client from its own PR facts. */
 export type SidebarPRGroupReader = (worktree: Worktree) => PRGroupKey
 
+/** The projects a collapsed project group hides, each with the group keys above it. */
+export type CollapsedProjectGroupSubtree = {
+  projects: readonly { key: string; worktreeIds: readonly string[]; groupKeys: readonly string[] }[]
+}
+
 export type GroupHeaderRow = {
   type: 'header'
   collapseKey?: string
@@ -49,6 +54,7 @@ export type GroupHeaderRow = {
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
+  collapsedSubtree?: CollapsedProjectGroupSubtree
 }
 
 export type WorktreeRow = {
