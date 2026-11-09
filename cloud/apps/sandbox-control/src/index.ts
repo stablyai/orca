@@ -14,7 +14,9 @@
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
-import { handleApi, isApiPath, type ApiExtension } from './api/router'
+import { authenticateApi } from './api/caller'
+import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
+import { handleMcpRoutes, isMcpPath, oauthApprovalsApi } from './mcp'
 import { retryPendingMessages } from './api/messages'
 import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
@@ -292,6 +294,17 @@ async function readJson(request: Request): Promise<unknown> {
   return text ? JSON.parse(text) : {}
 }
 
+async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise<ApiContext['life']>): Promise<ApiContext> {
+  return {
+    db: env.SANDBOX_DB,
+    now: deps.now ?? Date.now,
+    life: await (life ?? lifecycleDeps(env, deps)),
+    waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
+    readJson: () => readJson(request),
+    extensions: [oauthApprovalsApi, ...(deps.apiExtensions ?? [])]
+  }
+}
+
 /** Lifecycle routes refuse to run half-configured rather than guess at Orca's provider account. */
 async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
   if (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID)) {
@@ -487,19 +500,36 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return docsPage(publicOrigin(env, url)!)
     }
     if (isApiPath(url.pathname)) {
-      const life = await lifecycleDeps(env, deps)
       try {
-        return await handleApi(request, url, env, {
-          db: env.SANDBOX_DB,
-          now: deps.now ?? Date.now,
-          life,
-          waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
-          readJson: () => readJson(request),
-          extensions: deps.apiExtensions
-        })
+        return await handleApi(request, url, env, await apiContext(env, deps, request))
       } catch (error) {
         return errorResponse(error)
       }
+    }
+    if (isMcpPath(url.pathname)) {
+      // Hosted MCP server (src/mcp): every tool call runs through the public API as the MCP caller.
+      const now = deps.now ?? Date.now
+      let life: Promise<ApiContext['life']> | undefined
+      return await handleMcpRoutes(request, url, {
+        origin: publicOrigin(env, url)!,
+        db: env.SANDBOX_DB,
+        now,
+        allowedOrigins: (env.MCP_ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean),
+        authenticate: (req) => authenticateApi(env, req, now()),
+        api: async (caller, method, path, body) => {
+          const inner = new Request(new URL(path, url.origin), {
+            method,
+            headers: { 'content-type': 'application/json' },
+            body: body === undefined ? undefined : JSON.stringify(body)
+          })
+          life ??= lifecycleDeps(env, deps)
+          try {
+            return await handleApiAs(caller, inner, new URL(inner.url), await apiContext(env, deps, inner, life))
+          } catch (error) {
+            return errorResponse(error)
+          }
+        }
+      })
     }
     if (url.pathname === '/v1/secrets' || url.pathname.startsWith('/v1/secrets/')) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())

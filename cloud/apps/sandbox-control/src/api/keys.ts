@@ -39,6 +39,10 @@ export type ApiKeyRow = {
   created_at: number
   revoked_at: number | null
   revoked_by: string | null
+  /** MCP OAuth tokens (migration 0022): the registered client, the resource (RFC 8707) and the grant family. */
+  client_id?: string | null
+  audience?: string | null
+  family_id?: string | null
 }
 
 const TAG: Record<ApiKeyKind, string> = { user: 'sk', workspace: 'ws', oauth: 'oat', oauth_refresh: 'ort' }
@@ -91,6 +95,7 @@ export async function mintApiKey(
     kind?: ApiKeyKind
     sandboxId?: string | null
     expiresAt?: number | null
+    oauth?: { clientId: string; audience: string; familyId: string }
   },
   now: number
 ): Promise<MintedKey> {
@@ -112,16 +117,20 @@ export async function mintApiKey(
     last_used_at: null,
     created_at: now,
     revoked_at: null,
-    revoked_by: null
+    revoked_by: null,
+    client_id: input.oauth?.clientId ?? null,
+    audience: input.oauth?.audience ?? null,
+    family_id: input.oauth?.familyId ?? null
   }
   await db
     .prepare(
       `INSERT INTO api_keys (id, account_id, created_by, creator_role, name, prefix, secret_hash, scopes, kind,
-         sandbox_id, expires_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         sandbox_id, expires_at, created_at${row.client_id ? ', client_id, audience, family_id' : ''})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${row.client_id ? ', ?, ?, ?' : ''})`
     )
     .bind(row.id, row.account_id, row.created_by, row.creator_role, row.name, row.prefix, row.secret_hash,
-      row.scopes, row.kind, row.sandbox_id, row.expires_at, row.created_at)
+      row.scopes, row.kind, row.sandbox_id, row.expires_at, row.created_at,
+      ...(row.client_id ? [row.client_id, row.audience, row.family_id] : []))
     .run()
   return { row, secret }
 }
