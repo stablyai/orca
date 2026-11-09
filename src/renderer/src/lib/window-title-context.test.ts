@@ -4,7 +4,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identit
 import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { selectWindowTitle } from './window-title-context'
 
 function makeTab(overrides: Partial<Tab> & { id: string; worktreeId: string }): Tab {
