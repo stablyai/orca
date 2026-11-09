@@ -1,3 +1,4 @@
+import { RuntimeConnectionChangedBeforeSendError } from '../../runtime/rpc/calls/runtime-rpc-result'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -58,7 +59,9 @@ export function assertEnvironmentPairing(selector: string, expectedRevision?: nu
     expectedRevision !== undefined &&
     (current.pairingRevision ?? current.createdAt) !== expectedRevision
   ) {
-    throw new Error('The paired Orca server changed while the request was in progress.')
+    throw new RuntimeConnectionChangedBeforeSendError(
+      'The paired Orca server changed while the request was in progress.'
+    )
   }
 }
 
@@ -112,7 +115,7 @@ async function callPinnedToRuntime(
   }
   const probed = probedConnections.get(client)
   if (probed?.runtimeId !== expectedEnvironmentRuntimeId) {
-    throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    throw new RuntimeConnectionChangedBeforeSendError(RUNTIME_CONNECTION_CHANGED_MESSAGE)
   }
   return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probed.epoch })
 }

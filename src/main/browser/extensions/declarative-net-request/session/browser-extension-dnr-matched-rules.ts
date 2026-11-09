@@ -1,4 +1,4 @@
-import type { DnrRequestAction } from '../ruleset-matcher'
+import type { DnrRequestAction } from '../matching/ruleset-matcher'
 
 /** getMatchedRules' MatchedRuleInfo. */
 export type DnrMatchedRuleInfo = {

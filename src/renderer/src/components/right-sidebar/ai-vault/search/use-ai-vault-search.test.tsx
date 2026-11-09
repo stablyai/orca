@@ -12,7 +12,6 @@ import {
   searchResults
 } from '../../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import type { AgentSessionStatusEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import { useAiVaultSearch } from './use-ai-vault-search'
 
 const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
@@ -22,10 +21,7 @@ vi.mock('@/store/index', () => ({
   ) => select({ settings: mockSettings, runtimeEnvironments: [] })
 }))
 
-const feeds = vi.hoisted(() => ({
-  subscribe: vi.fn(),
-  emit: new Map<string, (event: AgentSessionStatusEvent) => void>()
-}))
+const feeds = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: feeds.subscribe
 }))
@@ -47,11 +43,7 @@ const empty: AiVaultSearchResponse = {
 }
 beforeEach(() => {
   resetStructuredAgentSessionStatusFeedsForTests()
-  feeds.emit.clear()
-  feeds.subscribe.mockImplementation(async (target, emit) => {
-    feeds.emit.set(target.environmentId ?? 'local', emit)
-    return { unsubscribe: vi.fn() }
-  })
+  feeds.subscribe.mockImplementation(async () => ({ unsubscribe: vi.fn() }))
   vi.useFakeTimers()
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -143,90 +135,56 @@ it('does not revive old results or cursors before debounce when returning from a
   unmount()
 })
 
-it('revalidates active search without losing hits, accepting old pages, or touching another host', async () => {
-  const request = { query: 'inventory' }
-  const owned = {
-    ...searchHit(),
-    title: 'Budget plan',
-    structuredSession: { sessionId: 'native', workspaceId: 'workspace' }
-  }
-  searchSessions.mockResolvedValue({
+it('keeps loaded rows while a continuation is pending and appends its captured page', async () => {
+  searchSessions.mockResolvedValueOnce({
     ...searchResults(),
-    hits: [owned],
-    page: { cursor: 'old-page', hasMore: true }
+    hits: [{ ...searchHit(), sessionId: 'first' }],
+    page: { cursor: 'next', hasMore: true }
   })
-  const a = renderHook(() => useAiVaultSearch(request, 'runtime:a', ''))
-  const b = renderHook(() => useAiVaultSearch(request, 'runtime:b', ''))
-  const summary = {
-    sessionId: 'native',
-    workspaceId: 'workspace',
-    agent: 'pi' as const,
-    latestPrompt: '',
-    status: null,
-    updatedAt: 1,
-    providerSession: { key: 'session_id' as const, id: '/provider' }
-  }
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-  await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [summary] }))
+  const request = { query: 'needle' }
+  const { result, unmount } = renderHook(() => useAiVaultSearch(request, 'local', ''))
   await debounce()
-  const baseline = searchSessions.mock.calls.length
-  for (const n of [10, 100]) {
-    await act(async () => {
-      for (let i = 0; i < n; i++) {
-        feeds.emit.get('a')?.({
-          type: 'status',
-          session: { ...summary, updatedAt: i, toolName: `${i}` }
-        })
-        feeds.emit.get('a')?.({
-          type: 'snapshot',
-          sessions: [],
-          namingActiveSessionIds: [],
-          conversationNames: [{ sessionId: 'native', conversationName: `${i}` }]
-        })
-      }
-    })
-    expect(searchSessions).toHaveBeenCalledTimes(baseline)
-  }
-  let settlePage = (_response: AiVaultSearchResponse): void => {}
+  let resolve!: (response: AiVaultSearchResponse) => void
   searchSessions.mockImplementationOnce(
     () =>
-      new Promise((resolve) => {
-        settlePage = resolve
+      new Promise((done) => {
+        resolve = done
       })
   )
-  act(() => a.result.current.loadMore())
-  const { providerSession: _provider, ...detached } = summary
-  await act(async () => {
-    for (const id of ['/next', '/third']) {
-      feeds.emit.get('a')?.({
-        type: 'status',
-        session: {
-          ...summary,
-          providerSession: { key: 'session_id', id }
-        }
-      })
-    }
-    feeds.emit.get('a')?.({ type: 'status', session: detached })
-  })
-  expect(a.result.current.hits).toEqual([owned])
-  const recovered = { ...searchHit(), title: 'Check inventory' }
-  searchSessions.mockResolvedValueOnce({ ...searchResults(), hits: [recovered] })
+  act(() => result.current.loadMore())
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first'])
   await act(async () =>
-    settlePage({ ...searchResults(), hits: [{ ...searchHit(), title: 'obsolete' }] })
+    resolve({ ...searchResults(), hits: [{ ...searchHit(), sessionId: 'second' }] })
   )
-  expect(a.result.current.hits).toEqual([recovered])
-  expect(b.result.current.hits).toEqual([owned])
-  expect(
-    searchSessions.mock.calls.slice(baseline).map(([args, scope]) => [args.cursor, scope])
-  ).toEqual([
-    ['old-page', 'runtime:a'],
-    [undefined, 'runtime:a']
-  ])
-  a.unmount()
-  b.unmount()
-  await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [] }))
-  expect(searchSessions).toHaveBeenCalledTimes(baseline + 2)
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first', 'second'])
+  unmount()
+})
+
+it('keeps the last hits on screen until a newer query answers, ignoring the older reply', async () => {
+  const hit = (sessionId: string) => ({ ...searchHit(), sessionId })
+  let answerOld = (_response: AiVaultSearchResponse): void => {}
+  searchSessions
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('first')] })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerOld = resolve
+        })
+    )
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('newest')] })
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'n' } } }
+  )
+  await debounce()
+  rerender({ request: { query: 'ne' } })
+  await debounce()
+  rerender({ request: { query: 'nee' } })
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['first'])
+  expect(result.current.answered).toBe(false)
+  await debounce()
+  await act(async () => answerOld({ ...searchResults(), hits: [hit('older')] }))
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['newest'])
+  expect(result.current.answered).toBe(true)
+  unmount()
 })

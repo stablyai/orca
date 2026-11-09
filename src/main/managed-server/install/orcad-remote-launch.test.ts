@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { orcadLivenessProbeCommand, parseOrcadLiveness } from './orcad-remote-launch'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
 getRemoteHostPlatform('win32-x64')

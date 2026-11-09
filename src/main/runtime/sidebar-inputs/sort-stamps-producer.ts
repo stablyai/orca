@@ -19,7 +19,7 @@ import {
   type AgentPaneChange,
   type AgentPaneWorkspace,
   type AgentTransitionDetector
-} from '../../agent-hooks/agent-transition-detector'
+} from '../../agent-hooks/observations/agent-transition-detector'
 import {
   listTieredWorkspaces,
   readSortStamps,

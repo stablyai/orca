@@ -17,7 +17,6 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
-  isConnectedRuntimeHostState,
   runtimeHostConnectionState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
@@ -209,10 +208,6 @@ export function getRuntimeServerConnectionState(
     // Ready details prove only transport; older/failed probes can omit runtime status, and errors need reachability diagnostics.
     transportStatus: details.status === 'ready' ? 'connected' : 'disconnected'
   })
-}
-
-export function isRuntimeServerTransportConnected(state: RuntimeServerConnectionState): boolean {
-  return isConnectedRuntimeHostState(state)
 }
 
 export function getRuntimeServerConnectionLabel(

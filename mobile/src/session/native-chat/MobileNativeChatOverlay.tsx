@@ -119,12 +119,17 @@ function MobileNativeChatOverlayContent({
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMobileNativeChatProjection(fullContent.messages, agent, [
-    sendSurfaceId,
-    sessionId,
-    controller.nativeChatItemSource?.client,
-    controller.nativeChatItemSource?.sessionId
-  ])
+  const folded = useMobileNativeChatProjection(
+    fullContent.messages,
+    agent,
+    [
+      sendSurfaceId,
+      sessionId,
+      controller.nativeChatItemSource?.client,
+      controller.nativeChatItemSource?.sessionId
+    ],
+    controller.nativeChatShowsCiResultLines
+  )
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
@@ -285,6 +290,7 @@ function MobileNativeChatOverlayContent({
                         status={session.status}
                         error={session.error}
                         readFailedFinally={session.readFailedFinally === true}
+                        clearing={session.clearing === true}
                         agent={controller.nativeChatAgent}
                         sessionLive={controller.nativeChatSessionLive}
                         agentWorking={controller.nativeChatTurnActive}

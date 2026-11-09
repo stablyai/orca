@@ -19,7 +19,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store

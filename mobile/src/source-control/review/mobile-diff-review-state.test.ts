@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  clearMobileDiffReviewFileReviewed,
   completeMobileDiffReviewState,
   createMobileDiffReviewState,
-  isMobileDiffReviewFileReviewed,
   markMobileDiffReviewFileReviewed,
   mergeMobileDiffReviewState
 } from './mobile-diff-review-state'
@@ -16,13 +14,6 @@ const descriptor = {
 } as const
 
 describe('mobile diff review state', () => {
-  it('marks files reviewed against the current diff identity', () => {
-    const state = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
-
-    expect(isMobileDiffReviewFileReviewed(state.files[descriptor.key], 'd1')).toBe(true)
-    expect(isMobileDiffReviewFileReviewed(state.files[descriptor.key], 'd2')).toBe(false)
-  })
-
   it('invalidates reviewed state when refreshed identity changes', () => {
     const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
 
@@ -49,15 +40,5 @@ describe('mobile diff review state', () => {
 
     expect(merged.completedAt).toBe(6)
     expect(merged.files[descriptor.key]?.reviewedAt).toBe(5)
-  })
-
-  it('clears reviewed state for manual unreview', () => {
-    const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
-
-    const unreviewed = clearMobileDiffReviewFileReviewed(reviewed, descriptor.key, 8)
-
-    expect(unreviewed.files[descriptor.key]?.reviewedAt).toBeUndefined()
-    expect(unreviewed.files[descriptor.key]?.reviewDiffIdentity).toBeUndefined()
-    expect(unreviewed.updatedAt).toBe(8)
   })
 })

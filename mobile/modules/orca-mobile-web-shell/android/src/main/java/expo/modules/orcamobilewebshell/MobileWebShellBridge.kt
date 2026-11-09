@@ -3,6 +3,9 @@ package expo.modules.orcamobilewebshell
 /** Shared page/native bridge contract; framework-free for off-device checks. */
 internal const val MOBILE_WEB_SHELL_BRIDGE_OBJECT = "orcaBridge"
 
+/** Tells a page booted ahead of its screen to stop asking for init; the screen that adopts it answers. */
+internal const val MOBILE_WEB_SHELL_PARKED_FRAME = """{"v":1,"type":"parked"}"""
+
 /** Enforce the shared UTF-8 JSON byte ceiling natively, before parsing. */
 internal const val MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES = 640 * 1024
 

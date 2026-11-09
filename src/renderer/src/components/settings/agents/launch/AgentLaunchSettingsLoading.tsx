@@ -1,6 +1,6 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
-import { AllAgentsPermissionSetting } from '../../../agent/launch-settings/AgentPermissionChoiceControls'
+import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
 
 export function AgentLaunchSettingsLoading(): React.JSX.Element {
   const t = useTranslate()

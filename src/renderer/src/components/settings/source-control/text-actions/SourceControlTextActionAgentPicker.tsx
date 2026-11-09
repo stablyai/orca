@@ -43,7 +43,7 @@ import {
   type AgentPickerEntry,
   type AgentPickerDraft
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { SourceControlActionAgentPicker } from '../SourceControlActionAgentPicker'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { getAgentCatalogForAction } from '../source-control-action-recipe-options'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 
@@ -308,8 +308,8 @@ const TextActionPicker = memo(
               .filter(Boolean)
               .join(' · ')
     return (
-      <SourceControlActionAgentPicker
-        text={{
+      <AgentLaunchPicker
+        {...{
           draftScope: props.draftScope,
           agent: activeAgent,
           disabled: props.disabled || !settings || Boolean(props.repoId && (!repo || !host)),
