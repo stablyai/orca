@@ -9,7 +9,10 @@ export function getRepositoryHookScriptTextareaRows(script: string): number {
   return clampRows(lineCount + 1, 4, 14)
 }
 
-function countScriptTextareaLines(text: string, maxLines: number): number {
+export function countScriptTextareaLines(
+  text: string,
+  maxLines: number = Number.POSITIVE_INFINITY
+): number {
   if (text.length === 0) {
     return 1
   }

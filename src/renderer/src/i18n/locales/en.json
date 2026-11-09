@@ -6474,7 +6474,8 @@
           "save": "Save local setup",
           "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "notImported": "Not imported",
-          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved.",
+          "showFullToSave": "Show the full script to save it."
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
