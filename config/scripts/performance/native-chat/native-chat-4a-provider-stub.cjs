@@ -35,7 +35,11 @@ fs.mkdirSync(path.dirname(transcriptPath), { recursive: true })
 let parentUuid = null
 if (fs.existsSync(transcriptPath)) {
   const lines = fs.readFileSync(transcriptPath, 'utf8').trim().split('\n').filter(Boolean)
-  parentUuid = lines.length > 0 ? (JSON.parse(lines.at(-1)).uuid ?? null) : null
+  // Chain to the last message, as the CLI does: a fork copy ends with a parentless custom-title row.
+  const last = lines
+    .map((line) => JSON.parse(line))
+    .findLast((row) => (row.type === 'user' || row.type === 'assistant') && !row.isSidechain)
+  parentUuid = last?.uuid ?? null
 }
 
 // Fork and rewind read the provider's own transcript, so every user/assistant frame is also saved there.
