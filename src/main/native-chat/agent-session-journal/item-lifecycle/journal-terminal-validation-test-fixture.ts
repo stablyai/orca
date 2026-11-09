@@ -1,3 +1,4 @@
+import { readTestJournalItems, readTestJournalSnapshot } from '../journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,7 +84,7 @@ export function createFixture() {
       const json = JSON.stringify({
         v: 3,
         kind: 'item',
-        epoch: journal.epoch,
+        epoch: journal.physicalCursor().epoch,
         seq: index + 2,
         ts: 900,
         fence: 7,
@@ -108,24 +109,30 @@ export function createFixture() {
       { itemId: 'orca:advanceable', body: { kind: 'turn', turnId: 'other', state: 'running' } },
       { itemId: 'orca:approval', body: pendingApproval() }
     ])
-    const before = journal.snapshot().items.find((item) => item.itemId === saved.itemId)
+    const before = (await readTestJournalItems(journal)).find(
+      (item) => item.itemId === saved.itemId
+    )
     const { db } = openTestJournalHostDatabase(root)
     const history = liveTestJournalRows(db, 'validation')
     const commits = vi.fn()
     journal.observeCommits(commits)
     await expect(settle()).resolves.toBeGreaterThan(0)
     expect(commits).toHaveBeenCalledTimes(1)
-    expect(journal.snapshot().items.find((item) => item.itemId === saved.itemId)).toEqual(before)
-    expect(journal.itemBody('orca:advanceable')).toMatchObject({ state: 'interrupted' })
-    expect(journal.itemBody('orca:approval')).toMatchObject({ resolution: { state: 'cancelled' } })
+    expect(
+      (await readTestJournalItems(journal)).find((item) => item.itemId === saved.itemId)
+    ).toEqual(before)
+    expect(await journal.reads.itemBody('orca:advanceable')).toMatchObject({ state: 'interrupted' })
+    expect(await journal.reads.itemBody('orca:approval')).toMatchObject({
+      resolution: { state: 'cancelled' }
+    })
     expect(liveTestJournalRows(db, 'validation').slice(0, history.length)).toEqual(history)
-    const settled = journal.snapshot()
+    const settled = await readTestJournalSnapshot(journal)
     await settle()
-    expect(journal.snapshot()).toEqual(settled)
+    expect(await readTestJournalSnapshot(journal)).toEqual(settled)
     expect(commits).toHaveBeenCalledTimes(1)
     await journal.close()
     journal = await open()
-    expect(journal.snapshot()).toEqual(settled)
+    expect(await readTestJournalSnapshot(journal)).toEqual(settled)
   }
 
   function pendingApproval() {

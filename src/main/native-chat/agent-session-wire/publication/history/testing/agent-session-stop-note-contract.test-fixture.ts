@@ -79,7 +79,7 @@ export function readNote() {
 }
 
 export function rows() {
-  const result = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+  const result = journal.readSince({ epoch: journal.physicalCursor().epoch, sequence: 0 })
   if (!result.ok) {
     throw new Error(result.reset)
   }

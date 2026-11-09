@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, vi, type Mock } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -60,7 +61,9 @@ export async function expectRawStopNoteRewindRecovery({
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
   const target = agentJournalItemKey(targetIdentity)
-  expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({
+  expect(
+    (await readTestJournalItems(journal)).find((item) => item.itemId === noteId)?.body
+  ).toEqual({
     kind: 'status',
     text: 'Cancellation requested.'
   })
@@ -73,7 +76,7 @@ export async function expectRawStopNoteRewindRecovery({
   await expect(
     host.rewind(caller, {
       itemId: target,
-      expectedEpoch: journal.epoch,
+      expectedEpoch: journal.physicalCursor().epoch,
       envelope: {
         sessionId: HOST_TEST_SESSION,
         clientOperationId: hostTestOperationId(),
@@ -81,7 +84,7 @@ export async function expectRawStopNoteRewindRecovery({
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.rewind',
           sessionId: HOST_TEST_SESSION,
-          fields: { itemId: target, expectedEpoch: journal.epoch }
+          fields: { itemId: target, expectedEpoch: journal.physicalCursor().epoch }
         })
       }
     })
@@ -97,8 +100,10 @@ export async function expectRawStopNoteRewindRecovery({
   // Rewind settlement runs in startup after attach; drain serialization before asserting.
   await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
-  expect(journal.itemBody(noteId)).toEqual(unconfirmed)
-  expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({
+  expect(await journal.reads.itemBody(noteId)).toEqual(unconfirmed)
+  expect(
+    (await readTestJournalItems(journal)).find((item) => item.itemId === noteId)?.body
+  ).toEqual({
     kind: 'status',
     text: 'Cancellation requested.'
   })

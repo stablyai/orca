@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,11 +10,11 @@ import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecy
 import { agentSessionProviderHandleChainHead } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRewindFork } from '../../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
@@ -132,7 +133,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -163,7 +164,7 @@ afterEach(async () => {
 async function rewindSecondPrompt(uuid = 'prompt-2') {
   const fields = {
     itemId: key(uuid),
-    expectedEpoch: (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
+    expectedEpoch: (await readTestHostJournal(host, HOST_TEST_SESSION)).cursor.epoch
   }
   return host.rewind(caller, {
     ...fields,
@@ -182,10 +183,10 @@ async function rewindSecondPrompt(uuid = 'prompt-2') {
 
 describe('rewinding a chat whose agent forks', () => {
   it('keeps the original conversation when saving its fork fails', async () => {
-    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    const before = await readTestHostJournal(host, HOST_TEST_SESSION)
     forkForRewind.mockRejectedValueOnce(new Error('transcript write failed'))
     await expect(rewindSecondPrompt()).rejects.toThrow('transcript write failed')
-    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
+    expect(await readTestHostJournal(host, HOST_TEST_SESSION)).toEqual(before)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
     expect(closeSession).not.toHaveBeenCalled()
   })

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -41,7 +42,7 @@ describe('a repeated draft press under a fresh operation id', () => {
       throw new Error('expected both presses answered')
     }
     expect(second.value.clientMessageId).toBe(first.value.clientMessageId)
-    const handoffs = (await rig.host.journalSnapshot(SESSION)).submissions.filter(
+    const handoffs = (await readTestHostJournal(rig.host, SESSION)).submissions.filter(
       (entry) => entry.queuedMessageId === draftId
     )
     expect(handoffs).toHaveLength(1)
@@ -82,7 +83,7 @@ describe('a queued Send receipt', () => {
       replayed: true,
       value: { submission: { queuedMessageId: id } }
     })
-    const submissions = (await rig.host.journalSnapshot(SESSION)).submissions
+    const submissions = (await readTestHostJournal(rig.host, SESSION)).submissions
     expect(submissions.filter((entry) => entry.queuedMessageId === id)).toHaveLength(1)
   })
 

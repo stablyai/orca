@@ -1,3 +1,5 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,10 +9,7 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session/jou
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -51,7 +50,7 @@ afterEach(async () => {
 async function statusRowsFor(frames: Record<string, unknown>[]) {
   const journal = await openAgentSessionJournal({
     identity: IDENTITY,
-    database: openTestJournalHostDatabase(root),
+    database: await openTestAgentSessionDatabase(root),
     now: () => 1_700_000_000_000,
     mintEpoch: () => 'epoch-1'
   })
@@ -62,11 +61,10 @@ async function statusRowsFor(frames: Record<string, unknown>[]) {
     translator.handle({ type: 'message', sessionId: 'orca-session', message: frame })
     await deferred.drained()
   }
-  return journal
-    .snapshot()
-    .items.flatMap((item): Extract<AgentJournalItemBody, { kind: 'status' }>[] =>
+  return (await readTestJournalItems(journal)).flatMap(
+    (item): Extract<AgentJournalItemBody, { kind: 'status' }>[] =>
       item.body.kind === 'status' ? [item.body] : []
-    )
+  )
 }
 
 describe('a Claude api_retry frame', () => {

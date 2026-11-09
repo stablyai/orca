@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Clients without accepted-send support wait for handover; sends queued behind compact must answer when queued to avoid the phone timeout.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -83,9 +84,10 @@ it('answers a send queued behind /compact at once, and delivers it once after th
   })
 
   await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
-  const journal = await (
-    await ensureStructuredAgentSessionHost(harness.hostConfig())
-  ).journalSnapshot(SESSION)
+  const journal = await readTestHostJournal(
+    await ensureStructuredAgentSessionHost(harness.hostConfig()),
+    SESSION
+  )
   expect(
     journal.submissions.filter((entry) => entry.queuedMessageId === answer.queued.messageId)
   ).toEqual([expect.objectContaining({ handedOverAt: expect.any(Number) })])

@@ -62,20 +62,22 @@ it('restores separate pause and cancellation owners from complete format-3 scala
     sequence: journal.cursor().sequence,
     event: { reason: 'user-close', turnId: 'mail', at: 1_000 }
   }
-  expect(journalOutcomeSource(db(), identity.sessionId, journal.epoch)?.prefix).toBe(0)
+  expect(
+    journalOutcomeSource(db(), identity.sessionId, journal.physicalCursor().epoch)?.prefix
+  ).toBe(0)
   expect(marks()).toMatchObject({ manualStop: stop, latestStop: close })
   await journal.close()
   journal = await current.open(options())
   expect(journal.stopMarks.latest()).toMatchObject(close)
-  expect(journal.queuedMessages.userStopInForce()).toEqual(stop)
-  expect(journal.queuedMessages.nextInputCard()).toBeNull()
+  expect(await journal.queuedMessages.userStopInForce()).toEqual(stop)
+  expect(await journal.queuedMessages.nextInputCard()).toBeNull()
   await journal.replaceEpochItems('handle_forked', 0, [])
   await journal.close()
   journal = await current.open(options())
   expect(marks()).toMatchObject({ manualStop: stop, latestStop: close })
-  expect(journal.queuedMessages.nextInputCard()).toBeNull()
+  expect(await journal.queuedMessages.nextInputCard()).toBeNull()
   await journal.appendQueueResume(0)
-  expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('W')
+  expect((await journal.queuedMessages.nextInputCard())?.messageId).toBe('W')
 })
 
 it.each(['raw-prefix', 'old-format-3-layout'] as const)(
@@ -115,8 +117,8 @@ it.each(['raw-prefix', 'old-format-3-layout'] as const)(
       manualStop: stop,
       latestStop: { event: { reason: 'user-close', turnId: 'mail' } }
     })
-    expect(journal.queuedMessages.userStopInForce()).toEqual(stop)
-    expect(journal.queuedMessages.nextInputCard()).toBeNull()
+    expect(await journal.queuedMessages.userStopInForce()).toEqual(stop)
+    expect(await journal.queuedMessages.nextInputCard()).toBeNull()
   }
 )
 
@@ -136,7 +138,7 @@ it('does not revive a superseded historical Stop, and distinguishes explicit nul
     )
     .run(JSON.stringify('queuePauseMarks'))
   journal = await current.open(options())
-  expect(journal.queuedMessages.userStopInForce()).toBeNull()
+  expect(await journal.queuedMessages.userStopInForce()).toBeNull()
   await journal.appendStopEvent({ reason: 'host-stop' }, 0)
   expect(marks().manualStop).toBeNull()
 })

@@ -135,7 +135,7 @@ describe('claims written with the message', () => {
       )
     ).catch((caught: unknown) => caught)
     expect(isAgentSessionAttachmentExpiredError(error)).toBe(true)
-    expect(journal.submission('send-1')).toBeUndefined()
+    expect(await journal.reads.submission('send-1')).toBeUndefined()
     expect(claims()).toEqual([])
   })
 
@@ -150,7 +150,7 @@ describe('claims written with the message', () => {
       })
       .catch((caught: unknown) => caught)
     expect(isAgentSessionAttachmentExpiredError(refused)).toBe(true)
-    expect(journal.queuedMessages.list()).toHaveLength(0)
+    expect(await journal.queuedMessages.list()).toHaveLength(0)
 
     const path = await storeUpload(UPLOAD_A, 'notes.txt')
     const body = message({ type: 'text', text: `read @${path}` })
@@ -165,7 +165,7 @@ describe('claims written with the message', () => {
     )
     await journals.closeAll()
     const reopened = await open()
-    expect(reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
+    expect(await reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
     expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 })

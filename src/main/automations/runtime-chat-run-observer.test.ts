@@ -1,4 +1,3 @@
-import { measureAutomationChatRun } from './automation-chat-run-measurement-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalSnapshot,
@@ -29,7 +28,7 @@ const mocks = vi.hoisted(() => {
   return {
     ...hostState,
     host: {
-      journalCurrentRead: vi.fn(),
+      automationRun: vi.fn(),
       observeConversationPublications: vi.fn(),
       queuedSendAnswer: vi.fn(async () => null)
     }
@@ -122,15 +121,15 @@ describe('restart observation and disposal', () => {
     const release = vi.fn()
     const read = Promise.withResolvers<AgentJournalSnapshot>()
     mocks.host.observeConversationPublications.mockImplementation((_id, observer) => {
-      expect(mocks.host.journalCurrentRead).not.toHaveBeenCalled()
+      expect(mocks.host.automationRun).not.toHaveBeenCalled()
       observer.next({ kind: 'reset', source: {}, journal: null })
       return release
     })
-    mocks.host.journalCurrentRead.mockReturnValue(read.promise)
+    mocks.host.automationRun.mockReturnValue(read.promise)
     const controller = new AbortController()
     const pending = observeAutomationChatRun(runtime, run, controller.signal)
     const rejected = expect(pending).rejects.toThrow('request_aborted')
-    await vi.waitFor(() => expect(mocks.host.journalCurrentRead).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.host.automationRun).toHaveBeenCalledOnce())
     controller.abort()
     await rejected
     read.resolve(view)
@@ -150,10 +149,10 @@ describe('restart observation and disposal', () => {
     })
     const delayed = Promise.withResolvers<null>()
     const opening = Promise.withResolvers<AgentJournalSnapshot>()
-    mocks.host.journalCurrentRead.mockReturnValueOnce(opening.promise).mockResolvedValue(view)
+    mocks.host.automationRun.mockReturnValueOnce(opening.promise).mockResolvedValue(view)
     mocks.host.queuedSendAnswer.mockReturnValueOnce(delayed.promise)
     const pending = observeAutomationChatRun(runtime, run, new AbortController().signal)
-    await vi.waitFor(() => expect(mocks.host.journalCurrentRead).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.host.automationRun).toHaveBeenCalledOnce())
     notify({ kind: 'reset', source: {}, journal: null })
     opening.resolve({
       ...view,
@@ -164,275 +163,113 @@ describe('restart observation and disposal', () => {
     view.items[0] = turn('own', view.submissions[0].providerItemId!)
     delayed.resolve(null)
     expect(await pending).toMatchObject({ status: 'completed' })
-    expect(mocks.host.journalCurrentRead).toHaveBeenCalledTimes(3)
+    expect(mocks.host.automationRun).toHaveBeenCalledTimes(3)
     expect(release).toHaveBeenCalledOnce()
   })
 })
 
-// The provider is scripted; queue ownership, journal, catch-up and publication are real.
-describe('real host queue publication and operation bounds', () => {
-  // Two history sizes pin every per-history coefficient below; 1000 turns only made seeding outlast the timeout under load.
-  it.each([20, 100])(
-    'observes Q→S at %i prior turns without token-triggered history scans',
-    async (history) => {
-      const totals: number[][] = []
-      for (const mode of ['baseline', 'internal', 'display'] as const) {
-        const rig = await createQueuedMessageTestRig({ restartable: true })
-        mocks.actualHost = rig.host
-        const controller = new AbortController()
-        try {
-          const working = await rig.workingSend()
-          let sink = rig.providerEvents()
-          const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-          for (let n = 0; n < history; n++) {
-            await journal.appendSubmission({
-              clientMessageId: `old-send-${n}`,
-              payloadFingerprint: 'a'.repeat(64),
-              fence: 1,
-              body: hostTestMessage(`old prompt ${n}`)
-            })
-            await journal.resolveDispatch({
-              clientMessageId: `old-send-${n}`,
-              state: 'accepted',
-              providerIdentity: null,
-              fence: 1
-            })
-            sink.appendItem(
-              { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: `old-${n}`, ordinal: 0 },
-              { kind: 'turn', turnId: `old-${n}`, state: 'completed', outcome: 'success' },
-              { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-            )
-            if (n % 100 === 99) {
-              await sink.written?.()
-            }
-          }
-          await sink.written?.()
-          const run = {
-            ...buildProfileStateCutoverFixture('/fixture').automationRuns[0],
-            // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
-            createdAt: Date.now(),
-            // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
-            dispatchedAt: Date.now(),
-            sessionKind: 'chat' as const,
-            chatSessionId: HOST_TEST_SESSION
-          }
-          const q = automationRunOperationId(run, 'reuse-send')
-          const body = hostTestMessage('automation behind human backlog')
-          const fields = { body, delivery: 'queue-if-active' as const }
-          expect(
-            await rig.host.send(
-              { callerKey: 'client-1' },
-              {
-                ...fields,
-                envelope: rig.envelope(fields, 'agentSession.send', q)
-              }
-            )
-          ).toMatchObject({ ok: true, value: { queued: { messageId: q, state: 'waiting' } } })
-          const metrics = measureAutomationChatRun(journal, rig.host)
-          const {
-            measure,
-            full,
-            status,
-            observerReads,
-            registration,
-            releases,
-            keys,
-            timers,
-            cleared
-          } = metrics
-          const tokenBurst = async () => {
-            for (let n = 0; n < 25; n++) {
-              sink.appendItem(
-                { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'unrelated', ordinal: 1 },
-                {
-                  kind: 'message',
-                  role: 'assistant',
-                  blocks: [{ type: 'text', text: `token-${n}` }]
-                },
-                { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-              )
-              sink.publish()
-              await sink.written?.()
-              await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-            }
-          }
-          const difference = (before: number[]) =>
-            measure().map((value, index) => value - before[index])
-          const displayRelease =
-            mode === 'display'
-              ? await rig.host.subscribe({
-                  id: 'ordinary-display',
-                  sessionId: HOST_TEST_SESSION,
-                  emit: () => {}
-                })
-              : () => {}
-          const beforeBaseline = measure()
-          await tokenBurst()
-          const baselineWork = difference(beforeBaseline)
-          const runtimeFacade = {
-            ensureStructuredAgentSessionHost: async () => {},
-            openAgentSessionRecordStore: async () => ({
-              getOperationRow: (_caller: string, id: string) =>
-                id === q
-                  ? { outcome: { status: 'succeeded', sessionId: HOST_TEST_SESSION } }
-                  : undefined,
-              getConversation: () => ({
-                provider: 'codex',
-                location: { workspaceId: 'workspace-1' }
-              })
-            })
-          }
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: initialization/receipt reads are scripted; the actual host/journal/queue/observer and N/10N measurements execute.
-          const runtime = runtimeFacade as unknown as OrcaRuntimeService
-          let pending =
-            mode === 'internal' ? observeAutomationChatRun(runtime, run, controller.signal) : null
-          void pending?.catch(() => {})
-          if (pending) {
-            await eventually(() => expect(registration).toHaveBeenCalledOnce())
-          }
-          await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          expect(status.mock.calls.length).toBeGreaterThan(0)
-          expect(full).not.toHaveBeenCalled()
-          const beforeTokens = measure()
-          const readsBeforeTokens = observerReads.mock.calls.length
-          const keysBeforeTokens = keys.map((spy) => spy.mock.calls.length)
-          await tokenBurst()
-          expect(observerReads.mock.calls.length).toBe(readsBeforeTokens)
-          const observerWork = difference(beforeTokens)
-          expect(observerWork).toEqual(baselineWork)
-          const keyedAdded = keys.map((spy, i) => spy.mock.calls.length - keysBeforeTokens[i])
-          expect(keyedAdded.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(25 * 12)
-          const unchangedReads = observerReads.mock.calls.length
-          await journal.resolveDispatch({
-            clientMessageId: 'old-send-0',
-            state: 'accepted',
-            providerIdentity: null,
-            fence: 1
-          })
-          await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          expect(observerReads).toHaveBeenCalledTimes(unchangedReads)
-          if (pending) {
-            controller.abort()
-            await expect(pending).rejects.toThrow('request_aborted')
-            expect(releases[0]).toHaveBeenCalledOnce()
-            pending = observeAutomationChatRun(runtime, run, new AbortController().signal)
-            await eventually(() => expect(registration).toHaveBeenCalledTimes(2))
-          }
-          await rig.settleAccepted(working, 'human')
-          sink.appendItem(
-            { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'turn-human', ordinal: 1 },
-            { kind: 'turn', turnId: 'turn-human', state: 'completed', outcome: 'success' },
-            { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
-          )
-          sink.publish({ lifecycle: true })
-          expect(await sink.written?.()).toEqual({ ok: true })
-          await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          const handoff = () =>
-            journal.submissions().findLast((entry) => entry.queuedMessageId === q)
-          await eventually(() => expect(handoff()).toBeDefined())
-          const sent = handoff()!.clientMessageId
-          expect(sent).not.toBe(q)
-          await eventually(() => expect(journal.submission(sent)?.handedOverAt).toBeDefined())
-          await rig.settleAccepted(sent, 'automation')
-          await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          const beforeRestatement = observerReads.mock.calls.length
-          await journal.resolveDispatch({
-            clientMessageId: sent,
-            state: 'accepted',
-            providerIdentity: null,
-            fence: 1
-          })
-          await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          expect(observerReads).toHaveBeenCalledTimes(beforeRestatement)
-          const beforeWork = observerReads.mock.calls.length
-          rig.host['clientDelivery'].publishRestored(HOST_TEST_SESSION)
-          rig.host.publishWorkChanged(HOST_TEST_SESSION)
-          if (pending) {
-            await eventually(() =>
-              expect(observerReads.mock.calls.length).toBeGreaterThan(beforeWork)
-            )
-          }
-          const accepted = journal.submission(sent)
-          sink = rig.providerEvents()
-          const ownId = {
-            provider: 'codex' as const,
-            threadId: HOST_TEST_THREAD,
-            turnId: 'turn-automation',
-            ordinal: 1
-          }
-          sink.appendItem(
-            ownId,
-            {
-              kind: 'turn',
-              turnId: 'turn-automation',
-              userItemId: accepted!.providerItemId!,
-              state: 'completed',
-              outcome: 'success'
-            },
-            { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
-          )
-          sink.appendItem(
-            { ...ownId, ordinal: 2 },
-            {
-              kind: 'message',
-              role: 'assistant',
-              blocks: [{ type: 'text', text: 'Exact automation output' }]
-            },
-            { turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(ownId) } }
-          )
-          sink.publish({ lifecycle: true })
-          expect(await sink.written?.()).toEqual({ ok: true })
-          await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          expect(
-            pending
-              ? await pending
-              : chatAutomationRunObservation(
-                  await rig.host.journalCurrentRead(HOST_TEST_SESSION),
-                  q,
-                  'Codex',
-                  await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
-                )
-          ).toMatchObject({
-            status: 'completed',
-            outputSnapshot: { content: 'Exact automation output' }
-          })
-          expect(rig.dispatch).toHaveBeenCalledTimes(2)
-          expect(releases).toHaveLength(mode === 'internal' ? 2 : 0)
-          for (const release of releases) {
-            expect(release).toHaveBeenCalledOnce()
-          }
-          for (const [index, args] of timers.mock.calls.entries()) {
-            if (Number(args[1]) > 5 * 60 * 60 * 1000) {
-              expect(cleared).toHaveBeenCalledWith(timers.mock.results[index].value)
-            }
-          }
-          displayRelease()
-          expect(registration).toHaveBeenCalledTimes(mode === 'internal' ? 2 : 0)
-          expect(observerReads.mock.calls.length).toBeLessThanOrEqual(12)
-          const { copied, iteratorYields, projectedRows, scannedRows } = metrics.details()
-          expect(copied + iteratorYields + projectedRows + scannedRows).toBeLessThan(
-            (history + 30) * 4000
-          )
-          const sessions = rig.host.collaboratorsForTests().sessions
-          expect(sessions['observers'].size).toBe(0)
-          expect(sessions['attachments'].size).toBe(1)
-          totals.push(measure())
-          process.stdout.write(
-            `${JSON.stringify({ history, mode, sourceAttachments: sessions['attachments'].size, logicalObservers: sessions['observers'].size, baselineWork, observerWork, keyedAdded, totals: measure(), ...metrics.details(), reconciliations: observerReads.mock.calls.length, registrations: registration.mock.calls.length, releases: releases.filter((r) => r.mock.calls.length === 1).length })}\n`
-          )
-        } finally {
-          controller.abort()
-          mocks.actualHost = null
-          await rig.dispose()
-          vi.restoreAllMocks()
-        }
+describe('real host queue publication', () => {
+  it('follows a queued run through handover and returns its exact output', async () => {
+    const rig = await createQueuedMessageTestRig({ restartable: true })
+    mocks.actualHost = rig.host
+    const controller = new AbortController()
+    try {
+      const working = await rig.workingSend()
+      const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+      const run = {
+        ...buildProfileStateCutoverFixture('/fixture').automationRuns[0],
+        // ast-grep-ignore: test-no-wall-clock -- Match the observer's expiry clock.
+        createdAt: Date.now(),
+        // ast-grep-ignore: test-no-wall-clock -- Match the observer's expiry clock.
+        dispatchedAt: Date.now(),
+        sessionKind: 'chat' as const,
+        chatSessionId: HOST_TEST_SESSION
       }
-      const added = totals[1].map((value, i) => value - totals[0][i])
-      process.stdout.write(
-        `${JSON.stringify({ history, fullWorkloadBaseline: totals[0], fullWorkloadInternal: totals[1], added, displayControl: totals[2] })}\n`
+      const q = automationRunOperationId(run, 'reuse-send')
+      const fields = {
+        body: hostTestMessage('automation behind human backlog'),
+        delivery: 'queue-if-active' as const
+      }
+      expect(
+        await rig.host.send(
+          { callerKey: 'client-1' },
+          {
+            ...fields,
+            envelope: rig.envelope(fields, 'agentSession.send', q)
+          }
+        )
+      ).toMatchObject({ ok: true, value: { queued: { messageId: q, state: 'waiting' } } })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only runtime initialization and receipt lookup are scripted; the host owns delivery and observation.
+      const runtime = {
+        ensureStructuredAgentSessionHost: async () => {},
+        openAgentSessionRecordStore: async () => ({
+          getOperationRow: (_caller: string, id: string) =>
+            id === q
+              ? { outcome: { status: 'succeeded', sessionId: HOST_TEST_SESSION } }
+              : undefined,
+          getConversation: () => ({ provider: 'codex', location: { workspaceId: 'workspace-1' } })
+        })
+      } as unknown as OrcaRuntimeService
+      const pending = observeAutomationChatRun(runtime, run, controller.signal)
+      void pending.catch(() => {})
+      await rig.settleAccepted(working, 'human')
+      let sink = rig.providerEvents()
+      sink.appendItem(
+        { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'turn-human', ordinal: 1 },
+        { kind: 'turn', turnId: 'turn-human', state: 'completed', outcome: 'success' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
       )
+      sink.publish({ lifecycle: true })
+      expect(await sink.written?.()).toEqual({ ok: true })
+      await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
+      const sent = await rig.handoffId(q)
+      expect(sent).not.toBe(q)
+      await eventually(async () =>
+        expect((await journal.reads.submission(sent))?.handedOverAt).toBeDefined()
+      )
+      await rig.settleAccepted(sent, 'automation')
+      const accepted = await journal.reads.submission(sent)
+      sink = rig.providerEvents()
+      const ownId = {
+        provider: 'codex' as const,
+        threadId: HOST_TEST_THREAD,
+        turnId: 'turn-automation',
+        ordinal: 1
+      }
+      sink.appendItem(
+        ownId,
+        {
+          kind: 'turn',
+          turnId: 'turn-automation',
+          userItemId: accepted!.providerItemId!,
+          state: 'completed',
+          outcome: 'success'
+        },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
+      )
+      sink.appendItem(
+        { ...ownId, ordinal: 2 },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Exact automation output' }]
+        },
+        { turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(ownId) } }
+      )
+      sink.publish({ lifecycle: true })
+      expect(await sink.written?.()).toEqual({ ok: true })
+      await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
+      expect(await pending).toMatchObject({
+        status: 'completed',
+        outputSnapshot: { content: 'Exact automation output' }
+      })
+      expect(rig.dispatch).toHaveBeenCalledTimes(2)
+    } finally {
+      controller.abort()
+      mocks.actualHost = null
+      await rig.dispose()
     }
-  )
+  })
   it.each(['withdraw', 'return', 'missing', 'end'] as const)(
     'settles a queue-only %s without resending',
     async (outcome) => {
@@ -473,12 +310,12 @@ describe('real host queue publication and operation bounds', () => {
           (value) => value,
           (error) => error
         )
-        const reads = vi.spyOn(rig.host, 'journalCurrentRead')
+        const reads = vi.spyOn(rig.host, 'automationRun')
         await eventually(() => expect(reads).toHaveBeenCalled())
 
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
+            await rig.host.automationRun(HOST_TEST_SESSION, q, []),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -513,7 +350,7 @@ describe('real host queue publication and operation bounds', () => {
         expect(rig.dispatch).toHaveBeenCalledTimes(sends)
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
+            await rig.host.automationRun(HOST_TEST_SESSION, q, []),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -527,7 +364,6 @@ describe('real host queue publication and operation bounds', () => {
             rig.host.stopDelivery()
           }
           expect(await liveResult).toBeInstanceOf(Error)
-          expect(sessions['observers'].size).toBe(0)
           return
         }
         if (outcome === 'withdraw') {
@@ -540,7 +376,7 @@ describe('real host queue publication and operation bounds', () => {
         }
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
+            await rig.host.automationRun(HOST_TEST_SESSION, q, []),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)

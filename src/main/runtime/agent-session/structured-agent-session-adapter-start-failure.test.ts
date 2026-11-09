@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { claudeScriptedChild } from '../../claude/claude-scripted-child.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -106,7 +107,7 @@ async function failedStart(
   }
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
-    return (await host.journalSnapshot(SESSION)).submissions.find(
+    return (await readTestHostJournal(host, SESSION)).submissions.find(
       (entry) => entry.clientMessageId === sent.value.clientMessageId
     )
   }
@@ -114,7 +115,7 @@ async function failedStart(
     timeout: 5_000
   })
   const settled = await submission()
-  const snapshot = await host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(host, SESSION)
   const failureKind = agent === 'codex' && !unanswered ? 'startFailed' : 'providerStartFailed'
   expect(readWholeAgentSessionFailureFact(settled?.rejection)).toMatchObject({
     kind: failureKind,

@@ -84,7 +84,7 @@ it('answers every input-evidence read from a readonly snapshot exactly as the in
   await journal.appendSubmission(
     {
       clientMessageId: 'linked',
-      payloadFingerprint: journal.queuedMessages.get('card')!.fingerprint,
+      payloadFingerprint: (await journal.queuedMessages.get('card'))!.fingerprint,
       body: fixture.message('linked'),
       fence: 0,
       handoverRecorded: true

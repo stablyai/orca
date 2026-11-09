@@ -1,3 +1,5 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,10 +19,7 @@ import { openAgentSessionJournal } from '../native-chat/agent-session-journal/jo
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-structured-launch-resolution'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
@@ -263,7 +262,7 @@ describe('Claude stream-json connection', () => {
         agent: 'claude',
         providerHandle: claudeProviderHandle(SESSION_ID, 'leaf-1')
       },
-      database: openTestJournalHostDatabase(join(scenario.cwd, 'journal')),
+      database: await openTestAgentSessionDatabase(join(scenario.cwd, 'journal')),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
@@ -280,7 +279,7 @@ describe('Claude stream-json connection', () => {
 
     await until(() => (settled ? true : null), 'the result frame')
     await deferred.drained()
-    const items = journal.snapshot().items
+    const items = await readTestJournalItems(journal)
     const assistant = items.filter(
       (item) => item.body.kind === 'message' && item.body.role === 'assistant'
     )

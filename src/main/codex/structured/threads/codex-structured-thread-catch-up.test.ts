@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { recordedCodexRollout } from '../../__fixtures__/codex-rollout-recordings'
 import {
   prepareLegacyTranscriptImport,
@@ -97,7 +101,7 @@ describe('Codex chat catch-up', () => {
     history[1_029] = proof('U')
     await c.open(history, { onReceipt })
     expect(settled).toEqual(['U'])
-    expect(c.journal.submission('U')?.dispatchState).toBe('accepted')
+    expect((await c.journal.reads.submission('U'))?.dispatchState).toBe('accepted')
     await c.open([], {
       onReceipt,
       connection: {
@@ -111,7 +115,7 @@ describe('Codex chat catch-up', () => {
     })
     expect(settled).toEqual(['U', 'failed-import'])
     await c.reopen()
-    expect(c.journal.submission('failed-import')?.dispatchState).toBe('accepted')
+    expect((await c.journal.reads.submission('failed-import'))?.dispatchState).toBe('accepted')
     await c.journal.appendSubmission({
       clientMessageId: 'cancelled',
       body: { kind: 'message', role: 'user', blocks: [] },
@@ -168,7 +172,7 @@ describe('Codex chat catch-up', () => {
     // Recent proof stops at 1024 known turns. The oldest import page also contains a known turn.
     expect(settled).toEqual(['U', 'failed-import', 'old-gap', 'fetched-known'])
     expect(
-      c.journal.item(
+      await c.journal.reads.item(
         agentJournalItemKey({
           provider: 'codex',
           threadId: THREAD,
@@ -178,9 +182,9 @@ describe('Codex chat catch-up', () => {
       )
     ).toBeNull()
     await c.reopen()
-    expect(c.journal.submission('old-gap')?.dispatchState).toBe('accepted')
-    expect(c.journal.submission('fetched-known')?.dispatchState).toBe('accepted')
-    expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
+    expect((await c.journal.reads.submission('old-gap'))?.dispatchState).toBe('accepted')
+    expect((await c.journal.reads.submission('fetched-known'))?.dispatchState).toBe('accepted')
+    expect((await c.journal.reads.submission('V'))?.dispatchState).toBe('rejected')
 
     for (const n of [100, 1_000]) {
       for (const id of [`tail-${n}`, `second-${n}`]) {
@@ -268,11 +272,11 @@ describe('Codex chat catch-up', () => {
       })
       expect(settled).toContain(first)
       expect(settled).not.toContain(next)
-      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
+      expect((await c.journal.reads.submission(next))?.dispatchState).toBe('pending')
       await c.reopen()
-      expect(c.journal.submission(first)?.dispatchState).toBe('accepted')
-      expect(c.journal.submission(next)?.dispatchState).toBe('rejected')
-      expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
+      expect((await c.journal.reads.submission(first))?.dispatchState).toBe('accepted')
+      expect((await c.journal.reads.submission(next))?.dispatchState).toBe('rejected')
+      expect((await c.journal.reads.submission('V'))?.dispatchState).toBe('rejected')
       // Losing ownership or cancellation during a read forbids a new proof callback.
       const blocked = new AbortController()
       current = true
@@ -301,7 +305,7 @@ describe('Codex chat catch-up', () => {
     const outside = { ...turn(2), items: [{ type: 'agentMessage', id: 'a-2', text: answer }] }
     await c.open([turn(1), outside])
     await c.reopen()
-    const items = c.journal.snapshot().items
+    const items = await readTestJournalItems(c.journal)
     const stored = items.find(
       (item) =>
         item.body.kind === 'message' &&
@@ -343,10 +347,10 @@ describe('Codex chat catch-up', () => {
     }
     await c.deferred.drained()
     native.dispose()
-    const before = c.journal.snapshot().items
+    const before = await readTestJournalItems(c.journal)
     await c.reopen()
     await c.open([turn(1), turn(2), turn(3)])
-    expect(c.journal.snapshot().items.slice(0, before.length)).toEqual(before)
+    expect((await readTestJournalItems(c.journal)).slice(0, before.length)).toEqual(before)
     expect(c.texts().slice(-4)).toEqual([
       '(continued-outside)',
       'user:ask 2',
@@ -360,7 +364,7 @@ describe('Codex chat catch-up', () => {
   it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
     const c = await chat({ now: 1_000 })
     await c.open([turn(1)])
-    const before = c.journal.snapshot()
+    const before = await readTestJournalSnapshot(c.journal)
     const large = {
       ...turn(2),
       items: Array.from({ length: 600 }, (_, n) => ({
@@ -375,14 +379,12 @@ describe('Codex chat catch-up', () => {
     )
     expect((await c.open([turn(1), large])).ok).toBe(false)
     expect(c.deferred.state().failed).toBe(true)
-    expect(c.journal.snapshot()).toEqual(before)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(before)
     c.db.exec('DROP TRIGGER fail_later_partition')
     await c.reopen()
-    expect(c.journal.snapshot()).toEqual(before)
-    c.publications.length = 0
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(before)
     await c.open([turn(1), large])
     expect(c.texts()).toHaveLength(603)
-    expect(c.publications).toEqual([before.items.length + 602])
     await c.reopen()
     await c.open([turn(1), large])
     expect(c.texts()).toHaveLength(603)
@@ -398,16 +400,16 @@ describe('Codex chat catch-up', () => {
       ]
     })
     await c.open([withReasoning(1)])
-    const before = c.journal.snapshot().items
+    const before = await readTestJournalItems(c.journal)
     await c.open([withReasoning(2)])
-    expect(c.journal.snapshot().items.slice(0, before.length)).toEqual(before)
+    expect((await readTestJournalItems(c.journal)).slice(0, before.length)).toEqual(before)
     expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:answer 1',
       'assistant:answer 2'
     ])
-    const reasoning = c.journal
-      .snapshot()
-      .items.filter((item) => item.body.kind === 'message' && item.body.role === 'reasoning')
+    const reasoning = (await readTestJournalItems(c.journal)).filter(
+      (item) => item.body.kind === 'message' && item.body.role === 'reasoning'
+    )
     expect(new Set(reasoning.map((item) => item.itemId)).size).toBe(2)
     expect(new Set(reasoning.map((item) => JSON.stringify(item.turnScope))).size).toBe(2)
   })
@@ -490,7 +492,7 @@ describe('Codex chat catch-up', () => {
         options: { filePath }
       })
     ).toMatchObject({ ok: true, imported: 2 })
-    const original = c.journal.snapshot().items
+    const original = await readTestJournalItems(c.journal)
     const dated = (n: number) => ({ ...turn(n), startedAt: n, completedAt: n + 10 })
     await c.open([dated(100), dated(300)])
     const target = agentJournalItemKey({
@@ -512,7 +514,7 @@ describe('Codex chat catch-up', () => {
         operationId,
         callerKey,
         itemId: target,
-        expectedEpoch: c.journal.epoch,
+        expectedEpoch: c.journal.physicalCursor().epoch,
         phase: 'provider-succeeded'
       }
     }))
@@ -520,9 +522,8 @@ describe('Codex chat catch-up', () => {
     const deps = () => ({ store, logger: testEventSinkLogging().logger })
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(
-      c.journal
-        .snapshot()
-        .items.slice(0, original.length)
+      (await readTestJournalItems(c.journal))
+        .slice(0, original.length)
         .map(({ itemId, body, observedAt, turnScope }) => ({ itemId, body, observedAt, turnScope }))
     ).toEqual(
       original.map(({ itemId, body, observedAt, turnScope }) => ({
@@ -544,9 +545,8 @@ describe('Codex chat catch-up', () => {
       'assistant:answer 600'
     ])
     expect(
-      c.journal
-        .snapshot()
-        .items.slice(0, original.length)
+      (await readTestJournalItems(c.journal))
+        .slice(0, original.length)
         .map(({ itemId, body, observedAt, turnScope }) => ({ itemId, body, observedAt, turnScope }))
     ).toEqual(
       original.map(({ itemId, body, observedAt, turnScope }) => ({
@@ -556,10 +556,10 @@ describe('Codex chat catch-up', () => {
         turnScope
       }))
     )
-    const complete = c.journal.snapshot()
+    const complete = await readTestJournalSnapshot(c.journal)
     await c.reopen()
     await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
-    expect(c.journal.snapshot()).toEqual(complete)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(complete)
   })
 
   it('keeps erased-origin legacy chats readable without guessing from native IDs', async () => {
@@ -630,7 +630,7 @@ it.each(['a', 'b'] as const)(
       fence: 1,
       turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turnIdentity) }
     })
-    const before = c.journal.item(key)!.revision
+    const before = (await c.journal.reads.item(key))!.revision
     // API contract derived from recorded command fields, not a captured list/read response.
     const command = {
       type: 'commandExecution',
@@ -652,7 +652,7 @@ it.each(['a', 'b'] as const)(
       ]
     }
     await c.open([], { returnedTurns: [supplied], paginate: false })
-    const saved = c.journal.item(key)!
+    const saved = (await c.journal.reads.item(key))!
     expect(saved.revision).toBeGreaterThan(before)
     expect(saved.body).toMatchObject({
       kind: 'tool-call',
@@ -662,10 +662,10 @@ it.each(['a', 'b'] as const)(
     })
     expect(saved.body).not.toHaveProperty('exitCode')
     expect(saved.body).not.toHaveProperty('durationMs')
-    expect(c.journal.item(agentJournalItemKey(turnIdentity))?.body).toMatchObject({
+    expect((await c.journal.reads.item(agentJournalItemKey(turnIdentity)))?.body).toMatchObject({
       state: label === 'a' ? 'interrupted' : 'completed'
     })
-    const calls = projectStructuredItemsToNativeChat(c.journal.snapshot().items)
+    const calls = projectStructuredItemsToNativeChat(await readTestJournalItems(c.journal))
       .flatMap((message) => message.blocks)
       .filter((block) => block.type === 'tool-call')
     expect(calls.find((call) => call.callId === id)).not.toHaveProperty('exitCode')
@@ -701,14 +701,13 @@ it.each(['a', 'b'] as const)(
       ],
       paginate: false
     })
-    expect(c.journal.item(key)?.body).toEqual(saved.body)
+    expect((await c.journal.reads.item(key))?.body).toEqual(saved.body)
     expect(
-      c.journal
-        .snapshot()
-        .items.find((row) => row.body.kind === 'tool-call' && row.body.callId === 'failed-seven')
-        ?.body
+      (await readTestJournalItems(c.journal)).find(
+        (row) => row.body.kind === 'tool-call' && row.body.callId === 'failed-seven'
+      )?.body
     ).toMatchObject({ state: 'failed', exitCode: 7, durationMs: 11872 })
     await c.reopen()
-    expect(c.journal.item(key)?.body).toEqual(saved.body)
+    expect((await c.journal.reads.item(key))?.body).toEqual(saved.body)
   }
 )

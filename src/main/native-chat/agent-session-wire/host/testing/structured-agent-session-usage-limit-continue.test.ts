@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -31,7 +32,7 @@ it('automatically continues a failed usage-limited turn after its reset instead 
   await current.host.usageLimitContinue.tick()
   let continuationId: string | undefined
   await eventually(async () => {
-    const snapshot = await current.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(current.host, SESSION)
     continuationId = snapshot.submissions.find(
       (submission) => submission.handedOverAt !== undefined
     )?.clientMessageId

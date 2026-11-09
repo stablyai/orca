@@ -158,7 +158,7 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
     provider.appendItem(firstTurnIdentity, firstTurn, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await rig.host.flushStreamedEvents(SESSION)
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    const physicalEpoch = journal.epoch
+    const physicalEpoch = journal.physicalCursor().epoch
     await journal.replaceEpochItems(
       'handle_forked',
       attached.fence,
@@ -189,7 +189,7 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
     const next = restTestSend('finish after rewind', attached.fence)
     const nextReply = await rig.host.send(REST_TEST_CALLER, next)
     expect(nextReply).toMatchObject({ ok: true })
-    expect(journal.submission(next.envelope.clientOperationId)).toBeDefined()
+    expect(await journal.reads.submission(next.envelope.clientOperationId)).toBeDefined()
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
     const request = rig.adapter.dispatch.mock.calls[1]![0]
     const dispatched = await rig.adapter.dispatch.mock.results[1]!.value

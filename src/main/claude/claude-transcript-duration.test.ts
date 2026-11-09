@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { selectStructuredAgentSettledTurns } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
@@ -244,10 +245,10 @@ describe('Claude historical cycle duration', () => {
   it('ends captured work at its boundary before later idle, next prompt and exit', async () => {
     const c = await chat()
     await c.live()
-    const before = c.journal.snapshot()
+    const before = await readTestJournalSnapshot(c.journal)
     const handle = structuredClone(c.identity.providerHandle)
     const alias = key('p1')
-    const canonical = c.journal.canonicalItemId(alias)
+    const canonical = await c.journal.reads.canonicalItemId(alias)
     await c.write([
       ...chatTurn,
       ...capturedDurationRows.map((row, i) => ({
@@ -257,7 +258,7 @@ describe('Claude historical cycle duration', () => {
       }))
     ])
     expect(await c.open('a1')).toBe(true)
-    const snapshot = c.journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(c.journal)
     const turns = snapshot.items.filter((item) => item.body.kind === 'turn')
     const first = turns.find(
       (item) =>
@@ -293,7 +294,7 @@ describe('Claude historical cycle duration', () => {
       expect(turn.body).not.toHaveProperty('outcome')
       expect(turn.body).not.toHaveProperty('durationMs')
     }
-    const queuedItem = c.journal.item(key('080f8253-c2a1-41e1-b5e6-b6083f15c62d'))!
+    const queuedItem = (await c.journal.reads.item(key('080f8253-c2a1-41e1-b5e6-b6083f15c62d')))!
     expect(queuedItem).toMatchObject({
       observedAt: 1792711941679,
       turnScope: {
@@ -306,11 +307,11 @@ describe('Claude historical cycle duration', () => {
       true
     )
     for (const item of before.items) {
-      expect(c.journal.item(item.itemId)).toEqual(item)
+      expect(await c.journal.reads.item(item.itemId)).toEqual(item)
     }
     expect(snapshot.submissions).toEqual(before.submissions)
     expect(c.identity.providerHandle).toEqual(handle)
-    expect(c.journal.canonicalItemId(alias)).toBe(canonical)
+    expect(await c.journal.reads.canonicalItemId(alias)).toBe(canonical)
     expect(c.rows()).toContain('user:<local-command-stdout>See ya!</local-command-stdout>')
     const exits = turns.filter(
       (item) =>
@@ -323,7 +324,7 @@ describe('Claude historical cycle duration', () => {
       expect(item.body).not.toHaveProperty('completedAt')
     }
     expect(await c.open('a1')).toBe(true)
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
     expect(c.warn).not.toHaveBeenCalled()
   })
 })

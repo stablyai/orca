@@ -56,7 +56,7 @@ it.each([
     await rig.settleAccepted(first, 'a')
     await publishRunningTurn(first)
     expect(
-      rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.newestTurn()
+      await rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.reads.newestTurn()
     ).toMatchObject({ state: 'running', userItemId: agentJournalSubmissionKey(first) })
     const held = rig.send('Use a different model', undefined, {
       carried: { model: 'model-b' }

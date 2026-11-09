@@ -65,7 +65,7 @@ async function memory(root: string): Promise<Journal> {
   journals.push(journal)
   return Object.assign(journal, {
     queued: <T>(run: () => T) => journal.readInOrder(run),
-    cards: async () => journal.queuedMessages.list()
+    cards: async () => await journal.queuedMessages.list()
   })
 }
 

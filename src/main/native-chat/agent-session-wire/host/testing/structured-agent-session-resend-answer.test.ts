@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
@@ -58,7 +59,7 @@ describe('send receipt acceptance', () => {
       }
     })
     expect(store.listOperationRows()).toEqual(before)
-    expect(hostJournal().submissions()).toHaveLength(0)
+    expect(await readTestJournalSubmissions(hostJournal())).toHaveLength(0)
     expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
       { verdict: 'absent' }
     )

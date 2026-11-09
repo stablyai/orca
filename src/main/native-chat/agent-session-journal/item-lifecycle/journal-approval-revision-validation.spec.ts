@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
 import type { createFixture } from './journal-terminal-validation-test-fixture'
 import { expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -14,7 +15,7 @@ export function registerJournalApprovalRevisionValidationTests(
         body: fixture.pendingApproval()
       }
     ])
-    const before = fixture.journal.snapshot().items[0]
+    const before = (await readTestJournalItems(fixture.journal))[0]
     const cursor = fixture.journal.cursor()
     await expect(
       fixture.journal.appendItem(
@@ -33,7 +34,7 @@ export function registerJournalApprovalRevisionValidationTests(
       )
     ).resolves.toBeDefined()
     expect(fixture.journal.cursor().sequence).toBe(cursor.sequence + 1)
-    expect(fixture.journal.snapshot().items[0]).toEqual(before)
+    expect((await readTestJournalItems(fixture.journal))[0]).toEqual(before)
     await fixture.expectSendStillWritable()
   })
 }

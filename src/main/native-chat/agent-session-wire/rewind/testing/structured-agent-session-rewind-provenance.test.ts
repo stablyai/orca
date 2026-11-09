@@ -100,19 +100,19 @@ async function rewindAtLiveFence(journal: AgentSessionJournal): Promise<void> {
 describe('a rewind after a failed cleanup', () => {
   it("does not promote the dead generation's turn, prompt or reply to the live one", async () => {
     const journal = await leftByDeadGeneration()
-    const before = journal.epoch
+    const before = journal.physicalCursor().epoch
 
     await rewindAtLiveFence(journal)
 
-    expect(journal.epoch).not.toBe(before)
+    expect(journal.physicalCursor().epoch).not.toBe(before)
     const work = new StructuredAgentSessionCurrentWork(journal, LIVE)
     // New row fence must not promote old execution provenance.
-    expect(journal.itemFence(agentJournalItemKey(TURN))).toBe(DEAD)
-    expect(journal.itemFence(agentJournalItemKey(PROMPT))).toBe(DEAD)
-    expect(journal.itemFence(agentJournalItemKey(REPLY))).toBe(DEAD)
+    expect(await journal.reads.itemFence(agentJournalItemKey(TURN))).toBe(DEAD)
+    expect(await journal.reads.itemFence(agentJournalItemKey(PROMPT))).toBe(DEAD)
+    expect(await journal.reads.itemFence(agentJournalItemKey(REPLY))).toBe(DEAD)
     expect(work.activeTurnId()).toBeNull()
     expect(work.actionablePromptIds()).toEqual([])
     expect(work.working()).toBe(false)
-    expect(journal.itemBody(agentJournalItemKey(UNDONE))).toBeNull()
+    expect(await journal.reads.itemBody(agentJournalItemKey(UNDONE))).toBeNull()
   })
 })

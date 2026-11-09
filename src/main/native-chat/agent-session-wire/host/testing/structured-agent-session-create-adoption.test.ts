@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdir, realpath, rename, writeFile } from 'node:fs/promises'
 vi.mock(
   '../../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
@@ -135,7 +136,7 @@ it.each([
     if (!result.ok) {
       throw new Error('Real selected-account adoption failed')
     }
-    const snapshot = await fixture.rig.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(fixture.rig.host, SESSION)
     expect(snapshot.items.map(({ body }) => body)).toEqual(
       _kind === 'legacy'
         ? [

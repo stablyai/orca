@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -120,9 +121,9 @@ describe('OMP recordings through the adapter', () => {
       await rig.adapter.closeSession(SESSION)
       const savedMessages = (await rig.rig.rows()).filter((row) => row.body.kind === 'message')
       const reopened = await rig.rig.reopenJournal()
-      expect(reopened.snapshot().items.filter((row) => row.body.kind === 'message')).toEqual(
-        savedMessages
-      )
+      expect(
+        (await readTestJournalItems(reopened)).filter((row) => row.body.kind === 'message')
+      ).toEqual(savedMessages)
     }
   )
 

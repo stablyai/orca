@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
@@ -69,7 +70,7 @@ function finish(): void {
 
 async function commandTurnState(clientMessageId: string): Promise<string | undefined> {
   const { itemId } = structuredAgentSessionCommandTurn(clientMessageId)
-  const item = (await state.host.journalSnapshot(HOST_TEST_SESSION)).items.find(
+  const item = (await readTestHostJournal(state.host, HOST_TEST_SESSION)).items.find(
     (entry) => entry.itemId === itemId
   )
   return item?.body.kind === 'turn' ? item.body.state : undefined
@@ -166,9 +167,9 @@ describe('conversation command admission reads the work the provider reported', 
     expect(await state.host.conversationCommand(CALLER, params)).toMatchObject({ ok: true })
 
     await vi.waitFor(async () => {
-      const submission = (await state.host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-        (entry) => entry.clientMessageId === params.envelope.clientOperationId
-      )
+      const submission = (
+        await readTestHostJournal(state.host, HOST_TEST_SESSION)
+      ).submissions.find((entry) => entry.clientMessageId === params.envelope.clientOperationId)
       expect(submission?.dispatchState).toBe('rejected')
     })
     expect(state.acquire).toHaveBeenCalledTimes(2)
@@ -183,7 +184,7 @@ it('keeps a direct failed-start command terminal until an explicit fresh rerun',
   const command = compactParams()
   await state.host.conversationCommand(CALLER, command)
   await vi.waitFor(async () => {
-    const snapshot = await state.host.journalSnapshot(HOST_TEST_SESSION)
+    const snapshot = await readTestHostJournal(state.host, HOST_TEST_SESSION)
     expect(
       snapshot.submissions.find(
         (entry) => entry.clientMessageId === command.envelope.clientOperationId
@@ -202,7 +203,9 @@ it('keeps a direct failed-start command terminal until an explicit fresh rerun',
     })
   ).toMatchObject({ ok: true })
   await vi.waitFor(async () =>
-    expect((await state.host.journalSnapshot(HOST_TEST_SESSION)).submissions.at(-1)).toMatchObject({
+    expect(
+      (await readTestHostJournal(state.host, HOST_TEST_SESSION)).submissions.at(-1)
+    ).toMatchObject({
       dispatchState: 'accepted'
     })
   )
@@ -218,7 +221,7 @@ it('keeps a direct failed-start command terminal until an explicit fresh rerun',
   const uncertain = compactParams()
   expect(await state.host.conversationCommand(CALLER, uncertain)).toMatchObject({ ok: true })
   await vi.waitFor(async () => {
-    const snapshot = await state.host.journalSnapshot(HOST_TEST_SESSION)
+    const snapshot = await readTestHostJournal(state.host, HOST_TEST_SESSION)
     expect(
       snapshot.submissions.find(
         (entry) => entry.clientMessageId === uncertain.envelope.clientOperationId
@@ -234,7 +237,9 @@ it('keeps a direct failed-start command terminal until an explicit fresh rerun',
     })
   ).toMatchObject({ ok: true })
   await vi.waitFor(async () =>
-    expect((await state.host.journalSnapshot(HOST_TEST_SESSION)).submissions.at(-1)).toMatchObject({
+    expect(
+      (await readTestHostJournal(state.host, HOST_TEST_SESSION)).submissions.at(-1)
+    ).toMatchObject({
       dispatchState: 'accepted'
     })
   )
@@ -244,7 +249,7 @@ it('keeps a direct failed-start command terminal until an explicit fresh rerun',
   await state.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
   expect(compact).toHaveBeenCalledTimes(1)
   expect(
-    (await state.host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+    (await readTestHostJournal(state.host, HOST_TEST_SESSION)).submissions.find(
       (entry) => entry.clientMessageId === uncertain.envelope.clientOperationId
     )
   ).toMatchObject({ dispatchState: 'unknown' })

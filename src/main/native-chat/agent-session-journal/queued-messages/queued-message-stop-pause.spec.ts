@@ -29,9 +29,9 @@ export function registerQueuedMessageStopPauseTests(
       expect(fixture.reason(journal)).toBe('failed')
       await journal.replaceEpochItems('handle_forked', 0, kept)
       expect(fixture.reason(journal)).toBe('failed')
-      expect(journal.queuedMessages.nextInputCard()).toBeNull()
+      expect(await journal.queuedMessages.nextInputCard()).toBeNull()
       await journal.appendQueueResume(0)
-      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('carried')
+      expect((await journal.queuedMessages.nextInputCard())?.messageId).toBe('carried')
     })
 
     it("the queue's own consume is refused in its transaction while the pause holds the card; Send-now is not", async () => {
@@ -54,10 +54,10 @@ export function registerQueuedMessageStopPauseTests(
           }
         )
       await expect(consume('drain-1', true)).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
-      expect(journal.submission('drain-1')).toBeUndefined()
-      expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
+      expect(await journal.reads.submission('drain-1')).toBeUndefined()
+      expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('waiting')
       await consume('send-now-1', false)
-      expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
+      expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('dispatched')
     })
 
     it("a rewind's epoch replacement restates a Stop still pausing, and not one a turn ended", async () => {
@@ -95,13 +95,13 @@ export function registerQueuedMessageStopPauseTests(
       providerIdentity: null,
       fence: 0
     })
-    expect(journal.queuedMessages.nextInputCard()).toBeNull()
+    expect(await journal.queuedMessages.nextInputCard()).toBeNull()
     expect(fixture.reason(journal)).toBe('stopped')
     await fixture.turn(journal, 'person')
     await journal.replaceEpochItems('handle_forked', 0, [])
     await journal.close()
     journal = await fixture.open()
-    expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('P')
+    expect((await journal.queuedMessages.nextInputCard())?.messageId).toBe('P')
     expect(fixture.reason(journal)).toBeNull()
   })
 
@@ -143,7 +143,8 @@ export function registerQueuedMessageStopPauseTests(
     await journal.close()
     journal = await fixture.open()
     expect(
-      journal.queuedMessages.pauses().find((pause) => pause.reason === 'cleared')?.messageIds
+      (await journal.queuedMessages.pauses()).find((pause) => pause.reason === 'cleared')
+        ?.messageIds
     ).toEqual(['P'])
     await fixture.turn(journal, 'person')
     expect(fixture.held(journal)).toEqual([
@@ -167,8 +168,8 @@ export function registerQueuedMessageStopPauseTests(
     ).run(source.generation, Number(source.through_seq) + 1, JSON.stringify('retired-person'))
     db.prepare('UPDATE journal_outcome_epochs SET through_seq=through_seq+1').run()
     const restored = await fixture.open()
-    expect(restored.submission('retired-person')).toBeUndefined()
-    expect(restored.queuedMessages.nextInputCard()?.messageId).toBe('W')
+    expect(await restored.reads.submission('retired-person')).toBeUndefined()
+    expect((await restored.queuedMessages.nextInputCard())?.messageId).toBe('W')
     expect(fixture.reason(restored)).toBeNull()
   })
 }

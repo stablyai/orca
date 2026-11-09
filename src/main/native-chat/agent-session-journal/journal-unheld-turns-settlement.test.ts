@@ -47,7 +47,7 @@ async function memory(root: string): Promise<Journal> {
   })
   await journal.open()
   return Object.assign(journal, {
-    turnState: async (turnId: string) => journal.item(`orca:${turnId}`)?.body
+    turnState: async (turnId: string) => (await journal.reads.item(`orca:${turnId}`))?.body
   })
 }
 

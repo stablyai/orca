@@ -1,5 +1,8 @@
 import { expect, it, vi } from 'vitest'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
@@ -11,7 +14,6 @@ import {
 } from './structured-agent-session-host-test-data.test-fixture'
 import { journalIdentityFor } from '../../acquisition/structured-agent-session-attach'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { digestPayload } from '../../../agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   CALLER,
@@ -65,7 +67,7 @@ it('keeps a send a crash cut off as sent when its chat reattaches', async () => 
   await prior.host.close(HOST_TEST_SESSION, 'evict')
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, attachParams()),
-    database: openTestJournalHostDatabase(prior.root)
+    database: await openTestAgentSessionDatabase(prior.root)
   })
   await journal.appendSubmission({
     clientMessageId: 'crashed-send',

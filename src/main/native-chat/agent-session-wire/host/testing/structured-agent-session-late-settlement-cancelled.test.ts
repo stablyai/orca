@@ -118,7 +118,7 @@ describe('settling a send the provider proves it received after the ack window',
 
     const after = journal().readSince(before)
     expect(after.ok && after.rows).toHaveLength(1)
-    expect(journal().submission(params.envelope.clientOperationId)).toMatchObject({
+    expect(await journal().reads.submission(params.envelope.clientOperationId)).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: `claude:${THREAD}:echo-row`
     })

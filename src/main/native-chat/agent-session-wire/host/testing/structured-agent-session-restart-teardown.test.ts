@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
@@ -52,7 +53,9 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
       )
       expect(inspect(log.entries, { depth: 8 })).not.toContain('/private/account')
       expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-      await expect(host.journalSnapshot(SESSION)).rejects.toThrow('agent_session_ownership_unknown')
+      await expect(await readTestHostJournal(host, SESSION)).rejects.toThrow(
+        'agent_session_ownership_unknown'
+      )
     } finally {
       operation.mockRestore()
       warning.mockRestore()

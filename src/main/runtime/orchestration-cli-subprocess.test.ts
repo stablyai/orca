@@ -32,7 +32,8 @@ import {
 } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStoreText
+  readPersistedTestAgentSessionStoreText,
+  openTestAgentSessionDatabase
 } from './agent-session/records/agent-session-record-store-test-harness'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 
@@ -616,7 +617,7 @@ describeIfBuilt('native caller subprocess over durable records', () => {
       host = new StructuredAgentSessionHost({
         ...rig.host.deps,
         store,
-        journalDatabase: openTestJournalHostDatabase(rig.root)
+        journalDatabase: await openTestAgentSessionDatabase(rig.root)
       })
       replaceHostTestState({ host, store })
       setStructuredAgentSessionHost(host)

@@ -43,7 +43,7 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
       revision: 1,
       body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'big' }] },
       v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-      epoch: seeded.epoch,
+      epoch: seeded.physicalCursor().epoch,
       seq: seq + 1,
       fence: 1,
       ts: 2_000
@@ -53,7 +53,7 @@ it('catches a subscriber up past a pre-existing unsendable removal with a bounde
       itemId: hugeItemId,
       revision: 2,
       v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-      epoch: seeded.epoch,
+      epoch: seeded.physicalCursor().epoch,
       seq: seq + 2,
       fence: 1,
       ts: 2_001

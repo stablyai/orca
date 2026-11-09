@@ -1,3 +1,7 @@
+import {
+  readTestHostJournal,
+  readTestJournalItems
+} from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import {
   assertTestJournalHistoricalInputs,
@@ -91,9 +95,9 @@ it('keeps Resume visible beside an idle-evicted unknown send recovery', async ()
 
   expect(stopEvents()).toEqual(before)
   expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-  expect(journal().submissionBody(id)).toEqual(fields.body)
-  expect(journal().queuedMessages.get(`recovery:${id}`)).toBeNull()
-  expect(journal().itemBody(`orca:${id}`)).toEqual(fields.body)
+  expect(await journal().reads.submissionBody(id)).toEqual(fields.body)
+  expect(await journal().queuedMessages.get(`recovery:${id}`)).toBeNull()
+  expect(await journal().reads.itemBody(`orca:${id}`)).toEqual(fields.body)
   expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toContain('stopped')
   expect(await rig.drafts()).toEqual([{ messageId: held, state: 'waiting' }])
   expect(await rig.handoff(held)).toBeUndefined()
@@ -128,13 +132,13 @@ it('a failed personal start retains Stop after its returned input is deleted', a
   await personal.result
 
   expect(stopEvents().map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
-  expect(journal().queuedMessages.userStopInForce()?.event.reason).toBe('user-stop')
+  expect((await journal().queuedMessages.userStopInForce())?.event.reason).toBe('user-stop')
   await eventually(async () =>
     expect(await rig.drafts()).toContainEqual({ messageId: personal.id, state: 'returned' })
   )
   expect(await rig.handoff(held)).toBeUndefined()
   expect(await rig.deleteQueued(personal.id)).toMatchObject({ value: { deleted: true } })
-  expect(journal().queuedMessages.userStopInForce()?.event.reason).toBe('user-stop')
+  expect((await journal().queuedMessages.userStopInForce())?.event.reason).toBe('user-stop')
   expect(await rig.handoff(held)).toBeUndefined()
   expect(await rig.resume()).toMatchObject({ value: { resumed: true } })
   await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
@@ -172,7 +176,7 @@ it('an unattended failed start preserves a manual Stop without returning the mai
   await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
   await mail.result
 
-  expect(journal().queuedMessages.get(mail.id)).toBeNull()
+  expect(await journal().queuedMessages.get(mail.id)).toBeNull()
   expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   expect(await rig.handoff(held)).toBeUndefined()
 })
@@ -197,7 +201,7 @@ it.each(['host-stop', 'user-close', 'user-close-before-exit'] as const)(
       position: 1,
       queuedAt: journal().physicalCursor()
     })
-    expect(journal().queuedMessages.get(held)?.unattended).toBeUndefined()
+    expect((await journal().queuedMessages.get(held))?.unattended).toBeUndefined()
     expect(await rig.stop()).toMatchObject({ ok: true })
     finishTestJournalHistoricalInputs(journal())
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
@@ -231,9 +235,8 @@ it.each(['host-stop', 'user-close', 'user-close-before-exit'] as const)(
       await expect(rig.host.close(SESSION, 'user-close')).rejects.toThrow()
       expect(oldSession.lastEndedChild).toBe(previousEnd)
       expect(
-        oldSession.journal
-          .snapshot()
-          .items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
+        (await readTestJournalItems(oldSession.journal))
+          .flatMap((item) => readAgentJournalTurn(item.body) ?? [])
           .find((turn) => turn.turnId === `turn-of-${mail.id}`)
       ).toMatchObject({ state: 'running' })
       await oldSession.journal.close()
@@ -248,7 +251,7 @@ it.each(['host-stop', 'user-close', 'user-close-before-exit'] as const)(
         collab.lifetime.stopAgent(SESSION, { cause: 'host-stop' })
       )
     }
-    const afterExit = await rig.host.journalSnapshot(SESSION)
+    const afterExit = await readTestHostJournal(rig.host, SESSION)
     const turn = afterExit.items
       .flatMap((item) => readAgentJournalTurn(item.body) ?? [])
       .find((entry) => entry.turnId === `turn-of-${mail.id}`)
@@ -256,7 +259,7 @@ it.each(['host-stop', 'user-close', 'user-close-before-exit'] as const)(
     const offersAfterExit = await rig.restartOffers()
     await rig.host.close(SESSION, 'evict')
     rig.crashRestartHostProcess()
-    await rig.host.journalSnapshot(SESSION)
+    await readTestHostJournal(rig.host, SESSION)
     const mail2 = rig.send('mail after reopen', undefined, mailOptions)
     expect(await mail2.result).toMatchObject({ ok: true })
     await eventually(async () =>
@@ -282,7 +285,7 @@ it.each(['host-stop', 'user-close', 'user-close-before-exit'] as const)(
     expect(pauseAfterMail).toEqual({ reason: 'stopped' })
     expect(leaked).toBeUndefined()
     expect(
-      (await rig.host.journalSnapshot(SESSION)).submissions.filter(
+      (await readTestHostJournal(rig.host, SESSION)).submissions.filter(
         (entry) => entry.queuedMessageId === held
       )
     ).toHaveLength(1)

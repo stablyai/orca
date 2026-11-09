@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 // End-to-end coordinator-mail rig: real session/orchestration state and RPC, fake Codex child. Import registers lifecycle hooks.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -149,10 +150,11 @@ export function sendUserMessage(sessionId: string, text: string) {
 }
 
 export async function userTexts(sessionId: string): Promise<string[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item: AgentJournalRenderItem) =>
-    item.body?.kind === 'message' && item.body.role === 'user'
-      ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-      : []
+  return (await readTestHostJournal(host, sessionId)).items.flatMap(
+    (item: AgentJournalRenderItem) =>
+      item.body?.kind === 'message' && item.body.role === 'user'
+        ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
+        : []
   )
 }
 

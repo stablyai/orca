@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 // Direct/queued admission rejects missing attachments atomically; stored claims survive clear migration.
 
 import { existsSync } from 'node:fs'
@@ -80,7 +81,7 @@ describe('attachments at send admission', () => {
         }
       }
     })
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toHaveLength(0)
     expect(claimedSessions()).toEqual([])
     expect(existsSync(fresh)).toBe(true)
   })

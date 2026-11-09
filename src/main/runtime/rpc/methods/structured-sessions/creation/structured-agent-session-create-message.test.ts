@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
@@ -93,7 +94,7 @@ it('refuses a new founding operation before dispatching the same opening again',
     }
   })
   expect(
-    (await rig.host.journalSnapshot(SESSION)).submissions.map((row) => row.clientMessageId)
+    (await readTestHostJournal(rig.host, SESSION)).submissions.map((row) => row.clientMessageId)
   ).toEqual([input.firstMessage?.clientMessageId])
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
 })
@@ -216,7 +217,7 @@ it.each(['firstMessage', 'options'] as const)(
       ok: true,
       result: { ok: false, refusal: { code: 'agent_session_operation_conflict' } }
     })
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toEqual([])
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   }
 )
@@ -319,7 +320,7 @@ it.each(['options', 'firstMessage'] as const)(
     if (!first) {
       throw new Error('fixture first message missing')
     }
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
       { clientMessageId: first.clientMessageId }
     ])
     const changed = structuredAgentSessionCreateParams({

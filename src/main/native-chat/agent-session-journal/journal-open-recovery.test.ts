@@ -87,3 +87,28 @@ it('retains earlier recovery and a conservative reopen floor when the final mark
     })
   ).toEqual({ kind: 'selected', card: null })
 })
+
+it('marks a working subagent as unverifiable when another handle opens its saved journal', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  await f.run({
+    kind: 'item',
+    identity: { provider: 'orca', clientMessageId: 'roster' },
+    body: {
+      kind: 'message',
+      role: 'system',
+      blocks: [
+        {
+          type: 'subagent-group',
+          groupId: 'group',
+          agents: [{ id: 'a', label: 'read', state: 'working', startedAt: 10 }]
+        }
+      ]
+    },
+    options: { fence: 1, turnScope: { kind: 'thread' } }
+  })
+  await f.run({ kind: 'open' })
+  expect(f.item('orca:roster')).toMatchObject({
+    recovered: true,
+    body: { blocks: [{ agents: [{ id: 'a', state: 'unverifiable' }] }] }
+  })
+})

@@ -48,15 +48,17 @@ export function createFixture() {
   })
 
   function rows() {
-    return readTestJournalRows(openTestJournalHostDatabase(root).db, SESSION, journal.epoch).map(
-      (stored) => {
-        const parsed = parseJournalRow(stored.rowJson)
-        if (!parsed.ok) {
-          throw new Error('test row failed to parse')
-        }
-        return parsed.row
+    return readTestJournalRows(
+      openTestJournalHostDatabase(root).db,
+      SESSION,
+      journal.physicalCursor().epoch
+    ).map((stored) => {
+      const parsed = parseJournalRow(stored.rowJson)
+      if (!parsed.ok) {
+        throw new Error('test row failed to parse')
       }
-    )
+      return parsed.row
+    })
   }
 
   async function seedWork(count = 201) {

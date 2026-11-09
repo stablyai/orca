@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -72,7 +73,7 @@ it('settles the held message once, closes Pi, and starts afresh for a later send
   script.releaseHandshake()
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
-    return (await host.journalSnapshot(SESSION)).submissions.find(
+    return (await readTestHostJournal(host, SESSION)).submissions.find(
       (entry) => entry.clientMessageId === firstMessage.clientMessageId
     )
   }

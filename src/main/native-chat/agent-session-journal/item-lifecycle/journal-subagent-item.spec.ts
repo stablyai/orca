@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -67,7 +68,7 @@ export function registerJournalSubagentItemTests(): void {
       await live.close()
 
       const reopened = await open()
-      const row = reopened.snapshot().items.at(-1)!
+      const row = (await readTestJournalItems(reopened)).at(-1)!
       expect(row.recovered).toBe(true)
       expect(row.body).toMatchObject({
         blocks: [

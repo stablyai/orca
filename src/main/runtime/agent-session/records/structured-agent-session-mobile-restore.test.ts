@@ -15,8 +15,10 @@ import {
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from './agent-session-record-store-test-harness'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
@@ -96,7 +98,7 @@ describe('prompt delivery after host recovery', () => {
       logger: h.log.logger,
       store,
       adapter: adapter(),
-      journalDatabase: openTestJournalHostDatabase(h.root),
+      journalDatabase: await openTestAgentSessionDatabase(h.root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () => ({ outcome: 'pid-absent' }),

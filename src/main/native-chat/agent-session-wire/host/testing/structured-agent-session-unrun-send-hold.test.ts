@@ -58,7 +58,10 @@ describe('a message held behind a start that never answered, then the chat ends'
     })
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
     const [card] =
-      rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list() ?? []
+      (await rig.host
+        .collaboratorsForTests()
+        .sessions.get(SESSION)
+        ?.journal.queuedMessages.list()) ?? []
     expect(card).toMatchObject({ holdReason: null })
     expect(derivedPauses()).toEqual(['restarted'])
     expect(await rig.restartOffers()).toEqual([])

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
@@ -30,7 +31,9 @@ async function queuedDraft(text: string): Promise<string> {
 }
 
 async function submissionIds(): Promise<string[]> {
-  return (await rig.host.journalSnapshot(SESSION)).submissions.map((entry) => entry.clientMessageId)
+  return (await readTestHostJournal(rig.host, SESSION)).submissions.map(
+    (entry) => entry.clientMessageId
+  )
 }
 
 async function handedOver(id: string): Promise<void> {

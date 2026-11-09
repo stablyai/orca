@@ -1,5 +1,6 @@
 /** Centralize store fixtures in the worker-owned journal DB; closeTestAgentSessionRecordStores owns their cleanup. */
 
+import { resolve } from 'node:path'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import {
@@ -38,16 +39,24 @@ const databases = new Map<string, Promise<JournalSqlDatabase>>()
 
 /** Stores reopened in one directory share its writer, like one runtime's slot. */
 export function openTestAgentSessionDatabase(stateDirectory: string): Promise<JournalSqlDatabase> {
-  let opened = databases.get(stateDirectory)
+  const directory = resolve(stateDirectory)
+  let opened = databases.get(directory)
   if (!opened) {
-    opened = JournalSqlDatabase.open(stateDirectory, {
+    opened = JournalSqlDatabase.open(directory, {
       writerPath: journalSqlWorkerPath(),
       readerPath: journalSqlReaderPath(),
       onMaintenanceError: () => {}
     })
-    databases.set(stateDirectory, opened)
+    databases.set(directory, opened)
   }
   return opened
+}
+
+export async function closeTestAgentSessionDatabase(stateDirectory: string): Promise<void> {
+  const directory = resolve(stateDirectory)
+  const opened = databases.get(directory)
+  databases.delete(directory)
+  await (await opened)?.close()
 }
 
 export async function closeTestAgentSessionRecordStores(): Promise<void> {

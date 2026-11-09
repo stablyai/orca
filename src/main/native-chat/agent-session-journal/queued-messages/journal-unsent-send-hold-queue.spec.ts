@@ -1,3 +1,4 @@
+import { openTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../journal-store'
 import { openAgentSessionJournal } from '../journal-store-factory'
 import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-database-test-support'
@@ -94,9 +95,9 @@ export function registerJournalUnsentSendHoldQueueTests(
       await fixture.hold(journal, { cause: 'chatClosed' })
 
       expect(fixture.cardOrder(journal)).toEqual(['person'])
-      expect(journal.queuedMessages.get('person')).toMatchObject({ holdReason: null })
+      expect(await journal.queuedMessages.get('person')).toMatchObject({ holdReason: null })
       for (const id of ['person', 'mail']) {
-        expect(journal.submission(id)).toMatchObject({
+        expect(await journal.reads.submission(id)).toMatchObject({
           dispatchState: 'rejected',
           ...fixture.CHAT_CLOSED
         })
@@ -113,7 +114,7 @@ export function registerJournalUnsentSendHoldQueueTests(
       })
 
       expect(fixture.cardOrder(journal)).toEqual(['before'])
-      expect(journal.submission('after')?.dispatchState).toBe('pending')
+      expect((await journal.reads.submission('after'))?.dispatchState).toBe('pending')
     })
   })
 
@@ -188,7 +189,7 @@ export function registerJournalUnsentSendHoldQueueTests(
   })
 
   it('retains queued and legacy chat tasks at restart while withdrawing a derived preamble', async () => {
-    const database = openTestJournalHostDatabase(fixture.root)
+    const database = await openTestAgentSessionDatabase(fixture.root)
     const open = async () =>
       fixture.journals.track(
         await openAgentSessionJournal({
@@ -227,6 +228,6 @@ export function registerJournalUnsentSendHoldQueueTests(
     await earlier.close()
     const reopened = await open()
     expect(fixture.cardOrder(reopened)).toEqual(['legacy-task', 'queued-task'])
-    expect(reopened.queuedMessages.get('derived-preamble')?.state).toBe('withdrawn')
+    expect((await reopened.queuedMessages.get('derived-preamble'))?.state).toBe('withdrawn')
   })
 }

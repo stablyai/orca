@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it } from 'vitest'
 import {
   countRecordQueries,
@@ -82,7 +83,7 @@ describe('SQLite conversation reopen work', () => {
     }
     expect(after.records['healthy-chat'].conversationName).toBe('renamed')
     const reopened = await scaleJournal(root, 'damaged-0')
-    expect(reopened.snapshot().items.map((item) => item.body)).toContainEqual(
+    expect((await readTestJournalItems(reopened)).map((item) => item.body)).toContainEqual(
       hostTestMessage('saved question')
     )
     expect(store.getConversation('damaged-0')?.providerHandleChain[0]?.handle.nativeId).toBe(

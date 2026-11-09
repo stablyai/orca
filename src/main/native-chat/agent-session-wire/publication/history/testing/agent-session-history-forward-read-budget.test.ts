@@ -80,7 +80,7 @@ describe('forward history SQL read budget', () => {
     const first = readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
-      cursor: { epoch: journal.epoch, sequence: 1 },
+      cursor: { epoch: journal.physicalCursor().epoch, sequence: 1 },
       limit: 2
     })
     expect(first).toMatchObject({ ok: true, page: { hasNewer: true } })
@@ -106,7 +106,7 @@ describe('forward history SQL read budget', () => {
       const page = readAgentSessionHistory(journal, {
         sessionId: identity.sessionId,
         direction: 'after',
-        cursor: { epoch: journal.epoch, sequence: 1 },
+        cursor: { epoch: journal.physicalCursor().epoch, sequence: 1 },
         limit: 2
       })
       expect(page).toMatchObject({

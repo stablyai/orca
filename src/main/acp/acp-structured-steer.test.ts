@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -180,7 +181,7 @@ describe('permission changes with already admitted ACP input', () => {
     expect(framesOf(original, 'session/cancel')).toHaveLength(1)
     expect(framesOf(original, 'session/prompt')).toHaveLength(0)
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    const handoffId = journal.queuedMessages.get(id)?.consumedAs ?? id
+    const handoffId = (await journal.queuedMessages.get(id))?.consumedAs ?? id
     const prompt = await rig.frame('session/prompt')
     expect(promptIdOf(prompt)).toBe(`prompt:${handoffId}`)
     rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'done'))
@@ -213,8 +214,11 @@ describe('permission changes with already admitted ACP input', () => {
       const c = await send(host, 'C new policy')
       const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
       const handoffId = (id: string) => journal.queuedMessages.get(id)?.consumedAs ?? id
-      expect(journal.queuedMessages.get(c)).toMatchObject({ state: 'waiting', consumedAs: null })
-      expect(journal.submission(handoffId(b))?.dispatchState).toBe('pending')
+      expect(await journal.queuedMessages.get(c)).toMatchObject({
+        state: 'waiting',
+        consumedAs: null
+      })
+      expect((await journal.reads.submission(handoffId(b)))?.dispatchState).toBe('pending')
       expect(framesOf(original, 'session/prompt')).toHaveLength(1)
       original.agent.reply(promptA, { stopReason: 'cancelled' })
       const promptB = await rig.frame('session/prompt', 1)
@@ -225,14 +229,14 @@ describe('permission changes with already admitted ACP input', () => {
         await waitFor(() =>
           expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
         )
-        expect(journal.submission(handoffId(c))?.rejection).toMatchObject({
+        expect((await journal.reads.submission(handoffId(c)))?.rejection).toMatchObject({
           kind: 'restartFailed',
           neverReachedAgent: true
         })
         expect(original.exited).toBe(false)
       }
       original.agent.reply(promptB, { stopReason: 'end_turn' })
-      expect(journal.submission(a)?.dispatchState).toBe('accepted')
+      expect((await journal.reads.submission(a))?.dispatchState).toBe('accepted')
       expect(framesOf(original, 'session/prompt')).toHaveLength(2)
       if (outcome === 'drained') {
         await waitFor(() => expect(original.exited).toBe(true))
@@ -244,7 +248,7 @@ describe('permission changes with already admitted ACP input', () => {
           expect(journal.submission(handoffId(c))?.dispatchState).toBe('accepted')
         )
       } else {
-        expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
+        expect((await journal.reads.submission(handoffId(c)))?.dispatchState).toBe('rejected')
       }
       await host.close(SESSION, 'user-close')
     }
@@ -496,7 +500,7 @@ describe('Steer on a Grok card, through the host', () => {
       return history.ok ? history.page : null
     }
     const sends = async () =>
-      (await host.journalSnapshot(SESSION)).submissions
+      (await readTestHostJournal(host, SESSION)).submissions
         .filter((entry) => entry.queuedMessageId === cardId)
         .map((entry) => ({ state: entry.dispatchState, reason: entry.reason }))
     return { cardId, sendNow, page, sends }

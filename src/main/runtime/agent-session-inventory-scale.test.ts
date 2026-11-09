@@ -7,7 +7,6 @@ import { hostTestState } from '../native-chat/agent-session-wire/host/testing/st
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   countRecordQueries,
   countStoreWork,
@@ -23,7 +22,8 @@ import {
   seedTestAgentSessionRecordStore,
   openTestAgentSessionRecordStore,
   editPersistedTestAgentSessionStore,
-  readPersistedTestAgentSessionStore
+  readPersistedTestAgentSessionStore,
+  openTestAgentSessionDatabase
 } from './agent-session/records/agent-session-record-store-test-harness'
 import { OrchestrationDb } from './orchestration/db/orchestration-db'
 import './orchestration/db/contract-constants'
@@ -56,7 +56,7 @@ async function inventoryRig(n: number) {
   const host = new StructuredAgentSessionHost({
     ...hostTestState().host.deps,
     store: rig.store,
-    journalDatabase: openTestJournalHostDatabase(rig.root)
+    journalDatabase: await openTestAgentSessionDatabase(rig.root)
   })
   setStructuredAgentSessionHost(host)
   return { ...rig, host }
@@ -109,7 +109,7 @@ describe('real conversation inventory work', () => {
     const host = new StructuredAgentSessionHost({
       ...hostTestState().host.deps,
       store,
-      journalDatabase: openTestJournalHostDatabase(root)
+      journalDatabase: await openTestAgentSessionDatabase(root)
     })
     const ids = new Set(unreadable.map(({ sessionId }) => sessionId))
     const work = countStoreWork(store)
@@ -203,7 +203,7 @@ describe('real conversation inventory work', () => {
     const host = new StructuredAgentSessionHost({
       ...hostTestState().host.deps,
       store: globalStore,
-      journalDatabase: openTestJournalHostDatabase(globalRoot)
+      journalDatabase: await openTestAgentSessionDatabase(globalRoot)
     })
     setStructuredAgentSessionHost(host)
     const db = new OrchestrationDb(':memory:')

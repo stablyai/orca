@@ -13,7 +13,10 @@ import {
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { readAgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { openTestAgentSessionRecordStore } from '../../../../agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -23,10 +26,7 @@ import type { RpcRequest, RpcResponse } from '../../../core'
 import type { RpcDispatchStreamingOptions } from '../../../dispatcher-stream-options'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { claudeAndCodexAgents } from '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
@@ -273,7 +273,7 @@ describe('committed adopting create RPC replay', () => {
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       claimKeyId: 'key-1'
     })
     setStructuredAgentSessionHost(host)

@@ -163,9 +163,9 @@ describe('clear transaction', () => {
     expect(journal.cursor()).toEqual(before)
     expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
     expect(
-      journal.queuedMessages.list().map(({ messageId, state }) => ({ messageId, state }))
+      (await journal.queuedMessages.list()).map(({ messageId, state }) => ({ messageId, state }))
     ).toEqual(['first', 'command', 'last'].map((messageId) => ({ messageId, state: 'waiting' })))
-    expect(journal.queuedMessages.pauses()).toEqual([])
+    expect(await journal.queuedMessages.pauses()).toEqual([])
     expect((await open()).getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
     expect((await open()).getRecord(SOURCE)?.providerHandleChain).toEqual(previousChain)
     expect(store.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status).toBe(

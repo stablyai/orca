@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,11 +8,11 @@ import { agentSessionRefusalError } from '../../../../../shared/agent-session/fa
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import {
   NO_STRUCTURED_AGENTS,
@@ -91,7 +92,7 @@ beforeEach(async () => {
       setOption: vi.fn(async () => undefined),
       open: async () => ({ reportedOptions: { model: '' } })
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     assertNoTerminalWriter,
@@ -126,12 +127,15 @@ async function rejection(id: string, sessionId = SESSION) {
   await vi.waitFor(
     async () =>
       expect(
-        (await host.journalSnapshot(sessionId)).submissions.find((s) => s.clientMessageId === id)
-          ?.dispatchState
+        (await readTestHostJournal(host, sessionId)).submissions.find(
+          (s) => s.clientMessageId === id
+        )?.dispatchState
       ).toBe('rejected'),
     { timeout: 10_000 }
   )
-  return (await host.journalSnapshot(sessionId)).submissions.find((s) => s.clientMessageId === id)
+  return (await readTestHostJournal(host, sessionId)).submissions.find(
+    (s) => s.clientMessageId === id
+  )
 }
 
 // H10: a chat reopened while its conversation runs in a terminal starts no second writer.

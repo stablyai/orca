@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
@@ -93,7 +94,7 @@ it('retains the first refused OMP message while later messages queue and complet
     ).toEqual([])
   })
   expect(await messages()).toEqual(['first', 'second', 'third'])
-  const snapshot = await host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(host, SESSION)
   expect(snapshot.submissions).toHaveLength(3)
   expect(snapshot.submissions.every((row) => row.dispatchState === 'accepted')).toBe(true)
 })

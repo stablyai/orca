@@ -12,12 +12,12 @@ import {
   PROVIDER_SESSION_ID
 } from '../../../../claude/structured/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-session/installation/structured-claude-runtime-adapter'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import {
@@ -106,7 +106,7 @@ beforeEach(async () => {
     agents: NO_STRUCTURED_AGENTS,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: logs.logger,

@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,12 +85,14 @@ it.each([
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(onFailed).not.toHaveBeenCalled()
     expect(deferred.state().failed).toBe(false)
-    const saved = journal.snapshot().items.filter((item) => item.body.kind === 'question')
+    const saved = (await readTestJournalItems(journal)).filter(
+      (item) => item.body.kind === 'question'
+    )
     expect(
       saved.map((item) => (item.body.kind === 'question' ? item.body.question : null))
     ).toEqual(questions)
     expect(saved.map((item) => item.revision)).toEqual(ids[0] === ids[1] ? [2] : [1, 1])
-    expect(published.at(-1)).toEqual(journal.snapshot())
+    expect(published.at(-1)).toEqual(await readTestJournalSnapshot(journal))
     translator.dispose()
     deferred.close()
   }

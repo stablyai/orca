@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -54,7 +55,7 @@ export async function expectRestoredUsageLimitCancelled(
   store: AgentSessionRecordStore,
   cut: { turnItemId: string; resetsAt: number }
 ) {
-  const restored = await host.journalSnapshot(HOST_TEST_SESSION)
+  const restored = await readTestHostJournal(host, HOST_TEST_SESSION)
   expect(latestNativeChatUsageLimitCut(restored.items, restored.submissions)).toMatchObject(cut)
   expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toEqual(cut)
   expect(host.usageLimitContinue.readState(HOST_TEST_SESSION)?.state).toBe('cancelled')
@@ -140,7 +141,7 @@ export async function expectUsageLimitCompletionRollback({
   const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
   const cut = await appendRewindUsageLimitedTurn(journal, now())
   const request = await params(target)
-  const before = await host.journalSnapshot(HOST_TEST_SESSION)
+  const before = await readTestHostJournal(host, HOST_TEST_SESSION)
   const physical = journal.physicalCursor().epoch
   const db = openTestJournalHostDatabase(directory).db
   db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
@@ -149,7 +150,7 @@ export async function expectUsageLimitCompletionRollback({
   await expect(host.rewind({ callerKey: 'desktop' }, request)).rejects.toThrow(
     'completion write failed'
   )
-  const committed = await host.journalSnapshot(HOST_TEST_SESSION)
+  const committed = await readTestHostJournal(host, HOST_TEST_SESSION)
   expect(committed).toEqual(before)
   expect(committed.cursor.epoch).toBe(request.expectedEpoch)
   expect(journal.physicalCursor().epoch).toBe(physical)
@@ -160,7 +161,7 @@ export async function expectUsageLimitCompletionRollback({
   expect(
     await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
   ).toMatchObject({ ok: true })
-  const restored = await host.journalSnapshot(HOST_TEST_SESSION)
+  const restored = await readTestHostJournal(host, HOST_TEST_SESSION)
   expect(restored.cursor.epoch).not.toBe(request.expectedEpoch)
   expect(journal.physicalCursor().epoch).toBe(physical)
   expect(restored.items.map(({ itemId }) => itemId)).toEqual([

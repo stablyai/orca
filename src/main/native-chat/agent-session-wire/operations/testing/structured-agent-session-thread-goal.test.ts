@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -82,7 +83,7 @@ describe('performThreadGoalChange', () => {
         message: 'goals feature is disabled'
       }
     })
-    expect(journal.snapshot().items).toEqual([])
+    expect(await readTestJournalItems(journal)).toEqual([])
   })
 
   it('retains the objective when a lost reply leaves application unknown', async () => {
@@ -99,7 +100,7 @@ describe('performThreadGoalChange', () => {
         change: { kind: 'set', objective: 'Ship the parser' }
       })
     ).rejects.toThrow('connection closed')
-    expect(journal.snapshot().items.map((item) => item.body)).toEqual([
+    expect((await readTestJournalItems(journal)).map((item) => item.body)).toEqual([
       expect.objectContaining({ sentAs: 'goal' })
     ])
   })

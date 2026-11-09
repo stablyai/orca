@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { getEventListeners } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -19,11 +20,11 @@ import {
   fakeCodex,
   THREAD_ID
 } from '../../../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   claudeAndCodexAgents,
   claudeAndCodexRouter
@@ -154,7 +155,7 @@ async function runStarts(count: number) {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: router,
-    journalDatabase: openTestJournalHostDatabase(join(root, `starts-${count}`)),
+    journalDatabase: await openTestAgentSessionDatabase(join(root, `starts-${count}`)),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${codex.connections.length}`,
     startupLimits: { ceilingMs: CEILING_MS },
@@ -197,9 +198,11 @@ async function runStarts(count: number) {
     vi.waitFor(assertion, { timeout: 10_000, interval: 0 })
 
   const submission = async (id: string) =>
-    (await host!.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === id)
+    (await readTestHostJournal(host!, SESSION)).submissions.find(
+      (row) => row.clientMessageId === id
+    )
   const failureRows = async () =>
-    (await host!.journalSnapshot(SESSION)).items.filter(
+    (await readTestHostJournal(host!, SESSION)).items.filter(
       (item) => item.body.kind === 'status' && item.body.tone === 'error'
     ).length
   const phase = () => host!.collaboratorsForTests().sessions.get(SESSION)?.child?.phase

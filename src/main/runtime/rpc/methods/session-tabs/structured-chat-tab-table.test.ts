@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -87,12 +88,12 @@ describe('a chat tab across /clear', () => {
     }
     expect((await call('agentSession.conversationCommand', params)).result?.ok).not.toBe(true)
     lost.mockRestore()
-    const landed = journal.snapshot()
+    const landed = await readTestJournalSnapshot(journal)
     expect(await call('agentSession.conversationCommand', params)).toMatchObject({
       ok: true,
       result: { ok: true }
     })
-    expect(journal.snapshot()).toEqual(landed)
+    expect(await readTestJournalSnapshot(journal)).toEqual(landed)
     expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
       `agent-session:${HOST_TEST_SESSION}`
     ])

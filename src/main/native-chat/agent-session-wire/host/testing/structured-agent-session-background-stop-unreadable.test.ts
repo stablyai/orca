@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
@@ -67,7 +68,7 @@ async function rigWithTaskList(): Promise<{
 }
 
 async function unconfirmedNotes(testRig: QueuedMessageTestRig) {
-  return (await testRig.host.journalSnapshot(SESSION)).items.filter(
+  return (await readTestHostJournal(testRig.host, SESSION)).items.filter(
     (item) => item.body.kind === 'status' && item.body.failure?.kind === 'cancelUnconfirmed'
   )
 }

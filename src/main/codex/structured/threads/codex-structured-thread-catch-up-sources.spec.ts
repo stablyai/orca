@@ -1,4 +1,8 @@
 import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
+import {
   adapterFor,
   fakeCodex,
   acquireReadyCodexForTest
@@ -105,7 +109,7 @@ export function registerCodexHistorySourcesTests(input: {
       }
       await open()
       expect(c.texts()).toEqual(['user:ask 1', 'assistant:A different final answer'])
-      const rows = c.journal.snapshot().items
+      const rows = await readTestJournalItems(c.journal)
       expect(new Set(rows.map((row) => row.itemId)).size).toBe(rows.length)
       expect(rows.find((row) => row.body.kind === 'turn')?.body).toMatchObject({
         kind: 'turn',
@@ -128,12 +132,12 @@ export function registerCodexHistorySourcesTests(input: {
           )
         )
       expect(imports()).toHaveLength(1)
-      const snapshot = c.journal.snapshot()
+      const snapshot = await readTestJournalSnapshot(c.journal)
       await c.reopen()
-      expect(c.journal.snapshot()).toEqual(snapshot)
+      expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
       const repeated = vi.spyOn(c.deferred.sink, 'tryAppendTransition')
       await open()
-      expect(c.journal.snapshot()).toEqual(snapshot)
+      expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
       await c.open([], {
         paginate: false,
         returnedTurns: [
@@ -146,7 +150,7 @@ export function registerCodexHistorySourcesTests(input: {
           }
         ]
       })
-      expect(c.journal.snapshot()).toEqual(snapshot)
+      expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
       expect(
         repeated.mock.calls.flatMap(([call]) =>
           call.steps.filter(
@@ -184,7 +188,7 @@ export function registerCodexHistorySourcesTests(input: {
       },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const legacySaved = c.journal.item(agentJournalItemKey(legacy))
+    const legacySaved = await c.journal.reads.item(agentJournalItemKey(legacy))
     await c.reopen()
     await c.open([], {
       paginate: false,
@@ -208,7 +212,7 @@ export function registerCodexHistorySourcesTests(input: {
         }
       ]
     })
-    expect(c.journal.snapshot().items.map(({ body }) => body)).toContainEqual(
+    expect((await readTestJournalItems(c.journal)).map(({ body }) => body)).toContainEqual(
       expect.objectContaining({ kind: 'status', text: 'omitted parent child' })
     )
     await c.open([], {
@@ -230,7 +234,7 @@ export function registerCodexHistorySourcesTests(input: {
         }
       ]
     })
-    const bodies = c.journal.snapshot().items.map(({ body }) => body)
+    const bodies = (await readTestJournalItems(c.journal)).map(({ body }) => body)
     expect(bodies).toContainEqual(
       expect.objectContaining({ kind: 'status', text: 'saved parent child' })
     )
@@ -244,7 +248,7 @@ export function registerCodexHistorySourcesTests(input: {
         output: journalPayload('retained')
       })
     )
-    const before = c.journal.snapshot()
+    const before = await readTestJournalSnapshot(c.journal)
     await c.open([], {
       paginate: false,
       returnedTurns: [
@@ -257,10 +261,10 @@ export function registerCodexHistorySourcesTests(input: {
         }
       ]
     })
-    expect(c.journal.snapshot()).toEqual(before)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(before)
     await c.reopen()
-    expect(c.journal.item(agentJournalItemKey(legacy))).toEqual(legacySaved)
-    const snapshot = c.journal.snapshot()
+    expect(await c.journal.reads.item(agentJournalItemKey(legacy))).toEqual(legacySaved)
+    const snapshot = await readTestJournalSnapshot(c.journal)
     const turnKey = agentJournalItemKey(codexTurnLifecycleIdentity(SESSION, 'turn-1'))
     for (const text of [
       'omitted parent child',
@@ -372,16 +376,16 @@ export function registerCodexHistorySourcesTests(input: {
       mcpIdentity: { server: 's', tool: 'lookup' },
       input: null
     })
-    const sparse = c.journal
-      .snapshot()
-      .items.find(({ body }) => body.kind === 'tool-call' && body.callId === 'sparse-command')
+    const sparse = (await readTestJournalItems(c.journal)).find(
+      ({ body }) => body.kind === 'tool-call' && body.callId === 'sparse-command'
+    )
     expect(sparse?.body).toMatchObject({
       kind: 'tool-call',
       input: { command: 'pwd', cwd: '/work' }
     })
-    const originalPatch = c.journal
-      .snapshot()
-      .items.find(({ body }) => body.kind === 'tool-call' && body.callId === 'patch')
+    const originalPatch = (await readTestJournalItems(c.journal)).find(
+      ({ body }) => body.kind === 'tool-call' && body.callId === 'patch'
+    )
     expect(originalPatch?.revision).toBe(1)
     await c.reopen()
     const transitions = vi.spyOn(c.deferred.sink, 'tryAppendTransition')
@@ -399,10 +403,10 @@ export function registerCodexHistorySourcesTests(input: {
     }
     await open([incoming, turn(2)])
     for (const row of saved) {
-      expect(row && c.journal.item(row.itemId)).toEqual(row)
+      expect(row && (await c.journal.reads.item(row.itemId))).toEqual(row)
     }
-    expect(sparse && c.journal.item(sparse.itemId)).toEqual(sparse)
-    const snapshot = c.journal.snapshot()
+    expect(sparse && (await c.journal.reads.item(sparse.itemId))).toEqual(sparse)
+    const snapshot = await readTestJournalSnapshot(c.journal)
     expect(snapshot.items.filter(({ body }) => body.kind === 'tool-call')).toEqual([
       ...saved,
       sparse
@@ -451,9 +455,9 @@ export function registerCodexHistorySourcesTests(input: {
       revision: 2
     })
     await c.reopen()
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
     await open([incoming, turn(2)])
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
   })
 
   it('releases whole-response groups with more than 1024 unchanged saved keys and keeps a small new turn', async () => {
@@ -470,10 +474,12 @@ export function registerCodexHistorySourcesTests(input: {
       await c.open([], { paginate: false, returnedTurns: [entry] })
     }
     await c.reopen()
-    const before = c.journal.snapshot()
+    const before = await readTestJournalSnapshot(c.journal)
     const commits = vi.spyOn(c.deferred.sink, 'tryAppendTransition')
     await c.open([], { paginate: false, returnedTurns: [...old, turn(31)] })
-    expect(c.journal.snapshot().items.slice(0, before.items.length)).toEqual(before.items)
+    expect((await readTestJournalItems(c.journal)).slice(0, before.items.length)).toEqual(
+      before.items
+    )
     expect(c.texts().slice(-2)).toEqual(['user:ask 31', 'assistant:answer 31'])
     const imports = commits.mock.calls.flatMap(([call]) =>
       call.steps.filter(
@@ -482,9 +488,9 @@ export function registerCodexHistorySourcesTests(input: {
       )
     )
     expect(imports).toHaveLength(1)
-    const snapshot = c.journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(c.journal)
     await c.open([], { paginate: false, returnedTurns: [...old, turn(31)] })
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
     expect(
       commits.mock.calls.flatMap(([call]) =>
         call.steps.filter(

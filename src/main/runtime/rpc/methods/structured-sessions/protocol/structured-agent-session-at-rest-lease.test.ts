@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 vi.mock('node:fs/promises', { spy: true })
@@ -14,7 +15,7 @@ import { fixture, call, restingChat } from './structured-agent-session-rest-cont
 
 it('hands off a readable saved conversation without granting its invalid execution lease authority', async () => {
   await restingChat()
-  const { cursor } = await fixture.rig.host.journalSnapshot(SESSION)
+  const { cursor } = await readTestHostJournal(fixture.rig.host, SESSION)
   await fixture.rig.host.flushAllStreamedEvents()
   await editPersistedTestAgentSessionStore(fixture.rig.root, (persisted) => {
     Object.assign(persisted.records[SESSION].lease, { minimumNextFence: 'bad' })

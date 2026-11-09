@@ -1,3 +1,7 @@
+import {
+  readTestJournalSnapshot,
+  readTestJournalSubmissions
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -157,7 +161,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     endedCalls: 0,
     send: 'pending'
   })
-  const before = journal.snapshot()
+  const before = await readTestJournalSnapshot(journal)
   const commits = vi.fn()
   journal.observeCommits(commits)
   const admission = vi.spyOn(translator, 'handle')
@@ -210,7 +214,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   expect(events).toHaveLength(1)
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   expect(onFailed).not.toHaveBeenCalled()
-  expect(journal.snapshot()).toEqual(before)
+  expect(await readTestJournalSnapshot(journal)).toEqual(before)
   expect(commits).not.toHaveBeenCalled()
   let record: AgentSessionRecord = agentSessionRecordFixture(
     agentSessionLeaseFixture({ sessionId: SESSION })
@@ -263,12 +267,12 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'again' }] }
     })
   ).resolves.toMatchObject({ sequence })
-  const settled = journal.snapshot()
-  const submissions = journal.submissions()
+  const settled = await readTestJournalSnapshot(journal)
+  const submissions = await readTestJournalSubmissions(journal)
   await journal.close()
   await closeTestJournalHostDatabase(root)
   const reopened = await journals.open(options)
-  expect(reopened.snapshot()).toEqual(settled)
-  expect(reopened.submissions()).toEqual(submissions)
+  expect(await readTestJournalSnapshot(reopened)).toEqual(settled)
+  expect(await readTestJournalSubmissions(reopened)).toEqual(submissions)
   deferred.close()
 })

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { verifyWorkerStartCardScenario } from './worker-start-card-scenario.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
@@ -260,7 +261,7 @@ it.each([
         }
       )
     }
-    const before = await current.host.journalSnapshot(COORD)
+    const before = await readTestHostJournal(current.host, COORD)
     const rpc = h.findMethod(method)
     const running = rpc.handler(rpc.params?.parse(admitted.request.params), {
       runtime,
@@ -341,7 +342,7 @@ it.each([
     ) {
       await eventually(async () =>
         expect(
-          (await current.host.journalSnapshot(COORD)).items.some(
+          (await readTestHostJournal(current.host, COORD)).items.some(
             (item) => item.body.kind === 'agent-start'
           )
         ).toBe(true)
@@ -383,7 +384,7 @@ it.each([
         remoteReady &&
         !['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(scenario)
       ) {
-        const start = (await current.host.journalSnapshot(COORD)).items.find(
+        const start = (await readTestHostJournal(current.host, COORD)).items.find(
           ({ body }) => body.kind === 'agent-start'
         )
         expect(start?.body).toMatchObject({ worker: { agent: expectedAgent } })
@@ -393,7 +394,7 @@ it.each([
       if (
         ['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(scenario)
       ) {
-        expect((await current.host.journalSnapshot(COORD)).items).toEqual(before.items)
+        expect((await readTestHostJournal(current.host, COORD)).items).toEqual(before.items)
       }
       return
     }

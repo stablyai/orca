@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,14 +75,11 @@ export async function chat(clock: { now: number }) {
   }
   let journal = await journals.open(journalOptions)
   let deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  const publications: number[] = []
   const bind = () =>
     deferred.bind({
       journal,
       fence: 1,
-      publish: () => {
-        publications.push(journal.snapshot().items.length)
-      }
+      publish: () => {}
     })
   bind()
   cleanups.push(async () => {
@@ -100,7 +98,6 @@ export async function chat(clock: { now: number }) {
     get db() {
       return openTestJournalHostDatabase(root).db
     },
-    publications,
     reopen: async () => {
       deferred.close()
       await journal.close()
@@ -122,8 +119,8 @@ export async function chat(clock: { now: number }) {
       })
       return deferred.drained()
     },
-    texts: () =>
-      journal.snapshot().items.flatMap((item) => {
+    texts: async () =>
+      (await readTestJournalItems(journal)).flatMap((item) => {
         if (item.body.kind === 'message') {
           const text = item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
           return [`${item.body.role}:${text.join('')}`]

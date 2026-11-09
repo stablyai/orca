@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -73,14 +74,14 @@ function withdraw(clientMessageId: string, answeredInTurn?: AgentJournalAnswered
 }
 
 async function send(clientMessageId: string) {
-  return (await rig.host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+  return (await readTestHostJournal(rig.host, HOST_TEST_SESSION)).submissions.find(
     (entry) => entry.clientMessageId === clientMessageId
   )
 }
 
 /** How the shared projection every client runs draws this send, or null when it hides it. */
 async function drawn(clientMessageId: string) {
-  const { items, submissions } = await rig.host.journalSnapshot(HOST_TEST_SESSION)
+  const { items, submissions } = await readTestHostJournal(rig.host, HOST_TEST_SESSION)
   const message = projectStructuredAgentSessionMessages(items, [], submissions).find(
     (entry) => entry.id === agentJournalSubmissionKey(clientMessageId)
   )
@@ -160,9 +161,11 @@ describe("Stop's event", () => {
       { messageId: opening, state: 'waiting' },
       { messageId: last, state: 'waiting' }
     ])
-    expect(journal().submissionBody(steer)).toEqual(hostTestMessage('sent now into the turn'))
-    expect(journal().queuedMessages.get(`recovery:${steer}`)).toBeNull()
-    expect(journal().submission(steer)?.options).toEqual({})
+    expect(await journal().reads.submissionBody(steer)).toEqual(
+      hostTestMessage('sent now into the turn')
+    )
+    expect(await journal().queuedMessages.get(`recovery:${steer}`)).toBeNull()
+    expect((await journal().reads.submission(steer))?.options).toEqual({})
     // The turn's message, unconfirmed, as an old client's projection draws it too.
     expect(await send(steer)).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await drawn(steer)).toEqual({ stoppedBeforeStart: undefined })
@@ -215,7 +218,9 @@ describe("Stop's event", () => {
     ])
     const handoff = await rig.handoffId(sentId)
     expect(await rig.drafts()).toEqual([{ messageId: waiting, state: 'waiting' }])
-    expect(journal().submissionBody(handoff)).toEqual(hostTestMessage('sent now into the turn'))
+    expect(await journal().reads.submissionBody(handoff)).toEqual(
+      hostTestMessage('sent now into the turn')
+    )
     expect(await rig.deleteQueued(`recovery:${handoff}`)).toMatchObject({
       value: { deleted: false }
     })
@@ -267,7 +272,7 @@ describe("a /clear's carried cards", () => {
     }
     await eventually(async () =>
       expect(
-        (await rig.host.journalSnapshot(replacementId)).submissions.find(
+        (await readTestHostJournal(rig.host, replacementId)).submissions.find(
           (entry) => entry.clientMessageId === sent.value.clientMessageId
         )?.handedOverAt
       ).toBeDefined()
@@ -282,7 +287,7 @@ describe("a /clear's carried cards", () => {
         ordinal: 0
       }
     })
-    expect(journal(replacementId).queuedMessages.list()[0]?.messageId).toBe(carried)
+    expect((await journal(replacementId).queuedMessages.list())[0]?.messageId).toBe(carried)
     expect(structuredQueuePauses(journal(replacementId))).toEqual([])
   })
 })

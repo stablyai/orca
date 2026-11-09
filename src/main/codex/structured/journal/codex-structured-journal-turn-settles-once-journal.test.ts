@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -68,7 +69,7 @@ async function session() {
     drained: () => deferred.drained(),
     items: async () => {
       await deferred.drained()
-      return journal.snapshot().items
+      return await readTestJournalItems(journal)
     }
   }
 }

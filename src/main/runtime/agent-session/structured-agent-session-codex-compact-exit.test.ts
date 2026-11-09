@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -25,7 +26,10 @@ afterEach(async () => {
 })
 
 async function snapshot() {
-  return (await ensureStructuredAgentSessionHost(harness.hostConfig())).journalSnapshot(SESSION)
+  return await readTestHostJournal(
+    await ensureStructuredAgentSessionHost(harness.hostConfig()),
+    SESSION
+  )
 }
 
 /** The connections that received `method`, once per call. */

@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../rpc/unused-default-rpc-methods.test-fixture'
 import { scriptedCodexCatalogSession } from '../scripted-codex-model-catalog.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -349,13 +350,13 @@ describe('a structured codex session over agentSession.*', () => {
       identity: JOURNAL_IDENTITY,
       stateDirectory: root
     })
-    expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')
+    expect((await readTestJournalItems(reopened)).map(textOf)).toContain(
+      'Final text before shutdown.'
+    )
     expect(
-      reopened
-        .snapshot()
-        .items.some(
-          (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-        )
+      (await readTestJournalItems(reopened)).some(
+        (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
+      )
     ).toBe(false)
   })
 })

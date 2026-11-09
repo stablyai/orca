@@ -66,7 +66,7 @@ async function writeItems(opener: typeof journals, ordinals: number[]): Promise<
     )
   }
   await opener.closeAll()
-  return journal.epoch
+  return journal.physicalCursor().epoch
 }
 
 const db = () => openTestJournalHostDatabase(root).db

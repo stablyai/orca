@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
@@ -226,7 +227,7 @@ describe('context usage for a turn row outside the loaded page', () => {
         host = await hostAnswer()
       }
       expect(selectStructuredAgentContextUsage(state.items, host)).toEqual(
-        selectStructuredAgentContextUsage(journal.snapshot().items)
+        selectStructuredAgentContextUsage(await readTestJournalItems(journal))
       )
       stepsAfterTrim += hasTurnRow(state) ? 0 : 1
     }

@@ -13,7 +13,10 @@ import {
   PROVIDER_SESSION_ID
 } from '../../../../claude/structured/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -24,10 +27,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
@@ -73,7 +73,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW

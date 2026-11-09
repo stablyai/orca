@@ -79,8 +79,8 @@ it('publishes the complete original and exact compact retry tuple through instal
   expect(sent.ok).toBe(true)
   await eventually(async () => expect(await rig!.drafts()).toHaveLength(1))
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const original = journal.submission(id)!
-  const receipt = journal.receiptFor(id)
+  const original = (await journal.reads.submission(id))!
+  const receipt = await journal.reads.receiptFor(id)
   const epoch = journal.cursor().epoch
   const reason = "Codex couldn't restart. Send your message to try again."
   const rejection = {
@@ -183,14 +183,14 @@ it('publishes the complete original and exact compact retry tuple through instal
     throw new Error('history refused')
   }
   expect(rpc.result).toStrictEqual(expected)
-  expect(journal.item(agentJournalSubmissionKey(id))).toStrictEqual(expectedSource)
-  expect(journal.submission(id)).toStrictEqual({
+  expect(await journal.reads.item(agentJournalSubmissionKey(id))).toStrictEqual(expectedSource)
+  expect(await journal.reads.submission(id)).toStrictEqual({
     ...expectedSubmission,
     resolvedAt: original.resolvedAt,
     keptAsQueuedMessageId: id
   })
-  expect(journal.submissionBody(id)).toStrictEqual(body)
-  expect(journal.receiptFor(id)).toStrictEqual(receipt)
+  expect(await journal.reads.submissionBody(id)).toStrictEqual(body)
+  expect(await journal.reads.receiptFor(id)).toStrictEqual(receipt)
   const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
   const {
     queuedMessages,
@@ -292,8 +292,7 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   const held = await published()
   expect(held).toHaveProperty('page.queuedMessages', [
     { messageId: saved, position: -1, body, state: 'waiting', paused: true },
-    ...j.queuedMessages
-      .list()
+    ...(await j.queuedMessages.list())
       .filter((row) => row.messageId !== saved)
       .map((row) => ({
         messageId: row.messageId,
@@ -302,8 +301,8 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
         state: 'waiting'
       }))
   ])
-  const immutable = j.submission(id)
-  const receipt = j.receiptFor(id)
+  const immutable = await j.reads.submission(id)
+  const receipt = await j.reads.receiptFor(id)
   await rig.quitRestartHostProcess()
   setStructuredAgentSessionHost(rig.host)
   rig.failNextStart(new Error('saved choice own retry failed'))
@@ -318,7 +317,7 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   await eventually(async () => expect((await rig!.handoff(saved))?.dispatchState).toBe('rejected'))
   const rejected = await published()
   const state = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const physical = state.queuedMessages.get(saved)!
+  const physical = (await state.queuedMessages.get(saved))!
   expect(physical.state).toBe('returned')
   expect(physical.recovers).toBe(id)
   expect(physical.consumedAs).not.toBe(id)
@@ -338,9 +337,9 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   expect(rig.dispatch).toHaveBeenCalledTimes(1)
   await published()
   await rig.settleAccepted(id, 'original-positive-proof-independent-of-failed-retry')
-  expect(state.queuedMessages.get(saved)).toStrictEqual(physical)
-  expect(state.submissionBody(id)).toStrictEqual(body)
-  expect(state.submission(id)?.payloadFingerprint).toBe(immutable?.payloadFingerprint)
-  expect(state.receiptFor(id)).not.toEqual(receipt)
+  expect(await state.queuedMessages.get(saved)).toStrictEqual(physical)
+  expect(await state.reads.submissionBody(id)).toStrictEqual(body)
+  expect((await state.reads.submission(id))?.payloadFingerprint).toBe(immutable?.payloadFingerprint)
+  expect(await state.reads.receiptFor(id)).not.toEqual(receipt)
   await published()
 })

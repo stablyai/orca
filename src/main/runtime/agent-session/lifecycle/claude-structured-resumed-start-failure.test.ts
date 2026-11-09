@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 // Reopened chats publish before initialize; later startup failure must reach the visible transcript.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -76,7 +77,7 @@ describe('a reopened Claude chat whose CLI dies before initialize', () => {
     }
 
     await vi.waitFor(() => expect(statusTexts(events)).toContainEqual(STARTUP_TEXT))
-    const submission = (await host.journalSnapshot(SESSION)).submissions.find(
+    const submission = (await readTestHostJournal(host, SESSION)).submissions.find(
       (entry) => entry.clientMessageId === (sent.ok && sent.value.clientMessageId)
     )
     // Keep stderr in log details, outside the user-facing sentence.

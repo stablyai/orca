@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -73,8 +77,8 @@ it.each(['person', 'mail'] as const)(
       await journal.open()
       await journal.queuedMessages.importAtOpen()
       expect(legacyIds(sessionId)).toEqual([])
-      expect(journal.queuedMessages.list().map((card) => card.messageId)).toEqual(['W'])
-      expect(journal.queuedMessages.userStopInForce() === null).toBe(sender === 'person')
+      expect((await journal.queuedMessages.list()).map((card) => card.messageId)).toEqual(['W'])
+      expect((await journal.queuedMessages.userStopInForce()) === null).toBe(sender === 'person')
       await journal.appendSubmission({
         clientMessageId: `unattended-${opened}`,
         body: message('wake'),
@@ -90,7 +94,7 @@ it.each(['person', 'mail'] as const)(
         providerIdentity: null,
         fence: 0
       })
-      expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
+      expect((await journal.queuedMessages.nextInputCard())?.messageId ?? null).toBe(
         sender === 'person' ? 'W' : null
       )
       await journal.close()
@@ -135,8 +139,8 @@ it.each(['person', 'mail'] as const)(
       journal = journalFor(sessionId)
       await journal.open()
       expect(legacyIds(sessionId)).toEqual([])
-      expect(journal.queuedMessages.get('S')).toBeNull()
-      expect(journal.queuedMessages.userStopInForce() === null).toBe(sender === 'person')
+      expect(await journal.queuedMessages.get('S')).toBeNull()
+      expect((await journal.queuedMessages.userStopInForce()) === null).toBe(sender === 'person')
       await journal.appendSubmission({
         clientMessageId: `wake-${opened}`,
         body: message('wake'),
@@ -152,7 +156,7 @@ it.each(['person', 'mail'] as const)(
         providerIdentity: null,
         fence: 0
       })
-      expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
+      expect((await journal.queuedMessages.nextInputCard())?.messageId ?? null).toBe(
         sender === 'person' ? 'W' : null
       )
       if (opened === 0) {
@@ -219,12 +223,12 @@ it('a retired personal handoff in a marker-5 prefix keeps Stop lifted without re
   for (let opened = 0; opened < 2; opened++) {
     journal = journalFor(sessionId)
     await journal.open()
-    expect(journal.queuedMessages.userStopInForce()).toBeNull()
-    expect(journal.submission('H')).toBeUndefined()
-    expect(journal.item(agentJournalSubmissionKey('H'))).toBeNull()
-    expect(journal.queuedMessages.get('S')).toBeNull()
+    expect(await journal.queuedMessages.userStopInForce()).toBeNull()
+    expect(await journal.reads.submission('H')).toBeUndefined()
+    expect(await journal.reads.item(agentJournalSubmissionKey('H'))).toBeNull()
+    expect(await journal.queuedMessages.get('S')).toBeNull()
     await journal.appendQueueReopen(0)
-    expect(journal.queuedMessages.nextInputCard()).toBeNull()
+    expect(await journal.queuedMessages.nextInputCard()).toBeNull()
     await journal.appendSubmission({
       clientMessageId: `wake-${opened}`,
       body: message('wake'),
@@ -240,7 +244,7 @@ it('a retired personal handoff in a marker-5 prefix keeps Stop lifted without re
       providerIdentity: null,
       fence: 0
     })
-    expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('W')
+    expect((await journal.queuedMessages.nextInputCard())?.messageId).toBe('W')
     await journal.replaceEpochItems('handle_forked', 0, [])
     await journal.close()
   }
@@ -270,8 +274,8 @@ it('a new-format missing-card attempt cannot invent legacy personal provenance',
   await journal.close()
   journal = journalFor(SESSION)
   await journal.open()
-  expect(journal.queuedMessages.userStopInForce()).not.toBeNull()
-  expect(journal.queuedMessages.nextInputCard()).toBeNull()
+  expect(await journal.queuedMessages.userStopInForce()).not.toBeNull()
+  expect(await journal.queuedMessages.nextInputCard()).toBeNull()
   await journal.close()
 })
 
@@ -369,7 +373,10 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     })
     expect(events[0]?.type).toBe('snapshot')
     while (state.hasOlder) {
-      const requestedCursor = { epoch: journal.epoch, sequence: state.items[0]!.sequence }
+      const requestedCursor = {
+        epoch: journal.physicalCursor().epoch,
+        sequence: state.items[0]!.sequence
+      }
       const older = readAgentSessionHistory(
         journal,
         { sessionId: SESSION, direction: 'before', cursor: requestedCursor },
@@ -382,7 +389,7 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
         page: structuredClone(older.page)
       })
     }
-    const canonical = journal.snapshot()
+    const canonical = await readTestJournalSnapshot(journal)
     expect([state.items, state.submissions]).toEqual([canonical.items, canonical.submissions])
     feed.publish(SESSION, journal)
     await append(journal, 205)
@@ -400,9 +407,9 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     feed.publish(SESSION, journal)
   }
   if (proof !== 'none') {
-    const placed = journal
-      .snapshot()
-      .items.find((item) => item.itemId === agentJournalSubmissionKey('u'))
+    const placed = (await readTestJournalItems(journal)).find(
+      (item) => item.itemId === agentJournalSubmissionKey('u')
+    )
     const loaded = clients.map((client) => client().items.length)
     const normalizationKey = journal.publicRead().normalizationKey
     const identity = {
@@ -412,7 +419,7 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
       ordinal: 206
     }
     if (proof === 'dispatch') {
-      await journal.acceptLate({
+      await journal.settleLateDispatch({
         clientMessageId: 'u',
         state: 'accepted',
         fence: 0,
@@ -421,8 +428,8 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
     }
     await journal.appendItem(identity, message('stopped words'), threadWrite)
     feed.publish(SESSION, journal)
-    expect(journal.submission('u')?.dispatchState).toBe('accepted')
-    expect(journal.receiptFor('u')).not.toBeNull()
+    expect((await journal.reads.submission('u'))?.dispatchState).toBe('accepted')
+    expect(await journal.reads.receiptFor('u')).not.toBeNull()
     expect(journal.publicRead().normalizationKey).toBe(normalizationKey)
     expect(clients.map((client) => client().items.length)).toEqual(loaded)
     for (const client of clients) {

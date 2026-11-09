@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -57,9 +58,9 @@ afterEach(async () => {
 
 describe('structured agent-session outbound admission', () => {
   it('admits bounded initial, background-task, epoch, compaction, and history recovery frames', async () => {
-    expect(Buffer.byteLength(JSON.stringify(journal.snapshot()), 'utf8')).toBeGreaterThan(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
+    expect(
+      Buffer.byteLength(JSON.stringify(await readTestJournalSnapshot(journal)), 'utf8')
+    ).toBeGreaterThan(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
 
     let roster: AgentSessionBackgroundTaskState | null = null
     const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
@@ -124,7 +125,7 @@ describe('structured agent-session outbound admission', () => {
       sessionId: SESSION,
       journal,
       fence: 2,
-      cursor: { epoch: journal.epoch, sequence: firstItemSequence },
+      cursor: { epoch: journal.physicalCursor().epoch, sequence: firstItemSequence },
       emit: (event) => catchup.push(event)
     })
 
@@ -156,7 +157,12 @@ function body(text: string): AgentJournalItemBody {
 /** Inject a legacy oversized removal ID to force a cursor_compacted reset. */
 async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentSessionJournal> {
   const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
-  const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: journal.epoch, fence: 1, ts: 1 }
+  const base = {
+    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    epoch: journal.physicalCursor().epoch,
+    fence: 1,
+    ts: 1
+  }
   const rows: JournalRow[] = [
     {
       ...base,

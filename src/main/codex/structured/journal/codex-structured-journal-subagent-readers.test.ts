@@ -1,3 +1,5 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,10 +17,7 @@ import type { AgentSessionJournal } from '../../../native-chat/agent-session-jou
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -44,7 +43,7 @@ async function openJournal(root: string): Promise<AgentSessionJournal> {
       agent: 'codex',
       providerHandle: codexProviderHandle(PARENT)
     },
-    database: openTestJournalHostDatabase(root),
+    database: await openTestAgentSessionDatabase(root),
     now: () => 1_000
   })
 }
@@ -107,14 +106,14 @@ async function session() {
     },
     items: async (): Promise<readonly AgentJournalRenderItem[]> => {
       await deferred.drained()
-      return journal.snapshot().items
+      return await readTestJournalItems(journal)
     },
     reopen: async (): Promise<readonly AgentJournalRenderItem[]> => {
       await deferred.drained()
       deferred.unbind()
       await journal.close()
       journal = await openJournal(root)
-      return journal.snapshot().items
+      return await readTestJournalItems(journal)
     }
   }
 }

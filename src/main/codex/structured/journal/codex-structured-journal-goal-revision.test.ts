@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -100,7 +101,7 @@ describe('codex goal accounting revisions', () => {
 
     goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await drained()
-    const [, created] = journal.snapshot().items
+    const [, created] = await readTestJournalItems(journal)
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'later' },
       { kind: 'status', text: 'Something after the goal' },
@@ -114,7 +115,7 @@ describe('codex goal accounting revisions', () => {
       params: goalFrame({ timeUsedSeconds: 10, updatedAt: 1789067998 })
     })
     await drained()
-    expect(journal.snapshot().items[1]?.revision).toBe(created?.revision)
+    expect((await readTestJournalItems(journal))[1]?.revision).toBe(created?.revision)
     expect(published).toEqual([])
 
     goals.handle({
@@ -124,7 +125,7 @@ describe('codex goal accounting revisions', () => {
     })
     await drained()
 
-    const items = journal.snapshot().items
+    const items = await readTestJournalItems(journal)
     expect(items.map((item) => item.itemId)).toEqual([
       'orca:earlier',
       created?.itemId,

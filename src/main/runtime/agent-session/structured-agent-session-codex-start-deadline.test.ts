@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // A Codex start has no per-step deadline: a slow `initialize` still delivers the held message, and
 // one that never answers is ended by the start's own overall limit ("never finished starting").
 
@@ -113,7 +114,7 @@ it('fails the held message as never finished starting when the start passes its 
 
   await vi.waitFor(async () => {
     await host.flushStreamedEvents(HOST_TEST_SESSION)
-    const [held] = (await host.journalSnapshot(HOST_TEST_SESSION)).submissions
+    const [held] = (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions
     expect(held?.dispatchState).toBe('rejected')
     expect(readWholeAgentSessionFailureFact(held?.rejection)).toMatchObject({ kind: 'hostStopped' })
   })

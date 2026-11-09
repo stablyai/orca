@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 // Use the real host's fingerprint admission to reject envelopes derived from different fields.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -67,7 +68,7 @@ function sendTurn(
 }
 
 async function sentMessage(clientMessageId: string) {
-  const snapshot = await rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(rig.host, SESSION)
   return snapshot.items.find((item) => item.itemId === agentJournalSubmissionKey(clientMessageId))
 }
 
@@ -79,11 +80,9 @@ describe('sendAgentTurn through the real host', () => {
       queued: { position: 1, state: 'waiting' }
     })
     expect(
-      rig.host
-        .collaboratorsForTests()
-        .sessions.get(SESSION)
-        ?.journal.queuedMessages.list()
-        .map(({ state, body }) => ({ state, from: body.from }))
+      (
+        await rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.list()
+      ).map(({ state, body }) => ({ state, from: body.from }))
     ).toEqual([{ state: 'waiting', from: MAIL_SOURCE }])
     const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.queuedMessages?.map(({ body }) => body.from)).toEqual([MAIL_SOURCE])

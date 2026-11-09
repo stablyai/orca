@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -207,15 +208,11 @@ describe('Claude durable resume point at turn end', () => {
     })
     await claudeStartupSettled(adapter, 'session-1')
     expect(
-      journal
-        .snapshot()
-        .items.some(
-          (item) =>
-            item.body.kind === 'message' &&
-            item.body.blocks.some(
-              (block) => block.type === 'text' && block.text === 'outside reply'
-            )
-        )
+      (await readTestJournalItems(journal)).some(
+        (item) =>
+          item.body.kind === 'message' &&
+          item.body.blocks.some((block) => block.type === 'text' && block.text === 'outside reply')
+      )
     ).toBe(true)
     expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({
       resumeCursor: 'resumed-at'

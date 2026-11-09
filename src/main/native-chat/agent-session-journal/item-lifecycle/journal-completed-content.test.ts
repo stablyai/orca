@@ -1,3 +1,4 @@
+import { readTestJournalItems, readTestJournalSnapshot } from '../journal-observation.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AcpToolTimeline } from '../../../acp/acp-tool-timeline'
@@ -43,7 +44,7 @@ it.each(['direct', 'transition'] as const)(
       output: journalPayload(text)
     }
     const cursor = rig.journal.cursor()
-    const snapshot = rig.journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(rig.journal)
     const blocked = rig.journal.readInOrder(() => {
       expect(
         rig.eventSink.tryAppendItem?.(
@@ -55,7 +56,7 @@ it.each(['direct', 'transition'] as const)(
       return gate.promise
     })
     expect(rig.journal.cursor()).toEqual(cursor)
-    expect(rig.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(rig.journal)).toEqual(snapshot)
     const append = () =>
       path === 'direct'
         ? rig.eventSink.tryAppendItem?.(identity, body, options)
@@ -79,13 +80,13 @@ it.each(['direct', 'transition'] as const)(
     })
     await new Promise((resolve) => setImmediate(resolve))
     expect(rig.journal.cursor()).toEqual(cursor)
-    expect(rig.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(rig.journal)).toEqual(snapshot)
     expect(landed).toBe(false)
     gate.resolve()
     await blocked
     expect(await written).toEqual({ ok: true })
     const reopened = await rig.reopenJournal()
-    expect(reopened.snapshot().items.map((item) => item.body)).toEqual([
+    expect((await readTestJournalItems(reopened)).map((item) => item.body)).toEqual([
       { kind: 'status', tone: 'info', text: 'before' },
       body
     ])
@@ -178,7 +179,7 @@ it.each(['acp', 'pi'] as const)(
     }
     expect(onFailed).not.toHaveBeenCalled()
     const reopened = await rig.reopenJournal()
-    expect(reopened.snapshot().items.map((row) => row.body)).toEqual(
+    expect((await readTestJournalItems(reopened)).map((row) => row.body)).toEqual(
       ['one', 'two'].map((callId) =>
         expect.objectContaining({
           kind: 'tool-call',

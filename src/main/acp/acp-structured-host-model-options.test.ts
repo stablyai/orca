@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
@@ -169,7 +170,7 @@ async function openModels(
   const complete = async (id: string) => {
     await waitFor(() => expect(submissionFor(id)?.dispatchState).toMatch(/admitted|accepted/))
     const frame = framesOf(rig.rig.child(), 'session/prompt').at(-1)!
-    const turn = journal().runningTurn()?.turnId
+    const turn = (await journal().reads.runningTurn())?.turnId
     rig.rig.child().agent.reply(frame, { stopReason: 'end_turn' })
     await rig.rig.settle()
     await rig.host.flushStreamedEvents(SESSION)
@@ -203,7 +204,7 @@ async function openModels(
             messageId: 'held'
           })
         ).toMatchObject({ ok: true })
-        await complete(journal().submissions().at(-1)!.clientMessageId)
+        await complete((await readTestJournalSubmissions(journal())).at(-1)!.clientMessageId)
       }
     }
   }
@@ -302,7 +303,7 @@ it.each([10, 100, 'Send', 'rejection'] as const)(
         [second, PRO]
       ] as const) {
         expect(
-          rig.journal().queuedMessages.get(id)?.options ?? rig.submissionFor(id)?.options
+          (await rig.journal().queuedMessages.get(id))?.options ?? rig.submissionFor(id)?.options
         ).toEqual({ model, effort: 'low' })
         await rig.complete(id)
       }

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
@@ -125,7 +126,7 @@ async function openModel(
     const id = await send(f.host, text)
     await waitFor(async () => {
       expect(
-        (await f.host.journalSnapshot(SESSION)).submissions.find(
+        (await readTestHostJournal(f.host, SESSION)).submissions.find(
           (entry) => entry.clientMessageId === id
         )
       ).toMatchObject({ dispatchState: 'accepted' })
@@ -134,7 +135,9 @@ async function openModel(
         messages,
         JSON.stringify({ messages, controls: framesOf(f.rig.child(), 'session/set_config_option') })
       ).toContain(expected)
-      expect(f.host.collaboratorsForTests().sessions.get(SESSION)!.journal.runningTurn()).toBeNull()
+      expect(
+        await f.host.collaboratorsForTests().sessions.get(SESSION)!.journal.reads.runningTurn()
+      ).toBeNull()
     })
     return id
   }
@@ -159,7 +162,7 @@ it.each(['@role', '@role:high', 'retired'])(
     const id = await send(f.host, 'literal choice')
     await waitFor(async () =>
       expect(
-        (await f.host.journalSnapshot(SESSION)).submissions.find(
+        (await readTestHostJournal(f.host, SESSION)).submissions.find(
           (entry) => entry.clientMessageId === id
         )
       ).toMatchObject({ dispatchState: 'rejected' })
@@ -261,7 +264,7 @@ it('does not send when an offered effort control is genuinely rejected', async (
   const id = await send(f.host, 'use the offered effort')
   await waitFor(async () =>
     expect(
-      (await f.host.journalSnapshot(SESSION)).submissions.find(
+      (await readTestHostJournal(f.host, SESSION)).submissions.find(
         (entry) => entry.clientMessageId === id
       )
     ).toMatchObject({ dispatchState: 'rejected' })

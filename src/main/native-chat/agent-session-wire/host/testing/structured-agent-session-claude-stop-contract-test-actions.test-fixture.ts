@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { createStoppedClaudeDeadline } from './structured-agent-session-stop-deadline.test-fixture'
 import { expect, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
@@ -57,7 +58,7 @@ export async function send(text: string, fence?: number): Promise<string> {
 }
 
 export async function dispatch(clientMessageId: string) {
-  const submission = (await fixture.host.journalSnapshot(SESSION)).submissions.findLast(
+  const submission = (await readTestHostJournal(fixture.host, SESSION)).submissions.findLast(
     (entry) =>
       entry.clientMessageId === clientMessageId || entry.queuedMessageId === clientMessageId
   )
@@ -89,7 +90,7 @@ export async function openTurn(
   })
   await eventually(async () => expect((await dispatch(clientMessageId)).state).toBe('accepted'))
   const turnId = activeStructuredAgentSessionTurnId(
-    (await fixture.host.journalSnapshot(SESSION)).items
+    (await readTestHostJournal(fixture.host, SESSION)).items
   )
   expect(turnId).not.toBeNull()
   return turnId!
@@ -124,14 +125,14 @@ export async function interruptSent(connection: FakeConnection): Promise<void> {
 
 export async function turnOutcome(): Promise<string | undefined> {
   await fixture.host.flushStreamedEvents(SESSION)
-  const snapshot = await fixture.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(fixture.host, SESSION)
   return readAgentJournalTurn(snapshot.items.findLast((item) => item.body.kind === 'turn')?.body)
     ?.outcome
 }
 
 export async function statusTexts(): Promise<string[]> {
   await fixture.host.flushStreamedEvents(SESSION)
-  return (await fixture.host.journalSnapshot(SESSION)).items.flatMap((item) =>
+  return (await readTestHostJournal(fixture.host, SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' ? [String(item.body.text)] : []
   )
 }
@@ -150,7 +151,7 @@ export function childRecords() {
 
 export async function agentStatus() {
   await fixture.host.flushStreamedEvents(SESSION)
-  const { items, submissions } = await fixture.host.journalSnapshot(SESSION)
+  const { items, submissions } = await readTestHostJournal(fixture.host, SESSION)
   const { summary } = projectStructuredAgentSessionStatusState(
     items,
     submissions,
@@ -180,7 +181,7 @@ export async function ask(
   })
   const card = await eventually(async () => {
     await fixture.host.flushStreamedEvents(SESSION)
-    const item = (await fixture.host.journalSnapshot(SESSION)).items.find(
+    const item = (await readTestHostJournal(fixture.host, SESSION)).items.find(
       (entry) => entry.body.kind === 'approval' || entry.body.kind === 'question'
     )
     expect(item).toBeDefined()
@@ -199,7 +200,7 @@ export function cancelCard(turnId: string, prompt: { itemId: string; expectedRev
 
 export async function cardResolution(itemId: string): Promise<unknown> {
   await fixture.host.flushStreamedEvents(SESSION)
-  const body = (await fixture.host.journalSnapshot(SESSION)).items.find(
+  const body = (await readTestHostJournal(fixture.host, SESSION)).items.find(
     (item) => item.itemId === itemId
   )?.body
   return body?.kind === 'approval' || body?.kind === 'question' ? body.resolution : undefined

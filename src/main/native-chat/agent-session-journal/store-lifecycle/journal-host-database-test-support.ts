@@ -16,6 +16,7 @@ import { applyJournalRow } from '../projection/journal-reducer'
 import { assertTestJournalHistoricalInputs } from '../replay/journal-historical-inputs.test-support'
 import {
   openTestAgentSessionDatabase,
+  closeTestAgentSessionDatabase,
   closeTestAgentSessionRecordStores
 } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
@@ -49,11 +50,13 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
 
 export async function closeTestJournalHostDatabase(stateDirectory: string): Promise<void> {
   const directory = resolve(stateDirectory)
+  await closeTestAgentSessionDatabase(directory)
   await opened.get(directory)?.close()
   opened.delete(directory)
 }
 
 export async function closeTestJournalHostDatabases(): Promise<void> {
+  await closeTestAgentSessionRecordStores()
   for (const database of opened.values()) {
     await database.close()
   }
@@ -93,7 +96,6 @@ export function createTrackedJournalOpener(
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
-      await closeTestAgentSessionRecordStores()
       await closeTestJournalHostDatabases()
     }
   }

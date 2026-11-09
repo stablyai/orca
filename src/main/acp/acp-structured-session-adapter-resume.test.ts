@@ -36,8 +36,8 @@ const resume = {
     resume: {
       sessionId: PROVIDER_SESSION,
       key: 'acp:grok:saved',
-      mayBeUnsaved: () => false,
-      unannouncedLosses: () => []
+      mayBeUnsaved: async () => false,
+      unannouncedLosses: async () => []
     }
   }
 }
@@ -247,8 +247,8 @@ describe('reattaching a Grok chat the journal holds', () => {
           resume: {
             sessionId: 'saved-1',
             key: 'acp-key-saved-1',
-            mayBeUnsaved: () => mayBeUnsaved,
-            unannouncedLosses: () => []
+            mayBeUnsaved: async () => mayBeUnsaved,
+            unannouncedLosses: async () => []
           }
         },
         initialize: RESUMES,
@@ -279,8 +279,8 @@ describe('reattaching a Grok chat the journal holds', () => {
         resume: {
           sessionId: 'saved-1',
           key: 'acp-key-saved-1',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          mayBeUnsaved: async () => false,
+          unannouncedLosses: async () => []
         }
       },
       initialize: RESUMES,

@@ -1,76 +1,24 @@
-import { afterEach, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import Database from '../../sqlite/sync-database'
-import {
-  createJournalReducerState,
-  renderJournalItems,
-  type JournalReducerState
-} from './projection/journal-reducer'
-import { JournalSqlReducer } from './journal-sql-reducer'
-import { JournalSqlScope } from './journal-sql-scope'
-import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
+import { createJournalReducerState, renderJournalItems } from './projection/journal-reducer'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { journalDispatchRowBuilder } from './writing/journal-row-builders'
-import {
-  readJournalUsageLimitCut as memoryReadJournalUsageLimitCut,
-  readJournalOrcaStopCut as memoryReadJournalOrcaStopCut
-} from './journal-status-cuts'
+import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
 import {
   newestStructuredAgentSessionTurn,
   newestStructuredAgentSessionTurnBySequence
 } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalRewoundReceipt } from './journal-writer-rewind-receipt'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
-import { JournalSqlStatusContext } from './journal-sql-status-context'
-import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
-
-const sqlOwners = new WeakMap<JournalReducerState, JournalSqlReducer>()
-function readJournalUsageLimitCut(
-  state: JournalReducerState,
-  ...args: Parameters<typeof memoryReadJournalUsageLimitCut> extends [unknown, ...infer A]
-    ? A
-    : never
-) {
-  const sql = sqlOwners.get(state)
-  if (!sql) {
-    return memoryReadJournalUsageLimitCut(state, ...args)
-  }
-  sql.flush()
-  return readJournalSqlUsageLimitCut(new JournalSqlStatusContext(sql.context.scope), ...args)
-}
-function readJournalOrcaStopCut(
-  state: JournalReducerState,
-  ...args: Parameters<typeof memoryReadJournalOrcaStopCut> extends [unknown, ...infer A] ? A : never
-) {
-  const sql = sqlOwners.get(state)
-  if (!sql) {
-    return memoryReadJournalOrcaStopCut(state, ...args)
-  }
-  sql.flush()
-  return readJournalSqlOrcaStopCut(new JournalSqlStatusContext(sql.context.scope), ...args)
-}
-
-const databases: Database.Database[] = []
-afterEach(() => databases.splice(0).forEach((db) => db.close()))
-
-function fixture(backend: 'memory' | 'sql') {
-  if (backend === 'memory') {
-    return createJournalReducerState('session', 'epoch')
-  }
-  const db = new Database(':memory:')
-  databases.push(db)
-  db.exec(journalSqlProjectionSchema())
-  const sql = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch')
-  sqlOwners.set(sql.state, sql)
-  return sql.state
+function fixture() {
+  return createJournalReducerState('session', 'epoch')
 }
 function item(
   id: string,
@@ -81,252 +29,179 @@ function item(
   return { itemId: id, sequence, revision: 1, observedAt: 1, body, ...extra }
 }
 
-it.each(['memory', 'sql'] as const)(
-  'reads the first scoped limit and rechecks rewind completion in %s',
-  (backend) => {
-    const state = fixture(backend)
-    state.items.set(
-      'failed',
-      item(
-        'failed',
-        10,
-        {
-          kind: 'turn',
-          turnId: 'failed',
-          state: 'completed',
-          outcome: 'failure',
-          completedAt: 100
-        },
-        { recoveredAt: 200 }
-      )
-    )
-    const scope = { turnScope: { kind: 'turn' as const, turnItemId: 'failed' } }
-    const limit = (resetsAt: number) => ({
-      kind: 'status' as const,
-      ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', {
-          usageLimit: { resetsAt }
-        }),
-        { surface: 'row' }
-      )
-    })
-    state.items.set(
-      'child-limit',
-      item('child-limit', 11, limit(300), { ...scope, agentId: 'child' })
-    )
-    state.items.set('first-limit', item('first-limit', 12, limit(400), scope))
-    state.items.set('later-limit', item('later-limit', 13, limit(500), scope))
-    expect(readJournalUsageLimitCut(state)).toEqual({
-      turnItemId: 'failed',
-      resetsAt: 400,
-      turnEndedAt: 200
-    })
-    const cursor = { epoch: 'epoch', sequence: 13 }
-    const receipt = { write: () => {}, committed: () => {} }
-    expect(() => journalRewoundReceipt(undefined, receipt)(cursor).fold?.(state)).toThrow(
-      JournalHostFactsNeededError
-    )
-    expect(() =>
-      journalRewoundReceipt(
-        { cursor, cancel: { turnItemId: 'failed', resetsAt: 400 } },
-        receipt
-      )(cursor).fold?.(state)
-    ).not.toThrow()
-    expect(readJournalUsageLimitCut(state, 12)).toBeNull()
-
-    const command = {
-      kind: 'message' as const,
-      role: 'user' as const,
-      blocks: [],
-      command: { name: 'compact' as const }
-    }
-    state.items.set('command', item('command', 14, command))
-    state.items.set(
-      'command-turn',
-      item('command-turn', 15, {
-        kind: 'turn',
-        turnId: 'compact',
-        state: 'completed',
-        outcome: 'success',
-        userItemId: 'command'
-      })
-    )
-    expect(readJournalUsageLimitCut(state)?.resetsAt).toBe(400)
-    state.items.set('command', item('command', 14, { kind: 'message', role: 'user', blocks: [] }))
-    expect(readJournalUsageLimitCut(state)).toBeNull()
-    state.items.set('command', item('command', 14, command))
-    state.items.delete('command-turn')
-    state.items.delete('command')
-    for (const turnScope of [
-      undefined,
-      { kind: 'thread' as const },
-      { kind: 'unknown' as const }
-    ]) {
-      state.items.set(
-        'later-user',
-        item('later-user', 20, { kind: 'message', role: 'user', blocks: [] }, { turnScope })
-      )
-      expect(readJournalUsageLimitCut(state)).toBeNull()
-    }
-    state.items.set(
-      'later-user',
-      item('later-user', 20, { kind: 'message', role: 'user', blocks: [] }, scope)
-    )
-    expect(readJournalUsageLimitCut(state)?.resetsAt).toBe(400)
-    state.items.delete('later-user')
-    const pending: AgentJournalSubmission = {
-      clientMessageId: 'pending',
-      fence: 1,
-      payloadFingerprint: 'fp',
-      dispatchState: 'pending',
-      providerItemId: null,
-      reason: null,
-      submittedAt: 1,
-      resolvedAt: null
-    }
-    state.submissions.set('pending', pending)
-    const order = journalInputOrder(state)
-    order.afterRow(
-      state,
-      journalDispatchRowBuilder(() => state, {
-        clientMessageId: 'pending',
-        state: 'pending',
-        fence: 1,
-        turnScope: { kind: 'thread' }
-      })(21, 1)
-    )
-    expect(readJournalUsageLimitCut(state)).toBeNull()
-  }
-)
-
-it.each(['memory', 'sql'] as const)(
-  'keeps visible and raw boundary order distinct and reads child stop causes in %s',
-  (backend) => {
-    const state = fixture(backend)
-    state.items.set(
-      'orca:running',
-      item(
-        'orca:running',
-        10,
-        { kind: 'turn', turnId: 'running', state: 'running' },
-        { sequenceIndex: 2 }
-      )
-    )
-    state.items.set(
-      'completed',
-      item(
-        'completed',
-        10,
-        {
-          kind: 'status',
-          text: 'Ended',
-          turnLifecycle: { turnId: 'completed', state: 'interrupted' }
-        },
-        { sequenceIndex: 1 }
-      )
-    )
-    const boundary = (raw?: true) => {
-      const sql = sqlOwners.get(state)
-      if (sql) {
-        sql.flush()
-        const item = [
-          ...new JournalSqlStatusContext(sql.context.scope).select({ kind: 'boundary', raw })
-        ][0]?.item
-        return readAgentJournalTurn(item?.body)?.turnId ?? null
-      }
-      return (
-        (raw
-          ? newestStructuredAgentSessionTurnBySequence(memoryJournalMap(state.items).values())
-          : newestStructuredAgentSessionTurn(renderJournalItems(state))
-        )?.turnId ?? null
-      )
-    }
-    expect(boundary()).toBe('running')
-    expect(boundary(true)).toBe('completed')
-    state.inputs.rejections.set('running', {
-      clientMessageId: 'running',
-      fence: 1,
-      payloadFingerprint: 'fp',
-      dispatchState: 'rejected',
-      providerItemId: null,
-      reason: null,
-      submittedAt: 1,
-      resolvedAt: 1
-    })
-    expect(boundary()).toBe('completed')
-    const scope = {
-      turnScope: { kind: 'turn' as const, turnItemId: 'completed' },
-      agentId: 'child'
-    }
-    state.items.set(
-      'child-stop',
-      item('child-stop', 11, { kind: 'status', text: 'Quit', orcaStop: { cause: 'quit' } }, scope)
-    )
-    expect(readJournalOrcaStopCut(state)).toEqual({ turnItemId: 'completed', cause: 'quit' })
-    state.items.set(
-      'clear',
-      item('clear', 12, {
-        kind: 'status',
-        text: 'Cleared',
-        contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 1 }
-      })
-    )
-    expect(boundary()).toBeNull()
-    expect(readJournalOrcaStopCut(state, 12)).toBeNull()
-  }
-)
-
-it('reads changed cuts at the writer savepoint and discards their memo after rollback', () => {
-  const state = fixture('sql')
-  const sql = sqlOwners.get(state)!
-  const { db } = sql.context.scope
+it('reads the first scoped limit and rechecks rewind completion', () => {
+  const state = fixture()
   state.items.set(
     'failed',
-    item('failed', 1, {
+    item(
+      'failed',
+      10,
+      {
+        kind: 'turn',
+        turnId: 'failed',
+        state: 'completed',
+        outcome: 'failure',
+        completedAt: 100
+      },
+      { recoveredAt: 200 }
+    )
+  )
+  const scope = { turnScope: { kind: 'turn' as const, turnItemId: 'failed' } }
+  const limit = (resetsAt: number) => ({
+    kind: 'status' as const,
+    ...agentSessionFailureWords(
+      agentSessionFailureFact('usageLimitReached', {
+        usageLimit: { resetsAt }
+      }),
+      { surface: 'row' }
+    )
+  })
+  state.items.set(
+    'child-limit',
+    item('child-limit', 11, limit(300), { ...scope, agentId: 'child' })
+  )
+  state.items.set('first-limit', item('first-limit', 12, limit(400), scope))
+  state.items.set('later-limit', item('later-limit', 13, limit(500), scope))
+  expect(readJournalUsageLimitCut(state)).toEqual({
+    turnItemId: 'failed',
+    resetsAt: 400,
+    turnEndedAt: 200
+  })
+  const cursor = { epoch: 'epoch', sequence: 13 }
+  const receipt = { write: () => {}, committed: () => {} }
+  expect(() => journalRewoundReceipt(undefined, receipt)(cursor).fold?.(state)).toThrow(
+    JournalHostFactsNeededError
+  )
+  expect(() =>
+    journalRewoundReceipt(
+      { cursor, cancel: { turnItemId: 'failed', resetsAt: 400 } },
+      receipt
+    )(cursor).fold?.(state)
+  ).not.toThrow()
+  expect(readJournalUsageLimitCut(state, 12)).toBeNull()
+
+  const command = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [],
+    command: { name: 'compact' as const }
+  }
+  state.items.set('command', item('command', 14, command))
+  state.items.set(
+    'command-turn',
+    item('command-turn', 15, {
       kind: 'turn',
-      turnId: 'turn',
+      turnId: 'compact',
       state: 'completed',
-      outcome: 'failure'
+      outcome: 'success',
+      userItemId: 'command'
     })
   )
-  const limit = (resetsAt: number) =>
+  expect(readJournalUsageLimitCut(state)?.resetsAt).toBe(400)
+  state.items.set('command', item('command', 14, { kind: 'message', role: 'user', blocks: [] }))
+  expect(readJournalUsageLimitCut(state)).toBeNull()
+  state.items.set('command', item('command', 14, command))
+  state.items.delete('command-turn')
+  state.items.delete('command')
+  for (const turnScope of [undefined, { kind: 'thread' as const }, { kind: 'unknown' as const }]) {
+    state.items.set(
+      'later-user',
+      item('later-user', 20, { kind: 'message', role: 'user', blocks: [] }, { turnScope })
+    )
+    expect(readJournalUsageLimitCut(state)).toBeNull()
+  }
+  state.items.set(
+    'later-user',
+    item('later-user', 20, { kind: 'message', role: 'user', blocks: [] }, scope)
+  )
+  expect(readJournalUsageLimitCut(state)?.resetsAt).toBe(400)
+  state.items.delete('later-user')
+  const pending: AgentJournalSubmission = {
+    clientMessageId: 'pending',
+    fence: 1,
+    payloadFingerprint: 'fp',
+    dispatchState: 'pending',
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: null
+  }
+  state.submissions.set('pending', pending)
+  const order = journalInputOrder(state)
+  order.afterRow(
+    state,
+    journalDispatchRowBuilder(() => state, {
+      clientMessageId: 'pending',
+      state: 'pending',
+      fence: 1,
+      turnScope: { kind: 'thread' }
+    })(21, 1)
+  )
+  expect(readJournalUsageLimitCut(state)).toBeNull()
+})
+
+it('keeps visible and raw boundary order distinct and reads child stop causes', () => {
+  const state = fixture()
+  state.items.set(
+    'orca:running',
     item(
-      'limit',
-      2,
+      'orca:running',
+      10,
+      { kind: 'turn', turnId: 'running', state: 'running' },
+      { sequenceIndex: 2 }
+    )
+  )
+  state.items.set(
+    'completed',
+    item(
+      'completed',
+      10,
       {
         kind: 'status',
-        ...agentSessionFailureWords(
-          agentSessionFailureFact('usageLimitReached', {
-            usageLimit: { resetsAt }
-          }),
-          { surface: 'row' }
-        )
+        text: 'Ended',
+        turnLifecycle: { turnId: 'completed', state: 'interrupted' }
       },
-      { turnScope: { kind: 'turn', turnItemId: 'failed' } }
+      { sequenceIndex: 1 }
     )
-  state.items.set('limit', limit(400))
-  expect(state.queries.usageLimitContinueIdentity(state)).toEqual({
-    turnItemId: 'failed',
-    resetsAt: 400
-  })
-  db.exec('SAVEPOINT writer_cut')
-  try {
-    state.items.set('limit', limit(500))
-    expect(state.queries.usageLimitContinueIdentity(state)).toEqual({
-      turnItemId: 'failed',
-      resetsAt: 500
-    })
-    state.items.set('limit', limit(600))
-    expect(state.queries.usageLimitContinueIdentity(state)).toEqual({
-      turnItemId: 'failed',
-      resetsAt: 600
-    })
-  } finally {
-    db.exec('ROLLBACK TO writer_cut; RELEASE writer_cut')
+  )
+  const boundary = (raw?: true) => {
+    return (
+      (raw
+        ? newestStructuredAgentSessionTurnBySequence(memoryJournalMap(state.items).values())
+        : newestStructuredAgentSessionTurn(renderJournalItems(state))
+      )?.turnId ?? null
+    )
   }
-  const next = new JournalSqlReducer(sql.context.scope, 'epoch').state
-  expect(next.queries.usageLimitContinueIdentity(next)).toEqual({
-    turnItemId: 'failed',
-    resetsAt: 400
+  expect(boundary()).toBe('running')
+  expect(boundary(true)).toBe('completed')
+  state.inputs.rejections.set('running', {
+    clientMessageId: 'running',
+    fence: 1,
+    payloadFingerprint: 'fp',
+    dispatchState: 'rejected',
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: 1
   })
+  expect(boundary()).toBe('completed')
+  const scope = {
+    turnScope: { kind: 'turn' as const, turnItemId: 'completed' },
+    agentId: 'child'
+  }
+  state.items.set(
+    'child-stop',
+    item('child-stop', 11, { kind: 'status', text: 'Quit', orcaStop: { cause: 'quit' } }, scope)
+  )
+  expect(readJournalOrcaStopCut(state)).toEqual({ turnItemId: 'completed', cause: 'quit' })
+  state.items.set(
+    'clear',
+    item('clear', 12, {
+      kind: 'status',
+      text: 'Cleared',
+      contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 1 }
+    })
+  )
+  expect(boundary()).toBeNull()
+  expect(readJournalOrcaStopCut(state, 12)).toBeNull()
 })

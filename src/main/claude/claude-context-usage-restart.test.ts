@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -193,9 +194,8 @@ describe('context usage across a restart', () => {
     })
     live.reattach()
     await live.settle()
-    const turn = journal
-      .snapshot()
-      .items.map((item) => readAgentJournalTurn(item.body))
+    const turn = (await readTestJournalItems(journal))
+      .map((item) => readAgentJournalTurn(item.body))
       .find(Boolean)
     expect(turn).toMatchObject({
       state: 'unverifiable',

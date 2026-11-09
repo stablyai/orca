@@ -1,3 +1,8 @@
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot,
+  readTestJournalSubmissions
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { registerCodexHistorySourcesTests } from './codex-structured-thread-catch-up-sources.spec'
 import { registerCodexHistoryVariantsTests } from './codex-structured-thread-catch-up-variants.spec'
 import { registerCodexHistoryBoundsTests } from './codex-structured-thread-catch-up-bounds.spec'
@@ -102,8 +107,8 @@ export function registerCodexCatchUpEchoTests(input: {
           }))
     }
     await c.reopen()
-    const before = c.journal.snapshot()
-    const draft = c.journal.queuedMessages.get('draft')
+    const before = await readTestJournalSnapshot(c.journal)
+    const draft = await c.journal.queuedMessages.get('draft')
     const receipts = states.map((state) => c.journal.receiptFor(state))
     const native = states.map((state, n) => ({
       ...turn(n + 2),
@@ -139,23 +144,27 @@ export function registerCodexCatchUpEchoTests(input: {
       'user:continue',
       'assistant:outside answer'
     ])
-    expect(c.journal.snapshot().items.slice(0, before.items.length)).toEqual(before.items)
+    expect((await readTestJournalItems(c.journal)).slice(0, before.items.length)).toEqual(
+      before.items
+    )
     expect(states.map((state) => c.journal.receiptFor(state))).toEqual(receipts)
     expect(c.texts().filter((text) => text.includes('historical rendering'))).toEqual([])
-    expect(c.journal.snapshot().submissions).toEqual(before.submissions)
-    expect(c.journal.queuedMessages.get('draft')).toEqual(draft)
+    expect(await readTestJournalSubmissions(c.journal)).toEqual(before.submissions)
+    expect(await c.journal.queuedMessages.get('draft')).toEqual(draft)
     const outsideKey = agentJournalItemKey({
       provider: 'codex',
       threadId: THREAD,
       turnId: 'turn-7',
       ordinal: 0
     })
-    expect(journalItemEchoFields(c.journal.itemProvenance(outsideKey))).toEqual({ echoOf: null })
-    const whole = c.journal.snapshot()
+    expect(journalItemEchoFields(await c.journal.reads.itemProvenance(outsideKey))).toEqual({
+      echoOf: null
+    })
+    const whole = await readTestJournalSnapshot(c.journal)
     await c.reopen()
     await c.open([...native, outside])
-    expect(c.journal.snapshot()).toEqual(whole)
-    expect(c.journal.queuedMessages.get('draft')).toEqual(draft)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(whole)
+    expect(await c.journal.queuedMessages.get('draft')).toEqual(draft)
     const restored = restoreJournal(c.db, SESSION)
     expect(restored?.state.queue.cards.get('draft')).toEqual(draft)
   })
@@ -203,9 +212,9 @@ export function registerCodexCatchUpEchoTests(input: {
     }
     await c.journal.replaceEpochItems('handle_forked', 1, cut.kept)
     await c.reopen()
-    const prompt = c.journal.item(key)
+    const prompt = await c.journal.reads.item(key)
     expect(prompt?.body).toEqual(body)
-    expect(c.journal.submission(clientMessageId)?.dispatchState).toBe('unknown')
+    expect((await c.journal.reads.submission(clientMessageId))?.dispatchState).toBe('unknown')
     const native = {
       ...turn(4),
       items: [
@@ -218,18 +227,20 @@ export function registerCodexCatchUpEchoTests(input: {
         { type: 'agentMessage', id: 'reply', text: 'native answer' }
       ]
     }
-    const before = c.journal.snapshot()
+    const before = await readTestJournalSnapshot(c.journal)
     const beforeTexts = c.texts()
     await c.open([turn(1), turn(2), native])
-    expect(c.journal.item(key)).toEqual(prompt)
-    expect(c.journal.snapshot().items.slice(0, before.items.length)).toEqual(before.items)
+    expect(await c.journal.reads.item(key)).toEqual(prompt)
+    expect((await readTestJournalItems(c.journal)).slice(0, before.items.length)).toEqual(
+      before.items
+    )
     expect(c.texts()).toEqual([...beforeTexts, 'assistant:native answer'])
-    expect(c.journal.submission(clientMessageId)?.dispatchState).toBe('unknown')
-    expect(c.journal.receiptFor(clientMessageId)).toBeNull()
-    const whole = c.journal.snapshot()
+    expect((await c.journal.reads.submission(clientMessageId))?.dispatchState).toBe('unknown')
+    expect(await c.journal.reads.receiptFor(clientMessageId)).toBeNull()
+    const whole = await readTestJournalSnapshot(c.journal)
     await c.reopen()
     await c.open([turn(1), turn(2), native])
-    expect(c.journal.snapshot()).toEqual(whole)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(whole)
     await c.journal.replaceEpochItems('handle_forked', 1, [])
     const hidden = c.journal.cursor()
     const { readCodexHistoryJournalView } =
@@ -239,18 +250,23 @@ export function registerCodexCatchUpEchoTests(input: {
     ).toBeNull()
     await c.open([native], {
       onReceipt: (id, providerIdentity) =>
-        c.journal.acceptLate({ clientMessageId: id, providerIdentity, state: 'accepted', fence: 1 })
+        c.journal.settleLateDispatch({
+          clientMessageId: id,
+          providerIdentity,
+          state: 'accepted',
+          fence: 1
+        })
     })
-    expect(c.journal.submission(clientMessageId)?.dispatchState).toBe('accepted')
-    expect(c.journal.item(key)).toBeNull()
-    expect(c.journal.snapshot().items).toEqual([])
+    expect((await c.journal.reads.submission(clientMessageId))?.dispatchState).toBe('accepted')
+    expect(await c.journal.reads.item(key)).toBeNull()
+    expect(await readTestJournalItems(c.journal)).toEqual([])
     expect(
       (await readCodexHistoryJournalView(c.journal, THREAD, AbortSignal.abort())).latest
     ).toBeNull()
     expect(c.journal.cursor().epoch).toBe(hidden.epoch)
     await c.reopen()
     await c.open([native])
-    expect(c.journal.snapshot().items).toEqual([])
+    expect(await readTestJournalItems(c.journal)).toEqual([])
   })
 
   it('completes a represented turn and older gaps through an actual paginated open with partial returned content', async () => {
@@ -371,9 +387,9 @@ export function registerCodexCatchUpEchoTests(input: {
       'assistant:completed answer'
     ])
     expect(
-      c.journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
+      (await readTestJournalItems(c.journal)).filter((item) => item.body.kind === 'tool-call')
     ).toHaveLength(1)
-    expect(c.journal.item(agentJournalItemKey(detailIdentity))?.body).toMatchObject({
+    expect((await c.journal.reads.item(agentJournalItemKey(detailIdentity)))?.body).toMatchObject({
       state: 'completed'
     })
     const before = c.journal.cursor()
@@ -399,7 +415,7 @@ export function registerCodexCatchUpEchoTests(input: {
     // The newly selected page also acquires its known sibling's full content.
     expect(fullReads).toBe(3)
     expect(
-      c.journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
+      (await readTestJournalItems(c.journal)).filter((item) => item.body.kind === 'tool-call')
     ).toHaveLength(2)
     const acquired = c.journal.cursor()
     await open()

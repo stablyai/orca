@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
@@ -17,7 +18,7 @@ it('tells queued messages the agent is signed out when its published startup fai
   expect(rig.sent('session/prompt')).toEqual([])
   rig.child().agent.fail(request, -32000, 'Authentication required')
   await waitFor(async () => {
-    const snapshot = await host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(host, SESSION)
     const submission = snapshot.submissions.find((entry) => entry.clientMessageId === messageId)
     expect(submission?.handedOverAt).toBeUndefined()
     expect(submission).toMatchObject({

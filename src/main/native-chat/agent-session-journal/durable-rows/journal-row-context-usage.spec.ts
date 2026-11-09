@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
@@ -115,7 +116,7 @@ export function registerJournalRowContextUsageTests(): void {
       }
 
       const reopened = await open()
-      expect(reopened.snapshot().items.map((item) => item.body)).toEqual([
+      expect((await readTestJournalItems(reopened)).map((item) => item.body)).toEqual([
         turn('turn-0'),
         { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'after' }] }
       ])

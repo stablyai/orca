@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it, vi } from 'vitest'
 import {
   CALLER,
@@ -35,7 +36,7 @@ it.each(['goal', 'rewind'] as const)(
       })
     ).toMatchObject({ ok: true })
     const change = { kind: 'set' as const, objective: 'A goal during compact' }
-    const expectedEpoch = (await host.journalSnapshot(SESSION)).cursor.epoch
+    const expectedEpoch = (await readTestHostJournal(host, SESSION)).cursor.epoch
     const itemId = 'codex:thread-1:turn-1:1'
     const result =
       operation === 'goal'
@@ -57,7 +58,7 @@ it.each(['goal', 'rewind'] as const)(
       operation === 'goal' ? { ok: true } : { ok: false, refusal: { rewindReason: 'busy' } }
     )
     expect(dispatch).not.toHaveBeenCalled()
-    const row = host
+    const row = await host
       .collaboratorsForTests()
       .sessions.get(SESSION)!
       .journal.queuedMessages.get(queuedEnvelope.clientOperationId)

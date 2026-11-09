@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -119,7 +120,7 @@ it('keeps a resumed subagent and background task working when the run that creat
   await journal.replaceEpochItems(
     'handle_forked',
     2,
-    journal.snapshot().items.map((item) => {
+    (await readTestJournalItems(journal)).map((item) => {
       const { ownerFence, executionOwner } = journal.itemProvenance(item.itemId)
       return {
         identity: parseAgentJournalItemKey(item.itemId)!,
@@ -131,9 +132,9 @@ it('keeps a resumed subagent and background task working when the run that creat
   )
   await settleRunOne()
 
-  const blocks = journal
-    .snapshot()
-    .items.flatMap((item) => (item.body.kind === 'message' ? item.body.blocks : []))
+  const blocks = (await readTestJournalItems(journal)).flatMap((item) =>
+    item.body.kind === 'message' ? item.body.blocks : []
+  )
   expect(blocks.filter(isSubagentBlock).map((block) => block.state)).toEqual(['working'])
   expect(blocks.filter(isBackgroundTaskBlock).map((block) => block.state)).toEqual(['working'])
 })

@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // A reopened chat catches up on turns its agent replays that the chat never saw, against real
 // OpenCode 2.0.14 and Grok 1.0.62 recordings: once, in order, without a notice, and never a turn
 // the chat already holds.
@@ -241,7 +242,7 @@ describe('ACP history catch-up', () => {
     expect(await rig.rows()).toEqual(complete)
     const reopened = await rig.reopenJournal()
     expect(
-      isHistoricalProviderTimelineItem(reopened.item(observedTool.itemId)!, (key) =>
+      isHistoricalProviderTimelineItem((await reopened.reads.item(observedTool.itemId))!, (key) =>
         reopened.item(key)
       )
     ).toBe(true)
@@ -343,7 +344,7 @@ describe('ACP history catch-up', () => {
       state: 'pending',
       turnScope: { kind: 'thread' }
     })
-    const submissions = journal.submissions()
+    const submissions = await readTestJournalSubmissions(journal)
     const replay = ['handed', 'queued'].flatMap((id) => [
       userReplay(id),
       {
@@ -356,11 +357,11 @@ describe('ACP history catch-up', () => {
       }
     ])
     await catchUp(replay)
-    expect(journal.submissions()).toEqual(submissions)
+    expect(await readTestJournalSubmissions(journal)).toEqual(submissions)
     expect(userTexts(await fixture.rig.rows())).toEqual(['repeat', 'repeat', 'repeat'])
-    expect(journal.receiptFor('queued')).toBeNull()
-    expect(journal.submission('queued')?.dispatchState).toBe('pending')
-    expect(journal.submission('queued')?.handedOverAt).toBeUndefined()
+    expect(await journal.reads.receiptFor('queued')).toBeNull()
+    expect((await journal.reads.submission('queued'))?.dispatchState).toBe('pending')
+    expect((await journal.reads.submission('queued'))?.handedOverAt).toBeUndefined()
   })
   it.each(['interleaved', 'adjacent', 'hidden-root', 'hidden-later'] as const)(
     'keeps Grok root and later messages in one execution across restart: %s',
@@ -438,7 +439,7 @@ describe('ACP history catch-up', () => {
         await catchUp([...rootBlocks, output('A')])
       }
       const before = await rig.rows()
-      const submissions = rig.journal.submissions()
+      const submissions = await readTestJournalSubmissions(rig.journal)
       await fixture.restart()
       const replay = [
         ...rootBlocks,
@@ -524,7 +525,7 @@ describe('ACP history catch-up', () => {
         }
       }
       expect(dividers(rows)).toHaveLength(0)
-      expect(rig.journal.submissions()).toEqual(submissions)
+      expect(await readTestJournalSubmissions(rig.journal)).toEqual(submissions)
       await catchUp(replay)
       expect(await rig.rows()).toEqual(rows)
     }
@@ -644,7 +645,7 @@ describe('ACP history catch-up', () => {
         blocks: [{ text: 'prefix' }]
       })
       if (scenario === 'queued-only') {
-        expect(rig.journal.submission('queued')?.handedOverAt).toBeUndefined()
+        expect((await rig.journal.reads.submission('queued'))?.handedOverAt).toBeUndefined()
         await catchUp([userReplay('outside'), answerReplay('full')])
         const caughtUp = (await rig.rows()).filter(
           (item) => item.body.kind === 'message' && item.body.role === 'assistant'

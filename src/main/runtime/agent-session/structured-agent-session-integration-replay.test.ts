@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -133,13 +134,13 @@ describe('a structured codex session over agentSession.*', () => {
       identity,
       stateDirectory: harness.root
     })
-    expect(reopened.snapshot().items.map(textOf)).toContain('Buffered while the journal opens.')
+    expect((await readTestJournalItems(reopened)).map(textOf)).toContain(
+      'Buffered while the journal opens.'
+    )
     expect(
-      reopened
-        .snapshot()
-        .items.some(
-          (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-        )
+      (await readTestJournalItems(reopened)).some(
+        (item) => item.body?.kind === 'status' && item.body.turnLifecycle?.state === 'running'
+      )
     ).toBe(false)
   })
 })

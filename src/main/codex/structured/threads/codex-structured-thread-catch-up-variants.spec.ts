@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { expect, it, vi } from 'vitest'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
@@ -54,9 +58,9 @@ export function registerCodexHistoryVariantsTests(input: {
       ]
     })
     expect(
-      c.journal.snapshot().items.find(({ body }) => body.kind === 'tool-call')?.body
+      (await readTestJournalItems(c.journal)).find(({ body }) => body.kind === 'tool-call')?.body
     ).toMatchObject({ output: journalPayload(output) })
-    const snapshot = c.journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(c.journal)
     await c.reopen()
     const serialize = vi.spyOn(JSON, 'stringify')
     await c.open([], { paginate: false, returnedTurns: [large] })
@@ -80,7 +84,7 @@ export function registerCodexHistoryVariantsTests(input: {
       })
     ).toBe(false)
     serialize.mockRestore()
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
     const warnings = vi.fn()
     const logger = { warn: warnings, info: vi.fn(), error: vi.fn(), debug: vi.fn() }
     const huge = {
@@ -96,7 +100,7 @@ export function registerCodexHistoryVariantsTests(input: {
       ]
     }
     await c.open([], { paginate: false, returnedTurns: [huge], logger })
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
     expect(
       warnings.mock.calls.some(
         ([, fields]) =>
@@ -112,7 +116,7 @@ export function registerCodexHistoryVariantsTests(input: {
       ],
       logger
     })
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
     expect(
       warnings.mock.calls.some(
         ([, fields]) => fields.error instanceof Error && fields.error.message === 'too-large'
@@ -144,7 +148,7 @@ export function registerCodexHistoryVariantsTests(input: {
         turn(2)
       ]
     })
-    const old = c.journal.item(agentJournalItemKey(parent))
+    const old = await c.journal.reads.item(agentJournalItemKey(parent))
     if (old?.body.kind !== 'tool-call') {
       throw new Error('missing saved parent')
     }
@@ -175,11 +179,11 @@ export function registerCodexHistoryVariantsTests(input: {
       ]
     })
     expect(
-      c.journal
-        .snapshot()
-        .items.some(({ body }) => body.kind === 'status' && body.text === 'must fail stale parent')
+      (await readTestJournalItems(c.journal)).some(
+        ({ body }) => body.kind === 'status' && body.text === 'must fail stale parent'
+      )
     ).toBe(false)
-    expect(c.journal.item(old.itemId)?.body).toMatchObject({
+    expect((await c.journal.reads.item(old.itemId))?.body).toMatchObject({
       output: journalPayload('concurrent writer')
     })
     expect(
@@ -273,7 +277,7 @@ export function registerCodexHistoryVariantsTests(input: {
       subagentExecutions: helpers,
       onReceipt: async (id, providerIdentity) => {
         receipts.push(id)
-        await c.journal.acceptLate({
+        await c.journal.settleLateDispatch({
           clientMessageId: id,
           providerIdentity,
           state: 'accepted',
@@ -291,7 +295,7 @@ export function registerCodexHistoryVariantsTests(input: {
       'assistant:Proof sibling'
     ])
     expect(receipts).toEqual(['proof'])
-    expect(c.journal.submission('proof')?.dispatchState).toBe('accepted')
+    expect((await c.journal.reads.submission('proof'))?.dispatchState).toBe('accepted')
     expect(helpers.find('wrong-helper')).toBeUndefined()
     const row = (ordinal: number) =>
       c.journal.item(
@@ -308,9 +312,8 @@ export function registerCodexHistoryVariantsTests(input: {
       blocks: [{ type: 'text', text: 'Good after refused slot' }]
     })
     expect(
-      c.journal
-        .snapshot()
-        .items.filter(({ body }) => body.kind === 'tool-call')
+      (await readTestJournalItems(c.journal))
+        .filter(({ body }) => body.kind === 'tool-call')
         .map(({ body }) => body)
     ).toEqual([
       expect.objectContaining({ input: { command: 'pwd', cwd: '/workspace' }, state: 'running' }),
@@ -320,10 +323,10 @@ export function registerCodexHistoryVariantsTests(input: {
         output: journalPayload('good')
       })
     ])
-    const saved = c.journal.snapshot()
+    const saved = await readTestJournalSnapshot(c.journal)
     await c.reopen()
-    expect(c.journal.snapshot()).toEqual(saved)
-    expect(c.journal.receiptFor('proof')).not.toBeNull()
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(saved)
+    expect(await c.journal.reads.receiptFor('proof')).not.toBeNull()
   })
 
   it.each(['completed', 'failed', 'interrupted'] as const)(
@@ -334,7 +337,7 @@ export function registerCodexHistoryVariantsTests(input: {
       await c.open([], { returnedTurns: [initial], paginate: false })
       const identity = codexTurnLifecycleIdentity(SESSION, 'turn-1')
       const key = agentJournalItemKey(identity)
-      const old = c.journal.item(key)
+      const old = await c.journal.reads.item(key)
       if (old?.body.kind !== 'turn') {
         throw new Error('missing saved lifecycle')
       }
@@ -344,7 +347,7 @@ export function registerCodexHistoryVariantsTests(input: {
         { ...old.body, contextUsage, requestedAt: 500 },
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      const original = c.journal.item(
+      const original = await c.journal.reads.item(
         agentJournalItemKey({ provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 })
       )
       await c.open([], { returnedTurns: [turn(2)], paginate: false })
@@ -362,7 +365,7 @@ export function registerCodexHistoryVariantsTests(input: {
         ],
         paginate: false
       })
-      const updated = c.journal.item(key)
+      const updated = await c.journal.reads.item(key)
       expect(updated?.body).toEqual({
         ...old.body,
         contextUsage,
@@ -373,30 +376,28 @@ export function registerCodexHistoryVariantsTests(input: {
         completedAt: (1_700_000_000 + 150) * 1000
       })
       expect(updated?.sequence).toBe(old.sequence)
-      expect(c.journal.item(original?.itemId ?? '')).toEqual(original)
+      expect(await c.journal.reads.item(original?.itemId ?? '')).toEqual(original)
       await c.reopen()
-      const extra = c.journal
-        .snapshot()
-        .items.find(
-          ({ body }) =>
-            body.kind === 'message' &&
-            body.blocks.some(
-              (block) => block.type === 'text' && block.text === 'Extra same-turn answer'
-            )
-        )
+      const extra = (await readTestJournalItems(c.journal)).find(
+        ({ body }) =>
+          body.kind === 'message' &&
+          body.blocks.some(
+            (block) => block.type === 'text' && block.text === 'Extra same-turn answer'
+          )
+      )
       expect(extra?.turnScope).toEqual({ kind: 'turn', turnItemId: key })
-      const projected = projectStructuredItemsToNativeChat(c.journal.snapshot().items)
+      const projected = projectStructuredItemsToNativeChat(await readTestJournalItems(c.journal))
       expect(
-        nativeChatTurnMembership(projected, c.journal.snapshot()).turnKeys[
+        nativeChatTurnMembership(projected, await readTestJournalSnapshot(c.journal)).turnKeys[
           projected.findIndex((item) => item.id === extra?.itemId)
         ]
       ).toBe(original?.itemId)
-      const settled = c.journal.item(key)
+      const settled = await c.journal.reads.item(key)
       await c.open([], {
         returnedTurns: [{ ...turn(1), status: status === 'completed' ? 'failed' : 'completed' }],
         paginate: false
       })
-      expect(c.journal.item(key)).toEqual(settled)
+      expect(await c.journal.reads.item(key)).toEqual(settled)
     }
   )
 }

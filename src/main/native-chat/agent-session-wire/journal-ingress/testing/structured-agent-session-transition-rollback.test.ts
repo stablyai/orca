@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
@@ -38,8 +39,8 @@ BEGIN SELECT RAISE(ABORT, 'second chunk refused'); END`)
   await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
   expect(journal.cursor().sequence).toBe(before)
   expect(
-    journal
-      .snapshot()
-      .items.filter((item) => item.body.kind === 'tool-call' && item.body.state === 'failed')
+    (await readTestJournalItems(journal)).filter(
+      (item) => item.body.kind === 'tool-call' && item.body.state === 'failed'
+    )
   ).toEqual([])
 })

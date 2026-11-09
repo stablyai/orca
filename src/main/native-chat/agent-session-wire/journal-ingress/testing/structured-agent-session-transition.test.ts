@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -36,7 +37,7 @@ it('lands its steps back to back, each resolved after the one before it', async 
   })
   await deferred.drained()
 
-  const items = journal.snapshot().items
+  const items = await readTestJournalItems(journal)
   expect(items.map((item) => item.itemId)).toEqual([
     agentJournalItemKey(turn),
     agentJournalItemKey(identity('later'))
@@ -62,7 +63,7 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
   })
 
   await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
-  expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
+  expect((await readTestJournalItems(journal)).map((item) => item.itemId)).toEqual([
     agentJournalItemKey(identity('first'))
   ])
 })

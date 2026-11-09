@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -78,7 +79,7 @@ it('rolls back the entire Codex exit settlement when a later row fails', async (
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   published.length = 0
   journal.observeCommits(commits)
-  const before = journal.snapshot()
+  const before = await readTestJournalSnapshot(journal)
   const database = openTestJournalHostDatabase(root)
   const diskBefore = liveTestJournalRows(database.db, SESSION)
   const sawEarlierInserts: number[] = []
@@ -114,7 +115,7 @@ it('rolls back the entire Codex exit settlement when a later row fails', async (
   await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
   expect(sawEarlierInserts).toEqual([1])
   expect(liveTestJournalRows(database.db, SESSION)).toEqual(diskBefore)
-  expect(journal.snapshot()).toEqual(before)
+  expect(await readTestJournalSnapshot(journal)).toEqual(before)
   expect(commits).not.toHaveBeenCalled()
   expect(published.every((snapshot) => JSON.stringify(snapshot) === JSON.stringify(before))).toBe(
     true

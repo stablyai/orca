@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
@@ -14,7 +15,10 @@ import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
@@ -39,7 +43,6 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data.test-fixture'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentRegistry } from '../../providers/structured-agent-registry'
@@ -157,7 +160,7 @@ export async function interruptedRestart(
     logger: log.logger,
     store,
     adapter: { ...adapter(), closeSession },
-    journalDatabase: openTestJournalHostDatabase(previous.root),
+    journalDatabase: await openTestAgentSessionDatabase(previous.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner,
@@ -211,12 +214,12 @@ export function continuationUnanswered(state: {
 }
 
 export async function statusNotes(host: StructuredAgentSessionHost) {
-  return notesOf((await host.journalSnapshot(SESSION)).items)
+  return notesOf((await readTestHostJournal(host, SESSION)).items)
 }
 
 export async function readerNotes(host: StructuredAgentSessionHost) {
   return notesOf(
-    withNativeChatCutTurnNotices((await host.journalSnapshot(SESSION)).items, {
+    withNativeChatCutTurnNotices((await readTestHostJournal(host, SESSION)).items, {
       agentName: 'Codex'
     })
   )

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../rpc/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -70,7 +71,7 @@ async function refusal(method: string, params: Record<string, unknown>, sessionI
 
 /** Who each agent message in the chat's journal says it is from. */
 async function taskSenders(sessionId: string): Promise<unknown[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item) =>
+  return (await readTestHostJournal(host, sessionId)).items.flatMap((item) =>
     item.body.kind === 'message' && item.body.from ? [item.body.from] : []
   )
 }

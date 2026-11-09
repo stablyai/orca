@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 // Real CLI captures verify waiting children have durable cards and child waits do not alter parent status.
 
 import { readFileSync } from 'node:fs'
@@ -221,7 +222,9 @@ async function pipeline() {
     (resolution: Pick<AgentJournalResolution, 'state' | 'selectedOptionId'>, itemId = cardId()) =>
     async (): Promise<void> => {
       await deferred.drained()
-      const card = pendingCards(journal.snapshot().items).find((item) => item.itemId === itemId)
+      const card = pendingCards(await readTestJournalItems(journal)).find(
+        (item) => item.itemId === itemId
+      )
       const identity = card && parseAgentJournalItemKey(card.itemId)
       if (card?.body.kind !== 'approval' || !identity) {
         throw new Error('no pending card to record')

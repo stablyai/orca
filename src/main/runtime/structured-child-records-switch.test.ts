@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -324,7 +325,7 @@ describe('the chat strip and the session list read the same host child records',
     )
     await vi.waitFor(async () =>
       expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
+        (await readTestHostJournal(host, SESSION)).submissions.find(
           (entry) => entry.clientMessageId === clientOperationId
         )?.handedOverAt
       ).toBeDefined()

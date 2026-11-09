@@ -1,3 +1,4 @@
+import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,10 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 
@@ -35,7 +33,7 @@ let journal: AgentSessionJournal
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-resolved-append-'))
   journal = await openAgentSessionJournal({
-    database: openTestJournalHostDatabase(root),
+    database: await openTestAgentSessionDatabase(root),
     identity: {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',

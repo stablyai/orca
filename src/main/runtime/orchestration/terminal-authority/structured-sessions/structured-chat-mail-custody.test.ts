@@ -151,7 +151,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       runId,
       count: 1
     })
-    const [card] = journalOf(COORDINATOR).queuedMessages.list()
+    const [card] = await journalOf(COORDINATOR).queuedMessages.list()
     const fields = { messageId: card!.messageId }
     const sent = await host.queuedMessageSend(
       { callerKey: 'test-surface' },
@@ -266,7 +266,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     const record = host.deps.store.getRecord(COORDINATOR)
     expect(nextStructuredQueuedMessage({ journal, record, work })).toBeNull()
     // The person's Send of that card says what happened, never that Orca restarted.
-    const card = journal.queuedMessages.list().find((row) => row.state === 'waiting')
+    const card = (await journal.queuedMessages.list()).find((row) => row.state === 'waiting')
     const fields = { messageId: card!.messageId }
     const sent = await host.queuedMessageSend(
       { callerKey: 'test-surface' },
@@ -337,7 +337,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     await vi.waitFor(() => expect(send.mock.calls.length).toBeLessThanOrEqual(2), WAIT)
 
     // Deleting the person's cards frees room: that journal edge alone sends the report.
-    for (const card of journalOf(COORDINATOR).queuedMessages.list()) {
+    for (const card of await journalOf(COORDINATOR).queuedMessages.list()) {
       const fields = { messageId: card.messageId }
       expect(
         await host.queuedMessageDelete(
