@@ -107,18 +107,6 @@ export function launchCatalogOffersEffort(agent: TuiAgent, modelId: string, effo
   )
 }
 
-/** False only when this agent's terminal launches take no effort for any model. */
-export function launchCatalogTakesEffort(agent: AgentType) {
-  const catalog = getAgentSessionOptionLaunchCatalog(agent)
-  return (
-    !catalog ||
-    [
-      ...(catalog.unknownModelOptions ?? []),
-      ...catalog.models.flatMap((model) => model.options)
-    ].some((option) => option.id === 'effort')
-  )
-}
-
 function refuse(
   code: AgentLaunchModelPreferenceRefusal['code'],
   message: string

@@ -53,13 +53,14 @@ export function sourceControlActionOptions(
   const options = model?.options ?? catalog?.unknownModelOptions ?? []
   const launchCatalog = getAgentSessionOptionLaunchCatalog(agent)
   const launchModel = findCatalogModel(launchCatalog ?? { models: [], modelApply: {} }, modelId)
-  // Terminals take only what the launch catalog compiles; Chat may offer more.
+  // Terminals offer only what the launch catalog offers; Chat may offer more.
   const launchOptions = launchModel?.options ?? launchCatalog?.unknownModelOptions ?? []
   return options.flatMap((option): SourceControlActionOption[] => {
     const chats = optionReachesChats(agent, option)
     const terminals = launchOptions.some(
       (launch) =>
         launch.id === option.id &&
+        !(launch.kind.type === 'select' && launch.kind.choices.length === 0) &&
         Boolean(launch.apply.launchArgs || launch.apply.composedIntoModel)
     )
     if (
