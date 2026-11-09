@@ -402,7 +402,9 @@ describe('Accepted structured history read retirement', () => {
       publishView()
     })
     expect(dismissIds()).toHaveLength(1)
-    expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
+    await waitFor(() =>
+      expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
+    )
     act(() => useAppStore.setState({ activeWorktreeId: WORKSPACE }))
     screen.rerender(
       createElement(
@@ -549,6 +551,9 @@ describe('Accepted structured history read retirement', () => {
     const relay = new RuntimeMobileNotificationController()
     try {
       addPrompt('A')
+      await waitFor(() =>
+        expect(fixture.events.some((event) => event.type === 'notification')).toBe(true)
+      )
       const sent = fixture.events.find((event) => event.type === 'notification')
       if (!sent?.notificationId || sent.type !== 'notification') {
         throw new Error('prompt not sent')

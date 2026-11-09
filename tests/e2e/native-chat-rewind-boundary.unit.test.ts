@@ -1,8 +1,8 @@
+// @vitest-environment happy-dom
 import {
   readTestJournalSnapshot,
   readTestJournalItems
 } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
-// @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,17 +14,18 @@ import {
 } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { structuredRewindCut } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-cut'
+import { completeTestJournalRewind } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-completion.test-support'
 import { useNativeChatRewind } from '../../src/renderer/src/components/native-chat/use-native-chat-rewind'
 
 const IDENTITY = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
-  agent: 'codex',
-  providerHandle: codexProviderHandle('main')
+  agent: 'claude',
+  providerHandle: claudeProviderHandle('original', null)
 }
 const journals = createTrackedJournalOpener()
 let root: string
@@ -103,6 +104,7 @@ it('offers a recovered opener only when its saved native alias arrives, retainin
       nativeId: 'forked'
     })
     expect(cut).toMatchObject({ beforeMessage: { sessionId: 'original', uuid: 'genuine' } })
+    await completeTestJournalRewind(root, recovered, target, 2)
     expect((await readTestJournalItems(recovered)).map(({ itemId }) => itemId)).toEqual([
       agentJournalItemKey(native('earlier')),
       agentJournalItemKey(native('reply'))

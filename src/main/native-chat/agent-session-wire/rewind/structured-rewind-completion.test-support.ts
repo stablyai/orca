@@ -11,28 +11,28 @@ import { recoverStructuredRewind } from './structured-rewind-recovery'
 export async function completeTestJournalRewind(
   root: string,
   journal: AgentSessionJournal,
-  itemId: string
+  itemId: string,
+  fence = 1
 ): Promise<void> {
   const { sessionId, agent: provider, providerHandle } = journal.identity
   if (!providerHandle || (provider !== 'claude' && provider !== 'codex')) {
     throw new Error('rewind fixture requires a native provider handle')
   }
-  await seedTestAgentSessionRecordStore(root, {
-    records: [
-      agentSessionRecordFixture({
-        sessionId,
-        provider,
-        providerHandleChain: [
-          {
-            linkId: 'head',
-            handle: providerHandle,
-            origin: 'adopted',
-            mintedAtFence: 1,
-            observedAt: 1
-          }
-        ]
-      })
+  const record = agentSessionRecordFixture({
+    sessionId,
+    provider,
+    providerHandleChain: [
+      {
+        linkId: 'head',
+        handle: providerHandle,
+        origin: 'adopted',
+        mintedAtFence: fence,
+        observedAt: 1
+      }
     ]
+  })
+  await seedTestAgentSessionRecordStore(root, {
+    records: [{ ...record, lease: { ...record.lease, runtimeFence: fence } }]
   })
   const store = await openTestAgentSessionRecordStore(root)
   const operationId = '1700000000000-00000000000000000000000000000001'
@@ -40,7 +40,7 @@ export async function completeTestJournalRewind(
   await store.admitOperation({ callerKey, operationId, fingerprint: 'rewind', now: 1_000 })
   await store.updateRecord(sessionId, {
     kind: 'rewind',
-    fence: 1,
+    fence,
     rewind: {
       operationId,
       callerKey,
@@ -63,6 +63,6 @@ export async function completeTestJournalRewind(
     { store, logger: testEventSinkLogging().logger },
     sessionId,
     journal,
-    1
+    fence
   )
 }
