@@ -84,17 +84,15 @@ export function needsPosixPaneShellResolution(shellPath: string): boolean {
 /** Bare pwsh -> absolute path via the spawn PATH, then installs a Finder/desktop-entry PATH misses. */
 export async function resolvePosixPaneShellPath(
   shellPath: string,
-  spawnPathValue = process.env.PATH ?? ''
+  spawnPathValue = process.env.PATH ?? '',
+  spawnCwd = process.cwd()
 ): Promise<string> {
   if (!needsPosixPaneShellResolution(shellPath)) {
     return shellPath
   }
   for (const dir of spawnPathValue.split(':')) {
-    if (!pathPosix.isAbsolute(dir)) {
-      // Empty and relative entries resolve against the pane cwd, so execvp keeps that lookup.
-      return shellPath
-    }
-    const candidate = pathPosix.join(dir, shellPath)
+    // Empty and relative entries resolve against the child's cwd, as execvp does.
+    const candidate = pathPosix.resolve(spawnCwd, dir, shellPath)
     if (await isExecutableFile(candidate)) {
       return candidate
     }

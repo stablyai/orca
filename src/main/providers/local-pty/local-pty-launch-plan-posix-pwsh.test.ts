@@ -44,7 +44,7 @@ describe('local POSIX pwsh launch plan', () => {
     }
     const finish = await plan.settle()
     expect(finish().shellPath).toBe('/opt/microsoft/powershell/7/pwsh')
-    expect(resolvePosixPaneShellPath).toHaveBeenCalledWith('pwsh', '/bin')
+    expect(resolvePosixPaneShellPath).toHaveBeenCalledWith('pwsh', '/bin', '/tmp')
   })
 
   it('plans other shells synchronously without resolving', () => {
