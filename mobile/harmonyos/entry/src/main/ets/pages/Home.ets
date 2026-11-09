@@ -804,7 +804,10 @@ struct Home {
   // ---------------------------------------------------------------- actions
 
   openHostDetail(hostId: string): void {
-    if (this.runtimes.get(hostId)?.lease.connection.isCredentialMissing()) { this.openPairScan(); return; }
+    let connection = this.runtimes.get(hostId)?.lease.connection;
+    let credential = connection?.getCredentialStatus();
+    if (credential === 'missing') { this.openPairScan(); return; }
+    if (credential === 'temporarily-unavailable') { connection?.connect(true); return; }
     this.openHostRoute(hostId, '');
   }
 
@@ -936,6 +939,10 @@ struct Home {
   }
 
   private openDesktopActions(host: HostMeta): void {
+    let credential = this.runtimes.get(host.id)?.lease.connection.getCredentialStatus();
+    if (credential === 'missing' || credential === 'temporarily-unavailable') {
+      this.removeHost(host).catch(() => {}); return;
+    }
     this.hostAction = ''; this.hostActionTarget = host; this.hostSheetOpen = true;
   }
 
@@ -1129,9 +1136,14 @@ struct Home {
   private desktopVerdict(host: HostMeta): DesktopConnectionVerdict {
     let phase = this.hostPhases[host.id];
     let connection = this.runtimes.get(host.id)?.lease.connection;
-    if (connection?.isCredentialMissing()) {
+    let credential = connection?.getCredentialStatus();
+    if (credential === 'missing') {
       return { kind: 'auth-failed', label: uiText('components.hostCard.pairingInvalid', this.uiLocale),
         detail: uiText('components.hostCard.repairHint', this.uiLocale) };
+    }
+    if (credential === 'temporarily-unavailable') {
+      return { kind: 'warning', label: uiText('components.hostCard.pairingTemporarilyUnavailable', this.uiLocale),
+        detail: uiText('components.hostCard.unlockHint', this.uiLocale) };
     }
     return describeDesktopConnection({
       state: phase === 'idle' || phase === 'stopped' || !phase ? 'disconnected' : phase,

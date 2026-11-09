@@ -2,12 +2,13 @@ import { common } from '@kit.AbilityKit';
 import { DesktopNotifications } from '../notifications/DesktopNotifications';
 import { getDeviceToken, getRelayCredential, HostMeta, listHosts } from '../storage/HostStore';
 import { HostSession, SessionPhase } from './HostSession';
+import { RelayCredential } from './RelayProtocol';
 import { SpikeRpcClient } from './SpikeRpcClient';
 
 type ProfileChange = 'name' | 'endpoint' | 'paired';
 
 type DesktopListener = (phase: SessionPhase, detail: string) => void;
-const CREDENTIAL_MISSING = '凭证缺失 — 请重新配对';
+export type DesktopCredentialStatus = 'ready' | 'missing' | 'temporarily-unavailable';
 
 export interface DesktopConnectionLease {
   connection: DesktopConnection;
@@ -78,6 +79,7 @@ export class DesktopConnection {
   private client: SpikeRpcClient | null = null;
   private phase: SessionPhase = 'idle';
   private detail: string = '';
+  private credentialStatus: DesktopCredentialStatus = 'ready';
   private connectedAt: number | null = null;
   private activePath: string = 'lan';
   private holders: number = 0;
@@ -105,7 +107,7 @@ export class DesktopConnection {
   }
 
   getPhase(): SessionPhase { return this.phase; }
-  isCredentialMissing(): boolean { return this.phase === 'auth-failed' && this.detail === CREDENTIAL_MISSING; }
+  getCredentialStatus(): DesktopCredentialStatus { return this.credentialStatus; }
   getClient(): SpikeRpcClient | null { return this.client; }
   getPairedMeta(): HostMeta | null { return this.session ? this.meta : null; }
   getActivePath(): string { return this.activePath; }
@@ -142,7 +144,7 @@ export class DesktopConnection {
     this.opening = true; this.publish('connecting', '正在连接');
     this.open(generation).catch(() => {
       if (generation !== this.generation) { return; }
-      this.opening = false; this.publish('stopped', '无法读取桌面凭证');
+      this.opening = false; this.publish('stopped', '无法连接桌面');
     });
   }
 
@@ -154,13 +156,23 @@ export class DesktopConnection {
       this.opening = false; this.publish('stopped', '主机不存在'); return;
     }
     this.meta = meta;
-    let token = await getDeviceToken(this.context, this.hostId);
+    let token: string | null;
+    let relay: RelayCredential | null;
+    try {
+      token = await getDeviceToken(this.context, this.hostId);
+      if (generation !== this.generation) { return; }
+      relay = token ? await getRelayCredential(this.context, this.hostId) : null;
+    } catch (e) {
+      if (generation !== this.generation) { return; }
+      this.credentialStatus = 'temporarily-unavailable';
+      this.opening = false; this.publish('stopped', '无法读取桌面凭证'); return;
+    }
     if (generation !== this.generation) { return; }
     if (!token) {
-      this.opening = false; this.publish('auth-failed', CREDENTIAL_MISSING); return;
+      this.credentialStatus = 'missing';
+      this.opening = false; this.publish('auth-failed', '凭证缺失 — 请重新配对'); return;
     }
-    let relay = await getRelayCredential(this.context, this.hostId);
-    if (generation !== this.generation) { return; }
+    this.credentialStatus = 'ready';
     let session = new HostSession(meta, token, relay ?? undefined, this.context);
     this.opening = false; this.session = session;
     this.unsubscribeSession = session.addListener((phase: SessionPhase, detail: string): void => {

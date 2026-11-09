@@ -5234,6 +5234,32 @@
     "zh-Hant": "配對已失效",
     "zh": "配对无效"
   },
+  "components.hostCard.pairingTemporarilyUnavailable": {
+    "de": "Kopplung vorübergehend nicht verfügbar",
+    "en": "Pairing temporarily unavailable",
+    "es": "Emparejamiento no disponible temporalmente",
+    "fr": "Appairage temporairement indisponible",
+    "ja": "ペアリングが一時的に利用できません",
+    "ko": "페어링 일시 사용 불가",
+    "pt": "Pareamento temporariamente indisponível",
+    "ru": "Сопряжение временно недоступно",
+    "tr": "Eşleştirme geçici olarak kullanılamıyor",
+    "zh-Hant": "配對暫時無法使用",
+    "zh": "配对暂时不可用"
+  },
+  "components.hostCard.unlockHint": {
+    "de": "Telefon entsperren, dann zum erneuten Versuch tippen",
+    "en": "Unlock your phone, then tap to retry",
+    "es": "Desbloquea tu teléfono y toca para reintentar.",
+    "fr": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
+    "ja": "スマートフォンのロックを解除してから、タップして再試行してください。",
+    "ko": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
+    "pt": "Desbloqueie seu celular e depois toque para tentar novamente",
+    "ru": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
+    "tr": "Telefonunuzun kilidini açın, ardından yeniden denemek için dokunun",
+    "zh-Hant": "解鎖手機後，點一下以重試",
+    "zh": "解锁手机后，轻点重试"
+  },
   "components.hostCard.repairHint": {
     "de": "Zum erneuten Koppeln mit dem Desktop tippen",
     "en": "Tap to re-pair with your desktop",
