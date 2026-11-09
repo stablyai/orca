@@ -3,11 +3,14 @@ import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { EventProps } from '../../shared/telemetry-events'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type { JournalRow } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
-import { track } from './client'
+import { recordStructuredChatPromptAccepted } from './structured-chat-dispatch'
 
 type PromptJournal = Pick<AgentSessionJournal, 'submission'>
 type PromptSource = EventProps<'native_chat_prompt_submitted'>
-const pendingPrompts = new WeakMap<PromptJournal, Map<string, PromptSource>>()
+const pendingPrompts = new WeakMap<
+  PromptJournal,
+  Map<string, { source: PromptSource; ownerKey?: string }>
+>()
 const MAX_PENDING_PROMPTS_PER_JOURNAL = 256
 
 /** Fresh user sends retain device provenance through queued-message conversion, without persisting telemetry state. */
@@ -15,7 +18,8 @@ export function rememberNativeChatPrompt(
   journal: PromptJournal,
   clientMessageId: string,
   agent: string,
-  userClient: 'desktop' | 'mobile' | undefined
+  userClient: 'desktop' | 'mobile' | undefined,
+  ownerKey?: string
 ): void {
   if (!userClient) {
     return
@@ -35,10 +39,13 @@ export function rememberNativeChatPrompt(
     }
   }
   pending.set(clientMessageId, {
-    agent_kind: isTuiAgent(agent) ? tuiAgentToAgentKind(agent) : 'other',
-    // The host cannot establish the desktop renderer's execution-target classification.
-    runtime: 'unknown',
-    client: userClient
+    ownerKey,
+    source: {
+      agent_kind: isTuiAgent(agent) ? tuiAgentToAgentKind(agent) : 'other',
+      // The host cannot establish the desktop renderer's execution-target classification.
+      runtime: 'unknown',
+      client: userClient
+    }
   })
 }
 
@@ -67,7 +74,7 @@ export function observeNativeChatPromptSubmissions(
       if (row.state === 'accepted' && source) {
         pending.delete(sourceId)
         try {
-          track('native_chat_prompt_submitted', source)
+          recordStructuredChatPromptAccepted(source.source, source.ownerKey)
         } catch (error) {
           console.warn('[telemetry] native chat prompt observation failed', error)
         }

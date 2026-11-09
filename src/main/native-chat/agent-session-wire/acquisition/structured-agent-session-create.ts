@@ -233,7 +233,8 @@ async function foundConversation(
               ? openingMessageOptions(candidate.record.options)
               : {})
           },
-          caller.userClient
+          caller.userClient,
+          caller.telemetryOwnerKey
         ).catch((error: unknown) => {
           if (!(error instanceof CommandReceiptExistsError)) {
             throw error

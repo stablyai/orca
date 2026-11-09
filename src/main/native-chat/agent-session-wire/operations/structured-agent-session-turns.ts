@@ -133,7 +133,8 @@ export async function performSend(
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
   },
-  userClient?: 'desktop' | 'mobile'
+  userClient?: 'desktop' | 'mobile',
+  telemetryOwnerKey?: string
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal.submission(input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
@@ -154,7 +155,13 @@ export async function performSend(
   }
   try {
     if (!input.body.command) {
-      rememberNativeChatPrompt(ctx.journal, input.clientMessageId, ctx.agent, userClient)
+      rememberNativeChatPrompt(
+        ctx.journal,
+        input.clientMessageId,
+        ctx.agent,
+        userClient,
+        telemetryOwnerKey
+      )
     }
     await ctx.journal.appendSubmission(
       { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },

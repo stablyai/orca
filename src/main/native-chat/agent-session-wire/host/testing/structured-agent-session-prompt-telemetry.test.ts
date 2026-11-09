@@ -3,12 +3,15 @@ import type { RpcContext } from '../../../../runtime/rpc/core'
 import type { RpcCallerIdentity } from '../../../../runtime/rpc/rpc-caller-identity'
 import { structuredCallerFor } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-gate'
 import { createTestParams } from './structured-agent-session-create-test-fixture'
-import { track } from '../../../../telemetry/client'
+import { isTelemetryInitialized, track } from '../../../../telemetry/client'
+import { subscribeStructuredChatTelemetry } from '../../../../telemetry/structured-chat-dispatch'
+import type { StructuredChatTelemetryEvent } from '../../../../../shared/structured-chat-dispatch-telemetry'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
@@ -17,14 +20,21 @@ import {
   hostTestSendParams
 } from './structured-agent-session-host-test-data'
 
-vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../../telemetry/client', () => ({
+  track: vi.fn(),
+  isTelemetryInitialized: vi.fn(() => true)
+}))
 
 let rig: QueuedMessageTestRig
 const prompts = () =>
   vi.mocked(track).mock.calls.filter(([name]) => name === 'native_chat_prompt_submitted')
 
-function transportCaller(caller?: RpcCallerIdentity, clientKind?: 'mobile' | 'runtime') {
-  const context: Partial<RpcContext> = { caller, clientKind }
+function transportCaller(
+  caller?: RpcCallerIdentity,
+  clientKind?: 'mobile' | 'runtime',
+  pairedDeviceParentId?: string
+) {
+  const context: Partial<RpcContext> = { caller, clientKind, pairedDeviceParentId }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: caller derivation reads only transport identity fields supplied here.
   return structuredCallerFor(context as RpcContext)
 }
@@ -32,6 +42,7 @@ const desktop = () => transportCaller({ kind: 'desktop' })
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  vi.mocked(isTelemetryInitialized).mockReturnValue(true)
   rig = await createQueuedMessageTestRig()
 })
 afterEach(async () => rig.dispose())
@@ -168,4 +179,72 @@ it('counts the trusted desktop opening message only after its provider accepts i
   expect(prompts()).toEqual([
     ['native_chat_prompt_submitted', { agent_kind: 'codex', runtime: 'unknown', client: 'desktop' }]
   ])
+})
+
+it('relays only provider acceptance with the authenticated desktop or delegated phone owner', async () => {
+  vi.mocked(isTelemetryInitialized).mockReturnValue(false)
+  const events: { event: StructuredChatTelemetryEvent; owner: string }[] = []
+  const unsubscribe = subscribeStructuredChatTelemetry((event, owner) =>
+    events.push({ event, owner })
+  )
+  try {
+    const caller = transportCaller({ kind: 'paired-device', deviceId: 'desktop-a' }, 'runtime')
+    const desktopSend = { ...hostTestSendParams('private desktop prompt'), userSend: true as const }
+    await rig.host.send(caller, desktopSend)
+    await eventually(async () =>
+      expect(
+        (await rig.submission(desktopSend.envelope.clientOperationId))?.handedOverAt
+      ).toBeDefined()
+    )
+    expect(events).toEqual([])
+
+    const queuedId = hostTestOperationId()
+    const fields = {
+      body: hostTestMessage('private phone prompt'),
+      delivery: 'queue-if-active' as const
+    }
+    const phone = transportCaller(
+      { kind: 'paired-device', deviceId: 'delegated-phone' },
+      'mobile',
+      'desktop-a'
+    )
+    await rig.host.send(phone, {
+      envelope: rig.envelope(fields, 'agentSession.send', queuedId),
+      ...fields,
+      userSend: true
+    })
+    expect(events).toEqual([])
+    await rig.settleAccepted(
+      desktopSend.envelope.clientOperationId,
+      `of-${desktopSend.envelope.clientOperationId}`
+    )
+    await rig.host.send(caller, desktopSend)
+    await openRigTurnFor(rig, desktopSend.envelope.clientOperationId, 'completed', 'success')
+    await eventually(async () => expect((await rig.handoff(queuedId))?.handedOverAt).toBeDefined())
+    await rig.settleAccepted(await rig.handoffId(queuedId), 'remote-phone-turn')
+    expect(events).toEqual([
+      {
+        owner: 'desktop-a',
+        event: {
+          type: 'structuredChatPromptAccepted',
+          id: expect.any(String),
+          agent_kind: 'codex',
+          client: 'desktop'
+        }
+      },
+      {
+        owner: 'desktop-a',
+        event: {
+          type: 'structuredChatPromptAccepted',
+          id: expect.any(String),
+          agent_kind: 'codex',
+          client: 'mobile'
+        }
+      }
+    ])
+    expect(events[0].event.id).not.toBe(events[1].event.id)
+    expect(prompts()).toEqual([])
+  } finally {
+    unsubscribe()
+  }
 })

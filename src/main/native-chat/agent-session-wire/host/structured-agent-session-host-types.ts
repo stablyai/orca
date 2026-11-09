@@ -65,6 +65,8 @@ export type StructuredAgentSessionCaller = {
   clientKind?: 'mobile' | 'runtime'
   /** Proven by the caller's transport, never inferred from an unnamed/runtime client. */
   userClient?: 'desktop' | 'mobile'
+  /** Consent-owning paired desktop, including the authenticated parent of a delegated phone. */
+  telemetryOwnerKey?: string
   readsOptionsWithoutModel?: boolean
 }
 

@@ -132,6 +132,14 @@ export async function requireRenameStructuredHost(
 export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCaller {
   return {
     clientKind: ctx.clientKind,
+    telemetryOwnerKey:
+      ctx.caller?.kind === 'paired-device'
+        ? ctx.clientKind === 'runtime'
+          ? ctx.caller.deviceId
+          : ctx.clientKind === 'mobile'
+            ? ctx.pairedDeviceParentId
+            : undefined
+        : undefined,
     userClient:
       ctx.caller?.kind === 'desktop'
         ? 'desktop'

@@ -119,7 +119,8 @@ export function sendStructuredAgentSessionTurn(
               ctx.journal,
               params.envelope.clientOperationId,
               ctx.agent,
-              caller.userClient
+              caller.userClient,
+              caller.telemetryOwnerKey
             )
           }
           try {
