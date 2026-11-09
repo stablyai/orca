@@ -116,23 +116,25 @@ function ToolbarTranscript({
   )
 }
 
+function assertPaneActionSizes(frame: HTMLElement, expectedCount: number): void {
+  const buttons = frame.querySelectorAll('.native-chat-pane-actions > button')
+  if (buttons.length !== expectedCount) {
+    throw new Error(`Expected ${expectedCount} pane actions`)
+  }
+  for (const button of buttons) {
+    const bounds = button.getBoundingClientRect()
+    const icon = button.querySelector('svg')?.getBoundingClientRect()
+    if (bounds.width !== 28 || bounds.height !== 28 || icon?.width !== 16 || icon.height !== 16) {
+      throw new Error('Pane actions must use 28px targets and 16px icons')
+    }
+  }
+}
+
 export const toolbarWide = defineFixture({
   width: 800,
   store: toolbarStore,
   render: () => <ToolbarTranscript />,
-  interact: (frame) => {
-    const buttons = frame.querySelectorAll('.native-chat-pane-actions > button')
-    if (buttons.length !== 4) {
-      throw new Error('Expected all four pane actions')
-    }
-    for (const button of buttons) {
-      const bounds = button.getBoundingClientRect()
-      const icon = button.querySelector('svg')?.getBoundingClientRect()
-      if (bounds.width !== 28 || bounds.height !== 28 || icon?.width !== 16 || icon.height !== 16) {
-        throw new Error('Pane actions must use 28px targets and 16px icons')
-      }
-    }
-  }
+  interact: (frame) => assertPaneActionSizes(frame, 4)
 })
 export const toolbarNarrow = defineFixture({
   ...toolbarWide,
@@ -140,7 +142,8 @@ export const toolbarNarrow = defineFixture({
 })
 export const toolbarInactive = defineFixture({
   ...toolbarWide,
-  render: () => <ToolbarTranscript focused={false} />
+  render: () => <ToolbarTranscript focused={false} />,
+  interact: (frame) => assertPaneActionSizes(frame, 3)
 })
 export const toolbarEmpty = defineFixture({
   ...toolbarNarrow,
@@ -152,7 +155,8 @@ export const toolbarHistory = defineFixture({
 })
 export const transcriptWithoutToolbar = defineFixture({
   ...toolbarNarrow,
-  render: () => <ToolbarTranscript header={false} />
+  render: () => <ToolbarTranscript header={false} />,
+  interact: (frame) => assertPaneActionSizes(frame, 0)
 })
 
 export const toolbarOlderHistory = defineFixture({
