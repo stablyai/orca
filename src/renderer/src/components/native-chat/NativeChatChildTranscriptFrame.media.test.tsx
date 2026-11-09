@@ -19,7 +19,7 @@ vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: reads.visual }))
 vi.mock('./NativeChatSessionChildren', () => ({ NativeChatSessionChildren: () => null }))
-vi.mock('./NativeChatTranscriptChrome', () => ({
+vi.mock('./media/images/native-chat-image-visibility', () => ({
   observeTranscriptVisibility: (_element: Element, onChange: (visible: boolean) => void) => {
     onChange(true)
     return () => {}
