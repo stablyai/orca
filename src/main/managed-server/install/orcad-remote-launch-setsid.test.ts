@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ORCAD_PID_FILENAME, ORCAD_READINESS_FILENAME } from './orcad-remote-host-support'
 import { orcadLaunchCommand, type OrcadLaunchSpec } from './orcad-remote-launch'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const host = getRemoteHostPlatform('linux-x64')
 

@@ -4,10 +4,8 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { PairedMobileDevice } from '../../../mobile/paired-mobile-devices'
 import { LegacyEncryptionNotice } from '../../legacy-encryption-notice'
 
-export type PairedDevice = PairedMobileDevice
-
 type MobilePairedDevicesSectionProps = {
-  devices: readonly PairedDevice[]
+  devices: readonly PairedMobileDevice[]
   hasQrCode: boolean
   onRevokeDevice: (deviceId: string) => void
 }

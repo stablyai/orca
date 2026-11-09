@@ -5,7 +5,10 @@ import type {
   BrowserTabSwitchResult
 } from '../../../../shared/runtime-browser-contracts'
 import type { BrowserCertificateProceedResult } from '../../../../shared/browser-workspace-types'
-import { browserCertificateTrustController, browserManager } from '../../../browser/browser-manager'
+import {
+  browserCertificateTrustController,
+  browserManager
+} from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { BrowserError } from '../../../browser/browser-error'
 import { publishSwitchedBrowserSessionTab } from './browser-tab-create-publication'
 import type {

@@ -217,6 +217,17 @@ orca-ide serve --pairing-address 100.64.1.20
 
 This only stops Orca from turning the GPU off. Chromium may still render in software on Orca's own Xvfb, which has no GPU of its own; open `chrome://gpu` in a browser pane to check, and point `DISPLAY` at a GPU-backed X server if it reports software rendering. If you installed the server with `orca serve service install`, add the variable to the service unit yourself. If the server stops starting or browser panes crash with it set, unset it to go back to software rendering.
 
+### Copies of a machine image
+
+Copies of a machine image share the server identity: the pairing key, the paired devices, and the installation id. Revoking a device on one copy leaves it working on the others, and the desktop app treats all copies as one server. Set `ORCA_INSTANCE_ID` per instance (for example the cloud-init instance id) in the environment that starts `orca serve`, or run `orca serve reset-identity` on each copy.
+
+- With `ORCA_INSTANCE_ID` set, Orca records the value with the server identity. If a later start sees a different value, Orca creates a new identity and removes all paired devices on that copy, so clients pair with it again.
+- The first value Orca sees on an existing server is only recorded, so setting the variable later keeps existing pairings. Use a value that stays the same across restarts of one instance; a value that changes on every boot forces a new pairing each time.
+- When `ORCA_INSTANCE_ID` is not set, Orca never changes the identity on its own.
+- If Orca cannot write the new identity (for example on a full or read-only disk), it keeps serving the current one unchanged, logs an error, and tries again on the next start.
+- `orca serve reset-identity` does the same reset on demand. Stop Orca on that machine first; the command asks for confirmation, or pass `--yes`.
+- Each reset moves the replaced files into a new folder under `orca-identity-backups` in the Orca data directory (the five most recent are kept). To undo an unwanted reset, stop Orca and copy the files from that folder back into the data directory.
+
 ### Mobile from a headless server
 
 For the Orca mobile app, request a mobile-scoped QR code and link:

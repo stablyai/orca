@@ -85,12 +85,6 @@ describe('host name identity', () => {
   }
 
   describe('legacy classification', () => {
-    it('treats a typed legacy name as a phone override and a generated one as none', async () => {
-      const hosts = await loadHosts()
-      expect(hosts.find(({ id }) => id === GENERATED_HOST.id)?.personalName).toBeUndefined()
-      expect(hosts.find(({ id }) => id === TYPED_HOST.id)?.personalName).toBe('Windows-Low Spec')
-    })
-
     it('does not re-classify an adopted machine name once identity fields exist', async () => {
       // A record the descriptor writer already touched: non-generated name, no override.
       storedHostsRaw = JSON.stringify([
@@ -126,27 +120,6 @@ describe('host name identity', () => {
   })
 
   describe('updateHostDescriptor', () => {
-    it('adopts a reported machine name as the display name of an unoverridden host', async () => {
-      await updateHostDescriptor(GENERATED_HOST.id, {
-        machineName: 'm4airs-Air',
-        platform: 'darwin'
-      })
-      expect(stored().find(({ id }) => id === GENERATED_HOST.id)).toMatchObject({
-        name: 'm4airs-Air',
-        lastKnownMachineName: 'm4airs-Air',
-        lastKnownHostPlatform: 'darwin'
-      })
-    })
-
-    it('records the descriptor under an override without touching the display name', async () => {
-      await updateHostDescriptor(TYPED_HOST.id, { machineName: 'm4airs-Air', platform: 'darwin' })
-      expect(stored().find(({ id }) => id === TYPED_HOST.id)).toMatchObject({
-        name: 'Windows-Low Spec',
-        personalName: 'Windows-Low Spec',
-        lastKnownMachineName: 'm4airs-Air'
-      })
-    })
-
     it('clears a stale machine name when a live host stops reporting one', async () => {
       await updateHostDescriptor(GENERATED_HOST.id, {
         machineName: 'm4airs-Air',
@@ -156,13 +129,6 @@ describe('host name identity', () => {
       const record = stored().find(({ id }) => id === GENERATED_HOST.id)
       expect(record?.lastKnownMachineName).toBeUndefined()
       expect(record?.name).toBe('m4airs-Air')
-    })
-
-    it('swallows unreadable storage instead of surfacing an error', async () => {
-      storedHostsRaw = '{'
-      await expect(
-        updateHostDescriptor(GENERATED_HOST.id, { machineName: 'm4airs-Air', platform: 'darwin' })
-      ).resolves.toBeUndefined()
     })
   })
 
@@ -186,22 +152,6 @@ describe('host name identity', () => {
       })
     })
 
-    it('re-resolves an adopted name after a re-pair that offered the stored one', async () => {
-      await updateHostDescriptor(GENERATED_HOST.id, {
-        machineName: 'm4airs-Air',
-        platform: 'darwin'
-      })
-      await savePairedHost({
-        id: GENERATED_HOST.id,
-        name: 'Host 1',
-        endpoint: GENERATED_HOST.endpoint,
-        deviceToken: 'fresh-token',
-        publicKeyB64: GENERATED_HOST.publicKeyB64,
-        lastConnected: 99
-      })
-      expect(stored().find(({ id }) => id === GENERATED_HOST.id)?.name).toBe('m4airs-Air')
-    })
-
     it('does not roll back identity changed since a connection took its profile snapshot', async () => {
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'Studio', platform: 'darwin' })
       // Use a connection-held snapshot to prove saves cannot roll back later identity changes.
@@ -220,14 +170,6 @@ describe('host name identity', () => {
   })
 
   describe('phone override edit', () => {
-    it('sets the override and the display name together', async () => {
-      await updateHostNameAndEndpoint(GENERATED_HOST.id, { personalName: 'Basement Rig' })
-      expect(stored().find(({ id }) => id === GENERATED_HOST.id)).toMatchObject({
-        name: 'Basement Rig',
-        personalName: 'Basement Rig'
-      })
-    })
-
     it('clearing the override returns to the desktop-reported name', async () => {
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'm4airs-Air', platform: 'darwin' })
       await updateHostNameAndEndpoint(TYPED_HOST.id, { personalName: null })

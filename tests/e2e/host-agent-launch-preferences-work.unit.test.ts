@@ -26,7 +26,7 @@ import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/c
 import { structuredLaunchSeedOptions } from '../../src/shared/native-chat/input/native-chat-session-option-defaults'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
-vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../src/main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: vi.fn(async () => {})
 }))
 

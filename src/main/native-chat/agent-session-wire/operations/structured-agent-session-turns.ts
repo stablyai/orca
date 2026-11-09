@@ -5,6 +5,10 @@ import {
   captureStructuredExecutionOptions,
   captureStructuredSteerOptions
 } from '../options/structured-agent-session-execution-options'
+import {
+  forgetNativeChatPrompt,
+  rememberNativeChatPrompt
+} from '../../../telemetry/native-chat-prompt-submissions'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
@@ -133,7 +137,9 @@ export async function performSend(
     steer?: true
     keepCurrentOptions?: true
     selection?: Readonly<Record<string, string>>
-  }
+  },
+  userClient?: 'desktop' | 'mobile',
+  telemetryOwnerKey?: string
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal.submission(input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
@@ -158,12 +164,22 @@ export async function performSend(
     return { ok: false, refusal: captured.refusal }
   }
   try {
+    if (!input.body.command) {
+      rememberNativeChatPrompt(
+        ctx.journal,
+        input.clientMessageId,
+        ctx.agent,
+        userClient,
+        telemetryOwnerKey
+      )
+    }
     await ctx.journal.appendSubmission(
       { ...submission, options: captured.options, fence: ctx.fence, handoverRecorded: true },
       undefined,
       ctx.operationReceipt
     )
   } catch (error) {
+    forgetNativeChatPrompt(ctx.journal, input.clientMessageId)
     return agentSessionAdmissionWriteRefusal(ctx, error)
   }
   return {

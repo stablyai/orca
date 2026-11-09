@@ -12,7 +12,7 @@ import {
   TaskProviderLogo,
   type MobileColorScheme
 } from './mobile-tasks-dependencies'
-import { renderMobileTasksListState } from './mobile-tasks-list-state'
+import { ignoreKeptRowPress, renderMobileTasksListState } from './mobile-tasks-list-state'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   createLinearTask,
@@ -37,9 +37,13 @@ export function renderMobileTasksLinearList(
     mutatingStatus,
     refreshTasks,
     refreshing,
-    setActionItem,
-    setLinearStatusPickerItem
+    taskUiReady
   } = model
+  // The last list, kept before Tasks is ready, is read-only.
+  const setActionItem = taskUiReady ? model.setActionItem : ignoreKeptRowPress
+  const setLinearStatusPickerItem = taskUiReady
+    ? model.setLinearStatusPickerItem
+    : ignoreKeptRowPress
   const listState = renderMobileTasksListState(model, linearIssuesForView.length, bottomBarHeight)
   if (listState) {
     return listState
