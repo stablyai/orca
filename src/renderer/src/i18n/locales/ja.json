@@ -19217,7 +19217,8 @@
       "contextUsage": {
         "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
         "title": "コンテキスト",
-        "estimated": "最後の応答から推定。"
+        "estimated": "最後の応答から推定。",
+        "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
       },
       "dismissDeliveryNotice": "閉じる",
       "addSelectionToChat": "チャットに追加",

@@ -20616,7 +20616,8 @@
       "contextUsage": {
         "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
         "title": "Контекст",
-        "estimated": "Оценка по последнему ответу."
+        "estimated": "Оценка по последнему ответу.",
+        "deferredNote": "Загружается по запросу. Не входит в использованный объём."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Копировать ID сессии Orca",

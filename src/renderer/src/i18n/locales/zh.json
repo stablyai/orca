@@ -19162,7 +19162,8 @@
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
-        "estimated": "根据上一次响应的估算值。"
+        "estimated": "根据上一次响应的估算值。",
+        "deferredNote": "按需加载，不计入已用总量。"
       },
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",

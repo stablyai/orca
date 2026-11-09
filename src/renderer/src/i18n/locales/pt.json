@@ -20929,7 +20929,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
         "title": "Contexto",
-        "estimated": "Estimado a partir da última resposta."
+        "estimated": "Estimado a partir da última resposta.",
+        "deferredNote": "Carregado sob demanda. Não conta no total usado."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sessão do Orca",

@@ -19217,7 +19217,8 @@
       "contextUsage": {
         "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
         "title": "컨텍스트",
-        "estimated": "마지막 응답 기준 추정치입니다."
+        "estimated": "마지막 응답 기준 추정치입니다.",
+        "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
       },
       "dismissDeliveryNotice": "닫기",
       "addSelectionToChat": "채팅에 추가",
