@@ -2,7 +2,10 @@ import { useState, type ReactElement } from 'react'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import { acceptAgentPickerArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import {
+  acceptAgentPickerArguments,
+  type AgentPickerEdit
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import type {
   AgentPickerDraft,
   AgentPickerEntry,
@@ -26,8 +29,7 @@ export type AgentLaunchSetupPanelProps = {
   disabled?: boolean
   autoFocus?: boolean
   terminalBlocked?: boolean
-  /** `picked` is a discrete choice; typed Arguments are not. */
-  onDraftChange: (draft: AgentPickerDraft, picked: boolean) => void
+  onDraftChange: (draft: AgentPickerDraft, edit: AgentPickerEdit['kind']) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }
 
@@ -101,9 +103,11 @@ export function AgentLaunchSetupButton({
           disabled={disabled}
           autoFocus={autoFocus}
           terminalBlocked={terminalBlocked}
-          onDraftChange={(draft, picked) => {
+          onDraftChange={(draft, edit) => {
             setup.change(draft)
-            // Why: a launch form's trigger and Create read its selection, so a pick applies without closing the panel; text cards stage until Use.
+            // Why: a launch form's trigger and Create read its selection, so a pick applies without closing the panel.
+            // Arguments edits and text cards stay staged until Launch or Use.
+            const picked = edit === 'choice' || edit === 'permission' || edit === 'speed'
             const current =
               picked && mode === 'select' && !entry.textGeneration ? setup.getDraft() : undefined
             const selected = current && acceptAgentPickerArguments(entry, current)

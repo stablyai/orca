@@ -5,6 +5,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   useSyncExternalStore
 } from 'react'
 import { sameAgentPickerSetupSource as sameSource } from './agent-launch-picker-setup-source'
@@ -31,6 +32,8 @@ import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-compo
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
 const appSession: AgentPickerDraftOwner = {}
 const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
+// Why: a form re-derives its source (and may reset its scope) from each pick; the open panel stays the authority.
+const pickedSetups = new WeakSet<RetainedSetup>()
 
 export function invalidateAgentPickerDrafts(scope: AgentPickerDraftOwner) {
   sessionDrafts.set(scope, new Map())
@@ -122,11 +125,11 @@ export function useAgentPickerSetup({
     [mode, open, launchKey]
   )
   useSyncExternalStore(subscribe, () => read()?.draft)
-  // Why: a form re-derives its source (and may reset its scope) from each pick; the open panel stays the authority.
-  const picked = useRef<RetainedSetup | undefined>(undefined)
+  // The last pick the form took while this panel is open, carried into a record its scope reset recreates.
+  const [picked, setPicked] = useState<AgentPickerDraft>()
   const matches = useCallback(
     (record: RetainedSetup) =>
-      (open && record === picked.current) || sameSource(record.source, initial),
+      (open && pickedSetups.has(record)) || sameSource(record.source, initial),
     [open, initial]
   )
   const lifetime = useMemo(
@@ -153,15 +156,11 @@ export function useAgentPickerSetup({
           agent: entry.agent,
           preset: originalPreset,
           source: initial,
-          draft:
-            authored ??
-            (open ? picked.current?.draft : undefined) ??
-            seed ??
-            agentPickerDraft(entry),
+          draft: authored ?? (open ? picked : undefined) ?? seed ?? agentPickerDraft(entry),
           active: open
         }
-        if (open && picked.current) {
-          picked.current = record
+        if (open && picked) {
+          pickedSetups.add(record)
         }
         if (mode === 'launch') {
           writeLaunchSetupOptions(launchKey, record.draft, slot, record)
@@ -184,6 +183,7 @@ export function useAgentPickerSetup({
       initial,
       seed,
       open,
+      picked,
       mode,
       launchKey,
       slot,
@@ -198,15 +198,16 @@ export function useAgentPickerSetup({
     }
   }, [lifetime])
   useLayoutEffect(() => {
-    if (!open) {
-      picked.current = undefined
+    const current = read()
+    if (!open && current) {
+      pickedSetups.delete(current)
     }
-    if ((mode === 'launch' || !open) && !read()) {
+    if ((mode === 'launch' || !open) && !current) {
       return
     }
     const activeRecord = acquire()
     activeRecord.active = open
-    if (open && activeRecord === picked.current) {
+    if (open && pickedSetups.has(activeRecord)) {
       // The form now derives its source from this record's pick, so later edits survive a close.
       activeRecord.source = initial
     }
@@ -256,6 +257,7 @@ export function useAgentPickerSetup({
     getDraft,
     change,
     activate: () => {
+      setPicked(undefined)
       if (
         live.current === lifetime &&
         sessionDrafts.get(draftScope) === collection &&
@@ -284,7 +286,8 @@ export function useAgentPickerSetup({
         : draft
       store(accepted)
       if (pick) {
-        picked.current = record
+        pickedSetups.add(record!)
+        setPicked(accepted)
       }
       return true
     }
