@@ -10,7 +10,7 @@ function matchesQuery(name: string, query: string): boolean {
 
 export function SkillSharedLinksView({
   query,
-  shares: { shares, loading, error, busyShareId, revoke, revokeMany, refresh }
+  shares: { shares, loading, error, busyPackageId, revoke, revokeMany, refresh }
 }: {
   query: string
   shares: OwnedSkillShares
@@ -70,7 +70,7 @@ export function SkillSharedLinksView({
             key={share.id}
             share={share}
             olderShares={olderShares}
-            busy={[share, ...olderShares].some((link) => link.id === busyShareId)}
+            busy={busyPackageId === share.packageId}
             onRevoke={() => void revoke(share)}
             onRevokeLinks={(links) => void revokeMany(links)}
             onDeleted={refresh}

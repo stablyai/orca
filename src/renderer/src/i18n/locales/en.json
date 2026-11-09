@@ -12747,7 +12747,8 @@
           "keywordRevoke": "revoke",
           "activeLinksStopDescription": "Only people with a link can open it. Stop sharing a link to block future inspection and installs.",
           "confirmStop": "Confirm stop",
-          "stopSharing": "Stop sharing"
+          "stopSharing": "Stop sharing",
+          "stillLive": "Still live: {{links}}"
         },
         "bitbucket": {
           "credentials": {
