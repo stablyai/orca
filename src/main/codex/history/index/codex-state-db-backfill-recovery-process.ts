@@ -3,7 +3,7 @@ import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolu
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { buildWslCodexAppServerArgs } from '../../../codex-accounts/wsl-codex-command'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
-import { terminateCodexProbeChild } from '../../../rate-limits/codex-probe-termination'
+import { terminateCodexProbeChild } from '../../../codex-cli/codex-probe-termination'
 import {
   createProviderSpawnSpec,
   type ProviderCloseRequest
