@@ -17,13 +17,22 @@ export type CodexMcpMergeResult = {
 
 type Block = { before: string; body: string; after: string }
 
-function findBlock(text: string): Block | null {
+export type CodexMcpBlockMarkers = { start: string; end: string }
+
+/** One marked block per syncing computer, so two computers syncing one host never rewrite each other's. */
+export function codexMcpBlockMarkers(syncer: string | undefined): CodexMcpBlockMarkers {
+  return syncer
+    ? { start: `${CODEX_MCP_BLOCK_START} [${syncer}]`, end: `${CODEX_MCP_BLOCK_END} [${syncer}]` }
+    : { start: CODEX_MCP_BLOCK_START, end: CODEX_MCP_BLOCK_END }
+}
+
+function findBlock(text: string, markers: CodexMcpBlockMarkers): Block | null {
   const lines = text.split('\n')
-  const start = lines.indexOf(CODEX_MCP_BLOCK_START)
+  const start = lines.indexOf(markers.start)
   if (start === -1) {
     return null
   }
-  const end = lines.indexOf(CODEX_MCP_BLOCK_END, start + 1)
+  const end = lines.indexOf(markers.end, start + 1)
   if (end === -1) {
     throw new Error('codex_config_block_unterminated')
   }
@@ -54,12 +63,15 @@ function joinParts(parts: string[]): string {
 export function mergeCodexMcpServers(
   text: string | null,
   desired: Readonly<Record<string, Record<string, unknown>>>,
-  lastBlockPrint: string | null
+  lastBlockPrint: string | null,
+  markers: CodexMcpBlockMarkers = codexMcpBlockMarkers(undefined),
+  /** Markers of a block this computer is taking over (the pre-per-computer block it wrote). */
+  adopt?: CodexMcpBlockMarkers
 ): CodexMcpMergeResult {
   const source = text ?? ''
   // Refuse to edit a file Codex itself could not load.
   parseToml(source)
-  const block = findBlock(source)
+  const block = findBlock(source, markers) ?? (adopt ? findBlock(source, adopt) : null)
   const handEdited = block !== null && fingerprintMcpValue(block.body) !== lastBlockPrint
   const outside = block
     ? handEdited
@@ -89,7 +101,7 @@ export function mergeCodexMcpServers(
   if (!block && !body) {
     return { text: null, blockPrint: null, outcomes }
   }
-  const blockText = body ? `${CODEX_MCP_BLOCK_START}\n${body}\n${CODEX_MCP_BLOCK_END}` : ''
+  const blockText = body ? `${markers.start}\n${body}\n${markers.end}` : ''
   const next =
     block && !handEdited
       ? joinParts([block.before, blockText, block.after])
