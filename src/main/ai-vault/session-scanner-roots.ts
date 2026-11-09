@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/shell-startup/codex-home-wsl-env'
-import { resolveOmpSessionsDir } from './scanners/omp/omp-session-root'
+import { ompProfileSessionsDirs, resolveOmpSessionsDir } from './scanners/omp/omp-session-root'
 
 /** Where each transcript agent's session tree sits under a home dir (host or WSL guest). */
 export const AGENT_SESSION_HOME_SEGMENTS = {
@@ -68,9 +68,12 @@ export function ompSessionsRootDirs(args: {
   ompSessionsDir?: string
   wslHomeDirs?: readonly string[]
 }): string[] {
+  // An explicit sessions dir pins one location, matching the native chat resolver.
+  const profileDirs = args.ompSessionsDir === undefined ? ompProfileSessionsDirs() : []
   return (
     [
       resolveOmpSessionsDir({ sessionsDir: args.ompSessionsDir }),
+      ...profileDirs,
       ...wslHomeSessionDirs('omp', normalizedWslHomeDirs(args.wslHomeDirs))
     ]
       // Reject empty roots: normalizing OMP_CODING_AGENT_DIR=/ can otherwise allowlist the process cwd.

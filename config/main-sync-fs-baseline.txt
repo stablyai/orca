@@ -18,7 +18,7 @@
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
-1 src/main/ai-vault/scanners/omp/omp-session-root.ts
+3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts

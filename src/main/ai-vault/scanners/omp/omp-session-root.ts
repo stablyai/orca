@@ -1,18 +1,21 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, normalize, parse, resolve, win32 } from 'node:path'
 import { normalizeAgentSessionsDir } from '../../session-scanner-values'
+
+const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/
+const RESERVED_PROFILE_NAME_RE = /^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i
+
+function isSafeProfileName(name: string): boolean {
+  return PROFILE_NAME_RE.test(name) && !name.endsWith('.') && !RESERVED_PROFILE_NAME_RE.test(name)
+}
 
 function normalizedProfile(value: string | undefined): string | undefined | null {
   const profile = value?.trim()
   if (!profile || profile === 'default') {
     return undefined
   }
-  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(profile) &&
-    !profile.endsWith('.') &&
-    !/^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i.test(profile)
-    ? profile
-    : null
+  return isSafeProfileName(profile) ? profile : null
 }
 
 function safeRoot(value: string): string {
@@ -77,4 +80,53 @@ export function resolveOmpSessionsDir(
     }
   }
   return safeRoot(join(agentDir, 'sessions'))
+}
+
+/**
+ * Every existing profile session dir under the config home, so history from
+ * OMP_PROFILE/PI_PROFILE runs is discovered even when this process has no
+ * profile env of its own.
+ */
+export function ompProfileSessionsDirs(
+  options: {
+    env?: NodeJS.ProcessEnv
+    homeDir?: string
+    platform?: NodeJS.Platform
+  } = {}
+): string[] {
+  const env = options.env ?? process.env
+  const home = options.homeDir ?? homedir()
+  const platform = options.platform ?? process.platform
+  // The legacy override pins one location; enumeration would widen it.
+  if (env.OMP_CODING_AGENT_DIR?.trim()) {
+    return []
+  }
+  const profilesDir = join(home, env.PI_CONFIG_DIR || '.omp', 'profiles')
+  let entries
+  try {
+    entries = readdirSync(profilesDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const xdgProfilesDir =
+    (platform === 'linux' || platform === 'darwin') && env.XDG_DATA_HOME
+      ? join(env.XDG_DATA_HOME, 'omp', 'profiles')
+      : undefined
+  const dirs: string[] = []
+  for (const entry of entries) {
+    if (entry.name === 'default' || !entry.isDirectory() || !isSafeProfileName(entry.name)) {
+      continue
+    }
+    // Local agent layout plus the POSIX XDG data-home variant, when one is set.
+    const candidates = [
+      join(profilesDir, entry.name, 'agent', 'sessions'),
+      ...(xdgProfilesDir ? [join(xdgProfilesDir, entry.name, 'sessions')] : [])
+    ]
+    for (const dir of candidates) {
+      if (existsSync(dir)) {
+        dirs.push(dir)
+      }
+    }
+  }
+  return dirs.sort().filter((dir, index) => dirs.indexOf(dir) === index)
 }
