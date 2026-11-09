@@ -13,6 +13,7 @@ import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
 import { CloudWorkspaceMenuItems } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
 import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
 import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
+import { WorktreeCloudTransferMenuItem } from './WorktreeCloudTransferMenuItem'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
@@ -169,6 +170,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             />
           )}
           {!isMultiContext && <CloudWorkspaceMenuItems worktreeId={worktree.id} />}
+          {!isMultiContext && <WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
               {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}

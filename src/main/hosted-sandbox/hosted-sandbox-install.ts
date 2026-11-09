@@ -25,6 +25,7 @@ import {
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
+import { installCloudTransferHandlers } from './cloud-transfer'
 import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
 import {
   findCloudRuntime,
@@ -81,6 +82,10 @@ export function installHostedSandbox(): void {
     stopSession: (environmentId) => registry.stopEnvironment(environmentId)
   })
   setHostedWorkspaceService(workspaces)
+  const disposeTransfer = installCloudTransferHandlers({
+    userDataPath,
+    windows: () => BrowserWindow.getAllWindows()
+  })
   setCloudArchiveCheck((workspaceId) => isArchivedOnControlPlane(userDataPath, client, workspaceId))
   const offline = installCloudOfflineService({
     userDataPath,
@@ -130,6 +135,7 @@ export function installHostedSandbox(): void {
     }
     registry.dispose()
     workspaces.dispose()
+    disposeTransfer()
     setHostedWorkspaceService(null)
     setCloudArchiveCheck(null)
     offline.dispose()
