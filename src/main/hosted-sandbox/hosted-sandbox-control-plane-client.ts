@@ -65,14 +65,22 @@ export type HostedSandboxControlPlaneClientOptions = {
 const DEFAULT_TIMEOUTS = { boot: 180_000, control: 60_000 }
 const MAX_RESPONSE_BYTES = 256 * 1024
 
-export function createHostedSandboxControlPlaneClient(
+export type HostedSandboxRequest = <T>(
+  method: 'GET' | 'POST' | 'DELETE',
+  path: string,
+  schema: z.ZodType<T>,
+  init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }
+) => Promise<T>
+
+/** One authenticated, schema-checked control-plane call; shared by every desktop client of it. */
+export function createHostedSandboxRequest(
   options: HostedSandboxControlPlaneClientOptions
-): HostedSandboxControlPlaneClient {
+): HostedSandboxRequest {
   const base = parseBaseUrl(options.baseUrl)
   const doFetch = options.fetch ?? fetch
   const timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts }
 
-  async function call<T>(
+  return async function call<T>(
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
     schema: z.ZodType<T>,
@@ -113,7 +121,12 @@ export function createHostedSandboxControlPlaneClient(
     }
     return parsed.data
   }
+}
 
+export function createHostedSandboxControlPlaneClient(
+  options: HostedSandboxControlPlaneClientOptions
+): HostedSandboxControlPlaneClient {
+  const call = createHostedSandboxRequest(options)
   const sandboxPath = (id: string, suffix = ''): string =>
     `v1/sandboxes/${encodeURIComponent(id)}${suffix}`
 

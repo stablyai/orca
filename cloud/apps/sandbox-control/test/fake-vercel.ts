@@ -19,6 +19,8 @@ type FakeBox = {
   startedAt: number
   timeoutMs: number
   route: string
+  /** Extra exposed ports beyond orcad's (updatePorts / create params). */
+  ports: number[]
   policy: NetworkPolicy
   /** orcad's recipe line for the current boot, once the start command ran. */
   orcadReady?: string
@@ -68,7 +70,10 @@ export function createFakeVercel(now: () => number): FakeVercel {
       tags: box.params.tags
     },
     session: { id: box.sessionId, status: box.status, startedAt: box.startedAt, timeoutMs: box.timeoutMs },
-    routes: [{ port: 6768, url: box.route }]
+    routes: [6768, ...box.ports.filter((port) => port !== 6768)].map((port) => ({
+      port,
+      url: port === 6768 ? box.route : `${box.route.replace('.vercel.run', '')}-${port}.vercel.run`
+    }))
   })
   const bySession = (sessionId: string): FakeBox => {
     const box = [...boxes.values()].find((candidate) => candidate.sessionId === sessionId)
@@ -154,6 +159,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
         startedAt: now(),
         timeoutMs: params.timeoutMs,
         route: `https://sb-${counter}.vercel.run`,
+        ports: params.ports,
         policy: params.networkPolicy,
         files: new Map()
       }
@@ -186,6 +192,14 @@ export function createFakeVercel(now: () => number): FakeVercel {
     },
     async updateNetworkPolicy(sessionId, policy) {
       bySession(sessionId).policy = policy
+    },
+    async updatePorts(name, ports) {
+      const box = boxes.get(name)
+      if (!box) {
+        throw new ProviderError(404, 'not_found')
+      }
+      box.ports = [...ports]
+      return state(box).routes
     },
     async runCommand(sessionId, params: RunCommandParams) {
       const box = bySession(sessionId)

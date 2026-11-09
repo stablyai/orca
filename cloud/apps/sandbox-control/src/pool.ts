@@ -6,7 +6,7 @@
 import type { MachineSize } from './entitlements'
 import { killSwitchOn, type GuardrailConfig } from './guardrails'
 import type { SandboxProviderApi } from './sandbox-provider'
-import { ORCAD_PORT } from './sandbox-vm-commands'
+import { ORCAD_PORT, SHARE_PROXY_PORT } from './sandbox-vm-commands'
 
 export type PoolConfig = {
   /** Ready VMs kept per (machine size, region); only `standard` in the default region is pooled. */
@@ -261,7 +261,7 @@ async function bootPooledVm(deps: PoolDeps, snapshotId: string): Promise<void> {
       vcpus: VCPUS[POOLED_SIZE],
       region: row.region,
       timeoutMs: POOL_VM_TIMEOUT_MS,
-      ports: [ORCAD_PORT],
+      ports: [ORCAD_PORT, SHARE_PROXY_PORT],
       // Nothing leaves a pooled VM until a create gives it the caller's policy.
       networkPolicy: { allow: {} },
       // Short backstop: a pooled VM is deleted running, so it should never leave a snapshot.

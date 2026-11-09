@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import { BellOff, Copy, Plug, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem } from '@/components/ui/context-menu'
@@ -50,7 +50,9 @@ export type RuntimePortRowForwarding = {
 
 /** Row forwarding UI for a remote environment's ports; null when the target is this computer. */
 export function useRuntimePortRowForwarding(
-  runtimeTarget: RuntimeClientTarget | null
+  runtimeTarget: RuntimeClientTarget | null,
+  /** Host actions after the forward items (Orca Cloud: Share…). */
+  extraMenuItems?: (port: WorkspacePort) => ReactNode
 ): RuntimePortRowForwarding | null {
   const t = useTranslate()
   const environmentId = runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : null
@@ -138,7 +140,7 @@ export function useRuntimePortRowForwarding(
       },
       menuItems: (port) => {
         const existing = forwardFor(port)
-        return existing ? (
+        const forwardItems = existing ? (
           <>
             <ContextMenuItem
               className={MENU_ITEM_CLASS}
@@ -176,13 +178,19 @@ export function useRuntimePortRowForwarding(
             {t('auto.components.right.sidebar.RuntimePortForward.forward', 'Forward to localhost')}
           </ContextMenuItem>
         )
+        return (
+          <>
+            {forwardItems}
+            {extraMenuItems?.(port)}
+          </>
+        )
       },
       copyAddress: (port) => {
         const existing = forwardFor(port)
         return existing ? `localhost:${existing.localPort}` : undefined
       }
     }
-  }, [environmentId, failures, forward, forwardFor, hostOffline, pending, t])
+  }, [environmentId, extraMenuItems, failures, forward, forwardFor, hostOffline, pending, t])
 
   if (!environmentId || !runtimePortForwardingAvailable()) {
     return null

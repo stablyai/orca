@@ -86,7 +86,7 @@ log 'agent CLIs'
 npm install --global --no-fund --no-audit --prefix "$ORCA_HOME/tools" $AGENT_NPM_PACKAGES
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"

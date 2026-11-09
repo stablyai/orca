@@ -16,9 +16,10 @@ import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provide
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
-import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
+import { ORCAD_PORT, SHARE_PROXY_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
 import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
 import { resolveEnvironmentBoot, type BootSource } from './environments'
+import { shareProxyKey } from './share-crypto'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
 import {
   detachFromWorkspace,
@@ -85,6 +86,8 @@ export type LifecycleDeps = {
     pool?: PoolConfig
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
+    /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
+    shareLinkSecret?: string
   }
 }
 
@@ -277,7 +280,7 @@ async function boot(
           deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token))
         )
       : Promise.resolve(),
-    options.timer.time('orcad', () =>
+    options.timer.time('orcad', async () =>
       startOrcad(deps.provider, state, {
         sandboxId: row.id,
         repo: options.repo,
@@ -285,6 +288,9 @@ async function boot(
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
         gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
         secretEnv: prep.secrets.env,
+        shareProxyKey: deps.config.shareLinkSecret
+          ? await shareProxyKey(deps.config.shareLinkSecret, row.id, state.session.id)
+          : undefined,
         prelude: options.prelude
       })
     )
@@ -451,7 +457,7 @@ export async function createSandbox(
         vcpus: VCPUS[row.machine_size],
         region: row.region,
         timeoutMs: LEASE_MS,
-        ports: [ORCAD_PORT],
+        ports: [ORCAD_PORT, SHARE_PROXY_PORT],
         networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token),
         snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
         tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }

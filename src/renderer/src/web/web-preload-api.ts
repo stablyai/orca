@@ -60,6 +60,13 @@ import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-sessio
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
 
+const notCloud = {
+  ok: false,
+  code: 'not_cloud',
+  // The renderer words failures from `code`; web clients never show share UI.
+  message: ''
+} as const
+
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
@@ -104,6 +111,13 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     linear: createRuntimeNamespaceApi('linear'),
     jira: createWebJiraApi(),
     hooks: createHooksApi(),
+    // Desktop-only: share links ride the desktop's Orca Cloud session.
+    cloudShares: {
+      list: () => Promise.resolve(notCloud),
+      create: () => Promise.resolve(notCloud),
+      revoke: () => Promise.resolve(notCloud),
+      open: () => Promise.resolve(notCloud)
+    },
     stats: {
       getSummary: async () =>
         callRuntimeResult<StatsSummary>('stats.summary').catch(() => ({

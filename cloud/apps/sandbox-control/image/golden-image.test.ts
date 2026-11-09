@@ -99,7 +99,9 @@ describe('golden image build', () => {
   it('ships VM scripts that parse', () => {
     for (const script of ['provision-golden.sh', ...VM_SCRIPTS.map((name) => `vm/${name}`)]) {
       const path = fileURLToPath(new URL(`./${script}`, import.meta.url).href)
-      expect(spawnSync('bash', ['-n', path]).status, script).toBe(0)
+      // Node entry points (shebang `env node`) parse with node, the rest with bash.
+      const isNode = readFileSync(path, 'utf8').startsWith('#!/usr/bin/env node')
+      expect(spawnSync(isNode ? process.execPath : 'bash', isNode ? ['--check', path] : ['-n', path]).status, script).toBe(0)
     }
   })
 

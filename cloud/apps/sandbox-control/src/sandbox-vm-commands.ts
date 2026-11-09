@@ -5,6 +5,8 @@ import { READY_VIA_FILE_ENV, resolveOrcadReadyLine } from './orcad-ready'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 
 export const ORCAD_PORT = 6768
+/** In-VM share-link proxy (image/vm/orca-share-proxy); only answers gateway-signed requests. */
+export const SHARE_PROXY_PORT = 6769
 export const START_COMMAND = '/opt/orca/bin/orca-sandbox-start'
 export const DRAIN_COMMAND = '/opt/orca/bin/orca-sandbox-drain'
 export const ENV_COMMAND = '/opt/orca/bin/orca-sandbox-env'
@@ -45,6 +47,8 @@ export type StartInputs = {
    * environment build's prebuilt repo as the project. Its failure never blocks the start.
    */
   prelude?: { script: string; env?: Record<string, string> }
+  /** This session's share-proxy key (src/share-crypto.ts); the proxy keeps it in memory only. */
+  shareProxyKey?: string
 }
 
 /** `NAME=<base64 utf-8 value>` lines, so values with newlines or quotes survive bash intact. */
@@ -91,6 +95,9 @@ export async function startOrcad(
   if (inputs.secretEnv && Object.keys(inputs.secretEnv).length > 0) {
     env.ORCA_SECRET_ENV = encodeSecretEnv(inputs.secretEnv)
   }
+  if (inputs.shareProxyKey) {
+    env.ORCA_SHARE_PROXY_KEY = inputs.shareProxyKey
+  }
   // The prelude rides in an env var (the start script's `env -i` keeps it out of orcad) so one
   // round trip both prepares the checkout and starts orcad.
   const result = await provider.runCommand(
@@ -98,7 +105,8 @@ export async function startOrcad(
     inputs.prelude
       ? {
           command: 'bash',
-          args: ['-c', `bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
+          // The prelude never sees the share-proxy key; only the start script gets it.
+          args: ['-c', `env -u ORCA_SHARE_PROXY_KEY bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
           env: { ...env, ...inputs.prelude.env, ORCA_PRELUDE: inputs.prelude.script },
           timeoutMs: START_TIMEOUT_MS
         }

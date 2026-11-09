@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
@@ -6,6 +6,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { LocalWorkspacePortsPanel } from './local-workspace-ports-panel'
 import { SshPortsPanel } from './ssh-ports-panel'
 import { HostScopedPortsPanel } from './host-scoped-ports-panel'
+import { CloudSharedLinksSection } from './cloud-share/cloud-shared-links-section'
+import { SharePortMenuItem, useSharePortAction } from './cloud-share/use-share-port-action'
+import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import {
   getPortsPanelOwnerKey,
   portsPanelForwardTargetId,
@@ -20,6 +23,20 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
   const host = useMemo(() => portsPanelHostForOwnerKey(ownerKey), [ownerKey])
   const sshForwardTargetId = useAppStore((state) =>
     portsPanelForwardTargetId(host, state.runtimeEnvironments)
+  )
+  // Orca Cloud workspaces are paired endpoints; non-cloud environments answer `unsupported`.
+  const environmentId =
+    host.kind === 'endpoint' && host.target.kind === 'environment'
+      ? host.target.environmentId
+      : null
+  const shareAction = useSharePortAction(environmentId)
+  const { available: shareAvailable, openShareDialog } = shareAction
+  // Stable, so the forwarding menu memo only recomputes when sharing becomes (un)available.
+  const sharePortMenuItems = useCallback(
+    (port: WorkspacePort) => (
+      <SharePortMenuItem port={port.port} action={{ available: shareAvailable, openShareDialog }} />
+    ),
+    [shareAvailable, openShareDialog]
   )
   const scopedHost = useMemo(
     () =>
@@ -44,6 +61,14 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
           isVisible={isVisible}
           runtimeTarget={host.target}
           sshForwardTargetId={sshForwardTargetId}
+          portMenuItems={shareAvailable ? sharePortMenuItems : undefined}
+          footer={(activePorts) => (
+            <CloudSharedLinksSection
+              action={shareAction}
+              isVisible={isVisible}
+              detectedPorts={[...new Set(activePorts.map((port) => port.port))]}
+            />
+          )}
         />
       )
     case 'host-scoped':

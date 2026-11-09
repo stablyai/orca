@@ -21,6 +21,7 @@ import {
   setHostedWorkspaceService
 } from './hosted-workspace-service'
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
+import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
@@ -38,6 +39,7 @@ export function installHostedSandbox(): void {
     withCloudBuildDefaults(process.env),
     app.isPackaged
   )
+  registerCloudShareHandlers(userDataPath, config)
   if (!config) {
     return
   }
