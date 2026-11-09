@@ -5341,7 +5341,10 @@
           "69f5b5380d": "복제 중...",
           "cloneOnHostDescription": "Git URL을 입력하고 {{value0}}에서 클론할 위치를 선택하세요.",
           "cloneParentFolder": "상위 폴더",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "폴더 이름",
+          "cloneFolderTakenByRepo": "이 폴더의 \"{{value0}}\"은(는) 이미 다른 저장소이므로 이 클론에는 별도의 폴더가 필요합니다.",
+          "cloneFolderNotEmpty": "이 폴더에 \"{{value0}}\"이(가) 이미 있으므로 이 클론에는 별도의 폴더가 필요합니다."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "닫기",
@@ -18808,6 +18811,7 @@
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
         "skills": "스킬",
+        "checkingSkills": "새 스킬을 확인하는 중…",
         "loadingSkills": "스킬 로딩 중…",
         "clearDescription": "대화 컨텍스트 지우기",
         "skillsUnavailableHost": "SSH 채팅에서는 스킬 목록을 표시할 수 없습니다",

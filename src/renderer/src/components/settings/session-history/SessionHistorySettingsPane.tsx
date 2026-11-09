@@ -32,8 +32,8 @@ import {
   sessionSearchReadErrorMessage,
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from './session-history-status-copy'
-import { useSessionSearchStatus } from './use-session-search-status'
+} from '../../session-search/session-search-status'
+import { useSessionSearchStatus } from '../../session-search/use-session-search-status'
 import { useRuntimeEnvironmentCatalog } from '../runtime-environments/catalog/use-runtime-environment-catalog'
 
 export function SessionHistorySettingsPane({

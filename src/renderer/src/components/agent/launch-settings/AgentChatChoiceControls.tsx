@@ -4,15 +4,13 @@ import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
-import { useAntigravityChatSignIn } from '../../provider-accounts/AntigravityChatSignInRow'
-import {
-  AntigravityProviderSignInArea,
-  antigravityProviderSignInShown
-} from '../../provider-accounts/AntigravityProviderSignInArea'
+import { useAntigravityChatSignIn } from '../../provider-accounts/use-antigravity-chat-sign-in'
+import { AntigravityProviderSignInArea } from '../../provider-accounts/AntigravityProviderSignInArea'
+import { antigravityProviderSignInShown } from '../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import {
   getHostRuntimeLabel,
   getRuntimeSentenceLabel
-} from '../../settings/accounts/scope/accounts-pane-runtime'
+} from '../../../lib/provider-accounts/account-runtime-label'
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/structured-chat-platform-support'

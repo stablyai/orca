@@ -9,7 +9,7 @@ import {
 import {
   getProviderRuntimeContextKey,
   getEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { getLinearCacheGeneration, getLinearMutationGeneration } from './linear-slice-request-state'
 import { defaultScopeSource, rowLessSourceTarget } from '@/lib/default-creation-host'
 import type { RowLessSource } from '@/lib/default-creation-host'

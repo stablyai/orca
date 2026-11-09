@@ -2193,8 +2193,7 @@
       "copyPathLabel": "Markdown yolunu kopyala",
       "copySource": "Markdown kaynağını kopyala",
       "discard": "Vazgeç",
-      "dismissKeyboard": "Klavyeyi gizle",
-      "dismissKeyboardHint": "Ekran klavyesini gizler ve Markdown düzenleyicisini açık tutar.",
+      "previewTruncated": "Önizleme kısaltıldı.",
       "readOnly": "Salt okunur"
     },
     "nativeChatAttachActions": {

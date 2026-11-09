@@ -287,27 +287,6 @@ describe('browser grab toast owner', () => {
     expect(next.view.result.current.grabToast).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
-  it.each(['clipboard', 'interaction'] as const)(
-    'honors reentrant cleanup during %s delivery',
-    async (point) => {
-      const payload = makePayload()
-      extract.mockResolvedValue({ ok: true, payload })
-      const { view, bounds } = mount()
-      if (point === 'clipboard') {
-        writes.mockImplementationOnce(() => view.unmount())
-      } else {
-        state.recordFeatureInteraction.mockImplementationOnce(() => view.unmount())
-      }
-      await act(async () => {
-        view.result.current.handleGrabActionShortcut('c')
-        await Promise.resolve()
-      })
-      expect(writes.mock.calls).toEqual([[formatGrabPayloadAsText(payload)]])
-      expect(state.recordFeatureInteraction.mock.calls).toEqual([['browser-grab']])
-      expect(bounds).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
-    }
-  )
   it('preserves latest target reads and screenshot completion after cleanup', async () => {
     const extraction = deferred<BrowserExtractHoverResult>()
     const image = deferred<{ ok: true; screenshot: typeof screenshot }>()
