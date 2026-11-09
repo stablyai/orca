@@ -9,7 +9,14 @@ import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import type { TerminalPaneChatController } from '../chat/use-terminal-pane-chat-state'
 
 export function useTerminalPaneStoreBindings(controller: TerminalPaneChatController) {
-  const { expectedLayoutLeafIds, isVisible, measureWhileHidden, restoredLayout, tabId } = controller
+  const {
+    expectedLayoutLeafIds,
+    isVisible,
+    repoTerminalTheme,
+    measureWhileHidden,
+    restoredLayout,
+    tabId
+  } = controller
   const {
     clearRuntimePaneTitle,
     clearTabPtyId,
@@ -29,6 +36,10 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
   const settings = useAppStore((store) => store.settings)
+  const repoTerminalThemeRef = useRef(repoTerminalTheme)
+  // Mount-time appearance can run before the next effect commit.
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  repoTerminalThemeRef.current = repoTerminalTheme
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
   const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
@@ -56,6 +67,7 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
     openSpacePage,
     refreshWorkspaceSpace,
     settings,
+    repoTerminalThemeRef,
     updateSettings,
     requestLinkRoutingPreference,
     keybindings,

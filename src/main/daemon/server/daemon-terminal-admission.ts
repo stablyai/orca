@@ -133,6 +133,9 @@ export class DaemonTerminalAdmission {
           ? { shellReadyTimeoutMs: payload.shellReadyTimeoutMs }
           : {}),
         ...(payload.agentSessionEnsure ? { agentSessionEnsure: payload.agentSessionEnsure } : {}),
+        ...(typeof payload.worktreeId === 'string' && payload.worktreeId
+          ? { worktreeId: payload.worktreeId }
+          : {}),
         spawnAdmission: {
           clientId,
           declaredIntent: isSpawnIntent(payload.spawnIntent) ? payload.spawnIntent : null,

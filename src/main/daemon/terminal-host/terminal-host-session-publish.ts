@@ -123,6 +123,7 @@ export async function spawnAndPublishSession(
     scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
+    ...(opts.worktreeId ? { worktreeId: opts.worktreeId } : {}),
     wslDistro,
     // A WSL guest root rides only this live session's inventory row; it dies with the session.
     ...(wslDistro ? { onWslGuestRoot: (root) => recordRoot(root) } : {}),

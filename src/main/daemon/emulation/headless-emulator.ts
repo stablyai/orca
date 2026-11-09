@@ -140,14 +140,16 @@ export class HeadlessEmulator {
     })
   }
 
-  /** Match renderer cursor replies; pushed attributes supersede per-PTY color overrides. */
-  applyPushedViewAttributes(attributes: TerminalViewAttributes): void {
+  /** Sets cursor options so xterm answers DECSCUSR / DECRQM 12 renderer-true; per-PTY color
+   *  overrides are dropped only when a theme change moved this PTY's colours away from
+   *  `prev` (null: no theme changed, main only learned the base). */
+  applyPushedViewAttributes(next: TerminalViewAttributes, prev: TerminalViewAttributes | null) {
     if (this.disposed) {
       return
     }
-    this.terminal.options.cursorStyle = attributes.cursorStyle
-    this.terminal.options.cursorBlink = attributes.cursorBlink
-    this.viewAttributeResponder?.clearColorOverrides()
+    this.terminal.options.cursorStyle = next.cursorStyle
+    this.terminal.options.cursorBlink = next.cursorBlink
+    this.viewAttributeResponder?.applyPushedBase(next, prev)
   }
 
   /** Restore kitty flags without allowing query replies. */

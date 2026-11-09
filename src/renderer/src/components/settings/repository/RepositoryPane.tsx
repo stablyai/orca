@@ -13,6 +13,9 @@ import { McpConfigSection } from './mcp/McpConfigSection'
 import { WorktreeSymlinksSection } from './worktrees/WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './worktrees/SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
+import { RepositoryTerminalThemeSection } from '../RepositoryTerminalThemeSection'
+import { getRepoTerminalThemeAvailability } from '@/lib/repo-terminal-theme-availability'
+import { getRepositoryTerminalThemeSearchEntries } from '../repository-terminal-theme-search-entries'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
@@ -44,11 +47,12 @@ import {
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
+  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount' | 'terminalTheme'
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   ghAccount?: GhAccountBinding | null
+  terminalTheme?: Repo['terminalTheme'] | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -210,6 +214,7 @@ export function RepositoryPane({
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
+  const terminalThemeEntries = getRepositoryTerminalThemeSearchEntries(repo)
 
   const hooksSection =
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
@@ -393,6 +398,15 @@ export function RepositoryPane({
         repo={repo}
         updateRepo={updateSelectedRepo}
         writeSourceControlAiSettings={writeSourceControlAiSettings}
+      />
+    ) : null,
+    // Why not isFolder-gated: folder and SSH projects run terminals too.
+    getRepoTerminalThemeAvailability(repo) === 'available' &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, terminalThemeEntries)) ? (
+      <RepositoryTerminalThemeSection
+        key="terminal-theme"
+        repo={repo}
+        updateRepo={updateSelectedRepo}
       />
     ) : null,
     !isFolder &&

@@ -12,7 +12,7 @@ import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import {
   admitPairedCreateColors,
-  getTerminalViewerColors
+  getWorkspaceTerminalViewerColors
 } from '../view/terminal-view-attribute-store'
 import { resolveTerminalPresentation } from './terminal-presentation'
 import {
@@ -127,7 +127,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           },
           agentTeamsPlan?.env
         )
-        const terminalColorQueryReplies = getTerminalViewerColors()
+        const terminalColorQueryReplies = getWorkspaceTerminalViewerColors(workspace)
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }

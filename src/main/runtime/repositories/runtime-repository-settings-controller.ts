@@ -56,6 +56,7 @@ type RepositoryUpdates = Partial<
 > & {
   projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
+  terminalTheme?: Repo['terminalTheme'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
@@ -116,6 +117,9 @@ export class RuntimeRepositorySettingsController {
     }
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
+    }
+    if ('terminalTheme' in updates && updates.terminalTheme === null) {
+      sanitizedUpdates.terminalTheme = null
     }
     const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
       assertWslMoveRepoWritable(store, repo)

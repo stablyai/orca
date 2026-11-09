@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeRepoTerminalThemeOverrides } from '../repo-terminal-theme'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
@@ -21,6 +22,18 @@ export const RepoSourceControlAiOverrides = z
       : value === null
         ? null
         : normalizeRepoSourceControlAiOverrides(value)
+  )
+
+// Why: optional per wire Rule 1 — older peers strip it; null is the clear sentinel.
+export const RepoTerminalThemeOverrides = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeRepoTerminalThemeOverrides(value)
   )
 
 export const RepoBadgeColor = z
@@ -92,7 +105,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
-      sourceControlAi: RepoSourceControlAiOverrides
+      sourceControlAi: RepoSourceControlAiOverrides,
+      terminalTheme: RepoTerminalThemeOverrides
     })
   })
 }

@@ -1,5 +1,6 @@
 import type { CommandHandler } from './dispatch'
 import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
+import { REPO_HANDLER_GROUPS } from './repo-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
@@ -79,18 +80,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
   },
-  {
-    name: 'repo',
-    keys: [
-      'repo list',
-      'repo add',
-      'repo show',
-      'repo set',
-      'repo set-base-ref',
-      'repo search-refs'
-    ],
-    load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
-  },
+  ...REPO_HANDLER_GROUPS,
   ...WORKTREE_HANDLER_GROUPS,
   {
     name: 'file',

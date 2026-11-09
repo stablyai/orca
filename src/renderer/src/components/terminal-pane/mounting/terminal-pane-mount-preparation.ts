@@ -279,18 +279,18 @@ export function prepareTerminalPaneMount(
     osc7UncHost: extractUncHost(startupCwd),
     applyAppearance: (manager) => {
       const currentSettings = deps.settingsRef.current
-      if (!currentSettings) {
-        return
+      if (currentSettings) {
+        applyTerminalAppearance(
+          manager,
+          currentSettings,
+          refs.systemPrefersDarkRef.current,
+          deps.paneTransportsRef.current,
+          deps.effectiveMacOptionAsAltRef.current,
+          deps.paneMode2031Ref.current,
+          deps.paneLastThemeModeRef.current,
+          deps.repoTerminalThemeRef.current
+        )
       }
-      applyTerminalAppearance(
-        manager,
-        currentSettings,
-        refs.systemPrefersDarkRef.current,
-        deps.paneTransportsRef.current,
-        deps.effectiveMacOptionAsAltRef.current,
-        deps.paneMode2031Ref.current,
-        deps.paneLastThemeModeRef.current
-      )
     },
     cancelResizeAll
   }

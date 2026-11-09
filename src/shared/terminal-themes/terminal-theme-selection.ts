@@ -75,7 +75,9 @@ export function lookupTerminalTheme(
       : undefined
   return custom
     ? terminalCustomThemeToXtermTheme(custom)
-    : (TERMINAL_THEME_CATALOG[selection] ?? null)
+    : Object.hasOwn(TERMINAL_THEME_CATALOG, selection)
+      ? TERMINAL_THEME_CATALOG[selection]
+      : null
 }
 
 // Why re-validate: settings are persisted and synced, so a snapshot is untrusted input here.

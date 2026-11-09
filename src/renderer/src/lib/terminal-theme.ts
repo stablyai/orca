@@ -133,6 +133,9 @@ export function resolveEffectiveTerminalAppearance(
   }
 }
 
+// Why shared: main seeds project colours from the same override rule the panes paint with.
+export { applyRepoTerminalThemeOverride } from '../../../shared/repo-terminal-theme-settings'
+
 export function normalizeColor(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
   if (!trimmed) {
@@ -164,3 +167,8 @@ export function resolvePaneStyleOptions(
     focusFollowsMouse: settings.terminalFocusFollowsMouse
   }
 }
+
+export {
+  DEFAULT_TERMINAL_THEME_DARK,
+  DEFAULT_TERMINAL_THEME_LIGHT
+} from '../../../shared/terminal-themes/terminal-theme-selection'

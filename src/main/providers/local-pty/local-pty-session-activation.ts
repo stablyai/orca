@@ -13,6 +13,7 @@ import {
 import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import type { PtyIngressEmission } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
+import { getPtyOwnerColorsForWorktree } from '../../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   type TerminalExitCause,
   resolveProcessExitCause
@@ -123,6 +124,7 @@ export function activateLocalPtySession(args: {
     ownerBackend === 'windows-conpty' ? createGitBashConsoleCapacityDetector(4096) : null
   const startupIngress = new PtyStartupIngress({
     ...(spawn.startupIngress ? { intent: spawn.startupIngress } : {}),
+    resolveHostColors: () => getPtyOwnerColorsForWorktree(spawn.worktreeId),
     ownerBackend,
     readForegroundGroup: ptyForegroundGroupReader(proc),
     write: (data) => proc.write(data),
