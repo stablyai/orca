@@ -38,10 +38,12 @@ type WorkerStartModePlacement = {
 export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  terminalOnly?: boolean
 }): WorkerStartModeReceipt {
   return decideAgentLaunchMode({
     placement: args.params,
     settings: args.settings,
+    terminalOnly: args.terminalOnly,
     vocabulary: WORKER_START_VOCABULARY
   })
 }
