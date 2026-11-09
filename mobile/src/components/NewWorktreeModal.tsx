@@ -175,7 +175,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     transitionDrawer: navigation.transitionDrawer,
     setError,
     onCreated: (worktreeId, name, warning) => {
-      setNote('')
+      // A note typed in a reopened form while this create ran is not the one it sent.
+      setNote((current) => (current === note ? '' : current))
       onCreated(worktreeId, name, warning, repoServer)
     },
     onClose
