@@ -1,4 +1,4 @@
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { waitForProcessExitUntil } from './provider-process-exit-deadline'
 import {
@@ -26,7 +26,7 @@ export type ProviderProcessClosePolicy = {
 }
 
 export type ProviderProcessCloseInput = {
-  child: Pick<SpawnedProcess, 'pid' | 'kill' | 'stdin'>
+  child: Pick<ChildProcess, 'pid' | 'kill' | 'stdin'>
   exitPromise: Promise<void>
   rootVerdict: () => DescendantTreeVerdict
   supervised?: boolean

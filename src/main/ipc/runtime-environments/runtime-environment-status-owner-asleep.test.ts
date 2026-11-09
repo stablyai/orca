@@ -11,8 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../runtime/construction/runtime-desktop-surface', () => ({
   getRuntimeDesktopSurface: () => ({})
 }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: mocks.send
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: mocks.send
 }))
 vi.mock(
   '../../../shared/remote-runtime/host-catalog/runtime-environments',

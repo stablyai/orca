@@ -162,6 +162,7 @@ export async function openClaudeStreamJsonConnection(
   // Share descendant evidence across close retries and fault cleanup.
   const rootSettled = (): boolean => managed.rootVerdict === 'exited'
   const tree = createClaudeChildTreeReaper(child, {
+    site: 'claude-structured-child-close',
     exited: rootSettled,
     supervised: managed.supervised
   })

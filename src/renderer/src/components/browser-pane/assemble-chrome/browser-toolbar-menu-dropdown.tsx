@@ -18,7 +18,8 @@ import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportD
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useAppStore } from '@/store'
 import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../../shared/browser/browser-family-labels'
 import type {
   BrowserSessionProfile,
   BrowserViewportPresetId

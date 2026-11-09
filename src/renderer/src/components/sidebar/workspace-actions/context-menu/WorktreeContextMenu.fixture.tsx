@@ -101,6 +101,7 @@ function menuFixture(
 }
 
 export const open = menuFixture(repo)
+export const primaryCheckout = menuFixture(repo, { ...worktree, isMainWorktree: true })
 export const withChild = menuFixture(repo, worktree, { children: [childWorktree] })
 const projectGroups: ProjectGroup[] = ['Releases', 'Experiments'].map((name, index) => ({
   id: name.toLowerCase(),

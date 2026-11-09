@@ -33,10 +33,10 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   useMobileTranslation()
-  const { client, enabled, onTranscript, onError } = options
+  const { client, enabled, onTranscript, onError, removeFillerWords } = options
   // Both capture seams hold the screen while the microphone is open; native uses the device directly and page uses shell audio verbs.
   const capture = useDictationCapture()
-  const speech = useOnDeviceSpeech()
+  const speech = useOnDeviceSpeech(removeFillerWords)
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [transcriptSoFar, setTranscriptSoFar, keptTranscript] = useMobileDictationTranscriptSoFar()

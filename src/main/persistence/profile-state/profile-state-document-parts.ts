@@ -8,9 +8,10 @@ import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
  * this layer still sees one document per domain.
  *
  * Older builds ignore these tables and read the domain's legacy `profile_state_documents`
- * row. That row is refreshed from the parts when the writer starts, at most every five minutes while it runs, and at graceful close; when an
- * older build rewrites it, its revision no longer matches `legacy_revision` and the legacy
- * row becomes authoritative again until the next write re-splits it.
+ * row. That row is refreshed from the parts when the writer starts, at most hourly while it
+ * runs, and at graceful close; when an older build rewrites it, its revision no longer matches
+ * `legacy_revision` and the legacy row becomes authoritative again until the next write
+ * re-splits it.
  */
 export {
   PROFILE_STATE_DOCUMENT_PARTS_META_TABLE,
