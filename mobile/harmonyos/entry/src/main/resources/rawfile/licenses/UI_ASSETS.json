@@ -272,6 +272,13 @@
       "package": "lucide-static",
       "version": "0.577.0",
       "source": "package/icons/list-todo.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_type.svg",
+      "sha256": "b359461e1803625aaf0a84b0e7721e393ceb4f12c974f0fe41d8aada97718491",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/type.svg"
     }
   ]
 }
