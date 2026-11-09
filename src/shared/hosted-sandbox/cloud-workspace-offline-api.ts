@@ -51,7 +51,8 @@ export type CloudOfflineSnapshot = {
   chats: CloudOfflineChat[]
 }
 
-export type CloudQueuedPromptState = 'queued' | 'sending' | 'delivered' | 'failed'
+/** `unconfirmed`: it may have reached the agent (sent, but the reply never came back). */
+export type CloudQueuedPromptState = 'queued' | 'sending' | 'delivered' | 'failed' | 'unconfirmed'
 
 export type CloudQueuedPrompt = {
   id: string

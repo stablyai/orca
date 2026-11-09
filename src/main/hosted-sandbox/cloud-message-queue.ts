@@ -11,10 +11,7 @@
 // already up, never to one asleep, archived or manually disconnected, and stop after a budget.
 import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
-import {
-  CLOUD_QUEUED_PROMPT_MAX_CHARS,
-  type CloudQueuedPrompt
-} from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
+import { CLOUD_QUEUED_PROMPT_MAX_CHARS } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
@@ -23,20 +20,18 @@ import {
 } from '../../shared/agent-session/agent-session-host-authority'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { SendParams } from '../../shared/rpc-contract/structured-agent-session-params'
-import type { OfflineCacheCodec } from './cloud-offline-cache'
 import {
   readSealedPrompts,
+  currentFence,
+  publicView,
+  RETRYABLE_REFUSALS,
+  removeLegacyPlaintextQueue,
   writeSealedPrompts,
+  type CloudMessageQueue,
+  type CloudMessageQueueDeps,
   type StoredPrompt
 } from './cloud-message-queue-store'
 
-/** Refusals that mean "not now", not "never": the same operation is sent again. */
-const RETRYABLE_REFUSALS = new Set([
-  'agent_session_checkpoint_stale',
-  'execution_owner_reconciling',
-  'agent_session_ownership_unknown',
-  'agent_session_operation_capacity'
-])
 /** Delivered prompts stay listed briefly so the chat can show "Delivered". */
 const DELIVERED_RETENTION_MS = 10 * 60_000
 export const MAX_FAILURES = 6
@@ -46,59 +41,18 @@ const SEND_TIMEOUT_MS = 60_000
 /** Re-mint a never-sent id this long before the host would refuse it as expired. */
 const REMINT_MARGIN_MS = 60 * 60_000
 
-export type WorkspaceAvailability =
-  | { kind: 'up'; environmentId: string }
-  | { kind: 'asleep'; environmentId: string }
-  /** Archived or manually disconnected: nothing wakes it or sends to it. */
-  | { kind: 'blocked'; reason: string }
-  | { kind: 'gone' }
-
-export type CloudMessageQueueDeps = {
-  path: string
-  /** Null: the OS cannot seal files, so the queue lives in memory only. */
-  codec: OfflineCacheCodec | null
-  now?: () => number
-  locate: (workspaceId: string) => Promise<WorkspaceAvailability>
-  /** Wake through the ordinary path; true once orcad is up. */
-  wake: (workspaceId: string) => Promise<boolean>
-  call: (
-    environmentId: string,
-    method: string,
-    params: unknown,
-    timeoutMs: number
-  ) => Promise<RuntimeRpcResponse<unknown>>
-  onChange?: (workspaceId: string) => void
-  log?: (line: string) => void
-}
-
-export type CloudMessageQueue = {
-  /** Queue and deliver (waking the VM: the person asked for it). Rejects blocked workspaces. */
-  enqueue(args: {
-    workspaceId: string
-    sessionId: string
-    text: string
-  }): Promise<CloudQueuedPrompt>
-  list(workspaceId: string): CloudQueuedPrompt[]
-  cancel(id: string): boolean
-  edit(id: string, text: string): boolean
-  /** Background pass: deliver to VMs that are already up; never wakes. */
-  drive(workspaceId?: string): Promise<void>
-  /** The workspace was slept, archived or removed: queued prompts fail instead of waiting. */
-  failPending(workspaceId: string, reason: string): void
-  /** Sign-out / profile switch: forget everything. */
-  clear(): void
-}
-
-function publicView(prompt: StoredPrompt): CloudQueuedPrompt {
-  const { clientOperationId: _id, failures: _f, nextAttemptAt: _n, ...view } = prompt
-  return view
-}
+export type {
+  CloudMessageQueue,
+  CloudMessageQueueDeps,
+  WorkspaceAvailability
+} from './cloud-message-queue-store'
 
 export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessageQueue {
   const now = deps.now ?? Date.now
   const log = deps.log ?? ((line: string) => console.error(line))
   const driving = new Map<string, Promise<void>>()
   const mintId = () => createStructuredAgentSessionOperationId(randomUUID, now())
+  removeLegacyPlaintextQueue(deps.path)
   let prompts: StoredPrompt[] = readSealedPrompts(deps.path, deps.codec)
 
   function save(): void {
@@ -116,7 +70,17 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
   function failOnce(prompt: StoredPrompt, error: string): void {
     const failures = prompt.failures + 1
     if (failures >= MAX_FAILURES) {
-      update(prompt, { failures, state: 'failed', error })
+      // A prompt that reached `sending` may already be on the host: say so, so nobody re-sends it.
+      update(
+        prompt,
+        prompt.state === 'sending'
+          ? {
+              failures,
+              state: 'unconfirmed',
+              error: 'Delivery could not be confirmed. Check the chat before sending again.'
+            }
+          : { failures, state: 'failed', error }
+      )
       return
     }
     update(prompt, {
@@ -132,30 +96,6 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       )
       .sort((a, b) => a.createdAt - b.createdAt)
 
-  /** The session's fence; `refused` when the host says the chat is gone; null to retry later. */
-  async function currentFence(
-    environmentId: string,
-    sessionId: string
-  ): Promise<number | { refused: string } | null> {
-    const response = await deps.call(
-      environmentId,
-      'agentSession.history',
-      { sessionId, direction: 'tail', limit: 1 },
-      20_000
-    )
-    if (!response.ok) {
-      // A session refusal is final (the chat was closed or never existed here); anything else
-      // (asleep, unreachable, timeout) is the transport and is retried.
-      const code = response.error.code
-      return code.startsWith('agent_session_') && !RETRYABLE_REFUSALS.has(code)
-        ? { refused: code }
-        : null
-    }
-    const result = response.result as { ok: boolean; page?: { fence?: number }; fence?: number }
-    const fence = result.page?.fence ?? (result.ok ? undefined : result.fence)
-    return typeof fence === 'number' ? fence : null
-  }
-
   /** One attempt. 'stop': leave the rest of this workspace for later. */
   async function deliver(prompt: StoredPrompt, environmentId: string): Promise<'next' | 'stop'> {
     // A never-sent id close to the host's admission window gets a fresh one; a sent one never does.
@@ -166,10 +106,10 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
     ) {
       update(prompt, { clientOperationId: mintId() })
     }
-    const before = { id: prompt.clientOperationId, text: prompt.text }
+    const before = { id: prompt.clientOperationId, text: prompt.text, state: prompt.state }
     let fence: number | { refused: string } | null
     try {
-      fence = await currentFence(environmentId, prompt.sessionId)
+      fence = await currentFence(deps.call, environmentId, prompt.sessionId)
     } catch (error) {
       failOnce(prompt, `Could not reach the workspace: ${String(error).slice(0, 120)}`)
       return 'stop'
@@ -178,7 +118,9 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
     if (
       !prompts.includes(prompt) ||
       prompt.clientOperationId !== before.id ||
-      prompt.text !== before.text
+      prompt.text !== before.text ||
+      // A Sleep or archive failed it meanwhile (the person may already have re-sent it).
+      prompt.state !== before.state
     ) {
       return 'next'
     }
@@ -372,6 +314,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       }
     },
     clear() {
+      removeLegacyPlaintextQueue(deps.path)
       const workspaces = new Set(prompts.map((p) => p.workspaceId))
       prompts = []
       rmSync(deps.path, { force: true })
