@@ -1,5 +1,6 @@
 import {
   existsSync,
+  statSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,12 +14,12 @@ import { describe, expect, it } from 'vitest'
 import { gunzipCapped, safeEntryPath, safeExtractTar } from './cloud-transfer-tar'
 
 /** Minimal ustar writer: entries are [name, type, content]. */
-function tar(entries: [string, string, string?][]): Buffer {
+function tar(entries: [string, string, string?, string?][]): Buffer {
   const blocks: Buffer[] = []
-  for (const [name, type, content = ''] of entries) {
+  for (const [name, type, content = '', mode = '0000644'] of entries) {
     const header = Buffer.alloc(512)
     header.write(name, 0, 100)
-    header.write('0000644\0', 100)
+    header.write(`${mode}\0`, 100)
     header.write('0000000\0', 108)
     header.write('0000000\0', 116)
     header.write(`${Buffer.byteLength(content).toString(8).padStart(11, '0')}\0`, 124)
@@ -116,5 +117,32 @@ describe('safe extraction of VM archives', () => {
     expect(existsSync(join(root, 'out'))).toBe(false)
     writeFileSync(join(root, 'ok.gz'), gzipSync(Buffer.from('hello')))
     expect(await gunzipCapped(join(root, 'ok.gz'), join(root, 'ok'), 1024)).toBe(5)
+  })
+
+  it('skips .git paths (any case), keeps the exec bit, steps over dir data, reads pax paths by bytes', async () => {
+    const { root, dest } = setup()
+    const archive = join(root, 'a.tar')
+    const longName = `dir/${'é'.repeat(60)}.sh`
+    const record = ` path=${longName}\n`
+    let length = Buffer.byteLength(record) + 2
+    length = Buffer.byteLength(`${length}${record}`)
+    writeFileSync(
+      archive,
+      tar([
+        ['.git/hooks/pre-commit', '0', 'evil'],
+        ['sub/.GIT/config', '0', 'evil'],
+        ['run.sh', '0', '#!/bin/sh', '0000755'],
+        ['odd-dir/', '5', 'payload-that-must-be-skipped'],
+        ['pax', 'x', `${length}${record}`],
+        ['ignored-name', '0', 'pax body']
+      ])
+    )
+    const result = await safeExtractTar(archive, dest, { maxBytes: 4096 })
+    expect(existsSync(join(dest, '.git'))).toBe(false)
+    expect(existsSync(join(dest, 'sub', '.GIT'))).toBe(false)
+    expect(result.skipped).toEqual(['.git/hooks/pre-commit', 'sub/.GIT/config'])
+    expect(statSync(join(dest, 'run.sh')).mode & 0o111).not.toBe(0)
+    expect(existsSync(join(dest, 'odd-dir'))).toBe(true)
+    expect(readFileSync(join(dest, longName), 'utf8')).toBe('pax body')
   })
 })

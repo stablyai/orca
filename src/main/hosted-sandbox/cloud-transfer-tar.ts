@@ -42,6 +42,10 @@ export function safeEntryPath(name: string): string | null {
   if (parts.some((part) => part === '..' || part === '' || part.includes('\0'))) {
     return null
   }
+  // Never write git metadata (e.g. .git/hooks of a checkout the destination might be).
+  if (parts.some((part) => part.toLowerCase() === '.git')) {
+    return null
+  }
   return normalize(parts.join(sep))
 }
 
@@ -62,19 +66,23 @@ function readOctal(block: Buffer, offset: number, length: number): number {
 }
 
 function paxPath(data: Buffer): string | null {
+  // Records are "<len> key=value\n" where <len> counts bytes (not characters) of the whole record.
   let path: string | null = null
-  let rest = data.toString('utf8')
-  while (rest.length > 0) {
-    const space = rest.indexOf(' ')
-    const length = Number.parseInt(rest.slice(0, space), 10)
-    if (!Number.isFinite(length) || length <= 0) {
+  let offset = 0
+  while (offset < data.length) {
+    const space = data.indexOf(0x20, offset)
+    if (space === -1) {
       break
     }
-    const record = rest.slice(space + 1, length - 1)
+    const length = Number.parseInt(data.subarray(offset, space).toString('ascii'), 10)
+    if (!Number.isFinite(length) || length <= 0 || offset + length > data.length) {
+      break
+    }
+    const record = data.subarray(space + 1, offset + length - 1).toString('utf8')
     if (record.startsWith('path=')) {
       path = record.slice(5)
     }
-    rest = rest.slice(length)
+    offset += length
   }
   return path
 }
@@ -141,6 +149,8 @@ export async function safeExtractTar(
       }
       const target = join(root, relative)
       if (type === '5') {
+        // A directory entry may (oddly) carry data blocks: always step over them.
+        offset += padded
         if (await throughSymlink(root, relative)) {
           result.skipped.push(rawName.slice(0, 200))
           continue
@@ -168,7 +178,9 @@ export async function safeExtractTar(
         offset += padded
         continue
       }
-      const out = await open(target, 'w', 0o644)
+      // Keep the executable bit (scripts); never setuid/setgid or group/world-writable.
+      const executable = (readOctal(header, 100, 8) & 0o111) !== 0
+      const out = await open(target, 'w', executable ? 0o755 : 0o644)
       try {
         let remaining = size
         let position = offset

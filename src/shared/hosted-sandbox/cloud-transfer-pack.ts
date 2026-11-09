@@ -43,7 +43,8 @@ export function cloudTransferPackScript(): string {
 root="$PWD"
 out="$root/${CLOUD_TRANSFER_DIR}"
 stage="$out/stage"
-rm -rf "$stage" "$out/transfer.tar"
+# A result left by an earlier run (whose cleanup failed) must never be read as this run's.
+rm -rf "$stage" "$out/transfer.tar" "$out/result.json"
 mkdir -p "$stage/claude" "$stage/codex"
 exclude="$(git rev-parse --git-path info/exclude)"
 mkdir -p "$(dirname "$exclude")"
