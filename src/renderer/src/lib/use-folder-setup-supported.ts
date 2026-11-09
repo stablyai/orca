@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
@@ -25,11 +25,25 @@ function folderSetupHost(repo: Repo | null | undefined): FolderSetupHost {
     : { kind: 'known', supported: true }
 }
 
-function probeFolderSetup(environmentId: string): Promise<boolean> {
-  return runtimeEnvironmentSupportsCapability(
+// Every answer, from the composer's probe or a Create retry, reaches all mounted consumers.
+const folderSetupAnswers = new Map<string, boolean>()
+const folderSetupListeners = new Set<() => void>()
+
+function subscribeFolderSetupAnswers(listener: () => void): () => void {
+  folderSetupListeners.add(listener)
+  return () => folderSetupListeners.delete(listener)
+}
+
+async function probeFolderSetup(environmentId: string): Promise<boolean> {
+  const supported = await runtimeEnvironmentSupportsCapability(
     environmentId,
     WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY
   )
+  if (folderSetupAnswers.get(environmentId) !== supported) {
+    folderSetupAnswers.set(environmentId, supported)
+    folderSetupListeners.forEach((listener) => listener())
+  }
+  return supported
 }
 
 /** Folder setup runs only on hosts that report it; older hosts would save scripts that never run. Rejects when the host can't answer. */
@@ -43,30 +57,20 @@ export function resolveFolderSetupSupported(repo: Repo | null | undefined): Prom
 export function useFolderSetupSupport(repo: Repo | null | undefined): FolderSetupSupport {
   const host = folderSetupHost(repo)
   const environmentId = host.kind === 'runtime' ? host.environmentId : null
-  const [probe, setProbe] = useState<{ environmentId: string; supported: boolean } | null>(null)
+  const answer = useSyncExternalStore(subscribeFolderSetupAnswers, () =>
+    environmentId ? folderSetupAnswers.get(environmentId) : undefined
+  )
   useEffect(() => {
-    if (!environmentId) {
-      return
-    }
-    let cancelled = false
-    // A failed probe stays pending so Create re-asks instead of treating it as unsupported.
-    probeFolderSetup(environmentId).then(
-      (supported) => {
-        if (!cancelled) {
-          setProbe({ environmentId, supported })
-        }
-      },
-      () => {}
-    )
-    return () => {
-      cancelled = true
+    // Re-asked on mount so an in-place host upgrade shows; a failure stays pending for Create to retry.
+    if (environmentId) {
+      probeFolderSetup(environmentId).catch(() => {})
     }
   }, [environmentId])
   if (host.kind === 'known') {
     return host.supported ? 'supported' : 'unsupported'
   }
-  if (probe?.environmentId !== host.environmentId) {
+  if (answer === undefined) {
     return 'pending'
   }
-  return probe.supported ? 'supported' : 'unsupported'
+  return answer ? 'supported' : 'unsupported'
 }
