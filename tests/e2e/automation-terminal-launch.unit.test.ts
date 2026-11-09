@@ -22,6 +22,7 @@ import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/
 import { buildProfileStateCutoverFixture } from '../../src/main/persistence/profile-state-cutover-fixture'
 import { launchAutomationChatAgent } from '../../src/main/automations/automation-chat-agent-launch'
 import { agentSessionRefusalError } from '../../src/shared/agent-session/failures/agent-session-wire-refusals'
+import { withTestAgentSessionDatabase } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 
 const mocks = vi.hoisted(() => {
   const hostState: {
@@ -497,9 +498,14 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
     const current = { ...run, createdAt: HOST_TEST_NOW }
     const rig = await createQueuedMessageTestRig({ restartable: true })
     mocks.actualHost = rig.host
-    // The SQL record store has no record-deletion command, so deletion is injected at its record
-    // reads: every read the refusal and the fresh decision consult answers as for a missing record.
     const { store } = rig
+    const recordJson = await withTestAgentSessionDatabase(rig.root, (db) =>
+      String(
+        db
+          .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+          .get(HOST_TEST_SESSION)!.record_json
+      )
+    )
     const reads = {
       select: store.selectWritableRecord,
       record: store.getRecord,
@@ -507,7 +513,10 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
       require: store.requireWritableRecord
     }
     const removed: { mockRestore: () => void }[] = []
-    const removeRecord = () => {
+    const removeRecord = async () => {
+      await withTestAgentSessionDatabase(rig.root, (db) =>
+        db.prepare('DELETE FROM agent_session_records WHERE session_id=?').run(HOST_TEST_SESSION)
+      )
       const deleted = (id: string) => id === HOST_TEST_SESSION
       removed.push(
         vi
@@ -535,7 +544,7 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
       const sent = rig.host.send.bind(rig.host)
       const send = vi.spyOn(rig.host, 'send').mockImplementationOnce(async (...args) => {
         if (when === 'before-admission') {
-          removeRecord()
+          await removeRecord()
         }
         const reply = await sent(...args)
         if (when === 'before-admission') {
@@ -548,7 +557,7 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
           })
         } else {
           expect(reply.ok).toBe(true)
-          removeRecord()
+          await removeRecord()
           if (when === 'accepted-lost-reply') {
             throw new Error('accepted reply lost after deletion')
           }
@@ -596,6 +605,11 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
       for (const read of removed) {
         read.mockRestore()
       }
+      await withTestAgentSessionDatabase(rig.root, (db) =>
+        db
+          .prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)')
+          .run(HOST_TEST_SESSION, recordJson)
+      )
       await rig.dispose()
     }
   }
