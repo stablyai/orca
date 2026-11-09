@@ -18,6 +18,8 @@ type HoldDictationReleaseMatcher = (event: KeyboardEvent) => boolean
 type ActiveHold = {
   matchesRelease: HoldDictationReleaseMatcher
   pressedAt: number
+  /** Key repeat showed the key still down past the Auto threshold. */
+  repeatedPastThreshold: boolean
   startedDictation: boolean
 }
 
@@ -146,17 +148,18 @@ export function useHoldDictationGesture({
       return
     }
 
-    // Losing the release (blur, hidden, mode change) counts as releasing now, which inserts what was said.
-    const endHold = (): void => {
+    // Losing the release (blur, hidden, mode change) ends the press, which inserts what was said.
+    // releasedAt is null when the key's own release time is unknown; only key repeat then proves an Auto hold.
+    const endHold = (releasedAt: number | null = null): void => {
       const hold = activeHoldRef.current
       if (!hold) {
         return
       }
       activeHoldRef.current = null
-      if (
-        mode === 'hold' ||
-        (hold.startedDictation && performance.now() - hold.pressedAt >= AUTO_HOLD_THRESHOLD_MS)
-      ) {
+      const held =
+        hold.repeatedPastThreshold ||
+        (releasedAt !== null && releasedAt - hold.pressedAt >= AUTO_HOLD_THRESHOLD_MS)
+      if (mode === 'hold' || (hold.startedDictation && held)) {
         stop()
       }
     }
@@ -185,10 +188,14 @@ export function useHoldDictationGesture({
         activeHoldRef.current = {
           matchesRelease: createHoldDictationReleaseMatcher(e),
           pressedAt: performance.now(),
+          repeatedPastThreshold: false,
           startedDictation: false
         }
       }
       const hold = activeHoldRef.current
+      if (hold && e.repeat && performance.now() - hold.pressedAt >= AUTO_HOLD_THRESHOLD_MS) {
+        hold.repeatedPastThreshold = true
+      }
       // One dictation per press: key repeat after an automatic stop must not start another.
       if (hold && !hold.startedDictation && canStart()) {
         hold.startedDictation = true
@@ -199,7 +206,8 @@ export function useHoldDictationGesture({
     const handleKeyUp = (e: KeyboardEvent): void => {
       const hold = activeHoldRef.current
       if (hold && (matchesShortcut(e) || hold.matchesRelease(e))) {
-        endHold()
+        // macOS drops the key's keyup while Cmd is held, so a Cmd keyup says nothing about when the key went up.
+        endHold(getReleasedModifier(e) === 'meta' ? null : performance.now())
       }
     }
 
@@ -208,16 +216,17 @@ export function useHoldDictationGesture({
         endHold()
       }
     }
+    const handleBlur = (): void => endHold()
 
     addAppKeyListener('keydown', handleKeyDown)
     addAppKeyListener('keyup', handleKeyUp)
-    window.addEventListener('blur', endHold)
+    window.addEventListener('blur', handleBlur)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => {
       endHold()
       removeAppKeyListener('keydown', handleKeyDown)
       removeAppKeyListener('keyup', handleKeyUp)
-      window.removeEventListener('blur', endHold)
+      window.removeEventListener('blur', handleBlur)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [mode, enabled])

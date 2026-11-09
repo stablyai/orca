@@ -169,10 +169,11 @@ describe('useHoldDictationGesture in Auto mode', () => {
   it('keeps recording after a tap and stops on the next press', async () => {
     await renderProbe()
 
+    // macOS drops the E keyup under Cmd, so the tap ends only when Cmd lets go.
     beginHold()
-    now += 299
+    now += 600
     act(() => {
-      dispatchKeyUp({ key: 'e', code: 'KeyE', metaKey: true })
+      dispatchKeyUp({ key: 'Meta', code: 'MetaLeft', metaKey: false })
     })
     expect(stopDictation).not.toHaveBeenCalled()
 
@@ -187,10 +188,10 @@ describe('useHoldDictationGesture in Auto mode', () => {
     await renderProbe()
 
     beginHold()
+    now += 300
     act(() => {
       dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, repeat: true })
     })
-    now += 300
     act(() => {
       dispatchKeyUp({ key: 'Meta', code: 'MetaLeft', metaKey: false })
     })
