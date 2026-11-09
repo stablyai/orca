@@ -12,6 +12,7 @@ import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
+import { refuseAgentServerRoute } from './agent-server-route'
 import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
@@ -70,7 +71,9 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
 }
 
 export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
-  'orchestration send': async ({ flags, client, cwd, json }) => {
+  'orchestration send': async (ctx) => {
+    const { flags, client, cwd, json } = ctx
+    await refuseAgentServerRoute('send', ctx)
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {
@@ -99,6 +102,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       from,
       to,
       run: getOptionalStringFlag(flags, 'run'),
+      on: getOptionalStringFlag(flags, 'on'),
       subject: getRequiredStringFlag(flags, 'subject'),
       body: getOptionalStringFlag(flags, 'body'),
       type,

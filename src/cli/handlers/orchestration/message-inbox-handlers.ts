@@ -27,6 +27,7 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       id: getRequiredStringFlag(flags, 'id'),
       body: getRequiredStringFlag(flags, 'body'),
       run: getOptionalStringFlag(flags, 'run'),
+      on: getOptionalStringFlag(flags, 'on'),
       from
     })
     if (!flags.has('full')) {
