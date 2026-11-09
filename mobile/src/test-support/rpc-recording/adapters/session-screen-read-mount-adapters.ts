@@ -1,10 +1,12 @@
+import type * as UseMobileSessionDocumentReadersModule from '../../../files/session-documents/use-mobile-session-document-readers'
+import type * as UseMobileSessionTerminalListModule from '../../../terminal/session/use-mobile-session-terminal-list'
 import { hookMount, performHookAction } from '../hook-mount'
 import type {
   FileDocState,
-  MarkdownDocState,
-  MobileSessionTab
-} from '../../../session/mobile-session-route-types'
-import type { TerminalRecord } from '../../../session/mobile-terminal-records'
+  MarkdownDocState
+} from '../../../files/session-documents/session-document-state'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
+import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -21,9 +23,9 @@ export function sessionScreenReadMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.tab-documents': ({ client }) => {
-      const useReaders = modules.load<
-        typeof import('../../../session/use-mobile-session-document-readers')
-      >('mobile/src/session/use-mobile-session-document-readers.ts').useMobileSessionDocumentReaders
+      const useReaders = modules.load<typeof UseMobileSessionDocumentReadersModule>(
+        'mobile/src/files/session-documents/use-mobile-session-document-readers.ts'
+      ).useMobileSessionDocumentReaders
       let markdownDocs = new Map<string, MarkdownDocState>()
       let fileDocs = new Map<string, FileDocState>()
       let readers: ReturnType<typeof useReaders>
@@ -83,9 +85,9 @@ export function sessionScreenReadMountAdapters(
       }
     },
     'session.terminal-inventory': ({ client, effect }) => {
-      const useList = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-list')
-      >('mobile/src/session/use-mobile-session-terminal-list.ts').useMobileSessionTerminalList
+      const useList = modules.load<typeof UseMobileSessionTerminalListModule>(
+        'mobile/src/terminal/session/use-mobile-session-terminal-list.ts'
+      ).useMobileSessionTerminalList
       let terminals: TerminalRecord[] = []
       const terminalsRef: { current: TerminalRecord[] } = { current: [] }
       const sessionTabsRef: { current: MobileSessionTab[] } = { current: [] }

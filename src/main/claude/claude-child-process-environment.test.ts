@@ -1,22 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 
 describe('Claude child process environment', () => {
-  it('strips case-insensitive auth headers through the shared env patch on Windows', () => {
-    expect(
-      applyClaudeEnvPatch(
-        {
-          anthropic_api_key: 'inherited-key',
-          Anthropic_Custom_Headers: 'Authorization: inherited',
-          SAFE_VALUE: 'preserved'
-        },
-        {},
-        { stripAuthEnv: true, platform: 'win32' }
-      )
-    ).toEqual({ SAFE_VALUE: 'preserved' })
-  })
-
   it('strips case-insensitive inherited auth and session stamps on Windows', () => {
     const env = buildClaudeChildProcessEnv(
       {

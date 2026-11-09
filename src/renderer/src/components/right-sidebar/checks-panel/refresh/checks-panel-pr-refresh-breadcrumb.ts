@@ -2,7 +2,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import {
   getGitHubPRRefreshStateExpiryAt,
   type PRRefreshState
-} from '@/store/github/pr-refresh-state'
+} from '@/store/github/refresh/pr-refresh-state'
 import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue

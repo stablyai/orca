@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
+import { forceLayoutReflow } from '@/lib/force-layout-reflow'
 
 function getReviewPrAnimatedStatusCopy(): {
   pendingLabel: string
@@ -133,7 +134,7 @@ export function useReviewPrViewAnimation(
       cursorEl.classList.remove('is-visible', 'is-clicking')
       cursorEl.style.transition = 'none'
       cursorEl.style.transform = 'translate(-30px, 220px)'
-      void cursorEl.offsetWidth
+      forceLayoutReflow(cursorEl)
       cursorEl.style.transition = ''
       checksBlockEl.classList.remove('is-visible')
       commentsBlockEl.classList.remove('is-visible')

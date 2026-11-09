@@ -2,7 +2,7 @@ import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
 import { release } from 'node:os'
 import { join } from 'node:path'
 import { getAppIconPath } from './desktop-integration/app-icon'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
@@ -24,6 +24,7 @@ import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window-activity'
 import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
@@ -204,6 +205,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)
   }
@@ -231,6 +233,7 @@ export function createMainWindow(
     closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
+    activity.dispose()
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)

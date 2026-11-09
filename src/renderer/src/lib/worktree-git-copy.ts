@@ -2,12 +2,10 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRoutableExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
-import {
-  selectWorkspaceByHostTarget,
-  selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { GitPushTarget } from '../../../shared/worktree/types'
@@ -35,7 +33,7 @@ export type WorktreeGitCopy = {
  * The selected copy's host, else the owner's when the unqualified owner resolves. An ambiguous twin
  * with no selection stays unplaced, so its git calls refuse instead of guessing a copy.
  */
-function placedHostId(state: AppState, worktreeId: string): ExecutionHostId | null {
+export function worktreeGitCopyHostId(state: AppState, worktreeId: string): ExecutionHostId | null {
   const selected = getActiveWorkspaceExecutionHostId(state, worktreeId)
   if (selected) {
     return parseRoutableExecutionHostId(selected)?.id ?? null
@@ -57,7 +55,7 @@ export function resolveWorktreeGitCopy(
   worktreeId: string,
   hostId?: ExecutionHostId | null
 ): WorktreeGitCopy | null {
-  const copyHostId = hostId ?? placedHostId(state, worktreeId)
+  const copyHostId = hostId ?? worktreeGitCopyHostId(state, worktreeId)
   const transport = runtimeTargetForWorkspaceOwner(state, {
     workspaceId: worktreeId,
     ...(copyHostId ? { hostId: copyHostId } : {})
@@ -91,7 +89,7 @@ export function resolveWorktreeGitCopyNow(
 
 /** The selected copy's host, for a callback that must keep answering for it after a switch. */
 export function useWorktreeGitCopyHostId(worktreeId: string | null): ExecutionHostId | null {
-  return useAppStore((state) => (worktreeId ? placedHostId(state, worktreeId) : null))
+  return useAppStore((state) => (worktreeId ? worktreeGitCopyHostId(state, worktreeId) : null))
 }
 
 /**

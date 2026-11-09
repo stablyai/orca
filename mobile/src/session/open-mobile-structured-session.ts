@@ -7,14 +7,14 @@ import {
 } from '../../../src/shared/open-structured-agent-session'
 import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   structuredOpenLocation,
   structuredOpenParty,
   structuredOpenReveal,
   structuredOpenTabs
 } from './mobile-structured-session-open-rpc'
-import { sessionTabActivate } from './mobile-session-write-operations'
+import { sessionTabActivate } from './tabs/mobile-session-tab-write-operations'
 
 /** The workspace client already carries executionHost; a single budget includes connect waits. */
 export async function openMobileStructuredSession(args: {

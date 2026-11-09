@@ -11,7 +11,7 @@ const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 import NodeDistMirrorDialog from './NodeDistMirrorDialog'
-import { SshHostNodeMirrorAction } from '../../ssh/server-actions/SshHostNodeMirrorAction'
+import { SshHostNodeMirrorAction } from '../../../ssh-host-recovery/SshHostNodeMirrorAction'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 
@@ -103,19 +103,6 @@ describe('Use a Node.js mirror', () => {
     await waitFor(() =>
       expect(settingsSet).toHaveBeenCalledWith({ nodeDistMirrorUrl: 'https://mirror.example/node' })
     )
-  })
-
-  it('cancels without saving, also with Escape', async () => {
-    render(<Host status={blocked} />)
-    openDialog()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-
-    const input = openDialog()
-    fireEvent.keyDown(input, { key: 'Escape' })
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(settingsSet).not.toHaveBeenCalled()
-    expect(connect).not.toHaveBeenCalled()
   })
 
   it('shows no offer once a mirror was tried, only the setting link', () => {

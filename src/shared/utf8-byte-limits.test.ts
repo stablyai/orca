@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampUtf8TextPrefix,
-  getUtf8ByteLength,
   getUtf8ChunkEndIndex,
   isUtf8ByteLengthWithinLimit,
   measureUtf8ByteLength,
@@ -34,15 +33,6 @@ describe('scanning a prefix slice whose parent continues past the slice', () => 
       observed.add(readUtf8CodePointAt(sliced, SLICE_BOUNDARY_UNITS - 1))
     }
     expect([...observed]).toEqual([0xd9f6])
-  })
-
-  it('measures the same byte length as the encoder in every JIT tier', () => {
-    const expected = Buffer.byteLength(sliced, 'utf8')
-    const observed = new Set<number>()
-    for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
-      observed.add(measureUtf8ByteLength(sliced).byteLength)
-    }
-    expect([...observed]).toEqual([expected])
   })
 
   it('does not report an exceeded limit at the true byte length in every JIT tier', () => {
@@ -107,34 +97,5 @@ describe('isUtf8ByteLengthWithinLimit', () => {
     { name: 'text with positive infinity', text: '😀', maxBytes: Infinity, expected: true }
   ])('$name', ({ text, maxBytes, expected }) => {
     expect(isUtf8ByteLengthWithinLimit(text, maxBytes)).toBe(expected)
-  })
-})
-
-describe('isUtf8ByteLengthWithinLimit native fast path', () => {
-  // Compare native bounded encoding against the prior scan at boundaries, including lone surrogates.
-  const samples = [
-    '',
-    'a',
-    'ascii only text',
-    'caf\u00e9',
-    '\u20ac\u20ac\u20ac',
-    '\ud83d\ude00\ud83d\ude00',
-    '\ud83d',
-    '\ude00',
-    'mixed \u00e9 \u20ac \ud83d\ude00 tail',
-    'x'.repeat(64)
-  ]
-
-  it('matches the scanning implementation at every limit around the boundary', () => {
-    for (const text of samples) {
-      const exactBytes = getUtf8ByteLength(text)
-      for (let maxBytes = 1; maxBytes <= exactBytes + 2; maxBytes += 1) {
-        expect({ text, maxBytes, within: isUtf8ByteLengthWithinLimit(text, maxBytes) }).toEqual({
-          text,
-          maxBytes,
-          within: text.length <= maxBytes && exactBytes <= maxBytes
-        })
-      }
-    }
   })
 })

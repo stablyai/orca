@@ -68,7 +68,7 @@ describe('Codex rollout subagent lifecycle', () => {
       subagents: [
         {
           id: CHILD_ID,
-          description: '/root/pr_review',
+          description: 'pr_review',
           state: 'working',
           startedAt: 1234
         }

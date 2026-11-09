@@ -2,16 +2,83 @@
 
 import * as React from 'react'
 import * as HoverCardPrimitive from 'radix-ui/hover-card'
+import { useControllableState } from 'radix-ui/internal'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
-function HoverCard({ ...props }: React.ComponentProps<typeof HoverCardPrimitive.Root>) {
-  return <HoverCardPrimitive.Root data-slot="hover-card" {...props} />
+const HoverCardInteractionContext = React.createContext({
+  dismiss: () => {},
+  reset: () => {}
+})
+
+function HoverCard({
+  open: controlledOpen,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof HoverCardPrimitive.Root>) {
+  const [open, setOpen] = useControllableState({
+    prop: controlledOpen,
+    defaultProp: defaultOpen ?? false,
+    onChange: onOpenChange,
+    caller: 'HoverCard'
+  })
+  const blocked = React.useRef(false)
+  const dismiss = React.useCallback(() => {
+    blocked.current = true
+    setOpen(false)
+  }, [setOpen])
+  const reset = React.useCallback(() => {
+    blocked.current = false
+  }, [])
+  const interaction = React.useMemo(() => ({ dismiss, reset }), [dismiss, reset])
+  return (
+    <HoverCardInteractionContext value={interaction}>
+      <HoverCardPrimitive.Root
+        data-slot="hover-card"
+        {...props}
+        open={open}
+        onOpenChange={(next) => {
+          if (!next || !blocked.current) {
+            setOpen(next)
+          }
+        }}
+      />
+    </HoverCardInteractionContext>
+  )
 }
 
-function HoverCardTrigger({ ...props }: React.ComponentProps<typeof HoverCardPrimitive.Trigger>) {
-  return <HoverCardPrimitive.Trigger data-slot="hover-card-trigger" {...props} />
+function HoverCardTrigger({
+  onPointerDown,
+  onPointerLeave,
+  onContextMenu,
+  onBlur,
+  ...props
+}: React.ComponentProps<typeof HoverCardPrimitive.Trigger>) {
+  const { dismiss, reset } = React.useContext(HoverCardInteractionContext)
+  return (
+    <HoverCardPrimitive.Trigger
+      data-slot="hover-card-trigger"
+      {...props}
+      onPointerDown={(event) => {
+        onPointerDown?.(event)
+        dismiss()
+      }}
+      onContextMenu={(event) => {
+        onContextMenu?.(event)
+        dismiss()
+      }}
+      onPointerLeave={(event) => {
+        onPointerLeave?.(event)
+        reset()
+      }}
+      onBlur={(event) => {
+        onBlur?.(event)
+        reset()
+      }}
+    />
+  )
 }
 
 const hoverCardContentVariants = cva('', {

@@ -4,7 +4,7 @@ import type { useAppStore } from '@/store'
 import { SourceControlAgentActionDialog } from '@/components/right-sidebar/source-control/ai/SourceControlAgentActionDialog'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { saveFixChecksActionDefault, startFixChecksFromDialog } from './fix-launch'
 
@@ -30,6 +30,7 @@ export function ChecksFixDialog({
   updateSettings: ReturnType<typeof useAppStore.getState>['updateSettings']
   updateRepo: ReturnType<typeof useAppStore.getState>['updateRepo']
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SourceControlAgentActionDialog
       open={fixChecksComposerPrompt !== null}
@@ -39,8 +40,8 @@ export function ChecksFixDialog({
         }
       }}
       actionId="fixChecks"
-      title={translate('auto.components.PullRequestPage.a053bdd082', 'Fix Broken Checks With AI')}
-      description={translate(
+      title={t('auto.components.PullRequestPage.a053bdd082', 'Fix Broken Checks With AI')}
+      description={t(
         'auto.components.PullRequestPage.ddfd42f460',
         'Review the prompt before starting an agent.'
       )}
@@ -58,7 +59,7 @@ export function ChecksFixDialog({
       }
       onLaunched={() => {
         toast.success(
-          translate(
+          t(
             'auto.components.PullRequestPage.85e62c5266',
             'Started an AI agent for the broken checks.'
           )

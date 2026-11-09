@@ -1,5 +1,8 @@
-import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/journal-input-observations'
-import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/journal-history-origin'
+import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/input-order/journal-input-observations'
+import {
+  nativeCopyIds,
+  usableJournalHistoryOrigin
+} from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
@@ -11,7 +14,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'
 
@@ -29,6 +32,8 @@ export type CodexHistoryJournalView = {
   hasRows: boolean
   /** Proven transcript origin, independent of subsequently imported provider identities. */
   importedAt: number | null
+  covered?: ReadonlySet<string>
+  origin?: unknown
   unresolvedOrigin: boolean
 }
 
@@ -98,10 +103,22 @@ export function readCodexHistoryJournalView(
   const rawOrigin = journal.historyOrigin()
   const origin = usableJournalHistoryOrigin(rawOrigin)
   const importedAt =
-    origin?.providerHandle.kind === 'codex' && origin.providerHandle.threadId === threadId
+    origin?.kind === 'legacy_import' &&
+    origin.providerHandle.kind === 'codex' &&
+    origin.providerHandle.threadId === threadId
       ? origin.importedAt
       : null
+  const copy =
+    origin?.kind === 'native_copy' &&
+    origin.unit === 'codex-turn' &&
+    origin.agent === 'codex' &&
+    origin.providerHandle.kind === 'codex' &&
+    origin.providerHandle.threadId === threadId
+      ? origin
+      : null
   return {
+    ...(copy ? { covered: nativeCopyIds(copy) } : {}),
+    origin: rawOrigin,
     epoch: journal.epoch,
     nativePromptKeys: journal.inputOrder.captureKeys(nativePromptKeys, signal),
     unresolvedIds: new Set(
@@ -117,7 +134,7 @@ export function readCodexHistoryJournalView(
     latestPosition,
     hasRows,
     importedAt,
-    unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null
+    unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null && !copy
   }
 }
 
@@ -152,6 +169,7 @@ export function sameCodexHistoryJournalView(
 ): boolean {
   return (
     a.epoch === b.epoch &&
+    a.origin === b.origin &&
     JSON.stringify([...(a.unresolvedIds ?? [])]) === JSON.stringify([...(b.unresolvedIds ?? [])]) &&
     a.unresolvedOrigin === b.unresolvedOrigin &&
     a.importedAt === b.importedAt &&

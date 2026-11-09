@@ -4,7 +4,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
-import { getEligibleWorktreeParents, isEligibleWorktreeParent } from './worktree-parent-candidates'
+import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 
 function makeWorktree(id: string, repoId = 'repo'): Worktree {
   return {
@@ -161,42 +161,14 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('offers parents from another repository on the same host', () => {
-    const child = makeWorktree('child', 'repo-a')
-    const sameRepo = makeWorktree('same-repo', 'repo-a')
-    const otherRepo = makeWorktree('other-repo', 'repo-b')
-    const worktrees = [child, sameRepo, otherRepo]
-
-    expect(
-      canAssignWorktreeParent({
-        child,
-        candidateParent: otherRepo,
-        lineageById: {},
-        worktreeMap: makeMap(worktrees)
-      })
-    ).toBe(true)
-    expect(
-      getEligibleWorktreeParents({
-        child,
-        worktrees,
-        lineageById: {},
-        worktreeMap: makeMap(worktrees),
-        repoMap: makeRepoMap([
-          { id: 'repo-a', connectionId: null, executionHostId: 'local' },
-          { id: 'repo-b', connectionId: null, executionHostId: 'local' }
-        ])
-      }).map((worktree) => worktree.id)
-    ).toEqual([sameRepo.id, otherRepo.id])
-  })
-
-  it('excludes same-repo candidates owned by a different runtime host', () => {
+  it('lists candidates on another machine after the child machine candidates', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameHost = makeWorktree('same-host', 'repo-a')
     const otherHost = makeWorktree('other-host', 'repo-a')
     child.hostId = 'runtime:env-a'
     sameHost.hostId = 'runtime:env-a'
     otherHost.hostId = 'runtime:env-b'
-    const worktrees = [child, sameHost, otherHost]
+    const worktrees = [otherHost, child, sameHost]
 
     expect(
       getEligibleWorktreeParents({
@@ -208,35 +180,35 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameHost.id])
+    ).toEqual(['same-host', 'other-host'])
   })
 
-  it('allows another project for picker and direct drop checks', () => {
-    const child = { ...makeWorktree('child'), projectId: 'project-a' }
-    const sameProject = { ...makeWorktree('same-project'), projectId: 'project-a' }
-    const otherProject = { ...makeWorktree('other-project'), projectId: 'project-b' }
-    const worktrees = [child, sameProject, otherProject]
-    const worktreeMap = makeMap(worktrees)
-    const repoMap = makeRepoMap()
+  it('offers a chain across three machines but hides one nested under the child', () => {
+    const child = makeWorktree('child', 'repo-a')
+    const chained = makeWorktree('chained', 'repo-a')
+    const nestedUnderChild = makeWorktree('nested', 'repo-a')
+    const third = makeWorktree('third', 'repo-a')
+    child.hostId = 'runtime:env-a'
+    chained.hostId = 'runtime:env-b'
+    nestedUnderChild.hostId = 'runtime:env-b'
+    third.hostId = 'runtime:env-c'
+    const worktrees = [child, chained, nestedUnderChild, third]
 
     expect(
       getEligibleWorktreeParents({
         child,
         worktrees,
         lineageById: {},
-        worktreeMap,
-        repoMap
+        worktreeMap: makeMap(worktrees),
+        repoMap: makeRepoMap([
+          { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
+        ]),
+        parentIdentities: new Map([
+          ['runtime:env-b|chained', 'runtime:env-c|third'],
+          ['runtime:env-b|nested', 'runtime:env-a|child']
+        ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameProject.id, otherProject.id])
-    expect(
-      isEligibleWorktreeParent({
-        child,
-        candidateParent: otherProject,
-        lineageById: {},
-        worktreeMap,
-        repoMap
-      })
-    ).toBe(true)
+    ).toEqual(['chained', 'third'])
   })
 
   it('excludes archived worktrees from picker candidates', () => {

@@ -3,7 +3,7 @@ import {
   clearPairedTerminalTabCloseIntents,
   recordPairedTerminalTabCloseIntent,
   type PairedTerminalTabCloseIntentsByEnvironment
-} from '../../runtime/paired-terminal-tab-close-intents'
+} from '../../runtime/web-session-tabs-sync/closing/paired-terminal-tab-close-intents'
 
 export type PairedTerminalTabCloseIntentSlice = {
   /** Persist unacknowledged paired-host closes by environment so reload/snapshots cannot reopen closed tabs. */

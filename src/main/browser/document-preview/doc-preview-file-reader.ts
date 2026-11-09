@@ -1,12 +1,12 @@
 import { extname } from 'node:path'
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-file-contracts'
-import type { DocPreviewFileFailureReason } from '../../../shared/doc-preview-scheme'
-import { FONT_FILE_MIME_TYPES } from '../../../shared/font-file-extensions'
-import { isBinaryBuffer } from '../../../shared/binary-buffer'
+import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
+import type { DocPreviewFileFailureReason } from '../../../shared/document-preview/doc-preview-scheme'
+import { FONT_FILE_MIME_TYPES } from '../../../shared/file-preview/font-file-extensions'
+import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import {
   DOC_PREVIEW_FILE_CHANGED_MESSAGE,
   type DocPreviewFileChunk
-} from '../../../shared/doc-preview-file-access'
+} from '../../../shared/document-preview/doc-preview-file-access'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import {
@@ -20,6 +20,7 @@ import {
 } from './doc-preview-grant-registry'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
 import { readDocPreviewTerminalFile } from './doc-preview-terminal-file-reader'
+import type { RuntimeDocPreviewReadParams } from './doc-preview-runtime-read-contract'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
 // Why: under files.readDocPreviewChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
@@ -107,14 +108,6 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
   return source.mimeType
     ? { ok: true, bytes: Buffer.alloc(0), contentType }
     : UNSUPPORTED_ASSET_OUTCOME
-}
-
-export type RuntimeDocPreviewReadParams = {
-  worktree: string
-  relativePath: string
-  entryRelativePath: string
-  implicitRootRelativePath: string | null
-  authorizedRootRelativePaths: string[]
 }
 
 async function readRuntimeDocPreviewFile(

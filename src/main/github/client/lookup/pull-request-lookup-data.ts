@@ -1,4 +1,5 @@
 import type {
+  GitHubOwnerRepo,
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
   PRMergeableState,
@@ -81,16 +82,20 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+  'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
+  'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   userRefresh?: boolean
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
+  /** Bounds check pagination for CI-line watch reads only; absent reads every page. */
+  checkPageLimit?: number
+  /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
+  exactRepository?: GitHubOwnerRepo
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

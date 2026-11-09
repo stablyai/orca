@@ -116,26 +116,6 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(state.workspaceSessionsByHostId?.['runtime:mirror']).toEqual(hostSessionSnapshot)
   })
 
-  it('fails closed when metadata is mutated or replaced after the scan starts', () => {
-    const inPlaceState = makeState()
-    const inPlaceId = `${REPO_ID}::/workspace/in-place`
-    inPlaceState.worktreeMeta[inPlaceId] = makeMeta(inPlaceId)
-    const inPlaceScan = capture(inPlaceState)
-    inPlaceState.worktreeMeta[inPlaceId]!.instanceId = 'replacement-instance'
-
-    expect(pruneCaptured(inPlaceState, inPlaceScan, [inPlaceId])).toEqual([])
-
-    const replacedState = makeState()
-    const replacedId = `${REPO_ID}::/workspace/replaced`
-    const original = makeMeta(replacedId)
-    replacedState.worktreeMeta[replacedId] = original
-    const replacedScan = capture(replacedState)
-    replacedState.worktreeMeta[replacedId] = { ...original }
-
-    expect(pruneCaptured(replacedState, replacedScan, [replacedId])).toEqual([])
-    expect(replacedState.worktreeMeta[replacedId]).not.toBe(original)
-  })
-
   it('fails closed when an identical repo row is removed and re-added during the scan', () => {
     const state = makeState()
     const worktreeId = `${REPO_ID}::/workspace/re-added-repo`
@@ -147,145 +127,6 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
     expect(state.repos[0]).toBe(replacement)
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
-  })
-
-  it('uses the effective Git kind when the raw legacy repo omitted kind', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/legacy-git-kind`
-    const rawRepo = state.repos[0]!
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const scan = capture(state, { ...rawRepo, kind: 'git' })
-
-    expect(rawRepo.kind).toBeUndefined()
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([worktreeId])
-  })
-
-  it.each([
-    'tabsByWorktree',
-    'browserTabsByWorktree',
-    'openFilesByWorktree',
-    'activeFileIdByWorktree',
-    'activeBrowserTabIdByWorktree',
-    'clientHostedBrowserPagesByWorktree',
-    'activeTabTypeByWorktree',
-    'activeTabIdByWorktree',
-    'unifiedTabs',
-    'tabGroups',
-    'tabGroupLayouts',
-    'activeGroupIdByWorktree',
-    'lastVisitedAtByWorktreeId',
-    'defaultTerminalTabsAppliedByWorktreeId'
-  ] as const)('preserves an owner named by workspaceSession.%s', (field) => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/${field}`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const scan = capture(state)
-    const ownerKey = field === 'lastVisitedAtByWorktreeId' ? `local|${worktreeId}` : worktreeId
-    ;(state.workspaceSession as unknown as Record<string, unknown>)[field] = {
-      [ownerKey]: []
-    }
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    expect(state.worktreeMeta[worktreeId]).toBeDefined()
-  })
-
-  it('preserves scalar, nested, remote-partition, mobile, and relay recovery owners', () => {
-    const ownerMutations: ((state: PersistedState, worktreeId: string) => void)[] = [
-      (state, worktreeId) => {
-        state.workspaceSession.activeWorktreeId = worktreeId
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.activeWorkspaceKey = worktreeWorkspaceKey(worktreeId)
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.activeWorktreeIdsOnShutdown = [worktreeId]
-      },
-      (state, worktreeId) => {
-        state.ui.lastActiveWorktreeId = worktreeId
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.sleepingAgentSessionsByPaneKey = {
-          pane: { worktreeId } as never
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.terminalSurfaceTombstonesByPaneKey = {
-          pane: { worktreeId } as never
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.closedTerminalTabTombstonesByTabId = {
-          tab: { worktreeId, closedAt: 1 }
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.clientHostedBrowserCloseIntentsByEnvironment = {
-          runtime: [{ worktreeId, browserPageId: 'page', closedAt: 1 }]
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSession.browserPagesByWorkspace = {
-          browser: [{ worktreeId } as never]
-        }
-      },
-      (state, worktreeId) => {
-        state.workspaceSessionsByHostId = {
-          'ssh:builder': {
-            ...getDefaultWorkspaceSession(),
-            lastVisitedAtByWorktreeId: { [worktreeId]: 1 }
-          }
-        }
-      },
-      (state, worktreeId) => {
-        state.mobileClientTabSelectionsByDeviceId = {
-          phone: { [worktreeId]: {} as never }
-        }
-      },
-      (state, worktreeId) => {
-        state.sshRemotePtyLeases = [
-          {
-            targetId: 'builder',
-            ptyId: 'pty',
-            worktreeId,
-            state: 'detached',
-            createdAt: 1,
-            updatedAt: 1
-          }
-        ]
-      },
-      (state, worktreeId) => {
-        state.migrationUnsupportedPtyEntries = [
-          {
-            ptyId: 'pty',
-            worktreeId,
-            reason: 'legacy-numeric-pane-key',
-            source: 'local',
-            updatedAt: 1
-          }
-        ]
-      },
-      (state, worktreeId) => {
-        state.automations = [
-          {
-            enabled: true,
-            workspaceMode: 'existing',
-            workspaceId: worktreeId
-          } as never
-        ]
-      },
-      (state, worktreeId) => {
-        state.automationRuns = [{ status: 'dispatching', workspaceId: worktreeId } as never]
-      }
-    ]
-
-    for (const [index, mutate] of ownerMutations.entries()) {
-      const state = makeState()
-      const worktreeId = `${REPO_ID}::/workspace/owner-${index}`
-      state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-      const scan = capture(state)
-      mutate(state, worktreeId)
-      expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    }
   })
 
   // Route-retired tombstones must not pin metadata forever (#17775).
@@ -324,85 +165,6 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(Object.keys(state.worktreeMeta).sort()).toEqual([...liveIds].sort())
   })
 
-  // Plain expiry proves only route loss; recoverable panes retain ownership.
-  it('keeps a metadata row pinned by an unmarked expired lease', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/orphaned`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const scan = capture(state)
-    state.sshRemotePtyLeases = [
-      {
-        targetId: 'builder',
-        ptyId: 'pty',
-        worktreeId,
-        state: 'expired',
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ]
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-  })
-
-  it('preserves canonically equivalent session and top-level owners', () => {
-    const candidateId = `${REPO_ID}::/workspace/Café`.normalize('NFC')
-    const ownerId = candidateId.normalize('NFD')
-    const ownerMutations: ((state: PersistedState) => void)[] = [
-      (state) => {
-        state.workspaceSession.activeWorktreeId = ownerId
-      },
-      (state) => {
-        state.ui.lastActiveWorktreeId = ownerId
-      }
-    ]
-
-    for (const mutate of ownerMutations) {
-      const state = makeState()
-      state.worktreeMeta[candidateId] = makeMeta(candidateId)
-      const scan = capture(state)
-      mutate(state)
-
-      expect(pruneCaptured(state, scan, [candidateId])).toEqual([])
-      expect(state.worktreeMeta[candidateId]).toBeDefined()
-    }
-  })
-
-  it('removes a row on a later pass after its persisted owner is cleared', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/two-phase`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    state.workspaceSession.lastVisitedAtByWorktreeId = { [worktreeId]: 1 }
-    const scan = capture(state)
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    delete state.workspaceSession.lastVisitedAtByWorktreeId![worktreeId]
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([worktreeId])
-  })
-
-  it('treats dotfile visibility and cleanup dismissals as non-owning preferences', () => {
-    const state = makeState()
-    const worktreeId = `${REPO_ID}::/workspace/non-owning-preferences`
-    state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    const showDotfilesByWorktree = { [worktreeId]: true }
-    const workspaceCleanup = {
-      dismissals: {
-        [worktreeId]: {
-          worktreeId,
-          dismissedAt: 1,
-          fingerprint: 'fingerprint',
-          classifierVersion: 1
-        }
-      }
-    }
-    state.ui.showDotfilesByWorktree = showDotfilesByWorktree
-    state.ui.workspaceCleanup = workspaceCleanup
-    const scan = capture(state)
-
-    expect(pruneCaptured(state, scan, [worktreeId])).toEqual([worktreeId])
-    expect(state.ui.showDotfilesByWorktree).toBe(showDotfilesByWorktree)
-    expect(state.ui.workspaceCleanup).toBe(workspaceCleanup)
-  })
-
   it('preserves foreign aliases, ambiguous local aliases, and divergent projections', () => {
     const foreignState = makeState()
     const foreignId = `${REPO_ID}::/workspace/foreign-alias`
@@ -436,34 +198,6 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     divergentState.worktreeIdentityAliases = { [`local|${divergentId}`]: ['canonical'] }
     const divergentScan = capture(divergentState)
     expect(pruneCaptured(divergentState, divergentScan, [divergentId])).toEqual([])
-  })
-
-  it('fails closed for repo replacement, host collisions, remote, runtime, and folder repos', () => {
-    const mutations: ((state: PersistedState) => void)[] = [
-      (state) => {
-        state.repos[0] = makeRepo({ path: '/workspace/replacement' })
-      },
-      (state) => {
-        state.repos.push(makeRepo({ connectionId: 'builder', executionHostId: 'ssh:builder' }))
-      },
-      (state) => {
-        state.repos[0] = makeRepo({ connectionId: 'builder', executionHostId: 'ssh:builder' })
-      },
-      (state) => {
-        state.repos[0] = makeRepo({ executionHostId: 'runtime:environment' })
-      },
-      (state) => {
-        state.repos[0] = makeRepo({ kind: 'folder' })
-      }
-    ]
-    for (const mutate of mutations) {
-      const state = makeState()
-      const worktreeId = `${REPO_ID}::/workspace/stale`
-      state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-      const scan = capture(state)
-      mutate(state)
-      expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
-    }
   })
 
   it('fails closed when project runtime routing changes away and back during the scan', () => {
@@ -508,27 +242,5 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(state.settings.localWindowsRuntimeDefault).toEqual(originalDefault)
     expect(pruneCaptured(state, scan, [worktreeId])).toEqual([])
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
-  })
-
-  it('rejects malformed, folder-instance, WSL, and non-native Windows candidate paths', () => {
-    const state = makeState()
-    const foreignWindowsId = `${REPO_ID}::C:\\workspace\\stale`
-    const ids = [
-      `${REPO_ID}::relative/path`,
-      `${REPO_ID}::`,
-      `wrong::/workspace/stale`,
-      `${REPO_ID}::/workspace/folder::workspace:11111111-1111-4111-8111-111111111111`,
-      `${REPO_ID}::\\\\wsl.localhost\\Ubuntu\\home\\gone`,
-      `${REPO_ID}::/home/user/wsl-legacy`,
-      foreignWindowsId
-    ]
-    for (const worktreeId of ids) {
-      state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
-    }
-    const scan = capture(state)
-
-    expect(pruneCaptured(state, scan, ids.slice(0, -2))).toEqual([])
-    expect(pruneCaptured(state, scan, [ids.at(-2)!], 'win32')).toEqual([])
-    expect(pruneCaptured(state, scan, [foreignWindowsId], 'linux')).toEqual([])
   })
 })

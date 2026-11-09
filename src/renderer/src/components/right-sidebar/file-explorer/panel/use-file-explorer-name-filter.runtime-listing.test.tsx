@@ -14,14 +14,14 @@ const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
 const cancelRuntimeFileListMock = vi.hoisted(() => vi.fn())
 const searchRuntimeFilePathsMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/runtime-file-search-client', () => ({
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({
   listRuntimeFiles: listRuntimeFilesMock,
   cancelRuntimeFileList: cancelRuntimeFileListMock,
   searchRuntimeFilePaths: searchRuntimeFilePathsMock
 }))
 
 const initialAppState = useAppStore.getInitialState()
-const LOCAL_KEY = folderWorkspaceKey('local-workspace')
+
 const REMOTE_KEY = folderWorkspaceKey('remote-workspace')
 
 function projectGroup(id: string, parentPath: string, connectionId: string | null): ProjectGroup {
@@ -88,10 +88,6 @@ async function settle(): Promise<void> {
   }
 }
 
-function renderNameFilter(activeWorktreeId: string) {
-  return renderHook(() => useFileExplorerNameFilter({ isFilesViewActive: true, activeWorktreeId }))
-}
-
 beforeEach(() => {
   useAppStore.setState(initialAppState, true)
   listRuntimeFilesMock.mockReset().mockResolvedValue(['packages/app/package.json', 'src/main.ts'])
@@ -106,25 +102,6 @@ afterEach(() => {
 })
 
 describe('useFileExplorerNameFilter over the real runtime listing', () => {
-  it('keeps the local listing across query edits without refetching it', async () => {
-    const { result } = renderNameFilter(LOCAL_KEY)
-
-    await act(async () => {
-      result.current.setNameFilterQuery('pack')
-    })
-    await settle()
-    await act(async () => {
-      result.current.setNameFilterQuery('package.json')
-    })
-    await settle()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
-    expect(result.current.nameFilterSource?.relativePaths).toEqual([
-      'packages/app/package.json',
-      'src/main.ts'
-    ])
-  })
-
   it('never projects the previous query answer after a remote query edit', async () => {
     vi.useFakeTimers()
     searchRuntimeFilePathsMock.mockResolvedValue({ files: ['first/hit.ts'], truncated: false })

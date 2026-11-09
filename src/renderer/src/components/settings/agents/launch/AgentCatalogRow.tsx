@@ -3,10 +3,9 @@ import { Check, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { SettingsBadge, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
-
 import {
   type AgentSessionSourceHomeControl,
   AgentSessionSourceHomeInput
@@ -24,12 +23,10 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from '../../../agent/launch-settings/AgentLaunchDefaultsEditor'
-import {
-  agentPermissionChoiceLabel,
-  AgentPermissionMenu,
-  type AgentPermissionChoiceRow
-} from '../../../agent/launch-settings/AgentPermissionChoiceControls'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
+import { AgentPermissionMenu } from '../../../agent/launch-settings/AgentPermissionMenu'
+import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
 
@@ -44,6 +41,7 @@ export function AgentAvailabilityControl({
   isEnabled: boolean
   onSetEnabled: (enabled: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
   return (
     <SettingsSegmentedControl<AgentAvailability>
@@ -53,20 +51,18 @@ export function AgentAvailabilityControl({
           onSetEnabled(next === 'enabled')
         }
       }}
-      ariaLabel={translate(
-        'auto.components.settings.AgentsPane.1c9a9679ec',
-        '{{value0}} availability',
-        { value0: label }
-      )}
+      ariaLabel={t('auto.components.settings.AgentsPane.1c9a9679ec', '{{value0}} availability', {
+        value0: label
+      })}
       size="sm"
       options={[
         {
           value: 'enabled',
-          label: translate('auto.components.settings.AgentsPane.d4d2a45d63', 'Enabled')
+          label: t('auto.components.settings.AgentsPane.d4d2a45d63', 'Enabled')
         },
         {
           value: 'disabled',
-          label: translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')
+          label: t('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')
         }
       ]}
     />
@@ -135,6 +131,7 @@ export function AgentCatalogRow({
   opensAs,
   chatRuntime
 }: AgentCatalogRowProps): React.JSX.Element {
+  const t = useTranslate()
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
@@ -158,13 +155,6 @@ export function AgentCatalogRow({
       )?.focus()
     })
   }
-  const expandable =
-    isDetected ||
-    permission !== undefined ||
-    permissionChoice !== undefined ||
-    chatRuntime !== undefined ||
-    launchChoiceEditor !== undefined
-
   return (
     <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
       <div className="flex flex-wrap items-start gap-3">
@@ -176,7 +166,7 @@ export function AgentCatalogRow({
             <span className="text-sm font-medium leading-none">{label}</span>
             {!isEnabled && (
               <SettingsBadge tone="muted">
-                {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
+                {t('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
               </SettingsBadge>
             )}
           </div>
@@ -203,7 +193,7 @@ export function AgentCatalogRow({
                 className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <SettingsBadge tone="accent">
-                  {agentPermissionChoiceLabel(permissionChoice.choice, label)}
+                  {agentPermissionChoiceLabel(permissionChoice.choice, label, t)}
                 </SettingsBadge>
               </button>
             </div>
@@ -234,16 +224,13 @@ export function AgentCatalogRow({
                   aria-pressed={isDefault}
                   title={
                     isDefault
-                      ? translate('settings.agents.clearDefault', 'Clear default agent')
-                      : translate(
-                          'auto.components.settings.AgentsPane.5f986a9b92',
-                          'Set as default'
-                        )
+                      ? t('settings.agents.clearDefault', 'Clear default agent')
+                      : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')
                   }
                   className="h-7 w-full justify-center gap-1 text-xs"
                 >
                   <Check className={cn('size-3', !isDefault && 'invisible')} />
-                  {translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
+                  {t('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
                 </Button>
               )}
             </div>
@@ -254,41 +241,36 @@ export function AgentCatalogRow({
               rel="noopener noreferrer"
               title={
                 isDetected
-                  ? translate('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
-                  : translate('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
+                  ? t('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
+                  : t('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
               }
               className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             >
               <ExternalLink className="size-3.5" />
             </a>
             <div className="flex size-7 items-center justify-center">
-              {expandable && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setCmdOpen((previous) => !previous)}
-                  aria-label={
-                    cmdOpen
-                      ? translate(
-                          'settings.agents.collapseAgentSettings',
-                          'Collapse agent settings'
-                        )
-                      : translate('settings.agents.expandAgentSettings', 'Expand agent settings')
-                  }
-                  className="size-7 text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronDown
-                    className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
-                  />
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setCmdOpen((previous) => !previous)}
+                aria-label={
+                  cmdOpen
+                    ? t('settings.agents.collapseAgentSettings', 'Collapse agent settings')
+                    : t('settings.agents.expandAgentSettings', 'Expand agent settings')
+                }
+                className="size-7 text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown
+                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
+                />
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {expandable && cmdOpen && (
+      {cmdOpen && (
         <div className="mt-3 space-y-3 pl-10">
           {chatRuntime}
           {!launchChoiceEditor && permissionChoice && (
@@ -304,6 +286,23 @@ export function AgentCatalogRow({
             />
           )}
           {!isDetected && launchChoiceEditor?.(permissionRef)}
+          {!isDetected && (
+            <div>
+              <AgentCommandOverrideInput
+                key={cmdOverride ?? defaultCmd}
+                defaultCmd={defaultCmd}
+                cmdOverride={cmdOverride}
+                onSaveOverride={onSaveOverride}
+              />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {t(
+                  'settings.agents.undetectedCommandHint',
+                  'If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.',
+                  { agent: label }
+                )}
+              </p>
+            </div>
+          )}
           {isDetected && (
             <div>
               <AgentCommandOverrideInput
@@ -337,7 +336,7 @@ export function AgentCatalogRow({
                     }
                     note={
                       permissionChoice?.argsSetPermission
-                        ? translate(
+                        ? t(
                             'settings.agents.permissionArgsTerminalOnly',
                             'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
                             { agent: label }
@@ -368,7 +367,7 @@ export function AgentCatalogRow({
                 </div>
               )}
               <p className="mt-2 text-[11px] text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.AgentsPane.f9f127d664',
                   'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
                 )}

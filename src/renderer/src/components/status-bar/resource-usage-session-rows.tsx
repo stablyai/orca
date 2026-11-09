@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown, ChevronRight, Globe, Trash2, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -22,6 +22,7 @@ export function SessionRow({
   onNavigate: (tabId: string, paneKey: string | null) => void
   onKill: (session: UnifiedSessionRow) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const clickable = session.tabId !== null && session.bound
   const handleClick = (): void => {
     if (clickable && session.tabId) {
@@ -74,7 +75,7 @@ export function SessionRow({
               session.bound &&
                 'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
               'Kill session {{value0}}',
               { value0: session.sessionId }
@@ -121,6 +122,7 @@ export function WorktreeRow({
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
@@ -142,11 +144,11 @@ export function WorktreeRow({
             className="pl-2 py-2 pr-0.5 shrink-0"
             aria-label={
               isCollapsed
-                ? translate(
+                ? t(
                     'auto.components.status.bar.ResourceUsageStatusSegment.c4a8968bdd',
                     'Expand workspace'
                   )
-                : translate(
+                : t(
                     'auto.components.status.bar.ResourceUsageStatusSegment.bbcd9b7b85',
                     'Collapse workspace'
                   )
@@ -167,7 +169,7 @@ export function WorktreeRow({
         <button
           type="button"
           onClick={onNavigate}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.status.bar.ResourceUsageStatusSegment.d659d71d2d',
             'Resume workspace {{value0}}',
             { value0: rowLabel }
@@ -181,10 +183,7 @@ export function WorktreeRow({
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
               {worktree.hostLabel
                 ? `· ${worktree.hostLabel}`
-                : translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
-                    '· remote'
-                  )}
+                : t('auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1', '· remote')}
             </span>
           )}
         </button>
@@ -209,7 +208,7 @@ export function WorktreeRow({
                       type="button"
                       onClick={onDelete}
                       disabled={isMainWorktree}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a',
                         'Delete workspace {{value0}}',
                         { value0: rowLabel }
@@ -230,11 +229,11 @@ export function WorktreeRow({
                     className="z-[70] max-w-[200px] text-pretty"
                   >
                     {isMainWorktree
-                      ? translate(
+                      ? t(
                           'auto.components.status.bar.ResourceUsageStatusSegment.946724a70a',
                           'The main workspace cannot be deleted.'
                         )
-                      : translate(
+                      : t(
                           'auto.components.status.bar.ResourceUsageStatusSegment.a82253b458',
                           'Delete workspace.'
                         )}

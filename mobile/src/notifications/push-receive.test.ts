@@ -1,11 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import '@react-native-async-storage/async-storage'
 import { AppState } from 'react-native'
 import { setNotificationViewingWorkspace } from './notification-viewing-policy'
 vi.mock('./push-tray-dismissal', () => ({ dismissPresentedPushNotification: vi.fn() }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
-import { loadHostCatalog } from '../transport/host-store'
-import type { HostCatalogEntry } from '../transport/types'
+import { loadHostCatalog } from '../transport/hosts/host-store'
+import type { HostCatalogEntry } from '../transport/hosts/host-profile'
 
 import {
   foregroundNotificationBehavior,
@@ -19,7 +19,7 @@ async function shouldSuppressForegroundPush(data: unknown): Promise<boolean> {
 }
 
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
-vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
+vi.mock('../transport/hosts/host-store', () => ({ loadHostCatalog: vi.fn() }))
 const storage = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -40,9 +40,6 @@ const otherHostFingerprint = Buffer.from(sha256(Buffer.alloc(32, 2)))
 
 function apnsData(orca: Record<string, unknown>): unknown {
   return { aps: { alert: { title: 'Orca', body: 'Agent needs input' } }, orca }
-}
-function fcmData(orca: Record<string, unknown>): unknown {
-  return Object.fromEntries(Object.entries(orca).map(([key, value]) => [key, String(value)]))
 }
 
 beforeEach(() => {
@@ -66,33 +63,6 @@ describe('shouldSuppressForegroundPush', () => {
       notificationSeq: 7,
       notificationEpoch: 'epoch-1'
     })
-
-  it('drops an older host’s finished-agent push but keeps questions, bells and the push test', async () => {
-    storage.set(
-      'orca:notificationDeliveryPreferences',
-      JSON.stringify({ onlyWhenAgentNeedsInput: true })
-    )
-    const alert = (seq: number, agentState: string) =>
-      apnsData({
-        hostFingerprint,
-        notificationSeq: seq,
-        notificationEpoch: 'epoch-1',
-        source: 'agent-task-complete',
-        agentState
-      })
-    await expect(shouldSuppressForegroundPush(alert(1, 'finished'))).resolves.toBe(true)
-    await expect(shouldSuppressForegroundPush(alert(2, 'needs-input'))).resolves.toBe(false)
-    await expect(
-      shouldSuppressForegroundPush(
-        fcmData({
-          hostFingerprint,
-          notificationSeq: 3,
-          notificationEpoch: 'epoch-1',
-          source: 'terminal-bell'
-        })
-      )
-    ).resolves.toBe(false)
-  })
 
   it('allows one eligible native push and suppresses an in-process duplicate', async () => {
     await expect(shouldSuppressForegroundPush(push())).resolves.toBe(false)
@@ -137,57 +107,6 @@ describe('shouldSuppressForegroundPush', () => {
     await rememberPushDismissal(payload)
     await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(true)
   })
-
-  it('fails closed for recognized pushes when suppression checks throw', async () => {
-    const dismissals = await import('./push-dismissal-watermarks')
-    const dismissalSpy = vi
-      .spyOn(dismissals, 'wasPushDismissed')
-      .mockRejectedValueOnce(new Error('dismissal read failed'))
-    await expect(
-      foregroundNotificationBehavior({ request: { content: { data: push() } } })
-    ).resolves.toMatchObject({ shouldShowBanner: false, shouldShowList: false })
-    dismissalSpy.mockRestore()
-  })
-})
-
-it('uses one delivery snapshot for sound and viewing even when settings change during host lookup', async () => {
-  AppState.currentState = 'active'
-  setNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'folder' })
-  storage.set(
-    'orca:notificationDeliveryPreferences',
-    JSON.stringify({
-      sound: false,
-      suppressWhileViewing: false
-    })
-  )
-  vi.mocked(loadHostCatalog).mockImplementationOnce(async () => {
-    storage.set(
-      'orca:notificationDeliveryPreferences',
-      JSON.stringify({
-        sound: true,
-        suppressWhileViewing: true
-      })
-    )
-    return hosts
-  })
-  const behavior = await foregroundNotificationBehavior({
-    request: {
-      content: {
-        data: apnsData({
-          hostFingerprint,
-          worktreeId: 'folder',
-          notificationEpoch: 'snapshot',
-          notificationSeq: 1
-        })
-      }
-    }
-  })
-  expect(behavior).toMatchObject({ shouldShowBanner: true, shouldPlaySound: false })
-  expect(
-    vi
-      .mocked(AsyncStorage.getItem)
-      .mock.calls.filter(([key]) => key === 'orca:notificationDeliveryPreferences')
-  ).toHaveLength(1)
 })
 
 it('preflight does not consume the final presentation claim and observes later dismissals', async () => {

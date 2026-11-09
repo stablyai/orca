@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
-import { resolveWorktreeModelDiscoveryRuntime } from '../../../native-chat/native-chat-session-option-discovery'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
+import { resolveWorktreeModelDiscoveryRuntime } from '../../../native-chat/session/options/catalog/native-chat-session-option-discovery'
 import { getCommitMessageAgentCapability } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   getDiscoveredModels,
+  savedDiscoveredModels,
   withDiscoveredModels
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
@@ -47,7 +48,7 @@ function listTextModels(
         hostKey,
         agent
       )
-      if (JSON.stringify(saved) === JSON.stringify(result.models)) {
+      if (JSON.stringify(saved) === JSON.stringify(savedDiscoveredModels(result.models))) {
         return
       }
       return writeSourceControlAiSettings((current) =>

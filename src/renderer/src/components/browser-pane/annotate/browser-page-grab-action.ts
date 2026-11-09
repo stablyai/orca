@@ -14,7 +14,8 @@ export function runBrowserGrabActionShortcut({
   grabPayloadRef,
   toolTargetIdRef,
   recordFeatureInteraction,
-  showGrabToast
+  showGrabToast,
+  copyGrabScreenshot
 }: {
   key: 'c' | 's'
   grabIntent: GrabIntent
@@ -27,6 +28,7 @@ export function runBrowserGrabActionShortcut({
     type: BrowserPageGrabToastState['type'],
     payload?: BrowserGrabPayload | null
   ) => void
+  copyGrabScreenshot: (dataUrl: string, payload: BrowserGrabPayload) => void
 }): void {
   if (grabIntent === 'annotate') {
     return
@@ -40,9 +42,8 @@ export function runBrowserGrabActionShortcut({
     } else {
       const dataUrl = payload.screenshot?.dataUrl
       if (dataUrl?.startsWith('data:image/png;base64,')) {
-        void window.api.ui.writeClipboardImage(dataUrl)
         recordFeatureInteraction('browser-grab')
-        showGrabToast('Screenshotted', 'success', payload)
+        copyGrabScreenshot(dataUrl, payload)
       } else {
         showGrabToast('No screenshot available', 'error', payload)
       }

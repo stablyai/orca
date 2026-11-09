@@ -1,4 +1,4 @@
-import type { OrchestrationAdmission } from '../../../../orchestration/orchestration-admission'
+import type { OrchestrationAdmission } from '../../../../orchestration/addressing/orchestration-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { createDispatchCreatorEvaluation } from '../../../../orchestration/db/dispatch-creator-evaluation'
 import { selectWorkerFollowUpPlan } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'

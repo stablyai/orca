@@ -20,6 +20,7 @@ import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { collectActiveRowKeys } from './active-workspace'
 import {
   buildFeedHostOptions,
+  feedPairedDeviceIdsByEnvironment,
   indexSidebarFeed,
   rankSidebarFeedWorktrees,
   type SidebarFeedIndex
@@ -50,6 +51,7 @@ import type {
 } from './row-types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
+import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
 import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
@@ -146,14 +148,7 @@ export function planSidebarFeedRows(
   const retained = new Set(domains.retention?.retainedIds)
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
-  const pairedDeviceIdsByEnvironment = new Map(
-    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
-      const environmentId = parseExecutionHostId(hostId)
-      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
-        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
-        : []
-    })
-  )
+  const pairedDeviceIdsByEnvironment = feedPairedDeviceIdsByEnvironment(domains)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,
@@ -182,6 +177,7 @@ export function planSidebarFeedRows(
       }
     },
     worktreeLineageById: lineageById,
+    lineageParentIdentities: index.lineageParentIdentities,
     filterRepoIds: view.filters.filterRepoIds,
     preserveLineageParentOrder: view.sortBy === 'manual',
     forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds
@@ -236,6 +232,7 @@ export function planSidebarFeedRows(
     workspaceStatuses: view.workspaceStatuses,
     projectOrderBy: view.projectOrderBy,
     lineageById,
+    lineageParentIdentities: index.lineageParentIdentities,
     worktreeMap,
     nestLineage: true,
     projectGroups: visibleProjectGroups,
@@ -299,9 +296,10 @@ export function renderSidebarFeedRows(
 export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,
-  view: SidebarFeedView
+  view: SidebarFeedView,
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedRows {
-  const index = indexSidebarFeed(domains, catalog.repos)
+  const index = indexSidebarFeed(domains, catalog.repos, lineagePolicy)
   const planned = planSidebarFeedRows(
     domains,
     index,

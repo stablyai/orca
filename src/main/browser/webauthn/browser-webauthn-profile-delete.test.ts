@@ -23,7 +23,10 @@ vi.mock('electron', () => ({
   webContents: { fromFrame: fromFrameMock }
 }))
 
-vi.mock('../browser-manager', () => ({
+vi.mock('../../browser-passwords/browser-password-vaults', () => ({
+  forgetBrowserPasswordVault: () => true
+}))
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getRendererContextForGuest: getRendererContextForGuestMock,
     handleGuestWillDownload: vi.fn(),
@@ -43,7 +46,7 @@ vi.mock('../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({ mode: 'clean', userAgent: 'Mozilla/5.0 Test' })
 }))
 
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import {
   cancelAllBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest

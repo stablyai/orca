@@ -12,7 +12,7 @@ import {
   supportsTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,7 @@ import {
   createTerminalQuickCommandDialogDraftMemory,
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -76,6 +76,7 @@ export function TerminalQuickCommandDialog({
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const fallbackAgent: TuiAgent =
     getAgentCatalog().find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
@@ -214,17 +215,17 @@ export function TerminalQuickCommandDialog({
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="text-sm">
             {mode === 'edit'
-              ? translate(
+              ? t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.f9b184fc16',
                   'Edit Quick Command'
                 )
-              : translate(
+              : t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.5b3f634a55',
                   'Add Quick Command'
                 )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ed04233b3e',
               'Saved items appear in the tab bar menu for one-click run.'
             )}
@@ -262,7 +263,7 @@ export function TerminalQuickCommandDialog({
             <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
             <div className="space-y-2">
               <Label>
-                {translate(
+                {t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
                   'Action'
                 )}

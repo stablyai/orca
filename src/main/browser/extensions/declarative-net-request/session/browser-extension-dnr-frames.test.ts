@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DnrEngine } from '../engine'
 import { createDnrRequestState } from '../request-state'
-import { buildDnrRuleset } from '../ruleset-builder'
+import { buildDnrRuleset } from '../rule-compilation/ruleset-builder'
 import { DnrFrameTracker } from './browser-extension-dnr-frames'
 
 const EXT = 'f'.repeat(32)
