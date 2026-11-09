@@ -6,7 +6,7 @@ import type {
 import type {
   RecipeWorkspaceCreateParams,
   RecipeWorkspaceCreation
-} from '../../../ephemeral-vm/recipe-workspace-create'
+} from '../../../ephemeral-vm/recipe-workspace-create-params'
 import { worktreeCreateRepoSelector } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeProvisionedWorkspaceAdoption } from './runtime-provisioned-workspace-adoption'
 

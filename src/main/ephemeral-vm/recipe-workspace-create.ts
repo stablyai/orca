@@ -16,7 +16,9 @@ import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
   assertRecipeWorkspaceCreateSupported,
   forwardedCreateFields,
-  type RecipeWorkspaceCreateParams
+  RecipeWorkspaceResult as WorkspaceResult,
+  type RecipeWorkspaceCreateParams,
+  type RecipeWorkspaceCreation
 } from './recipe-workspace-create-params'
 import {
   RECIPE_WORKSPACE_CREATE_FAILED_CODE,
@@ -25,30 +27,7 @@ import {
 } from '../../shared/recipe-workspace-create-progress'
 import type { EphemeralVmProvisionIpcResult } from './environment-provision'
 
-export type { RecipeWorkspaceCreateParams }
-const WorkspaceResult = z
-  .object({
-    worktree: z
-      .object({
-        id: z.string().min(1),
-        repoId: z.string().min(1),
-        path: z.string().min(1),
-        branch: z.string(),
-        instanceId: z.string().optional()
-      })
-      .passthrough()
-  })
-  .passthrough()
-export type RecipeWorkspaceCreation = z.infer<typeof WorkspaceResult> & {
-  recipe: {
-    id: string
-    runtimeId: string
-    environmentId: string
-    checkoutMode: EphemeralVmCheckoutMode
-  }
-  environmentWarnings?: string[]
-}
-
+export type { RecipeWorkspaceCreateParams, RecipeWorkspaceCreation }
 const ENVIRONMENT_OUTCOME = {
   destroyed: 'destroyed',
   failed: 'destroy-failed',

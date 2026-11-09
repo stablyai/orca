@@ -1,8 +1,33 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { WorktreeCreate } from '../../shared/rpc-contract/worktree-create-params'
 import type { EphemeralVmCheckoutMode } from '../../shared/orca-yaml-hook-types'
 
+// Kept apart from the orchestration so runtime types (and the mobile host-declaration program)
+// do not pull in provisioning, the recipe runner and their imports.
 export type RecipeWorkspaceCreateParams = z.infer<typeof WorktreeCreate>
+
+export const RecipeWorkspaceResult = z
+  .object({
+    worktree: z
+      .object({
+        id: z.string().min(1),
+        repoId: z.string().min(1),
+        path: z.string().min(1),
+        branch: z.string(),
+        instanceId: z.string().optional()
+      })
+      .passthrough()
+  })
+  .passthrough()
+export type RecipeWorkspaceCreation = z.infer<typeof RecipeWorkspaceResult> & {
+  recipe: {
+    id: string
+    runtimeId: string
+    environmentId: string
+    checkoutMode: EphemeralVmCheckoutMode
+  }
+  environmentWarnings?: string[]
+}
 
 // Fields a normal create on the environment's own Orca understands; lineage, activation and the
 // caller's terminal stay on this host, which records them after the environment answers.
