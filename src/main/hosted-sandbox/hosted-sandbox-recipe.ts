@@ -84,6 +84,13 @@ function failed(error: unknown): RecipeStepProviderResult {
       failure: ephemeralVmFailure('cloudPlanRequired')
     }
   }
+  if (isEnvironmentProviderError(error, 'conflict') && error.reason === 'github_not_connected') {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason}\n`,
+      failure: ephemeralVmFailure('cloudGithubNotConnected')
+    }
+  }
   if (isEnvironmentProviderError(error, 'unauthorized')) {
     return { ...base, stderr: '', failure: ephemeralVmFailure('cloudSignInRequired') }
   }

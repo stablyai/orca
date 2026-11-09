@@ -4011,7 +4011,6 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Dismiss",
             "34dd5ee38b": "Retry",
-            "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
             "cancelProvisioning": "Cancel",
             "somethingWentWrong": "Something went wrong while creating the workspace."
@@ -4057,27 +4056,25 @@
             "stateRunning": "In progress",
             "stateDone": "Done",
             "stateFailed": "Failed",
-            "openFailedCloud": "Couldn’t open your cloud workspace"
+            "openFailedCloud": "Couldn’t open your cloud workspace",
+            "stateSkipped": "Skipped"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
             "checksTitleCloud": "The sandbox is up, but its environment checks failed",
             "planTitle": "Orca Cloud needs a Team plan",
             "planBody": "Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.",
-            "hoursUsedTitle": "You’ve used this period’s sandbox hours",
-            "hoursUsedBody": "Raise your overage limit or wait for your hours to reset. Nothing was created.",
+            "hoursUsedTitle": "You’ve used this month’s included sandbox hours",
+            "hoursUsedBody": "Turn on overage in Plan & billing to keep starting sandboxes. Nothing was created.",
             "paymentTitle": "Your Orca payment needs attention",
             "paymentBody": "Update your payment method to start cloud workspaces again. Nothing was created.",
-            "concurrencyTitle": "All your cloud workspaces are in use",
-            "concurrencyBody": "You’ve reached your plan’s limit on running cloud workspaces. Put one to sleep or delete it from the sidebar, then try again.",
+            "concurrencyTitle": "Your team is running as many cloud workspaces as its plan allows",
+            "concurrencyBody": "Put a running cloud workspace to sleep or delete it, then try again. Nothing was created.",
             "signInTitle": "Sign in to use Orca Cloud",
-            "signInBody": "Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you.",
             "unavailableTitle": "Orca Cloud is unavailable right now",
             "unavailableBody": "The problem is on our side, not in your project. Nothing was created. Try again in a moment.",
             "networkTitle": "Couldn’t reach Orca Cloud",
-            "networkBody": "Check your internet connection, then try again.",
             "snapshotTitle": "This project’s saved environment is missing",
-            "snapshotBody": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Try again; if it keeps happening, contact support.",
             "provisionBodyCloud": "Something went wrong while starting the sandbox. Try again, or open the logs for details.",
             "stillRunningCloud": "The sandbox is running and using sandbox hours until you choose.",
             "stillRunningLocal": "The VM is running and using hours until you choose.",
@@ -4089,7 +4086,26 @@
             "updatePayment": "Update payment method",
             "manageBilling": "Manage billing",
             "checksBodyCloud": "Open anyway to fix these inside the workspace, or retry the checks after changing your project.",
-            "createBodyCloud": "Your sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details."
+            "showWorkspaces": "Show cloud workspaces",
+            "contactSupport": "Contact support",
+            "planBodyMember": "Ask an owner or admin to choose a Team plan. Nothing was created, and you weren’t charged.",
+            "hoursUsedBodyMember": "Ask an owner or admin to turn on overage. Nothing was created.",
+            "spendCapTitle": "You’ve reached this month’s spend cap",
+            "spendCapBody": "Raise the monthly spend cap in Plan & billing to keep starting sandboxes. Nothing was created.",
+            "spendCapBodyMember": "Ask an owner or admin to raise the monthly spend cap. Nothing was created.",
+            "paymentBodyMember": "Ask an owner or admin to update the payment method. Nothing was created.",
+            "memberConcurrencyTitle": "You’re running as many cloud workspaces as you can at once",
+            "memberConcurrencyBody": "Put one of yours to sleep or delete it, then try again. Nothing was created.",
+            "githubTitle": "Connect GitHub to use this repository",
+            "githubBody": "Orca Cloud needs access to GitHub to clone this private repository. Connect GitHub to your Orca account, then try again. Nothing was created.",
+            "signInBody2": "Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you. Nothing was created.",
+            "networkBody2": "Check your internet connection, then try again. Nothing was created.",
+            "snapshotBody2": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created. Try again, or contact support if it keeps happening.",
+            "provisionTitleCloud": "The sandbox didn’t start",
+            "provisionTitleVm": "The VM recipe failed",
+            "createTitleCloud": "Couldn’t open the workspace on the sandbox",
+            "createBodyCloud2": "The sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details.",
+            "createTitleVm": "Couldn’t create the workspace on the VM"
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4097,13 +4113,35 @@
             "copy": "Copy log",
             "label": "Build log",
             "copyFailed": "Couldn’t copy the log.",
-            "copiedStatus": "Log copied"
+            "copiedStatus": "Log copied",
+            "hiddenLines": "Technical lines hidden: {{count}}. Copy log includes them."
           },
           "orcaCloudBuildLog": {
             "checkingPlan": "Checking your plan…",
             "provisioning": "Starting the sandbox…",
             "booting": "Booting the sandbox…",
-            "connecting": "Connecting to the sandbox…"
+            "connecting": "Connecting to the sandbox…",
+            "resuming": "Waking the sandbox…",
+            "suspending": "Putting the sandbox to sleep…",
+            "renewing": "Extending the session…",
+            "rollingOver": "Starting a fresh session…",
+            "destroying": "Deleting the sandbox…",
+            "denyNoPlan": "Your account has no active Team plan.",
+            "denyHours": "This month’s included sandbox hours are used up.",
+            "denySpendCap": "This month’s spend cap is reached.",
+            "denyPayment": "A payment is overdue.",
+            "denyConcurrency": "Your team’s limit on running cloud workspaces is reached.",
+            "denyMemberConcurrency": "Your limit on running cloud workspaces is reached.",
+            "denyGithub": "GitHub isn’t connected to your Orca account.",
+            "denyMachineSize": "This machine size isn’t part of your plan.",
+            "refusedBilling": "Orca Cloud couldn’t check your plan.",
+            "refusedProvider": "The sandbox provider is unavailable.",
+            "refusedNotConfigured": "Orca Cloud isn’t set up on the server.",
+            "refusedSignIn": "Orca Cloud needs you to sign in again.",
+            "refused": "Orca Cloud refused the request.",
+            "httpError": "Orca Cloud answered with an error.",
+            "unreachable": "Couldn’t reach Orca Cloud.",
+            "timeout": "Orca Cloud didn’t answer in time."
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -4122,6 +4160,16 @@
             "warning": "Warning",
             "passed": "Passed",
             "toolMissingFixCloud": "Install {{command}} in the workspace, or add it to your project’s setup script."
+          },
+          "WorktreeCreationTabStrip": {
+            "cancelLabel": "Cancel workspace creation"
+          },
+          "VmDeleteConfirmDialog": {
+            "titleCloud": "Delete this sandbox?",
+            "titleVm": "Delete this VM?",
+            "bodyCloud": "The sandbox and anything on it are deleted, and the workspace isn’t created.",
+            "bodyVm": "The VM and anything on it are destroyed, and the workspace isn’t created.",
+            "keep": "Keep it"
           }
         }
       },
@@ -25613,12 +25661,13 @@
       "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
       "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
-      "recipeExitedWithoutCode": "Recipe exited with code unknown.",
-      "destroyExitedWithoutCode": "Destroy exited with code unknown.",
+      "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
+      "recipeExitedWithoutCode": "Recipe exited without an exit code.",
+      "destroyExitedWithoutCode": "Destroy exited without an exit code.",
       "suspendExited": "Suspend exited with code {{exitCode}}.",
-      "suspendExitedWithoutCode": "Suspend exited with code unknown.",
+      "suspendExitedWithoutCode": "Suspend exited without an exit code.",
       "resumeExited": "Resume exited with code {{exitCode}}.",
-      "resumeExitedWithoutCode": "Resume exited with code unknown.",
+      "resumeExitedWithoutCode": "Resume exited without an exit code.",
       "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
       "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources.",
       "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again."

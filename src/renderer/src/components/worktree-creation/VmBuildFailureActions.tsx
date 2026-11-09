@@ -4,10 +4,11 @@ import {
   ChevronDown,
   CreditCard,
   Loader2,
+  LifeBuoy,
   LogIn,
+  PanelLeft,
   Pencil,
   RotateCcw,
-  Sparkles,
   SquareArrowOutUpRight,
   Trash2
 } from 'lucide-react'
@@ -30,6 +31,8 @@ export type VmBuildFailureActions = {
   onSeePlans: () => void
   onOpenBilling: () => void
   onSignIn: () => void
+  onShowWorkspaces: () => void
+  onContactSupport: () => void
 }
 
 type Action = {
@@ -45,6 +48,7 @@ function failureActions(
   failure: VmBuildFailure,
   cloud: boolean,
   canFixWithAgent: boolean,
+  canManageBilling: boolean,
   signingIn: boolean,
   actions: VmBuildFailureActions,
   t: Translate
@@ -75,32 +79,35 @@ function failureActions(
           {
             key: 'plans',
             label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
-            icon: <Sparkles />,
             onClick: actions.onSeePlans
           }
         ],
         more: []
       }
     case 'hoursUsed':
+    case 'spendCap':
     case 'payment':
+      // Members can't change billing; their card tells them who can.
       return {
-        primary: [
-          {
-            key: 'billing',
-            label:
-              failure.kind === 'payment'
-                ? t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
-                    'Update payment method'
-                  )
-                : t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.manageBilling',
-                    'Manage billing'
-                  ),
-            icon: <CreditCard />,
-            onClick: actions.onOpenBilling
-          }
-        ],
+        primary: canManageBilling
+          ? [
+              {
+                key: 'billing',
+                label:
+                  failure.kind === 'payment'
+                    ? t(
+                        'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
+                        'Update payment method'
+                      )
+                    : t(
+                        'auto.components.worktree.creation.VmBuildFailureCard.manageBilling',
+                        'Manage billing'
+                      ),
+                icon: <CreditCard />,
+                onClick: actions.onOpenBilling
+              }
+            ]
+          : [],
         more: []
       }
     case 'signIn':
@@ -153,9 +160,40 @@ function failureActions(
             more: [editRecipe]
           }
     case 'concurrency':
+    case 'memberConcurrency':
+      return {
+        primary: [
+          {
+            key: 'workspaces',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.showWorkspaces',
+              'Show cloud workspaces'
+            ),
+            icon: <PanelLeft />,
+            onClick: actions.onShowWorkspaces
+          },
+          tryAgain
+        ],
+        more: []
+      }
+    case 'snapshotMissing':
+      return {
+        primary: [tryAgain],
+        more: [
+          {
+            key: 'support',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.contactSupport',
+              'Contact support'
+            ),
+            icon: <LifeBuoy />,
+            onClick: actions.onContactSupport
+          }
+        ]
+      }
+    case 'githubNotConnected':
     case 'unavailable':
     case 'network':
-    case 'snapshotMissing':
     case 'create':
       return { primary: [tryAgain], more: [] }
   }
@@ -166,6 +204,7 @@ export function FailureActionRow({
   cloud,
   vmKept,
   canFixWithAgent,
+  canManageBilling,
   signingIn,
   actions,
   t
@@ -174,11 +213,20 @@ export function FailureActionRow({
   cloud: boolean
   vmKept: boolean
   canFixWithAgent: boolean
+  canManageBilling: boolean
   signingIn: boolean
   actions: VmBuildFailureActions
   t: Translate
 }): React.JSX.Element {
-  const { primary, more } = failureActions(failure, cloud, canFixWithAgent, signingIn, actions, t)
+  const { primary, more } = failureActions(
+    failure,
+    cloud,
+    canFixWithAgent,
+    canManageBilling,
+    signingIn,
+    actions,
+    t
+  )
   // Leaving a build that still holds a VM destroys it, so say so on the button.
   const destroys = vmKept
   return (

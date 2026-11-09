@@ -6,6 +6,7 @@ import { appendStampedLog } from '@/lib/pending-creation-provisioning-log'
 import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'
+import { humanizeOrcaCloudLogLine } from './orca-cloud-build-log'
 
 const base = {
   status: 'creating' as const,
@@ -31,18 +32,58 @@ describe('deriveVmBuildSteps', () => {
       10_000
     )
     expect(steps).toEqual([
-      { id: 'provision', state: 'done', elapsedMs: 5000, percent: null, startedAt: 1000 },
-      { id: 'checks', state: 'done', elapsedMs: 3000, percent: null, startedAt: 6000 },
-      { id: 'create', state: 'running', elapsedMs: 1000, percent: 40, startedAt: 9000 }
+      {
+        id: 'provision',
+        state: 'done',
+        elapsedMs: 5000,
+        percent: null,
+        startedAt: 1000,
+        skipped: false
+      },
+      {
+        id: 'checks',
+        state: 'done',
+        elapsedMs: 3000,
+        percent: null,
+        startedAt: 6000,
+        skipped: false
+      },
+      {
+        id: 'create',
+        state: 'running',
+        elapsedMs: 1000,
+        percent: 40,
+        startedAt: 9000,
+        skipped: false
+      }
     ])
   })
 
-  it('marks the workspace step failed when creation fails after the VM is up', () => {
+  it('marks the workspace step failed, with how long it ran, when creation fails on the VM', () => {
     const steps = deriveVmBuildSteps(
-      { ...base, status: 'error', phase: 'fetching', environmentCheck: { status: 'passed' } },
-      5000
+      {
+        ...base,
+        status: 'error',
+        phase: 'fetching',
+        phaseLog: [
+          { phase: 'provisioning-vm', at: 1000 },
+          { phase: 'fetching', at: 4000 }
+        ],
+        errorAt: 6500,
+        environmentCheck: { status: 'passed' }
+      },
+      9000
     )
     expect(steps.map((step) => step.state)).toEqual(['done', 'done', 'failed'])
+    expect(steps[2].elapsedMs).toBe(2500)
+  })
+
+  it('shows skipped checks as skipped, not verified and not stuck pending', () => {
+    const steps = deriveVmBuildSteps(
+      { ...base, phase: 'fetching', environmentCheck: { status: 'skipped' } },
+      5000
+    )
+    expect(steps[1]).toMatchObject({ state: 'done', skipped: true })
   })
 
   it('reads as done once the worktree exists and is opening', () => {
@@ -79,6 +120,20 @@ describe('classifyVmBuildFailure', () => {
         cloud: true
       })
     ).toEqual({ kind: 'hoursUsed' })
+  })
+
+  it('tells a member limit apart from the team limit, and a spend cap from used hours', () => {
+    const refused = (errorCode: string, reason: string) =>
+      classifyVmBuildFailure({
+        entry: { ...entry, errorCode, provisioningLog: `Orca Cloud: ${reason}\n` },
+        error: 'x',
+        cloud: true
+      })
+    expect(refused('cloudConcurrencyLimit', 'member_concurrency_limit')).toEqual({
+      kind: 'memberConcurrency'
+    })
+    expect(refused('cloudConcurrencyLimit', 'concurrency_limit')).toEqual({ kind: 'concurrency' })
+    expect(refused('cloudPlanRequired', 'overage_cap_reached')).toEqual({ kind: 'spendCap' })
   })
 
   it('names a missing snapshot only for Orca Cloud', () => {
@@ -124,5 +179,19 @@ describe('holdRunningSteps', () => {
       'done',
       'running'
     ])
+  })
+})
+
+describe('humanizeOrcaCloudLogLine', () => {
+  const t = ((_key: string, fallback: string) => fallback) as Parameters<
+    typeof humanizeOrcaCloudLogLine
+  >[1]
+
+  it('turns provider codes into sentences and hides internals', () => {
+    expect(humanizeOrcaCloudLogLine('Orca Cloud: included_hours_exhausted', t)).toBe(
+      'This month’s included sandbox hours are used up.'
+    )
+    expect(humanizeOrcaCloudLogLine('[orca-cloud] resuming', t)).toBe('Waking the sandbox…')
+    expect(humanizeOrcaCloudLogLine('sandbox sbx_41d9 scheduled on pool p-use1-3', t)).toBeNull()
   })
 })

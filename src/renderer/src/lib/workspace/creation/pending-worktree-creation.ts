@@ -169,6 +169,8 @@ export type PendingWorktreeCreation = {
   error?: string
   /** Machine-readable cause of `error`, e.g. `cloudPlanRequired`, so the sheet can offer the right fix. */
   errorCode?: string
+  /** Set by the store when `status` turns to error. */
+  errorAt?: number
   provisioningLog?: string
   /** Arrival time of each line in `provisioningLog`, index-aligned with its lines. */
   provisioningLogStamps?: readonly number[]

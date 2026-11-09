@@ -1,10 +1,16 @@
 import type { Translate } from '@/i18n/use-translate'
 import type { VmBuildFailure } from './vm-build-failure'
 
-/** The card's title and one plain-language sentence on what happened and what to do. */
+export type VmBuildFailureCopyContext = {
+  cloud: boolean
+  /** False for team members who can't change billing; they are told to ask an owner or admin. */
+  canManageBilling: boolean
+}
+
+/** The card's cause-specific title and one plain-language sentence on what to do next. */
 export function vmBuildFailureCopy(
   failure: VmBuildFailure,
-  cloud: boolean,
+  { cloud, canManageBilling }: VmBuildFailureCopyContext,
   t: Translate
 ): { title: string; body: string | null } {
   switch (failure.kind) {
@@ -32,21 +38,47 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.planTitle',
           'Orca Cloud needs a Team plan'
         ),
-        body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.planBody',
-          'Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.'
-        )
+        body: canManageBilling
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.planBody',
+              'Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.'
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.planBodyMember',
+              'Ask an owner or admin to choose a Team plan. Nothing was created, and you weren’t charged.'
+            )
       }
     case 'hoursUsed':
       return {
         title: t(
           'auto.components.worktree.creation.VmBuildFailureCard.hoursUsedTitle',
-          'You’ve used this period’s sandbox hours'
+          'You’ve used this month’s included sandbox hours'
         ),
-        body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.hoursUsedBody',
-          'Raise your overage limit or wait for your hours to reset. Nothing was created.'
-        )
+        body: canManageBilling
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.hoursUsedBody',
+              'Turn on overage in Plan & billing to keep starting sandboxes. Nothing was created.'
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.hoursUsedBodyMember',
+              'Ask an owner or admin to turn on overage. Nothing was created.'
+            )
+      }
+    case 'spendCap':
+      return {
+        title: t(
+          'auto.components.worktree.creation.VmBuildFailureCard.spendCapTitle',
+          'You’ve reached this month’s spend cap'
+        ),
+        body: canManageBilling
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.spendCapBody',
+              'Raise the monthly spend cap in Plan & billing to keep starting sandboxes. Nothing was created.'
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.spendCapBodyMember',
+              'Ask an owner or admin to raise the monthly spend cap. Nothing was created.'
+            )
       }
     case 'payment':
       return {
@@ -54,20 +86,47 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.paymentTitle',
           'Your Orca payment needs attention'
         ),
-        body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.paymentBody',
-          'Update your payment method to start cloud workspaces again. Nothing was created.'
-        )
+        body: canManageBilling
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.paymentBody',
+              'Update your payment method to start cloud workspaces again. Nothing was created.'
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.paymentBodyMember',
+              'Ask an owner or admin to update the payment method. Nothing was created.'
+            )
       }
     case 'concurrency':
       return {
         title: t(
           'auto.components.worktree.creation.VmBuildFailureCard.concurrencyTitle',
-          'All your cloud workspaces are in use'
+          'Your team is running as many cloud workspaces as its plan allows'
         ),
         body: t(
           'auto.components.worktree.creation.VmBuildFailureCard.concurrencyBody',
-          'You’ve reached your plan’s limit on running cloud workspaces. Put one to sleep or delete it from the sidebar, then try again.'
+          'Put a running cloud workspace to sleep or delete it, then try again. Nothing was created.'
+        )
+      }
+    case 'memberConcurrency':
+      return {
+        title: t(
+          'auto.components.worktree.creation.VmBuildFailureCard.memberConcurrencyTitle',
+          'You’re running as many cloud workspaces as you can at once'
+        ),
+        body: t(
+          'auto.components.worktree.creation.VmBuildFailureCard.memberConcurrencyBody',
+          'Put one of yours to sleep or delete it, then try again. Nothing was created.'
+        )
+      }
+    case 'githubNotConnected':
+      return {
+        title: t(
+          'auto.components.worktree.creation.VmBuildFailureCard.githubTitle',
+          'Connect GitHub to use this repository'
+        ),
+        body: t(
+          'auto.components.worktree.creation.VmBuildFailureCard.githubBody',
+          'Orca Cloud needs access to GitHub to clone this private repository. Connect GitHub to your Orca account, then try again. Nothing was created.'
         )
       }
     case 'signIn':
@@ -77,8 +136,8 @@ export function vmBuildFailureCopy(
           'Sign in to use Orca Cloud'
         ),
         body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.signInBody',
-          'Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you.'
+          'auto.components.worktree.creation.VmBuildFailureCard.signInBody2',
+          'Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you. Nothing was created.'
         )
       }
     case 'unavailable':
@@ -99,8 +158,8 @@ export function vmBuildFailureCopy(
           'Couldn’t reach Orca Cloud'
         ),
         body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.networkBody',
-          'Check your internet connection, then try again.'
+          'auto.components.worktree.creation.VmBuildFailureCard.networkBody2',
+          'Check your internet connection, then try again. Nothing was created.'
         )
       }
     case 'snapshotMissing':
@@ -110,35 +169,47 @@ export function vmBuildFailureCopy(
           'This project’s saved environment is missing'
         ),
         body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.snapshotBody',
-          'The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Try again; if it keeps happening, contact support.'
+          'auto.components.worktree.creation.VmBuildFailureCard.snapshotBody2',
+          'The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created. Try again, or contact support if it keeps happening.'
         )
       }
     case 'provision':
-      return {
-        title: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.createFailedTitle',
-          'Couldn’t create workspace'
-        ),
-        body: cloud
-          ? t(
+      return cloud
+        ? {
+            title: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.provisionTitleCloud',
+              'The sandbox didn’t start'
+            ),
+            body: t(
               'auto.components.worktree.creation.VmBuildFailureCard.provisionBodyCloud',
               'Something went wrong while starting the sandbox. Try again, or open the logs for details.'
             )
-          : failure.error
-      }
+          }
+        : {
+            title: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.provisionTitleVm',
+              'The VM recipe failed'
+            ),
+            body: failure.error
+          }
     case 'create':
-      return {
-        title: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.createFailedTitle',
-          'Couldn’t create workspace'
-        ),
-        body: cloud
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.createBodyCloud',
-              'Your sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details.'
+      return cloud
+        ? {
+            title: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.createTitleCloud',
+              'Couldn’t open the workspace on the sandbox'
+            ),
+            body: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.createBodyCloud2',
+              'The sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details.'
             )
-          : failure.error
-      }
+          }
+        : {
+            title: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.createTitleVm',
+              'Couldn’t create the workspace on the VM'
+            ),
+            body: failure.error
+          }
   }
 }
