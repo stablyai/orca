@@ -63,6 +63,8 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
+  /** False while asleep, in a dark wake, or just woken; scheduled runs then wait a tick. */
+  systemSettled: () => boolean = () => true
 
   constructor(
     store: Store,
@@ -216,7 +218,9 @@ export class AutomationService {
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    if (this.evaluating || this.stopped) {
+    // A run started in a dark wake is cut off by the next sleep; a due run stays due, so a later
+    // settled tick starts it.
+    if (this.evaluating || this.stopped || !this.systemSettled()) {
       return
     }
     this.evaluating = true
