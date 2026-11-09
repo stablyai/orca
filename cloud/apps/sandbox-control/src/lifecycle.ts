@@ -346,8 +346,9 @@ export async function createSandbox(
     options.pool === false
       ? null
       : await timer.time('pool', () => claimPooledVm(deps, request.machineSize, region).catch(() => null))
-  if (pooled) {
-    // Refill behind the response so the next create finds one too.
+  if (deps.config.pool) {
+    // Refill behind the response, on a miss too (empty, or stale after a golden rotation), so the next
+    // create finds one without waiting for the cron.
     const refill = maintainPool(deps).catch((error: unknown) =>
       console.log(JSON.stringify({ event: 'pool_refill_failed', error: String(error).slice(0, 200) }))
     )

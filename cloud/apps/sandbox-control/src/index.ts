@@ -781,9 +781,6 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
-          // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
-          const pool = await maintainPool(life).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
-          console.log(JSON.stringify({ event: 'pool', ...pool }))
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
@@ -797,6 +794,13 @@ export default {
         await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
           console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))
         )
+        // After the golden tick, with fresh deps: a just-activated image replaces pooled VMs this tick.
+        // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
+        const fresh = await lifecycleDeps(env, {})
+        if (fresh) {
+          const pool = await maintainPool(fresh).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          console.log(JSON.stringify({ event: 'pool', ...pool }))
+        }
       })
     )
   }

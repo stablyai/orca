@@ -98,6 +98,27 @@ describe('warm pool', () => {
     expect(poolRows()[0]!.snapshot_id).toBe('snap_newer')
   })
 
+  it('one maintainer at a time: an overlapping refill is skipped, never doubles the pool', async () => {
+    const { h, deps, poolRows } = await pooledHarness('2')
+    const [a, b] = await Promise.all([maintainPool(deps()), maintainPool(deps())])
+    expect([a, b]).toContainEqual({ skipped: 'busy' })
+    expect(poolRows()).toHaveLength(2)
+    expect(h.vercel.boxes.size).toBe(2)
+    // The lease is released: the next tick runs.
+    expect(await maintainPool(deps())).toEqual({ created: 0, recycled: 0, ready: 2 })
+  })
+
+  it('a miss refills too (empty or stale pool), so the next create hits without waiting for the cron', async () => {
+    const { h, poolRows } = await pooledHarness('1')
+    const first = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(first.status).toBe(200)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(poolRows().map((r) => r.status)).toEqual(['ready'])
+    const second = await h.call('POST', '/v1/sandboxes', { body: { ...create, workspaceId: 'ws-2' } })
+    expect(second.body.sandbox.id).not.toBe(first.body.sandbox.id)
+    expect(h.vercel.boxes.get(`orca-test-${second.body.sandbox.id}`)!.params.tags.orcaPool).toBe('1')
+  })
+
   it('drains when the pool is turned off', async () => {
     const { h, deps, poolRows } = await pooledHarness('2')
     await maintainPool(deps())
