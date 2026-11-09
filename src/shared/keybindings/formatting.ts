@@ -21,6 +21,7 @@ import {
   isKeybindingInterceptedByMainProcess
 } from './effective'
 import { isDoubleTapBinding } from './normalization'
+import { SPATIAL_PANE_FOCUS_ACTION_IDS } from '../spatial-pane-shortcut-policy'
 
 function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
   switch (modifier) {
@@ -165,6 +166,19 @@ export function findKeybindingConflictsForDefinitions(
     }
   }
   const scopes = new Set(definitions.map((definition) => definition.scope))
+  const spatialPaneFocusIdentities = new Set(
+    SPATIAL_PANE_FOCUS_ACTION_IDS.flatMap((actionId) => {
+      const definition = byId.get(actionId)
+      return definition
+        ? getEffectiveKeybindingsForDefinition(
+            definition,
+            platform,
+            overrides,
+            definitions
+          ).flatMap((binding) => keybindingConflictIdentities(actionId, binding, platform))
+        : []
+    })
+  )
   for (const definition of definitions) {
     if (ignoredActionIds.has(definition.id)) {
       continue
@@ -181,7 +195,17 @@ export function findKeybindingConflictsForDefinitions(
         options.includeMainProcessInterception &&
         isKeybindingInterceptedByMainProcess(definition)
       ) {
+        // Why: main yields worktree history to a focused terminal when the physical chord is also spatial pane focus; double taps stay with main.
+        const yieldsToTerminal =
+          !isDoubleTapBinding(binding) &&
+          definition.id.startsWith('worktree.history.') &&
+          keybindingConflictIdentities(definition.id, binding, platform).some((identity) =>
+            spatialPaneFocusIdentities.has(identity)
+          )
         for (const scope of scopes) {
+          if (scope === 'terminal' && yieldsToTerminal) {
+            continue
+          }
           if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
             groups.add(scope)
           }

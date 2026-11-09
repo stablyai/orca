@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useCoveredTerminalFocusHandoff } from './use-covered-terminal-focus-handoff'
+import { useNativeChatCoverFocusReporting } from './use-native-chat-cover-focus-reporting'
 import { requestNativeChatCoverPaste } from '../input/paste/native-chat-cover-paste'
 
 /** The cover owns focus and paste for its pane until a chat input can take them. */
@@ -14,6 +15,7 @@ export function NativeChatPaneCover({
 }): React.JSX.Element {
   const coverRef = useRef<HTMLDivElement>(null)
   useCoveredTerminalFocusHandoff(coverRef, pane.terminal)
+  useNativeChatCoverFocusReporting(coverRef)
   return (
     <div
       ref={coverRef}

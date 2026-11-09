@@ -305,6 +305,23 @@ describe('AgentTerminalPreview', () => {
     view.unmount()
   })
 
+  it('lets xterm encode a spatial pane focus chord, since the preview has no panes', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'ArrowUp',
+      code: 'ArrowUp',
+      ctrlKey: true,
+      altKey: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(keydown)).toBe(true)
+    expect(keydown.defaultPrevented).toBe(false)
+  })
+
   // Snapshot replay can redeliver a kitty push; it must not leave stale flags after the TUI’s single pop.
   it('does not let a redelivered kitty push outlive the TUI pop', async () => {
     connect.mockResolvedValueOnce({

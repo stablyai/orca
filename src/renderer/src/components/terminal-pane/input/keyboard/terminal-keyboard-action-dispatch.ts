@@ -11,10 +11,21 @@ import {
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { equalizeTerminalPanes } from '../../layout/ownership/terminal-pane-layout-owner-commands'
+import { isSpatialFocusDirection } from '@/lib/pane-manager/pane-spatial-focus'
+import type {
+  KeybindingOverrides,
+  KeybindingPlatform,
+  TerminalShortcutPolicy
+} from '../../../../../../shared/keybindings'
+import { dispatchSpatialPaneFocus } from './terminal-spatial-focus-dispatch'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
 type ActionDispatchContext = {
+  shortcutPlatform: KeybindingPlatform
+  keybindings?: KeybindingOverrides
+  terminalShortcutPolicy?: TerminalShortcutPolicy
+  readUnexpandedLayout: (find: () => number | null) => number | null
   tabId: string
   worktreeId: string
   fallbackCwd: string
@@ -97,7 +108,8 @@ export function dispatchTerminalShortcutAction(
     }
     return
   }
-  if (event.repeat) {
+  // Spatial focus decides held repeats from the first press of the hold.
+  if (event.repeat && !(action.type === 'focusPane' && isSpatialFocusDirection(action.direction))) {
     return
   }
   if (action.type === 'toggleSearch') {
@@ -137,6 +149,10 @@ export function dispatchTerminalShortcutAction(
     return
   }
   if (action.type === 'focusPane') {
+    if (isSpatialFocusDirection(action.direction)) {
+      dispatchSpatialPaneFocus(action.direction, event, manager, context)
+      return
+    }
     const panes = manager.getPanes()
     if (panes.length < 2) {
       return

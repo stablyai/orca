@@ -6,6 +6,7 @@ import {
 } from '../../shared/modifier-double-tap-detector'
 import {
   normalizeTerminalShortcutPolicy,
+  keybindingMatchesAction,
   type KeybindingMatchOptions
 } from '../../shared/keybindings'
 import {
@@ -16,6 +17,7 @@ import {
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import { matchesSpatialPaneFocusShortcut } from '../../shared/spatial-pane-shortcut-policy'
 import type { Store } from '../persistence/loading-store/store'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
@@ -41,6 +43,7 @@ export function installMainWindowShortcutRouting(args: {
     event: Electron.Event,
     action: WindowShortcutAction,
     options: {
+      spatialPaneConflict?: boolean
       isAutoRepeat: boolean
       focusedShortcutContext: KeybindingMatchOptions
       input: TextShortcutInput
@@ -71,6 +74,15 @@ export function installMainWindowShortcutRouting(args: {
 
     // Floating-panel ownership routes index jumps to its renderer tabs instead of the main workspace.
     if (focus.isFloatingPanelFocused() && isIndexJump) {
+      return false
+    }
+
+    // Yield only physical chords the terminal can own as spatial navigation, repeats too: the terminal repeats its first press's outcome and swallows repeats of a press it never saw.
+    if (
+      action.type === 'worktreeHistoryNavigate' &&
+      (focusedShortcutContext.context === 'terminal' || focus.isNativeChatCoverFocused()) &&
+      options.spatialPaneConflict
+    ) {
       return false
     }
 
@@ -244,6 +256,15 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     dispatchResolvedWindowShortcutAction(event, action, {
+      spatialPaneConflict: matchesSpatialPaneFocusShortcut((actionId) =>
+        keybindingMatchesAction(
+          actionId,
+          input,
+          process.platform,
+          keybindings,
+          terminalShortcutContext
+        )
+      ),
       isAutoRepeat: Boolean(input.isAutoRepeat),
       focusedShortcutContext: terminalShortcutContext,
       input

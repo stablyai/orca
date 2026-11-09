@@ -58,6 +58,18 @@ describe('keybinding-file', () => {
     })
   })
 
+  it.each(['Mod+Alt+ArrowLeft', 'Mod+Alt+ArrowRight', 'Mod+Alt+ArrowUp', 'Mod+Alt+ArrowDown'])(
+    'keeps a saved terminal shortcut on the spatial pane focus default %s',
+    (chord) => {
+      writeFileSync(filePath, JSON.stringify({ keybindings: { 'terminal.splitDown': [chord] } }))
+
+      const snapshot = readKeybindingFile(filePath, 'linux')
+
+      expect(snapshot.overrides).toEqual({ 'terminal.splitDown': [chord] })
+      expect(snapshot.diagnostics).toEqual([])
+    }
+  )
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'does not reimport a manually deleted shortcut on %s',
     (platform) => {

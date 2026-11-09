@@ -57,6 +57,7 @@ export type UiWindowApi = {
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
   markPlainTextContextMenuTarget: () => void
   setTerminalInputFocused: (focused: boolean) => void
+  setNativeChatCoverFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
   setShortcutRecorderFocused: (focused: boolean) => void
   onRichMarkdownContextCommand: (
