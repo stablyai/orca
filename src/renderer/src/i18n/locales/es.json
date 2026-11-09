@@ -3735,6 +3735,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Activar"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Ajustado para otra ventana",
+            "fitHere": "Ajustar aquí"
           }
         }
       },
