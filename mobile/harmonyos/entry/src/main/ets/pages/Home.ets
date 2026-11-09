@@ -191,7 +191,7 @@ struct Home {
   private appInForeground: boolean = true;
   private loadEpoch: number = 0;
   private onboardingChecked: boolean = false;
-  private onboardingPending: boolean = false;
+  private onboardingSteps: string[] = [];
   private onboardingNavigating: boolean = false;
 
   // ---------------------------------------------------------------- helpers
@@ -330,17 +330,16 @@ struct Home {
   private openPendingOnboarding(context: common.Context): boolean {
     if (this.hosts.length === 0) { return false; }
     if (AppStorage.get<boolean>('explicitLaunchNavigation') === true) {
-      this.onboardingChecked = true; this.onboardingPending = false; return false;
+      this.onboardingChecked = true; this.onboardingSteps = []; return false;
     }
     if (!this.onboardingChecked) {
       this.onboardingChecked = true;
-      try { this.onboardingPending = loadMobileOnboardingSteps(context).length > 0; }
-      catch (e) { return false; }
+      this.onboardingSteps = loadMobileOnboardingSteps(context);
     }
-    if (!this.onboardingPending) { return false; }
+    if (this.onboardingSteps.length === 0) { return false; }
     if (!this.onboardingNavigating) {
       this.onboardingNavigating = true;
-      router.replaceUrl({ url: 'pages/MobileOnboarding' }).catch(() => {
+      router.replaceUrl({ url: 'pages/MobileOnboarding', params: { 'steps': this.onboardingSteps.join(',') } }).catch(() => {
         this.onboardingNavigating = false;
         if (this.visible) { this.loadError = '无法打开首次设置，请重试'; }
       });

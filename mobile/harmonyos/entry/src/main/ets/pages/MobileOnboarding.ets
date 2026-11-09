@@ -4,7 +4,8 @@ import { common } from '@kit.AbilityKit';
 import { accessibility } from '@kit.AccessibilityKit';
 import { uiText } from '../settings/NativeUi';
 import { LocalNotifier } from '../notifications/LocalNotifier';
-import { loadMobileOnboardingSteps, saveOnboardingSessionView, saveOnboardingOnlineNotifications } from '../onboarding/MobileOnboardingPlan';
+import { loadMobileOnboardingSteps, parseMobileOnboardingSteps, saveOnboardingSessionView,
+  saveOnboardingOnlineNotifications } from '../onboarding/MobileOnboardingPlan';
 import { MobileOnboardingPanel } from '../onboarding/MobileOnboardingPanel';
 
 @Entry
@@ -19,7 +20,6 @@ struct MobileOnboarding {
   @State step: string = '';
   @State error: string = '';
   @State busyChoice: string = '';
-  @State loaded: boolean = false;
   @State completed: number = 0;
   @State visible: boolean = false;
   @State foreground: boolean = true;
@@ -27,7 +27,7 @@ struct MobileOnboarding {
   private pager: SwiperController = new SwiperController();
   private hostId: string = '';
   private disposed: boolean = false;
-  private navigationEpoch: number = 0;
+  private navigating: boolean = false;
   private context?: common.UIAbilityContext;
   private watchingMotion: boolean = false;
   private motionChanged = (reduced: boolean): void => { this.reducedMotion = reduced; };
@@ -38,6 +38,9 @@ struct MobileOnboarding {
     let params = (router.getParams() ?? {}) as Record<string, string>;
     this.hostId = params['hostId'] ?? '';
     let context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    this.pages = params['steps'] === undefined ? loadMobileOnboardingSteps(context)
+      : parseMobileOnboardingSteps(params['steps']);
+    this.step = this.pages[0] ?? '';
     this.context = context;
     context.eventHub.on('orcaForeground', this.onForeground);
     context.eventHub.on('orcaBackground', this.onBackground);
@@ -47,10 +50,13 @@ struct MobileOnboarding {
       this.watchingMotion = true;
     } catch (e) {}
   }
-  onPageShow(): void { this.visible = true; this.navigationEpoch++; this.refresh(); }
-  onPageHide(): void { this.visible = false; this.navigationEpoch++; }
+  onPageShow(): void {
+    this.visible = true;
+    if (!this.step) { this.continueToApp(); }
+  }
+  onPageHide(): void { this.visible = false; }
   aboutToDisappear(): void {
-    this.disposed = true; this.visible = false; this.navigationEpoch++;
+    this.disposed = true; this.visible = false;
     this.context?.eventHub.off('orcaForeground', this.onForeground);
     this.context?.eventHub.off('orcaBackground', this.onBackground);
     if (this.watchingMotion) {
@@ -64,51 +70,38 @@ struct MobileOnboarding {
     catch (e) { this.reducedMotion = true; }
   }
 
-  refresh(): void {
-    try {
-      let steps = loadMobileOnboardingSteps(getContext(this));
-      if (!this.loaded) { this.pages = steps; }
-      this.loaded = true; this.error = '';
-      if (steps.length === 0) { this.step = ''; this.continueToApp(); }
-      else {
-        this.step = steps[0];
-        let index = this.pages.indexOf(this.step);
-        if (index < 0) { this.pages = steps; index = 0; }
-        if (this.completed !== index) {
-          this.completed = index;
-          this.pager.changeIndex(index, !this.reducedMotion);
-        }
-      }
-    } catch (e) { this.error = '无法读取首次设置，请重试'; }
+  private advance(): void {
+    this.completed++;
+    this.step = this.pages[this.completed] ?? '';
+    if (this.step) { this.pager.changeIndex(this.completed, !this.reducedMotion); }
+    else { this.continueToApp(); }
   }
 
   private continueToApp(): void {
-    if (this.disposed || !this.visible) { return; }
-    if (/^[a-f0-9]{32}$/.test(this.hostId)) {
-      router.replaceUrl({ url: 'pages/ShellScreen', params: { 'hostId': this.hostId } }).catch(() => { this.error = '无法打开桌面，请重试'; });
-    } else {
-      router.replaceUrl({ url: 'pages/Home' }).catch(() => { this.error = '无法打开首次设置，请重试'; });
-    }
+    if (this.disposed || !this.visible || this.navigating) { return; }
+    this.navigating = true; this.error = '';
+    let hasHost = /^[a-f0-9]{32}$/.test(this.hostId);
+    let params: Record<string, string> = {};
+    if (hasHost) { params['hostId'] = this.hostId; }
+    router.replaceUrl({ url: hasHost ? 'pages/ShellScreen' : 'pages/Home', params: params }).catch(() => {
+      this.navigating = false;
+      if (!this.disposed) { this.error = hasHost ? '无法打开桌面，请重试' : '无法打开首次设置，请重试'; }
+    });
   }
 
   async chooseSession(view: string): Promise<void> {
     if (this.busyChoice || this.disposed || !this.visible || this.step !== 'session-view') { return; }
     this.busyChoice = view; this.error = '';
-    let navigationEpoch = this.navigationEpoch;
     try {
       await saveOnboardingSessionView(getContext(this), view);
-      if (!this.disposed && this.visible && navigationEpoch === this.navigationEpoch) { this.refresh(); }
+      if (!this.disposed) { this.advance(); }
     } catch (e) { if (!this.disposed) { this.error = '无法保存选择，请重试'; } }
-    finally {
-      this.busyChoice = '';
-      if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch) { this.refresh(); }
-    }
+    finally { this.busyChoice = ''; }
   }
 
   async chooseNotifications(enable: boolean): Promise<void> {
     if (this.busyChoice || this.disposed || !this.visible || this.step !== 'online-notifications') { return; }
     this.busyChoice = enable ? 'enable' : 'skip'; this.error = '';
-    let navigationEpoch = this.navigationEpoch;
     try {
       let granted = false;
       if (enable) {
@@ -117,12 +110,9 @@ struct MobileOnboarding {
       }
       if (this.disposed) { return; }
       await saveOnboardingOnlineNotifications(getContext(this), granted);
-      if (!this.disposed && this.visible && navigationEpoch === this.navigationEpoch) { this.refresh(); }
+      if (!this.disposed) { this.advance(); }
     } catch (e) { if (!this.disposed) { this.error = '无法保存通知选择，请重试'; } }
-    finally {
-      this.busyChoice = '';
-      if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch) { this.refresh(); }
-    }
+    finally { this.busyChoice = ''; }
   }
 
   @Builder
@@ -165,7 +155,7 @@ struct MobileOnboarding {
             Text(uiText(this.error, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText)
               .textAlign(TextAlign.Center)
             Button(uiText('重试', this.uiLocale)).fontFamily('Geist').fontSize(14)
-              .enabled(this.busyChoice === '').onClick((): void => this.refresh())
+              .enabled(this.busyChoice === '').onClick((): void => this.continueToApp())
           } else {
             LoadingProgress().width(28).height(28).color(this.themeSecondary)
           }

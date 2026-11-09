@@ -5,9 +5,16 @@ const { loadArkts } = require('./arkts-source.cjs')
 function onboardingStore() {
   const values = new Map()
   let failWrite = false
+  let unreadableKey = ''
+  function read(key) {
+    if (key === unreadableKey) {
+      throw new Error('preference unavailable')
+    }
+    return values.get(key)
+  }
   const prefs = {
-    hasSync: (key) => values.has(key),
-    getSync: (key, fallback) => (values.has(key) ? values.get(key) : fallback),
+    hasSync: (key) => read(key) !== undefined,
+    getSync: (key, fallback) => read(key) ?? fallback,
     putSync: (key, value) => values.set(key, value),
     deleteSync: (key) => values.delete(key),
     flushSync() {
@@ -32,6 +39,9 @@ function onboardingStore() {
     ...flow,
     failNextWrite() {
       failWrite = true
+    },
+    setUnreadableKey(key) {
+      unreadableKey = key
     }
   }
 }
@@ -46,6 +56,16 @@ test('first-run choices persist in order and are not offered again after reopeni
   assert.deepEqual(Array.from(flow.loadMobileOnboardingSteps({})), ['online-notifications'])
   await flow.saveOnboardingOnlineNotifications({}, false)
   assert.deepEqual(Array.from(flow.loadMobileOnboardingSteps({})), [])
+})
+
+test('an unreadable choice does not block a different confirmed missing choice', async () => {
+  const flow = onboardingStore()
+  flow.setUnreadableKey('orca:defaultSessionView')
+  assert.deepEqual(Array.from(flow.loadMobileOnboardingSteps({})), ['online-notifications'])
+  await flow.saveOnboardingOnlineNotifications({}, false)
+  assert.deepEqual(Array.from(flow.loadMobileOnboardingSteps({})), [])
+  flow.setUnreadableKey('')
+  assert.deepEqual(Array.from(flow.loadMobileOnboardingSteps({})), ['session-view'])
 })
 
 test('a failed save leaves the first-run choice pending instead of advancing', async () => {

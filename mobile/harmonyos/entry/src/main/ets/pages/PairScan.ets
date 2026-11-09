@@ -245,6 +245,7 @@ struct PairScan {
       let steps = loadMobileOnboardingSteps(getContext(this));
       if (steps.length === 0 && hostId === this.repairHostId) { router.back(); return; }
       let params: Record<string, string> = { 'hostId': hostId };
+      if (steps.length > 0) { params['steps'] = steps.join(','); }
       await router.replaceUrl({ url: steps.length > 0 ? 'pages/MobileOnboarding' : 'pages/ShellScreen', params: params });
     } catch (e) {
       if (!this.disposed) { this.error = '配对已保存，无法继续首次设置，请重试'; }
