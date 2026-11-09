@@ -75,7 +75,8 @@ it('ends a supervised process whose event loop stays blocked past the exit bound
   let stderr = ''
   child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve) => child.once('exit', (code, signal) => resolve({ code, signal }))
+    // close, not exit: stderr may still hold the worker's last line when exit fires.
+    (resolve) => child.once('close', (code, signal) => resolve({ code, signal }))
   )
   expect(exit.code === 0 && exit.signal === null).toBe(false)
   expect(stderr).toContain('exiting so the service manager restarts it')
