@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Users } from 'lucide-react'
+import { ChevronsUpDown, User } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenuItem,
@@ -87,7 +87,7 @@ export function SidebarTeamSubmenu({
               )
         }
       >
-        <Users className="size-3.5" />
+        {activeName ? <ChevronsUpDown className="size-3.5" /> : <User className="size-3.5" />}
         <span className="min-w-0 flex-1 truncate">
           {activeName ?? t('auto.components.sidebar.teamSwitcher.personal', 'Personal account')}
         </span>

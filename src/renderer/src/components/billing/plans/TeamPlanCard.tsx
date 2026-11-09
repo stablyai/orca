@@ -151,7 +151,7 @@ export function TeamPlanCard({
           type="button"
           className="w-full"
           aria-disabled={busy || undefined}
-          onClick={onCheckout}
+          onClick={busy ? undefined : onCheckout}
           data-plans-primary=""
         >
           {busy ? <LoadingSpinner /> : null}
@@ -188,7 +188,7 @@ export function TeamPlanCard({
           variant="outline"
           className="w-full"
           aria-disabled={busy || undefined}
-          onClick={onManage}
+          onClick={busy ? undefined : onManage}
           data-plans-primary=""
         >
           {t('auto.components.billing.manageBilling', 'Manage billing')}

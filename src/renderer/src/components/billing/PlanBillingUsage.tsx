@@ -76,7 +76,11 @@ export function UsageSummary({
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
-        tone={includedUsagePercent(entitlement) >= 100 ? 'warning' : 'default'}
+        tone={
+          includedUsagePercent(entitlement) >= 100 && !entitlement.overage.optedIn
+            ? 'warning'
+            : 'default'
+        }
         aria-label={t('auto.components.billing.sandboxHoursUsedLabel', 'Sandbox hours used')}
       />
       {entitlement.overageSeconds === 0 &&
@@ -167,6 +171,14 @@ export function OverageControls({
       value2: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
     }
   )
+  const descriptionOn = t(
+    'auto.components.billing.overageDescriptionOn',
+    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set.',
+    {
+      value0: formatCents(overage.centsPerHour, locale),
+      value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale)
+    }
+  )
   const capPercent =
     overage.spendCapCents > 0
       ? Math.min(100, Math.round((overage.spentCents / overage.spendCapCents) * 100))
@@ -175,6 +187,7 @@ export function OverageControls({
     <div className="space-y-1.5">
       <Progress
         value={capPercent}
+        tone={capPercent >= 100 ? 'warning' : 'default'}
         aria-label={t('auto.components.billing.capUsedLabel', 'Overage spend cap used')}
       />
       <p className="text-xs text-muted-foreground tabular-nums">
@@ -222,7 +235,7 @@ export function OverageControls({
             {t('auto.components.billing.overageTitle', 'Overage')}
           </p>
           <p id={descriptionId} className="text-xs text-muted-foreground">
-            {description}
+            {optedIn ? descriptionOn : description}
           </p>
         </div>
         <SettingsDisabledControlTooltip
@@ -287,14 +300,6 @@ export function OverageControls({
                     }}
                   />
                 </div>
-                {capValid && entitlement.reason === 'overage_cap_reached' ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t(
-                      'auto.components.billing.capReachedHint',
-                      'Raise the cap to keep starting sandboxes. Your files are safe.'
-                    )}
-                  </p>
-                ) : null}
                 {capValid ? null : (
                   <p id={capErrorId} className="text-xs text-destructive">
                     {t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
@@ -317,6 +322,14 @@ export function OverageControls({
                 <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
                   {t('auto.components.billing.saveCap', 'Save')}
                 </Button>
+              ) : null}
+              {capValid && entitlement.reason === 'overage_cap_reached' ? (
+                <p className="basis-full text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.billing.capReachedHint',
+                    'Raise the cap to keep starting sandboxes. Your files are safe.'
+                  )}
+                </p>
               ) : null}
             </form>
           )}

@@ -293,8 +293,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {roster?.canManageMembers && enterprise ? (
-        <div className="rounded-xl border border-border">
+      {(roster?.canManageMembers && enterprise) || selfRow ? (
+        <div className="divide-y divide-border/60 rounded-xl border border-border">
           {roster?.canManageMembers && enterprise ? (
             <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
               <div className="min-w-[14rem] flex-1 space-y-0.5">

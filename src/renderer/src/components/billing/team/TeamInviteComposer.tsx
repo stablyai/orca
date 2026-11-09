@@ -315,7 +315,8 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
               type="submit"
               size="sm"
               // aria-disabled keeps focus here while sending; submit ignores it meanwhile.
-              aria-disabled={sending || valid.length === 0 || undefined}
+              disabled={!sending && valid.length === 0}
+              aria-disabled={sending || undefined}
             >
               {sending ? <LoadingSpinner className="size-3.5" /> : <Send />}
               {valid.length === 0

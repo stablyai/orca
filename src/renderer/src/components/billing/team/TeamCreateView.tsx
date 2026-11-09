@@ -53,7 +53,7 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
           className="mt-4 space-y-2"
           onSubmit={(event) => {
             event.preventDefault()
-            if (trimmed && !props.creating) {
+            if (trimmed && !props.creating && !props.unavailable) {
               props.onCreate(trimmed)
             }
           }}
@@ -79,7 +79,8 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
             />
             <Button
               type="submit"
-              aria-disabled={!trimmed || props.creating || props.unavailable || undefined}
+              disabled={!props.creating && (!trimmed || props.unavailable)}
+              aria-disabled={props.creating || undefined}
             >
               {props.creating ? <LoadingSpinner className="size-3.5" /> : null}
               {t('auto.components.billing.team.createCta', 'Create team')}
