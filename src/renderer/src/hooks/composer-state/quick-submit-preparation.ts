@@ -79,30 +79,31 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       let submitResolvedSetupDecision = resolvedSetupDecision
 
-      // Create waits for the host's answer so an unanswered probe can't drop an ask-policy prompt.
+      // Create re-asks the host so a pending or stale answer can't drop an ask-policy prompt.
       const supportSettlement = await settleComposerSubmit(
-        setupSupport === 'pending'
-          ? resolveFolderSetupSupported(selectedRepo).catch(() => {
-              throw new Error(
-                translate(
-                  'auto.hooks.useComposerState.folderSetupSupportCheckFailed',
-                  "Couldn't confirm whether this host runs folder setup scripts. Try again."
-                )
-              )
-            })
-          : Promise.resolve(setupSupport === 'supported'),
+        resolveFolderSetupSupported(selectedRepo).catch(() => {
+          throw new Error(
+            translate(
+              'auto.hooks.useComposerState.folderSetupSupportCheckFailed',
+              "Couldn't confirm whether this host runs folder setup scripts. Try again."
+            )
+          )
+        }),
         isSubmissionCancelled
       )
       if (supportSettlement.status === 'cancelled') {
         return null
       }
       const submitSetupSupported = supportSettlement.value
+      if (!submitSetupSupported) {
+        submitSetupConfig = null
+      }
 
       if (
         submitSetupSupported &&
-        (setupSupport === 'pending' || setupPolicy === 'ask') &&
+        (setupSupport !== 'supported' || setupPolicy === 'ask') &&
         selectedRepoHookContextKey &&
-        (setupSupport === 'pending' || checkedHooksContextKey !== selectedRepoHookContextKey)
+        (setupSupport !== 'supported' || checkedHooksContextKey !== selectedRepoHookContextKey)
       ) {
         const outcome = await readWorkspaceSetupInspection(
           () => loadHookCheckForRepo(repoId),
