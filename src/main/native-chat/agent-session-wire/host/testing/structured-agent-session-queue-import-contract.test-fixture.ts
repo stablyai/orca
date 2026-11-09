@@ -23,7 +23,7 @@ export const identity = {
   providerHandle: codexProviderHandle('thread')
 }
 export const sourceHandle = { kind: 'codex' as const, threadId: 'thread' }
-export const base = (seq: number) => ({ v: 3, epoch: 'frozen-epoch', seq, fence: 0, ts: 1_000 })
+export const base = (seq: number) => ({ v: 4, epoch: 'frozen-epoch', seq, fence: 0, ts: 1_000 })
 export const founding: JournalRow = {
   ...base(1),
   kind: 'epoch',

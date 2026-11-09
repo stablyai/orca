@@ -1,4 +1,5 @@
 // Exercise compiled CLI keepalives over pipes; skip until built (the verification gate builds it).
+import { withTestAgentSessionDatabase } from './agent-session/records/agent-session-record-store-test-harness'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,10 +27,7 @@ import {
 import { abandonStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-abandon.test-fixture'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText,
@@ -572,46 +570,47 @@ describeIfBuilt('native caller subprocess over durable records', () => {
 
       await abandonStructuredAgentSessionHost(host)
       await hostTestRecoveryCapsuleSettled()
-      const nativeDb = openTestJournalHostDatabase(rig.root).db
-      const before = nativeDb
-        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
-        .get(sessionId)
-      expect(before).toBeDefined()
-      nativeDb
-        .prepare(`
+      await withTestAgentSessionDatabase(rig.root, (nativeDb) => {
+        const before = nativeDb
+          .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+          .get(sessionId)
+        expect(before).toBeDefined()
+        nativeDb
+          .prepare(`
         UPDATE agent_session_records
         SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad')
         WHERE session_id = ?
       `)
-        .run(sessionId)
-      const damaged = nativeDb
-        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
-        .get(sessionId)
-      if (typeof before?.record_json !== 'string' || typeof damaged?.record_json !== 'string') {
-        throw new Error('Expected persisted native record JSON')
-      }
-      const original: unknown = JSON.parse(before.record_json)
-      if (!isRecord(original) || !isRecord(original.lease)) {
-        throw new Error('Expected checked original record and lease')
-      }
-      expect(JSON.parse(damaged.record_json)).toEqual({
-        ...original,
-        lease: { ...original.lease, minimumNextFence: 'bad' }
-      })
-      // A second visible raw row must be excluded because its conversation cannot be checked.
-      nativeDb
-        .prepare(`
+          .run(sessionId)
+        const damaged = nativeDb
+          .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+          .get(sessionId)
+        if (typeof before?.record_json !== 'string' || typeof damaged?.record_json !== 'string') {
+          throw new Error('Expected persisted native record JSON')
+        }
+        const original: unknown = JSON.parse(before.record_json)
+        if (!isRecord(original) || !isRecord(original.lease)) {
+          throw new Error('Expected checked original record and lease')
+        }
+        expect(JSON.parse(damaged.record_json)).toEqual({
+          ...original,
+          lease: { ...original.lease, minimumNextFence: 'bad' }
+        })
+        // A second visible raw row must be excluded because its conversation cannot be checked.
+        nativeDb
+          .prepare(`
         INSERT INTO agent_session_records (session_id, record_json)
         SELECT ?, json_set(record_json, '$.sessionId', ?, '$.lease.sessionId', ?,
           '$.providerHandleChain', 'bad')
         FROM agent_session_records WHERE session_id = ?
       `)
-        .run(invalidId, invalidId, invalidId, sessionId)
-      nativeDb
-        .prepare(`
+          .run(invalidId, invalidId, invalidId, sessionId)
+        nativeDb
+          .prepare(`
         INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, 1)
       `)
-        .run(structuredAgentSessionTabId(invalidId), invalidId)
+          .run(structuredAgentSessionTabId(invalidId), invalidId)
+      })
       await closeTestJournalHostDatabase(rig.root)
       store = await openTestAgentSessionRecordStore(rig.root)
       host = new StructuredAgentSessionHost({

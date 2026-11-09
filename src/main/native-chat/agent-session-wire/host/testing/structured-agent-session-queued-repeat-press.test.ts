@@ -8,7 +8,7 @@ import {
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   hostTestMessage,
   hostTestOperationId,
@@ -72,7 +72,7 @@ describe('a queued Send receipt', () => {
       value: { queued: { state: 'waiting' } }
     })
     expect(await rig.drafts()).toHaveLength(1)
-    expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+    expect(await rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
       verdict: 'readable',
       receipt: { result: { kind: 'queued-draft', messageId: id } }
     })
@@ -105,9 +105,10 @@ describe('a queued Send receipt', () => {
   it('rolls back a draft whose receipt cannot be saved', async () => {
     await rig.workingSend()
     const id = hostTestOperationId()
-    const db = openTestJournalHostDatabase(rig.root).db
-    db.exec(`CREATE TRIGGER fail_draft_receipt BEFORE INSERT ON agent_session_command_receipts
+    await withTestAgentSessionDatabase(rig.root, (db) =>
+      db.exec(`CREATE TRIGGER fail_draft_receipt BEFORE INSERT ON agent_session_command_receipts
       BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
+    )
     expect(await rig.host.send(CALLER, params(id, 'must roll back'))).toMatchObject({
       ok: false,
       refusal: {
@@ -116,9 +117,11 @@ describe('a queued Send receipt', () => {
       }
     })
     expect(await rig.drafts()).toHaveLength(0)
-    expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toEqual({ verdict: 'absent' })
+    expect(await rig.store.readCommandReceipt({ kind: 'global' }, id)).toEqual({
+      verdict: 'absent'
+    })
     expect(rig.store.listOperationRows().find((row) => row.operationId === id)).toBeUndefined()
-    db.exec('DROP TRIGGER fail_draft_receipt')
+    await withTestAgentSessionDatabase(rig.root, (db) => db.exec('DROP TRIGGER fail_draft_receipt'))
     expect(await rig.host.send(CALLER, params(id, 'must roll back'))).toMatchObject({
       ok: true,
       replayed: false

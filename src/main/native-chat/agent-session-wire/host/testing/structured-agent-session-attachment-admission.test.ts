@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionAttachmentStoreRoot } from '../../../agent-session-attachments/agent-session-attachment-references'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER as CALLER,
@@ -49,13 +49,13 @@ function clientSend(body: AgentJournalMessageItem, delivery?: 'queue-if-active')
   })
 }
 
-function claimedSessions(): string[] {
-  return openTestJournalHostDatabase(rig.root)
-    .db.prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
-    .all()
-    .flatMap((row) =>
-      typeof row === 'object' && row !== null && 'session_id' in row ? [String(row.session_id)] : []
-    )
+function claimedSessions(): Promise<string[]> {
+  return withTestAgentSessionDatabase(rig.root, (db) =>
+    db
+      .prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
+      .all()
+      .map((row) => String(row.session_id))
+  )
 }
 
 describe('attachments at send admission', () => {
@@ -82,7 +82,7 @@ describe('attachments at send admission', () => {
       }
     })
     expect((await readTestHostJournal(rig.host, SESSION)).submissions).toHaveLength(0)
-    expect(claimedSessions()).toEqual([])
+    expect(await claimedSessions()).toEqual([])
     expect(existsSync(fresh)).toBe(true)
   })
 

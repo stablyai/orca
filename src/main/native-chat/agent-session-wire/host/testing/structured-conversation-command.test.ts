@@ -1,3 +1,4 @@
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,10 +22,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -159,9 +157,10 @@ async function clearCommits(params = commandParams('clear'), who = caller) {
 
 describe('same-conversation clear', () => {
   it('rolls back the divider, boundary and ledger success together when storage fails', async () => {
-    const db = openTestJournalHostDatabase(generationRoot()).db
-    db.exec(
-      "CREATE TEMP TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+    await withTestAgentSessionDatabase(generationRoot(), (db) =>
+      db.exec(
+        "CREATE TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+      )
     )
     const params = commandParams('clear')
     const before = await readTestHostJournal(host, HOST_TEST_SESSION)
@@ -174,7 +173,7 @@ describe('same-conversation clear', () => {
     expect(
       store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
-    db.exec('DROP TRIGGER fail_clear')
+    await withTestAgentSessionDatabase(generationRoot(), (db) => db.exec('DROP TRIGGER fail_clear'))
     await clearCommits(params)
     expect(await clearRows()).toHaveLength(1)
     expect(

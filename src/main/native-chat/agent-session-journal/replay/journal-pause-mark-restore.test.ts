@@ -25,7 +25,7 @@ const identity = {
   agent: 'codex' as const,
   providerHandle: codexProviderHandle('thread')
 }
-const row = (seq: number) => ({ v: 3, epoch: 'historical', seq, fence: 0, ts: 1_000 })
+const row = (seq: number) => ({ v: 4, epoch: 'historical', seq, fence: 0, ts: 1_000 })
 const rows: JournalRow[] = [
   {
     ...row(1),

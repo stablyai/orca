@@ -73,7 +73,11 @@ describe('structured agent-session outbound admission', () => {
 
     roster = { state: 'monitoring' }
     subscribers.republishBackgroundTasks(SESSION, 2)
-    await vi.waitFor(() => expect(initial.slice(1)).toHaveLength(2))
+    await vi.waitFor(() =>
+      expect(initial.slice(1)).toContainEqual(
+        expect.objectContaining({ backgroundTasks: { state: 'monitoring' } })
+      )
+    )
     initial.slice(1).forEach(expectAdmitted)
 
     const epochReset: AgentSessionSubscribeEvent[] = []

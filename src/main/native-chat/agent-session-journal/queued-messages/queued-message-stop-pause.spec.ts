@@ -153,7 +153,7 @@ export function registerQueuedMessageStopPauseTests(
   })
 
   it('a retired accepted outcome still proves a later personal turn lifted Stop', async () => {
-    const row = (seq: number) => ({ v: 3, epoch: 'historical', seq, fence: 0, ts: 1_000 })
+    const row = (seq: number) => ({ v: 4, epoch: 'historical', seq, fence: 0, ts: 1_000 })
     seedTestJournalHistoricalRows(
       openTestJournalHostDatabase(fixture.root).db,
       fixture.IDENTITY,

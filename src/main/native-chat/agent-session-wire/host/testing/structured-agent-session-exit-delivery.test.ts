@@ -69,6 +69,7 @@ async function watchChat(current: QueuedMessageTestRig) {
       })
     }
   })
+  await eventually(() => expect(reads.length).toBeGreaterThan(0))
   return reads
 }
 

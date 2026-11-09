@@ -9,13 +9,13 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
+import {
+  seedTestAgentSessionRecordStore,
+  withTestAgentSessionDatabase
+} from './records/agent-session-record-store-test-harness'
 import { nativeChatScratchFolderFor } from '../../native-chat/native-chat-scratch-folder'
 import { foundAgentSessionRecord } from './records/agent-session-record-founding'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
@@ -77,8 +77,10 @@ describe('structured agent-session runtime install', () => {
       stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
       await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
       if (failWrite) {
-        openTestJournalHostDatabase(stateDirectory).db.exec(
-          "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+        await withTestAgentSessionDatabase(stateDirectory, (db) =>
+          db.exec(
+            "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+          )
         )
       }
       const logged = recordingStructuredAgentSessionLogger()

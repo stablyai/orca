@@ -9,16 +9,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionContextUsage } from '../../../../shared/agent-session/agent-session-context-usage'
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
-  liveTestJournalRows,
   updateTestJournalRowJson
 } from '../store-lifecycle/journal-host-database-test-support'
+import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inputs.test-support'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalRowContextUsageTests(): void {
@@ -61,7 +58,7 @@ export function registerJournalRowContextUsageTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener({ legacyInputs: true })
+  const journals = createTrackedJournalOpener()
 
   const open = () =>
     journals.open({
@@ -70,10 +67,6 @@ export function registerJournalRowContextUsageTests(): void {
       now: () => ++clock,
       mintEpoch: () => 'epoch-1'
     })
-
-  function row(ordinal: number): AgentJournalItemIdentity {
-    return { provider: 'orca', clientMessageId: `row-${ordinal}` }
-  }
 
   const turn = (turnId: string, contextUsage?: AgentSessionContextUsage): AgentJournalItemBody => ({
     kind: 'turn',
@@ -94,26 +87,55 @@ export function registerJournalRowContextUsageTests(): void {
 
   describe('context facts on replayed turn rows', () => {
     it('keeps a turn row whose facts it cannot read, and everything after it, minus the facts', async () => {
-      const journal = await open()
-      await journal.appendItem(row(0), turn('turn-0', FACTS[0]), {
-        fence: 1,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-      await journal.appendItem(
-        row(1),
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'after' }] },
-        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      const db = openTestJournalHostDatabase(root).db
+      const epoch = 'saved-context'
+      seedTestJournalHistoricalRows(db, IDENTITY, [
+        { v: 3, kind: 'epoch', epoch, seq: 1, ts: 1_000, fence: 1, reason: 'session_created' },
+        {
+          v: 3,
+          kind: 'item',
+          epoch,
+          seq: 2,
+          ts: 1_000,
+          fence: 1,
+          itemId: 'orca:row-0',
+          revision: 1,
+          body: turn('turn-0', FACTS[0]),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
+        {
+          v: 3,
+          kind: 'item',
+          epoch,
+          seq: 3,
+          ts: 1_001,
+          fence: 1,
+          itemId: 'orca:row-1',
+          revision: 1,
+          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'after' }] },
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ])
+      updateTestJournalRowJson(
+        db,
+        IDENTITY.sessionId,
+        2,
+        JSON.stringify({
+          v: 3,
+          kind: 'item',
+          epoch,
+          seq: 2,
+          ts: 1_000,
+          fence: 1,
+          itemId: 'orca:row-0',
+          revision: 1,
+          body: {
+            ...turn('turn-0'),
+            contextUsage: { used: { kind: 'unknown', capturedAt: 'later' } }
+          },
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
       )
-      await journal.close()
-      const opened = openTestJournalHostDatabase(root)
-      try {
-        const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
-        const future = JSON.parse(rowJson)
-        future.body.contextUsage = { used: { kind: 'unknown', capturedAt: 'later' } }
-        updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
-      } finally {
-        await opened.close()
-      }
 
       const reopened = await open()
       expect((await readTestJournalItems(reopened)).map((item) => item.body)).toEqual([

@@ -1,7 +1,9 @@
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  withTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { expect, vi } from 'vitest'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
@@ -159,10 +161,11 @@ export async function expectUsageLimitCompletionRollback({
   const request = await params(target)
   const before = await readTestHostJournal(host, HOST_TEST_SESSION)
   const physical = journal.physicalCursor().epoch
-  const db = openTestJournalHostDatabase(directory).db
-  db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
+  await withTestAgentSessionDatabase(directory, (db) =>
+    db.exec(`CREATE TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
       WHEN instr(NEW.record_json, '"phase":"completed"') > 0
       BEGIN SELECT RAISE(ABORT, 'completion write failed'); END`)
+  )
   await expect(host.rewind({ callerKey: 'desktop' }, request)).rejects.toThrow(
     'completion write failed'
   )
@@ -172,7 +175,9 @@ export async function expectUsageLimitCompletionRollback({
   expect(journal.physicalCursor().epoch).toBe(physical)
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
   expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
-  db.exec('DROP TRIGGER fail_rewind_completion')
+  await withTestAgentSessionDatabase(directory, (db) =>
+    db.exec('DROP TRIGGER fail_rewind_completion')
+  )
   const replace = vi.spyOn(AgentSessionJournal.prototype, 'completeRewind')
   expect(
     await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)

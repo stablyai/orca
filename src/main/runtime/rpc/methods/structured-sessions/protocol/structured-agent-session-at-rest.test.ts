@@ -20,14 +20,16 @@ import {
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
-  foundRestTestChat,
   REST_TEST_CALLER as CALLER,
   restTestSend
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
-import { editPersistedTestAgentSessionStore } from '../../../../agent-session/records/agent-session-record-store-test-harness'
+import {
+  editPersistedTestAgentSessionStore,
+  withTestAgentSessionDatabase
+} from '../../../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcResponse } from '../../../core'
-import { openTestJournalHostDatabase } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 
 import {
   CLIENT,
@@ -397,78 +399,18 @@ it('logs a reader reconnecting to a journal that will not open once per failure'
   expect(logged()).toEqual([denied, exhausted])
 })
 
-it('refuses a damaged journal as unloadable at subscribe and send, and keeps its rows (P2-03)', async () => {
-  await foundRestTestChat(fixture.rig)
-  await fixture.rig.host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare(
-      "UPDATE journal_outcomes SET value_json = '}{' WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2"
-    )
-    .run(SESSION)
-  await fixture.rig.restart()
-  setStructuredAgentSessionHost(fixture.rig.host)
-
-  const frames = await call('agentSession.subscribe', { sessionId: SESSION })
-  expect(frames.find((frame) => !frame.ok)).toMatchObject({
-    error: {
-      data: {
-        refusal: {
-          code: 'agent_session_journal_unreadable',
-          details: { reason: 'journalCorrupt' }
-        }
-      }
-    }
+it('resets catch-up over an unreadable event while keeping the current conversation readable', async () => {
+  await restingChat()
+  await call('agentSession.subscribe', { sessionId: SESSION })
+  const live = await journalSqlReads(
+    fixture.rig.host.deps.journalDatabase.readers,
+    SESSION
+  ).cursor()
+  await withTestAgentSessionDatabase(fixture.rig.root, (db) => {
+    db.prepare(
+      'UPDATE journal_events SET changes_json=? WHERE session_id=? AND sequence=(SELECT MIN(sequence) FROM journal_events WHERE session_id=? AND sequence>1)'
+    ).run('{damaged', SESSION, SESSION)
   })
-  const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
-  expect(
-    await fixture.rig.host.send(CALLER, restTestSend('after the damage', fence))
-  ).toMatchObject({
-    ok: false,
-    refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
-  })
-  expect(
-    openTestJournalHostDatabase(fixture.rig.root)
-      .db.prepare(
-        'SELECT value_json FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ?) AND seq = 2 LIMIT 1'
-      )
-      .get(SESSION)?.value_json
-  ).toBe('}{')
-})
-
-function outcomeEpoch(): { epoch: unknown; sequence: unknown } {
-  const row = openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare('SELECT epoch, through_seq FROM journal_outcome_epochs WHERE session_id = ?')
-    .get(SESSION)
-  return { epoch: row?.epoch, sequence: row?.through_seq }
-}
-
-function damageSupersededItemKey(key: string | Buffer): void {
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare(
-      "UPDATE journal_outcomes SET entry_key = ? WHERE field = 'items' AND seq = (SELECT MIN(seq) FROM journal_outcomes WHERE field = 'items')"
-    )
-    .run(key)
-}
-
-it('resets a client catching up over a superseded record with a damaged key, which open never reads', async () => {
-  await foundRestTestChat(fixture.rig)
-  await fixture.rig.host.flushAllStreamedEvents()
-  damageSupersededItemKey('123')
-  // A deletion is the one newest record admission lets keep such a key.
-  openTestJournalHostDatabase(fixture.rig.root)
-    .db.prepare(
-      "INSERT INTO journal_outcomes (generation, seq, field, entry_key, format, ordinal, value_json, deleted) SELECT generation, through_seq, 'items', '123', 2, 'b', 'null', 1 FROM journal_outcome_epochs WHERE session_id = ?"
-    )
-    .run(SESSION)
-  await fixture.rig.restart()
-  setStructuredAgentSessionHost(fixture.rig.host)
-  const hello = { items: [{ body: { kind: 'message' } }] }
-
-  expect((await call('agentSession.subscribe', { sessionId: SESSION }))[0]).toMatchObject({
-    ok: true,
-    result: { type: 'snapshot', page: hello }
-  })
-  const live = outcomeEpoch()
   const stale = { epoch: live.epoch, sequence: 1 }
   expect(
     (
@@ -476,55 +418,44 @@ it('resets a client catching up over a superseded record with a damaged key, whi
     )[0]
   ).toMatchObject({
     ok: true,
-    result: { ok: false, reset: 'schema_unreadable', page: hello }
+    result: {
+      ok: false,
+      reset: 'schema_unreadable',
+      page: { items: [{ body: { kind: 'message' } }] }
+    }
   })
   expect(
     (await call('agentSession.subscribe', { sessionId: SESSION, cursor: stale }))[0]
-  ).toMatchObject({
-    ok: true,
-    result: { type: 'reset', reset: 'schema_unreadable', page: hello }
-  })
-  // The reset moved the client to the live cursor, past the record it could not read.
-  expect(await call('agentSession.subscribe', { sessionId: SESSION, cursor: live })).toMatchObject([
-    { ok: true, result: { type: 'batch' } }
-  ])
-})
-
-it.each([
-  ['unparseable', '{damaged'],
-  ['non-text', Buffer.from([0])]
-])('resets a client when a key is damaged under an open chat: %s', async (_name, key) => {
-  await restingChat()
-  await call('agentSession.subscribe', { sessionId: SESSION })
-  damageSupersededItemKey(key)
-
+  ).toMatchObject({ ok: true, result: { type: 'reset', reset: 'schema_unreadable' } })
   expect(
-    (
-      await call('agentSession.history', {
-        sessionId: SESSION,
-        direction: 'after',
-        cursor: { epoch: outcomeEpoch().epoch, sequence: 1 }
-      })
-    )[0]
-  ).toMatchObject({ ok: true, result: { ok: false, reset: 'schema_unreadable' } })
+    (await call('agentSession.subscribe', { sessionId: SESSION, cursor: live }))[0]
+  ).toMatchObject({ ok: true, result: { type: 'batch' } })
 })
 
 it('keeps a storage failure during catch-up retryable instead of resetting the client', async () => {
   await restingChat()
-  await call('agentSession.subscribe', { sessionId: SESSION })
-  const { db } = openTestJournalHostDatabase(fixture.rig.root)
+  const live = await journalSqlReads(
+    fixture.rig.host.deps.journalDatabase.readers,
+    SESSION
+  ).cursor()
   const catchUp = {
     sessionId: SESSION,
     direction: 'after',
-    cursor: { epoch: outcomeEpoch().epoch, sequence: 1 }
+    cursor: { epoch: live.epoch, sequence: 1 }
   }
-
-  db.exec('ALTER TABLE journal_outcomes RENAME TO journal_outcomes_unavailable')
-  expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
-    ok: false,
-    error: { code: 'runtime_error' }
-  })
-  db.exec('ALTER TABLE journal_outcomes_unavailable RENAME TO journal_outcomes')
+  await withTestAgentSessionDatabase(fixture.rig.root, (db) =>
+    db.exec('ALTER TABLE journal_events RENAME TO journal_events_unavailable')
+  )
+  try {
+    expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
+      ok: false,
+      error: { code: 'runtime_error' }
+    })
+  } finally {
+    await withTestAgentSessionDatabase(fixture.rig.root, (db) =>
+      db.exec('ALTER TABLE journal_events_unavailable RENAME TO journal_events')
+    )
+  }
   expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
     ok: true,
     result: { ok: true }

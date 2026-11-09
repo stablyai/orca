@@ -60,8 +60,8 @@ describe('send receipt acceptance', () => {
     })
     expect(store.listOperationRows()).toEqual(before)
     expect(await readTestJournalSubmissions(hostJournal())).toHaveLength(0)
-    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
-      { verdict: 'absent' }
-    )
+    expect(
+      await store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
+    ).toEqual({ verdict: 'absent' })
   })
 })

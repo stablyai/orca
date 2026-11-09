@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -126,14 +126,15 @@ it.each(['allow', 'deny'])(
     const prompt = page.ok ? page.page.items.find((item) => item.itemId === itemId)! : null
     expect(prompt).not.toBeNull()
     const params = answer(prompt!, opId(), choice)
-    const db = openTestJournalHostDatabase(root).db
-    db.exec(`CREATE TRIGGER fail_plan_record AFTER UPDATE ON agent_session_records
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(`CREATE TRIGGER fail_plan_record AFTER UPDATE ON agent_session_records
       WHEN json_extract(NEW.record_json, '$.options.interactionMode') = '${after}'
       BEGIN SELECT RAISE(ABORT, 'record unavailable'); END`)
+    )
     await expect(host.respondToPrompt(CALLER, params)).rejects.toThrow('record unavailable')
-    db.exec('DROP TRIGGER fail_plan_record')
-    expect(receipt(params.envelope.clientOperationId)).toEqual({ verdict: 'absent' })
-    expect(promptBody(itemId)).toMatchObject({ resolution: { state: 'pending' } })
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER fail_plan_record'))
+    expect(await receipt(params.envelope.clientOperationId)).toEqual({ verdict: 'absent' })
+    expect(await promptBody(itemId)).toMatchObject({ resolution: { state: 'pending' } })
     expect(store.getRecord(SESSION)?.options).toEqual({
       model: 'opus[1m]',
       interactionMode: before
