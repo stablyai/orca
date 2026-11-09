@@ -48,7 +48,7 @@ it('stores Auto as Toggle plus hold-to-record so older builds keep a working sho
 
   // The old Toggle default becomes Auto; Hold was always a choice.
   expect(load({ dictationMode: 'toggle' }, false)).toEqual(['toggle', true])
-  expect(load({ dictationMode: 'hold' }, false)[0]).toBe('hold')
+  expect(load({ dictationMode: 'hold' }, false)).toEqual(['hold', false])
   // Builds that stored Auto as 'auto', or a Toggle picked there, keep what the user had.
   expect(load({ dictationMode: 'auto' }, true)).toEqual(['toggle', true])
   expect(load({ dictationMode: 'toggle' }, true)).toEqual(['toggle', false])

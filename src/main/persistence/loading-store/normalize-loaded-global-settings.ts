@@ -199,14 +199,15 @@ function migrateDictationShortcutMode(
   settings: PersistedState['settings'] | undefined
 ): Pick<VoiceSettings, 'dictationMode' | 'dictationHoldToRecord'> {
   const stored: { dictationMode?: unknown; dictationHoldToRecord?: unknown } = settings?.voice ?? {}
+  if (stored.dictationMode === 'hold') {
+    // An older client that later sets only 'toggle' then means plain Toggle.
+    return { dictationMode: 'hold', dictationHoldToRecord: false }
+  }
   // Builds from 3d2b0b12812 stored Auto as 'auto'. A 'toggle' saved before the marker was everyone's old default.
   const dictationHoldToRecord =
     stored.dictationMode === 'auto' ||
     (typeof stored.dictationHoldToRecord === 'boolean'
       ? stored.dictationHoldToRecord
       : settings?.voiceDictationModeDefaultedToAuto !== true)
-  return {
-    dictationMode: stored.dictationMode === 'hold' ? 'hold' : 'toggle',
-    dictationHoldToRecord
-  }
+  return { dictationMode: 'toggle', dictationHoldToRecord }
 }
