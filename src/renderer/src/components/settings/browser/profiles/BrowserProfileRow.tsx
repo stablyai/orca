@@ -20,7 +20,8 @@ import {
 import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../../../store/index'
-import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/constants'
+import '../../../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { useTranslate } from '@/i18n/use-translate'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 

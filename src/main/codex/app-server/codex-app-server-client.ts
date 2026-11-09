@@ -1,4 +1,5 @@
-import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import '../trust/toml/config-toml-trust'
 import { normalizeCodexHookTrustLookupKey as normalizeHookTrustKeyForLookup } from '../trust/identity/codex-trust-identity'
@@ -95,12 +96,11 @@ function collectHookListings(result: unknown): CodexHookListing[] {
 
 export async function runCodexHookTrustGrantSession(
   request: CodexHookTrustGrantRequest,
-  spawnImpl: (
-    program: string,
-    args: string[],
-    options: Record<string, unknown>
-  ) => ChildProcessHandle = (program, args, options) =>
-    spawnProcess({ program, args, ...options } as ProcessSpec)
+  spawnImpl: (program: string, args: string[], options: Record<string, unknown>) => ChildProcess = (
+    program,
+    args,
+    options
+  ) => spawnProcess({ program, args, ...options } as ProcessSpec)
 ): Promise<CodexHookTrustGrantSessionResult> {
   return runCodexAppServerSession(
     request.invocation,

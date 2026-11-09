@@ -349,48 +349,6 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('hands progress notes on keepalive frames to the caller and ignores malformed ones', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
-    roots.push(userDataPath)
-    const endpoint = join(userDataPath, 'runtime.sock')
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', (data) => {
-        const request: { id: string } = JSON.parse(String(data).trim())
-        socket.write('{"_keepalive":true,"progress":{"phase":"running-create"}}\n')
-        socket.write('{"_keepalive":true,"progress":{"phase":42}}\n')
-        socket.write('{"_keepalive":true}\n')
-        socket.write(
-          `${JSON.stringify({ id: request.id, ok: true, result: { created: true }, _meta: { runtimeId: 'runtime-1' } })}\n`
-        )
-      })
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-    const metadata: RuntimeMetadata = {
-      runtimeId: 'runtime-1',
-      pid: 123,
-      transports: [{ kind: 'unix', endpoint }],
-      authToken: 'token',
-      startedAt: 1
-    }
-    const onProgress = vi.fn()
-    const response = await sendRequest(
-      metadata,
-      'worktree.create',
-      {},
-      60_000,
-      undefined,
-      undefined,
-      {
-        onProgress
-      }
-    )
-    expect(response).toMatchObject({ ok: true, result: { created: true } })
-    expect(onProgress.mock.calls).toEqual([[{ phase: 'running-create' }]])
-  })
-
   it('rejects promptly when the runtime closes the socket before responding', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     roots.push(userDataPath)

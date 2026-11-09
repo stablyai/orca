@@ -9,7 +9,8 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { TabHoverCard } from './TabHoverCard'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'

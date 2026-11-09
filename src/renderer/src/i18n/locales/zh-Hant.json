@@ -4929,6 +4929,9 @@
             "accounts": "已儲存的 Antigravity 帳戶",
             "readAgo": "讀取於 {{time}}",
             "notRead": "用量未知：尚未讀取"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "將於 {{when}} 重設"
           }
         }
       },
@@ -6009,8 +6012,6 @@
           "888b83bf78": "無法儲存設定指令碼",
           "a49196d538": "當 Orca 建立新工作樹時執行。",
           "savedSetupCommand": "已儲存設定命令。",
-          "savedWithSkippedFields_one": "已略過 {{count}} 個不支援的欄位。已儲存設定命令。",
-          "savedWithSkippedFields_other": "已略過 {{count}} 個不支援的欄位。已儲存設定命令。",
           "savedInProjectSettings": "已儲存於此<settings>專案的設定</settings>中"
         },
         "SetupScriptPromptCardViews": {
@@ -6023,13 +6024,12 @@
           "eefa756190": "手動設定",
           "ca4efcbc25": "儲存",
           "fdbc6cb064": "已偵測的設定指令碼",
-          "7275f674cc": "已偵測的設定",
           "822ff300ad": "關閉",
           "5bfd5c8779": "關閉設定指令碼",
-          "detectedFromSource": "從 <source>{{source}}</source> 偵測到",
           "ignoresSharedSetup": "此存放庫會忽略共用的 <yaml>orca.yaml</yaml> 設定指令碼。請新增本機命令，或在「設定」中變更來源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。",
-          "reviewSetupScript": "檢查設定指令碼"
+          "reviewSetupScript": "檢查設定指令碼",
+          "7275f674cc": "已偵測的設定",
+          "detectedFromSource": "從 <file>{{source}}</file> 偵測到"
         },
         "SetupScriptReviewDialog": {
           "title": "檢查設定指令碼",
@@ -16710,13 +16710,7 @@
           "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "停止聽寫",
-          "7f3660a7ba": "啟動麥克風...",
-          "f082d0cb9d": "正在處理…",
-          "3de5a129e7": "正在聆聽",
-          "4977162383": "聲音太大",
-          "25f2b7a6a5": "正在說話",
-          "loadingModel": "正在載入語音模型…"
+          "4977162383": "聲音太大"
         }
       },
       "dashboard": {

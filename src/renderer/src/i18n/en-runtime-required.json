@@ -916,9 +916,9 @@
           "openTerminalWarning_one": "{{count}} open terminal in this project will be closed.",
           "openTerminalWarning_other": "{{count}} open terminals in this project will be closed."
         },
-        "SetupScriptPromptCard": {
-          "savedWithSkippedFields_one": "{{count}} unsupported field skipped. Saved the setup command.",
-          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
+        "SetupScriptCodeBlock": {
+          "showMore_one": "Show {{count}} more line",
+          "showMore_other": "Show {{count}} more lines"
         },
         "SidebarRepositoryFilterSection": {
           "selectedProjects_one": "{{count}} project",

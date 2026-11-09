@@ -3628,6 +3628,9 @@
             "accounts": "Contas Antigravity salvas",
             "readAgo": "Lido {{time}}",
             "notRead": "Uso desconhecido: ainda não consultado"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Redefinição em {{when}}"
           }
         }
       },
@@ -11759,13 +11762,12 @@
           "eefa756190": "Configurar manualmente",
           "ca4efcbc25": "Salvar",
           "fdbc6cb064": "Script de configuração detectado",
-          "7275f674cc": "Configuração detectada",
           "822ff300ad": "Descartar",
           "5bfd5c8779": "Descartar scripts de configuração",
-          "detectedFromSource": "Detectado em <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositório ignora scripts de configuração compartilhados de <yaml>orca.yaml</yaml>. Adicione um comando local ou altere a origem em Configurações.",
-          "foundSetupCommandIn": "Foi encontrado um comando de configuração em <source>{{source}}</source>. Salve-o para executá-lo nas novas worktrees.",
-          "reviewSetupScript": "Revisar script de configuração"
+          "reviewSetupScript": "Revisar script de configuração",
+          "7275f674cc": "Configuração detectada",
+          "detectedFromSource": "Detectado em <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Revisar script de configuração",
@@ -12312,9 +12314,6 @@
           "888b83bf78": "Falha ao salvar o script de configuração",
           "a49196d538": "Executa quando o Orca cria uma nova worktree.",
           "savedSetupCommand": "O comando de configuração foi salvo.",
-          "savedWithSkippedFields_one": "{{count}} campo não compatível foi ignorado. O comando de configuração foi salvo.",
-          "savedWithSkippedFields_other": "{{count}} campos não compatíveis foram ignorados. O comando de configuração foi salvo.",
-          "savedWithSkippedFields_many": "{{count}} campos não compatíveis foram ignorados. O comando de configuração foi salvo.",
           "savedInProjectSettings": "Salvo nas <settings>configurações deste projeto</settings>"
         },
         "FolderWorkspaceComposerDialog": {
@@ -19222,13 +19221,7 @@
           "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Parar ditado",
-          "7f3660a7ba": "Iniciando microfone…",
-          "f082d0cb9d": "Processando…",
-          "3de5a129e7": "Ouvindo",
-          "4977162383": "Muito alto",
-          "25f2b7a6a5": "Falando",
-          "loadingModel": "Carregando modelo de fala…"
+          "4977162383": "Muito alto"
         }
       },
       "link": {

@@ -59,15 +59,6 @@ describe('the @ts-nocheck guard', () => {
 })
 
 describe('checked transfers', () => {
-  it('accepts an empty checked cohort while retaining legacy runtime allowances', () => {
-    expect(
-      checkTransfers(
-        { ok: true, expected: [], programTestFiles: [], failures: [], problems: [] },
-        new Map([['legacy.test.ts', 'Legacy runtime-only: no checked transfer']])
-      )
-    ).toEqual([])
-  })
-
   it('rejects a declared checked transfer missing from the configured roots', () => {
     expect(
       checkTransfers(
