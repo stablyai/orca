@@ -19411,7 +19411,7 @@
         "detachedCommit": "提交 {{head}}（非分支）",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
-        "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
+        "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
       },
       "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。",
@@ -20221,7 +20221,7 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "新建代理"
+        "newAgent": "新建智能体"
       }
     },
     "contextualTours": {
@@ -21153,7 +21153,7 @@
       "conflict": "切换分支前，请完成或中止 {{operation}}。",
       "dirty_one": "切换分支前，请提交或放弃 {{count}} 个已更改的文件。",
       "dirty_other": "切换分支前，请提交或放弃 {{count}} 个已更改的文件。",
-      "agentWorking": "有代理正在此工作区中工作。请在其完成后再切换分支；如果它已停止，请关闭其标签页。",
+      "agentWorking": "有智能体正在此工作区中工作。请在其完成后再切换分支；如果它已停止，请关闭其标签页。",
       "listFailed": "Orca 无法列出本地分支。请尝试重新打开选择器。",
       "discoveryFailed": "Orca 找不到远程分支。你仍然可以切换本地分支或创建分支。",
       "switchFailed": "Orca 无法切换分支。请重试。",
@@ -22749,7 +22749,7 @@
     "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
     "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
     "catalogEmpty": "{{agent}} 没有可用模型。",
-    "search": "搜索智能体和配置…",
+    "search": "搜索，例如 Opus 5.5…",
     "configure": "配置 {{agent}}",
     "arguments": "参数",
     "argumentsHint": "仅适用于 CLI 启动。",
@@ -23335,7 +23335,7 @@
     "unsupportedDescription": "Apple 不支持在此 Mac 上运行 macOS {{macos}}。",
     "unknownDescription": "无法确认此 Mac 是否可以升级。请参考 Apple 的兼容性指南。",
     "whyTitle": "为何要做此更改？",
-    "whyIntro": "我们更新了 Orca 赖以运行的 Electron，以提供：",
+    "whyIntro": "我们更新了 Orca 的部分基础组件，例如 Electron 和本地语音引擎，以提供：",
     "whySecurity": "来自 Electron 和 Chromium 的持续安全修复。",
     "whyPerformance": "更快的启动速度和更高效的原生 API 调用。",
     "whySystemApis": "支持当前 macOS 通知 API 和安全的钥匙串存储。",
