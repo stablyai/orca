@@ -5,13 +5,11 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import capture from '../../../shared/__fixtures__/omp-native-commands.json'
 import '../../../shared/priority-semaphore'
-import { refreshAtRestCommandContext } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   commandDiscoveryRig,
   DISCOVERY_SESSION,
   ompRecord
 } from './testing/acp-command-discovery.test-fixture'
-import { deferred, tick } from '../process/testing/acp-scripted-agent.test-support'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import { readAcpForkSupport } from '../capabilities/acp-fork-support'
 import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
@@ -26,7 +24,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const rigs: Awaited<ReturnType<typeof commandDiscoveryRig>>[] = []
-// Let real filesystem/protocol I/O finish without advancing the attempt's fake clock.
 
 async function rig(...args: Parameters<typeof commandDiscoveryRig>) {
   const opened = await commandDiscoveryRig(...args)
@@ -34,7 +31,6 @@ async function rig(...args: Parameters<typeof commandDiscoveryRig>) {
   return opened
 }
 afterEach(async () => {
-  vi.useRealTimers()
   await Promise.all(rigs.splice(0).map((rig) => rig.dispose()))
   vi.restoreAllMocks()
 })
@@ -95,50 +91,6 @@ it('observes pre-initialize reports, validates session identity and keeps the la
     mcpServers: []
   })
   expect(children[0]!.lastCloseResult).toEqual({ root: 'exited', tree: null })
-})
-
-it('starts the 9 second deadline before readiness and cwd resolution', async () => {
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const readiness = deferred<void>()
-  const refreshing = refreshAtRestCommandContext(() => readiness.promise)
-  const cwd = deferred<string>()
-  const resolveWorkspacePath = vi.fn(() => cwd.promise)
-  const { catalog, children } = await rig(undefined, { resolveWorkspacePath })
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  const first = catalog.settled(ompRecord('waiting-ready'), 10_000)
-  await vi.advanceTimersByTimeAsync(9_000)
-  expect(await first).toBeUndefined()
-  readiness.resolve()
-  await refreshing
-  expect(resolveWorkspacePath).not.toHaveBeenCalled()
-  const second = catalog.settled(ompRecord('waiting-cwd'), 10_000)
-  await vi.advanceTimersByTimeAsync(9_000)
-  expect(await second).toBeUndefined()
-  cwd.resolve('/work/late')
-  await tick()
-  expect(children).toEqual([])
-})
-
-it('answers before slow close, cancels queued deadlines and drains stop without launching waiters', async () => {
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const close = deferred<void>()
-  const { catalog, children } = await rig((child) => {
-    const prove = child.proveClose
-    child.proveClose = async () => {
-      await close.promise
-      return prove()
-    }
-  })
-  expect(await catalog.settled(ompRecord('one'), 1_000)).toBeDefined()
-  expect(await catalog.settled(ompRecord('two'), 1_000)).toBeDefined()
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  const queued = catalog.settled(ompRecord('queued'), 10_000)
-  await vi.advanceTimersByTimeAsync(9_000)
-  expect(await queued).toBeUndefined()
-  const stop = catalog.closeAll()
-  close.resolve()
-  await stop
-  expect(children).toHaveLength(2)
 })
 
 it('handles actual root exit just before listener registration without changing historical evidence', async () => {

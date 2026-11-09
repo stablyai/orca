@@ -61,7 +61,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/pi/rpc-turn-races.test.ts',
   'src/main/acp/session/children/acp-structured-child-session-end.test.ts',
   'src/main/acp/session/children/acp-structured-child-stop.test.ts',
-  'src/main/acp/journal/acp-structured-child-work-admission.test.ts',
   'src/main/acp/session/children/acp-structured-child-work.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
