@@ -736,8 +736,7 @@
         "parakeetJa": "Japonais uniquement. Entraîné sur plus de 35 000 heures de parole naturelle. Ponctuation incluse.",
         "whisperTiny": "Plus de 90 langues. Moins précis que Parakeet, mais offre la plus large couverture linguistique.",
         "senseVoice": "Chinois, anglais, japonais, coréen et cantonais avec détection automatique de la langue.",
-        "gpt4oMiniTranscribe": "Transcription dans le cloud avec une grande précision et un faible coût. Nécessite une clé API OpenAI.",
-        "gpt4oTranscribe": "Transcription dans le cloud avec une précision supérieure. Nécessite une clé API OpenAI."
+        "gptTranscribe": "Transcription dans le cloud avec une grande précision. Nécessite une clé API OpenAI."
       }
     },
     "diagnostics": {

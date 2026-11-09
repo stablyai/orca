@@ -915,8 +915,7 @@
         "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",
         "whisperTiny": "支援 90 多種語言。準確度低於 Parakeet，但語言涵蓋範圍最廣。",
         "senseVoice": "支援中文、英文、日文、韓文及粵語，並自動偵測語言。",
-        "gpt4oMiniTranscribe": "準確度高、成本低的雲端轉錄。需要 OpenAI API 金鑰。",
-        "gpt4oTranscribe": "準確度更高的雲端轉錄。需要 OpenAI API 金鑰。"
+        "gptTranscribe": "準確度高的雲端轉錄。需要 OpenAI API 金鑰。"
       }
     },
     "diagnostics": {
