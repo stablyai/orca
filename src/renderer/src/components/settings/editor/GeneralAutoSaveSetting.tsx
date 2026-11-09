@@ -14,8 +14,8 @@ export function getAutoSaveSearchEntry() {
     ),
     keywords: [
       ...translateSearchKeyword('settings.general.search.keywords.auto_save', 'auto save'),
-      ...translateSearchKeyword('settings.general.search.keywords.autosave', 'autosave'),
-      ...translateSearchKeyword('settings.general.search.keywords.save', 'save'),
+      ...translateSearchKeyword('auto.components.settings.general.search.86f54575c7', 'autosave'),
+      ...translateSearchKeyword('auto.components.settings.general.search.4469b6fa4e', 'save'),
       translate(
         'auto.components.settings.GeneralEditorSettingsSection.a37865966c',
         'Auto save files'

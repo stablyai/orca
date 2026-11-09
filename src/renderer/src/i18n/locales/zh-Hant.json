@@ -8730,12 +8730,8 @@
           "acc7bbdefd": "再按一次 ESC 退出設定",
           "43b68e10f0": "你有未儲存的 AI 設定。離開後這些設定將被放棄。",
           "17bdee4ff1": "放棄未儲存的 AI 設定？",
-          "084d8fac5b": "隱私與安全",
-          "23931df7e8": "遠端主機",
           "8bd117d669": "介面",
           "e1578cd4bc": "工作流程",
-          "9abb9be3bc": "初始設定",
-          "23c6874fdf": "AI 能力",
           "65358016ea": "放棄",
           "devDescription": "僅供開發時測試各種 UI 狀態的工具。",
           "linearTitle": "Linear",
@@ -8755,7 +8751,11 @@
           "084f34826d": "統計和用量",
           "022effa46f": "遠端 Orca 伺服器",
           "045db77e21": "SSH 遠端主機",
-          "742ca66ea6": "隱私與遙測"
+          "742ca66ea6": "隱私與遙測",
+          "75f01ece60": "AI 能力",
+          "4da10f1fbb": "初始設定",
+          "7078ceae15": "遠端主機",
+          "f38d325999": "隱私與安全"
         },
         "SettingsFormControls": {
           "42a4d15a30": "沒有符合的字型。",
@@ -10078,6 +10078,7 @@
             "b2799ba622": "毫秒",
             "146728ac2c": "延遲",
             "86f54575c7": "自動儲存",
+            "4469b6fa4e": "儲存",
             "8ea61ad55c": "Orca 在您上次編輯後等待多長時間才會自動儲存。",
             "c56cb6f1c2": "網路",
             "nodeDistMirror": "鏡像站",
@@ -10144,7 +10145,22 @@
             "da5c42780e": "在應用程式中開啟",
             "b180c1041b": "分頁順序",
             "0504f69ba0": "檢查更新",
-            "a361519c97": "預設專案執行環境"
+            "a361519c97": "預設專案執行環境",
+            "running_terminal": "執行中",
+            "9f8558233a": "確認",
+            "confirm": "確認",
+            "agent": "代理程式",
+            "84c67d0108": "刪除",
+            "close": "關閉",
+            "5250cf0e48": "釘選",
+            "terminal": "終端機",
+            "command": "命令",
+            "7e9b556873": "跳過",
+            "7edf4f69e2": "自動化",
+            "867dddea41": "固定的",
+            "omp": "OMP",
+            "afa37a34e1": "關閉",
+            "ca86dd6e27": "對話方塊"
           }
         },
         "git": {
@@ -11475,8 +11491,7 @@
             "keywordSandbox": "沙箱",
             "keywordCloud": "雲",
             "keywordRecipe": "環境範本",
-            "keywordEphemeral": "短暫的",
-            "5e7d7868a2": "雲端虛擬機器"
+            "keywordEphemeral": "短暫的"
           }
         },
         "EphemeralVmsPane": {
@@ -11499,7 +11514,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "顯示存放庫自帶隨需環境的設定控制項和工作區執行目標。",
-          "f561738b7d": "切換雲端虛擬機器"
+          "cloudVmToggleLabel": "切換雲端虛擬機器"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "代理程式",

@@ -44,6 +44,6 @@ describe('TerminalInteractionSection scroll on input', () => {
       />
     )
 
-    expect(screen.getByRole('switch', { name: 'Scroll to Bottom on Input' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: /scroll to bottom on input/i })).toBeTruthy()
   })
 })

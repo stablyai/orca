@@ -8217,12 +8217,8 @@
           "acc7bbdefd": "再按一次 ESC 退出设置",
           "43b68e10f0": "你有未保存的 AI 设置。离开后这些设置将被放弃。",
           "17bdee4ff1": "放弃未保存的 AI 设置？",
-          "084d8fac5b": "隐私与安全",
-          "23931df7e8": "远程主机",
           "8bd117d669": "界面",
           "e1578cd4bc": "工作流程",
-          "9abb9be3bc": "初始设置",
-          "23c6874fdf": "AI 能力",
           "65358016ea": "放弃",
           "devDescription": "仅用于调试 UI 状态的开发工具。",
           "linearTitle": "Linear",
@@ -8242,7 +8238,11 @@
           "084f34826d": "统计和使用情况",
           "022effa46f": "远程 Orca 服务器",
           "045db77e21": "SSH 远程主机",
-          "742ca66ea6": "隐私与遥测"
+          "742ca66ea6": "隐私与遥测",
+          "75f01ece60": "AI 能力",
+          "4da10f1fbb": "初始设置",
+          "7078ceae15": "远程主机",
+          "f38d325999": "隐私与安全"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -9555,6 +9555,7 @@
             "b2799ba622": "毫秒",
             "146728ac2c": "延迟",
             "86f54575c7": "自动保存",
+            "4469b6fa4e": "保存",
             "8ea61ad55c": "Orca 在您上次编辑后等待多长时间才会自动保存。",
             "c56cb6f1c2": "网络",
             "3566fce83f": "本地主机",
@@ -9627,7 +9628,22 @@
             "da5c42780e": "在应用程序中打开",
             "b180c1041b": "制表符顺序",
             "0504f69ba0": "检查更新",
-            "a361519c97": "默认项目运行时"
+            "a361519c97": "默认项目运行时",
+            "running_terminal": "运行中",
+            "9f8558233a": "确认",
+            "confirm": "确认",
+            "agent": "智能体",
+            "84c67d0108": "删除",
+            "close": "关闭",
+            "5250cf0e48": "别针",
+            "terminal": "终端",
+            "command": "命令",
+            "7e9b556873": "跳过",
+            "7edf4f69e2": "自动化",
+            "867dddea41": "固定的",
+            "omp": "OMP",
+            "afa37a34e1": "关闭",
+            "ca86dd6e27": "对话"
           }
         },
         "git": {
@@ -11037,8 +11053,7 @@
             "keywordSandbox": "沙箱",
             "keywordCloud": "云",
             "keywordRecipe": "食谱",
-            "keywordEphemeral": "短暂的",
-            "5e7d7868a2": "云虚拟机"
+            "keywordEphemeral": "短暂的"
           }
         },
         "EphemeralVmsPane": {
@@ -11061,7 +11076,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "显示仓库自带按需环境的设置控件和工作区运行目标。",
-          "f561738b7d": "切换云虚拟机"
+          "cloudVmToggleLabel": "切换云虚拟机"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "智能体",

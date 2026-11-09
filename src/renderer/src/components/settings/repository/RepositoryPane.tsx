@@ -21,14 +21,11 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
-import { getRepositoryPaneSearchEntries } from './repository-search'
+import { getRepositoryPaneSearchMetadata } from './repository-search'
 import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
-import {
-  getRepositoryAgentTrustSearchEntry,
-  RepositoryAgentTrustSection
-} from './RepositoryAgentTrustSection'
+import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
@@ -178,38 +175,16 @@ export function RepositoryPane({
     }, 1500)
   }
 
-  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject }, t)
-  const identityEntryTitles = new Set([
-    t('auto.components.settings.repository.search.7f380f89ea', 'Display name'),
-    t('auto.components.settings.repository.search.0fe07b9e90', 'Project icon'),
-    t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
-    t('auto.components.settings.repository.search.eefc3e51ef', 'GitHub account'),
-    getRepositoryAgentTrustSearchEntry().title,
-    t('auto.components.settings.repository.search.f94afd4078', 'Keep fork up to date'),
-    t('auto.components.settings.repository.search.88d466b2e3', 'Default worktree base'),
-    t('auto.components.settings.repository.search.2e216fbad2', 'Worktree location'),
-    t('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
-    t('auto.components.settings.repository.search.7a89e2dc09', 'Project runtime'),
-    t('auto.components.settings.repository.search.bbbe994528', 'Remove project')
-  ])
-  const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
-  const sparsePresetEntries = allEntries.filter((entry) =>
-    ['Sparse Checkout Presets'].includes(entry.title)
-  )
-  const hooksEntries = allEntries.filter((entry) =>
-    [
-      'Setup Script',
-      'Archive Script',
-      'Advanced',
-      'When to Run Setup',
-      'Custom GitHub Issue Command'
-    ].includes(entry.title)
-  )
-  const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
-  const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
-  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
-  const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
-  const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
+  const {
+    identity: identityEntries,
+    sparsePresets: sparsePresetEntries,
+    hooks: hooksEntries,
+    mcp: mcpEntries,
+    sharedPaths: symlinkEntries,
+    sourceControlAi: sourceControlAiEntries,
+    hostSetups: hostSetupEntries,
+    projectRuntime: projectRuntimeEntries
+  } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (

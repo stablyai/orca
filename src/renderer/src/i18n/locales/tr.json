@@ -8893,12 +8893,8 @@
           "acc7bbdefd": "Ayarlardan çıkmak için ESC tuşuna tekrar basın",
           "43b68e10f0": "Kaydedilmemiş yapay zekâ ayarlarınız var. Çıkarsanız bunlar atılır.",
           "17bdee4ff1": "Kaydedilmemiş yapay zekâ ayarları atılsın mı?",
-          "084d8fac5b": "Gizlilik ve Güvenlik",
-          "23931df7e8": "Uzak Sunucular",
           "8bd117d669": "Arayüz",
           "e1578cd4bc": "İş Akışları",
-          "9abb9be3bc": "Kurulum",
-          "23c6874fdf": "AI Özellikleri",
           "65358016ea": "At",
           "devDescription": "UI durumlarını test etmek için yalnızca geliştiricilere yönelik araçlar.",
           "linearTitle": "Linear",
@@ -8918,7 +8914,11 @@
           "084f34826d": "İstatistikler ve Kullanım",
           "022effa46f": "Uzak Orca Sunucuları",
           "045db77e21": "SSH Sunucuları",
-          "742ca66ea6": "Gizlilik ve Telemetri"
+          "742ca66ea6": "Gizlilik ve Telemetri",
+          "75f01ece60": "AI Özellikleri",
+          "4da10f1fbb": "Kurulum",
+          "7078ceae15": "Uzak Sunucular",
+          "f38d325999": "Gizlilik ve Güvenlik"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Eşleşen yazı tipi yok.",
@@ -10241,6 +10241,7 @@
             "b2799ba622": "milisaniye",
             "146728ac2c": "gecikme",
             "86f54575c7": "otomatik kaydetme",
+            "4469b6fa4e": "kaydet",
             "8ea61ad55c": "Orca'nın otomatik kaydetmeden önce son düzenlemenizden sonra ne kadar bekleyeceği.",
             "c56cb6f1c2": "ağ",
             "nodeDistMirror": "yansı",
@@ -10307,7 +10308,22 @@
             "da5c42780e": "Birlikte Aç Uygulamaları",
             "b180c1041b": "Sekme Sırası",
             "0504f69ba0": "Güncellemeleri Denetle",
-            "a361519c97": "Varsayılan Proje Çalışma Zamanı"
+            "a361519c97": "Varsayılan Proje Çalışma Zamanı",
+            "running_terminal": "çalışıyor",
+            "9f8558233a": "onayla",
+            "confirm": "onayla",
+            "agent": "ajan",
+            "84c67d0108": "sil",
+            "close": "kapat",
+            "5250cf0e48": "sabitle",
+            "terminal": "terminal",
+            "command": "komut",
+            "7e9b556873": "atla",
+            "7edf4f69e2": "otomasyon",
+            "867dddea41": "sabitlenmiş",
+            "omp": "OMP",
+            "afa37a34e1": "kapat",
+            "ca86dd6e27": "iletişim kutusu"
           }
         },
         "git": {
@@ -11638,8 +11654,7 @@
             "keywordSandbox": "sandbox",
             "keywordCloud": "bulut",
             "keywordRecipe": "tarif",
-            "keywordEphemeral": "geçici",
-            "5e7d7868a2": "Cloud VM"
+            "keywordEphemeral": "geçici"
           }
         },
         "EphemeralVmsPane": {
@@ -11662,7 +11677,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Repository'e ait, isteğe bağlı ortamlar için kurulum kontrollerini ve çalışma alanı çalıştırma hedeflerini gösterir.",
-          "f561738b7d": "Cloud VM'i Aç/Kapat"
+          "cloudVmToggleLabel": "Cloud VM'i Aç/Kapat"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Ajan",

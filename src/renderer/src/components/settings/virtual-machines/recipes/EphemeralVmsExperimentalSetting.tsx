@@ -16,7 +16,7 @@ export function EphemeralVmsExperimentalSetting({
   updateSettings
 }: EphemeralVmsExperimentalSettingProps): React.JSX.Element {
   const t = useTranslate()
-  const entry = getExperimentalSearchEntry(t).ephemeralVms
+  const entry = getExperimentalSearchEntry().ephemeralVms
   const enabled = settings.experimentalEphemeralVms === true
 
   return (
@@ -29,7 +29,7 @@ export function EphemeralVmsExperimentalSetting({
     >
       <div className="flex max-w-3xl items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
-          <Label>{t('auto.components.settings.ephemeralVms.search.5e7d7868a2', 'Cloud vm')}</Label>
+          <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
               'auto.components.settings.ephemeralVmsExperimentalSetting.description',
@@ -40,8 +40,8 @@ export function EphemeralVmsExperimentalSetting({
         <Switch
           checked={enabled}
           aria-label={t(
-            'auto.components.settings.ephemeralVmsExperimentalSetting.f561738b7d',
-            'Toggle cloud vm'
+            'auto.components.settings.ephemeralVmsExperimentalSetting.cloudVmToggleLabel',
+            'Toggle Cloud VM'
           )}
           onCheckedChange={() => updateSettings({ experimentalEphemeralVms: !enabled })}
         />

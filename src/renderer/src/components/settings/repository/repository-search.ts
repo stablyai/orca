@@ -11,7 +11,7 @@ import { searchKeywordTranslator } from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './source-control/repository-git-author-search-entries'
 import { getRepositoryMcpConfigSearchEntries } from './mcp/mcp-config-search'
 import { getRepositoryGitHooksSearchEntries } from './hooks/repository-git-hooks-search-entries'
-import { getRepositoryGitWorktreeSearchEntries } from './worktrees/repository-git-worktree-search-entries'
+import { getRepositoryGitWorktreeSearchMetadata } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 
@@ -20,19 +20,20 @@ type RepositoryPaneSearchOptions = {
   windowsRuntimeSupported?: boolean
 }
 
-export function getRepositoryPaneSearchEntries(
+export function getRepositoryPaneSearchMetadata(
   repo: Repo,
   options: RepositoryPaneSearchOptions = {},
   t: Translate = translate
-): SettingsSearchEntry[] {
+) {
   const translateSearchKeyword = searchKeywordTranslator(t)
   const isFolder = isFolderRepo(repo)
   const isLocalWindowsProject =
     options.isLocalWindowsProject ??
     (Boolean(options.windowsRuntimeSupported) &&
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
-  return [
-    getRepositoryFormatterSearchEntry(t),
+
+  const formatter = getRepositoryFormatterSearchEntry(t)
+  const identity: SettingsSearchEntry[] = [
     getRepositoryAgentTrustSearchEntry(),
     {
       title: t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
@@ -180,8 +181,10 @@ export function getRepositoryPaneSearchEntries(
             ]
           }
         ]
-      : []),
-    ...(isFolder || !isLocalWindowsProject
+      : [])
+  ]
+  const projectRuntime: SettingsSearchEntry[] =
+    isFolder || !isLocalWindowsProject
       ? []
       : [
           {
@@ -219,36 +222,56 @@ export function getRepositoryPaneSearchEntries(
               )
             ]
           }
-        ]),
-    ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo, t)),
-    {
-      title: t('auto.components.settings.repository.search.bbbe994528', 'Remove project'),
-      description: t(
-        'auto.components.settings.repository.search.c86478c3d8',
-        'Remove this project from Orca.'
-      ),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.3067595d82',
-          'delete'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.6469de5368',
-          'project'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.cc876ca5f2',
-          'repository'
-        )
-      ]
-    },
-    ...(isFolder
-      ? []
-      : [
-          ...getRepositoryGitAuthorSearchEntries(repo, t),
-          ...getRepositoryMcpConfigSearchEntries(repo, t),
-          ...getRepositoryGitHooksSearchEntries(repo, t)
-        ])
-  ]
+        ]
+  const worktrees = isFolder
+    ? { entries: [], identity: [], sparsePresets: [], sharedPaths: [] }
+    : getRepositoryGitWorktreeSearchMetadata(repo, t)
+  const removeProject: SettingsSearchEntry = {
+    title: t('auto.components.settings.repository.search.bbbe994528', 'Remove project'),
+    description: t(
+      'auto.components.settings.repository.search.c86478c3d8',
+      'Remove this project from Orca.'
+    ),
+    keywords: [
+      repo.displayName,
+      ...translateSearchKeyword('auto.components.settings.repository.search.3067595d82', 'delete'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.6469de5368', 'project'),
+      ...translateSearchKeyword(
+        'auto.components.settings.repository.search.cc876ca5f2',
+        'repository'
+      )
+    ]
+  }
+  const sourceControlAi = isFolder ? [] : getRepositoryGitAuthorSearchEntries(repo, t)
+  const mcp = isFolder ? [] : getRepositoryMcpConfigSearchEntries(repo, t)
+  const hooks = isFolder ? [] : getRepositoryGitHooksSearchEntries(repo, t)
+  return {
+    entries: [
+      formatter,
+      ...identity,
+      ...projectRuntime,
+      ...worktrees.entries,
+      removeProject,
+      ...sourceControlAi,
+      ...mcp,
+      ...hooks
+    ],
+    identity: [...identity, ...projectRuntime, ...worktrees.identity, removeProject],
+    projectRuntime,
+    sparsePresets: worktrees.sparsePresets,
+    sharedPaths: worktrees.sharedPaths,
+    sourceControlAi,
+    mcp,
+    hooks,
+    // Host setups has no indexed descriptor; keep its existing empty-query admission.
+    hostSetups: [] satisfies SettingsSearchEntry[]
+  }
+}
+
+export function getRepositoryPaneSearchEntries(
+  repo: Repo,
+  options: RepositoryPaneSearchOptions = {},
+  t: Translate = translate
+): SettingsSearchEntry[] {
+  return getRepositoryPaneSearchMetadata(repo, options, t).entries
 }

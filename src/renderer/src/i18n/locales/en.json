@@ -1200,8 +1200,6 @@
       "search": {
         "keywords": {
           "auto_save": "auto save",
-          "autosave": "autosave",
-          "save": "save",
           "diff": "diff",
           "whitespace": "whitespace",
           "spaces": "spaces",
@@ -1213,23 +1211,7 @@
           "markdown": "markdown",
           "long_lines": "long lines",
           "confirmations": "confirmations",
-          "pinned": "pinned",
-          "tab": "tab",
-          "confirm": "confirm",
-          "close": "close",
           "ask_before": "ask before",
-          "chat": "chat",
-          "terminal": "terminal",
-          "agent": "agent",
-          "command": "command",
-          "omp": "OMP",
-          "delete": "delete",
-          "worktree": "worktree",
-          "workspace": "workspace",
-          "dialog": "dialog",
-          "skip": "skip",
-          "prompt": "prompt",
-          "automation": "automation",
           "artifact": "artifact",
           "share": "share",
           "link": "link",
@@ -9340,12 +9322,8 @@
           "acc7bbdefd": "Press ESC again to exit settings",
           "43b68e10f0": "You have unsaved AI settings. Leaving will discard them.",
           "17bdee4ff1": "Discard unsaved AI settings?",
-          "084d8fac5b": "Privacy & Security",
-          "23931df7e8": "Remote Hosts",
           "8bd117d669": "Interface",
           "e1578cd4bc": "Workflows",
-          "9abb9be3bc": "Set Up",
-          "23c6874fdf": "AI Capabilities",
           "65358016ea": "Discard",
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
@@ -9365,7 +9343,11 @@
           "084f34826d": "Stats & usage",
           "022effa46f": "Remote Orca servers",
           "045db77e21": "SSH hosts",
-          "742ca66ea6": "Privacy & telemetry"
+          "742ca66ea6": "Privacy & telemetry",
+          "75f01ece60": "AI capabilities",
+          "4da10f1fbb": "Set up",
+          "7078ceae15": "Remote hosts",
+          "f38d325999": "Privacy & security"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -10696,6 +10678,7 @@
             "b2799ba622": "milliseconds",
             "146728ac2c": "delay",
             "86f54575c7": "autosave",
+            "4469b6fa4e": "save",
             "8ea61ad55c": "How long Orca waits after your last edit before saving automatically.",
             "c56cb6f1c2": "network",
             "nodeDistMirror": "mirror",
@@ -10766,7 +10749,22 @@
             "da5c42780e": "Open in apps",
             "b180c1041b": "Tab order",
             "0504f69ba0": "Check for updates",
-            "a361519c97": "Default project runtime"
+            "a361519c97": "Default project runtime",
+            "running_terminal": "running",
+            "9f8558233a": "confirm",
+            "confirm": "confirm",
+            "agent": "agent",
+            "84c67d0108": "delete",
+            "close": "close",
+            "5250cf0e48": "pin",
+            "terminal": "terminal",
+            "command": "command",
+            "7e9b556873": "skip",
+            "7edf4f69e2": "automation",
+            "867dddea41": "pinned",
+            "omp": "OMP",
+            "afa37a34e1": "close",
+            "ca86dd6e27": "dialog"
           }
         },
         "git": {
@@ -12108,8 +12106,7 @@
             "keywordSandbox": "sandbox",
             "keywordCloud": "cloud",
             "keywordRecipe": "recipe",
-            "keywordEphemeral": "ephemeral",
-            "5e7d7868a2": "Cloud vm"
+            "keywordEphemeral": "ephemeral"
           }
         },
         "EphemeralVmsPane": {
@@ -12132,7 +12129,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
-          "f561738b7d": "Toggle cloud vm"
+          "cloudVmToggleLabel": "Toggle Cloud VM"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",

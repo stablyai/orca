@@ -3980,6 +3980,7 @@
             "b2799ba622": "milissegundos",
             "146728ac2c": "atraso",
             "86f54575c7": "salvamento automático",
+            "4469b6fa4e": "salvar",
             "8ea61ad55c": "Quanto tempo o Orca espera após sua última edição antes de salvar automaticamente.",
             "c56cb6f1c2": "rede",
             "3566fce83f": "localhost",
@@ -4052,7 +4053,22 @@
             "da5c42780e": "Apps do Abrir Em",
             "b180c1041b": "Ordem das Abas",
             "0504f69ba0": "Verificar Atualizações",
-            "a361519c97": "Runtime Padrão do Projeto"
+            "a361519c97": "Runtime Padrão do Projeto",
+            "running_terminal": "em execução",
+            "9f8558233a": "confirmar",
+            "confirm": "confirmar",
+            "agent": "agente",
+            "84c67d0108": "excluir",
+            "close": "fechar",
+            "5250cf0e48": "fixar",
+            "terminal": "terminal",
+            "command": "comando",
+            "7e9b556873": "pular",
+            "7edf4f69e2": "automação",
+            "867dddea41": "fixado",
+            "omp": "OMP",
+            "afa37a34e1": "fechar",
+            "ca86dd6e27": "caixa de diálogo"
           }
         },
         "AccountsPane": {
@@ -5126,12 +5142,8 @@
           "acc7bbdefd": "Pressione ESC novamente para sair das configurações",
           "43b68e10f0": "Você tem alterações não salvas do Autor de IA do Git. Sair vai descartá-las.",
           "17bdee4ff1": "Descartar alterações não salvas do Autor de IA do Git?",
-          "084d8fac5b": "Privacidade e Segurança",
-          "23931df7e8": "Hosts Remotos",
           "8bd117d669": "Interface",
           "e1578cd4bc": "Fluxos de Trabalho",
-          "9abb9be3bc": "Configurar",
-          "23c6874fdf": "Capacidades de IA",
           "65358016ea": "Descartar",
           "devDescription": "Ferramentas exclusivas para desenvolvedores testarem estados de UI.",
           "linearTitle": "Linear",
@@ -5151,7 +5163,11 @@
           "084f34826d": "Estatísticas e Uso",
           "022effa46f": "Servidores Orca Remotos",
           "045db77e21": "Hosts SSH",
-          "742ca66ea6": "Privacidade e Telemetria"
+          "742ca66ea6": "Privacidade e Telemetria",
+          "75f01ece60": "Capacidades de IA",
+          "4da10f1fbb": "Configurar",
+          "7078ceae15": "Hosts Remotos",
+          "f38d325999": "Privacidade e Segurança"
         },
         "experimental": {
           "search": {
@@ -8376,8 +8392,7 @@
             "keywordSandbox": "sandbox",
             "keywordCloud": "nuvem",
             "keywordRecipe": "receita",
-            "keywordEphemeral": "efêmero",
-            "5e7d7868a2": "VM na Nuvem"
+            "keywordEphemeral": "efêmero"
           }
         },
         "PluginMarketplaceListingRow": {
@@ -8643,7 +8658,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Mostra controles de configuração e destinos de execução de espaço de trabalho para ambientes sob demanda pertencentes ao repositório.",
-          "f561738b7d": "Alternar VM na Nuvem"
+          "cloudVmToggleLabel": "Alternar VM na Nuvem"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",

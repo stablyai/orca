@@ -8510,12 +8510,8 @@
           "acc7bbdefd": "Presiona ESC de nuevo para salir de ajustes",
           "43b68e10f0": "Hay ajustes de IA sin guardar. Se descartarán al salir.",
           "17bdee4ff1": "¿Descartar los ajustes de IA sin guardar?",
-          "084d8fac5b": "Privacidad y seguridad",
-          "23931df7e8": "Hosts remotos",
           "8bd117d669": "Interfaz",
           "e1578cd4bc": "Flujos de trabajo",
-          "9abb9be3bc": "Configuración inicial",
-          "23c6874fdf": "Capacidades de IA",
           "65358016ea": "Desechar",
           "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
           "linearTitle": "Linear",
@@ -8535,7 +8531,11 @@
           "084f34826d": "Estadísticas y uso",
           "022effa46f": "Servidores remotos de Orca",
           "045db77e21": "Hosts SSH",
-          "742ca66ea6": "Privacidad y telemetría"
+          "742ca66ea6": "Privacidad y telemetría",
+          "75f01ece60": "Capacidades de IA",
+          "4da10f1fbb": "Configuración inicial",
+          "7078ceae15": "Hosts remotos",
+          "f38d325999": "Privacidad y seguridad"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -9848,6 +9848,7 @@
             "b2799ba622": "milisegundos",
             "146728ac2c": "demora",
             "86f54575c7": "guardado automático",
+            "4469b6fa4e": "guardar",
             "8ea61ad55c": "Cuánto tiempo espera Orca después de su última edición antes de guardar automáticamente.",
             "c56cb6f1c2": "red",
             "3566fce83f": "servidor local",
@@ -9920,7 +9921,22 @@
             "da5c42780e": "Apps de Abrir en",
             "b180c1041b": "Orden de pestañas",
             "0504f69ba0": "Buscar actualizaciones",
-            "a361519c97": "Runtime de proyecto predeterminado"
+            "a361519c97": "Runtime de proyecto predeterminado",
+            "running_terminal": "correr",
+            "9f8558233a": "confirmar",
+            "confirm": "confirmar",
+            "agent": "agente",
+            "84c67d0108": "borrar",
+            "close": "cerca",
+            "5250cf0e48": "alfiler",
+            "terminal": "Terminal",
+            "command": "dominio",
+            "7e9b556873": "saltar",
+            "7edf4f69e2": "automatización",
+            "867dddea41": "fijado",
+            "omp": "OMP",
+            "afa37a34e1": "cerca",
+            "ca86dd6e27": "diálogo"
           }
         },
         "git": {
@@ -11320,8 +11336,7 @@
             "keywordSandbox": "salvadera",
             "keywordCloud": "nube",
             "keywordRecipe": "receta",
-            "keywordEphemeral": "efímero",
-            "5e7d7868a2": "VM en la nube"
+            "keywordEphemeral": "efímero"
           }
         },
         "EphemeralVmsPane": {
@@ -11344,7 +11359,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y destinos de ejecución de espacios de trabajo para entornos bajo demanda del repositorio.",
-          "f561738b7d": "Activar o desactivar VM en la nube"
+          "cloudVmToggleLabel": "Activar o desactivar VM en la nube"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",

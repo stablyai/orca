@@ -8777,12 +8777,8 @@
           "acc7bbdefd": "Appuyez à nouveau sur ESC pour quitter les paramètres",
           "43b68e10f0": "Des paramètres IA ne sont pas enregistrés. Ils seront abandonnés en quittant.",
           "17bdee4ff1": "Abandonner les paramètres IA non enregistrés ?",
-          "084d8fac5b": "Confidentialité et sécurité",
-          "23931df7e8": "Hôtes distants",
           "8bd117d669": "Interface",
           "e1578cd4bc": "Workflows",
-          "9abb9be3bc": "Configurer",
-          "23c6874fdf": "Capacités IA",
           "65358016ea": "Abandonner",
           "devDescription": "Outils réservés au développement pour exercer les états de l'UI.",
           "linearTitle": "Linear",
@@ -8802,7 +8798,11 @@
           "084f34826d": "Statistiques & usage",
           "022effa46f": "Serveurs Orca distants",
           "045db77e21": "Hôtes SSH",
-          "742ca66ea6": "Confidentialité & télémétrie"
+          "742ca66ea6": "Confidentialité & télémétrie",
+          "75f01ece60": "Capacités IA",
+          "4da10f1fbb": "Configurer",
+          "7078ceae15": "Hôtes distants",
+          "f38d325999": "Confidentialité et sécurité"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Aucune police correspondante.",
@@ -10119,6 +10119,7 @@
             "b2799ba622": "millisecondes",
             "146728ac2c": "délai",
             "86f54575c7": "enregistrement automatique",
+            "4469b6fa4e": "enregistrer",
             "8ea61ad55c": "Délai d'attente d'Orca après votre dernière modification avant l'enregistrement automatique.",
             "c56cb6f1c2": "réseau",
             "3566fce83f": "localhost",
@@ -10191,7 +10192,22 @@
             "da5c42780e": "Applications « Ouvrir dans »",
             "b180c1041b": "Ordre des onglets",
             "0504f69ba0": "Rechercher des mises à jour",
-            "a361519c97": "Runtime par défaut des projets"
+            "a361519c97": "Runtime par défaut des projets",
+            "running_terminal": "en cours d'exécution",
+            "9f8558233a": "confirmer",
+            "confirm": "confirmer",
+            "agent": "agent",
+            "84c67d0108": "supprimer",
+            "close": "fermer",
+            "5250cf0e48": "épingle",
+            "terminal": "Terminal",
+            "command": "commande",
+            "7e9b556873": "ignorer",
+            "7edf4f69e2": "automatisation",
+            "867dddea41": "épinglé",
+            "omp": "OMP",
+            "afa37a34e1": "fermer",
+            "ca86dd6e27": "boîte de dialogue"
           }
         },
         "git": {
@@ -11523,8 +11539,7 @@
             "keywordSandbox": "bac à sable",
             "keywordCloud": "nuage",
             "keywordRecipe": "recette",
-            "keywordEphemeral": "éphémère",
-            "5e7d7868a2": "VM cloud"
+            "keywordEphemeral": "éphémère"
           }
         },
         "EphemeralVmsPane": {
@@ -11547,7 +11562,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Affiche les contrôles de configuration et les cibles d'exécution espace de travail pour les environnements détenus par le dépôt, à la demande.",
-          "f561738b7d": "Activer/désactiver Cloud VM"
+          "cloudVmToggleLabel": "Activer/désactiver Cloud VM"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",

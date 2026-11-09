@@ -8909,12 +8909,8 @@
           "acc7bbdefd": "Zum Verlassen der Einstellungen erneut ESC drücken",
           "43b68e10f0": "Es gibt ungespeicherte KI-Einstellungen. Beim Verlassen werden sie verworfen.",
           "17bdee4ff1": "Ungespeicherte KI-Einstellungen verwerfen?",
-          "084d8fac5b": "Datenschutz & Sicherheit",
-          "23931df7e8": "Remote-Hosts",
           "8bd117d669": "Oberfläche",
           "e1578cd4bc": "Arbeitsabläufe",
-          "9abb9be3bc": "Einrichtung",
-          "23c6874fdf": "KI-Funktionen",
           "65358016ea": "Verwerfen",
           "devDescription": "Werkzeuge nur für die Entwicklung zum Testen von UI-Zuständen.",
           "linearTitle": "Linear",
@@ -8934,7 +8930,11 @@
           "084f34826d": "Statistiken & Nutzung",
           "022effa46f": "Entfernte Orca-Server",
           "045db77e21": "SSH-Hosts",
-          "742ca66ea6": "Datenschutz & Telemetrie"
+          "742ca66ea6": "Datenschutz & Telemetrie",
+          "75f01ece60": "KI-Funktionen",
+          "4da10f1fbb": "Einrichtung",
+          "7078ceae15": "Remote-Hosts",
+          "f38d325999": "Datenschutz & Sicherheit"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Keine passenden Schriftarten.",
@@ -10257,6 +10257,7 @@
             "b2799ba622": "Millisekunden",
             "146728ac2c": "Verzögerung",
             "86f54575c7": "Automatisches Speichern",
+            "4469b6fa4e": "Speichern",
             "8ea61ad55c": "Wartezeit nach der letzten Bearbeitung, bevor Orca automatisch speichert.",
             "c56cb6f1c2": "Netzwerk",
             "nodeDistMirror": "Spiegelserver",
@@ -10323,7 +10324,22 @@
             "da5c42780e": "Apps für „Öffnen in“",
             "b180c1041b": "Tab-Reihenfolge",
             "0504f69ba0": "Nach Updates suchen",
-            "a361519c97": "Standardlaufzeit für Projekte"
+            "a361519c97": "Standardlaufzeit für Projekte",
+            "running_terminal": "laufend",
+            "9f8558233a": "Bestätigen",
+            "confirm": "Bestätigen",
+            "agent": "Agent",
+            "84c67d0108": "Löschen",
+            "close": "Schließen",
+            "5250cf0e48": "Anheften",
+            "terminal": "Terminal",
+            "command": "Befehl",
+            "7e9b556873": "Überspringen",
+            "7edf4f69e2": "Automatisierung",
+            "867dddea41": "angeheftet",
+            "omp": "OMP",
+            "afa37a34e1": "Schließen",
+            "ca86dd6e27": "Dialog"
           }
         },
         "git": {
@@ -11654,8 +11670,7 @@
             "keywordSandbox": "Sandbox",
             "keywordCloud": "Cloud",
             "keywordRecipe": "Rezept",
-            "keywordEphemeral": "kurzlebig",
-            "5e7d7868a2": "Cloud-VM"
+            "keywordEphemeral": "kurzlebig"
           }
         },
         "EphemeralVmsPane": {
@@ -11678,7 +11693,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Zeigt Einrichtungsoptionen und Ausführungsziele für Arbeitsbereiche in im Repository verwalteten, bei Bedarf bereitgestellten Umgebungen an.",
-          "f561738b7d": "Cloud-VM aktivieren/deaktivieren"
+          "cloudVmToggleLabel": "Cloud-VM aktivieren/deaktivieren"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
