@@ -538,6 +538,13 @@
       "description": "在手动保存和自动保存前格式化文本。在设置 > 项目中配置格式化程序命令。默认关闭。",
       "keywords": "格式化程序 保存时格式化 prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "编辑器键位",
+      "description": "在代码编辑器中使用 Emacs 键位，而不是标准编辑方式。",
+      "keywords": "编辑器 键位 快捷键 emacs",
+      "default": "默认",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "插入末尾换行符",
       "description": "保存非空代码文件时，如果文件末尾没有换行符，则添加一个。默认关闭。",

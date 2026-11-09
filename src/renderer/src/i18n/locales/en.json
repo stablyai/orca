@@ -1221,6 +1221,13 @@
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
       "keywords": "formatter format on save prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "Editor Keybindings",
+      "description": "Use Emacs keybindings in the code editor instead of standard editing.",
+      "keywords": "editor keybindings keymap emacs",
+      "default": "Default",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "Insert Final Newline",
       "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",

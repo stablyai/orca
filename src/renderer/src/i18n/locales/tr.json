@@ -971,6 +971,13 @@
       "description": "Elle ve otomatik kaydetmeden önce metni biçimlendirin. Biçimlendirici komutunu Ayarlar > Projeler bölümünde yapılandırın. Varsayılan olarak kapalıdır.",
       "keywords": "biçimlendirici kaydederken biçimlendir prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "Düzenleyici Kısayolları",
+      "description": "Kod düzenleyicide standart düzenleme yerine Emacs kısayollarını kullan.",
+      "keywords": "düzenleyici kısayollar tuş eşlemesi emacs",
+      "default": "Varsayılan",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "Son satır sonunu ekle",
       "description": "Boş olmayan bir kod dosyası kaydedilirken sonunda satır sonu yoksa ekleyin. Varsayılan olarak kapalıdır.",

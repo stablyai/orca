@@ -538,6 +538,13 @@
       "description": "手動保存と自動保存の前にテキストをフォーマットします。設定 > プロジェクトでフォーマッターコマンドを設定してください。デフォルトではオフです。",
       "keywords": "フォーマッター 保存時 フォーマット prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "エディターのキーバインド",
+      "description": "コードエディターで標準の編集の代わりに Emacs キーバインドを使用します。",
+      "keywords": "エディター キーバインド キーマップ emacs",
+      "default": "デフォルト",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "末尾に改行を挿入",
       "description": "空でないコードファイルを保存する際、末尾に改行がなければ追加します。デフォルトではオフです。",

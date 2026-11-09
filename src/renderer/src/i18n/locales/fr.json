@@ -765,6 +765,13 @@
       "description": "Formate le texte avant les enregistrements manuels et automatiques. Configurez une commande de formatage dans Paramètres > Projets. Désactivé par défaut.",
       "keywords": "formateur formatage enregistrer prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "Raccourcis de l'éditeur",
+      "description": "Utiliser les raccourcis Emacs dans l'éditeur de code au lieu de l'édition standard.",
+      "keywords": "éditeur raccourcis clavier keymap emacs",
+      "default": "Par défaut",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "Insérer un saut de ligne final",
       "description": "Ajoute un saut de ligne à l’enregistrement d’un fichier de code non vide qui n’en possède pas à la fin. Désactivé par défaut.",

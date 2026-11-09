@@ -544,6 +544,13 @@
       "description": "Formatea el texto antes de guardar manual o automáticamente. Configura un comando de formateo en Configuración > Proyectos. Desactivado de forma predeterminada.",
       "keywords": "formateador formatear al guardar prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "Atajos del editor",
+      "description": "Usa los atajos de Emacs en el editor de código en lugar de la edición estándar.",
+      "keywords": "editor atajos teclado keymap emacs",
+      "default": "Predeterminado",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "Insertar salto de línea final",
       "description": "Añade un salto de línea al guardar un archivo de código no vacío que no termine con uno. Desactivado de forma predeterminada.",

@@ -1758,6 +1758,13 @@
       "description": "Formata o texto antes de salvamentos manuais e automáticos. Configure um comando de formatação em Configurações > Projetos. Desativado por padrão.",
       "keywords": "formatador formatar ao salvar prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "Atalhos do editor",
+      "description": "Use os atalhos do Emacs no editor de código em vez da edição padrão.",
+      "keywords": "editor atalhos teclado keymap emacs",
+      "default": "Padrão",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "Inserir nova linha final",
       "description": "Adiciona uma quebra de linha ao salvar um arquivo de código não vazio que não termina com uma. Desativado por padrão.",

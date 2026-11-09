@@ -944,6 +944,13 @@
       "description": "在手動儲存和自動儲存前格式化文字。請在設定 > 專案中設定格式化工具指令。預設為關閉。",
       "keywords": "格式化工具 儲存時格式化 prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "編輯器按鍵繫結",
+      "description": "在程式碼編輯器中使用 Emacs 按鍵繫結，而不是標準編輯方式。",
+      "keywords": "編輯器 按鍵繫結 快捷鍵 emacs",
+      "default": "預設",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "插入結尾換行符號",
       "description": "儲存非空的程式碼檔案時，若結尾沒有換行符號，則加入一個。預設為關閉。",

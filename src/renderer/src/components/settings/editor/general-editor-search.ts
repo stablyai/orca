@@ -2,12 +2,14 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getVisibleEditorTypographySearchEntries } from './editor-typography-search'
+import { getEditorKeybindingsSearchEntry } from './EditorKeybindingsSetting'
 import { getFormatOnSaveSearchEntry } from './EditorFormatOnSaveSetting'
 import { getInsertFinalNewlineSearchEntry } from './EditorInsertFinalNewlineSetting'
 
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   getFormatOnSaveSearchEntry(),
   getInsertFinalNewlineSearchEntry(),
+  getEditorKeybindingsSearchEntry(),
   {
     title: translate('auto.components.settings.general.search.ae21e806ce', 'Auto Save Files'),
     description: translate(

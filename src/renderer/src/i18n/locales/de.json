@@ -995,6 +995,13 @@
       "description": "Text vor manuellem und automatischem Speichern formatieren. Konfiguriere einen Formatierungsbefehl unter Einstellungen > Projekte. Standardmäßig deaktiviert.",
       "keywords": "Formatierer Formatierung beim Speichern prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "Editor-Tastenkürzel",
+      "description": "Emacs-Tastenkürzel im Code-Editor statt der Standardbearbeitung verwenden.",
+      "keywords": "Editor Tastenkürzel Keymap emacs",
+      "default": "Standard",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "Abschließenden Zeilenumbruch einfügen",
       "description": "Beim Speichern einer nicht leeren Codedatei einen Zeilenumbruch hinzufügen, falls sie nicht damit endet. Standardmäßig deaktiviert.",
