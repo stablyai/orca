@@ -13,7 +13,9 @@ import {
   HostedSandboxErrorResponseSchema,
   HostedSandboxListResponseSchema,
   HostedSandboxReadyResponseSchema,
+  HostedSandboxSshAccessResponseSchema,
   HostedSandboxStatusResponseSchema,
+  type HostedSandboxSshAccess,
   type HostedSandboxCreateRequest,
   type HostedSandboxReadyResponse,
   type HostedSandboxView
@@ -51,6 +53,17 @@ export type HostedSandboxControlPlaneClient = {
   ): Promise<HostedSandboxView>
   archiveInfo(sandboxId: string, signal?: AbortSignal): Promise<HostedArchiveResponse['archive']>
   unarchive(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
+  /** Installs (or revokes) one desktop's key in the running VM's sshd; answers its pinned host key. */
+  installSshKey(
+    sandboxId: string,
+    publicKey: string,
+    signal?: AbortSignal
+  ): Promise<HostedSandboxSshAccess>
+  removeSshKey(
+    sandboxId: string,
+    publicKey: string,
+    signal?: AbortSignal
+  ): Promise<HostedSandboxSshAccess>
 }
 
 export type HostedSandboxControlPlaneClientOptions = {
@@ -219,7 +232,23 @@ export function createHostedSandboxControlPlaneClient(
       call('POST', sandboxPath(id, '/unarchive'), HostedSandboxReadyResponseSchema, {
         kind: 'boot',
         signal
-      })
+      }),
+    installSshKey: async (id, publicKey, signal) =>
+      (
+        await call('POST', sandboxPath(id, '/ssh-keys'), HostedSandboxSshAccessResponseSchema, {
+          body: { publicKey },
+          kind: 'control',
+          signal
+        })
+      ).ssh,
+    removeSshKey: async (id, publicKey, signal) =>
+      (
+        await call('DELETE', sandboxPath(id, '/ssh-keys'), HostedSandboxSshAccessResponseSchema, {
+          body: { publicKey },
+          kind: 'control',
+          signal
+        })
+      ).ssh
   }
 }
 

@@ -27,7 +27,7 @@ const ReadySchema = z
 export type OrcadReady = z.infer<typeof ReadySchema>
 
 export class VmCommandError extends Error {
-  constructor(readonly code: 'orcad_start_failed' | 'orcad_ready_invalid' | 'route_missing') {
+  constructor(readonly code: 'orcad_start_failed' | 'orcad_ready_invalid' | 'route_missing' | 'ssh_keys_failed') {
     super(code)
     this.name = 'VmCommandError'
   }

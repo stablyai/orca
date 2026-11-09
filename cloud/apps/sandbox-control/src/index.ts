@@ -14,6 +14,7 @@
 //   POST   /v1/sandboxes/:id/unarchive                            -> {sandbox, connection}
 //   DELETE /v1/sandboxes/:id                                      -> {sandbox}
 //   POST, GET /v1/sandboxes/:id/shares | DELETE /v1/sandboxes/:id/shares/:shareId | POST /v1/shares/:token/visit
+//   POST | DELETE /v1/sandboxes/:id/ssh-keys {publicKey}          -> {ssh: {port, user, hostKey}}
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
@@ -86,6 +87,8 @@ import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
+import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
+import { audit } from './api/audit'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, type BuildDeps } from './environment-builds'
@@ -786,7 +789,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return answer ? json(answer.body, answer.status) : fail('not_found', 404)
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh-keys))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -877,6 +880,28 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
           return fail('invalid_request', 400)
         }
         return json({ sandbox: view(await renewLease(life, row, body.data.extendMs)) })
+      }
+      case 'POST ssh-keys':
+      case 'DELETE ssh-keys': {
+        const body = SshKeyRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        const action = request.method === 'POST' ? 'add' : 'remove'
+        const ssh = await updateSshKey(life, row, action, body.data.publicKey)
+        // Who granted or revoked shell access to which VM; the key comment names device + workspace.
+        await audit(
+          env.SANDBOX_DB,
+          { accountId: caller.accountId, type: 'user', id: caller.userId, userId: caller.userId },
+          {
+            action: action === 'add' ? 'sandbox.ssh_key_added' : 'sandbox.ssh_key_removed',
+            targetType: 'sandbox',
+            targetId: row.id,
+            detail: { key: body.data.publicKey.split(' ')[2] }
+          },
+          life.now()
+        ).catch(() => undefined)
+        return json({ ssh })
       }
       default:
         return fail('not_found', 404)

@@ -11,6 +11,13 @@ import type {
   EphemeralVmRuntimeRecord
 } from '../../shared/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import type {
+  CloudSshCopyResult,
+  CloudSshOpenEditorRequest,
+  CloudSshOpenEditorResult,
+  CloudSshRevokeResult,
+  CloudSshStatus
+} from '../../shared/cloud-ssh'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -90,4 +97,12 @@ export type EphemeralVmApi = {
     cleanupDisabled: boolean
     message?: string
   }>
+  /** Orca Cloud SSH: whether it applies to a workspace, and which editors can open it. */
+  cloudSshStatus: (args: { workspaceId: string }) => Promise<CloudSshStatus>
+  /** Ensures access (waking only for the first key install) and copies the ssh command. */
+  cloudSshCopyCommand: (args: { workspaceId: string }) => Promise<CloudSshCopyResult>
+  cloudSshOpenInEditor: (args: CloudSshOpenEditorRequest) => Promise<CloudSshOpenEditorResult>
+  cloudSshRevoke: (args: { workspaceId: string }) => Promise<CloudSshRevokeResult>
+  /** Takes Orca's Include line back out of ~/.ssh/config. */
+  cloudSshRemoveSshConfigInclude: () => Promise<boolean>
 }

@@ -46,6 +46,10 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   commandHandler?: (params: RunCommandParams, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
   failStart: boolean
   failEnvRefresh: boolean
+  /** Exit code orca-ssh-keys answers with (0 = success; 3 = image without sshd). */
+  sshKeysExit: number
+  /** authorized_keys per sandbox name, as orca-ssh-keys maintains it. */
+  authorizedKeys: Map<string, string[]>
   failCreate: boolean
   /** Answers `bash -c <script>` probes (metrics, archive capture); undefined falls through to 127. */
   onScript?: (script: string, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
@@ -137,6 +141,8 @@ export function createFakeVercel(now: () => number): FakeVercel {
     },
     failStart: false,
     failEnvRefresh: false,
+    sshKeysExit: 0,
+    authorizedKeys: new Map(),
     failCreate: false,
     snapshotExpirations: new Map(),
     expire(name) {
@@ -213,6 +219,17 @@ export function createFakeVercel(now: () => number): FakeVercel {
       const handled = fake.commandHandler?.(params, sessionId)
       if (handled) {
         return handled
+      }
+      if (params.command === '/opt/orca/bin/orca-ssh-keys') {
+        if (fake.sshKeysExit !== 0) {
+          return { exitCode: fake.sshKeysExit, stdout: '', stderr: 'ssh-keys failed' }
+        }
+        const key = params.env?.ORCA_SSH_PUBLIC_KEY ?? ''
+        const blob = key.split(' ')[1]
+        const keys = (fake.authorizedKeys.get(box.params.name) ?? []).filter((k) => k.split(' ')[1] !== blob)
+        fake.authorizedKeys.set(box.params.name, params.args?.[0] === 'add' ? [...keys, key] : keys)
+        const hostKey = `ssh-ed25519 ${'H'.repeat(68)}`
+        return { exitCode: 0, stdout: `${JSON.stringify({ port: 2222, user: 'vercel-sandbox', hostKey })}\n`, stderr: '' }
       }
       if (command === START_COMMAND) {
         if (fake.failStart) {

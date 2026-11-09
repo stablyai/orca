@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Starts this boot's unprivileged sshd on 127.0.0.1:2222 (idempotent). Nothing outside the VM can
+# reach that port: the desktop tunnels to it over orcad's runtime connection (`orca ssh-proxy`).
+# Key-only, single user (the sandbox user), no root. Its host key and authorized_keys live under
+# ~/.orca-sandbox/ssh on the persistent disk, so the host key stays the same across stop/resume;
+# orca-image-wipe removes that directory, so every VM cloned from the golden image makes its own.
+# Prints {"port":2222,"user":"<user>","hostKey":"ssh-ed25519 AAAA..."} on success.
+set -euo pipefail
+umask 077
+OPENSSH=/opt/orca/openssh
+SSH_DIR="$HOME/.orca-sandbox/ssh"
+PORT=2222
+mkdir -p "$SSH_DIR"
+chmod 0700 "$HOME/.orca-sandbox" "$SSH_DIR"
+exec 8>"$SSH_DIR/sshd.lock"
+flock -w 30 8
+
+if [ ! -x "$OPENSSH/sshd" ]; then
+  echo 'sshd is not installed in this image' >&2
+  exit 3
+fi
+if [ ! -s "$SSH_DIR/ssh_host_ed25519_key" ]; then
+  rm -f "$SSH_DIR/ssh_host_ed25519_key" "$SSH_DIR/ssh_host_ed25519_key.pub"
+  ssh-keygen -q -t ed25519 -N '' -C "orca-cloud-host" -f "$SSH_DIR/ssh_host_ed25519_key"
+fi
+touch "$SSH_DIR/authorized_keys"
+chmod 0600 "$SSH_DIR/authorized_keys"
+
+# Rewritten every start so an image update's settings apply to existing workspaces. PAM stays at
+# its compiled-in default (off): an unprivileged sshd cannot use it, and this build warns on `no`.
+cat >"$SSH_DIR/sshd_config" <<EOF
+ListenAddress 127.0.0.1:$PORT
+HostKey $SSH_DIR/ssh_host_ed25519_key
+PidFile $SSH_DIR/sshd.pid
+AuthorizedKeysFile $SSH_DIR/authorized_keys
+SshdSessionPath $OPENSSH/sshd-session
+$([ -x "$OPENSSH/sshd-auth" ] && echo "SshdAuthPath $OPENSSH/sshd-auth")
+AllowUsers $(id -un)
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+HostbasedAuthentication no
+StrictModes yes
+AllowTcpForwarding local
+AllowAgentForwarding no
+AllowStreamLocalForwarding local
+GatewayPorts no
+X11Forwarding no
+PermitTunnel no
+PermitUserEnvironment no
+ClientAliveInterval 30
+ClientAliveCountMax 4
+MaxStartups 10:30:60
+Subsystem sftp $OPENSSH/sftp-server
+EOF
+
+pid="$(cat "$SSH_DIR/sshd.pid" 2>/dev/null || echo 0)"
+# Resume reboots from disk, so a recorded pid can name a dead process or an unrelated one.
+if ! { kill -0 "$pid" 2>/dev/null && grep -q sshd "/proc/$pid/cmdline" 2>/dev/null; }; then
+  rm -f "$SSH_DIR/sshd.pid"
+  : >"$SSH_DIR/sshd.log"
+  "$OPENSSH/sshd" -t -f "$SSH_DIR/sshd_config"
+  "$OPENSSH/sshd" -f "$SSH_DIR/sshd_config" -E "$SSH_DIR/sshd.log"
+  for _ in $(seq 1 100); do
+    [ -s "$SSH_DIR/sshd.pid" ] && break
+    sleep 0.02
+  done
+  [ -s "$SSH_DIR/sshd.pid" ] || { echo 'sshd did not start' >&2; tail -n 20 "$SSH_DIR/sshd.log" >&2; exit 1; }
+fi
+
+host_key="$(cut -d' ' -f1-2 "$SSH_DIR/ssh_host_ed25519_key.pub")"
+printf '{"port":%s,"user":"%s","hostKey":"%s"}\n' "$PORT" "$(id -un)" "$host_key"

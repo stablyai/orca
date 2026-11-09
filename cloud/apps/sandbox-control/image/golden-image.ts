@@ -11,7 +11,9 @@ export const VM_SCRIPTS = [
   'orca-session-env.sh',
   'orca-egress-probe',
   'orca-image-wipe',
-  'orca-share-proxy'
+  'orca-share-proxy',
+  'orca-sshd',
+  'orca-ssh-keys'
 ] as const
 
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/)

@@ -145,6 +145,9 @@ env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   >"$STATE/ready.json" 2>"$STATE/orcad.log" </dev/null 9>&- &
 echo $! >"$STATE/orcad.pid"
 
+# sshd for `orca ssh` (loopback only). Best effort: a workspace without it still serves orcad.
+"$ORCA_HOME/bin/orca-sshd" >/dev/null 2>"$STATE/sshd-start.err" || true
+
 for _ in $(seq 1 1200); do
   if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then
     if [ -n "$clone_pid" ] && ! wait "$clone_pid"; then

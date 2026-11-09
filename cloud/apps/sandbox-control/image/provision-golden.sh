@@ -85,8 +85,35 @@ log 'agent CLIs'
 # shellcheck disable=SC2086 # word splitting is the package list
 npm install --global --no-fund --no-audit --prefix "$ORCA_HOME/tools" $AGENT_NPM_PACKAGES
 
+log 'openssh server (binaries only)'
+# For `orca ssh`: an unprivileged sshd on loopback (see vm/orca-sshd). Only the server binaries,
+# kept out of /usr: the packages would pull in systemd units, SELinux policy (~38 MB on AL2023) and
+# system host keys a user-run sshd never uses. Its libraries are already in the base image, except
+# tcp-wrappers on Ubuntu.
+mkdir -p "$ORCA_HOME/openssh"
+pkgs="$(mktemp -d)"
+if command -v dnf >/dev/null; then
+  sudo dnf install -y -q --setopt=install_weak_deps=False cpio >/dev/null
+  sudo dnf install -y -q --downloadonly --downloaddir="$pkgs" openssh-server >/dev/null
+  (cd "$pkgs" && rpm2cpio openssh-server-[0-9]*.rpm | cpio -idm --quiet)
+  sudo dnf clean all -q >/dev/null 2>&1 || true
+  libexec="$pkgs/usr/libexec/openssh"
+else
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends libwrap0 >/dev/null
+  (cd "$pkgs" && apt-get download -qq openssh-server openssh-sftp-server >/dev/null)
+  for deb in "$pkgs"/*.deb; do dpkg-deb -x "$deb" "$pkgs"; done
+  libexec="$pkgs/usr/lib/openssh"
+fi
+install -m 0755 "$pkgs/usr/sbin/sshd" "$libexec/sshd-session" "$libexec/sftp-server" "$ORCA_HOME/openssh/"
+# OpenSSH 10 splits authentication into its own binary.
+if [ -x "$libexec/sshd-auth" ]; then install -m 0755 "$libexec/sshd-auth" "$ORCA_HOME/openssh/"; fi
+sudo rm -rf "$pkgs"
+"$ORCA_HOME/openssh/sshd" -V 2>&1 | head -n 1 >&2 || true
+# sshd refuses a locked account ('!') even for key logins; '*' unlocks it with no usable password.
+sudo usermod -p '*' "$(id -un)"
+
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"

@@ -257,3 +257,26 @@ export const HostedArchiveResponseSchema = z
   })
   .strict()
 export type HostedArchiveResponse = z.infer<typeof HostedArchiveResponseSchema>
+
+/** ed25519 only, one line, a plain comment: nothing sshd would read as key options. */
+export const HOSTED_SANDBOX_SSH_PUBLIC_KEY =
+  /^ssh-ed25519 [A-Za-z0-9+/]{68} [A-Za-z0-9@._:+-]{1,200}$/
+
+/** POST (install) and DELETE (revoke) /v1/sandboxes/:id/ssh-keys. */
+export const HostedSandboxSshKeyRequestSchema = z
+  .object({ publicKey: z.string().regex(HOSTED_SANDBOX_SSH_PUBLIC_KEY) })
+  .strict()
+
+/** The VM's loopback sshd: the desktop pins `hostKey` instead of trusting it on first use. */
+export const HostedSandboxSshAccessResponseSchema = z
+  .object({
+    ssh: z
+      .object({
+        port: z.number().int().min(1).max(65535),
+        user: z.string().regex(/^[a-z_][a-z0-9_-]{0,31}$/),
+        hostKey: z.string().regex(/^ssh-ed25519 [A-Za-z0-9+/]{68}$/)
+      })
+      .strict()
+  })
+  .strict()
+export type HostedSandboxSshAccess = z.infer<typeof HostedSandboxSshAccessResponseSchema>['ssh']

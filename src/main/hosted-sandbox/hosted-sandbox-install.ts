@@ -10,6 +10,7 @@ import type { PluginService } from '../plugins/plugin-service'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
 import { createHostedSandboxDeviceEnroller } from './hosted-sandbox-device-enrollment'
 import { registerOrcaCloudDeviceEnroller } from '../runtime/rpc/methods/orca-cloud/orca-cloud-device-enrollment'
+import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import {
   ORCA_CLOUD_RECIPE,
   createHostedSandboxRecipeClient,
@@ -28,6 +29,12 @@ import { setHostedSessionSync } from './hosted-session-sync'
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
 
 let installed: { registry: HostedSessionRegistry } | null = null
+let controlPlaneClient: HostedSandboxControlPlaneClient | null = null
+
+/** The control plane this build talks to; null when Orca Cloud is not configured. */
+export function getHostedSandboxControlPlaneClient(): HostedSandboxControlPlaneClient | null {
+  return controlPlaneClient
+}
 
 export function installHostedSandbox(): void {
   if (installed) {
@@ -45,6 +52,7 @@ export function installHostedSandbox(): void {
   }
   const client = createHostedSandboxRecipeClient(config)
   const base = createHostedSandboxRecipeDriver(config, client)
+  controlPlaneClient = client
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
   const idleOverride = app.isPackaged
     ? Number.NaN

@@ -7725,7 +7725,48 @@
           "running": "Running",
           "idle": "Idle"
         },
-        "projectOrderSaveFailed": "Could not save the complete project order"
+        "projectOrderSaveFailed": "Could not save the complete project order",
+        "CloudSshIncludeDialog": {
+          "title": "Let {{editor}} find your cloud workspaces?",
+          "body": "{{editor}} connects through ~/.ssh/config. Orca will add this line at the top. Nothing else in the file changes.",
+          "cancel": "Cancel",
+          "confirm": "Add Line and Open"
+        },
+        "CloudSsh": {
+          "noEditors": "Install VS Code or Cursor to open over SSH.",
+          "menu": "SSH",
+          "copyCommand": "Copy SSH Command",
+          "revoke": "Revoke SSH Access",
+          "firstUseHint": "Your first connection adds this computer’s key.",
+          "unsupportedImage": "SSH isn’t available here",
+          "unsupportedImageDetail": "This workspace was created before Orca Cloud supported SSH. New workspaces have it.",
+          "asleep": "The workspace went to sleep",
+          "asleepDetail": "Try again to wake it.",
+          "wakeFailed": "Couldn’t wake the workspace",
+          "wakeFailedDetail": "Try again in a moment.",
+          "editorMissing": "Editor not found",
+          "editorMissingDetail": "Reinstall it, or open the workspace in the other editor.",
+          "failed": "Couldn’t set up SSH",
+          "forwardFailedDetail": "Orca couldn’t reach the workspace. Check your connection and try again.",
+          "failedDetail": "Orca Cloud didn’t answer. Try again in a moment.",
+          "retry": "Retry",
+          "settingUp": "Setting up SSH…",
+          "waking": "Waking the workspace…",
+          "addingKey": "Adding this computer’s key…",
+          "wakingTitle": "Waking the workspace…",
+          "preparing": "Preparing SSH…",
+          "copied": "SSH command copied",
+          "opening": "Opening in {{editor}}",
+          "openingDetail": "The first connection can take a minute.",
+          "revoking": "Revoking SSH access…",
+          "revoked": "SSH access revoked",
+          "revokedDetail": "This computer can no longer connect.",
+          "removeInclude": "Remove from ~/.ssh/config",
+          "includeRemoveFailed": "Couldn’t edit ~/.ssh/config",
+          "includeRemoved": "Removed from ~/.ssh/config",
+          "includeRemovedDetail": "Editors no longer see Orca Cloud hosts. Opening one in an editor asks again.",
+          "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects."
+        }
       },
       "shared": {
         "useDaemonActions": {

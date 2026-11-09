@@ -23,6 +23,7 @@ import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import type { HostedActivitySample } from './hosted-session-lease-policy'
 import { HostedSessionLeaseScheduler } from './hosted-session-lease-scheduler'
+import { cloudSshActiveAt } from '../cloud-ssh/cloud-ssh-activity'
 
 const WorkVerdict = z.object({
   verdict: z.enum(['idle', 'busy', 'unverifiable']),
@@ -74,6 +75,11 @@ export function createHostedSessionRegistry(deps: {
       session: status.session,
       log,
       readActivity: async (): Promise<HostedActivitySample> => {
+        // orcad cannot see SSH sessions; someone typing over `orca ssh` is using the workspace.
+        const sshActiveAt = cloudSshActiveAt(runtimeEnvironmentId)
+        if (sshActiveAt !== null) {
+          return { verdict: 'busy', idleSince: null, lastPtyInputAt: sshActiveAt }
+        }
         const response = await callRuntimeEnvironment(
           deps.userDataPath,
           runtimeEnvironmentId,

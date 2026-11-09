@@ -39,5 +39,10 @@ export const ephemeralVmApi = {
   cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
   stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
   forgetRuntime: (args) => ipcRenderer.invoke('ephemeralVm:forgetRuntime', args),
-  getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
+  getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args),
+  cloudSshStatus: (args) => ipcRenderer.invoke('cloudSsh:status', args),
+  cloudSshCopyCommand: (args) => ipcRenderer.invoke('cloudSsh:copyCommand', args),
+  cloudSshOpenInEditor: (args) => ipcRenderer.invoke('cloudSsh:openInEditor', args),
+  cloudSshRevoke: (args) => ipcRenderer.invoke('cloudSsh:revoke', args),
+  cloudSshRemoveSshConfigInclude: () => ipcRenderer.invoke('cloudSsh:removeSshConfigInclude')
 } satisfies PreloadApi['ephemeralVm']

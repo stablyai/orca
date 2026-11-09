@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileNetworkPolicy, gitBasicAuthorization } from '../src/network-policy'
+import { EDITOR_REMOTE_SERVER_HOSTS, compileNetworkPolicy, gitBasicAuthorization } from '../src/network-policy'
 
 const deny = { response: { statusCode: 403, body: 'orca-egress-denied', contentType: 'text/plain' } }
 
@@ -67,5 +67,14 @@ describe('compileNetworkPolicy', () => {
         credentials: [{ host: '*.github.com', header: 'authorization', placeholders: ['p'], via: 'transform', value: 'v' }]
       })
     ).toThrow(/exact host/)
+  })
+
+  it('lets editors reach their Remote-SSH server downloads by default, still without a wildcard', () => {
+    const { allow } = compileNetworkPolicy({ mode: 'allowlist' })
+    for (const host of ['update.code.visualstudio.com', 'vscode.download.prss.microsoft.com', 'cursor.blob.core.windows.net']) {
+      expect(EDITOR_REMOTE_SERVER_HOSTS).toContain(host)
+      expect(allow[host]).toEqual([])
+    }
+    expect(allow['*']).toBeUndefined()
   })
 })
