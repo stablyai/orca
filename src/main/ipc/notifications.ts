@@ -17,6 +17,8 @@ import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import { notificationIconFromRepoIcon } from './notification-repo-icon'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import {
@@ -233,7 +235,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       : null,
     readAuthorizationStatus: readNotificationAuthorizationStatus,
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
-    deliverNative: deliverNativeNotification,
+    deliverNative: (request, options, settings) => {
+      const repo = request.worktreeId
+        ? store.getRepo(getRepoIdFromWorktreeId(request.worktreeId))
+        : undefined
+      const icon = notificationIconFromRepoIcon(repo?.repoIcon)
+      return deliverNativeNotification(request, icon ? { ...options, icon } : options, settings)
+    },
     platform: process.platform,
     now: () => Date.now(),
     wasRead: announced.wasRead,

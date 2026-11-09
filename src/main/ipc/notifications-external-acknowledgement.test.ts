@@ -65,6 +65,7 @@ function installHandlers(): void {
   registerNotificationHandlers(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: notification handlers read only these settings on this path.
     {
+      getRepo: () => undefined,
       getSettings: () => ({
         notifications: {
           enabled: true,
