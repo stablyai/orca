@@ -1,6 +1,6 @@
 import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import React, { useCallback } from 'react'
-import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
+import { Copy, ExternalLink, Eye, FileText, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -30,6 +30,7 @@ type SourceControlEntryContextMenuProps = {
   hasWorkingTreeFile: boolean
   connectionId?: string | null
   onView?: () => void
+  onOpenFile?: () => void
   conflictResolutions?: readonly ConflictResolution[]
   onResolveConflict?: (resolution: ConflictResolution) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
@@ -44,6 +45,7 @@ export function SourceControlEntryContextMenu({
   hasWorkingTreeFile,
   connectionId,
   onView,
+  onOpenFile,
   conflictResolutions,
   onResolveConflict,
   onRevealInExplorer,
@@ -100,6 +102,15 @@ export function SourceControlEntryContextMenu({
           <Eye className="size-3.5" />
           {t('auto.components.right.sidebar.SourceControlEntryContextMenu.a1f2c8d901', 'View')}
         </ContextMenuItem>
+        {onOpenFile ? (
+          <ContextMenuItem onSelect={onOpenFile}>
+            <FileText className="size-3.5" />
+            {t(
+              'auto.components.right.sidebar.SourceControlEntryContextMenu.openFile',
+              'Open file'
+            )}
+          </ContextMenuItem>
+        ) : null}
         {onResolveConflict && conflictResolutions && conflictResolutions.length > 0 ? (
           <>
             <ContextMenuSeparator />

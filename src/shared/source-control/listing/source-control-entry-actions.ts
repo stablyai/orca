@@ -40,3 +40,10 @@ export function getConflictResolutions(entry: GitStatusEntry): ConflictResolutio
   }
   return ['mark_resolved']
 }
+
+// Why: deleted rows and submodule gitlinks are not regular files on disk.
+export function canOpenWorkingTreeStatusEntry(
+  entry: Pick<GitStatusEntry, 'status' | 'submodule'>
+): boolean {
+  return entry.status !== 'deleted' && entry.submodule == null
+}
