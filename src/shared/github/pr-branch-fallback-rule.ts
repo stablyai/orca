@@ -23,7 +23,9 @@ export function resolvePRBranchFallback(args: {
     return NO_FALLBACK
   }
   if (cachedPR) {
+    // An unknown head (a phone before its git status) can't prove the branch moved on.
     const mergedPRMovedPastHead =
+      currentHeadOid != null &&
       cachedPR.state === 'merged' &&
       cachedPR.headSha !== currentHeadOid &&
       cachedPR.confirmedContainedHeadOid !== currentHeadOid
