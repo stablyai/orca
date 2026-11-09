@@ -102,7 +102,8 @@ describe('scan-local workspace attribution', () => {
       { id: 'first', repoId: 'r', displayName: 'first', path: '/repo/bb' },
       { id: 'second', repoId: 'r', displayName: 'second', path: '/repo/aa' },
       { id: 'root', repoId: 'r', displayName: 'root', path: '/' },
-      { id: 'spaces', repoId: 'r', displayName: 'spaces', path: '/a /a' }
+      { id: 'spaces', repoId: 'r', displayName: 'spaces', path: '/a /a' },
+      { id: 'unicode', repoId: 'r', displayName: 'unicode', path: '/repo/🌊' }
     ])
     probes.push({ ...probes[1], normalizedPath: '/repo/bb' })
     const listeners = [
@@ -112,7 +113,8 @@ describe('scan-local workspace attribution', () => {
       { cwd: '/' },
       { commandLine: 'node /repo/bb-other/server' },
       { commandLine: 'node --dir=/repo/bb:5173' },
-      { commandLine: 'z/a /a /a' }
+      { commandLine: 'z/a /a /a' },
+      { cwd: '/repo/🌊/server' }
     ].map((evidence, i) => ({ host: '127.0.0.1', port: 3000 + i, ...evidence }))
 
     expect(
@@ -126,7 +128,8 @@ describe('scan-local workspace attribution', () => {
       ['root', 'cwd'],
       null,
       ['first', 'command'],
-      ['spaces', 'command']
+      ['spaces', 'command'],
+      ['unicode', 'cwd']
     ])
   })
 })
