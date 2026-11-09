@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeAll, beforeEach, expect } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
@@ -193,6 +193,23 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
         : event
     })
   }
+  /** Catch-up and live frames follow committed reads, so wait for a frame at the current cursor. */
+  async function delivered(replies: RpcReply[]): Promise<void> {
+    await vi.waitFor(() => {
+      const cursor = journal.cursor()
+      expect(
+        events(replies).some((event) => {
+          const reached =
+            event.type === 'batch'
+              ? event.batch.cursor
+              : event.type === 'snapshot'
+                ? (event.page.liveCursor ?? event.page.window.nextCursor)
+                : null
+          return reached?.epoch === cursor.epoch && reached.sequence === cursor.sequence
+        })
+      ).toBe(true)
+    })
+  }
   function reduce(state: StructuredAgentSessionState, replies: RpcReply[]) {
     return events(replies).reduce(
       (state, event) => client.reduceStructuredAgentSession(state, { type: 'event', event }),
@@ -243,6 +260,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     page,
     subscribe,
     events,
+    delivered,
     reduce,
     render,
     turn,

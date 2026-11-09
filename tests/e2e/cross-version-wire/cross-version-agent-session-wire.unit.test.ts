@@ -682,13 +682,14 @@ describe('cross-version structured agent sessions', () => {
       const second = await answer('agentSession.send', sendParams('after restart', resumedFence))
       expect(second.ok).toBe(true)
 
-      const events = (
-        await call('agentSession.subscribe', {
-          sessionId: SESSION,
-          cursor: held
-        })
-      ).map((reply) => reply.result as AgentSessionSubscribeEvent)
-      expect(events.map((event) => event.type)).toEqual(['batch', 'batch'])
+      const replies = await call('agentSession.subscribe', {
+        sessionId: SESSION,
+        cursor: held
+      })
+      const read = () => replies.map((reply) => reply.result as AgentSessionSubscribeEvent)
+      // Catch-up frames follow committed reads after the subscription opens.
+      await vi.waitFor(() => expect(read().map((event) => event.type)).toEqual(['batch', 'batch']))
+      const events = read()
       const batches = events.filter((event) => event.type === 'batch')
       const batch = batches[0]?.batch
       const rendered = JSON.stringify(batches.flatMap((event) => event.batch.items))

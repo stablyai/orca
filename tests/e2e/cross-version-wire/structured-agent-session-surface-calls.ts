@@ -206,12 +206,12 @@ export const STRUCTURED_CALLS: {
   },
   {
     method: CONVERSATION_OUTLINE_METHOD,
-    hostMethod: 'journalSnapshot',
+    hostMethod: 'conversationOutline',
     result: { sessionId: SESSION, entries: [], omittedEntries: 0 }
   },
   {
     method: ITEM_DETAIL_METHOD,
-    hostMethod: 'journalSnapshot',
+    hostMethod: 'historyItem',
     result: { item: null }
   },
   // A subscription that opens with nothing to say answers with no reply at all,

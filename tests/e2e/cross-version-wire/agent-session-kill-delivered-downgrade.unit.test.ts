@@ -143,9 +143,10 @@ test(`${RELEASE_REF} keeps the converted records readable and writable; the upgr
       db,
       exported(drafts, 'agentSessionStoreDraftRowWrites')(before, draft)
     )
+    // Its loader holds every loaded lease unreconciled until that host proves ownership again.
     expect(
       oldRecord(storeMaps(exported(rows, 'loadAgentSessionStoreRows')(db)).records.get(sessionId))
-    ).toEqual(reconciled)
+    ).toEqual({ ...reconciled, lease: { ...reconciled.lease, unreconciled: true } })
     expect(
       db
         .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
@@ -159,7 +160,8 @@ test(`${RELEASE_REF} keeps the converted records readable and writable; the upgr
     if (!restored) {
       throw new Error('the upgraded chat must remain readable')
     }
-    expect(restored).toEqual(stopped)
+    // Opening the store is a restart: loaded leases stay unreconciled until ownership is proved.
+    expect(restored).toEqual({ ...stopped, lease: { ...stopped?.lease, unreconciled: true } })
     const conversation = agentSessionConversationView(restored)
     expect(agentSessionLeaseOwnerVerdict(restored.lease)).toBe('exited')
     expect(agentSessionLeasePossiblyWriting(restored.lease)).toBe(false)
