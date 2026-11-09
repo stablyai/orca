@@ -61,6 +61,8 @@ allowBuilds:
   cpu-features: true
   electron-winstaller: false
   esbuild: true
+  # Its install script only rebuilds when no @koromix/koffi-<platform> prebuilt is installed.
+  koffi: false
   msw: false
   node-pty: true
   ssh2: false

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { JiraUserPicker } from '@/components/jira-user-picker'
-import type { RowLessSource as RuntimeJiraSettings } from '@/lib/default-creation-host'
+import type { RowLessSource as RuntimeJiraSettings } from '@/runtime/hosts/selection/default-creation-host'
 import type { JiraUser } from '../../../../../shared/jira/jira-types'
 
 export function TaskPageJiraIssueUserField({

@@ -4,11 +4,12 @@ import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
 } from '@/lib/runtime-workspace-file-route'
+import '@/lib/editor/file-operations/editor-file-operation-owner'
 import {
   assertEditorFileOperationCurrent,
-  captureEditorFileOperationProvenance,
-  type EditorFileOperationProvenance
-} from '@/lib/editor-file-operation-owner'
+  captureEditorFileOperationProvenance
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { requestEditorSaveQuiesce } from './autosave/editor-autosave'
 import type { RestoredEditorOwnerResult } from '@/store/slices/editor/types/restored-editor-owner'
 import { contentRekeyOutcome } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'

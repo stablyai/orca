@@ -1,4 +1,10 @@
+import { inspectCapySetupConfig } from './setup-script-import-capy'
 import { inspectCodexEnvironmentConfig } from './setup-script-import-codex-environment'
+import { inspectConductorConfig } from './setup-script-import-conductor'
+import { inspectCopilotSetupStepsConfig } from './setup-script-import-copilot-setup-steps'
+import { inspectCursorEnvironmentConfig } from './setup-script-import-cursor-environment'
+import { inspectDevcontainerConfig } from './setup-script-import-devcontainer'
+import { asRecord, parseJsonObject } from './setup-script-import-parsers'
 import { inspectPackageManagerSetupCandidate } from './setup-script-package-manager-suggestion'
 import type { SetupScriptImportProvider } from './setup-script-import-providers'
 import {
@@ -28,7 +34,6 @@ export type SetupScriptImportFileExists = (relativePath: string) => Promise<bool
 
 const SUPERSET_CONFIG_PATH = '.superset/config.json'
 const SUPERSET_LOCAL_CONFIG_PATH = '.superset/config.local.json'
-const CONDUCTOR_CONFIG_PATH = 'conductor.json'
 const CMUX_CONFIG_PATHS = ['.cmux/cmux.json', 'cmux.json'] as const
 
 export async function inspectSetupScriptImportCandidates(
@@ -39,12 +44,18 @@ export async function inspectSetupScriptImportCandidates(
     const content = await readFile(relativePath)
     return content !== null && isSetupScriptImportTextWithinLimit(content) ? content : null
   }
+  // Order is precedence: the prompt offers the first match. Workspace-tool configs come first. CI
+  // runner and container setups target a disposable machine, so they rank below the lockfile guess.
   const candidates = await Promise.all([
     inspectSupersetConfig(boundedReadFile),
     inspectConductorConfig(boundedReadFile),
     inspectCodexEnvironmentConfig(boundedReadFile),
     inspectCmuxConfig(boundedReadFile),
-    inspectPackageManagerSetupCandidate(boundedReadFile, options?.fileExists)
+    inspectCursorEnvironmentConfig(boundedReadFile),
+    inspectCapySetupConfig(boundedReadFile),
+    inspectPackageManagerSetupCandidate(boundedReadFile, options?.fileExists),
+    inspectCopilotSetupStepsConfig(boundedReadFile),
+    inspectDevcontainerConfig(boundedReadFile)
   ])
   return candidates.filter(
     (candidate): candidate is SetupScriptImportCandidate => candidate != null
@@ -101,40 +112,6 @@ async function inspectSupersetConfig(
   }
 }
 
-async function inspectConductorConfig(
-  readFile: SetupScriptImportFileRead
-): Promise<SetupScriptImportCandidate | null> {
-  const config = parseJsonObject(await readFile(CONDUCTOR_CONFIG_PATH))
-  const scripts = asRecord(config?.scripts)
-  if (!config || !scripts) {
-    return null
-  }
-
-  const setup = normalizeSetupScriptImportCommand(scripts.setup)
-  if (!setup) {
-    return null
-  }
-
-  const unsupportedFields = collectUnsupportedFields(config, [
-    'enterpriseDataPrivacy',
-    'runScriptMode'
-  ])
-  for (const field of ['run', 'teardown'] as const) {
-    if (normalizeSetupScriptImportCommand(scripts[field])) {
-      unsupportedFields.push(`scripts.${field}`)
-    }
-  }
-
-  return {
-    provider: 'conductor',
-    label: 'Conductor',
-    files: [CONDUCTOR_CONFIG_PATH],
-    setup,
-    archive: normalizeSetupScriptImportCommand(scripts.archive) || undefined,
-    unsupportedFields
-  }
-}
-
 async function inspectCmuxConfig(
   readFile: SetupScriptImportFileRead
 ): Promise<SetupScriptImportCandidate | null> {
@@ -146,23 +123,6 @@ async function inspectCmuxConfig(
     }
   }
   return null
-}
-
-function parseJsonObject(content: string | null): Record<string, unknown> | null {
-  if (!content) {
-    return null
-  }
-  try {
-    return asRecord(JSON.parse(content))
-  } catch {
-    return null
-  }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
 }
 
 function resolveSupersetScriptValue(

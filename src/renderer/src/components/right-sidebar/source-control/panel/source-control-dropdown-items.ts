@@ -114,7 +114,7 @@ function localizedCommitCopy(t: Translate = translate): CommitDropdownCopy {
   }
 }
 
-/** Keep menu shape stable across states: render every row, disabling blocked actions with tooltip reasons. */
+/** Keep menu shape stable across states: render every row with its disabled reason. */
 export function resolveDropdownItems(
   inputs: DropdownActionInputs,
   t: Translate = translate

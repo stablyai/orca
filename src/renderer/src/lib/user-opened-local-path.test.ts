@@ -9,7 +9,7 @@ const boundaryMocks = vi.hoisted(() => ({
   })
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: boundaryMocks.getConnectionIdForFile
 }))
 

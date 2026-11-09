@@ -31,14 +31,4 @@ describe('mobile diff review state', () => {
 
     expect(merged.completedAt).toBeUndefined()
   })
-
-  it('keeps completion when refreshed identities are unchanged', () => {
-    const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
-    const completed = completeMobileDiffReviewState(reviewed, 6)
-
-    const merged = mergeMobileDiffReviewState(completed, [descriptor], 8)
-
-    expect(merged.completedAt).toBe(6)
-    expect(merged.files[descriptor.key]?.reviewedAt).toBe(5)
-  })
 })

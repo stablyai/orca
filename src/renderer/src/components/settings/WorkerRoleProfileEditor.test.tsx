@@ -5,7 +5,7 @@ import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-ses
 import { WorkerRoleProfileEditor } from './WorkerRoleProfileEditor'
 
 const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: '' }))
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentCatalog: () => [
     { id: 'claude', label: 'Claude' },
     { id: 'codex', label: 'Codex' },

@@ -1,7 +1,7 @@
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as ResolveOwnerModule from '@/lib/resolve-owner'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
+import type * as ResolveOwnerModule from '@/lib/workspace/ownership/resolve-owner'
 
 import type * as FrameDrawnModule from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -63,7 +63,7 @@ const hoisted = vi.hoisted(
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -74,7 +74,7 @@ vi.mock('../../web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null
 }))
-vi.mock('@/lib/resolve-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/resolve-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof ResolveOwnerModule>()),
   runtimeEnvironmentIdUnlessTwin: (_state: unknown, key: string) => hoisted.owners.get(key) ?? null
 }))

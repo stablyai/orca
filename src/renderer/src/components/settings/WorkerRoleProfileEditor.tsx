@@ -1,5 +1,5 @@
 import { sayNativeChatSessionOptionTranslated as say } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
   findCatalogModel,

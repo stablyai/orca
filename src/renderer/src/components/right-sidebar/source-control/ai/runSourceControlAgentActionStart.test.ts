@@ -36,7 +36,7 @@ vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess }
 }))
 
-vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+vi.mock('@/lib/workspace/activation/workspace-navigation-toast-action', () => ({
   workspaceNavigationToastAction: ({
     workspaceId,
     executionHostId

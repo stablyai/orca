@@ -9,7 +9,9 @@ import { buildActiveSurfacePatch } from '../store/slices/tabs/tabs-surface'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('../store', () => ({ useAppStore: { getState: mocks.getState } }))
-vi.mock('@/lib/cycled-tab-owner-activation', () => ({ activateCycledTabOnOwner: vi.fn() }))
+vi.mock('@/lib/workspace/tabs/cycled-tab-owner-activation', () => ({
+  activateCycledTabOnOwner: vi.fn()
+}))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 import { handleSwitchTerminalTab } from './ipc-tab-switch'

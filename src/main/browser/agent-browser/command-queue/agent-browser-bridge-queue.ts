@@ -1,4 +1,4 @@
-import type { BrowserTabSwitchResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabSwitchResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import { AgentBrowserBridgeActionEffects } from './agent-browser-bridge-action-effects'
 import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-session-name'

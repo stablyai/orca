@@ -1,15 +1,16 @@
 import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
 import type {
-  RuntimeMobileSessionAgentTab,
+  RuntimeMobileSessionTabGroup,
+  RuntimeMobileSessionTabsRemovedResult,
+  RuntimeMobileSessionTabsResult
+} from '../../../../shared/runtime-types'
+import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
@@ -173,7 +174,6 @@ export function resetReceivedSessionTabsFrameSequence(): void {
   receivedSessionTabsFrameSequence = 0
 }
 
-export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
@@ -184,7 +184,7 @@ export type MirroredTerminalTab = {
   hostTabId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
-  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>
+  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>
 }
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
@@ -282,6 +282,5 @@ export type WebSessionTabsBatchContext = {
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
 
-export type AgentTab = RuntimeMobileSessionAgentTab
 export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
 export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

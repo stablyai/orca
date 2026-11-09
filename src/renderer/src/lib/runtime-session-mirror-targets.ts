@@ -8,7 +8,7 @@ import {
   runtimeHostConnectionStateForEntry
 } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
-import { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
+import { getRuntimeSessionMirrorEnvironmentIds } from './workspace/ownership/runtime-session-mirror-owners'
 
 type RuntimeMirrorStatus = {
   status: RuntimeStatus | null

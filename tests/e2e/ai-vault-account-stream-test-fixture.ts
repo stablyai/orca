@@ -8,7 +8,7 @@ import {
   type RuntimeAccountServices
 } from '../../src/main/runtime/agent-session/environment/runtime-account-controller'
 import { RuntimeSubscriptionRegistry } from '../../src/main/runtime/client/runtime-subscription-registry'
-import { RateLimitService } from '../../src/main/rate-limits/service'
+import { RateLimitService } from '../../src/main/rate-limits/service/rate-limit-service'
 import { getManagedDataAccountService } from '../../src/main/managed-data-accounts/service'
 import { ACCOUNT_METHODS } from '../../src/main/runtime/rpc/methods/accounts/accounts'
 import {

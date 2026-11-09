@@ -22,9 +22,12 @@ import {
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
 import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../command-body-input'
+import { refuseAgentServerRoute } from './agent-server-route'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
-  'orchestration worker-start': async ({ flags, client, cwd, json }) => {
+  'orchestration worker-start': async (ctx) => {
+    const { flags, client, cwd, json } = ctx
+    await refuseAgentServerRoute('worker-start', ctx)
     for (const name of ['role', 'agent', 'model', 'effort', 'fast']) {
       const value = flags.get(name)
       if (typeof value === 'string' && !value.trim()) {

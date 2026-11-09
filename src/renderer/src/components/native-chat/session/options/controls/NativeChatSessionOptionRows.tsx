@@ -125,8 +125,10 @@ function OptionRow(props: {
       </div>
     )
   }
-  if (descriptor.kind.type === 'boolean' && layout === 'inline' && descriptor.id === 'fastMode') {
-    return (
+  // Every agent's speed is one button: Fast on/off for two modes, a list for more.
+  const speed = speedButtonTiers(descriptor)
+  const speedButton =
+    descriptor.kind.type === 'boolean' && descriptor.id === 'fastMode' ? (
       <Toggle
         variant="chip"
         size="xs"
@@ -137,22 +139,19 @@ function OptionRow(props: {
         <Zap className="size-3" />
         {say('fast')}
       </Toggle>
-    )
-  }
-  const speed = speedButtonTiers(descriptor)
-  if (speed && descriptor.kind.type === 'select') {
-    const button = (
+    ) : speed && descriptor.kind.type === 'select' ? (
       <NativeChatSessionSpeedButton
-        label={label}
+        label={say('speed')}
         standard={speed.standard}
-        faster={speed.faster}
+        tiers={speed.tiers}
         current={gone ? undefined : descriptor.kind.currentValue}
         disabled={off}
         onSet={onSet}
       />
-    )
+    ) : null
+  if (speedButton) {
     return layout === 'inline' ? (
-      button
+      speedButton
     ) : (
       <div
         className={cn(
@@ -160,8 +159,8 @@ function OptionRow(props: {
           layout === 'menu' && 'px-2'
         )}
       >
-        {label}
-        {button}
+        {say('speed')}
+        {speedButton}
       </div>
     )
   }
