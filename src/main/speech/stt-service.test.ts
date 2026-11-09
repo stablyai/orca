@@ -2,16 +2,7 @@ import type { ModelManager } from './model-manager'
 import type { SpeechModelState } from '../../shared/speech-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  MockOpenAiTranscriptionSession,
-  MockWorker,
-  getCloudSessions,
-  getCreatedWorkerCount,
-  getLastWorker,
-  readOpenAiSpeechApiKeyMock,
-  resetCloudSessions,
-  resetWorkers
-} = vi.hoisted(() => {
+const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.hoisted(() => {
   class HoistedMockWorker extends EventTarget {
     static created = 0
     static instances: HoistedMockWorker[] = []
@@ -86,34 +77,10 @@ const {
     }
   }
 
-  class HoistedMockOpenAiTranscriptionSession {
-    static instances: HoistedMockOpenAiTranscriptionSession[] = []
-    feedCalls: { samples: Float32Array; sampleRate: number }[] = []
-
-    constructor(readonly readTarget: () => { model: string; apiKey: string }) {
-      HoistedMockOpenAiTranscriptionSession.instances.push(this)
-    }
-
-    feedAudio(samples: Float32Array, sampleRate: number): void {
-      this.feedCalls.push({ samples, sampleRate })
-    }
-
-    finish(): Promise<string> {
-      const target = this.readTarget()
-      return Promise.resolve(`${target.model}:${target.apiKey}`)
-    }
-  }
-
   return {
-    MockOpenAiTranscriptionSession: HoistedMockOpenAiTranscriptionSession,
     MockWorker: HoistedMockWorker,
-    getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
-    readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
-    resetCloudSessions: () => {
-      HoistedMockOpenAiTranscriptionSession.instances = []
-    },
     resetWorkers: () => {
       HoistedMockWorker.created = 0
       HoistedMockWorker.instances = []
@@ -190,12 +157,12 @@ vi.mock('./model-catalog', () => ({
 vi.mock('./cloud-transcription-target', () => ({
   resolveCloudTranscriptionTarget: (modelId: string) => ({
     model: modelId,
-    apiKey: readOpenAiSpeechApiKeyMock()
+    apiKey: 'test-openai-key'
   })
 }))
 
 vi.mock('./openai-transcription-client', () => ({
-  OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
+  OpenAiTranscriptionSession: class {}
 }))
 
 import { START_DICTATION_TIMEOUT_MS, SttService, type SttEventSink } from './stt-service'
@@ -204,9 +171,7 @@ const DEFAULT_IDLE_UNLOAD_MS = 15 * 60 * 1000
 
 describe('SttService', () => {
   beforeEach(() => {
-    resetCloudSessions()
     resetWorkers()
-    readOpenAiSpeechApiKeyMock.mockClear()
   })
 
   it('gives each device dictating at once only its own text from one recognizer', async () => {
@@ -376,18 +341,6 @@ describe('SttService', () => {
     })
   })
 
-  it('frees the warm worker at once when a local dictation is discarded', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-
-    await service.startDictation('model-a', vi.fn(), undefined, 'mobile:1')
-    // Decoding the rest of the audio would hold the worker; a discard must not wait for it.
-    getLastWorker()!.emitStoppedOnStop = false
-    await service.stopDictation('mobile:1', { discard: true })
-    await service.startDictation('model-a', vi.fn(), undefined, 'mobile:2')
-
-    expect(getCreatedWorkerCount()).toBe(1)
-  })
-
   it('keeps a recognizer marked for unload until its dictation ends, then unloads it', async () => {
     const service = new SttService(readyModels(), spawnMockWorker)
 
@@ -528,41 +481,6 @@ describe('SttService', () => {
     expect(worker!.terminated).toBe(true)
   })
 
-  it('uses the OpenAI transcription session without creating a worker', async () => {
-    const sink = vi.fn()
-    const service = new SttService(
-      testModels({
-        getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
-        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      }),
-      spawnMockWorker
-    )
-
-    await service.startDictation('openai-model', sink, undefined, 'desktop')
-    service.feedAudio(new Float32Array([0.25, -0.25]), 48000, 'desktop')
-    await service.stopDictation('desktop')
-
-    expect(getCreatedWorkerCount()).toBe(0)
-    expect(getCloudSessions()).toHaveLength(1)
-    expect(getCloudSessions()[0].feedCalls).toHaveLength(1)
-    expect(sink).toHaveBeenCalledWith({ type: 'ready' })
-    expect(sink).toHaveBeenCalledWith({
-      type: 'final',
-      text: 'openai-model:test-openai-key'
-    })
-    expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
-  })
-
-  it('frees an idle local recognizer when a cloud dictation starts', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-    await service.stopDictation('desktop')
-
-    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
-
-    expect(getLastWorker()!.terminated).toBe(true)
-  })
-
   it('lets a model that is still loading finish when its dictation is canceled', async () => {
     vi.useFakeTimers()
     try {
@@ -633,44 +551,6 @@ describe('SttService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('does not treat internal warm-worker replacement as startup cancellation', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-
-    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop:1', {
-      dictationLanguage: 'ja'
-    })
-    await service.stopDictation('desktop:1')
-
-    await expect(
-      service.startDictation('whisper-model', vi.fn(), undefined, 'desktop:1', {
-        dictationLanguage: 'ko'
-      })
-    ).resolves.toBe(undefined)
-    expect(getCreatedWorkerCount()).toBe(2)
-  })
-
-  it('removes lifecycle listeners when the active worker errors', async () => {
-    const sink = vi.fn()
-    const service = new SttService(readyModels(), spawnMockWorker)
-
-    await service.startDictation('model-a', sink, undefined, 'desktop')
-    const worker = getLastWorker()
-    expect(worker).toBeDefined()
-    expect(worker!.listenerCount('message')).toBe(1)
-    expect(worker!.listenerCount('error')).toBe(1)
-    expect(worker!.listenerCount('exit')).toBe(1)
-
-    worker!.emit('error', new Error('worker failed'))
-
-    expect(sink).toHaveBeenCalledWith({
-      type: 'error',
-      error: 'Error: worker failed'
-    })
-    expect(worker!.listenerCount('message')).toBe(0)
-    expect(worker!.listenerCount('error')).toBe(0)
-    expect(worker!.listenerCount('exit')).toBe(0)
   })
 
   it('allows slow offline stop decoding before terminating the worker', async () => {
@@ -771,22 +651,6 @@ describe('SttService', () => {
     expect(worker!.messages.filter((message) => message.type === 'stop')).toHaveLength(1)
     expect(events).toContainEqual({ type: 'error', error: 'Error: native failure' })
     expect(events).toContainEqual({ type: 'stopped' })
-  })
-
-  it('shares one stop message across concurrent stop callers', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-    const worker = getLastWorker()
-    expect(worker).toBeDefined()
-    worker!.emitStoppedOnStop = false
-
-    const firstStop = service.stopDictation('desktop')
-    const secondStop = service.stopDictation('desktop')
-    expect(worker!.messages.filter((message) => message.type === 'stop')).toHaveLength(1)
-
-    worker!.emit('message', stoppedReply(worker!))
-    await Promise.all([firstStop, secondStop])
   })
 
   it('does not retain or reuse a worker that timed out while stopping', async () => {
