@@ -42,12 +42,60 @@ const HOT_MAPS = new Set([
   'terminalLayoutsByTabId',
   'sleepingAgentSessionsByPaneKey'
 ])
-const SOURCE_OWNERS = new Set([
-  `${RENDERER}store/terminals/terminal-parking-input-owner.ts`,
-  `${RENDERER}store/terminals/terminal-tab-owner-index.ts`,
-  `${RENDERER}store/terminals/sleeping-agent-record-index.ts`,
-  `${RENDERER}lib/worktree-tab-bucket-projection.ts`
+const OWNER_ROOTS = [
+  ['store/terminals/terminal-parking-input-owner.ts', 'acceptTerminalParkingInputs', []],
+  ['store/terminals/terminal-parking-input-owner.ts', 'publishAcceptedTerminalParkingInputs', []],
+  ['store/terminals/terminal-parking-input-owner.ts', 'invalidateTerminalParkingPtyInputs', []],
+  ['store/terminals/terminal-tab-owner-index.ts', 'update', ['tabsByWorktree']],
+  ['store/terminals/sleeping-agent-record-index.ts', 'update', ['records']],
+  ['store/terminals/sleeping-agent-record-index.ts', 'acceptTransition', ['previous', 'next']],
+  ['lib/worktree-tab-bucket-projection.ts', 'project', ['source']]
+]
+const KEY_DIFFS = new Set([
+  `${RENDERER}store/terminals/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
+  `${RENDERER}store/terminals/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
+  `${RENDERER}store/terminals/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
+  `${RENDERER}lib/worktree-tab-bucket-projection.ts#diffUnknownProjectionKeys`
 ])
+const COLD_RESYNCS = new Set([
+  `${RENDERER}store/terminals/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
+  `${RENDERER}store/terminals/sleeping-agent-record-index.ts#resyncSleepingAgentRecordKeys`
+])
+
+function isColdResyncCall(node, source) {
+  for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
+    if (
+      ts.isConditionalExpression(ancestor) &&
+      ancestor.condition.getText(source) === 'previous' &&
+      node.pos >= ancestor.whenFalse.pos
+    ) {
+      return true
+    }
+    if (
+      ts.isBinaryExpression(ancestor) &&
+      ancestor.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+      ancestor.left.getText(source) === 'keys'
+    ) {
+      return true
+    }
+    if (
+      ts.isIfStatement(ancestor) &&
+      node.pos >= ancestor.thenStatement.pos &&
+      node.end <= ancestor.thenStatement.end
+    ) {
+      const condition = ancestor.expression.getText(source).replace(/\s+/g, ' ')
+      if (
+        condition === 'ptyIds === undefined' ||
+        condition.includes(
+          'previous.settings?.terminalSshViewParking !== state.settings?.terminalSshViewParking'
+        )
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
 const STORE_BOUNDARIES = new Set([`${RENDERER}store/index.ts`, `${RENDERER}store.ts`])
 // Resource delivery and startup recovery are separate entry points, not parking input discovery.
 const EFFECT_BOUNDARIES = new Set([
@@ -189,7 +237,11 @@ function readModule(root, rel) {
         }
       }
     }
-    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) &&
+      node.name &&
+      node.body
+    ) {
       functions.set(node.name.text, node)
     }
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
@@ -209,15 +261,14 @@ export function collectParkingOwnershipViolations(root = process.cwd()) {
   const pending = [...ROOTS].flatMap(([rel, names]) =>
     names.map((name) => ({ rel, name, tainted: new Set() }))
   )
+  for (const [rel, name, tainted] of OWNER_ROOTS) {
+    pending.push({ rel: RENDERER + rel, name, tainted: new Set(tainted) })
+  }
   const visited = new Set()
   const violations = new Set()
   while (pending.length) {
     const { rel, name, tainted } = pending.pop()
-    if (
-      SOURCE_OWNERS.has(rel) ||
-      STORE_BOUNDARIES.has(rel) ||
-      EFFECT_BOUNDARIES.has(`${rel}#${name}`)
-    ) {
+    if (STORE_BOUNDARIES.has(rel) || EFFECT_BOUNDARIES.has(`${rel}#${name}`)) {
       continue
     }
     const identity = `${rel}#${name}#${[...tainted].sort().join(',')}`
@@ -308,13 +359,21 @@ export function collectParkingOwnershipViolations(root = process.cwd()) {
           ts.isIdentifier(callee.expression) &&
           callee.expression.text === 'Object' &&
           ENUMERATORS.has(callee.name.text) &&
-          node.arguments.some((arg) => hotMap(arg))
+          node.arguments.some((arg) => hotMap(arg)) &&
+          !(callee.name.text === 'keys' && KEY_DIFFS.has(`${rel}#${name}`)) &&
+          !COLD_RESYNCS.has(`${rel}#${name}`)
         ) {
           report(node)
         }
         if (ts.isIdentifier(callee)) {
           const target = mod.imports.get(callee.text) ?? { rel, name: callee.text }
-          if (!SOURCE_OWNERS.has(target.rel) && !STORE_BOUNDARIES.has(target.rel)) {
+          if (
+            COLD_RESYNCS.has(`${target.rel}#${target.name}`) &&
+            !isColdResyncCall(node, mod.source)
+          ) {
+            report(node)
+          }
+          if (!STORE_BOUNDARIES.has(target.rel)) {
             let targetModule = modules.get(target.rel)
             if (!targetModule) {
               modules.set(target.rel, (targetModule = readModule(root, target.rel)))

@@ -9,7 +9,13 @@ import type { AppState } from '../types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
-import { getTerminalTabOwnerWorktreeId, getTerminalTabOwners } from './terminal-tab-owner-index'
+import {
+  getTerminalTab,
+  getTerminalTabOwnerWorktreeIds,
+  getTerminalTabOwnerWorktreeId,
+  getTerminalTabOwners
+} from './terminal-tab-owner-index'
+import { runtimeEnvironmentSupportsTerminalParking } from '@/components/terminal-pane/parking/retention/paired-runtime-parking-capabilities'
 import {
   invalidateTerminalParkingInputs,
   retireTerminalParkingInputs
@@ -50,12 +56,15 @@ function sameTitleSlots(
   previous: AppState['runtimePaneTitlesByTabId'][string] | undefined,
   next: AppState['runtimePaneTitlesByTabId'][string] | undefined
 ): boolean {
+  if (previous === next) {
+    return true
+  }
   const before = Object.keys(previous ?? {})
   const after = Object.keys(next ?? {})
   return before.length === after.length && before.every((key) => key in (next ?? {}))
 }
 
-function changedKeys(
+function diffUnknownParkingRecordKeys(
   previous: Readonly<Record<string, unknown>>,
   next: Readonly<Record<string, unknown>>
 ): Iterable<string> {
@@ -64,7 +73,14 @@ function changedKeys(
     ? changes.keys
     : changes === null
       ? []
-      : new Set([...Object.keys(previous), ...Object.keys(next)])
+      : [...new Set([...Object.keys(previous), ...Object.keys(next)])].filter(
+          (key) =>
+            previous[key] !== next[key] || Object.hasOwn(previous, key) !== Object.hasOwn(next, key)
+        )
+}
+
+function resyncTerminalParkingWorkspaceIds(tabsByWorktree: AppState['tabsByWorktree']): string[] {
+  return Object.keys(tabsByWorktree)
 }
 
 function replacePtyMembership(state: AppState, tabId: string): void {
@@ -83,10 +99,7 @@ function replacePtyMembership(state: AppState, tabId: string): void {
       }
     }
   }
-  const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
-  const tab = worktreeId
-    ? state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-    : undefined
+  const tab = getTerminalTab(state.tabsByWorktree, tabId)
   if (!tab) {
     ptyIdsByTabId.delete(tabId)
     return
@@ -123,12 +136,10 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
   const previous = accepted
   const dirty = new Set<string>()
   const changedTabs = new Set<string>()
-  const previousOwners = previous ? getTerminalTabOwners(previous.tabsByWorktree) : null
-  const oldOwners = new Map<string, string>()
   if (!previous || previous.tabsByWorktree !== state.tabsByWorktree) {
     const worktreeIds = previous
-      ? changedKeys(previous.tabsByWorktree, state.tabsByWorktree)
-      : Object.keys(state.tabsByWorktree)
+      ? diffUnknownParkingRecordKeys(previous.tabsByWorktree, state.tabsByWorktree)
+      : resyncTerminalParkingWorkspaceIds(state.tabsByWorktree)
     for (const id of worktreeIds) {
       if (previous?.tabsByWorktree[id] === state.tabsByWorktree[id]) {
         continue
@@ -144,10 +155,6 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
       dirty.add(id)
       for (const tab of previous?.tabsByWorktree[id] ?? []) {
         changedTabs.add(tab.id)
-        const owner = previousOwners?.get(tab.id)
-        if (owner) {
-          oldOwners.set(tab.id, owner)
-        }
       }
       for (const tab of state.tabsByWorktree[id] ?? []) {
         changedTabs.add(tab.id)
@@ -161,7 +168,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     if (before === after) {
       continue
     }
-    for (const id of before ? changedKeys(before, after) : Object.keys(after)) {
+    for (const id of before ? diffUnknownParkingRecordKeys(before, after) : Object.keys(after)) {
       if (before?.[id] !== after[id]) {
         dirty.add(id)
       }
@@ -173,7 +180,10 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     if (before === after) {
       continue
     }
-    for (const tabId of before ? changedKeys(before, after) : Object.keys(after)) {
+    for (const tabId of before ? diffUnknownParkingRecordKeys(before, after) : Object.keys(after)) {
+      if (before?.[tabId] === after[tabId]) {
+        continue
+      }
       if (
         field === 'runtimePaneTitlesByTabId' &&
         sameTitleSlots(
@@ -201,13 +211,9 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     }
   }
   for (const tabId of changedTabs) {
-    const owner = owners.get(tabId)
-    const oldOwner = oldOwners.get(tabId)
-    if (owner) {
-      dirty.add(owner)
-    }
-    if (oldOwner) {
-      dirty.add(oldOwner)
+    // Changed buckets cover removed owners; surviving duplicate owners may also lose authority.
+    for (const id of getTerminalTabOwnerWorktreeIds(state.tabsByWorktree, tabId)) {
+      dirty.add(id)
     }
     replacePtyMembership(state, tabId)
   }
@@ -224,8 +230,12 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
           ])
     for (const environmentId of environmentIds) {
       if (
-        previous?.runtimeStatusByEnvironmentId.get(environmentId) ===
-        state.runtimeStatusByEnvironmentId.get(environmentId)
+        runtimeEnvironmentSupportsTerminalParking(
+          previous?.runtimeStatusByEnvironmentId.get(environmentId)
+        ) ===
+        runtimeEnvironmentSupportsTerminalParking(
+          state.runtimeStatusByEnvironmentId.get(environmentId)
+        )
       ) {
         continue
       }
@@ -244,7 +254,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     previous &&
     previous.settings?.terminalSshViewParking !== state.settings?.terminalSshViewParking
   ) {
-    for (const worktreeId of Object.keys(state.tabsByWorktree)) {
+    for (const worktreeId of resyncTerminalParkingWorkspaceIds(state.tabsByWorktree)) {
       dirty.add(worktreeId)
     }
   }
@@ -279,7 +289,7 @@ export function invalidateTerminalParkingPtyInputs(ptyIds?: Iterable<string>): v
   }
   const dirty = new Set<string>()
   if (ptyIds === undefined) {
-    for (const worktreeId of Object.keys(accepted.tabsByWorktree)) {
+    for (const worktreeId of resyncTerminalParkingWorkspaceIds(accepted.tabsByWorktree)) {
       dirty.add(worktreeId)
     }
   } else {

@@ -34,7 +34,6 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     setParkedTerminalWorktreeIds,
     tabsByWorktree,
     terminalParkingEnabled,
-    terminalParkingRevision,
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
@@ -94,8 +93,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       }
       if (
         previous.terminalParkingEnabled !== terminalParkingEnabled ||
-        previous.terminalRetentionBudgetEnabled !== terminalRetentionBudgetEnabled ||
-        previous.terminalParkingRevision !== terminalParkingRevision
+        previous.terminalRetentionBudgetEnabled !== terminalRetentionBudgetEnabled
       ) {
         for (const id of controller.mountedWorktreeIdsRef.current) {
           dirty.add(id)
@@ -297,7 +295,6 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     setParkedTerminalWorktreeIds,
     tabsByWorktree,
     terminalParkingEnabled,
-    terminalParkingRevision,
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,

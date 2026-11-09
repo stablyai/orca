@@ -100,6 +100,7 @@ describe('terminal tab owner index', () => {
     }
     const index = createTerminalTabOwnerIndex()
     expect(index.getFirstTab(initial, 'a')?.title).toBe('First')
+    expect(index.getTab(initial, 'a')?.title).toBe('Outside')
     expect(index.getOwner(initial, 'a')).toBe('B')
     expect(index.hasOwnerOutside(initial, 'a', 'A')).toBe(true)
     expect(index.hasOwnerOutside(initial, 'a', 'B')).toBe(true)
@@ -111,11 +112,13 @@ describe('terminal tab owner index', () => {
       ['B', null]
     ])
     expect(index.getFirstTab(next, 'a')?.title).toBe('Second')
+    expect(index.getTab(next, 'a')?.title).toBe('Second')
     expect(index.getFirstTab(next, 'x')?.title).toBe('Middle')
     expect(index.hasOwnerOutside(next, 'a', 'A')).toBe(false)
 
     const renamed = { ...next, A: next.A.map((tab) => ({ ...tab, title: `Updated ${tab.id}` })) }
     index.adoptMetadataOnlyBucketReplacements(next, renamed, ['A'])
     expect(index.getFirstTab(renamed, 'a')?.title).toBe('Updated a')
+    expect(index.getTab(renamed, 'a')?.title).toBe('Updated a')
   })
 })

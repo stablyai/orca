@@ -9,17 +9,18 @@ import {
 
 type PairedRuntimeParkingCapability = { capabilities?: readonly string[] }
 
+type PairedRuntimeParkingCapabilityStatus = {
+  status: PairedRuntimeParkingCapability | null | undefined
+  snapshot?:
+    | ({ status: PairedRuntimeParkingCapability | null } & Pick<
+        RuntimeHostStatusSnapshot,
+        'verification' | 'retired'
+      >)
+    | null
+}
 type PairedRuntimeParkingCapabilityStatuses = ReadonlyMap<
   string,
-  {
-    status: PairedRuntimeParkingCapability | null | undefined
-    snapshot?:
-      | ({ status: PairedRuntimeParkingCapability | null } & Pick<
-          RuntimeHostStatusSnapshot,
-          'verification' | 'retired'
-        >)
-      | null
-  }
+  PairedRuntimeParkingCapabilityStatus
 >
 
 type PairedRuntimeParkingEnvironmentIdsCache = {
@@ -37,6 +38,18 @@ function haveSameEnvironmentIds(left: ReadonlySet<string>, right: ReadonlySet<st
     }
   }
   return true
+}
+
+export function runtimeEnvironmentSupportsTerminalParking(
+  entry: PairedRuntimeParkingCapabilityStatus | null | undefined
+): boolean {
+  // Last-verified capabilities survive transport loss; explicit revocation withdraws restoration.
+  return (
+    !isRuntimeHostContactRevoked(entry) &&
+    lastVerifiedRuntimeStatus<PairedRuntimeParkingCapability>(entry)?.capabilities?.includes(
+      TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
+    ) === true
+  )
 }
 
 export function createPairedRuntimeParkingEnvironmentIdsSelector() {
@@ -57,12 +70,7 @@ export function createPairedRuntimeParkingEnvironmentIdsSelector() {
       if (!entry) {
         continue
       }
-      // Keep last-verified build capabilities across unverifiable probes; a revoked host cannot promise restoration (docs/reference/ssh-execution-boundary.md).
-      if (isRuntimeHostContactRevoked(entry)) {
-        continue
-      }
-      const status = lastVerifiedRuntimeStatus<PairedRuntimeParkingCapability>(entry)
-      if (status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
+      if (runtimeEnvironmentSupportsTerminalParking(entry)) {
         capable.add(environmentId)
       }
     }

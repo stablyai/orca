@@ -273,7 +273,6 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
         // The second pass re-resolves each tab's leaves; any change since the check fails confirmation.
         lease(worktreeId, clients.has('hover'), new Map(confirmedByTab))
         setHeldTerminalPrewarmWorktrees(leases.keys())
-        controllerRef.current.setTerminalParkingRevision((revision) => revision + 1)
       })
     }
 
@@ -303,7 +302,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
           }
         }
       }
-      // Read by the parking pass this sync's revision bump schedules.
+      // Lease membership invalidates only the workspaces whose parking exemption changed.
       setHeldTerminalPrewarmWorktrees(leases.keys())
     }
     sync()

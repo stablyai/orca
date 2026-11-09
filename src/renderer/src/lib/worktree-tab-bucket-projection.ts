@@ -4,6 +4,10 @@ export type WorktreeTabBucketProjection<T, P> = {
   project: (source: Readonly<Record<string, readonly T[]>>) => Record<string, P[]>
 }
 
+function diffUnknownProjectionKeys(source: Readonly<Record<string, unknown>>): string[] {
+  return Object.keys(source)
+}
+
 export function createWorktreeTabBucketProjection<T, P>(args: {
   projectTab: (tab: T) => P
   isSameProjectedTab: (previous: P, next: T) => boolean
@@ -26,18 +30,33 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
           ? [...changes.keys]
               .filter((key) => Object.hasOwn(previousSource!, key))
               .concat(changes.added)
-          : Object.keys(source)
+          : diffUnknownProjectionKeys(source)
       let changed =
         previousProjection === null ||
         (!knownKeys && sourceKeys.length !== Object.keys(previousProjection).length)
-      const nextProjection: Record<string, P[]> = knownKeys ? { ...previousProjection } : {}
+      let nextProjection: Record<string, P[]> | null = null
+      const writableProjection = (): Record<string, P[]> => {
+        if (nextProjection) {
+          return nextProjection
+        }
+        if (knownKeys) {
+          return (nextProjection = { ...previousProjection })
+        }
+        nextProjection = {}
+        if (previousProjection) {
+          for (const id of sourceKeys) {
+            nextProjection[id] = previousProjection[id] ?? []
+          }
+        }
+        return nextProjection
+      }
 
       for (const worktreeId of sourceKeys) {
         if (!(worktreeId in source)) {
-          if (worktreeId in nextProjection) {
+          if (previousProjection && worktreeId in previousProjection) {
             changed = true
+            delete writableProjection()[worktreeId]
           }
-          delete nextProjection[worktreeId]
           continue
         }
         const sourceTabs = source[worktreeId] ?? []
@@ -66,9 +85,13 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
           projectionBySourceBucket.set(sourceTabs, projectedTabs)
         }
 
-        nextProjection[worktreeId] = projectedTabs
-        if (projectedTabs !== previousTabs) {
+        if (
+          projectedTabs !== previousTabs ||
+          !previousProjection ||
+          !(worktreeId in previousProjection)
+        ) {
           changed = true
+          writableProjection()[worktreeId] = projectedTabs
         }
       }
 
@@ -76,8 +99,8 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
       if (!changed && previousProjection) {
         return previousProjection
       }
-      previousProjection = nextProjection
-      return nextProjection
+      previousProjection = writableProjection()
+      return previousProjection
     }
   }
 }

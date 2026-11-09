@@ -1,24 +1,15 @@
 import { readTabMapChanges } from '@/store/keyed-record-change-reads'
-import { isIndexKey } from '@/store/keyed-record-index-keys'
 
-type TerminalTabOwnerBuckets<T extends { id: string } = { id: string }> = Readonly<
-  Record<string, readonly T[]>
->
+import {
+  type TerminalTabOwnerBuckets,
+  type IndexedTerminalTabBucket,
+  indexTerminalTabBucket,
+  firstTerminalTabInBucket,
+  compareTerminalTabBucketOrder
+} from './terminal-tab-bucket-index'
 
-type IndexedBucket = {
-  source: readonly { id: string }[]
-  tabIds: ReadonlySet<string>
-  firstPositions: ReadonlyMap<string, number>
-}
-
-function indexBucket(tabs: readonly { id: string }[]): IndexedBucket {
-  const firstPositions = new Map<string, number>()
-  tabs.forEach((tab, position) => {
-    if (!firstPositions.has(tab.id)) {
-      firstPositions.set(tab.id, position)
-    }
-  })
-  return { source: tabs, tabIds: new Set(firstPositions.keys()), firstPositions }
+function diffUnknownTabOwnerKeys(tabsByWorktree: TerminalTabOwnerBuckets): string[] {
+  return Object.keys(tabsByWorktree)
 }
 
 export type TerminalTabOwnerIndex = {
@@ -26,6 +17,10 @@ export type TerminalTabOwnerIndex = {
   getOwner(tabsByWorktree: TerminalTabOwnerBuckets, tabId: string): string | null
   getFirstOwner(tabsByWorktree: TerminalTabOwnerBuckets, tabId: string): string | null
   getFirstTab<T extends { id: string }>(
+    tabsByWorktree: TerminalTabOwnerBuckets<T>,
+    tabId: string
+  ): T | undefined
+  getTab<T extends { id: string }>(
     tabsByWorktree: TerminalTabOwnerBuckets<T>,
     tabId: string
   ): T | undefined
@@ -46,19 +41,11 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   let source: TerminalTabOwnerBuckets | null = null
   const bucketOrder = new Map<string, number>()
   let nextBucketOrder = 0
-  const bucketByWorktreeId = new Map<string, IndexedBucket>()
+  const bucketByWorktreeId = new Map<string, IndexedTerminalTabBucket>()
   const worktreeIdsByTabId = new Map<string, Set<string>>()
   const ownerByTabId = new Map<string, string>()
   const firstOwnerByTabId = new Map<string, string>()
-
-  const compareWorkspaceOrder = (a: string, b: string): number => {
-    const numericA = isIndexKey(a)
-    const numericB = isIndexKey(b)
-    if (numericA || numericB) {
-      return numericA && numericB ? Number(a) - Number(b) : numericA ? -1 : 1
-    }
-    return bucketOrder.get(a)! - bucketOrder.get(b)!
-  }
+  const duplicateTabIds = new Set<string>()
 
   const removeBucketMembership = (worktreeId: string, tabIds: ReadonlySet<string>): void => {
     for (const tabId of tabIds) {
@@ -67,6 +54,9 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
         continue
       }
       worktreeIds.delete(worktreeId)
+      if (worktreeIds.size < 2) {
+        duplicateTabIds.delete(tabId)
+      }
       if (worktreeIds.size === 0) {
         worktreeIdsByTabId.delete(tabId)
       }
@@ -78,6 +68,9 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       const worktreeIds = worktreeIdsByTabId.get(tabId)
       if (worktreeIds) {
         worktreeIds.add(worktreeId)
+        if (worktreeIds.size > 1) {
+          duplicateTabIds.add(tabId)
+        }
       } else {
         worktreeIdsByTabId.set(tabId, new Set([worktreeId]))
       }
@@ -88,10 +81,10 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     let owner: string | undefined
     let first: string | undefined
     for (const id of worktreeIdsByTabId.get(tabId) ?? []) {
-      if (owner === undefined || compareWorkspaceOrder(id, owner) > 0) {
+      if (owner === undefined || compareTerminalTabBucketOrder(bucketOrder, id, owner) > 0) {
         owner = id
       }
-      if (first === undefined || compareWorkspaceOrder(id, first) < 0) {
+      if (first === undefined || compareTerminalTabBucketOrder(bucketOrder, id, first) < 0) {
         first = id
       }
     }
@@ -132,7 +125,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
           bucketOrder.delete(worktreeId)
           continue
         }
-        const nextBucket = indexBucket(tabs)
+        const nextBucket = indexTerminalTabBucket(tabs)
         const { tabIds } = nextBucket
         bucketByWorktreeId.set(worktreeId, nextBucket)
         addBucketMembership(worktreeId, tabIds)
@@ -147,8 +140,8 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       return ownerByTabId
     }
 
-    // Unknown snapshots can change key order and duplicate ownership; rebuild that order once.
-    const nextOrderedKeys = Object.keys(tabsByWorktree)
+    // Unknown patches need a bucket identity diff; only reordered duplicate owners need revisiting.
+    const nextOrderedKeys = diffUnknownTabOwnerKeys(tabsByWorktree)
     const nextKeySet = new Set(nextOrderedKeys)
     const affectedTabIds = new Set<string>()
 
@@ -178,7 +171,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       }
 
       // Immutable bucket replacement lets ownership scan only changed tab IDs, independent of fleet size.
-      const nextBucket = indexBucket(tabs)
+      const nextBucket = indexTerminalTabBucket(tabs)
       const { tabIds } = nextBucket
       for (const tabId of tabIds) {
         affectedTabIds.add(tabId)
@@ -187,19 +180,26 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       addBucketMembership(worktreeId, tabIds)
     }
 
-    bucketOrder.clear()
-    for (const [order, id] of nextOrderedKeys.entries()) {
-      bucketOrder.set(id, order)
-    }
-    nextBucketOrder = nextOrderedKeys.length
-    for (const tabId of worktreeIdsByTabId.keys()) {
-      resolveOwners(tabId)
+    const previousOrderedKeys = source ? diffUnknownTabOwnerKeys(source) : [...bucketOrder.keys()]
+    const orderChanged =
+      nextOrderedKeys.length !== previousOrderedKeys.length ||
+      nextOrderedKeys.some((id, index) => id !== previousOrderedKeys[index])
+    if (orderChanged) {
+      bucketOrder.clear()
+      for (const [order, id] of nextOrderedKeys.entries()) {
+        bucketOrder.set(id, order)
+      }
+      nextBucketOrder = nextOrderedKeys.length
+      const survivingKeys = previousOrderedKeys.filter((id) => nextKeySet.has(id))
+      const existingKeys = nextOrderedKeys.filter((id) => source && Object.hasOwn(source, id))
+      if (existingKeys.some((id, index) => id !== survivingKeys[index])) {
+        for (const tabId of duplicateTabIds) {
+          affectedTabIds.add(tabId)
+        }
+      }
     }
     for (const tabId of affectedTabIds) {
-      if (!worktreeIdsByTabId.has(tabId)) {
-        ownerByTabId.delete(tabId)
-        firstOwnerByTabId.delete(tabId)
-      }
+      resolveOwners(tabId)
     }
 
     source = tabsByWorktree
@@ -243,11 +243,19 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     getFirstTab: (tabsByWorktree, tabId) => {
       update(tabsByWorktree)
       const owner = firstOwnerByTabId.get(tabId)
-      const position =
-        owner === undefined ? undefined : bucketByWorktreeId.get(owner)?.firstPositions.get(tabId)
-      return owner === undefined || position === undefined
-        ? undefined
-        : tabsByWorktree[owner]?.[position]
+      return firstTerminalTabInBucket(
+        owner === undefined ? undefined : bucketByWorktreeId.get(owner),
+        owner === undefined ? undefined : tabsByWorktree[owner],
+        tabId
+      )
+    },
+    getTab: (tabsByWorktree, tabId) => {
+      const owner = update(tabsByWorktree).get(tabId)
+      return firstTerminalTabInBucket(
+        owner === undefined ? undefined : bucketByWorktreeId.get(owner),
+        owner === undefined ? undefined : tabsByWorktree[owner],
+        tabId
+      )
     },
     hasOwnerOutside: (tabsByWorktree, tabId, expectedWorkspaceId) => {
       update(tabsByWorktree)
@@ -312,4 +320,11 @@ export function adoptTerminalTabOwnerMetadataOnlyBuckets(
     nextTabsByWorktree,
     replacedWorktreeIds
   )
+}
+
+export function getTerminalTab<T extends { id: string }>(
+  buckets: TerminalTabOwnerBuckets<T>,
+  tabId: string
+): T | undefined {
+  return sharedTerminalTabOwnerIndex.getTab(buckets, tabId)
 }

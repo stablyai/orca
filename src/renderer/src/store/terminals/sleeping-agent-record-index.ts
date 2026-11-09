@@ -19,6 +19,14 @@ function tabPrefixes(key: string, record: SleepingAgentSessionRecord | undefined
   return ids
 }
 
+function resyncSleepingAgentRecordKeys(records: Records): string[] {
+  return Object.keys(records)
+}
+
+function diffUnknownSleepingRecordKeys(previous: Records | null, next: Records): Set<string> {
+  return new Set([...Object.keys(previous ?? {}), ...Object.keys(next)])
+}
+
 export function createSleepingAgentRecordIndex() {
   let source: Records | null = null
   const orderByKey = new Map<string, number>()
@@ -53,7 +61,7 @@ export function createSleepingAgentRecordIndex() {
         orderByKey.set(key, nextOrder++)
       }
     }
-    const changedKeys = keys ?? Object.keys(records)
+    const changedKeys = keys ?? resyncSleepingAgentRecordKeys(records)
     for (const key of changedKeys) {
       const before = keys ? previous?.[key] : undefined
       const after = records[key]
@@ -149,7 +157,7 @@ export function createSleepingAgentRecordIndex() {
       const tabIds = new Set<string>()
       const changes = previous ? readRecordChanges(next, previous) : null
       const keys = changes?.kind === 'addressed' ? changes.keys : previous === next ? [] : null
-      const changedKeys = keys ?? new Set([...Object.keys(previous ?? {}), ...Object.keys(next)])
+      const changedKeys = keys ?? diffUnknownSleepingRecordKeys(previous, next)
       for (const key of changedKeys) {
         const before = previous?.[key]
         const after = next[key]
