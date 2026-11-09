@@ -6709,7 +6709,6 @@
       "src/renderer/src/lib/workspace/activation/worktree-activation-structured-chat-surface.test.ts": 2043,
       "src/renderer/src/lib/workspace/activation/worktree-activation-web-runtime.test.ts": 2768,
       "src/renderer/src/lib/workspace/activation/worktree-agent-activation-seam.test.ts": 3440,
-      "src/renderer/src/lib/workspace/activation/worktree-agent-live-surface-adoption-layout-owner.test.ts": 1898,
       "src/renderer/src/lib/workspace/creation/worktree-creation-backend-startup-focus.test.ts": 2267,
       "src/renderer/src/lib/workspace/creation/worktree-creation-initial-surface.test.ts": 5258,
       "src/renderer/src/lib/workspace/creation/worktree-creation-structured-session-lifecycle.test.ts": 2633,
