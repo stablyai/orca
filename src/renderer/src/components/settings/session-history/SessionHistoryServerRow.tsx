@@ -6,9 +6,9 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {
   getRuntimeServerConnectionState,
-  isRuntimeServerTransportConnected,
   type RuntimeHostDetails
 } from '../runtime-environments/catalog/runtime-environment-host-details'
+import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { SessionHistoryComputerRow } from './SessionHistoryComputerRow'
 import type { SessionSearchComputerState } from './session-search-computer-rollup'
 import {
@@ -44,7 +44,7 @@ export function SessionHistoryServerRow({
   const [tooOldOnSet, setTooOldOnSet] = useState(false)
   const [busy, setBusy] = useState(false)
   const connectionState = getRuntimeServerConnectionState(details)
-  const connected = isRuntimeServerTransportConnected(connectionState)
+  const connected = isConnectedRuntimeHostState(connectionState)
   const { status, failed, hostTooOld, adopt } = useSessionSearchStatus({
     executionHostId: hostId,
     active: connected && !tooOldOnSet,

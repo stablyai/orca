@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
     fromId: (processId: number, routingId: number) => mocks.frames.get(`${processId}:${routingId}`)
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getWebContentsIdByTabId: () => new Map(),
     getGuestWebContentsId: (id: string) => (id === 'gesture-page' ? 700 : null)

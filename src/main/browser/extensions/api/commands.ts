@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { KEYBINDING_DEFINITIONS, keybindingMatchesAction } from '../../../../shared/keybindings'
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession

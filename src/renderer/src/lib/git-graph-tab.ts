@@ -119,7 +119,11 @@ export function gitGraphUpdateMessage(worktreeId: string, t: Translate = transla
   })
 }
 
-export async function openGitGraph(worktreeId: string): Promise<void> {
+export async function openGitGraph(
+  worktreeId: string,
+  // Lazy so a split is created only when a new tab actually opens.
+  resolveTargetGroupId?: () => string | undefined
+): Promise<void> {
   const supported = await probeGitGraphSupport(worktreeId)
   if (!supported) {
     return
@@ -151,6 +155,6 @@ export async function openGitGraph(worktreeId: string): Promise<void> {
       },
       mode: 'git-graph'
     },
-    { reopenId: id, preview: false }
+    { reopenId: id, preview: false, targetGroupId: resolveTargetGroupId?.() }
   )
 }

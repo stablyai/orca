@@ -19,6 +19,10 @@ import { isRecentPresentationDispatch } from '../db/dispatch-context/dispatch-lo
 import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-orca-session'
 import type { DispatchContextRow } from '../db/orchestration-records'
 import type { PtyPaneOf } from '../../terminal/surface/pty-pane-query'
+import {
+  createDispatchSessionLivenessReader,
+  type DispatchSessionObserver
+} from '../workers/lifecycle/session-worker-liveness'
 
 export type RuntimeAgentOrchestrationDependencies = {
   getDb(): OrchestrationDb | null
@@ -36,6 +40,14 @@ export type RuntimeAgentOrchestrationDependencies = {
   getSessionRecords(): AgentSessionRecordReader | null
 }
 
+type DispatchProjectionOptions = {
+  // Handles are process-local; pane identity still names the Dispatch after restart.
+  paneKey?: string
+  evidence?: FleetAgentStatusEvidence
+  observeSession?: DispatchSessionObserver
+  deferAttention?: boolean
+}
+
 export class RuntimeAgentOrchestrationProjection {
   constructor(private readonly deps: RuntimeAgentOrchestrationDependencies) {}
 
@@ -46,9 +58,12 @@ export class RuntimeAgentOrchestrationProjection {
     }
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
+    const statuses = this.deps.getAgentStatusSnapshot()
     const evidenceByPaneKey = new Map(
-      this.deps.getAgentStatusSnapshot().map((evidence) => [evidence.activity.paneKey, evidence])
+      statuses.map((evidence) => [evidence.activity.paneKey, evidence])
     )
+    const sessions = createDispatchSessionLivenessReader(db, statuses, scope.records)
+    const observeSession = sessions.observe
     // Batch attention queries below; per-pane reads would repeat every 16ms publication.
     const batchAttention = typeof db.getWorkerAttentionFactsForDispatches === 'function'
     const queriedHandles = new Set<string>()
@@ -65,6 +80,7 @@ export class RuntimeAgentOrchestrationProjection {
         {
           paneKey,
           evidence: evidenceByPaneKey.get(paneKey),
+          observeSession,
           deferAttention: batchAttention
         },
         scope
@@ -89,6 +105,7 @@ export class RuntimeAgentOrchestrationProjection {
         {
           paneKey,
           evidence: evidenceByPaneKey.get(paneKey),
+          observeSession,
           deferAttention: batchAttention
         },
         scope
@@ -106,6 +123,7 @@ export class RuntimeAgentOrchestrationProjection {
           {
             paneKey,
             evidence: evidenceByPaneKey.get(paneKey),
+            observeSession,
             deferAttention: batchAttention
           },
           scope
@@ -131,6 +149,7 @@ export class RuntimeAgentOrchestrationProjection {
               facts,
               isRoot: facts.isRoot,
               evidence: evidenceByPaneKey.get(paneKey),
+              session: sessions.observed(context.dispatchId),
               now
             })
           }
@@ -143,12 +162,7 @@ export class RuntimeAgentOrchestrationProjection {
   getForHandle(
     handle: string,
     db = this.deps.getDb(),
-    options: {
-      // Handles are process-local; pane identity still names the Dispatch after restart.
-      paneKey?: string
-      evidence?: FleetAgentStatusEvidence
-      deferAttention?: boolean
-    } = {},
+    options: DispatchProjectionOptions = {},
     scope = createOrchestrationProjectionScope(db, this.deps)
   ): AgentStatusOrchestrationContext | undefined {
     const { paneKey } = options
@@ -164,10 +178,11 @@ export class RuntimeAgentOrchestrationProjection {
     dispatch: DispatchContextRow,
     handle: string,
     db: OrchestrationDb | null,
-    options: { paneKey?: string; evidence?: FleetAgentStatusEvidence; deferAttention?: boolean },
+    options: DispatchProjectionOptions,
     scope: ReturnType<typeof createOrchestrationProjectionScope>
   ): AgentStatusOrchestrationContext {
     const { paneKey, evidence, deferAttention = false } = options
+    const session = options.observeSession?.(dispatch)
     const task = scope.task(dispatch.task_id, dispatch.run_id)
     const display = crewTaskDisplay(task)
     const owningRun =
@@ -273,7 +288,7 @@ export class RuntimeAgentOrchestrationProjection {
       ) ?? {}
     const attention =
       !deferAttention && db && typeof db.getWorkerAttentionFacts === 'function'
-        ? buildWorkerAttentionContext({ db, dispatch, task, evidence, now: scope.now })
+        ? buildWorkerAttentionContext({ db, dispatch, task, evidence, session, now: scope.now })
         : undefined
     return {
       taskId: dispatch.task_id,
