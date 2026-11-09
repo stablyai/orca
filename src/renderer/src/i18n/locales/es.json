@@ -19506,7 +19506,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
         "title": "Contexto",
-        "estimated": "Estimado a partir de la última respuesta."
+        "estimated": "Estimado a partir de la última respuesta.",
+        "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
       },
       "dismissDeliveryNotice": "Descartar",
       "addSelectionToChat": "Añadir al chat",
