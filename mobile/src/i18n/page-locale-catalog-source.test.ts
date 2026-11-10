@@ -9,6 +9,17 @@ import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-sto
 
 // The page build resolves mobile-i18n's catalog import to the .web module; mirror that here.
 vi.mock('./locale-catalog-imports', () => import('./locale-catalog-imports.web'))
+// A shell that skipped the catalog chunks: only locales listed here are on disk.
+const chunksOnDisk = new Map<string, Record<string, unknown>>()
+vi.mock('./bundled-locale-catalogs', () => ({
+  importBundledLocaleCatalog: async (locale: string) => {
+    const catalog = chunksOnDisk.get(locale)
+    if (!catalog) {
+      throw new Error('not on disk')
+    }
+    return catalog
+  }
+}))
 
 const OLD_SHA = 'a'.repeat(64)
 const NEW_SHA = 'b'.repeat(64)
@@ -192,5 +203,16 @@ describe('the page language catalog', () => {
 
     expect(i18n.getMobileUiLocale()).toBe('ko')
     expect(i18n.translate('greeting', 'Hello')).toBe('안녕하세요')
+  })
+
+  it('imports the chunk an older shell left on disk, with no wait and no request', async () => {
+    chunksOnDisk.set('es', { greeting: 'Hola' })
+    const client = fakeClient('reconnecting')
+    openPage(client, fakeStore({}))
+
+    await i18n.activateMobileUiLocale('es')
+
+    expect(i18n.translate('greeting', 'Hello')).toBe('Hola')
+    expect(client.sent).toHaveLength(0)
   })
 })

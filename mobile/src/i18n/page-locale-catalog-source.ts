@@ -15,6 +15,7 @@ import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-sto
 import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
 import { captureRpcOperationSettlement, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { importBundledLocaleCatalog } from './bundled-locale-catalogs'
 import {
   announceLocaleCatalog as announce,
   publishPageLocaleCatalogLoader,
@@ -234,6 +235,11 @@ async function firstCatalog(current: CatalogSource, locale: CatalogLocale): Prom
 }
 
 async function loadCatalog(current: CatalogSource, locale: CatalogLocale): Promise<LocaleCatalog> {
+  // A generation an older shell downloaded still holds the chunk: no wait, and this page's own strings.
+  const bundled = await importBundledLocaleCatalog(locale).catch(() => null)
+  if (bundled !== null) {
+    return bundled
+  }
   const first = firstCatalog(current, locale)
   const settled = await withTimeoutResult(first, FIRST_PAINT_CATALOG_WAIT_MS)
   if (settled.ok) {
