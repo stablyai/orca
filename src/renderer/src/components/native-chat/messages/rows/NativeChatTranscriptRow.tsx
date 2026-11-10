@@ -141,6 +141,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
           endsResponse={slot.endsResponse}
+          latestResponse={slot.latestResponse === true}
           onScrollMessageToTop={context.onScrollMessageToTop}
           deliveryNotice={deliveryNotice}
           subagentRoster={slot.subagentRoster}

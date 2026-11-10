@@ -52,6 +52,7 @@ export function NativeChatAssistantMessageRow({
     trailingRun,
     continuesTurn = false,
     endsResponse,
+    latestResponse = true,
     inSubagentSection = false,
     runtimeContext,
     fork
@@ -122,6 +123,9 @@ export function NativeChatAssistantMessageRow({
           }
           className={cn(
             'mt-1 w-fit select-none',
+            !latestResponse &&
+              fork?.pendingItemId !== message.id &&
+              'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
             // They hang into the gap below; a section keeps them inside its border instead.
             !inSubagentSection && '-mb-5'
           )}

@@ -73,6 +73,8 @@ export type NativeChatMessageSlot = {
    *  the last drawn response with words, else the last with images. Absent outside a turn and in
    *  subagent sections. */
   endsResponse?: boolean
+  /** This response is the newest one in the conversation. */
+  latestResponse?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** Pull requests this row's turn opened, drawn after it. */
   openedPullRequests?: readonly NativeChatOpenedPullRequest[]
@@ -256,6 +258,19 @@ export function buildNativeChatTranscript(
     if (!lastWordsByTurn.has(turnKey)) {
       slot.endsResponse = true
     }
+  }
+  const latestResponse = drawn.findLast(
+    (slot) =>
+      slot.kind === 'message' &&
+      slot.depth === 0 &&
+      slot.drawsMessage &&
+      !slot.receipt &&
+      slot.message.role === 'assistant' &&
+      (slot.endsResponse === true ||
+        (slot.endsResponse === undefined && nativeChatAgentRowWords(slot.message, t).length > 0))
+  )
+  if (latestResponse?.kind === 'message') {
+    latestResponse.latestResponse = true
   }
   for (let index = 0; index < drawn.length - 1; index += 1) {
     const slot = drawn[index]!
