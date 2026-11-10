@@ -1,7 +1,7 @@
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { rendererAgentStatusObservations } from '../../../lib/renderer-agent-status-observations'
+import { rendererAgentStatusObservations } from '../../../lib/agent-status/evidence/renderer-agent-status-observations'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,

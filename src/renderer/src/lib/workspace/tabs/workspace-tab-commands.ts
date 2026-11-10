@@ -19,8 +19,8 @@ import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../floating-terminal'
+} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
 

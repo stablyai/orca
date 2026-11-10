@@ -7,7 +7,7 @@ import type {
 } from '../../../../../../shared/telemetry-events'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {

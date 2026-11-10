@@ -5,6 +5,8 @@ import {
   recoverWebSessionTerminalOrphansBeforeApply
 } from '../web-session-terminal-orphan-recovery'
 import type { TerminalOrphanRecoveryState } from '../surfaces/web-session-terminal-orphan-recovery-surface'
+import type { TerminalOrphanRecoveryCall } from '../adoption/web-session-terminal-orphan-recovery-adoption'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
 import '../../../rpc/testing/runtime-environment-bridge-fixture'
 
 const ENVIRONMENT_ID = 'remote-runtime'
@@ -252,6 +254,98 @@ describe('web session pending terminal handle recovery', () => {
           terminal: 'term-live'
         }
       ]
+    })
+  })
+
+  describe('an unbound pane whose host tab was closed (#9194)', () => {
+    const closedPaneCall = vi.fn<TerminalOrphanRecoveryCall>()
+    beforeEach(() => {
+      closedPaneCall.mockReset()
+      closedPaneCall.mockImplementation(async ({ method }) =>
+        method === 'terminal.resolvePane'
+          ? {
+              id: 'resolve',
+              ok: false,
+              error: { code: 'terminal_not_found', message: 'terminal_not_found' }
+            }
+          : { id: method, ok: false, error: { code: 'unexpected_method', message: method } }
+      )
+    })
+    function closedTabFrame(snapshotVersion: number): RuntimeMobileSessionTabsResult {
+      return { ...pendingSnapshot(), activeTabId: null, snapshotVersion, tabs: [] }
+    }
+    function recover(frame: RuntimeMobileSessionTabsResult) {
+      return recoverWebSessionTerminalOrphansBeforeApply(
+        stateWithEmptyBinding(),
+        frame,
+        ENVIRONMENT_ID,
+        { call: closedPaneCall }
+      )
+    }
+    const keepsPane = { tabs: [expect.objectContaining({ parentTabId: HOST_TAB_ID })] }
+
+    it('retires the pane after two authoritative absences', async () => {
+      await expect(recover(closedTabFrame(3))).resolves.toMatchObject(keepsPane)
+      await expect(recover(closedTabFrame(4))).resolves.toMatchObject({ tabs: [] })
+    })
+
+    it('retires the pane at once when the frame carries its close record', async () => {
+      const frame = {
+        ...closedTabFrame(3),
+        retiredTerminalSurfaces: [
+          {
+            parentTabId: HOST_TAB_ID,
+            leafId: LEAF_ID,
+            terminal: TERMINAL_HANDLE,
+            ptyId: 'pty-live'
+          }
+        ]
+      }
+      await expect(recover(frame)).resolves.toMatchObject({ tabs: [] })
+      expect(closedPaneCall).not.toHaveBeenCalled()
+    })
+
+    it('restarts the count when the host publishes the pane again', async () => {
+      await recover(closedTabFrame(3))
+      await recover({ ...pendingSnapshot(), snapshotVersion: 4 })
+      await expect(recover(closedTabFrame(5))).resolves.toMatchObject(keepsPane)
+    })
+
+    it('retires a closed tab whose exited pane an older host still resolves as disconnected', async () => {
+      closedPaneCall.mockImplementation(async ({ method }) =>
+        method === 'terminal.resolvePane'
+          ? {
+              id: 'resolve',
+              ok: true,
+              _meta: { runtimeId: 'runtime-1' },
+              result: {
+                terminal: {
+                  handle: TERMINAL_HANDLE,
+                  tabId: HOST_TAB_ID,
+                  leafId: LEAF_ID,
+                  ptyId: 'pty-live',
+                  connected: false,
+                  worktreeId: WORKTREE_ID
+                }
+              }
+            }
+          : { id: method, ok: false, error: { code: 'unexpected_method', message: method } }
+      )
+      await expect(recover(closedTabFrame(3))).resolves.toMatchObject(keepsPane)
+      await expect(recover(closedTabFrame(4))).resolves.toMatchObject({ tabs: [] })
+    })
+
+    it('keeps a pane the host still publishes, whatever the pane lookup says', async () => {
+      for (const snapshotVersion of [3, 4, 5]) {
+        await expect(recover({ ...pendingSnapshot(), snapshotVersion })).resolves.toMatchObject(
+          keepsPane
+        )
+      }
+    })
+
+    it('never counts a frame the host did not publish', async () => {
+      await recover({ ...closedTabFrame(3), publicationEpoch: 'none' })
+      await expect(recover(closedTabFrame(4))).resolves.toMatchObject(keepsPane)
     })
   })
 })

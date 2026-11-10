@@ -184,6 +184,8 @@ export class ModelManager extends SpeechModelDownloadTransport {
       }
     }
     this.activeDownloads.set(modelId, handle)
+    // Until the swap starts, modelDir holds only the old files, which are how the update is found again.
+    let replacingModelDir = false
 
     try {
       await this.downloadModelFiles(
@@ -198,6 +200,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
         return
       }
 
+      replacingModelDir = true
       await rm(modelDir, { recursive: true, force: true })
       await rename(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
@@ -209,7 +212,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
       }
-      removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
+      if (replacingModelDir) {
+        removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
+      }
       if (!aborted) {
         // Settings awaits real failures; cancellation stays quiet.
         throw err
