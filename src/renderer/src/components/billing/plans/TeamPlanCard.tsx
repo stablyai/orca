@@ -42,13 +42,13 @@ export function TeamPlanCard({
   const discounted =
     interval === 'year' && monthly !== null && fullMonthly !== null && monthly < fullMonthly
 
+  // Same bullets as the marketing site's /cloud pricing card; the overage line is in-app only.
   const features = [
     t(
       'auto.components.billing.plans.featureHours4',
       '{{value0}} sandbox hours per seat each month, pooled across your team',
       { value0: String(team.includedHoursPerSeat) }
     ),
-    // Same bullets as the marketing site's /cloud pricing card; overage below is in-app only.
     t('auto.components.billing.plans.featureStandard', 'Standard (4 vCPU · 8 GB)'),
     t(
       'auto.components.billing.plans.featureLarge4',
