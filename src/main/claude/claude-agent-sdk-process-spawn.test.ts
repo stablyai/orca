@@ -90,6 +90,25 @@ describe('claude agent SDK process spawn', () => {
     expect(spawn.managed?.stderrTail().length).toBe(8192)
   })
 
+  it('keeps native chat identity after SDK and configured environment defaults', () => {
+    const process = fakeSpawn()
+    createClaudeCodeProcessSpawn(process.spawnImpl, 'win32').spawn(
+      sdkOptions({
+        env: {
+          CLAUDE_CODE_ENTRYPOINT: 'sdk-ts',
+          claude_code_entrypoint: 'account',
+          PATH: 'C:\\bin'
+        }
+      })
+    )
+    expect(process.specs[0]?.env).toMatchObject({ CLAUDE_CODE_ENTRYPOINT: 'orca', PATH: 'C:\\bin' })
+    expect(
+      Object.keys(process.specs[0]?.env ?? {}).filter(
+        (key) => key.toUpperCase() === 'CLAUDE_CODE_ENTRYPOINT'
+      )
+    ).toEqual(['CLAUDE_CODE_ENTRYPOINT'])
+  })
+
   it('preserves a Windows .cmd shim and its arguments for the host spawner', () => {
     const process = fakeSpawn()
     createClaudeCodeProcessSpawn(process.spawnImpl, 'win32').spawn(

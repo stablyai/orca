@@ -77,10 +77,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       allowFailedArchiveHook = false,
       hostId
     } = options
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const store = this.store
+    const store = this.requireStore()
     const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, cleanupHostId)
     // The repo row names the host; a caller may omit hostId for a worktree on another host.
@@ -144,7 +141,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
           removalTarget,
           cleanupHostId,
           removalHostId,
-          repo
+          repo,
+          archive: { runHooks, allowFailedArchiveHook }
         })
         if (orphanOrFolderResult) {
           return orphanOrFolderResult

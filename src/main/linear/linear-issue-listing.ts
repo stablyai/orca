@@ -27,6 +27,7 @@ import {
   shouldThrowAuthError,
   sortLimitAndDescribeIssues
 } from './linear-issue-query-support'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export type LinearListFilter = 'assigned' | 'created' | 'all' | 'completed' | 'open'
 
@@ -111,7 +112,7 @@ async function readIssueConnectionPage(
   const nodes = connection?.nodes ?? []
   return {
     items: nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)),
-    hasMore: Boolean(connection?.pageInfo?.hasNextPage),
+    hasMore: linearConnectionHasNextPage(connection),
     endCursor: connection?.pageInfo?.endCursor ?? undefined
   }
 }
