@@ -4,7 +4,10 @@ import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agen
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './native-chat/transcript/mobile-native-chat-notice-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
-import { forkMobileStructuredChatIntoWorktree } from './mobile-structured-chat-worktree-fork'
+import {
+  forkMobileStructuredChatIntoWorktree,
+  type MobileWorktreeForkMode
+} from './mobile-structured-chat-worktree-fork'
 import { useMobileWorktreeForkRequest } from './native-chat/mobile-native-chat-worktree-fork-requests'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
@@ -43,9 +46,11 @@ export function MobileNativeChatForkProvider({
   const executionHost = useWorkspaceExecutionHost()
   const { getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(client, true)
   const createWorktreeFork = useCallback(
-    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => {
+    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource, mode: MobileWorktreeForkMode) => {
       const current = latestController.current
       return forkMobileStructuredChatIntoWorktree({
+        mode,
+        sourceLabel: current.activeSessionTab?.title || undefined,
         client: current.client,
         sourceWorktreeId: current.worktreeId,
         agent,

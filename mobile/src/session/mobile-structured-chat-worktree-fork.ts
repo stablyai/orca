@@ -1,4 +1,7 @@
-import { Alert } from 'react-native'
+import { Alert, Platform } from 'react-native'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
+import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../src/shared/orca-session-address'
+import { agentReferenceNote } from '../../../src/shared/orchestration/mailbox/orchestration-agent-reference'
 import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -11,6 +14,53 @@ import { sessionWorktreeRecordRead } from '../worktree/session-worktree-record-o
 import { createWorktreeWithNameRetry } from '../tasks/worktree-create-retry'
 import type { WorktreeCreateIdempotencyProbe } from '../tasks/worktree-create-idempotency-policy'
 import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
+
+/** A worktree you drive, or a background subagent that reports back to the chat it came from. */
+export type MobileWorktreeForkMode = 'worktree' | 'subagent'
+
+/** Whether this phone can ask for a subagent's task: iOS has a text prompt, and the host must take a first message. */
+export function mobileSubagentForkAvailable(
+  hostCapabilities: readonly string[] | undefined
+): boolean {
+  return (
+    Platform.OS === 'ios' &&
+    hostCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) === true
+  )
+}
+
+/** Asks for the subagent's task; null when cancelled or empty. */
+function askMobileSubagentTask(): Promise<string | null> {
+  return new Promise((resolve) => {
+    Alert.prompt(
+      translate('chat.fork.subagent.title', 'Background subagent'),
+      translate(
+        'chat.fork.subagent.message',
+        'A copy of this chat works on this in its own worktree and reports back here.'
+      ),
+      [
+        {
+          text: translate('chat.fork.worktree.cancel', 'Cancel'),
+          style: 'cancel',
+          onPress: () => resolve(null)
+        },
+        {
+          text: translate('chat.fork.subagent.start', 'Start'),
+          onPress: (value?: string) => resolve(value?.trim() || null)
+        }
+      ],
+      'plain-text'
+    )
+  })
+}
+
+/** The subagent's first message: its task, and the chat it reports back to. */
+function subagentFirstMessage(task: string, sourceSessionId: string, label: string): string {
+  if (!isOrcaSessionId(sourceSessionId)) {
+    return task
+  }
+  const address = formatOrcaSessionAddress(sourceSessionId)
+  return `${task}\n\nWork on this on your own. When you are done, report what you did and found to the chat you were forked from.\n${agentReferenceNote(label, address)}`
+}
 
 /** Where the fork's new worktree branches from: the project's main branch, or the source's own branch. */
 export type MobileWorktreeForkBase = 'main' | 'current'
@@ -60,6 +110,9 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   sourceWorktreeId: string
   agent: TuiAgent
   forkFrom: StructuredAgentSessionForkSource
+  mode?: MobileWorktreeForkMode
+  /** The chat a subagent reports back to, by name. */
+  sourceLabel?: string
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   showToast: (message: string, durationMs?: number) => void
   openWorktree: (worktreeId: string, name: string, warning?: string) => void
@@ -87,6 +140,11 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   if (!base) {
     return
   }
+  const subagent = input.mode === 'subagent'
+  const task = subagent ? await askMobileSubagentTask() : null
+  if (subagent && !task) {
+    return
+  }
   const sourceName = source?.displayName?.trim() || branch || 'chat'
   const baseName = slugifyForWorkspaceName(`${sourceName}-fork`) || 'session-fork'
   const repoId = source?.repoId ?? getRepoIdFromWorktreeId(input.sourceWorktreeId)
@@ -94,15 +152,18 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
     client,
     baseName,
     worktreeCreateIdempotency: input.worktreeCreateIdempotency,
-    buildParams: (name) => ({
+    // A taken name retries as name-2, name-3…; the title says the same number.
+    buildParams: (name, attempt) => ({
       repo: `id:${repoId}`,
       setupDecision: 'inherit',
       name,
-      displayName: `Fork of ${sourceName}`,
+      displayName: attempt === 0 ? `Fork of ${sourceName}` : `Fork ${attempt + 1} of ${sourceName}`,
       displayNameKind: 'user' as const,
       createdWithAgent: input.agent,
       ...(base === 'current' && branch ? { baseBranch: branch } : {})
-    })
+    }),
+    // Nested under its source, so the sidebar shows forks as a tree.
+    parent: { parentWorkspace: input.sourceWorktreeId, parentWorkspaceOrigin: 'manual' }
   }).catch((error: unknown) => ({
     error: error instanceof Error ? error.message : mobileWorktreeForkCopy.createFailed()
   }))
@@ -114,9 +175,25 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
     client,
     created.worktreeId,
     input.agent,
-    input.forkFrom
+    input.forkFrom,
+    undefined,
+    task
+      ? subagentFirstMessage(task, input.forkFrom.sessionId, input.sourceLabel ?? input.agent)
+      : undefined
   ).catch(() => ({ kind: 'unknown' as const }))
-  input.openWorktree(created.worktreeId, created.name, created.warning)
+  // A subagent works in the background; you stay in this chat.
+  if (task) {
+    if (result.kind === 'created') {
+      input.showToast(
+        translate('chat.fork.subagent.started', 'Subagent started in {{name}}', {
+          name: created.name
+        }),
+        3000
+      )
+    }
+  } else {
+    input.openWorktree(created.worktreeId, created.name, created.warning)
+  }
   if (result.kind === 'unknown') {
     report(mobileWorktreeForkCopy.unconfirmed(agentName))
   } else if (result.kind !== 'created') {

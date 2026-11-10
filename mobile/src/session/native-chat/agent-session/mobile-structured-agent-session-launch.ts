@@ -47,7 +47,8 @@ function createParamsFor(
   agent: TuiAgent,
   worktree: string,
   forkFrom: StructuredAgentSessionForkSource | undefined,
-  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
+  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement'],
+  firstMessageText?: string
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
@@ -55,6 +56,18 @@ function createParamsFor(
     agent,
     ...(forkFrom ? { forkFrom } : {}),
     ...(tabPlacement ? { tabPlacement } : {}),
+    ...(firstMessageText
+      ? {
+          firstMessage: {
+            clientMessageId: randomV4Uuid(),
+            body: {
+              kind: 'message' as const,
+              role: 'user' as const,
+              blocks: [{ type: 'text' as const, text: firstMessageText }]
+            }
+          }
+        }
+      : {}),
     randomUuid: randomV4Uuid
   })
 }
@@ -91,7 +104,9 @@ export async function createMobileStructuredAgentSession(
   /** Sent only to a host advertising forks. */
   forkFrom?: StructuredAgentSessionForkSource,
   /** Sent only to a host advertising create placement; the replay keeps it. */
-  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement'],
+  /** Sent only to a host advertising create messages: the chat's first prompt. */
+  firstMessageText?: string
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -132,7 +147,7 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement)
+  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement, firstMessageText)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   let priorCreateOutcomeUnknown = false

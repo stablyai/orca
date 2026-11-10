@@ -16,6 +16,14 @@ import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-ag
 import { NativeChatWorktreeForkDialogHost } from './NativeChatWorktreeForkDialog'
 import { useNativeChatWorktreeForkRequest } from './native-chat-worktree-fork-requests'
 
+/** The chat tab's title, as a subagent addresses its report. */
+function chatTabLabel(tabId: string, worktreeId: string): string | undefined {
+  const tab = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
+  return tab ? tab.customLabel || tab.label || undefined : undefined
+}
+
 /** The workspace showing a chat's tab; a fork into a new worktree lives apart from its source. */
 function openChatWorkspaceId(sessionId: string, fallback: string): string {
   const tabs = Object.values(useAppStore.getState().unifiedTabsByWorktree).flat()
@@ -33,7 +41,7 @@ export function NativeChatRowActionsProvider({
   forks,
   children
 }: {
-  pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
+  pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target' | 'sessionId'>
   chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
@@ -74,6 +82,11 @@ export function NativeChatRowActionsProvider({
                   sourceWorktreeId={worktreeId}
                   agent={agent}
                   request={forks.fork.request}
+                  source={{
+                    target,
+                    sessionId: pane.sessionId,
+                    label: chatTabLabel(pane.tabId, worktreeId) ?? agent
+                  }}
                 />
               ) : null}
             </NativeChatForkSlotContext.Provider>

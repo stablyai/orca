@@ -37,7 +37,10 @@ export function MobileAgentSessionTabActionSheet({
         }),
         ...workerActions,
         ...(tab && tab.id === controller.activeSessionTab?.id
-          ? [mobileWorktreeForkAction(controller, tab, t, dismiss)].filter((action) => !!action)
+          ? [
+              mobileWorktreeForkAction(controller, tab, t, dismiss),
+              mobileWorktreeForkAction(controller, tab, t, dismiss, 'subagent')
+            ].filter((action) => !!action)
           : []),
         ...closeWithBulkActions(tab, dismiss)
       ]}

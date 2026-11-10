@@ -20952,8 +20952,23 @@
           "tooltip": "Fork into a new worktree. Its chat includes this whole response, up to the end of its turn.",
           "menu": "Fork into New Worktree…",
           "sidebarMenu": "Fork Chat into New Worktree",
-          "forkNotStarted": "The worktree was created, but the chat could not be forked into it."
-        }
+          "forkNotStarted": "The worktree was created, but the chat could not be forked into it.",
+          "created": "Created {{name}}",
+          "nameLabel": "Name",
+          "where": "Folder {{folder}}, branch {{name}} (with your branch prefix)"
+        },
+        "subagent": {
+          "title": "Fork as a background subagent",
+          "description": "A copy of this chat, up to this response, works on a task in its own worktree and reports back here. You keep working in this chat.",
+          "taskLabel": "Task",
+          "taskPlaceholder": "What should the subagent do?",
+          "confirm": "Start subagent",
+          "menu": "Fork as Background Subagent…"
+        },
+        "menuTooltip": "Fork from this response: in a new tab, a new worktree, or as a background subagent.",
+        "menuTab": "In a new tab",
+        "menuWorktree": "Into a new worktree…",
+        "menuSubagent": "As a background subagent…"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

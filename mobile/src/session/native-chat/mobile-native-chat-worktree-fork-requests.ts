@@ -1,7 +1,8 @@
+import type { MobileWorktreeForkMode } from '../mobile-structured-chat-worktree-fork'
 import { useEffect, useSyncExternalStore } from 'react'
 
 // The header's "…" menu sits outside the chat's fork provider; it asks the provider instead.
-let pending = false
+let pending: MobileWorktreeForkMode | null = null
 let version = 0
 const listeners = new Set<() => void>()
 
@@ -12,12 +13,12 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** Forks the open chat into a new worktree, from its newest response. */
-export function requestMobileWorktreeFork(): void {
+export function requestMobileWorktreeFork(mode: MobileWorktreeForkMode = 'worktree'): void {
   // With no chat showing, a kept request would fork whichever chat opens next.
   if (listeners.size === 0) {
     return
   }
-  pending = true
+  pending = mode
   version += 1
   for (const listener of listeners) {
     listener()
@@ -26,16 +27,17 @@ export function requestMobileWorktreeFork(): void {
 
 /** Hands the provider a pending request; `forkLatest` reports whether a response could fork. */
 export function useMobileWorktreeForkRequest(
-  forkLatest: () => boolean,
+  forkLatest: (mode: MobileWorktreeForkMode) => boolean,
   onNothing: () => void
 ): void {
   const current = useSyncExternalStore(subscribe, () => version)
   useEffect(() => {
-    if (!pending) {
+    const mode = pending
+    if (!mode) {
       return
     }
-    pending = false
-    if (!forkLatest()) {
+    pending = null
+    if (!forkLatest(mode)) {
       onNothing()
     }
   }, [current, forkLatest, onNothing])

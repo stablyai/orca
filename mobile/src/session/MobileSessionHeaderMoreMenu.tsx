@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import type { View } from 'react-native'
 import {
+  Bot,
   Columns2,
   Folder,
   GitBranch,
@@ -45,6 +46,13 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     handleOpenQuickCommands
   } = controller
   const worktreeFork = mobileWorktreeForkAction(controller, controller.activeSessionTab, t)
+  const subagentFork = mobileWorktreeForkAction(
+    controller,
+    controller.activeSessionTab,
+    t,
+    undefined,
+    'subagent'
+  )
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -119,6 +127,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       : []
   const tabs: ActionSheetAction[] = [
     ...(worktreeFork ? [{ ...worktreeFork, icon: GitBranchPlus }] : []),
+    ...(subagentFork ? [{ ...subagentFork, icon: Bot }] : []),
     ...(actionsCollapsed
       ? [
           {

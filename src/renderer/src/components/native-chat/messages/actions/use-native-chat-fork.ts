@@ -34,6 +34,7 @@ import {
   type NativeChatSideChatRequest
 } from '@/components/native-chat/messages/actions/native-chat-fork-launch'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
+import type { NativeChatWorktreeForkMode } from './native-chat-worktree-fork'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { beginNativeChatSideChatPlacement } from '@/components/native-chat/messages/actions/native-chat-side-chat-placement'
 import {
@@ -53,7 +54,7 @@ export type NativeChatForkRowAction = {
     destination?: NativeChatForkDestination
   ) => Promise<NativeChatForkOutcome | undefined>
   /** Asks where a fork into a new worktree should branch from; absent where the host can't. */
-  openWorktreeFork?: (throughItemId: string) => void
+  openWorktreeFork?: (throughItemId: string, mode?: NativeChatWorktreeForkMode) => void
 }
 
 /** Another worktree the fork opens in, instead of beside its source. */
@@ -62,6 +63,7 @@ export type NativeChatForkDestination = { worktreeId: string }
 /** The response a fork into a new worktree copies through, while its dialog is open. */
 export type NativeChatWorktreeForkDialog = {
   throughItemId: string
+  mode: NativeChatWorktreeForkMode
   close: () => void
 }
 
@@ -80,7 +82,7 @@ export type NativeChatForkSurface = NativeChatForkRowAction & {
 export type NativeChatPaneFork = NativeChatForkSurface & {
   forkLatest: () => NativeChatForkLatestOutcome
   /** Opens the new-worktree fork from the newest response still in context; false when there is none. */
-  openWorktreeForkLatest?: () => boolean
+  openWorktreeForkLatest?: (mode?: NativeChatWorktreeForkMode) => boolean
   worktreeForkDialog: NativeChatWorktreeForkDialog | null
 }
 
@@ -213,26 +215,32 @@ export function useNativeChatFork(input: {
     request(throughItemId)
     return 'started'
   }, [latestForkItemId, request])
-  const [worktreeForkItemId, setWorktreeForkItemId] = useState<string | null>(null)
+  const [worktreeFork, setWorktreeFork] = useState<{
+    throughItemId: string
+    mode: NativeChatWorktreeForkMode
+  } | null>(null)
   const worktreeForkOffered = worktreeHost === 'supported'
-  const openWorktreeFork = useCallback((throughItemId: string) => {
-    if (!inFlight.current) {
-      setWorktreeForkItemId(throughItemId)
-    }
-  }, [])
-  const openWorktreeForkLatest = useCallback((): boolean => {
-    const throughItemId = latestForkItemId()
-    if (throughItemId) {
-      openWorktreeFork(throughItemId)
-    }
-    return throughItemId !== undefined
-  }, [latestForkItemId, openWorktreeFork])
+  const openWorktreeFork = useCallback(
+    (throughItemId: string, mode: NativeChatWorktreeForkMode = 'worktree') => {
+      if (!inFlight.current) {
+        setWorktreeFork({ throughItemId, mode })
+      }
+    },
+    []
+  )
+  const openWorktreeForkLatest = useCallback(
+    (mode: NativeChatWorktreeForkMode = 'worktree'): boolean => {
+      const throughItemId = latestForkItemId()
+      if (throughItemId) {
+        openWorktreeFork(throughItemId, mode)
+      }
+      return throughItemId !== undefined
+    },
+    [latestForkItemId, openWorktreeFork]
+  )
   const worktreeForkDialog = useMemo<NativeChatWorktreeForkDialog | null>(
-    () =>
-      worktreeForkItemId
-        ? { throughItemId: worktreeForkItemId, close: () => setWorktreeForkItemId(null) }
-        : null,
-    [worktreeForkItemId]
+    () => (worktreeFork ? { ...worktreeFork, close: () => setWorktreeFork(null) } : null),
+    [worktreeFork]
   )
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined

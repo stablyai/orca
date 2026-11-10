@@ -65,9 +65,14 @@ export async function createForkWorktree(input: {
   baseBranch?: string
   agent?: TuiAgent
   source: WorkspaceSource
+  /** The name and title the person chose; absent, derived from the source. */
+  name?: string
+  displayName?: string
+  /** Nests the fork under its source in the sidebar. */
+  nestUnderSource?: boolean
 }): Promise<CreatedForkWorktree> {
   const store = useAppStore.getState()
-  const name = forkWorkspaceName(input.sourceName)
+  const name = input.name || forkWorkspaceName(input.sourceName)
   const created = await store.createWorktree(
     input.repoId,
     name,
@@ -75,7 +80,7 @@ export async function createForkWorktree(input: {
     'inherit',
     undefined,
     input.source,
-    `Fork of ${input.sourceDisplayName || name}`,
+    input.displayName || `Fork of ${input.sourceDisplayName || name}`,
     undefined,
     undefined,
     undefined,
@@ -95,7 +100,10 @@ export async function createForkWorktree(input: {
     undefined,
     undefined,
     // Why: a project two hosts publish refuses a host-less create; the fork belongs on its source's host.
-    { executionHostId: forkCreationHostId(store, input.sourceWorktreeId) }
+    {
+      executionHostId: forkCreationHostId(store, input.sourceWorktreeId),
+      ...(input.nestUnderSource ? { parentWorktreeId: input.sourceWorktreeId } : {})
+    }
   )
   return created.worktree
 }
