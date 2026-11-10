@@ -1,3 +1,4 @@
+import { orchestrationProjectionFacts } from '../crew/orchestration-projection-facts'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { conversationRecordReader } from './session-lineage/structured-session-lineage'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -39,6 +40,8 @@ export function readCapturedOrchestrationFleetAgentStatusSnapshot(
   dependencies: RuntimeAgentOrchestrationDependencies
 ): readonly FleetAgentStatusEvidence[] {
   const projection = new RuntimeAgentOrchestrationProjection(dependencies)
+  const raw = dependencies.getDb()
+  const db = raw?.db ? orchestrationProjectionFacts(raw).view : raw
   let scope: ReturnType<typeof createOrchestrationProjectionScope> | undefined
   return readOrchestrationFleetAgentStatusSnapshot({
     ...source,
@@ -47,9 +50,8 @@ export function readCapturedOrchestrationFleetAgentStatusSnapshot(
       if (!handle) {
         return undefined
       }
-      const db = dependencies.getDb()
       scope ??= createOrchestrationProjectionScope(db, dependencies)
-      return projection.getForHandle(handle, db, { paneKey }, scope)
+      return projection.getForHandle(handle, db, { paneKey, deferAttention: true }, scope)
     }
   })
 }

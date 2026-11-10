@@ -1,3 +1,4 @@
+import { mintAgentStatusFleetEvidence } from '../../../ipc/agent-status-ipc-boundary'
 import { readAgentOrchestrationProjectionRecords } from '../addressing/orchestration-fleet-agent-status-snapshot'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
@@ -17,6 +18,21 @@ export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends Orca
       getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
       getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
       getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
+      getAgentStatusForPaneKey: (paneKey, contextForPane) =>
+        (this.getAgentStatusSnapshotForPaneFn?.(paneKey) ?? []).map((entry) =>
+          mintAgentStatusFleetEvidence(
+            entry,
+            {
+              getAgentStatusTerminalHandleForPaneKey: (pane) =>
+                this.getAgentStatusTerminalHandleForPaneKey(pane),
+              getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+              getAgentStatusOrchestrationContextForPaneKey:
+                contextForPane ??
+                ((pane) => this.getAgentStatusOrchestrationContextForPaneKey(pane))
+            },
+            this.readObservedAgentStatusPaneIdentityFn(paneKey)
+          )
+        ),
       getSessionRecords: () => readAgentOrchestrationProjectionRecords(),
       ...bound
     } satisfies RuntimeAgentOrchestrationDependencies

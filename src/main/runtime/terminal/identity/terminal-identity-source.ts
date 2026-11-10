@@ -5,9 +5,11 @@ import type {
 } from '../records/runtime-terminal-state-records'
 import type { TerminalHandleRecord, PtyIncarnationHandleRecord } from './terminal-handle-records'
 
-import { TerminalIncarnationCandidates } from './terminal-incarnation-candidates'
+import { OrderedTerminalCandidates } from './ordered-terminal-candidates'
+import { TerminalPaneCandidates } from './terminal-pane-candidates'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+type MutableIncarnation = Mutable<PtyIncarnationHandleRecord>
 /** Canonical terminal facts; semantic operations retain selection, callbacks and failure policy. */
 export class TerminalIdentitySource {
   private readonly ptyRecords = new Map<string, Mutable<RuntimePtyWorktreeRecord>>()
@@ -17,15 +19,13 @@ export class TerminalIdentitySource {
   private readonly ptyBindings = new Map<string, string>()
   private readonly leafBindings = new Map<string, string>()
   private readonly incarnationBindings = new Map<string, Mutable<PtyIncarnationHandleRecord>>()
-  private readonly incarnationCandidates = new TerminalIncarnationCandidates()
+  private readonly incarnationCandidates = new OrderedTerminalCandidates()
+  readonly paneCandidates = new TerminalPaneCandidates()
   private readonly syntheticHandles = new Set<string>()
   // Weak ownership links preserve detached canonical records without retaining their lifetime.
   private readonly ownedPtys = new WeakMap<object, Mutable<RuntimePtyWorktreeRecord>>()
   private readonly ownedLeaves = new WeakMap<RuntimeLeafRecord, Mutable<RuntimeLeafRecord>>()
-  private readonly ownedIncarnations = new WeakMap<
-    PtyIncarnationHandleRecord,
-    Mutable<PtyIncarnationHandleRecord>
-  >()
+  private readonly ownedIncarnations = new WeakMap<PtyIncarnationHandleRecord, MutableIncarnation>()
   private sequence = 0
   private epoch = 0
 
@@ -62,6 +62,7 @@ export class TerminalIdentitySource {
     const record = { ...input }
     this.ownedPtys.set(record, record)
     this.ptyRecords.set(record.ptyId, record)
+    this.paneCandidates.setPty(record)
     this.changed()
     return record
   }
@@ -130,11 +131,15 @@ export class TerminalIdentitySource {
       owned.surfaceRecordedAtGraphSequence = standing
     }
     if (changed) {
+      if (this.ptyRecords.get(owned.ptyId) === owned) {
+        this.paneCandidates.setPty(owned)
+      }
       this.changed()
     }
   }
 
   removePty(id: string): boolean {
+    this.paneCandidates.removePty(id)
     return this.remove(this.ptyRecords, id)
   }
 
@@ -143,10 +148,12 @@ export class TerminalIdentitySource {
       return
     }
     const next = new Map<string, Mutable<RuntimeLeafRecord>>()
+    this.paneCandidates.leaves.clear()
     for (const [key, input] of inputs) {
       const owned = this.ownedLeaves.get(input) ?? { ...input }
       this.ownedLeaves.set(owned, owned)
       next.set(key, owned)
+      this.paneCandidates.leaves.set(key, owned.leafId)
     }
     this.leafRecords = next
     this.changed()
@@ -161,9 +168,11 @@ export class TerminalIdentitySource {
   }
 
   removeLeaf(key: string): boolean {
+    this.paneCandidates.leaves.delete(key)
     return this.remove(this.leafRecords, key)
   }
   clearLeaves(): void {
+    this.paneCandidates.leaves.clear()
     this.clear(this.leafRecords)
   }
 
