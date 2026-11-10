@@ -1,7 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { NativeChatToolLine } from './NativeChatToolLine'
-import { NativeChatToolRun } from './NativeChatToolRun'
-import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
+import { NativeChatToolLine } from './tools/lines/NativeChatToolLine'
+import { NativeChatToolRun } from './tools/runs/NativeChatToolRun'
+import { nativeChatAppearanceStyle } from './appearance/native-chat-appearance-style'
 
 function Invocations() {
   return (

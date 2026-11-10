@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import {
@@ -13,9 +14,12 @@ import {
   resolveEditorFontFamily,
   resolveEditorLigaturesMode,
   type EditorLigaturesMode
-} from '@/lib/editor-typography'
-import { supportsCodeFontSmoothing, type CodeFontSmoothing } from '@/lib/code-font-smoothing'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/editor/appearance/editor-typography'
+import {
+  supportsCodeFontSmoothing,
+  type CodeFontSmoothing
+} from '@/lib/editor/appearance/code-font-smoothing'
+import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import {
   NumberField,
@@ -34,13 +38,14 @@ export function EditorTypographySettings({
   settings,
   updateSettings
 }: EditorTypographySettingsProps): React.JSX.Element {
+  const t = useTranslate()
   const entries = getEditorTypographySearchEntries()
   const editorFontFamily = resolveEditorFontFamily(settings)
   const ligatures = resolveEditorLigaturesMode(settings)
 
   return (
     <>
-      <SearchableSetting {...entries.fontSize}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontSize} {...entries.fontSize}>
         <NumberField
           label={entries.fontSize.title}
           description={entries.fontSize.description}
@@ -50,13 +55,13 @@ export function EditorTypographySettings({
           integer
           // Shows the terminal size an empty field follows.
           placeholder={String(settings.terminalFontSize)}
-          suffix={translate('auto.components.settings.editorTypography.fontSizeUnit', 'px')}
+          suffix={t('auto.components.settings.editorTypography.fontSizeUnit', 'px')}
           onChange={(value) => updateSettings({ editorFontSize: value })}
           onClear={() => updateSettings({ editorFontSize: undefined })}
         />
       </SearchableSetting>
 
-      <SearchableSetting {...entries.fontWeight}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontWeight} {...entries.fontWeight}>
         <NumberField
           label={entries.fontWeight.title}
           description={entries.fontWeight.description}
@@ -72,7 +77,7 @@ export function EditorTypographySettings({
         />
       </SearchableSetting>
 
-      <SearchableSetting {...entries.lineHeight}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.lineHeight} {...entries.lineHeight}>
         <NumberField
           label={entries.lineHeight.title}
           description={entries.lineHeight.description}
@@ -80,27 +85,24 @@ export function EditorTypographySettings({
           min={0}
           step={0.1}
           clearOnZero
-          placeholder={translate(
-            'auto.components.settings.editorTypography.lineHeightAuto',
-            'Auto'
-          )}
+          placeholder={t('auto.components.settings.editorTypography.lineHeightAuto', 'Auto')}
           onChange={(value) => updateSettings({ editorLineHeight: value })}
           onClear={() => updateSettings({ editorLineHeight: undefined })}
         />
       </SearchableSetting>
 
-      <SearchableSetting {...entries.ligatures}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.ligatures} {...entries.ligatures}>
         <SettingsRow
           label={entries.ligatures.title}
           description={
             ligatures === 'auto'
               ? fontFamilyHasKnownLigatures(editorFontFamily)
-                ? translate(
+                ? t(
                     'auto.components.settings.editorTypography.ligaturesAutoEnabled',
                     'Auto - enabled for "{{value0}}".',
                     { value0: editorFontFamily }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.editorTypography.ligaturesAutoDisabled',
                     'Auto - disabled for "{{value0}}".',
                     { value0: editorFontFamily }
@@ -115,18 +117,15 @@ export function EditorTypographySettings({
               options={[
                 {
                   value: 'off',
-                  label: translate('auto.components.settings.editorTypography.ligaturesOff', 'Off')
+                  label: t('auto.components.settings.editorTypography.ligaturesOff', 'Off')
                 },
                 {
                   value: 'auto',
-                  label: translate(
-                    'auto.components.settings.editorTypography.ligaturesAuto',
-                    'Auto'
-                  )
+                  label: t('auto.components.settings.editorTypography.ligaturesAuto', 'Auto')
                 },
                 {
                   value: 'on',
-                  label: translate('auto.components.settings.editorTypography.ligaturesOn', 'On')
+                  label: t('auto.components.settings.editorTypography.ligaturesOn', 'On')
                 }
               ]}
             />
@@ -135,7 +134,7 @@ export function EditorTypographySettings({
       </SearchableSetting>
 
       {supportsCodeFontSmoothing() ? (
-        <SearchableSetting {...entries.fontSmoothing}>
+        <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontSmoothing} {...entries.fontSmoothing}>
           <SettingsRow
             label={entries.fontSmoothing.title}
             description={entries.fontSmoothing.description}
@@ -147,14 +146,14 @@ export function EditorTypographySettings({
                 options={[
                   {
                     value: 'grayscale',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.editorTypography.fontSmoothingGrayscale',
                       'Grayscale'
                     )
                   },
                   {
                     value: 'native',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.editorTypography.fontSmoothingNative',
                       'Native'
                     )

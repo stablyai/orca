@@ -4,12 +4,10 @@ import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-hand
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
-  RuntimeTerminalShow
-} from '../../../../shared/runtime-types'
-import type {
-  RuntimeTerminalCreate,
+  RuntimeTerminalShow,
   RuntimeTerminalSummary
 } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {

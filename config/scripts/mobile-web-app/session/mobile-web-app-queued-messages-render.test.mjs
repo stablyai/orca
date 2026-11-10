@@ -32,7 +32,7 @@ import { View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileNativeChatQueuedMessages } from './src/session/native-chat/input/MobileNativeChatQueuedMessages'
 import { MobileNativeChatComposer } from './src/session/native-chat/composer/MobileNativeChatComposer'
-import { mobileQueuedMessageCards } from './src/session/mobile-structured-queued-message-cards'
+import { mobileQueuedMessageCards } from './src/session/native-chat/input/mobile-structured-queued-message-cards'
 import { activateMobileUiLocale, translate } from './src/i18n/mobile-i18n'
 
 const [mode, locale] = location.hash.slice(1).split(':')

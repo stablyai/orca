@@ -5,7 +5,7 @@ import {
   linearDisconnectWorkspace,
   linearSelectWorkspace,
   linearTestConnection
-} from '@/runtime/runtime-linear-client'
+} from '@/runtime/linear/runtime-linear-client'
 import {
   beginLinearMutation,
   isCurrentLinearMutation,

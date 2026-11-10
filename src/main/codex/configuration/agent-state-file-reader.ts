@@ -1,5 +1,5 @@
-import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-reader'
-import { assertJsonTextStructureWithinLimits } from '../../../shared/json-text-structure-limit'
+import { readNodeFileSyncWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
+import { assertJsonTextStructureWithinLimits } from '../../../shared/json-stream/json-text-structure-limit'
 
 export const MAX_AGENT_STATE_FILE_BYTES = 4 * 1024 * 1024
 export const MAX_AGENT_STATE_JSON_STRUCTURAL_TOKENS = 1_000_000

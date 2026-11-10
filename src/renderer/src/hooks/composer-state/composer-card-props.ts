@@ -4,9 +4,10 @@ import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates
 import type { ComposerModel } from './composer-model'
 import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
 
 export function buildComposerCardProps(state: ComposerModel) {
@@ -22,6 +23,8 @@ export function buildComposerCardProps(state: ComposerModel) {
       : undefined
   const {
     advancedOpen,
+    setupChoiceRevealRequest,
+    clearSetupChoiceReveal,
     agentPrompt,
     attachmentPaths,
     baseBranch,
@@ -102,6 +105,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedRepoRequiresConnection,
     sourceIntentBlocksCreate,
     sparseError,
+    selectedTargetNeedsVisibleHost,
     selectedRepoSshStatus,
     setAdvancedOpen,
     setAgentPrompt,
@@ -134,9 +138,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     workspaceSeedName,
     creating,
     sourceIntentBlocksCreate,
-    requiresExplicitSetupChoice,
-    hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     sparseError
   })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
@@ -236,6 +239,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
+    setupChoiceRevealRequest,
+    onSetupChoiceRevealed: clearSetupChoiceReveal,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,

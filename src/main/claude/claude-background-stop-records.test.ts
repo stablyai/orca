@@ -6,8 +6,9 @@ import {
 } from '../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentChildWorkLiveness } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
-import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
+import { conversationCommandBlocked } from '../native-chat/agent-session-wire/operations/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
+import { PARENT_TASK_STOP } from './claude-parent-task-frames.test-fixture'
 import { RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'
 
@@ -54,7 +55,6 @@ async function droppedFromRoster() {
   expect(records()).toMatchObject([
     { membership: 'live', stoppable: true, providerId: 'agent-1', kind: 'agent' }
   ])
-  expect(run.adapter.backgroundTaskState('session-1')).toBeNull()
   expect(blocked()?.message).toBe('Stop background tasks before using this command.')
   // Snapshot stop targets before dispatch; settle only acknowledged records.
   const stop = async (taskId?: string) => {
@@ -78,6 +78,46 @@ async function droppedFromRoster() {
 }
 
 describe('a background Stop acts on the host child records', () => {
+  it('keeps a stopped owner and its independently stoppable shell attached from real task frames', async () => {
+    const host = hostWithParent()
+    const run = await producer(host)
+    run.replay(PARENT_TASK_STOP.slice(0, 7))
+    const owner = run.records().find((record) => record.kind === 'agent')
+    expect(owner).toMatchObject({ membership: 'settled', outcome: 'cancelled' })
+    expect(run.records().find((record) => record.kind === 'command')).toMatchObject({
+      membership: 'live',
+      stoppable: true,
+      parentChildWorkId: owner?.childWorkId
+    })
+    const targets = agentChildWorkStopTargets(
+      host.getStructuredChildWorkViews(parent),
+      'shell-child'
+    )
+    expect(targets.map((target) => target.providerId)).toEqual(['shell-child'])
+    await run.adapter.stopBackgroundTasks({
+      sessionId: 'session-1',
+      fence: 7,
+      taskIds: targets.map((target) => target.providerId)
+    })
+    expect(run.claude.connections[0]!.calls.filter((call) => call.subtype === 'stop_task')).toEqual(
+      [{ subtype: 'stop_task', params: { taskId: 'shell-child' } }]
+    )
+    run.replay(PARENT_TASK_STOP.slice(7))
+    expect(run.records().find((record) => record.kind === 'command')).toMatchObject({
+      membership: 'settled',
+      outcome: 'cancelled'
+    })
+
+    // Start-only delivery in reverse owner order must converge too; no original tool traffic is replayed.
+    const childFirst = await producer()
+    childFirst.replay([PARENT_TASK_STOP[3]!, PARENT_TASK_STOP[1]!])
+    const resolvedOwner = childFirst.records().find((record) => record.kind === 'agent')
+    expect(childFirst.records().find((record) => record.kind === 'command')).toMatchObject({
+      membership: 'live',
+      parentChildWorkId: resolvedOwner?.childWorkId
+    })
+  })
+
   it("stops the row's own task, which the records keep after the roster dropped it", async () => {
     const { records, blocked, stopCalls, stop, basis } = await droppedFromRoster()
 

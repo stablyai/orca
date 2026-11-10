@@ -13,11 +13,11 @@ const mocks = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn(() => ({ primaryTabId: null }) as unknown)
 }))
 
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 

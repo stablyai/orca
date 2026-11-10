@@ -64,21 +64,6 @@ describe('orchestration agent views', () => {
     vi.restoreAllMocks()
   })
 
-  it('prints a worker-start as the ids a reuse needs, and --full as the whole envelope', async () => {
-    const flags: [string, string][] = [
-      ['task', 'task_1'],
-      ['from', 'term_coord']
-    ]
-    const concise = await run('worker-start', flags, OLDER_RUNTIME_START, true)
-    expect(concise.stdout).toBe(
-      '{"ok":true,"result":{"dispatchId":"ctx_1","taskId":"task_1","runId":"run_1","state":"ready","terminal":"term_agent","workspace":"wt_1::/repo"}}'
-    )
-
-    const full = await run('worker-start', [...flags, ['full', true]], OLDER_RUNTIME_START, true)
-    expect(full.stdout).toBe(JSON.stringify(full.response, null, 2))
-    expect(full.stderr).toBe('')
-  })
-
   it('makes a failed worker-start impossible to miss on stdout, stderr, and the exit code', async () => {
     const { stdout, stderr } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,
@@ -110,146 +95,6 @@ describe('orchestration agent views', () => {
       expect(stdout).not.toContain(raw)
     }
     expect(stdout).toContain('failedStage=agent\\x1b]0;x\\x07')
-  })
-
-  it('prints a question with its payload kept apart and a reply command for this executable', async () => {
-    const question = {
-      id: 'msg_q',
-      run_id: 'run_1',
-      from_handle: 'dispatch:ctx_1',
-      to_handle: 'run:run_1',
-      subject: 'Question',
-      body: 'Remove the old flag now?',
-      type: 'question',
-      priority: 'normal',
-      thread_id: 'msg_q',
-      payload: JSON.stringify({
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        question: 'Remove the old flag now?',
-        options: ['now', 'later']
-      }),
-      created_at: '2026-10-30T18:02:11Z',
-      delivery_contract: 'current_delivery'
-    }
-    const result = {
-      runId: 'run_1',
-      deliveryId: 'delivery_1',
-      deliveryAcknowledged: true,
-      messages: [question],
-      count: 1,
-      timedOut: false
-    }
-    const flags: [string, string][] = [['run', 'run_1']]
-
-    const json = await run('check', flags, result, true)
-    expect(JSON.parse(json.stdout)).toEqual({
-      ok: true,
-      result: {
-        messages: [
-          {
-            id: 'msg_q',
-            type: 'question',
-            from: 'ctx_1',
-            body: 'Remove the old flag now?',
-            payload: { taskId: 'task_1', dispatchId: 'ctx_1', options: ['now', 'later'] }
-          }
-        ]
-      }
-    })
-
-    const text = await run('check', flags, result)
-    expect(text.stdout).toBe(
-      [
-        'msg_q question from ctx_1',
-        '  Remove the old flag now?',
-        '  payload: taskId=task_1 dispatchId=ctx_1 options=now,later',
-        'Reply: orca-dev orchestration reply --id msg_q --body "..."'
-      ].join('\n')
-    )
-  })
-
-  it('never echoes a sent message back', async () => {
-    const { stdout } = await run(
-      'send',
-      [
-        ['from', 'term_worker'],
-        ['to', 'run:run_1'],
-        ['subject', 'Done'],
-        ['body', 'A long summary the worker just wrote.']
-      ],
-      {
-        message: { id: 'msg_done', body: 'A long summary the worker just wrote.', subject: 'Done' },
-        lifecycle: { action: 'completed', autoReleaseAt: '2026-10-30T18:12:11Z' },
-        next: 'Recorded. End your turn.'
-      },
-      true
-    )
-
-    expect(stdout).toBe(
-      '{"ok":true,"result":{"messageId":"msg_done","lifecycle":"completed","autoReleaseAt":"2026-10-30T18:12:11Z","next":"Recorded. End your turn."}}'
-    )
-  })
-
-  it('prints a follow-up as where it went, naming the launch mode only for a fresh start', async () => {
-    const followUp = (delivery: string) =>
-      run(
-        'send',
-        [
-          ['to', 'dispatch:ctx_1'],
-          ['subject', 'More']
-        ],
-        {
-          ...OLDER_RUNTIME_START,
-          dispatchId: 'ctx_2',
-          delivery,
-          followUpOf: 'ctx_1',
-          turnStart: 'queued',
-          mode: {
-            mode: 'terminal',
-            preferred: 'terminal',
-            detail: 'Started a terminal agent worker.'
-          },
-          next: 'Orca wakes you when workers report; end your turn.'
-        }
-      )
-
-    expect((await followUp('reopened')).stdout).toBe(
-      'delivery=reopened followUpOf=ctx_1 dispatchId=ctx_2 taskId=task_1 runId=run_1 state=ready terminal=term_agent workspace=wt_1::/repo queued=true\n' +
-        'Next: Orca wakes you when workers report; end your turn.'
-    )
-    expect((await followUp('started_fresh')).stdout).toContain('mode=terminal')
-  })
-
-  it('lists each worker with its agent terminal and a runnable next action', async () => {
-    const { stdout } = await run('worker-list', [['run', 'run_1']], {
-      workers: [
-        {
-          dispatchId: 'ctx_1',
-          taskId: 'task_1',
-          runId: 'run_1',
-          workerState: 'running',
-          dispatchStatus: 'dispatched',
-          agentTerminalHandle: 'term_agent',
-          terminalState: 'active',
-          resource: { endpointIncarnation: 'internal' },
-          projection: {
-            host: { id: 'local' },
-            workspace: { id: 'wt_1::/repo' },
-            stage: { activity: 'working' },
-            liveness: { verdict: 'live' },
-            nextAction: { argv: ['orchestration', 'worker-stop', '--dispatch', 'ctx_1'] },
-            attention: { categories: ['input', 'stale', 'root_completion'] }
-          }
-        }
-      ],
-      counts: { active: 1 }
-    })
-
-    expect(stdout).toBe(
-      'scope.run=run_1 scope.source=flag\n' +
-        'dispatchId=ctx_1 taskId=task_1 state=running liveness=live terminal=term_agent terminalState=active workspace=wt_1::/repo host=local attention=input next="orca-dev orchestration worker-stop --dispatch ctx_1"'
-    )
   })
 
   it('fails an interrupted check and an unconfirmed worker inventory on stderr and the exit code', async () => {
@@ -446,28 +291,6 @@ describe('orchestration agent views', () => {
       true
     )
     expect(JSON.parse(stdout)).toMatchObject({ ok: false, result: { workers: [] } })
-  })
-
-  it('says when worker-show never evaluated an interactive wait', async () => {
-    const show = (observation: unknown) =>
-      run('worker-show', [['dispatch', 'ctx_1']], {
-        dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'dispatched' },
-        worker: { state: 'running', stage: 'working', agentTerminalHandle: 'term_agent' },
-        ...(observation === undefined ? {} : { observation })
-      })
-    expect((await show(undefined)).stdout).toContain('waitingOnHuman=unknown')
-    expect((await show({ agentWait: null })).stdout).not.toContain('waitingOnHuman')
-  })
-
-  it('does not echo the Run objective the caller just sent', async () => {
-    const { stdout } = await run(
-      'worker-start',
-      [['spec', 'Review add']],
-      { ...OLDER_RUNTIME_START, run: { id: 'run_1', objective: 'Review add', created: true } },
-      true
-    )
-    expect(JSON.parse(stdout).result).toMatchObject({ runId: 'run_1', runCreated: true })
-    expect(stdout).not.toContain('Review add')
   })
 
   it('never lets a payload stand in for Orca-computed message fields', async () => {

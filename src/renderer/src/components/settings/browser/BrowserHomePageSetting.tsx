@@ -1,11 +1,12 @@
 import { toast } from 'sonner'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserHomePageSettingProps = {
   value: string
@@ -18,28 +19,23 @@ export function BrowserHomePageSetting({
   onChange,
   onSave
 }: BrowserHomePageSettingProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.BrowserHomePageSetting.70224e37b1',
-        'Default Home Page'
-      )}
-      description={translate(
+      title={t('auto.components.settings.BrowserHomePageSetting.9b9df9fe19', 'Default home page')}
+      description={t(
         'auto.components.settings.BrowserHomePageSetting.6a37540f4b',
         'URL opened when creating a new browser tab. Leave empty to open a blank tab.'
       )}
       keywords={['browser', 'home', 'homepage', 'default', 'url', 'new tab', 'blank']}
-      className="flex items-start justify-between gap-4 py-2"
+      className="flex items-start justify-between gap-4 py-3"
     >
       <div className="min-w-0 shrink space-y-0.5">
         <Label>
-          {translate(
-            'auto.components.settings.BrowserHomePageSetting.70224e37b1',
-            'Default Home Page'
-          )}
+          {t('auto.components.settings.BrowserHomePageSetting.9b9df9fe19', 'Default home page')}
         </Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.BrowserHomePageSetting.6a37540f4b',
             'URL opened when creating a new browser tab. Leave empty to open a blank tab.'
           )}
@@ -58,10 +54,7 @@ export function BrowserHomePageSetting({
           if (normalized && normalized !== ORCA_BROWSER_BLANK_URL) {
             onSave(normalized)
             toast.success(
-              translate(
-                'auto.components.settings.BrowserHomePageSetting.c6cbd1c105',
-                'Home page saved.'
-              )
+              t('auto.components.settings.BrowserHomePageSetting.c6cbd1c105', 'Home page saved.')
             )
           }
         }}
@@ -69,7 +62,7 @@ export function BrowserHomePageSetting({
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.BrowserHomePageSetting.37a30c5bfd',
             'https://google.com'
           )}
@@ -79,7 +72,7 @@ export function BrowserHomePageSetting({
           className="h-7 w-52 text-xs"
         />
         <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
-          {translate('auto.components.settings.BrowserHomePageSetting.d4ddcd0056', 'Save')}
+          {t('auto.components.settings.BrowserHomePageSetting.d4ddcd0056', 'Save')}
         </Button>
       </form>
     </SearchableSetting>

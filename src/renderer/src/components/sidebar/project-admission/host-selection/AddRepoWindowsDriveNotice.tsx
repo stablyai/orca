@@ -3,7 +3,8 @@ import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/wsl-ho
 import {
   addOnThisComputerLabel,
   wslHostWindowsDriveRefusalCopy
-} from '@/lib/wsl-host-windows-drive-refusal-toast'
+} from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Inline, not a toast: the user must act, and toasts above the dialog take no clicks. */
 export function AddRepoWindowsDriveNotice({
@@ -13,7 +14,8 @@ export function AddRepoWindowsDriveNotice({
   refusal: WslHostWindowsDriveRefusal
   onAddOnThisComputer: ((windowsPath: string) => void) | null
 }): React.JSX.Element {
-  const { title, description } = wslHostWindowsDriveRefusalCopy(refusal)
+  const t = useTranslate()
+  const { title, description } = wslHostWindowsDriveRefusalCopy(refusal, t)
   const { windowsPath } = refusal
   return (
     <div
@@ -30,7 +32,7 @@ export function AddRepoWindowsDriveNotice({
           className="self-start"
           onClick={() => onAddOnThisComputer(windowsPath)}
         >
-          {addOnThisComputerLabel()}
+          {addOnThisComputerLabel(t)}
         </Button>
       ) : null}
     </div>

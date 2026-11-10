@@ -6,9 +6,9 @@ import {
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit
-} from '../../../../../shared/work-items'
+} from '../../../../../shared/work-items/work-item-pagination'
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import { useAppStore } from '@/store/index'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {

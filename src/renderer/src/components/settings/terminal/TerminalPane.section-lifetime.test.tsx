@@ -47,7 +47,7 @@ vi.mock('@/store/index', () => ({
       setSettingsSearchQuery: fake.action
     })
 }))
-vi.mock('@/components/terminal-pane/pane-helpers', () => ({
+vi.mock('@/lib/user-agent-platform', () => ({
   isMacUserAgent: () => fake.isMac,
   isWindowsUserAgent: () => fake.isWindows
 }))
@@ -94,8 +94,12 @@ vi.mock('@/components/shared/useDaemonActions', () => ({
   useDaemonActions: () => ({ isBusy: false, busyKind: null, setPending: fake.action }),
   DaemonActionDialog: () => null
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
+  activateTabAndFocusPane: vi.fn()
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()

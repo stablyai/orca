@@ -1,15 +1,14 @@
-import { createElement, Fragment, type ReactNode } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-
 import { projectStructuredItemsToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
-import { foldMobileNativeChatMessages } from '../mobile-native-chat-render-data'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { createElement, Fragment, type ReactNode } from 'react'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -118,18 +117,16 @@ describe('mobile tool result availability', () => {
     vi.restoreAllMocks()
   })
 
-  function render(row: NativeChatMessage, openRun = true): ReactTestRenderer {
+  function render(row: NativeChatMessage): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message: row }))
     })
-    if (openRun) {
-      press(
-        renderer!.root.find(
-          (node) =>
-            String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
-        )
+    press(
+      renderer!.root.find(
+        (node) =>
+          String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
       )
-    }
+    )
     return renderer!
   }
 

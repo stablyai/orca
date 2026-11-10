@@ -11,6 +11,7 @@ import {
 } from './plugin-host-method-bind'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import { claimPluginReplacedActionRun } from '../plugin-command-replacement-deadline'
 import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 
@@ -42,7 +43,9 @@ const worktreeListAnswer = z.object({
   truncated: z.boolean().optional()
 })
 const repoListAnswer = z.object({
-  repos: z.array(z.object({ id: z.string(), kind: z.string().optional() }))
+  repos: z.array(
+    z.object({ id: z.string(), kind: z.string().optional(), displayName: z.string().optional() })
+  )
 })
 const folderListAnswer = z.object({
   folderWorkspaces: z.array(
@@ -54,6 +57,10 @@ const folderListAnswer = z.object({
     })
   )
 })
+const folderUpdateAnswer = z.object({
+  folderWorkspace: z.object({ name: z.string() }).nullable()
+})
+const worktreeSetAnswer = z.object({ worktree: z.object({ displayName: z.string() }) })
 const terminalCreateAnswer = z.object({ terminal: z.object({ handle: z.string() }) })
 const terminalReadAnswer = z.object({
   terminal: z.object({
@@ -113,18 +120,18 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       call('folderWorkspace.list', undefined)
     ])
     const { worktrees, totalCount, truncated } = worktreeListAnswer.parse(listed)
+    const repoRows = repoListAnswer.parse(repos).repos
     const folderRepos = new Set(
-      repoListAnswer
-        .parse(repos)
-        .repos.filter((repo) => repo.kind === 'folder')
-        .map((repo) => repo.id)
+      repoRows.filter((repo) => repo.kind === 'folder').map((repo) => repo.id)
     )
+    const projectNames = new Map(repoRows.map((repo) => [repo.id, repo.displayName || null]))
     const worktreeRows = worktrees.slice(0, PLUGIN_WORKSPACE_LIST_LIMIT).map((worktree) => {
       const folder = folderRepos.has(worktree.repoId)
       return {
         id: worktree.identity ? `identity:${worktree.identity.key}` : worktree.id,
         kind: folder ? ('folder' as const) : ('worktree' as const),
         name: worktree.displayName,
+        project: projectNames.get(worktree.repoId)?.slice(0, 512) ?? null,
         path: worktree.path,
         branch: folder ? null : branchName(worktree.branch),
         hostId: worktree.hostId ?? null
@@ -135,6 +142,7 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       id: folderWorkspaceKey(folder.id),
       kind: 'folder' as const,
       name: folder.name,
+      project: null,
       path: folder.folderPath,
       branch: null,
       hostId: folder.executionHostId ?? null
@@ -158,6 +166,40 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     }
     await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
     return { opened: true as const }
+  }),
+  'workspace.rename': bind(api['workspace.rename'], async ({ workspaceId, name }, ctx) => {
+    const trimmed = name.trim()
+    const scope = parseWorkspaceKey(workspaceId)
+    // The same update as a rename in the sidebar: the name is pinned and a pending
+    // automatic (first agent message) rename is cancelled, so neither replaces it later.
+    const renamed =
+      scope?.type === 'folder'
+        ? folderUpdateAnswer.parse(
+            await effect(ctx, 'folderWorkspace.update', {
+              folderWorkspaceId: scope.folderWorkspaceId,
+              // Twins on two hosts can share a folder id; refuse rather than rename both.
+              requireUniqueId: true,
+              updates: {
+                name: trimmed,
+                pendingFirstAgentMessageRename: false,
+                firstAgentMessageRenameError: null
+              }
+            })
+          ).folderWorkspace?.name
+        : worktreeSetAnswer.parse(
+            await effect(ctx, 'worktree.set', {
+              worktree: workspaceSelector(workspaceId),
+              displayName: trimmed
+            })
+          ).worktree.displayName
+    if (renamed === undefined) {
+      throw new PluginHostCallError('action_failed', 'no workspace has this id')
+    }
+    // Orca keeps the old name while the workspace is moving to or from WSL.
+    if (renamed !== trimmed) {
+      throw new PluginHostCallError('conflict', 'the workspace cannot be renamed right now')
+    }
+    return { name: trimmed }
   }),
   'terminal.create': bind(api['terminal.create'], async (params, ctx) => {
     const answer = await effect(ctx, 'terminal.create', {
@@ -217,8 +259,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     await renderer(services).openFile(workspaceId, path)
     return { opened: true as const }
   }),
-  'commands.run': bind(api['commands.run'], async ({ action }, { services, scope }) => {
+  'commands.run': bind(api['commands.run'], async ({ action }, { pluginId, services, scope }) => {
     scope.assertActive()
+    claimPluginReplacedActionRun(pluginId, action)
     // Always Orca's own action, never a plugin command that replaces it: a replacement that
     // calls commands.run for the original would otherwise call itself.
     await renderer(services).runAction(action)

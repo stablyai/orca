@@ -27,7 +27,7 @@ vi.mock('@/store/index', () => {
   useAppStore.getState = () => mocks.state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+vi.mock('@/runtime/files/reads/runtime-server-directory-browser', () => ({
   browseRuntimeServerDirectory: mocks.browse
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))

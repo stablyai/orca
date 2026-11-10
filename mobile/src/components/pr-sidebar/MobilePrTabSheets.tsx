@@ -22,6 +22,9 @@ import {
 } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
+import { draftTextHash, workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
@@ -168,17 +171,48 @@ function PrEditTextSheet({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const executionHost = useWorkspaceExecutionHost()
   const data = readyPrData(tab)
   const details = livePrDetails(data?.details ?? null)
   const current =
     field === 'title' ? (details?.item.title ?? data?.pr.title ?? '') : (details?.body ?? '')
-  const [draft, setDraft] = useState(current)
+  const resource = request.scope.resource
+  // An unsaved edit waits through Cancel and the app being killed, with the PR text it was typed against.
+  const keptKey = resource
+    ? workspaceDraftRowKey(
+        'prEdit',
+        { hostId: tab.hostId, executionHost, worktreeId: tab.worktreeId },
+        `${resource}:${field}`
+      )
+    : null
+  const [keptAgainst, setKeptAgainst] = useDurableDraftField(keptKey, 'against')
+  const [keptText, setKeptText] = useDurableDraftField(keptKey, 'text')
+  // An edit typed against text the PR still has comes back; once the PR text changes it would revert someone's edit.
+  const [base] = useState(current)
+  // A fingerprint, never empty, so an emptied PR description still marks an edit (an empty field is no field).
+  const [against] = useState(() => draftTextHash(base))
+  const draft = keptAgainst === against ? keptText : base
+  const setDraft = (text: string) => {
+    const edited = text !== base
+    setKeptText(edited ? text : '')
+    setKeptAgainst(edited ? against : '')
+  }
   const { textAction } = tab
   const save = async () => {
     if (!tab.ownsSheet(request)) {
       return
     }
-    if (await textAction.save(field, draft, current)) {
+    const sent = draft
+    if (await textAction.save(field, sent, current)) {
+      // Only the saved edit; one typed since in a reopened sheet stays.
+      let saved = false
+      setKeptText((text) => {
+        saved = text === sent
+        return saved ? '' : text
+      })
+      if (saved) {
+        setKeptAgainst('')
+      }
       tab.closeSheetIf(request)
     }
   }

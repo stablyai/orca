@@ -1,12 +1,12 @@
 import { useAppStore } from '@/store'
-import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
-import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
+import { notifyTerminalTypingDiscardedBeforeBind } from '../input/terminal-input-not-sent-notice'
+import { terminalShowsReplayedHistory } from '../snapshots/replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
-import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
-import { mainStartsPane } from './main-starts-pane'
-import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
-import type { IpcPtyTransportOptions } from '../pty-transport-types'
+import { shouldRetainDisposedPaneSpawn } from './spawn/disposed-spawn-retention'
+import { findColdRestoreResumeSource } from './startup/cold-restore-resume-startup'
+import { mainStartsPane } from './spawn/main-starts-pane'
+import { requestTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
+import type { IpcPtyTransportOptions } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** A split waiting on its inherited cwd, or remounted with handed-off keys; it holds keys as before. */
@@ -135,6 +135,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.paneStartup?.resumeOrigin
       ? { resumeOrigin: session.paneStartup.resumeOrigin }
       : {}),
+    ...(session.paneStartup?.resumeSource?.record?.paneKey
+      ? { resumeSourcePaneKey: session.paneStartup.resumeSource.record.paneKey }
+      : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {
           agentPrompt:
@@ -146,6 +149,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.draftPrompt
         ? { agentPromptDelivery: 'draft' as const }
         : {}),
+    ...(session.paneStartup?.freshAgentLaunch
+      ? { freshAgentLaunch: session.paneStartup.freshAgentLaunch }
+      : {}),
     ...(session.paneStartup?.agentArgsOverride !== undefined
       ? { agentArgsOverride: session.paneStartup.agentArgsOverride }
       : {}),
@@ -154,6 +160,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.trustWorktreeId
+      ? { trustWorktreeId: session.paneStartup.trustWorktreeId }
+      : {}),
     ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,

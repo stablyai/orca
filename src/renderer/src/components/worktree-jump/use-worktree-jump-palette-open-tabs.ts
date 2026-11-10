@@ -1,15 +1,20 @@
 import { useMemo } from 'react'
-import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
-import { searchBrowserPages, type SearchableBrowserPage } from '@/lib/browser-palette-search'
-import { buildSearchableSimulatorTabs, searchSimulatorTabs } from '@/lib/simulator-palette-search'
-import type { SearchableSimulatorTab } from '@/lib/simulator-palette-search-types'
+import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
 import {
-  buildSearchableWorkspaceTabs,
-  type SearchableWorkspaceTab
-} from '@/lib/workspace-tab-palette-search'
-import { searchWorkspaceTabs } from '@/lib/workspace-tab-palette-results'
+  searchBrowserPages,
+  type SearchableBrowserPage
+} from '@/lib/browser/palette/browser-palette-search'
+import {
+  buildSearchableSimulatorTabs,
+  searchSimulatorTabs
+} from '@/lib/simulator/search/simulator-palette-search'
+import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
-import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
+import { getPaletteWorktreeIdentity } from '@/lib/workspace/search/palette-repo-resolution'
 import type {
   BrowserPaletteItem,
   OpenTabPaletteItem,
@@ -17,14 +22,8 @@ import type {
   WorkspaceTabPaletteItem,
   WorktreePaletteItem
 } from './worktree-jump-palette-model'
-import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
-import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
-import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
-import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
-import {
-  encodePaletteIdentity,
-  type PaletteSearchContext
-} from '../../../../shared/palette-match/palette-ranking'
+import type { WorktreeJumpPaletteOpenTabsInput } from './worktree-jump-palette-open-tabs-input'
+import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 import {
   buildBrowserPaletteItems,
   buildOpenTabPaletteItems,
@@ -32,18 +31,12 @@ import {
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
 const EMPTY_WORKSPACE_TAB_ENTRIES: SearchableWorkspaceTab[] = []
-
-type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
-  WorktreeJumpPaletteWorktrees &
-  Pick<WorktreeJumpPaletteFilter, 'repoMap' | 'repoByHostIdentity'> &
-  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> & {
-    paletteSearchContext: PaletteSearchContext
-  }
 
 export function useWorktreeJumpPaletteOpenTabs({
   paletteStatusInputsActive,
@@ -80,6 +73,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   worktreeMatches,
   resolveWorktree
 }: WorktreeJumpPaletteOpenTabsInput) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const chatNames = useStructuredChatTabNames()
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -155,17 +149,22 @@ export function useWorktreeJumpPaletteOpenTabs({
   ])
   const simulatorMatches = useMemo(
     () =>
-      searchSimulatorTabs(simulatorTabEntries, deferredQuery.trim(), {
-        context: paletteSearchContext
-      }),
+      searchSimulatorTabs(
+        simulatorTabEntries,
+        deferredQuery.trim(),
+        {
+          context: paletteSearchContext
+        },
+        t
+      ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
-    [simulatorTabEntries, deferredQuery, paletteSearchContext, languageRevision]
+    [simulatorTabEntries, deferredQuery, paletteSearchContext, languageRevision, t]
   )
   const workspaceTabEntries = useMemo<SearchableWorkspaceTab[]>(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_WORKSPACE_TAB_ENTRIES
     }
-    return buildSearchableWorkspaceTabs({
+    return buildSearchableWorkspaceTabEntries({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: workspaces,
       repoMap,

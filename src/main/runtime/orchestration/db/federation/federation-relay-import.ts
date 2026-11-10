@@ -4,7 +4,7 @@ import type {
   MessageRow,
   WorkerReportOutcome,
   WorkerReportSettlement
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 

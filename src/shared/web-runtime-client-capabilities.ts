@@ -1,3 +1,5 @@
+import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from './git/commands/git-commit-action'
+import { GIT_GRAPH_TAB_CAPABILITY } from './source-control/runtime/git-graph-capabilities'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
 import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from './agent-session/agent-session-runtime-capabilities'
 import {
@@ -18,6 +20,8 @@ import {
 
 /** What the browser client advertises in its handshake with the host it is paired to. */
 export const WEB_RUNTIME_CLIENT_CAPABILITIES = [
+  GIT_GRAPH_TAB_CAPABILITY,
+  GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   // The desktop's chat, over the same `agentSession.*` calls.
   ...STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,

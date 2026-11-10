@@ -1,4 +1,4 @@
-import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
@@ -6,7 +6,7 @@ import {
   getStructuredLaunchStateBySessionId,
   getPersistedStructuredAgentLaunchRecord,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 /** Existing opening content is correlation after uncertainty, not an active create. */
 export function structuredAgentSessionLaunchHasRetainedInput(
@@ -64,14 +64,14 @@ export function settleStructuredLaunchFirstMessageFromJournal(
     )
   }
   deleteStructuredAgentLaunchRecord(sessionId)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
 }
 
 /** The launch adopts an existing conversation, which may keep a model of its own. */
 export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
-  const state = getStructuredLaunchStateBySessionId(sessionId)
-  const resumeFrom = state
-    ? state.intent.params.resumeFrom
-    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
-  return resumeFrom !== undefined
+  // A fork opens onto history it adopts, as a resume does.
+  const params =
+    getStructuredLaunchStateBySessionId(sessionId)?.intent.params ??
+    getPersistedStructuredAgentLaunchRecord(sessionId)
+  return params?.resumeFrom !== undefined || params?.forkFrom !== undefined
 }

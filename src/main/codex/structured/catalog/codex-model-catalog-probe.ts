@@ -3,6 +3,8 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { envWithPathRelativeTo } from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
@@ -51,32 +53,49 @@ export function createCodexModelCatalogProbe(
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
     lookup: AgentModelCatalogLookup = 'recover',
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    launchDirectory = cwd
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
-    const overlay = { ...deps.resolveEnv?.() }
+    const overlay = overlayEnvironmentVariables({}, deps.resolveEnv?.(), process.platform)
     const readEnvironment =
       lookup === 'saved' ? deps.resolveSavedEnvironment : deps.resolveEnvironment
     const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
       ...deps,
       operation,
-      resolveEnvironment: async () => ({ ...(await readEnvironment?.()), ...overlay }),
+      resolveEnvironment: async () =>
+        overlayEnvironmentVariables((await readEnvironment?.()) ?? {}, overlay, process.platform),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
-      ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
+      ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     })
     assertStructuredAgentResolutionCurrent(operation)
+    // Every listing runs in `cwd` with the user's command line, as other Codex hosts list from their
+    // own folder, so the chat's repo never picks the list; relative paths in user arguments are not
+    // resolved against the chat's folder. No root markers keep Codex from reading a repo above
+    // Orca's folder too, unless an administrator's managed config sets its own.
     const args = [
       ...prefixArgs,
       ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),
+      '-c',
+      'project_root_markers=[]',
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
     ]
     assertStructuredAgentResolutionCurrent(operation)
-    const env = { ...definedEnv(environment), CODEX_HOME: accountHomePath }
+    // The listing runs from the account folder; relative PATH entries still mean the chat's folder.
+    const env = {
+      ...(launchDirectory
+        ? envWithPathRelativeTo(definedEnv(environment), launchDirectory)
+        : definedEnv(environment)),
+      CODEX_HOME: accountHomePath
+    }
     return {
       identity: { command, args, cwd, overlay: Object.entries(overlay).sort() },
-      run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
-        assertStructuredAgentResolutionCurrent(operation)
+      run: async (
+        signal?: AbortSignal,
+        runOperation = operation
+      ): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
         deps.prepareHome?.(accountHomePath)
         const run = deps.runSession ?? runCodexAppServerSession
@@ -91,16 +110,20 @@ export function createCodexModelCatalogProbe(
             ...(signal ? { signal } : {})
           },
           async (rpc) => {
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             // Overlap model and account reads to avoid serial probe latency.
-            const listed = fetchCodexModelCatalogListing({ connection: rpc, cwd, operation })
+            const listed = fetchCodexModelCatalogListing({
+              connection: rpc,
+              cwd,
+              operation: runOperation
+            })
             void listed.catch(() => {})
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             const response: unknown = await rpc
               .request('account/read', { refreshToken: false }, { timeoutMs: 2_000 })
               // Failed account reads do not establish sign-out.
               .catch(() => undefined)
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             if (
               typeof response !== 'object' ||
               response === null ||
@@ -116,7 +139,7 @@ export function createCodexModelCatalogProbe(
             const signedOut = { reason: 'notSignedIn' as const, ...(account ? { account } : {}) }
             // Gateways may misreport sign-out; keep models that were successfully listed.
             const inHand = await listed.catch(() => null)
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             if (!inHand?.models.length) {
               throw new AgentModelCatalogUnavailableError(signedOut)
             }
@@ -128,7 +151,7 @@ export function createCodexModelCatalogProbe(
           }
           throw error
         })
-        assertStructuredAgentResolutionCurrent(operation)
+        assertStructuredAgentResolutionCurrent(runOperation)
         if (listing.models.length === 0) {
           throw new Error('codex app-server listed no models')
         }

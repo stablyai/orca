@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
+import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import { defineMethod } from '../../../core'
 import { isUserKeptWorkerTerminalOwner } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
@@ -28,7 +28,14 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     params: FederationFleetSnapshotParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const items = await mapWithConcurrency(params.dispatchIds, 16, async (dispatchId) => {
-        requireHomeAttachment(runtime, dispatchId, authenticatedCallerFingerprint)
+        const attachment = runtime.getOrchestrationDb().getRemoteDispatchAttachment(dispatchId)
+        // A Dispatch this home no longer holds here, such as one from an earlier pairing, must not hide the rest.
+        if (!attachment || attachment.home_peer_fingerprint !== authenticatedCallerFingerprint) {
+          return {
+            dispatchId,
+            observation: { status: 'unverifiable' as const, exactWorker: false }
+          }
+        }
         const observation = await observeRemoteAttachmentLiveness(runtime, dispatchId)
         const db = runtime.getOrchestrationDb()
         const autoReleaseAt = db.getLiveWorkerTerminalAutoReleaseAt(dispatchId)

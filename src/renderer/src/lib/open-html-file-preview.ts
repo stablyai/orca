@@ -1,6 +1,6 @@
-import { openFileInBrowserTab } from './file-preview'
+import { openFileInBrowserTab } from './browser/documents/file-preview'
 import { resolveWorkspaceDocAddressTarget } from './workspace-doc-address-input'
-import { selectWorkspaceSurface } from './workspace-surface-reveal'
+import { selectWorkspaceSurface } from './workspace/activation/workspace-surface-reveal'
 import { useAppStore } from '@/store'
 
 export function openHtmlFilePreview(params: {

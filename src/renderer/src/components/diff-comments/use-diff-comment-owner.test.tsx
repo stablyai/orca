@@ -1,10 +1,11 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
@@ -13,8 +14,8 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { useOwnedDiffCommentTarget } from './use-diff-comment-owner'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: vi.fn().mockResolvedValue({ ok: true })
 }))
 

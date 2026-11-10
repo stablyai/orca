@@ -4,14 +4,14 @@ import { act, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorktreeNavHistoryEntry } from '@/store/slices/worktree-nav-history'
+import type { WorktreeNavHistoryEntry } from '@/store/slices/ui/workspace-navigation-history'
 import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 
 const activateAndRevealWorktree = vi.fn()
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activateAndRevealWorktree(...args)
 }))
 

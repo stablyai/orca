@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { QuickSubmitOptions } from './quick-creation-request'
-import { findPendingLinkedWorkItemCreationId } from '@/lib/pending-worktree-creation'
+import { findPendingLinkedWorkItemCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { useAppStore } from '@/store'
 import { getWorkspaceSeedName } from '@/lib/new-workspace'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
@@ -32,7 +32,9 @@ type QuickSubmitActionInput = Pick<
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
   | 'selectedRepoRequiresConnection'
+  | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
+  | 'revealSetupChoice'
   | 'setCreateError'
   | 'setCreating'
   | 'setupDecision'
@@ -61,7 +63,9 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
+    revealSetupChoice,
     setCreateError,
     setCreating,
     setupDecision,
@@ -97,7 +101,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         !workspaceNameSeed ||
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
-        (requiresExplicitSetupChoice && !setupDecision) ||
+        selectedTargetNeedsVisibleHost ||
         sparseError !== null
       ) {
         return
@@ -133,6 +137,12 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
         onCreated?.()
+        return
+      }
+
+      if (requiresExplicitSetupChoice && !setupDecision) {
+        // The Run/Skip choice lives in Advanced; reveal it rather than refuse silently.
+        revealSetupChoice()
         return
       }
 
@@ -214,7 +224,9 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
       selectedRepoRequiresConnection,
+      selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
+      revealSetupChoice,
       setCreateError,
       setCreating,
       setupDecision,

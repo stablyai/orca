@@ -21,13 +21,14 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
+  MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
-} from '../../mobile-native-chat-notice-context'
-import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
+} from './mobile-native-chat-notice-context'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -35,16 +36,16 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
-import { sayMobileAgentSessionFailure } from '../../agent-session-failure-copy'
+import { sayMobileAgentSessionFailure } from '../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
-import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { sheetPrimaryButtonStyles } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -72,7 +73,15 @@ function noticeLineText(
   // Only reword text fully described by its fact; other host text stays as written.
   const context = { agentName: names.agentName }
   const surface =
-    failure?.kind === 'savedConversationMissing' || failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
         )
@@ -98,6 +107,7 @@ export function MobileNativeChatNoticeRow({
   const detailId = useId()
   const copy = nativeChatNoticeCopy(t)
   const names = useContext(MobileNativeChatNoticeContext)
+  const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -117,7 +127,7 @@ export function MobileNativeChatNoticeRow({
   const failureDetail = agentSessionFailureDetailText(failure)
   const signInCommand =
     failure?.kind === 'notSignedIn'
-      ? agentSessionRemoteSignInCommand(names.agentName, failure.account)
+      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
@@ -155,17 +165,21 @@ export function MobileNativeChatNoticeRow({
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'denied'
-          ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+        look.decision === 'approved'
+          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
               agent
             })
-          : t(
-              'chat.notice.safetyReview',
-              '{{agent}} reported a safety review warning. View details.',
-              {
+          : look.decision === 'denied'
+            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
                 agent
-              }
-            )
+              })
+            : t(
+                'chat.notice.safetyReview',
+                '{{agent}} reported a safety review warning. View details.',
+                {
+                  agent
+                }
+              )
       return (
         <View>
           <MobileNativeChatNoticeDisclosure
@@ -185,6 +199,30 @@ export function MobileNativeChatNoticeRow({
         <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
           <View style={styles.rule} />
           <Text style={styles.dividerLabel}>{label}</Text>
+          <View style={styles.rule} />
+        </View>
+      )
+    }
+    case 'forked-from': {
+      const { sourceName, sourceSessionId } = look
+      return (
+        // No label on the row: it would replace the text and hide the source link from screen readers.
+        <View style={styles.divider}>
+          <View style={styles.rule} />
+          <Text style={styles.dividerLabel}>
+            {copy.forkedFrom}{' '}
+            {openForkSource ? (
+              <Text
+                accessibilityRole="link"
+                style={styles.dividerLink}
+                onPress={() => openForkSource(sourceSessionId)}
+              >
+                {sourceName}
+              </Text>
+            ) : (
+              sourceName
+            )}
+          </Text>
           <View style={styles.rule} />
         </View>
       )
@@ -264,12 +302,12 @@ export function MobileNativeChatNoticeRow({
               )}
               onPress={() => runInTerminal(signInCommand)}
               style={({ pressed }) => [
-                chatViewStyles.retryPill,
+                sheetPrimaryButtonStyles.button,
                 styles.action,
-                pressed && chatViewStyles.retryPillPressed
+                pressed && sheetPrimaryButtonStyles.pressed
               ]}
             >
-              <Text style={chatViewStyles.retryPillLabel}>
+              <Text style={sheetPrimaryButtonStyles.label}>
                 {t('chat.notice.signIn', 'Sign in')}
               </Text>
             </Pressable>
@@ -324,6 +362,9 @@ const styles = themedStyleSheet(() => ({
   dividerLabel: {
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  dividerLink: {
+    textDecorationLine: 'underline'
   },
   faint: {
     color: colors.textMuted

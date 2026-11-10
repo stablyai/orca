@@ -1,7 +1,7 @@
 // Keep synchronous slug cache separate from repo-slug-index so store callers avoid its @/store import cycle.
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { runtimeTargetForRepoOwner } from './repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from './workspace/ownership/repo-runtime-owner'
 import {
   githubRepoIdentityKey,
   repoUpstreamIdentityKey

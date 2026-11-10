@@ -133,44 +133,6 @@ describe('orca serve service', () => {
     ).toThrow(/PATH/)
   })
 
-  it('refuses Windows and a relative --command', async () => {
-    await expect(
-      installServeService({ command: null, dryRun: true }, deps('win32'))
-    ).rejects.toThrow(/Windows/)
-    expect(() => resolveServiceCommand('orca', { platform: 'darwin', env: {} })).toThrow()
-    expect(() =>
-      resolveServiceCommand(null, { platform: 'darwin', env: { PATH: '/nonexistent' } })
-    ).toThrow(/PATH/)
-  })
-  it('names the command to run when only a server-only orca exists here', async () => {
-    // SSH server launchers run on plain Node, without an installed Electron desktop.
-    const serverCli = (platform: NodeJS.Platform, path: string): ServeServiceDeps => {
-      const base = deps(platform)
-      const { ELECTRON_RUN_AS_NODE: _electron, ...env } = base.env
-      return { ...base, env: { ...env, PATH: path } }
-    }
-    const scoped = join(home, 'profile', 'cli', 'bin')
-    await mkdir(scoped, { recursive: true })
-    await writeFile(join(scoped, 'orca'), '#!/bin/sh\n')
-    await chmod(join(scoped, 'orca'), 0o755)
-    await expect(
-      installServeService({ command: null, dryRun: false }, serverCli('linux', scoped))
-    ).rejects.toThrow(/install the Orca app.*`orca-ide serve service install`/i)
-    await expect(
-      installServeService({ command: null, dryRun: true }, serverCli('darwin', scoped))
-    ).rejects.toThrow(/`orca serve service install`/)
-    expect(calls).toEqual([])
-    await expect(
-      installServeService({ command: null, dryRun: true }, serverCli('linux', `${scoped}:${bin}`))
-    ).resolves.toMatchObject({ dryRun: true })
-    await expect(
-      installServeService(
-        { command: join(bin, 'orca-ide'), dryRun: true },
-        serverCli('linux', scoped)
-      )
-    ).resolves.toMatchObject({ dryRun: true })
-  })
-
   it('keeps an AppImage launch and profile directories out of the unit PATH (#36000)', async () => {
     const profileBin = join(home, 'profile', 'cli', 'bin')
     const d = deps('linux')

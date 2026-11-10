@@ -2,8 +2,8 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NativeChatToolLine } from './NativeChatToolLine'
-import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatToolLine } from './tools/lines/NativeChatToolLine'
+import { NativeChatToolRun } from './tools/runs/NativeChatToolRun'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))

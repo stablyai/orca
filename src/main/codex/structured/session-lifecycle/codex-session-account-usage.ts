@@ -1,5 +1,6 @@
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
@@ -9,13 +10,13 @@ import {
   mapCodexRpcRateLimits,
   type CodexAccountUsageRead,
   type RpcRateLimitsResponse
-} from '../../../rate-limits/codex-rpc-rate-limit-mapper'
+} from '../../../rate-limits/providers/codex/codex-rpc-rate-limit-mapper'
 import {
   runCodexProviderAppServer,
   type CodexProviderInvocationDeps
 } from './codex-provider-session-rename'
 import type { CodexSession } from './codex-structured-session-state'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 const USAGE_RPC_TIMEOUT_MS = 10_000
 const COLD_USAGE_TIMEOUT_MS = 30_000
@@ -34,15 +35,23 @@ async function readUsage(
   return { account, rateLimits: mapCodexRpcRateLimits((limits ?? {}) as RpcRateLimitsResponse) }
 }
 
-/** Live chats read on their own connection; a chat at rest reads its pinned home through a
- *  short-lived app-server launched exactly as the chat is, without resuming the thread. */
+/** A chat running on `record.accountHome` reads on its own connection; otherwise that home is read
+ *  through a short-lived app-server launched as the chat is, without resuming the thread. */
 export function readCodexSessionAccountUsage(
   sessions: Map<string, CodexSession>,
   readInvocation: () => CodexProviderInvocationDeps | undefined
 ): NonNullable<StructuredAgentSessionAdapter['readAccountUsage']> {
   return async (record, signal) => {
-    const connection = sessions.get(record.sessionId)?.connection
-    if (connection && !connection.closed) {
+    const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
+    const live = sessions.get(record.sessionId)
+    const connection = live?.connection
+    if (
+      connection &&
+      !connection.closed &&
+      live.codexHome &&
+      normalizeRuntimePathForComparison(live.codexHome) ===
+        normalizeRuntimePathForComparison(codexHome)
+    ) {
       const usage = await readUsage((method, params, options) =>
         connection.request(method, params, options)
       )
@@ -52,7 +61,6 @@ export function readCodexSessionAccountUsage(
     if (!invocation) {
       throw new Error('Codex usage invocation is not configured')
     }
-    const codexHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
     return withCodexHomeProcessLock(resolveCodexHomeProcessLockKey(codexHome), async () => {
       signal.throwIfAborted()
       return runCodexProviderAppServer(

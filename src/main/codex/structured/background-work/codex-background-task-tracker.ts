@@ -1,5 +1,5 @@
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -11,11 +11,15 @@ import {
   type CodexBackgroundTaskEvent
 } from './codex-background-task-frames'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
-import { CodexBackgroundCommandTracker } from './codex-background-command-tracker'
+import {
+  CodexBackgroundCommandTracker,
+  type CodexBackgroundCommandChange
+} from './codex-background-command-tracker'
 import { CodexChildWorkEvidence } from './codex-child-work-evidence'
 import type { CodexAbandonedCommand } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from '../session-lifecycle/codex-structured-session-state'
-import { boundSubagentLabel } from '../../../native-chat/agent-session-journal/journal-subagent-item'
+import { boundSubagentLabel } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
+import { codexChildCommandDescription } from '../../../../shared/codex-child-command-description'
 
 export type CodexChildWorkSink = {
   deliver: (evidence: AgentChildWorkEvidence[]) => void
@@ -40,6 +44,7 @@ export type CodexTerminalStopSupport = 'supported' | 'unsupported' | 'unknown'
 export class CodexBackgroundTaskTracker {
   private publishedFingerprint = '[]'
   private publishedState: AgentSessionBackgroundTaskState | null = null
+  private readonly projectedTasks = new Map<string, AgentSessionBackgroundTask>()
   private readonly commands: CodexBackgroundCommandTracker
   private readonly childWork: CodexChildWorkEvidence
   private terminalStops: CodexTerminalStopSupport | 'probing' = 'unknown'
@@ -91,11 +96,18 @@ export class CodexBackgroundTaskTracker {
     turns: { threadId: string; turnId: string }[]
     terminals: { threadId: string; processId: string }[]
   } {
-    const named = new Set(taskIds)
-    const lineage = this.executions
-      .workingChildren()
-      .filter((child) => named.has(child.agentThreadId))
-      .flatMap((child) => this.executions.lineage(child.agentThreadId))
+    const named = new Set(
+      taskIds.filter((id) => {
+        const child = this.executions.find(id)
+        return child?.registered && child.execution?.state === 'working'
+      })
+    )
+    const lineage = named.size
+      ? this.executions.lineage(
+          named,
+          this.commands.liveCommands().map((command) => command.threadId)
+        )
+      : []
     const threads = [...new Set(lineage.map((child) => child.agentThreadId))]
     return {
       turns: threads.flatMap((threadId) => {
@@ -147,16 +159,16 @@ export class CodexBackgroundTaskTracker {
     ]
     observeCodexExecutionFrame(this.executions, frame, this.primaryThreadId)
     this.childWork.observe(event, frame, commands)
-    if (!frame) {
-      return itemEvent || commands.length > 0 ? this.refresh() : false
-    }
-    // Children can outlive the parent turn; republish without settling or sweeping them.
-    return this.refresh()
+    // The journal may have dirtied this shared registry before admitting the frame.
+    return this.updateProjection(this.executions.takeChangedThreads(), commands)
+      ? this.refresh()
+      : false
   }
 
   clear(processExit?: StructuredAgentSessionEndedEvent['processExit']): boolean {
     this.childWork.clear(this.commands.clear(), processExit)
     this.executions.clear()
+    this.projectedTasks.clear()
     return this.refresh()
   }
 
@@ -186,6 +198,63 @@ export class CodexBackgroundTaskTracker {
         this.executions.label(threadId)
       )
     ]
+  }
+
+  private updateProjection(
+    threads: readonly string[],
+    commands: readonly CodexBackgroundCommandChange[]
+  ): boolean {
+    let changed = false
+    for (const threadId of threads) {
+      const child = this.executions.find(threadId)
+      const task =
+        child?.registered && child.execution?.state === 'working'
+          ? {
+              id: `codex-agent:${threadId}`,
+              kind: 'agent' as const,
+              ...(child.label ? { description: boundSubagentLabel(child.label) } : {})
+            }
+          : null
+      changed = this.projectTask(`codex-agent:${threadId}`, task) || changed
+      for (const command of this.commands.threadCommands(threadId)) {
+        changed = this.projectCommand(command) || changed
+      }
+    }
+    for (const command of commands) {
+      changed = this.projectCommand(command) || changed
+    }
+    return changed
+  }
+
+  private projectCommand(command: CodexBackgroundCommandChange): boolean {
+    if (command.type === 'ended') {
+      return this.projectTask(command.taskId, null)
+    }
+    const child = this.executions.find(command.threadId)
+    if (!command.backgrounded || (child?.registered && child.execution?.state === 'working')) {
+      return this.projectTask(command.task.id, null)
+    }
+    const label =
+      command.threadId === this.primaryThreadId ? null : this.executions.label(command.threadId)
+    const task = label
+      ? {
+          ...command.task,
+          description: codexChildCommandDescription(label, command.task.description)
+        }
+      : command.task
+    return this.projectTask(task.id, task)
+  }
+
+  private projectTask(id: string, task: AgentSessionBackgroundTask | null): boolean {
+    if (task === null) {
+      return this.projectedTasks.delete(id)
+    }
+    const previous = this.projectedTasks.get(id)
+    if (previous?.kind === task.kind && previous.description === task.description) {
+      return false
+    }
+    this.projectedTasks.set(id, task)
+    return true
   }
 
   private refresh(): boolean {

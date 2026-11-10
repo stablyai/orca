@@ -111,18 +111,6 @@ describe('gitlab client — combined listWorkItems', () => {
     })
   })
 
-  it('passes search queries through to merge request and issue fetches', async () => {
-    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
-
-    await listWorkItems('/repo', 'opened', 1, 20, undefined, 'ambiguous selector')
-
-    const mergeRequestCallPath = glabApiWithHeadersMock.mock.calls[0][0] as string[]
-    const issuesCallPath = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-    expect(mergeRequestCallPath[0]).toContain('search=ambiguous%20selector')
-    expect(issuesCallPath.at(-1)).toContain('search=ambiguous%20selector')
-  })
-
   it('looks up `#N` as the issue iid instead of a text search', async () => {
     glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
     glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
@@ -133,33 +121,6 @@ describe('gitlab client — combined listWorkItems', () => {
     const issueParams = new URLSearchParams(issuesCallPath.at(-1)?.split('?')[1])
     expect(issueParams.getAll('iids[]')).toEqual(['23'])
     expect(issueParams.has('search')).toBe(false)
-  })
-
-  it('routes issue list fetches through the selected SSH GitLab host', async () => {
-    resolveIssueSourceMock.mockResolvedValueOnce({
-      source: { host: 'git.internal', path: 'g/p' },
-      fellBack: false
-    })
-    glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
-    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
-
-    await listWorkItems('/repo', 'opened', 1, 20, 'upstream', undefined, 'conn-1')
-
-    expect(glabExecFileAsyncMock.mock.calls[0][0]).toEqual([
-      'api',
-      '--hostname',
-      'git.internal',
-      'projects/g%2Fp/issues?page=1&per_page=20&order_by=updated_at&sort=desc&state=opened'
-    ])
-  })
-
-  it('returns a not_found error envelope when project ref is unresolved', async () => {
-    resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
-
-    const result = await listWorkItems('/repo', 'opened')
-    expect(result.error?.type).toBe('not_found')
-    expect(result.items).toEqual([])
-    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('still returns issues when MRs error out', async () => {

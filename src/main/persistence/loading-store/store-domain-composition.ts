@@ -15,6 +15,7 @@ import { SessionHostPartitionOperations } from './session-host-partitions'
 import { SessionSnapshotOperations } from './session-snapshot-operations'
 import { MetadataLineageOperations } from './metadata-lineage-operations'
 import { CrossStoreLineagePersistence } from './cross-store-lineage-persistence'
+import { FolderParentLineagePersistence } from './folder-parent-lineage-persistence'
 import { ProjectCollectionOperations } from './project-collection-operations'
 import { AutomationPersistence } from './automation-persistence'
 import { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
@@ -41,6 +42,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   AutomationPersistence &
   MetadataLineageOperations &
   CrossStoreLineagePersistence &
+  FolderParentLineagePersistence &
   ProfilePreferences &
   SessionHostPartitionOperations &
   SessionSnapshotOperations &
@@ -69,6 +71,7 @@ export type StoreDomains = {
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
   crossStoreLineage: CrossStoreLineagePersistence
+  folderParentLineage: FolderParentLineagePersistence
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
@@ -97,6 +100,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   AutomationPersistence,
   MetadataLineageOperations,
   CrossStoreLineagePersistence,
+  FolderParentLineagePersistence,
   ProfilePreferences,
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
@@ -170,6 +174,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessionSnapshots,
     metadata,
     crossStoreLineage: new CrossStoreLineagePersistence(runtime, scheduling),
+    folderParentLineage: new FolderParentLineagePersistence(runtime, scheduling),
     projects,
     automations,
     mobileTabSelections,

@@ -1,9 +1,10 @@
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { AppState } from '../types'
-import { callRuntimeRpc, ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { ensureRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import {
   resolveTerminalPtyOwner,
   resolveTerminalWorktreeRoute
@@ -11,7 +12,7 @@ import {
 import {
   classifyTerminalRetirementWorktree,
   type TerminalTabRetirementPlan
-} from '../slices/terminal-tab-retirement'
+} from './terminal-tab-retirement'
 
 export function startTerminalTabProviderRetirement({
   localPtyTeardownOwnedExternally,

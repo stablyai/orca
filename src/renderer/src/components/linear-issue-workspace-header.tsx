@@ -22,10 +22,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import { copyLinearIssueText } from './linear-issue-clipboard'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function LinearIssueWorkspaceHeader({
   issue,
@@ -46,6 +46,7 @@ export function LinearIssueWorkspaceHeader({
   onOpenOrUseIssue: () => void
   onUseIssue: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <header className="flex h-[61px] flex-none items-center justify-between gap-4 border-b border-border/60 px-5">
       <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
@@ -64,12 +65,11 @@ export function LinearIssueWorkspaceHeader({
         ) : null}
         <LinearIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="truncate font-medium text-foreground">
-          {issue.workspaceName ??
-            translate('auto.components.LinearIssueWorkspace.65239a714b', 'Linear')}
+          {issue.workspaceName ?? t('auto.components.LinearIssueWorkspace.65239a714b', 'Linear')}
         </span>
         <ChevronRight className="size-3.5 shrink-0" />
         <span className="shrink-0">
-          {translate('auto.components.LinearIssueWorkspace.f63ef94ea8', 'Issues')}
+          {t('auto.components.LinearIssueWorkspace.f63ef94ea8', 'Issues')}
         </span>
         <ChevronRight className="size-3.5 shrink-0" />
         <span className="shrink-0 font-mono">{issue.identifier}</span>
@@ -85,16 +85,13 @@ export function LinearIssueWorkspaceHeader({
               variant="ghost"
               size="icon-sm"
               onClick={() => void copyLinearIssueText(issue.url, 'url')}
-              aria-label={translate(
-                'auto.components.LinearIssueWorkspace.97c19a84f1',
-                'Copy Linear URL'
-              )}
+              aria-label={t('auto.components.LinearIssueWorkspace.97c19a84f1', 'Copy Linear URL')}
             >
               <Copy className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL')}
+            {t('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL')}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -104,16 +101,13 @@ export function LinearIssueWorkspaceHeader({
               variant="ghost"
               size="icon-sm"
               onClick={(event) => openAppHttpLink(issue.url, { event })}
-              aria-label={translate(
-                'auto.components.LinearIssueWorkspace.openOnLinear',
-                'Open on Linear'
-              )}
+              aria-label={t('auto.components.LinearIssueWorkspace.openOnLinear', 'Open on Linear')}
             >
               <ExternalLink className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.LinearIssueWorkspace.openOnLinear', 'Open on Linear')}
+            {t('auto.components.LinearIssueWorkspace.openOnLinear', 'Open on Linear')}
           </TooltipContent>
         </Tooltip>
         {attachedWorkspace ? (
@@ -124,19 +118,19 @@ export function LinearIssueWorkspaceHeader({
                 size="sm"
                 onClick={onOpenOrUseIssue}
                 className="gap-1.5 whitespace-nowrap"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
                   'Open workspace attached to issue'
                 )}
               >
                 <FolderOpen className="size-3.5" />
-                {translate('auto.components.LinearIssueWorkspace.openWorkspace', 'Open workspace')}
+                {t('auto.components.LinearIssueWorkspace.openWorkspace', 'Open workspace')}
               </Button>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
                   size="icon-sm"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.LinearIssueWorkspace.moreWorkspaceActions',
                     'More issue workspace actions'
                   )}
@@ -148,10 +142,7 @@ export function LinearIssueWorkspaceHeader({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={onUseIssue}>
                 <Plus className="size-4" />
-                {translate(
-                  'auto.components.LinearIssueWorkspace.startNewWorkspace',
-                  'Start new workspace'
-                )}
+                {t('auto.components.LinearIssueWorkspace.startNewWorkspace', 'Start new workspace')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -161,12 +152,12 @@ export function LinearIssueWorkspaceHeader({
             size="sm"
             onClick={onOpenOrUseIssue}
             className="gap-1.5 whitespace-nowrap"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.LinearIssueWorkspace.30a7f56c0a',
               'Start workspace from issue'
             )}
           >
-            {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
+            {t('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
             <ArrowRight className="size-3.5" />
           </Button>
         )}
@@ -177,7 +168,7 @@ export function LinearIssueWorkspaceHeader({
                 variant="ghost"
                 size="icon-sm"
                 onClick={onClose}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.LinearIssueWorkspace.7a4997d8bb',
                   'Close Linear issue preview'
                 )}
@@ -186,7 +177,7 @@ export function LinearIssueWorkspaceHeader({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.LinearIssueWorkspace.df4c86ed12', 'Close')}
+              {t('auto.components.LinearIssueWorkspace.df4c86ed12', 'Close')}
             </TooltipContent>
           </Tooltip>
         ) : null}

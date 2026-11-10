@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import {
   getBrowserRemotelyViewedPageIds,
   getBrowserRemoteViewerSnapshot,
@@ -22,21 +23,21 @@ function getServerSnapshot(): number {
 export function useBrowserRemoteViewerForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {
-  useSyncExternalStore(
+  const storeVersion = useSyncExternalStore(
     subscribeBrowserRemoteViewerSnapshot,
     getBrowserRemoteViewerSnapshot,
     getServerSnapshot
   )
-  return hasRemoteViewerForAnyBrowserPage(browserPageIds)
+  return recomputeOn([storeVersion], () => hasRemoteViewerForAnyBrowserPage(browserPageIds))
 }
 
 export function useBrowserRemotelyViewedPageIds(
   browserPageIds: readonly (string | null | undefined)[]
 ): Set<string> {
-  useSyncExternalStore(
+  const storeVersion = useSyncExternalStore(
     subscribeBrowserRemoteViewerSnapshot,
     getBrowserRemoteViewerSnapshot,
     getServerSnapshot
   )
-  return getBrowserRemotelyViewedPageIds(browserPageIds)
+  return recomputeOn([storeVersion], () => getBrowserRemotelyViewedPageIds(browserPageIds))
 }

@@ -1,17 +1,14 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isGroupAddress } from '../../../../orchestration/groups'
+import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import {
   dispatchReportMailbox,
   isDispatchReportType
-} from '../../../../orchestration/dispatch-report-mailbox'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
-import {
-  SendParams,
-  isDispatchMutationMessageType,
-  isWorkerReportOutcome,
-  parseRemoteWorkerPayload
-} from '../schemas'
+} from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
+import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
+import { SendParams } from './send-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
 import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
@@ -41,6 +38,7 @@ import {
   settledDispatchId
 } from './settled-worker-follow-through'
 
+// `send --on <server>` is carried by withPeerMailSend (peer-mail-send.ts) before this handler runs.
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',

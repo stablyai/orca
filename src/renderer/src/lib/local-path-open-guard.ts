@@ -5,7 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
+import type { ExecutionHostOwnerMatch } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { translate } from '@/i18n/i18n'
 import { getWindowsPathAccess } from './windows-path-access'
 

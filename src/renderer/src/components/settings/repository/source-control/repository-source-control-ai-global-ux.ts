@@ -1,3 +1,4 @@
+import { readCompleteRecipeForDraft } from './repository-source-control-ai-recipe-completion'
 import type {
   HostedReviewDefaultKey,
   UseRepositorySourceControlAiGlobalUxArgs
@@ -19,7 +20,6 @@ import {
   composeDisplayRepoAi,
   computeActionDirtyById,
   hasOwnActionOverride,
-  readCompleteRecipeForDraft,
   retainCustomCommandDraft,
   retainDivergentActionTextDrafts,
   withRepoAiActionMode,

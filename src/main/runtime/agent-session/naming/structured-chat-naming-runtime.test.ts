@@ -1,22 +1,44 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
+import {
+  acquired,
+  fakeClaude,
+  identityFor,
+  recordingJournalSink,
+  PROVIDER_SESSION_ID
+} from '../../../claude/structured/claude-structured-session-test-support'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { Query } from '@anthropic-ai/claude-agent-sdk'
+import { createClaudeControlSurface } from '../../../claude/claude-agent-sdk-control-requests'
+import {
+  createStructuredChatNamingHandler,
+  type StructuredChatNamingDeps
+} from '../../../native-chat/structured-chat-naming'
+import { compareAndSetAgentSessionRecordName } from '../records/agent-session-record-conversation-name'
+import { rm } from 'node:fs/promises'
 import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
-import { submission as journalSubmission } from '../../../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
-import { STRUCTURED_AGENT_RUNTIME_CATALOG } from '../installation/structured-agent-runtime-metadata'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalSnapshot
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../../../text-generation/commit-message-text-generation'
+import * as shellEnvironment from '../environment/structured-agent-shell-environment'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../launch/structured-agent-launch-support'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import {
+  createQueuedMessageTestRig,
+  QUEUED_RIG_CALLER
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { holdDelivery } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-delivery-hold.test-fixture'
+import { holdUnsentSends } from '../../../native-chat/agent-session-journal/queued-messages/journal-unsent-send-hold'
+import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  HOST_TEST_SESSION,
+  hostTestOperationId
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 const mocks = vi.hoisted(() => ({
   account: vi.fn((_provider: string, id: string) => ({
@@ -24,7 +46,13 @@ const mocks = vi.hoisted(() => ({
     XDG_STATE_HOME: `/profiles/${id}/state`
   })),
   native: vi.fn(async () => 'Native title'),
-  generate: vi.fn(async () => ({ success: true as const, name: 'Login repair' })),
+  titleOwner: vi.fn(),
+  host: vi.fn<() => StructuredAgentSessionHost | undefined>(),
+  record: vi.fn(),
+  generate: vi.fn<typeof TextGeneration.generateConversationNameFromContext>(async () => ({
+    success: true as const,
+    name: 'Login repair'
+  })),
   target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd })),
   publishConversationName: vi.fn<(sessionId: string) => void>(),
   journalCurrentRead: vi.fn<(sessionId: string) => Promise<AgentJournalSnapshot>>()
@@ -34,15 +62,19 @@ vi.mock('../../../text-generation/commit-message-text-generation', async (import
   const actual = await importOriginal<typeof TextGeneration>()
   return { ...actual, generateConversationNameFromContext: mocks.generate }
 })
-vi.mock('../../../agent-hooks/first-work-generation-target', () => ({
+vi.mock('../../../agent-hooks/first-work/first-work-generation-target', () => ({
   resolveGenerationTarget: mocks.target
 }))
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => ({
-    deps: { adapter: { generateText: mocks.native } },
-    publishConversationName: mocks.publishConversationName,
-    journalCurrentRead: mocks.journalCurrentRead
-  })
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () =>
+    mocks.host() ?? {
+      deps: {
+        store: { getRecord: mocks.record },
+        adapter: { generateText: mocks.native, captureConversationTitleOwner: mocks.titleOwner }
+      },
+      publishConversationName: mocks.publishConversationName,
+      journalCurrentRead: mocks.journalCurrentRead
+    }
 }))
 
 vi.mock('../../../managed-data-accounts/service', () => ({
@@ -53,13 +85,21 @@ vi.mock('../../../managed-data-accounts/service', () => ({
 }))
 const roots: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
   installClaudeProfileRouter(undefined)
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.titleOwner.mockReset()
+  mocks.host.mockReset()
+  mocks.record.mockReset()
+})
 
 function rig() {
   const settings = getDefaultSettings('/isolated')
+  const settingsListeners = new Set<() => void>()
   settings.defaultTuiAgent = 'codex'
   settings.sourceControlAi = normalizeSourceControlAiSettings(settings.sourceControlAi)
   const runtime = {
@@ -77,13 +117,122 @@ function rig() {
   const logger = { warn: vi.fn(), error: vi.fn() }
   return {
     settings,
+    settingsChanged: () => settingsListeners.forEach((changed) => changed()),
     runtime,
     logger,
-    deps: structuredChatNamingDeps(() => ({ getSettings: () => settings }), runtime, logger)
+    deps: structuredChatNamingDeps(
+      () => ({
+        getSettings: () => settings,
+        onSettingsChanged: (changed) => {
+          settingsListeners.add(changed)
+          return () => {
+            settingsListeners.delete(changed)
+          }
+        }
+      }),
+      runtime,
+      logger
+    )
   }
 }
 
 describe('structured chat naming runtime', () => {
+  it('resolves Claude naming inheritance before the deliberate agent launch environment', async () => {
+    const inherited = {
+      CLAUDE_CODE_MESSAGING_SOCKET: 'parent-socket',
+      CLAUDE_CODE_ENTRYPOINT: 'parent-client',
+      CLAUDE_EFFORT: 'parent-effort',
+      CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+    }
+    vi.spyOn(shellEnvironment, 'resolveHostAgentBaseEnvironment').mockResolvedValue(inherited)
+    const settings = getDefaultSettings('/isolated')
+    settings.agentDefaultEnv = { claude: { CLAUDE_EFFORT: 'chosen-effort' } }
+    const env = await resolveHostStructuredAgentLaunchEnvironment('claude', settings)
+    expect(env).toMatchObject({
+      CLAUDE_EFFORT: 'chosen-effort',
+      CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+    })
+    expect(env.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined()
+    expect(
+      (await resolveHostStructuredAgentLaunchEnvironment('codex', settings)).CLAUDE_EFFORT
+    ).toBe('parent-effort')
+    expect(inherited.CLAUDE_CODE_MESSAGING_SOCKET).toBe('parent-socket')
+  })
+
+  it('uses the CLI title only for automatic default naming and honors changed settings', async () => {
+    const state = rig()
+    const record = agentSessionRecordFixture()
+    const pending = Promise.withResolvers<string>()
+    const generate = vi.fn(() => pending.promise)
+    mocks.titleOwner.mockReturnValue({ isCurrent: () => true, generate })
+    const result = state.deps.generate(
+      record,
+      'Repair login',
+      () => true,
+      state.deps.captureAutomaticTitle!(record)
+    )
+    await vi.waitFor(() => expect(generate).toHaveBeenCalled())
+    pending.resolve('Broken chat title')
+    expect(await result).toMatchObject({ name: 'Broken chat title' })
+    expect(mocks.generate).not.toHaveBeenCalled()
+    await state.deps.generate(record, 'Repair login')
+    expect(mocks.generate).toHaveBeenCalledOnce()
+
+    generate.mockImplementationOnce(async () => {
+      state.settings.sourceControlAi!.actions!.conversationName = {
+        commandInputTemplate: 'Custom {basePrompt}'
+      }
+      return 'Wrong settings title'
+    })
+    expect(
+      await state.deps.generate(
+        record,
+        'Repair login',
+        () => true,
+        state.deps.captureAutomaticTitle!(record)
+      )
+    ).toEqual({ name: 'Login repair' })
+  })
+
+  it.each(['action', 'shared', 'legacy', 'seeded-default', 'effort', 'template'] as const)(
+    'preserves authored %s naming choices without consulting the CLI',
+    async (choice) => {
+      const state = rig()
+      const source = state.settings.sourceControlAi!
+      if (choice === 'action') {
+        source.modelOverridesByOperation = {
+          conversationName: { selectedModelByAgent: { claude: 'opus' } }
+        }
+      }
+      if (choice === 'shared') {
+        source.selectedModelByAgent = { claude: 'opus' }
+      }
+      if (choice === 'legacy') {
+        state.settings.commitMessageAi!.selectedModelByAgent = { claude: 'opus' }
+      }
+      if (choice === 'seeded-default') {
+        state.settings.commitMessageAi!.selectedModelByAgent = { claude: 'sonnet' }
+        state.settings.commitMessageAi!.selectedThinkingByModel = { sonnet: 'high' }
+      }
+      if (choice === 'effort') {
+        source.selectedThinkingByModel = { sonnet: 'high' }
+      }
+      if (choice === 'template') {
+        source.actions!.conversationName = { commandInputTemplate: 'Custom {basePrompt}' }
+      }
+      const record = agentSessionRecordFixture()
+      expect(
+        await state.deps.generate(
+          record,
+          'Repair login',
+          () => true,
+          state.deps.captureAutomaticTitle!(record)
+        )
+      ).toEqual({ name: 'Login repair' })
+      expect(mocks.titleOwner).not.toHaveBeenCalled()
+    }
+  )
   it.each(['grok', 'antigravity'] as const)(
     'codes %s native naming failures without exposing provider text',
     async (provider) => {
@@ -103,340 +252,498 @@ describe('structured chat naming runtime', () => {
       }
     }
   )
+})
 
-  it.each([10, 100])(
-    'scopes naming prompts with linear visits over %i retained items',
-    async (count) => {
-      let visits = 0
-      const message: AgentJournalRenderItem = {
-        itemId: 'fresh',
-        sequence: count + 2,
-        revision: 1,
-        observedAt: 200,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'New task' }] }
-      }
-      const items: AgentJournalRenderItem[] = Array.from({ length: count }, (_, index) => ({
-        ...message,
-        itemId: `old-${index}`,
-        get sequence() {
-          visits++
-          return index + 1
+function automaticNaming(state: ReturnType<typeof rig>, before?: 'prompt' | 'seed') {
+  let record = agentSessionRecordFixture()
+  record.sessionId = 'session-1'
+  record.lease.sessionId = 'session-1'
+  record.providerHandleChain[0]!.handle.nativeId = PROVIDER_SESSION_ID
+  const blocked = Promise.withResolvers<void>()
+  const entered = Promise.withResolvers<void>()
+  const awaitPreparationRelease = async (stage: 'prompt' | 'seed') => {
+    if (before === stage) {
+      entered.resolve()
+      await blocked.promise
+    }
+  }
+  const store = {
+    getRecord: () => record,
+    compareAndSetConversationName: async (_id, name, expected, context, applicable) =>
+      compareAndSetAgentSessionRecordName(
+        async (apply) => {
+          if (expected === null) {
+            await awaitPreparationRelease('seed')
+          }
+          record = apply(record)
+          return record
         },
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Old task' }] }
-      }))
-      items.push(
+        name,
+        expected,
+        context,
+        applicable
+      ),
+    setUserConversationName: vi.fn()
+  } satisfies NonNullable<ReturnType<StructuredChatNamingDeps['getStore']>>
+  mocks.record.mockImplementation(() => record)
+  const handler = createStructuredChatNamingHandler({
+    ...state.deps,
+    getStore: () => store,
+    readFirstPrompt: async () => {
+      await awaitPreparationRelease('prompt')
+      return 'Repair login'
+    },
+    wait: async () => {}
+  })
+  return {
+    handler,
+    entered: entered.promise,
+    release: () => blocked.resolve(),
+    record: () => record,
+    replace: () => {
+      record = { ...record, lease: { ...record.lease, runtimeFence: 8 } }
+    },
+    start: () =>
+      handler(
         {
-          ...message,
-          itemId: 'clear',
-          sequence: count + 1,
-          body: {
-            kind: 'status',
-            text: 'Context cleared',
-            contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 200 }
-          }
+          sessionId: record.sessionId,
+          workspaceId: 'workspace-1',
+          agent: 'claude',
+          status: 'working',
+          latestPrompt: 'Repair login',
+          updatedAt: 1
         },
-        message
+        { replay: false, firstInputSubmissionKey: 'input-1' }
       )
-      let submissionVisits = 0
-      const submission: AgentJournalSubmission = {
-        ...journalSubmission('fresh', 'accepted', 'fresh'),
-        acceptedSequence: count + 2,
-        submittedAt: 200
-      }
-      const oldSubmissions: AgentJournalSubmission[] = Array.from(
-        { length: count },
-        (_, index) => ({
-          ...submission,
-          clientMessageId: `old-${index}`,
-          providerItemId: `old-${index}`,
-          get acceptedSequence() {
-            submissionVisits++
-            return index + 1
+  }
+}
+
+it.each(['prompt', 'seed', 'workspace', 'support'] as const)(
+  'retains the accepted input owner while %s preparation is pending',
+  async (stage) => {
+    const state = rig()
+    const blocked = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    if (stage === 'workspace') {
+      state.runtime.resolveWorkspace.mockImplementationOnce(async () => {
+        entered.resolve()
+        await blocked.promise
+        return { path: '/workspace/folder', executionHostId: 'local' }
+      })
+    }
+    const naming = automaticNaming(
+      state,
+      stage === 'prompt' || stage === 'seed' ? stage : undefined
+    )
+    const control = vi.fn(async () => 'Successor title')
+    mocks.titleOwner.mockImplementation(() => {
+      const fence = naming.record().lease.runtimeFence
+      return {
+        isCurrent: (current: AgentSessionRecord) => current.lease.runtimeFence === fence,
+        generate: async (_prompt: string, shouldExecute: () => boolean) => {
+          if (stage === 'support') {
+            entered.resolve()
+            await blocked.promise
           }
+          return shouldExecute() ? control() : null
+        }
+      }
+    })
+    naming.start()
+    await (stage === 'workspace' || stage === 'support' ? entered.promise : naming.entered)
+    naming.replace()
+    naming.release()
+    blocked.resolve()
+    await vi.waitFor(() => expect(naming.handler.activeSessionIds()).toEqual([]))
+    expect(control).not.toHaveBeenCalled()
+    expect(mocks.generate).toHaveBeenCalledOnce()
+    expect(naming.record().conversationName).toBe('Login repair')
+  }
+)
+
+it.each([false, true])(
+  'bounds timeout fallback to its owner (retired=%s), retries independently, and ignores late CLI results',
+  async (retired) => {
+    const state = rig()
+    const pending = Promise.withResolvers<string>()
+    const generateSessionTitle = vi.fn(() => pending.promise)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this flow calls only the feature-detected title method.
+    const controls = createClaudeControlSurface({ generateSessionTitle } as unknown as Query)
+    let owned = true
+    mocks.titleOwner.mockReturnValue({
+      isCurrent: () => owned,
+      generate: controls.generateSessionTitle
+    })
+    mocks.generate
+      .mockResolvedValueOnce({ success: false, error: 'Retry naming' })
+      .mockImplementationOnce(async () => {
+        if (retired) {
+          owned = false
+        }
+        return { success: true, name: 'Recovered name' }
+      })
+    const naming = automaticNaming(state)
+    vi.useFakeTimers()
+    naming.start()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(naming.record().conversationName).toBe(retired ? 'Repair login' : 'Recovered name')
+    pending.resolve('Late CLI name')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(naming.record().conversationName).toBe(retired ? 'Repair login' : 'Recovered name')
+    expect(generateSessionTitle).toHaveBeenCalledOnce()
+    expect(mocks.generate).toHaveBeenCalledTimes(2)
+    expect(naming.handler.activeSessionIds()).toEqual([])
+  }
+)
+
+it.each([
+  { support: 'unsupported' as const, transition: 'close', response: 'unused' },
+  { support: 'unknown' as const, transition: 'replacement', response: 'unused' },
+  { support: 'supported' as const, transition: 'replacement', response: 'error' },
+  { support: 'supported' as const, transition: 'close', response: 'null' }
+])(
+  'finishes independent naming after $transition with support=$support and response=$response',
+  async ({ support, transition, response }) => {
+    const cli = fakeClaude()
+    const adapter = await acquired(cli, { cliFlag: async () => support })
+    const state = rig()
+    const naming = automaticNaming(state)
+    const entered = Promise.withResolvers<void>()
+    const independent =
+      Promise.withResolvers<
+        Awaited<ReturnType<typeof TextGeneration.generateConversationNameFromContext>>
+      >()
+    const control = vi.fn(async () => {
+      if (response === 'error') {
+        throw new Error('Optional control rejected')
+      }
+      return response === 'null' ? null : 'Wrong live title'
+    })
+    cli.connections[0]!.generateSessionTitle = control
+    mocks.titleOwner.mockImplementation((record) => adapter.captureConversationTitleOwner(record))
+    mocks.generate.mockImplementationOnce(async () => {
+      entered.resolve()
+      return independent.promise
+    })
+    try {
+      naming.start()
+      await entered.promise
+      await adapter.closeSession('session-1')
+      if (transition === 'replacement') {
+        naming.replace()
+        await adapter.acquire({
+          identity: identityFor(),
+          fence: 8,
+          spawnToken: 'replacement',
+          events: recordingJournalSink()
         })
-      )
-      mocks.journalCurrentRead.mockResolvedValue({
-        sessionId: 'chat',
-        cursor: { epoch: 'epoch', sequence: count + 2 },
-        items,
-        submissions: [...oldSubmissions, submission]
-      })
-      const { deps } = rig()
-      expect(await deps.readFirstPrompt('chat', 100)).toBe('New task')
-      expect(visits).toBe(2 * count)
-      expect(submissionVisits).toBe(count)
-      visits = 0
-      expect(await deps.readJournalFirstPrompt('chat')).toBe('New task')
-      expect(visits).toBe(2 * count)
-    }
-  )
-
-  it('defers the settings store lookup until naming needs it', () => {
-    const state = rig()
-    const unavailableStore = vi.fn(() => {
-      throw new Error('runtime_unavailable')
-    })
-    const deps = structuredChatNamingDeps(unavailableStore, state.runtime, state.logger)
-    expect(unavailableStore).not.toHaveBeenCalled()
-    expect(() => deps.getSettings()).toThrow('runtime_unavailable')
-  })
-
-  it('re-reads the selected agent and template for the next chat', async () => {
-    const state = rig()
-    await state.deps.generate(agentSessionRecordFixture(), 'Repair login')
-    expect(mocks.generate).toHaveBeenLastCalledWith(
-      { firstPrompt: 'Repair login' },
-      expect.objectContaining({ agentId: 'claude' }),
-      expect.objectContaining({ kind: 'local', cwd: '/workspace/folder' }),
-      undefined
-    )
-    state.settings.sourceControlAi = {
-      ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
-      actions: {
-        conversationName: {
-          agentId: 'claude',
-          commandInputTemplate: 'Short name for {firstPrompt}',
-          agentArgs: '--model haiku'
-        }
+        cli.connections[1]!.generateSessionTitle = control
       }
+      independent.resolve({ success: true, name: 'Independent completion' })
+      await vi.waitFor(() => expect(naming.handler.activeSessionIds()).toEqual([]))
+      expect(naming.record().conversationName).toBe('Independent completion')
+      expect(control).toHaveBeenCalledTimes(response === 'unused' ? 0 : 1)
+    } finally {
+      await adapter.closeAll()
+      cli.dispose()
     }
-    await state.deps.generate(agentSessionRecordFixture(), 'Repair another chat')
-    expect(mocks.generate).toHaveBeenLastCalledWith(
-      { firstPrompt: 'Repair another chat' },
-      expect.objectContaining({
-        agentId: 'claude',
-        commandInputTemplate: 'Short name for {firstPrompt}',
-        agentArgs: '--model haiku'
+  }
+)
+
+it('discards a retired CLI result and publishes only independent fallback text', async () => {
+  const cli = fakeClaude()
+  const adapter = await acquired(cli)
+  const state = rig()
+  const naming = automaticNaming(state)
+  const pending = Promise.withResolvers<string>()
+  const started = Promise.withResolvers<void>()
+  cli.connections[0]!.generateSessionTitle = async () => {
+    started.resolve()
+    return pending.promise
+  }
+  mocks.titleOwner.mockImplementation((record) => adapter.captureConversationTitleOwner(record))
+  try {
+    naming.start()
+    await started.promise
+    await adapter.closeSession('session-1')
+    pending.resolve('Stale CLI title')
+    await vi.waitFor(() => expect(naming.handler.activeSessionIds()).toEqual([]))
+    expect(naming.record().conversationName).toBe('Login repair')
+  } finally {
+    await adapter.closeAll()
+    cli.dispose()
+  }
+})
+
+it.each(['capture', 'pending result'] as const)(
+  'keeps the seed and existing naming failure when account lookup fails at %s',
+  async (stage) => {
+    const cli = fakeClaude()
+    const adapter = await acquired(cli)
+    const state = rig()
+    const naming = automaticNaming(state)
+    const router = new ClaudeProfileRouter({
+      getSettings: () => ({
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: null,
+        agentStatusHooksEnabled: false,
+        disabledTuiAgents: []
       }),
-      expect.anything(),
-      undefined
-    )
-  })
-
-  it.each(
-    STRUCTURED_AGENT_RUNTIME_CATALOG.map(({ metadata }) => metadata.definition.agent).filter(
-      (agent) => agent !== 'pi' && agent !== 'omp'
-    )
-  )('names a %s chat with its own agent regardless of global selection', async (provider) => {
-    const state = rig()
-    state.settings.sourceControlAi = {
-      ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
-      agentId: 'codex'
+      dataRoot: '/isolated',
+      userHome: '/users/test',
+      env: {}
+    })
+    const preparation = vi.spyOn(router, 'preparation')
+    installClaudeProfileRouter(router)
+    const unavailable = () => {
+      throw new Error('Selected account folder missing')
     }
-    const record = agentSessionRecordFixture()
-    record.provider = provider
-    record.accountHome =
-      provider === 'opencode' || provider === 'opencode2'
-        ? { kind: 'opencode', locator: { kind: 'unmanaged' } }
-        : {
-            variable:
-              provider === 'codex'
-                ? 'CODEX_HOME'
-                : provider === 'claude'
-                  ? 'CLAUDE_CONFIG_DIR'
-                  : provider === 'grok'
-                    ? 'GROK_HOME'
-                    : provider === 'antigravity'
-                      ? 'GEMINI_HOME'
-                      : 'PI_CODING_AGENT_DIR',
-            path: '/pinned-account'
-          }
-    const shouldExecute = () => true
-    await state.deps.generate(record, 'Repair login', shouldExecute)
-    if (provider === 'grok' || provider === 'antigravity') {
-      expect(mocks.native).toHaveBeenCalledWith(
-        expect.objectContaining({ accountHome: record.accountHome, shouldExecute })
-      )
-      expect(mocks.generate).not.toHaveBeenCalled()
-    } else {
-      expect(mocks.generate).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ agentId: provider }),
-        expect.objectContaining({
-          env: expect.objectContaining(
-            'variable' in record.accountHome
-              ? { [record.accountHome.variable]: record.accountHome.path }
-              : {}
-          )
-        }),
-        shouldExecute
-      )
+    const pending = Promise.withResolvers<string>()
+    const started = Promise.withResolvers<void>()
+    cli.connections[0]!.generateSessionTitle = async () => {
+      started.resolve()
+      return pending.promise
     }
-    expect(state.settings.sourceControlAi?.actions?.conversationName?.agentId).toBeUndefined()
-  })
-
-  it('uses the current routed Claude account', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-naming-account-test-'))
-    roots.push(root)
-    const home = join(root, 'claude-profiles', 'selected', 'home')
-    await mkdir(home, { recursive: true })
-    await writeFile(join(root, 'claude-profiles', 'selected', 'profile.json'), '{}')
-    installClaudeProfileRouter(
-      new ClaudeProfileRouter({
-        getSettings: () => ({
-          claudeManagedAccounts: [],
-          activeClaudeManagedAccountId: 'selected',
-          agentStatusHooksEnabled: false,
-          disabledTuiAgents: []
-        }),
-        dataRoot: root,
-        userHome: join(root, 'personal'),
-        env: {}
-      })
-    )
-    const state = rig()
-    const record = agentSessionRecordFixture()
-    await state.deps.generate(record, 'Repair login')
-    expect(mocks.generate).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ env: expect.objectContaining({ CLAUDE_CONFIG_DIR: home }) }),
-      undefined
-    )
-  })
-
-  it.each([undefined, '/user-configured/claude'])(
-    'distinguishes the explicit Claude directory %s from inherited environment under System default',
-    async (configuredDir) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-naming-system-account-test-'))
-      roots.push(root)
-      const router = new ClaudeProfileRouter({
-        getSettings: () => ({
-          claudeManagedAccounts: [],
-          activeClaudeManagedAccountId: null,
-          agentStatusHooksEnabled: false,
-          disabledTuiAgents: []
-        }),
-        dataRoot: root,
-        userHome: join(root, 'personal'),
-        env: {}
-      })
-      installClaudeProfileRouter(router)
-      const state = rig()
-      state.settings.agentDefaultEnv = {
-        claude: configuredDir ? { CLAUDE_CONFIG_DIR: configuredDir } : {}
+    mocks.titleOwner.mockImplementation((record) => adapter.captureConversationTitleOwner(record))
+    state.runtime.resolveNamingEnvironment.mockImplementation(async () => unavailable())
+    try {
+      if (stage === 'capture') {
+        preparation.mockImplementation(unavailable)
       }
-      state.runtime.resolveNamingEnvironment.mockResolvedValue({
-        PATH: '/usr/bin',
-        CLAUDE_CONFIG_DIR: configuredDir ?? '/inherited/claude'
-      })
-      await state.deps.generate(agentSessionRecordFixture(), 'Repair login')
-      expect(mocks.generate).toHaveBeenLastCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.objectContaining({
-          env: expect.objectContaining({
-            CLAUDE_CONFIG_DIR: configuredDir ?? router.systemDefaultHome()
-          })
-        }),
-        undefined
-      )
+      naming.start()
+      if (stage === 'pending result') {
+        await started.promise
+        preparation.mockImplementation(unavailable)
+        pending.resolve('Unusable account title')
+      }
+      await vi.waitFor(() => expect(naming.handler.activeSessionIds()).toEqual([]))
+      expect(naming.record().conversationName).toBe('Repair login')
+      expect(naming.handler.failure('session-1')?.messageCode).toBe('agentNotRun')
+    } finally {
+      await adapter.closeAll()
+      cli.dispose()
     }
-  )
+  }
+)
 
-  it.each([false, true])(
-    'preserves args-only CLI recipes (explicit null: %s)',
-    async (explicitNull) => {
-      const state = rig()
-      state.settings.defaultTuiAgent = 'claude'
-      state.settings.sourceControlAi = {
-        ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
-        agentId: 'codex',
-        actions: {
-          conversationName: {
-            ...(explicitNull ? { agentId: null } : {}),
-            agentArgs: '--model custom',
-            commandInputTemplate: 'Title: {firstPrompt}'
-          }
+async function atRestNaming() {
+  const state = rig()
+  const chat = await createQueuedMessageTestRig({
+    agent: 'claude',
+    atRest: true,
+    starting: true,
+    restartable: true
+  })
+  await vi.waitFor(() =>
+    expect(
+      chat.host.collaboratorsForTests().conversationDelivery.loop.isRunning(HOST_TEST_SESSION)
+    ).toBe(false)
+  )
+  mocks.host.mockReturnValue(chat.host)
+  const title = vi.fn(async () => 'CLI first handover title')
+  chat.host.deps.adapter.captureConversationTitleOwner = (_record) => {
+    const child = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child
+    if (!child || child.phase !== 'ready') {
+      return null
+    }
+    const isCurrent = (current: AgentSessionRecord) =>
+      current.lease.runtimeFence === child.fence &&
+      chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child === child
+    return { isCurrent, generate: title }
+  }
+  const handler = createStructuredChatNamingHandler({ ...state.deps, now: () => 0 })
+  chat.host.deps.onSessionStatusChanged = handler
+  chat.host.deps.conversationNaming = handler
+  const done = () => vi.waitFor(() => expect(handler.activeSessionIds()).toEqual([]))
+  const seeded = () =>
+    vi.waitFor(() =>
+      expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Repair login')
+    )
+  return { state, chat, title, handler, done, seeded }
+}
+
+it.each(['fresh', 'startup retry', 'projected context'] as const)(
+  'names an at-rest chat from its first ready handover (%s)',
+  async (scenario) => {
+    const { chat, title, done, seeded } = await atRestNaming()
+    try {
+      expect(chat.starts).not.toHaveBeenCalled()
+      const journal = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+      if (scenario === 'projected context') {
+        await journal.replaceEpochItems('handle_forked', 1, [])
+        expect(journal.cursor().epoch).not.toBe(journal.physicalCursor().epoch)
+      }
+      if (scenario === 'startup retry') {
+        chat.failNextStart(
+          new AgentSessionAcquisitionRootExitObservedError(
+            new AgentSessionStartFailure(new Error('Temporary start failure'), 'safe')
+          )
+        )
+      }
+      const sent = chat.send('Repair login')
+      expect(await sent.result).toMatchObject({ ok: true })
+      await seeded()
+      expect(title).not.toHaveBeenCalled()
+      expect(mocks.generate).not.toHaveBeenCalled()
+      await journal.resolveDispatch({
+        clientMessageId: 'different-input',
+        state: 'pending',
+        fence: chat.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      expect(title).not.toHaveBeenCalled()
+      await chat.proveStart()
+      await done()
+      expect(chat.dispatch).toHaveBeenCalled()
+      expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(
+        'CLI first handover title'
+      )
+      expect(title).toHaveBeenCalledOnce()
+      expect(chat.starts).toHaveBeenCalledTimes(scenario === 'startup retry' ? 2 : 1)
+      expect(mocks.generate).not.toHaveBeenCalled()
+    } finally {
+      await chat.dispose()
+    }
+  }
+)
+
+it.each(['same-text rename', 'settings', 'auto-off', 'shutdown', 'Stop', 'close', 'held'] as const)(
+  'releases a pending first-input title on %s without adopting a future child',
+  async (exit) => {
+    const { chat, state, title, handler, done, seeded } = await atRestNaming()
+    const preclaim = exit === 'Stop' || exit === 'close' || exit === 'held' ? holdDelivery() : null
+    let stopping: Promise<unknown> | undefined
+    try {
+      expect(await chat.send('Repair login').result).toMatchObject({ ok: true })
+      await seeded()
+      if (exit === 'same-text rename') {
+        await handler.setUserName(HOST_TEST_SESSION, 'Repair login', 'rename')
+      }
+      if (exit === 'settings') {
+        state.settings.sourceControlAi!.actions!.conversationName = {
+          commandInputTemplate: 'Custom {basePrompt}'
+        }
+        state.settingsChanged()
+      }
+      if (exit === 'auto-off') {
+        state.settings.nativeChatAutoName = false
+        state.settingsChanged()
+      }
+      if (exit === 'shutdown') {
+        chat.host.stopDelivery()
+      }
+      if (preclaim) {
+        await preclaim.held
+        expect(chat.starts).not.toHaveBeenCalled()
+        if (exit === 'Stop') {
+          stopping = chat.stop()
+        }
+        if (exit === 'close') {
+          stopping = chat.host.close(HOST_TEST_SESSION, 'user-close')
+        }
+        if (exit === 'held') {
+          await holdUnsentSends(
+            chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal,
+            {
+              fence: chat.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+              hold: { cause: 'chatClosed' }
+            }
+          )
         }
       }
-      const record = agentSessionRecordFixture()
-      record.provider = 'antigravity'
-      await state.deps.generate(record, 'Repair login')
-      expect(mocks.generate).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          agentId: explicitNull ? 'claude' : 'codex',
-          agentArgs: '--model custom'
-        }),
-        expect.anything(),
-        undefined
+      await done()
+      const independent =
+        exit === 'settings' || exit === 'Stop' || exit === 'close' || exit === 'held'
+      expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe(
+        independent ? 'Login repair' : 'Repair login'
       )
-      expect(mocks.native).not.toHaveBeenCalled()
-    }
-  )
-
-  it('resolves plain folder workspaces without requiring a git repository', async () => {
-    const state = rig()
-    const record = agentSessionRecordFixture()
-    record.location.workspaceKind = 'folder'
-    expect(await state.deps.generate(record, 'Repair login')).toEqual({ name: 'Login repair' })
-    expect(state.runtime.resolveWorkspace).toHaveBeenCalledWith(record.location.workspaceId)
-    expect(state.runtime.resolveNamingEnvironment).toHaveBeenCalledWith('claude')
-  })
-
-  it.each(['ssh', 'wsl'])(
-    'skips unsupported %s even with invalid native settings',
-    async (kind) => {
-      const state = rig()
-      state.settings.sourceControlAi = {
-        ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
-        actions: { conversationName: { agentId: 'custom' } },
-        customAgentCommand: ''
+      expect(mocks.generate).toHaveBeenCalledTimes(independent ? 1 : 0)
+      expect(title).not.toHaveBeenCalled()
+      preclaim?.release()
+      await stopping
+      if (exit !== 'shutdown' && !preclaim) {
+        await chat.proveStart()
       }
-      const record = agentSessionRecordFixture()
-      if (kind === 'wsl') {
-        record.location.wslDistro = 'Ubuntu'
-      }
-      const remote = structuredChatNamingDeps(
-        () => ({ getSettings: () => state.settings }),
-        {
-          ...state.runtime,
-          resolveWorkspace: async () => ({
-            path: '/remote/workspace',
-            executionHostId: kind === 'ssh' ? toSshExecutionHostId('target') : 'local'
-          })
-        },
-        state.logger
-      )
-      expect(await remote.generate(record, 'Repair login')).toBeNull()
-      expect(state.logger.warn).not.toHaveBeenCalled()
-      expect(mocks.target).not.toHaveBeenCalled()
-      expect(mocks.generate).not.toHaveBeenCalled()
+      expect(title).not.toHaveBeenCalled()
+    } finally {
+      preclaim?.release()
+      await stopping
+      await chat.dispose()
     }
-  )
+  }
+)
 
-  it('publishes a new name to the host feed and retitles the open tab', () => {
-    const state = rig()
-    state.deps.onNamed('workspace-1', 'session-1')
-    expect(mocks.publishConversationName).toHaveBeenCalledWith('session-1')
-    expect(state.runtime.retitleOpenTab).toHaveBeenCalledWith('workspace-1', 'session-1')
+it('retires the selected first-handover source without adopting a replacement child', async () => {
+  const { chat, title, done } = await atRestNaming()
+  const entered = Promise.withResolvers<void>()
+  const result = Promise.withResolvers<string>()
+  title.mockImplementation(async () => {
+    entered.resolve()
+    return result.promise
   })
+  try {
+    expect(await chat.send('Repair login').result).toMatchObject({ ok: true })
+    await chat.proveStart()
+    await entered.promise
+    await chat.host.close(HOST_TEST_SESSION, 'user-close')
+    const successor = chat.send('A follow-up')
+    expect(await successor.result).toMatchObject({ ok: true })
+    await chat.proveStart()
+    result.resolve('Stale first CLI title')
+    await done()
+    expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Login repair')
+    expect(title).toHaveBeenCalledOnce()
+  } finally {
+    result.resolve('Late')
+    await chat.dispose()
+  }
+})
 
-  it('still retitles the open tab when the feed publication fails', () => {
-    const state = rig()
-    mocks.publishConversationName.mockImplementationOnce(() => {
-      throw new Error('journal unreadable')
-    })
-    state.deps.onNamed('workspace-1', 'session-1')
-    expect(state.runtime.retitleOpenTab).toHaveBeenCalledWith('workspace-1', 'session-1')
-    expect(state.logger.warn).toHaveBeenCalledWith(
-      'Chat name publication failed',
-      expect.objectContaining({ sessionId: 'session-1' })
-    )
+it('finishes Send now naming during delivery even if recording its failure cannot commit', async () => {
+  const { chat, title, done, seeded } = await atRestNaming()
+  const release = chat.holdNextStart()
+  let releaseSecond: (() => void) | undefined
+  chat.failNextStart(new AgentSessionStartFailure(new Error('Startup refused'), 'never'))
+  const fields = { command: 'compact' as const }
+  const command = chat.host.conversationCommand(QUEUED_RIG_CALLER, {
+    ...fields,
+    envelope: chat.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
   })
-
-  it('reports invalid agent configuration without launching anything', async () => {
-    const state = rig()
-    state.settings.sourceControlAi = {
-      ...normalizeSourceControlAiSettings(state.settings.sourceControlAi),
-      actions: { conversationName: { agentId: 'custom' } },
-      customAgentCommand: ''
+  try {
+    await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledOnce())
+    const sent = chat.send('Repair login')
+    const queued = await sent.result
+    if (!queued.ok || !('queued' in queued.value)) {
+      throw new Error('expected a queued receipt')
     }
-    expect(await state.deps.generate(agentSessionRecordFixture(), 'Repair login')).toEqual({
-      error: expect.any(String)
+    const messageId = queued.value.queued.messageId
+    expect(await chat.submission(sent.id)).toBeUndefined()
+    expect(await chat.sendNow(messageId)).toMatchObject({ ok: true })
+    expect(await chat.handoff(messageId)).toMatchObject({
+      queuedMessageId: messageId,
+      dispatchState: 'pending'
     })
-    expect(state.logger.warn).toHaveBeenCalled()
-    expect(mocks.generate).not.toHaveBeenCalled()
-  })
+    await seeded()
+    const journal = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const failure = vi
+      .spyOn(journal, 'appendLifecycleBatch')
+      .mockRejectedValue(new Error('Journal write unavailable'))
+    releaseSecond = chat.holdNextStart()
+    release()
+    await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledTimes(2))
+    chat.failNextStart(new AgentSessionStartFailure(new Error('Startup refused'), 'never'))
+    releaseSecond()
+    await done()
+    expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Login repair')
+    expect((await chat.handoff(messageId))?.dispatchState).toBe('pending')
+    expect(title).not.toHaveBeenCalled()
+    failure.mockRestore()
+  } finally {
+    release()
+    releaseSecond?.()
+    vi.restoreAllMocks()
+    await chat.stop()
+    await command
+    await chat.dispose()
+  }
 })

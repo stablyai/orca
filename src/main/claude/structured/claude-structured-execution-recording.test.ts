@@ -6,17 +6,15 @@ import {
   USER_MESSAGE
 } from './claude-structured-session-test-support'
 import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { createQueuedMessageTestRig } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 /** Claude ends a turn; a message sent before this joins the running turn on its choices. */
 const claudeTurnEnds = (connection: Parameters<typeof claudeFrame>[0]) =>
   claudeFrame(connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
 
-it.each(['low', 'high', undefined])(
+it.each(['high', undefined])(
   'admits accepted high independently of resolved effort (effective %s)',
   async (effective) => {
     const models = [

@@ -2,25 +2,25 @@ import type {
   OrchestrationCallerShowResult,
   OrchestrationPartyLocationResult,
   OrchestrationSessionAddressResult
-} from '../../../../../shared/orchestration-caller-status'
+} from '../../../../../shared/orchestration/orchestration-caller-status'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   PartyLocationParams,
   SessionAddressParams
 } from '../../../../../shared/rpc-contract/orchestration-params'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-party'
-import { locateOrchestrationParty } from '../../../orchestration/orchestration-party-location'
-import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
+import { resolveOrcaSessionParty } from '../../../orchestration/addressing/orchestration-party'
+import { locateOrchestrationParty } from '../../../orchestration/addressing/orchestration-party-location'
+import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { z } from 'zod'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { defineMethod, type RpcContext } from '../../core'
 import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
-import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
+import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
 async function locateParty(
   params: z.infer<typeof PartyLocationParams>,
@@ -69,10 +69,19 @@ export const ORCHESTRATION_CALLER_METHODS = [
     permission: 'workspace',
     params: null,
     // Dispatch already admitted the environment's session; do not resolve another caller from params.
-    handler: (_params, { orchestrationCaller }): OrchestrationCallerShowResult => ({
+    handler: (
+      _params,
+      { orchestrationCaller, orchestrationCompatibilityEvidence, runtime }
+    ): OrchestrationCallerShowResult => ({
       caller: orchestrationCaller
         ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
-        : null
+        : null,
+      // An Orca-launched agent's own pane and launch secret prove it is one; no hook needs to have fired.
+      terminal:
+        !orchestrationCaller &&
+        runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence, {
+          currentRuntimeLaunchSufficient: true
+        }) !== null
     })
   }),
   defineMethod({

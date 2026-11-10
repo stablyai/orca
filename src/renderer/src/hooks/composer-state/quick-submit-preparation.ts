@@ -2,20 +2,18 @@ import type { QuickSubmitPreparationInput } from './quick-submit-input-contract'
 
 import { useCallback } from 'react'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import {
-  getLinkedWorkItemProvider,
-  canUseIssueCommandForLinkedItemProvider
-} from '@/lib/new-workspace'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import { canUseIssueCommandForLinkedItemProvider } from '@/lib/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import {
   deriveWorkspaceSetupState,
   readWorkspaceSetupInspection,
   getComposerSetupInspectionCommit
-} from '@/lib/workspace-setup-preparation'
+} from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
-import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
+import { resolveWorktreeCreateBaseBranch } from '@/runtime/source-control/worktree-creation/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
@@ -38,7 +36,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    setAdvancedOpen,
+    revealSetupChoice,
     settings,
     setupConfig,
     setupDecision,
@@ -100,7 +98,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       }
 
       if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
-        setAdvancedOpen(true)
+        revealSetupChoice()
         return null
       }
 
@@ -108,7 +106,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         ? (submitResolvedSetupDecision ?? 'inherit')
         : 'skip'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
-        ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+        ? getWorkspaceSourceProvider(submitLinkedWorkItem)
         : null
       const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
         ? {
@@ -218,7 +216,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       selectedRepoExecutionHostId,
       selectedRepoHookContextKey,
       selectedRepoIsGit,
-      setAdvancedOpen,
+      revealSetupChoice,
       settings,
       setupConfig,
       setupDecision,

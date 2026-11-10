@@ -1,20 +1,21 @@
 import { useMemo, useState } from 'react'
 import { mcpToolIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   formatToolInput,
   MAX_TOOL_DETAIL_LENGTH,
   truncateToolDetail
 } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
-import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatCopyButton } from './messages/actions/NativeChatCopyButton'
 
 export function NativeChatToolInvocation({
   call
 }: {
   call: NativeChatToolCallBlock
 }): React.JSX.Element {
+  const t = useTranslate()
   const input = useMemo(() => formatToolInput(call.input), [call.input])
   const [expanded, setExpanded] = useState(false)
   const available = call.input !== null && call.input !== undefined
@@ -33,11 +34,11 @@ export function NativeChatToolInvocation({
         <>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-chat-foreground-faint">
-              {translate('components.native-chat.tool.input', 'Input')}
+              {t('components.native-chat.tool.input', 'Input')}
             </span>
             <NativeChatCopyButton
               text={input}
-              label={translate('components.native-chat.tool.copyInput', 'Copy input')}
+              label={t('components.native-chat.tool.copyInput', 'Copy input')}
             />
           </div>
           <pre
@@ -48,13 +49,13 @@ export function NativeChatToolInvocation({
           </pre>
           {!expanded && input.length > MAX_TOOL_DETAIL_LENGTH ? (
             <Button type="button" variant="ghost" size="xs" onClick={() => setExpanded(true)}>
-              {translate('components.native-chat.tool.showFullInput', 'Show full input')}
+              {t('components.native-chat.tool.showFullInput', 'Show full input')}
             </Button>
           ) : null}
         </>
       ) : (
         <p className="text-xs text-chat-foreground-faint">
-          {translate(
+          {t(
             'components.native-chat.tool.inputUnavailable',
             'Input is not available in this transcript.'
           )}
