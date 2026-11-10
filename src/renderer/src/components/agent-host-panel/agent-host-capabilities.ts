@@ -253,7 +253,7 @@ function sectionHelp(
         keys: passed,
         environment: t(
           'agentHostPanel.help.envPaired',
-          'Agents on {{host}} get its own environment. Orca doesn’t add variables on paired hosts.',
+          'Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.',
           { host }
         )
       }
