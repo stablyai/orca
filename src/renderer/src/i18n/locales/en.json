@@ -26690,7 +26690,6 @@
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
-    "sandboxMarkLabel": "Sandbox: {{state}}",
     "archive": "Archive",
     "oom": {
       "titleRan": "{{name}} ran out of memory",
@@ -26762,10 +26761,8 @@
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "moveToComputer": "Move to this computer",
-    "moveHere": "Move here",
     "openLocal": "Open local workspace",
     "copiedOn": "Moved to this computer · {{date}}",
-    "moveAgain": "Move again",
     "recovery": {
       "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
       "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
@@ -26793,7 +26790,9 @@
       "createWorkspace": "Create workspace"
     },
     "deletedNamed": "Deleted {{name}}",
-    "deleteFailedNamed": "Couldn’t delete {{name}}"
+    "deleteFailedNamed": "Couldn’t delete {{name}}",
+    "productName": "Orca Cloud",
+    "cloudMarkLabel": "Cloud workspace · {{state}}"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -27172,7 +27171,6 @@
       "applying": "Applying the changes is taking too long, so Orca stopped waiting."
     },
     "openFolder": "Open folder",
-    "failedLocalNext": "Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.",
     "conflicts": "Changed here since: {{files}}",
     "failedLocalReapply": "Apply changes again to bring them over. Nothing you changed here is overwritten, and your files are safe in the cloud workspace.",
     "reapply": "Apply changes again",
@@ -27182,7 +27180,8 @@
       "stillLeft": "Some changes still conflict with edits made here. They stay saved.",
       "done": "All changes applied",
       "discard": "Discard"
-    }
+    },
+    "failedLocalNextV2": "Use Move to this computer from the sandbox panel to bring them over. Your files are safe in the cloud workspace."
   },
   "orcaCloud": {
     "continueOffer": {

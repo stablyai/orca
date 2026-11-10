@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import {
-  Archive,
   ArchiveRestore,
   ChevronRight,
+  Cloud,
   File,
   Folder,
   GitPullRequest,
@@ -208,7 +208,7 @@ export function CloudArchivedWorkspaceView({
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
         <CloudWorkspaceHeader
-          icon={Archive}
+          icon={Cloud}
           title={workspaceName ?? t('orcaCloudWorkspace.archived.title', 'Archived workspace')}
           state="archived"
           stateLine={stateLine}

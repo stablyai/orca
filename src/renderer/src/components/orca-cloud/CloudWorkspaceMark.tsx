@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Cloud } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import { CloudStateDot } from './CloudStateDot'
+import { HostGlyph } from '@/components/host-row-icon'
 import { FOCUS_RING } from './cloud-focus'
 import { cloudStateLabel } from './cloud-state-copy'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
@@ -15,7 +14,8 @@ const HOVER_OPEN_MS = 250
 const HOVER_CLOSE_MS = 180
 
 /**
- * Sidebar mark for an Orca Cloud workspace: a cloud glyph with its live state dot beside it.
+ * Sidebar mark for an Orca Cloud workspace: the Cloud host glyph with its live state as a corner badge,
+ * in the same 12px slot as every other host glyph so titles align.
  * Hover previews the status panel; click or Enter pins it and moves focus into it.
  * Renders nothing for workspaces that are not on Orca Cloud.
  */
@@ -70,7 +70,7 @@ function CloudWorkspaceMarkInner({
   useCloudStatusPolling(workspaceId, PANEL_POLL_MS, open !== null)
   const close = useCallback(() => setOpen(null), [])
   const actions = useCloudPanelActions(workspaceId, close)
-  const label = t('orcaCloudWorkspace.sandboxMarkLabel', 'Sandbox: {{state}}', {
+  const label = t('orcaCloudWorkspace.cloudMarkLabel', 'Cloud workspace · {{state}}', {
     state: cloudStateLabel(view.state, t)
   })
   return (
@@ -106,14 +106,13 @@ function CloudWorkspaceMarkInner({
           onPointerEnter={hoverIn}
           onPointerLeave={hoverOut}
           className={cn(
-            // 24px hit area around the 16px mark, without changing the row's layout.
-            "relative inline-flex h-4 shrink-0 items-center gap-[3px] rounded px-px text-muted-foreground after:absolute after:-inset-1 after:content-['']",
+            // 24px hit area around the 12px glyph, without changing the row's layout.
+            "relative inline-flex size-3 shrink-0 items-center rounded-sm text-muted-foreground after:absolute after:-inset-1.5 after:content-['']",
             'hover:text-foreground',
             FOCUS_RING
           )}
         >
-          <Cloud className="size-3" aria-hidden="true" />
-          <CloudStateDot state={view.state} size="md" />
+          <HostGlyph kind="orca-cloud" size={12} state={view.state} className="text-inherit" />
         </button>
       </PopoverTrigger>
       <PopoverContent

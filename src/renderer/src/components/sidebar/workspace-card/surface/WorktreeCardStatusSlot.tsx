@@ -147,7 +147,12 @@ export function WorktreeCardStatusSlot({
   )
   // Orca Cloud workspaces show their state on the cloud mark; the VM badge would be a second indicator.
   const isCloud = useIsCloudWorkspace(worktreeId)
-  const vmState = vmRuntime && !isCloud ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
+  const vmHostState =
+    vmRuntime && !isCloud ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
+  // The host glyph's badge carries suspended, waking and provisioning; the lane keeps only the
+  // failures, whose badge holds the reason and the recovery actions.
+  const vmState =
+    vmHostState === 'resume_failed' || vmHostState === 'provision_failed' ? vmHostState : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.

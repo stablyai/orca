@@ -52,12 +52,9 @@
               "children": [
                 { "el": "RepoChip", "when": "vars.pinnedRepo" },
                 {
-                  "el": "SshControl",
-                  "when": "host.kind == 'ssh'",
-                  "props": { "iconOnly": "=!vars.classic" }
+                  "el": "HostMark",
+                  "props": { "sshIconOnly": "=!vars.classic", "runtime": "=host.kind == 'runtime'" }
                 },
-                { "el": "RuntimeHostMark", "when": "host.kind == 'runtime'" },
-                { "el": "CloudMark", "when": "host.kind != 'runtime' && host.kind != 'ssh'" },
                 { "el": "RepoChip", "when": "vars.inlineRepo" },
                 {
                   "el": "Title",
@@ -121,6 +118,7 @@
                   "when": "vars.hostBadge",
                   "props": { "label": "=vars.hostLabel" }
                 },
+                { "el": "HostStateWord" },
                 {
                   "el": "IdentityLabel",
                   "when": "vars.identityInMeta",
