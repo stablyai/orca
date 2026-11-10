@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { PlanBillingView } from './PlanBillingSection'
-import { sampleTeam } from './plan-billing-fixtures'
+import { sampleTeam, sampleTrial, sampleTrialUsedUp } from './plan-billing-fixtures'
 
 const HOUR = 3600
 
@@ -282,4 +282,62 @@ export const capTooHigh = defineFixture({
     input.dispatchEvent(new Event('input', { bubbles: true }))
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
+})
+
+/** Spec T1: the team's one-time trial, owner view (Choose plan). */
+export const trial = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView {...handlers} result={{ status: 'ok', entitlement: sampleTrial }} />
+  )
+})
+
+export const trialMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{ status: 'ok', entitlement: { ...sampleTrial, canManageBilling: false } }}
+    />
+  )
+})
+
+export const trialUsedUp = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView {...handlers} result={{ status: 'ok', entitlement: sampleTrialUsedUp }} />
+  )
+})
+
+export const trialUsedUpMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{ status: 'ok', entitlement: { ...sampleTrialUsedUp, canManageBilling: false } }}
+    />
+  )
+})
+
+/** No plan and no trial on offer (this account or team already used one). */
+export const trialUnavailable = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTrial,
+          status: 'none',
+          trial: null,
+          includedSeconds: 0,
+          usedSeconds: 0,
+          remainingIncludedSeconds: 0,
+          canStartSandbox: false,
+          reason: 'trial_unavailable'
+        }
+      }}
+    />
+  )
 })

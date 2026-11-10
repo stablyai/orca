@@ -41,6 +41,7 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
+  OrcaBillingTrialClaimResult,
   OrcaBillingReturn,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult
@@ -95,6 +96,8 @@ export type OrcaProfileApi = {
   orgCreate: (args: OrcaProfileOrgCreateArgs) => Promise<OrcaProfileOrgCreateResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
+  /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */
+  onBillingRefreshRequested: (callback: () => void) => () => void
   /** Fires when the setup done page opens orca://cloud/setup/return?session=… (N9). */
   onCloudSetupReturn: (callback: (event: OrcaCloudSetupReturn) => void) => () => void
   /** Plan & billing for the signed-in account (Orca Cloud billing service). */
@@ -113,4 +116,6 @@ export type OrcaProfileApi = {
   billingTeamPlans: (args: { orgIds: string[] }) => Promise<OrcaBillingTeamPlansResult>
   /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */
   billingSetOverage: (args: OrcaBillingOverageArgs) => Promise<OrcaBillingOverageResult>
+  /** Starts the team's one-time Orca Cloud trial (idempotent; no card). */
+  billingClaimTrial: () => Promise<OrcaBillingTrialClaimResult>
 }

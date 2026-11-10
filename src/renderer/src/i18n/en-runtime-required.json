@@ -247,7 +247,11 @@
         },
         "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
         "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
-        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours."
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
+        "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
+        "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
+        "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used"
       },
       "browser-pane": {
         "markup": {
@@ -1525,6 +1529,14 @@
       "lines_other": "Multi-line value · {{count}} lines"
     }
   },
+  "cloudSecretsAsk": {
+    "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.",
+    "missing_one": "{{count}} secret missing",
+    "missing_other": "{{count}} secrets missing",
+    "save_one": "Save secret",
+    "save_other": "Save {{count}} secrets"
+  },
   "codeHost": {
     "bitbucketConnect": {
       "accessTokenRequired": "Enter an access token.",
@@ -2371,6 +2383,10 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "secretRequest": {
+    "more_one": "{{count}} more request",
+    "more_other": "{{count}} more requests"
   },
   "sessionSearch": {
     "panel": {

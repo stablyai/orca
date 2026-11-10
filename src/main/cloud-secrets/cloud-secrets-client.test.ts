@@ -34,6 +34,29 @@ const VIEW = {
 }
 
 describe('createCloudSecretsClient', () => {
+  it('reads who owns a sandbox and whether it is shared, failing closed on an unknown owner', async () => {
+    const answers = [
+      { owner: { userId: 'u2', displayName: 'Ada', isCaller: false }, sharedWorkspace: true },
+      { owner: { userId: 'u1', displayName: 'Me', isCaller: true }, sharedWorkspace: false },
+      { owner: null, sharedWorkspace: true },
+      { owner: null }
+    ]
+    const { client, seen } = fakeControlPlane(() => Response.json(answers.shift()))
+    expect(await client.workspaceSharing('sbx 1')).toEqual({
+      shared: true,
+      ownerName: 'Ada',
+      isOwner: false
+    })
+    expect(await client.workspaceSharing('sbx')).toEqual({
+      shared: false,
+      ownerName: null,
+      isOwner: true
+    })
+    expect((await client.workspaceSharing('sbx')).isOwner).toBe(false)
+    expect((await client.workspaceSharing('sbx')).isOwner).toBe(true)
+    expect(seen[0].url).toBe('https://control.test/v1/agent-sources?workspaceId=sbx+1')
+  })
+
   it('addresses scope, name and repo on the wire and sends the value only in the body', async () => {
     const { client, seen } = fakeControlPlane(({ method }) =>
       Response.json(method === 'GET' ? { secrets: [VIEW] } : { secret: VIEW })

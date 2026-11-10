@@ -19,6 +19,7 @@ import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
 import { VmBuildCloudAgentStep } from '../cloud-agent-setup/VmBuildCloudAgentStep'
+import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
   classifyVmBuildFailure,
@@ -92,6 +93,7 @@ export function VmBuildSheet({
   onEditRecipe,
   agentSignInRow,
   cloudAgentStep,
+  secretsRow,
   stepTimings
 }: {
   creationId: string
@@ -110,6 +112,8 @@ export function VmBuildSheet({
   agentSignInRow?: React.ReactNode
   /** Fixtures only: a fixed "Add an agent" step (null for none) in place of the live one. */
   cloudAgentStep?: React.ReactNode
+  /** Fixtures only: a fixed Secrets row (null for none) in place of the live one. */
+  secretsRow?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
   stepTimings?: VmBuildStepTimings
 }): React.JSX.Element {
@@ -247,6 +251,11 @@ export function VmBuildSheet({
                     environmentId={entry.vmEnvironmentId}
                   />
                 ) : null)}
+              {secretsRow !== undefined ? (
+                secretsRow
+              ) : cloud ? (
+                <VmBuildSecretsRow entry={entry} />
+              ) : null}
             </ol>
           )}
 

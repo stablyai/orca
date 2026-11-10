@@ -6,12 +6,14 @@
 //   POST /v1/billing/overage {enabled, spendCapCents?} opt in/out of overage, set the cap
 //   POST /v1/billing/portal                 -> { url } Stripe Customer Portal
 //   POST /v1/billing/team-plans {orgIds}    other teams' plan state ("Switch to <team>"), read-only
+//   POST /v1/billing/trial                  claim the team's one-time trial -> entitlement (trial.ts)
 // Stripe:
 //   POST /v1/stripe/webhook                 signed events
 // Sandbox control plane (CONTROL_PLANE_TOKEN):
 //   POST /v1/internal/entitlements/check {accountId, machineSize, runningSandboxes}
 //   POST /v1/internal/usage {usageId, accountId, sandboxId, machineSize, startedAt, endedAt}
 //   GET  /v1/internal/suspensions          accounts whose payment grace expired (suspend running)
+//   POST /v1/internal/trial/github {accountId, githubUserId?, githubOwnerId?} GitHub binding -> trial abuse keys
 // Orca Cloud auth (MEMBERSHIP_SYNC_TOKEN):
 //   POST /v1/internal/seats {accountId, members}
 //   POST /v1/internal/cloud-setup/redeem {sessionId, ticket} -> {userId}   one-time browser ticket
@@ -72,7 +74,9 @@ import {
   setupGithubInstall,
   setupSessionView
 } from './cloud-setup'
-import { noTrialPort, type TrialPort } from './cloud-setup-trial'
+import { billingTrialPort, type TrialPort } from './cloud-setup-trial'
+import { grantTrial, isTeamAccount, recordTrialGithub, trialOffer, type TrialInput } from './trial'
+import type { BillingCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
 
@@ -86,6 +90,34 @@ const StartCheckSchema = z
     runningSandboxesForUser: z.number().int().min(0).max(10_000).optional()
   })
   .strict()
+
+const GITHUB_ID = z.string().regex(/^\d{1,20}$/)
+const TrialGithubSchema = z
+  .object({ accountId: z.string().min(1).max(128), githubUserId: GITHUB_ID.optional(), githubOwnerId: GITHUB_ID.optional() })
+  .strict()
+
+function trialInput(caller: BillingCaller, request: Request): TrialInput {
+  return {
+    accountId: caller.accountId,
+    userId: caller.userId,
+    email: caller.email,
+    emailVerified: caller.emailVerified,
+    githubUserId: caller.githubUserId,
+    ip: request.headers.get('cf-connecting-ip') ?? undefined
+  }
+}
+
+/** The desktop's entitlement body: the account's state plus what this caller is offered. */
+async function desktopEntitlement(env: Env, caller: BillingCaller, request: Request, now: number) {
+  const entitlement = await computeEntitlement(env, caller.accountId, now)
+  const offers = publicOffers(planCatalog(env))
+  const neverHadPlan = entitlement.reason === 'no_subscription'
+  const trial = neverHadPlan ? await trialOffer(env, trialInput(caller, request), now) : null
+  // A team that never had a plan but can't get a trial (one already used by this user, email,
+  // GitHub identity, or a disposable email) is told so instead of being offered one.
+  const reason = neverHadPlan && !trial && isTeamAccount(caller.accountId) ? 'trial_unavailable' : entitlement.reason
+  return { ...entitlement, reason, canManageBilling: caller.canManage, offers: { ...offers, trial } }
+}
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
@@ -254,7 +286,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
       const handled = await handleCloudSetup(request, env, url, now, {
         stripe,
         membership,
-        trial: deps.trial ?? noTrialPort,
+        trial: deps.trial ?? billingTrialPort,
         fetch: deps.fetch ?? fetch
       })
       if (handled) {
@@ -274,8 +306,31 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)
         }
-        const entitlement = await computeEntitlement(env, caller.accountId, now)
-        return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
+        return json(await desktopEntitlement(env, caller, request, now))
+      }
+
+      case 'POST /v1/billing/trial': {
+        // Any member may start the team's trial the first time they pick Orca Cloud (spec B1).
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const outcome = await grantTrial(env, trialInput(caller, request), now)
+        if (!outcome.ok) {
+          return json({ error: outcome.reason }, outcome.reason === 'team_required' ? 409 : 403)
+        }
+        return json(await desktopEntitlement(env, caller, request, now))
+      }
+
+      case 'POST /v1/internal/trial/github': {
+        if (!(await authenticateControlPlane(env, request))) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const body = TrialGithubSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        return json(await recordTrialGithub(env, body.data, now))
       }
 
       case 'POST /v1/billing/team-plans': {
@@ -327,8 +382,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!outcome.ok) {
           return json({ error: outcome.error }, outcome.status)
         }
-        const entitlement = await computeEntitlement(env, caller.accountId, now)
-        return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
+        return json(await desktopEntitlement(env, caller, request, now))
       }
 
       case 'POST /v1/internal/seats': {

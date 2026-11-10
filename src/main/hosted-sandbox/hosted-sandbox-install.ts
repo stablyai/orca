@@ -35,6 +35,9 @@ import {
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
+import { createUsageAlertRefreshScheduler } from '../billing/usage-alert-refresh'
+import { sendToTrustedUIRenderer } from '../ipc/ui'
+import { ORCA_BILLING_REFRESH_CHANNEL } from '../../shared/orca-billing'
 import {
   registerOrcaCloudEnvironmentHandlers,
   type OrcaCloudEnvironmentRepoSource
@@ -109,11 +112,18 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
       capabilities.idleStopMs = minutes * 60_000
     }
   }
+  // Usage alerts fire on billing reads; re-read on create/wake and every 30 min while one runs
+  // (the poll rides the 30 s beat below via registry.sync). Only the main window is asked, so
+  // extra windows never stack reads.
+  const usageRefresh = createUsageAlertRefreshScheduler({
+    requestRefresh: () => sendToTrustedUIRenderer(ORCA_BILLING_REFRESH_CHANNEL, null)
+  })
   const registry = createHostedSessionRegistry({
     userDataPath,
     driver,
     windows: () => BrowserWindow.getAllWindows(),
-    onConnected: (runtimeEnvironmentId) => void mcpSync.sync(runtimeEnvironmentId, 'connect')
+    onConnected: (runtimeEnvironmentId) => void mcpSync.sync(runtimeEnvironmentId, 'connect'),
+    onRunningChange: (anyRunning) => usageRefresh.setRunning(anyRunning)
   })
   const workspaces = installHostedWorkspaceService({
     userDataPath,
@@ -178,7 +188,11 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     beat.unref?.()
   }
   registerHostedSandboxRecipe(driver, {
-    onReady: () => setTimeout(() => void registry.sync(), 3_000).unref?.(),
+    onReady: () => {
+      setTimeout(() => void registry.sync(), 3_000).unref?.()
+      // Created or woken: hours may have accrued since the last read (other members, earlier runs).
+      usageRefresh.noteStarted()
+    },
     onStopped: (environmentId) => registry.stopEnvironment(environmentId),
     onWake: ({ workspaceId, phase, startedAt, message }) =>
       workspaces.emitWakeProgress({
@@ -200,6 +214,7 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
       clearTimeout(beat)
     }
     registry.dispose()
+    usageRefresh.dispose()
     workspaces.dispose()
     disposeTransfer()
     setHostedWorkspaceService(null)

@@ -17,7 +17,8 @@
 // blocks starts and puts running sandboxes to sleep -> peak seats (add charged
 // now, removal deferred, re-add free) -> annual plan + overage (an older overage item is re-priced, not doubled) -> seat true-down + test-clock
 // renewal -> invoice.payment_failed -> grace -> suspend -> pay -> resume -> cancel -> 3DS Checkout
-// (challenge passed; 3DS-then-decline and insufficient funds create nothing) -> cleanup.
+// (challenge passed; 3DS-then-decline and insufficient funds create nothing) -> one-time trial (granted
+// with no card, 1 at a time, metered until used up, once per user, a plan ends it) -> cleanup.
 // Prints PASS/FAIL per check and the ids.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -67,9 +68,9 @@ function check(name: string, ok: boolean, detail: unknown = ''): boolean {
 }
 const ids: Record<string, string> = {}
 
-async function token(org: string): Promise<string> {
+async function token(org: string, user = `user_${org}`): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
-  return new SignJWT({ sub: `user_${org}`, org, orgRole: 'owner', email: `e2e+${org}@example.com`, purpose: 'billing' })
+  return new SignJWT({ sub: user, org, orgRole: 'owner', email: `e2e+${user === `user_${org}` ? org : user}@example.com`, purpose: 'billing' })
     .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
     .setIssuer(issuer)
     .setAudience('orca-billing')
@@ -78,9 +79,9 @@ async function token(org: string): Promise<string> {
     .sign(signingKey)
 }
 
-async function billing(method: string, path: string, org: string | null, body?: unknown) {
+async function billing(method: string, path: string, org: string | null, body?: unknown, user?: string) {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
-  headers.authorization = `Bearer ${org ? await token(org) : CONTROL}`
+  headers.authorization = `Bearer ${org ? await token(org, user) : CONTROL}`
   const response = await fetch(`${BILLING_URL}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   return { status: response.status, body: (await response.json().catch(() => ({}))) as Record<string, any> }
 }
@@ -475,6 +476,49 @@ for (const [name, card, threeDS] of [
     { outcome, session: session.status, subscription: session.subscription, status: ent.status })
   await stripe('POST', `/v1/checkout/sessions/${session.id}/expire`).catch(() => undefined)
 }
+
+// ---- 9b. One-time trial (N11): no card, 1 at a time, metered until used up, once per user ----
+const orgT = `e2e-${runId}-trial`
+const accountT = `org:${orgT}`
+const offered = await entitlement(orgT)
+check('new team is offered the trial (2 sandbox hours), not yet granted', offered.reason === 'no_subscription' &&
+  offered.offers?.trial?.includedSeconds === 2 * HOUR && offered.trial === null, { reason: offered.reason, trial: offered.offers?.trial })
+const grantedT = await billing('POST', '/v1/billing/trial', orgT)
+check('trial granted with no card: status trial, can start, 1 sandbox at a time, no overage', grantedT.status === 200 &&
+  grantedT.body.status === 'trial' && grantedT.body.canStartSandbox === true && grantedT.body.limits?.maxConcurrentSandboxes === 1 &&
+  grantedT.body.trial?.includedSeconds === 2 * HOUR && grantedT.body.overage?.active === false, grantedT)
+const trialCustomers = await stripe<{ data: Array<{ metadata: Record<string, string> }> }>('GET', '/v1/customers', { email: `e2e+${orgT}@example.com`, limit: 10 })
+check('trial created nothing in Stripe (no customer)', trialCustomers.data.length === 0, trialCustomers.data.length)
+const secondRunning = await billing('POST', '/v1/internal/entitlements/check', null, { accountId: accountT, machineSize: 'standard', runningSandboxes: 1 }).then((r) => r.body)
+check('trial runs 1 sandbox at a time (concurrency_limit)', secondRunning.allow === false && secondRunning.reason === 'concurrency_limit', secondRunning)
+const trialOverage = await billing('POST', '/v1/billing/overage', orgT, { enabled: true })
+check('no overage during a trial', trialOverage.status === 409, trialOverage)
+const partway = await reportUsage(accountT, 1.5)
+check('trial usage is metered (1.5 of 2 h used, still can start)', partway.canStartSandbox === true && partway.overageSeconds === 0, partway)
+const usedUp = await reportUsage(accountT, 1)
+check('trial used up -> trial_used_up, running sandboxes go to sleep', usedUp.canStartSandbox === false &&
+  usedUp.reason === 'trial_used_up' && usedUp.suspendRunning === true, usedUp)
+const sameUser = await billing('POST', '/v1/billing/trial', `${orgT}-2`, undefined, `user_${orgT}`)
+check('the same user gets no second trial on another team (trial_unavailable)', sameUser.status === 403 &&
+  sameUser.body.error === 'trial_unavailable', sameUser)
+// A plan ends the trial (unused trial hours lapse).
+const customerT = await stripe<{ id: string }>('POST', '/v1/customers', { email: `e2e+${orgT}@example.com`, metadata: { account_id: accountT } })
+ids.trialCustomer = customerT.id
+linkAccount(accountT, customerT.id)
+await stripe('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customerT.id })
+  .then((pm: any) => stripe('POST', `/v1/customers/${customerT.id}`, { invoice_settings: { default_payment_method: pm.id } }))
+const trialSub = await stripe<{ id: string }>('POST', '/v1/subscriptions', {
+  customer: customerT.id,
+  items: [{ price: catalog.STRIPE_PRICE_TEAM_MONTHLY, quantity: 1 }],
+  metadata: { account_id: accountT }
+})
+ids.trialSubscription = trialSub.id
+const afterPlan = await until('plan replaces trial', () => entitlement(orgT), (e) => e.status === 'active')
+check('a plan ends the trial: Team active, trial gone, 60 h included', afterPlan.status === 'active' && afterPlan.trial === null &&
+  afterPlan.includedSeconds === 60 * HOUR && afterPlan.canStartSandbox === true, { status: afterPlan.status, trial: afterPlan.trial })
+await stripe('DELETE', `/v1/subscriptions/${trialSub.id}`).catch((error) => console.log(`  cleanup: ${error}`))
+// Drop this run's trial abuse keys (incl. the per-IP grant count) so reruns from this machine aren't rate limited.
+d1(`DELETE FROM trial_claims WHERE account_id LIKE 'org:e2e-${runId}-%'`)
 
 // ---- 10. Cleanup: remaining test subscriptions and the test clock (deletes its customer) -------
 await stripe('DELETE', `/v1/subscriptions/${ids.annualSubscription}`).catch((error) => console.log(`  cleanup: ${error}`))
