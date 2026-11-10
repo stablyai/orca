@@ -147,6 +147,10 @@ function key(ctx: Ctx) {
 }
 const api = async (ctx: Ctx, method: string, path: string, body?: unknown) => control.raw(method, path, await key(ctx), body)
 
+function onceSoonCron(): string {
+  const at = new Date(Date.now() + 2 * 60_000)
+  return `${at.getUTCMinutes()} ${at.getUTCHours()} * * *`
+}
 const routineWebhook = (ctx: Ctx) => platformChecks['api.routine-webhook-impl']!(ctx)
 
 export const platformChecks: Record<string, Check> = {
@@ -318,6 +322,61 @@ export const platformChecks: Record<string, Check> = {
     }
   },
 
+  'life.wake-on-message': async (ctx) => {
+    // A message sent to a SLEEPING workspace through the public API wakes it and is delivered to the
+    // agent (Claude Code via the shared gateway key, kimi-k2): the Conductor 0.81/0.83 behaviour.
+    const gw = secrets.aiGatewayKey()
+    if (!gw) {
+      return { status: 'skipped', detail: 'no AI Gateway key' }
+    }
+    const agentEnv: Record<string, string> = {
+      ANTHROPIC_BASE_URL: 'https://ai-gateway.vercel.sh',
+      ANTHROPIC_AUTH_TOKEN: gw,
+      ANTHROPIC_MODEL: 'moonshotai/kimi-k2',
+      ANTHROPIC_SMALL_FAST_MODEL: 'moonshotai/kimi-k2'
+    }
+    for (const [name, value] of Object.entries(agentEnv)) {
+      await control.as(ctx.solo, 'PUT', `/v1/secrets/personal/${name}`, { value })
+    }
+    const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-wakemsg-${tag(ctx)}` })
+    const id = created.body?.workspace?.id ?? created.body?.id
+    if (!id) {
+      return { status: 'fail', detail: `create ${created.status} ${JSON.stringify(created.body).slice(0, 200)}` }
+    }
+    ctx.run.created({ kind: 'sandbox', id, label: 'wake-on-message workspace', vcpus: 4 })
+    try {
+      const slept = await api(ctx, 'POST', `/v1/workspaces/${id}/sleep`)
+      const t0 = Date.now()
+      const sent = await api(ctx, 'POST', `/v1/workspaces/${id}/messages`, { text: 'Reply with exactly: WOKE-AND-DELIVERED', agent: 'claude' })
+      const mid = sent.body?.message?.id ?? sent.body?.id
+      let message: any = null
+      while (mid && Date.now() - t0 < 120_000) {
+        message = (await api(ctx, 'GET', `/v1/workspaces/${id}/messages/${mid}`)).body?.message
+        if (['delivered', 'failed'].includes(message?.status)) {
+          break
+        }
+        await sleep(1000)
+      }
+      const deliveredMs = Date.now() - t0
+      const ws = (await api(ctx, 'GET', `/v1/workspaces/${id}`)).body
+      const state = ws?.workspace?.state ?? ws?.state
+      const ok = slept.status < 300 && sent.status === 202 && message?.status === 'delivered'
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `workspace slept (${slept.status}); message POSTed while asleep -> ${sent.status}; ${message?.status ?? 'no message'}${message?.error ? ` (${message.error})` : ''} after ${deliveredMs} ms (woke the VM and handed the prompt to Claude Code); workspace now ${state}`,
+        timingsMs: { sleepToDelivered: deliveredMs }
+      }
+    } finally {
+      for (const name of Object.keys(agentEnv)) {
+        await control.as(ctx.solo, 'DELETE', `/v1/secrets/personal/${name}`)
+      }
+      const d = await api(ctx, 'DELETE', `/v1/workspaces/${id}`)
+      if (d.status < 300 || d.status === 404) {
+        ctx.run.destroyed('sandbox', id)
+      }
+    }
+  },
+
   'api.mcp': async (ctx) => {
     const rpc = (method: string, params: unknown, id: number) => api(ctx, 'POST', '/mcp', { jsonrpc: '2.0', id, method, params })
     const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'w9-acceptance', version: '1' } }, 1)
@@ -391,32 +450,85 @@ export const platformChecks: Record<string, Check> = {
   },
 
   'api.routine-cron': async (ctx) => {
-    const r = await api(ctx, 'POST', '/v1/routines', {
-      name: `w9-cron-${tag(ctx)}`,
-      repo: { url: config.testRepo },
-      trigger: { kind: 'schedule', cron: '0 9 * * 1-5', timezone: 'America/Los_Angeles' },
-      agent: 'claude',
-      prompt: 'Reply ok.',
-      postResults: 'none',
-      enabled: false,
-      maxRuntimeMinutes: 5
-    })
-    const id = r.body?.routine?.id
-    const gh = await api(ctx, 'POST', '/v1/routines', {
-      name: `w9-gh-${tag(ctx)}`,
-      repo: { url: config.testRepo },
-      trigger: { kind: 'github', events: ['pull_request.opened'], labels: ['orca'] },
-      agent: 'codex',
-      prompt: 'Review.',
-      postResults: 'comment',
-      enabled: false,
-      maxRuntimeMinutes: 5
-    })
-    for (const rid of [id, gh.body?.routine?.id].filter(Boolean)) {
-      await api(ctx, 'DELETE', `/v1/routines/${rid}`)
+    // A schedule routine fires by itself on a fresh VM, runs the agent, and destroys the VM. Dev allows
+    // an every-minute cron; GitHub-trigger creation (label/author/base filters) is checked too.
+    const gw = secrets.aiGatewayKey()
+    const agentEnv: Record<string, string> = gw
+      ? { ANTHROPIC_BASE_URL: 'https://ai-gateway.vercel.sh', ANTHROPIC_AUTH_TOKEN: gw, ANTHROPIC_MODEL: 'moonshotai/kimi-k2', ANTHROPIC_SMALL_FAST_MODEL: 'moonshotai/kimi-k2' }
+      : {}
+    for (const [name, value] of Object.entries(agentEnv)) {
+      await control.as(ctx.solo, 'PUT', `/v1/secrets/personal/${name}`, { value })
     }
-    const ok = (r.status === 201 || r.status === 200) && (gh.status === 201 || gh.status === 200)
-    return { status: ok ? 'partial' : 'fail', detail: `weekday schedule routine ${r.status} (next ${r.body?.routine?.nextRunAt ? new Date(r.body.routine.nextRunAt).toISOString() : 'n/a'}); GitHub label-filtered routine ${gh.status}. Firing path verified by api.routine-webhook (same runner).` }
+    const ids: string[] = []
+    try {
+      const r = await api(ctx, 'POST', '/v1/routines', {
+        name: `w9-cron-${tag(ctx)}`,
+        repo: { url: config.testRepo },
+        // Fires exactly once in the run: the UTC minute two minutes from now (daily cron).
+        trigger: { kind: 'schedule', cron: onceSoonCron(), timezone: 'UTC' },
+        agent: 'claude',
+        prompt: 'Reply with the single word ok. Do not change any files.',
+        postResults: 'none',
+        enabled: true,
+        maxRuntimeMinutes: 5
+      })
+      if (r.body?.routine?.id) {
+        ids.push(r.body.routine.id)
+      }
+      const gh = await api(ctx, 'POST', '/v1/routines', {
+        name: `w9-gh-${tag(ctx)}`,
+        repo: { url: config.testRepo },
+        trigger: { kind: 'github', events: ['pull_request.opened'], labels: ['orca'], baseBranches: ['main'] },
+        agent: 'codex',
+        prompt: 'Review.',
+        postResults: 'comment',
+        enabled: false,
+        maxRuntimeMinutes: 5
+      })
+      if (gh.body?.routine?.id) {
+        ids.push(gh.body.routine.id)
+      }
+      if (!r.body?.routine?.id) {
+        return { status: 'fail', detail: `create schedule routine ${r.status} ${JSON.stringify(r.body).slice(0, 200)}` }
+      }
+      const id = r.body.routine.id
+      const t0 = Date.now()
+      // Wait for the scheduler to start the FIRST run on its own (cron every minute), disable the
+      // routine at once so it fires only once, then follow that run to the end.
+      let first: any = null
+      while (!first && Date.now() - t0 < 6 * 60_000) {
+        const runs = (await api(ctx, 'GET', `/v1/routines/${id}/runs?limit=20`)).body?.runs ?? []
+        first = runs.at(-1) ?? null
+        if (!first) {
+          await sleep(5_000)
+        }
+      }
+      const firedAfterMs = first ? Date.now() - t0 : null
+      let run: any = first
+      while (first && Date.now() - t0 < 12 * 60_000) {
+        run = (await api(ctx, 'GET', `/v1/routines/${id}/runs/${first.id}`)).body?.run ?? run
+        if (['succeeded', 'failed', 'cancelled', 'timed_out'].includes(run?.status)) {
+          break
+        }
+        await sleep(10_000)
+      }
+      await sleep(5_000)
+      const left = run?.workspaceId ? await control.as(ctx.solo, 'GET', `/v1/sandboxes/${run.workspaceId}`) : null
+      const destroyed = !left || left.status === 404 || left.body?.sandbox?.status === 'destroyed'
+      const firedAfter = firedAfterMs !== null ? Math.round(firedAfterMs / 1000) : null
+      const ok = run?.status === 'succeeded' && destroyed && (gh.status === 201 || gh.status === 200)
+      return {
+        status: ok ? 'pass' : run ? 'partial' : 'fail',
+        detail: `daily schedule set 2 min ahead fired on its own ${firedAfter ?? '?'} s after creation -> first run ${run?.status ?? 'none within 5 min'} on a fresh VM (${String(run?.result?.summary ?? run?.error ?? '').slice(0, 80)}); VM destroyed after: ${destroyed}; GitHub-trigger routine with label/base filters -> ${gh.status}`
+      }
+    } finally {
+      for (const rid of ids) {
+        await api(ctx, 'DELETE', `/v1/routines/${rid}`)
+      }
+      for (const name of Object.keys(agentEnv)) {
+        await control.as(ctx.solo, 'DELETE', `/v1/secrets/personal/${name}`)
+      }
+    }
   },
 
   // ---------------- W8 ----------------

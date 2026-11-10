@@ -89,5 +89,75 @@ export const agentChecks: Record<string, Check> = {
         await ctx.sandboxes.destroy(box.body.sandbox.id)
       }
     }
+  },
+
+  'agent.signin': async (ctx) => {
+    // An agent that is set up once stays set up: onboarding pre-seeded (#142), auth homes on the
+    // workspace disk, and a working claude after sleep/wake and after a 24h-cap rollover.
+    // Subscription OAuth can't run unattended, so a stand-in credentials file proves the auth home persists.
+    const key = secrets.aiGatewayKey()
+    if (!key) {
+      return { status: 'skipped', detail: 'no AI Gateway key' }
+    }
+    const who = { sub: `w9-signin-${ctx.run.file.runId}` }
+    const env: Record<string, string> = {
+      ANTHROPIC_BASE_URL: GATEWAY,
+      ANTHROPIC_AUTH_TOKEN: key,
+      ANTHROPIC_MODEL: 'moonshotai/kimi-k2',
+      ANTHROPIC_SMALL_FAST_MODEL: 'moonshotai/kimi-k2'
+    }
+    for (const [name, value] of Object.entries(env)) {
+      await control.as(who, 'PUT', `/v1/secrets/personal/${name}`, { value })
+    }
+    const box = await ctx.sandboxes.create(who, { workspaceId: 'w9-signin' })
+    const steps: string[] = []
+    try {
+      if (box.status !== 200) {
+        return { status: 'fail', detail: `create ${box.status}` }
+      }
+      const id = box.body.sandbox.id
+      let code = box.body.connection.pairingCode as string
+      const root = box.body.connection.projectRoot as string
+      const marker = `w9-${ctx.run.file.runId}`
+      // Stand-in sign-in state in the CLIs' own auth homes (never real credentials).
+      await ctx.exec(box.body.sandbox.session!.id, `mkdir -p ~/.claude ~/.codex && echo '{"w9":"${marker}"}' > ~/.claude/.w9-signin.json && echo '{"w9":"${marker}"}' > ~/.codex/.w9-signin.json`)
+      const probe = async (label: string, sessionId: string) => {
+        const t = await openTerminal(code, root, 'folder')
+        if (!t.handle) {
+          steps.push(`${label}: no terminal`)
+          return false
+        }
+        await orca(code, ['terminal', 'send', '--terminal', t.handle, '--enter', '--text', `cd ${root} && claude -p "Reply with exactly: SIGNED-IN" > /tmp/signin-${label}.log 2>&1; echo EXIT=$? >> /tmp/signin-${label}.log`])
+        let out = ''
+        for (let i = 0; i < 24 && !/EXIT=/.test(out); i++) {
+          await sleep(5000)
+          out = (await ctx.exec(sessionId, `cat /tmp/signin-${label}.log 2>/dev/null | tail -c 400`)).stdout
+        }
+        const state = (await ctx.exec(sessionId, `node -e 'const c=require(require("os").homedir()+"/.claude.json");console.log(c.hasCompletedOnboarding)' 2>/dev/null; cat ~/.claude/.w9-signin.json ~/.codex/.w9-signin.json 2>/dev/null | grep -c ${marker}`)).stdout.trim().split('\n')
+        const ok = /SIGNED-IN/.test(out) && /EXIT=0/.test(out) && state[0] === 'true' && state[1] === '2'
+        steps.push(`${label}: claude ${/EXIT=0/.test(out) ? 'answered' : 'FAILED'}, onboarding ${state[0]}, auth homes ${state[1] === '2' ? 'kept' : 'LOST'}`)
+        return ok
+      }
+      const okFresh = await probe('fresh', box.body.sandbox.session!.id)
+      await ctx.sandboxes.suspend(id)
+      const woke = await ctx.sandboxes.resume(id)
+      code = woke.body.connection.pairingCode
+      const okWake = woke.status === 200 && (await probe('after-wake', woke.body.sandbox.session!.id))
+      const rolled = await ctx.sandboxes.rollover(id)
+      code = rolled.body.connection.pairingCode
+      const okRoll = rolled.status === 200 && (await probe('after-rollover', rolled.body.sandbox.session!.id))
+      const ok = okFresh && okWake && okRoll
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `${steps.join('; ')}. Subscription OAuth itself needs a person; the auth homes it writes (~/.claude, ~/.codex) are shown to persist across sleep/wake and rollover.`
+      }
+    } finally {
+      for (const name of Object.keys(env)) {
+        await control.as(who, 'DELETE', `/v1/secrets/personal/${name}`)
+      }
+      if (box.status === 200) {
+        await ctx.sandboxes.destroy(box.body.sandbox.id)
+      }
+    }
   }
 }

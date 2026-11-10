@@ -20,7 +20,8 @@ const STATUS: Record<string, { cls: string; label: string }> = {
   partial: { cls: 'w', label: '⚠️ partial' },
   fail: { cls: 'b', label: '❌ fail' },
   not_landed: { cls: 'n', label: '⏳ not landed' },
-  skipped: { cls: 'n', label: '— skipped' }
+  skipped: { cls: 'n', label: '— skipped' },
+  deferred: { cls: 'n', label: '⏸ post-MVP' }
 }
 
 export function resourceCost(rows: Resource[]): { vcpuHours: number; usd: number } {
@@ -117,7 +118,7 @@ export function renderReport(): string {
   const extra = loadFindings()
   const runs = loadRuns()
   const latest = latestResults(runs)
-  const counts = { pass: 0, partial: 0, fail: 0, not_landed: 0, skipped: 0 }
+  const counts = { pass: 0, partial: 0, fail: 0, not_landed: 0, skipped: 0, deferred: 0 }
   for (const f of CATALOG) {
     counts[(latest.get(f.id)?.result.status ?? 'not_landed') as keyof typeof counts]++
   }
@@ -156,7 +157,8 @@ Parity bar: <a href="conductor-parity-matrix.html">conductor-parity-matrix.html<
 <span style="background:var(--warn-bg);color:var(--warn-fg)">⚠️ ${counts.partial} partial</span>
 <span style="background:var(--bad-bg);color:var(--bad-fg)">❌ ${counts.fail} fail</span>
 <span style="background:var(--na-bg)">⏳ ${counts.not_landed} not landed</span>
-<span style="background:var(--na-bg)">— ${counts.skipped} skipped</span><br>
+<span style="background:var(--na-bg)">— ${counts.skipped} skipped</span>
+<span style="background:var(--na-bg)">⏸ ${counts.deferred} post-MVP</span><br>
 <b>Last run:</b> ${lastRun ? `${esc(lastRun.runId)} (${esc(lastRun.startedAt.slice(0, 16))}Z, target ${esc(lastRun.target.integrationSha ?? lastRun.target.desktopRef ?? 'API only')})` : 'none'} ·
 <b>Eval cost so far:</b> ≈ $${cost.usd.toFixed(2)} Vercel compute (${cost.vcpuHours.toFixed(2)} vCPU-h, upper bound at list price) · <b>Leaked resources:</b> ${leaked.length === 0 ? '0 ✅' : `<span style="color:var(--bad-fg)">${leaked.length}</span>`}</div>
 <h2>Features</h2>

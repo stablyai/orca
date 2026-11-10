@@ -32,6 +32,24 @@ async function refresh(ctx: Ctx): Promise<{ id: string; sessionId: string; code:
   box = Promise.resolve(next)
   return next
 }
+/** One runtime RPC (repeated n times) over a persistent paired connection via desktop/runtime-rpc.ts. */
+function runtimeRpc(code: string, method: string, params: unknown, repeat = 1): Promise<{ ms: number[]; response?: unknown; error?: string }> {
+  const repoRoot = new URL('../../../../../', import.meta.url).pathname
+  return new Promise((resolve) => {
+    execFile(
+      `${repoRoot}node_modules/.bin/tsx`,
+      [new URL('../../desktop/runtime-rpc.ts', import.meta.url).pathname, method, JSON.stringify(params), String(repeat)],
+      { cwd: repoRoot, timeout: 180_000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ORCA_PAIRING_CODE: code } },
+      (_e, stdout, stderr) => {
+        try {
+          resolve(JSON.parse(stdout.trim().split('\n').at(-1) ?? ''))
+        } catch {
+          resolve({ ms: [], error: stderr.replaceAll(code, '<pairing>').slice(-300) })
+        }
+      }
+    )
+  })
+}
 const status = async (ctx: Ctx, id: string) => (await control.as(ctx.solo, 'GET', `/v1/sandboxes/${id}/status`)).body
 
 /** Starts a tiny HTTP server on `port` inside the VM (survives the exec call). */
@@ -99,11 +117,39 @@ export const lifecycleChecks: Record<string, Check> = {
     }
   },
 
-  'life.idle-sleep': async () => {
-    const r = await fetch(`${config.controlPlaneUrl}/v1/config`).then((x) => x.json()).catch(() => null)
+  'life.idle-sleep': async (ctx) => {
+    // Real idle: a fresh workspace with no client, no lease renewals and no activity. It must stop by
+    // itself (idle rule / lease lapse) without anyone calling suspend. Skipped unless ORCA_ACCEPTANCE_LONG=1 (about 35 min).
+    const cfg = await fetch(`${config.controlPlaneUrl}/v1/config`).then((x) => x.json()).catch(() => null)
+    if (process.env.ORCA_ACCEPTANCE_LONG !== '1') {
+      return { status: 'skipped', detail: `long check (set ORCA_ACCEPTANCE_LONG=1); config idleSleepMinutes ${cfg?.idleSleepMinutes}` }
+    }
+    const who = { sub: `w9-idle-${ctx.run.file.runId}` }
+    const r = await ctx.sandboxes.create(who, { workspaceId: 'w9-idle' })
+    if (r.status !== 200) {
+      return { status: 'fail', detail: `create ${r.status}` }
+    }
+    const id = r.body.sandbox.id
+    const t0 = Date.now()
+    let state = ''
+    let stoppedAt: number | null = null
+    while (Date.now() - t0 < 40 * 60_000) {
+      await new Promise((res) => setTimeout(res, 60_000))
+      const s = await control.as(who, 'GET', `/v1/sandboxes/${id}/status`)
+      state = s.body?.status?.state ?? s.body?.sandbox?.status
+      if (['sleeping', 'stopping', 'archived'].includes(state) || s.body?.sandbox?.status === 'suspended') {
+        stoppedAt = Date.now()
+        break
+      }
+    }
+    const minutes = stoppedAt ? ((stoppedAt - t0) / 60_000).toFixed(1) : null
+    const ok = stoppedAt !== null && (stoppedAt - t0) <= 32 * 60_000
     return {
-      status: r?.idleSleepMinutes ? 'partial' : 'fail',
-      detail: `GET /v1/config -> idleSleepMinutes ${r?.idleSleepMinutes} (Conductor: 20). Idle stop is driven by the desktop scheduler + lease lapse; a ${r?.idleSleepMinutes}-min idle wait is not part of the routine run.`
+      status: ok ? 'pass' : 'fail',
+      detail: stoppedAt
+        ? `idle workspace (no client, no renewals) went to ${state} by itself after ${minutes} min (polled every 60 s; config idleSleepMinutes ${cfg?.idleSleepMinutes}, lease 30 min). Busy-VM survival at 38 min was shown by core in #152.`
+        : `still ${state} after 40 min idle`,
+      ...(stoppedAt ? { timingsMs: { idleToSleep: stoppedAt - t0 } } : {})
     }
   },
 
@@ -244,6 +290,31 @@ export const lifecycleChecks: Record<string, Check> = {
       status: ok ? 'pass' : 'fail',
       detail: `POST desktop ${r.status} in ${r.ms} ms -> loopback :${d.port}; listening=${Number(listening) > 0}; WebSocket upgrade with ticket -> ${withTicket}, bogus ticket -> ${bogus}; processes: ${procs.map((x) => x.split(' ').slice(1).join(' ').slice(0, 40)).join(', ') || 'none'}. Streaming into a desktop tab is UI (desktop run).`,
       timingsMs: { desktopStart: r.ms }
+    }
+  },
+
+  'acc.search': async (ctx) => {
+    const b = await refresh(ctx)
+    const needle = `w9needle${ctx.run.file.runId.replace(/[^0-9]/g, '')}`
+    // 5,000 files of text plus two needles, so the search has real work to do.
+    await ctx.exec(b.sessionId, `cd ${b.root} && mkdir -p s && for d in $(seq 50); do mkdir -p s/d$d; for f in $(seq 100); do echo "line $d $f lorem ipsum" > s/d$d/f$f.txt; done; done && echo "here ${needle} one" > s/d7/f3.txt && echo "and ${needle} two" > s/d42/f99.txt`, 120_000)
+    const t = await openTerminal(b.code, b.root)
+    const worktree: string | undefined = t.term.json?.result?.terminal?.worktreeId
+    if (!worktree) {
+      return { status: 'fail', detail: 'no worktree id' }
+    }
+    const r = await runtimeRpc(b.code, 'files.search', { worktree, query: needle }, 10)
+    if (r.error) {
+      return { status: 'fail', detail: `files.search over the pairing: ${r.error}` }
+    }
+    const text = JSON.stringify(r.response)
+    const hits = (text.match(new RegExp(needle, 'g')) ?? []).length
+    const ok = text.includes('d7/f3.txt') && text.includes('d42/f99.txt')
+    const sorted = [...r.ms].sort((x: number, y: number) => x - y)
+    return {
+      status: ok ? 'pass' : 'fail',
+      detail: `files.search (ripgrep in the VM) over the E2EE pairing found both needles in 5,002 files (${hits} matches); n=10 p50 ${sorted[4]} ms, max ${sorted[9]} ms (Mac to iad1 round trip included)`,
+      timingsMs: { searchP50: sorted[4]!, searchMax: sorted[9]! }
     }
   },
 

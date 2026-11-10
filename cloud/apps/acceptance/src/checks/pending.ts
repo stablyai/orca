@@ -11,6 +11,10 @@ async function routeExists(path: string, method = 'GET'): Promise<number> {
 }
 
 export const pendingChecks: Record<string, Check> = {
+  'cli.web': async () => ({
+    status: 'deferred',
+    detail: 'Post-MVP (coordinator decision 2026-11-10): design only; needs browser sign-in on the Orca Cloud auth service before a web client can pair. Not counted as a failure.'
+  }),
   'env.build': async () => {
     const status = await routeExists('/v1/environments')
     return status === 404 ? waiting('w1-env-builds', 'no /v1/environments route on the dev control plane') : { status: 'partial', detail: `GET /v1/environments -> ${status}; check not written yet` }

@@ -26,7 +26,7 @@ mkdirSync(shotsDir, { recursive: true })
 const USER = process.env.W9D_USER ?? 'w9-desktop'
 const REPO_SLUG = 'nwparker/orca-sandbox-push-test'
 const WAKE_CYCLES = Number(process.env.W9D_WAKE_CYCLES ?? 5)
-const KEY_SAMPLES = 10
+const KEY_SAMPLES = Number(process.env.W9D_KEY_SAMPLES ?? 10)
 const HTTP_SAMPLES = 10
 const PORT = 4173
 const runTag = new Date().toISOString().replace(/[:.]/g, '-')
@@ -76,7 +76,7 @@ function pct(samples, p) {
 }
 function stats(samples) {
   return samples.length
-    ? { n: samples.length, p50: pct(samples, 50), p95: pct(samples, 95), min: Math.min(...samples), max: Math.max(...samples), samples }
+    ? { n: samples.length, p50: pct(samples, 50), p95: pct(samples, 95), p99: pct(samples, 99), min: Math.min(...samples), max: Math.max(...samples), samples }
     : { n: 0 }
 }
 const redact = (s) => String(s ?? '').replace(/[A-Za-z0-9_-]{32,}/g, '<redacted>')
@@ -339,6 +339,36 @@ async function measureKeystroke(marker) {
   return Math.round(l.echo - l.down)
 }
 
+/**
+ * n keystroke -> echo samples with when each was taken (ms since the workspace's terminal first
+ * printed, and wall clock), so slow ones can be placed (right after create, first prompt, ...).
+ */
+async function keystrokeSamples(step, readyAt) {
+  await focusTerminal()
+  const samples = []
+  const timeline = []
+  const t0 = Date.now()
+  for (let i = 0; i < KEY_SAMPLES; i++) {
+    const at = Date.now()
+    const ms = await measureKeystroke(`k${i}${String.fromCharCode(97 + (i % 26))}q`)
+    samples.push(ms)
+    timeline.push({ i, ms, sinceStepMs: at - t0, sinceReadyMs: readyAt ? at - readyAt : null, at: new Date(at).toISOString() })
+  }
+  const st = stats(samples)
+  step.timings.keystrokeToEchoMs = st
+  const slowBar = Math.max(250, 2 * st.p50)
+  step.keystrokeTimeline = timeline
+  step.keystrokeOutliers = timeline.filter((x) => x.ms > slowBar)
+  const buckets = { '<100': 0, '100-149': 0, '150-199': 0, '200-249': 0, '250-499': 0, '>=500': 0 }
+  for (const x of samples) {
+    buckets[x < 100 ? '<100' : x < 150 ? '100-149' : x < 200 ? '150-199' : x < 250 ? '200-249' : x < 500 ? '250-499' : '>=500']++
+  }
+  step.keystrokeHistogram = buckets
+  step.status = st.p95 < 250 ? 'pass' : 'partial'
+  step.detail = `n=${st.n} keydown -> char in xterm DOM: p50 ${st.p50}ms, p95 ${st.p95}ms, p99 ${st.p99}ms, max ${st.max}ms; histogram ${JSON.stringify(buckets)}; outliers (> ${slowBar}ms) ${JSON.stringify(step.keystrokeOutliers.map((x) => `#${x.i} ${x.ms}ms at +${x.sinceReadyMs ?? x.sinceStepMs}ms`))}`
+  await shot(step, 'typed')
+}
+
 /** The sandbox this run created: listed under the dev account, created after Create was clicked. */
 async function sandboxForWorkspace(since) {
   const { items } = await listSandboxes(USER)
@@ -531,13 +561,14 @@ async function createExtraWorkspace(step, name) {
   await fillName(d, name)
   const t0 = Date.now()
   await d.getByRole('button', { name: /Create workspace/ }).click()
-  await waitForWorkspaceReady(step, t0)
+  const ready = await waitForWorkspaceReady(step, t0)
+  const readyAt = t0 + ready.firstOutput
   await dismissNoise()
   const sb = await sandboxForWorkspace(t0)
   if (!sb.newest) throw new Error(`no sandbox listed for ${name}`)
   created.sandboxIds.add(sb.newest.id)
-  step.createdForCheck = { name, sandboxId: sb.newest.id, createMs: Date.now() - t0 }
-  return { name, sandboxId: sb.newest.id }
+  step.createdForCheck = { name, sandboxId: sb.newest.id, createMs: Date.now() - t0, firstOutputMs: ready.firstOutput }
+  return { name, sandboxId: sb.newest.id, readyAt }
 }
 
 /** Open the cloud workspace and type until an echo comes back (wakes it if asleep). Returns ms. */
@@ -1062,14 +1093,8 @@ async function main() {
     return
   }
 
-  await runStep('term.keystroke', `First-keystroke latency in the cloud xterm (n=${KEY_SAMPLES})`, async (step) => {
-    await focusTerminal()
-    const samples = []
-    for (let i = 0; i < KEY_SAMPLES; i++) samples.push(await measureKeystroke(`k${i}${String.fromCharCode(97 + i)}q`))
-    step.timings.keystrokeToEchoMs = stats(samples)
-    step.status = pct(samples, 95) < 250 ? 'pass' : 'partial'
-    step.detail = `keydown -> char in xterm DOM: p50 ${pct(samples, 50)}ms, p95 ${pct(samples, 95)}ms (DOM renderer)`
-    await shot(step, 'typed')
+  await runStep('term.keystroke', `Keystroke -> echo in the cloud xterm (n=${KEY_SAMPLES})`, async (step) => {
+    await keystrokeSamples(step, null)
   })
 
   await runStep('acc.port-forward', `Ports panel detects :${PORT}, forward to localhost, ${HTTP_SAMPLES} GETs`, async (step) => {
@@ -1323,12 +1348,156 @@ async function main() {
   await oobDeleteStep()
 }
 
+/** Personal agent secrets for the run's dev user (AI Gateway, kimi-k2). Values are never logged. */
+async function agentSecrets(mode) {
+  const keyFile = process.env.W9D_AI_GATEWAY_KEY_FILE
+  if (!keyFile || !existsSync(keyFile)) throw new Error('W9D_AI_GATEWAY_KEY_FILE missing')
+  const key = readFileSync(keyFile, 'utf8').trim()
+  const values = {
+    ANTHROPIC_BASE_URL: 'https://ai-gateway.vercel.sh',
+    ANTHROPIC_AUTH_TOKEN: key,
+    ANTHROPIC_MODEL: 'moonshotai/kimi-k2',
+    ANTHROPIC_SMALL_FAST_MODEL: 'moonshotai/kimi-k2'
+  }
+  const out = {}
+  for (const [name, value] of Object.entries(values)) {
+    const r = await sandboxApi(USER, mode === 'put' ? 'PUT' : 'DELETE', `/v1/secrets/personal/${name}`, mode === 'put' ? { value } : undefined)
+    out[name] = r.status
+  }
+  return out
+}
+
+/**
+ * life.auto-resume (W2 #144): Claude (kimi-k2 via the AI Gateway) runs a 40 s loop; mid-turn the
+ * status panel's Restart restarts the sandbox; Orca must type `continue` once the relaunched TUI is
+ * ready (~26-28 s after the click), the turn finishes (LOOPDONE), and no second continue follows.
+ */
+async function autoResumeStep() {
+  await runStep('life.auto-resume', 'Restart mid-turn from the status panel: Orca sends `continue` once, the agent finishes the turn (W2 #144)', async (step) => {
+    step.secretsPut = await agentSecrets('put')
+    try {
+      const ws = await createExtraWorkspace(step, `${wsName}-ar`)
+      step.sandboxId = ws.sandboxId
+      const screen = async () => (await visibleTerminals()).join('\n')
+      // The composer launched Claude (CLI) in the visible terminal; wait for its prompt.
+      const tReady = Date.now()
+      while (Date.now() - tReady < 150_000 && !/for shortcuts|bypass permissions|Claude Code|\? for/i.test(await screen())) await sleep(500)
+      step.timings.agentReadyMs = Date.now() - tReady
+      await shot(step, 'agent-ready')
+      await focusTerminal()
+      const prompt = 'run: for i in $(seq 40); do echo $i; sleep 1; done; echo LOOPDONE'
+      await page.keyboard.type(prompt)
+      await sleep(400)
+      await page.keyboard.press('Enter')
+      const tSent = Date.now()
+      // Mid-turn: the loop has printed a few numbers.
+      const looping = () => screen().then((t) => t.split('\n').some((l) => /^\s*[│⎿]?\s*(4|5|6|7|8)\s*$/.test(l)))
+      while (Date.now() - tSent < 120_000 && !(await looping())) {
+        // A tool-permission prompt would stall the turn: accept it once ("Yes").
+        if (!step.acceptedPermission && /Do you want to proceed|Yes, and don.t ask/i.test(await screen())) {
+          await page.keyboard.press('Enter')
+          step.acceptedPermission = true
+        }
+        await sleep(300)
+      }
+      step.timings.sendToLoopingMs = Date.now() - tSent
+      await shot(step, 'mid-turn')
+      // Status panel: the row's cloud mark -> Restart (-> confirm when agents are running).
+      // No Escape here: focus is in Claude's TUI, where Escape interrupts the running turn.
+      // The row's cloud mark (status panel) appears once the cloud-workspace store knows the row.
+      const tagMark = async () =>
+        (await rowOf(ws.name))?.evaluate((el) => {
+          for (let e = el, j = 0; e && j < 8; e = e.parentElement, j++) {
+            const m = e.querySelector('[data-cloud-workspace-mark]')
+            if (m) {
+              m.setAttribute('data-w9d-mark', '1')
+              return m.getAttribute('data-cloud-workspace-mark')
+            }
+          }
+          return null
+        })
+      const tMark = Date.now()
+      let markState = null
+      while (Date.now() - tMark < 60_000 && !(markState = await tagMark())) await sleep(500)
+      step.markState = markState
+      step.timings.waitForMarkMs = Date.now() - tMark
+      let tClick
+      if (markState) {
+        step.restartVia = 'status panel'
+        await page.locator('[data-w9d-mark="1"]').first().click()
+        await page.getByRole('button', { name: /^Restart$/ }).filter({ visible: true }).first().click({ timeout: 10_000 })
+        tClick = Date.now()
+      } else {
+        // No status-panel mark on the row: the row menu's Restart sandbox runs the same action.
+        step.restartVia = 'row menu (no status-panel mark on the row)'
+        await (await rowOf(ws.name)).click({ button: 'right' })
+        await page.getByRole('menuitem').first().waitFor({ timeout: 5000 })
+        step.rowMenu = (await menuItems()).map((x) => x.split('\n')[0])
+        await page.getByRole('menuitem', { name: /^Restart sandbox$/ }).click({ timeout: 10_000 })
+        tClick = Date.now()
+      }
+      const confirm = page.getByRole('button', { name: /^Restart sandbox$/ }).filter({ visible: true })
+      if (await confirm.first().isVisible({ timeout: 2500 }).catch(() => false)) {
+        await confirm.first().click()
+        step.confirmed = true
+      }
+      await shot(step, 'restart-clicked')
+      const traceStart = await page.evaluate(() => (window.__orcaContinueTrace ?? []).length)
+      let continueAt = null
+      let loopDoneAt = null
+      const sends = []
+      while (Date.now() - tClick < 240_000) {
+        const tr = await page.evaluate((n) => (window.__orcaContinueTrace ?? []).slice(n), traceStart)
+        for (const e of tr) {
+          const [ts, ...rest] = e.split(' ')
+          const line = rest.join(' ')
+          if (/^result .* true$/.test(line) && !sends.some((x) => x.line === line && x.ts === Number(ts))) sends.push({ ts: Number(ts), line })
+        }
+        if (continueAt === null && sends.length) continueAt = sends[0].ts - tClick
+        const text = await screen()
+        // Claude collapses long tool output ("… +38 lines"), so LOOPDONE itself may never be on
+        // screen: a finished turn after the continue ("✻ … · done") counts too.
+        const lines = text.split('\n')
+        const afterContinue = lines.slice(lines.findIndex((l) => /❯\s*continue\s*$/.test(l)) + 1)
+        const finished = sends.length > 0 && lines.some((l) => /❯\s*continue\s*$/.test(l)) && afterContinue.some((l) => /✻ .*· done/.test(l))
+        if (loopDoneAt === null && (lines.some((l) => l.replace(/[│⎿●\s]/g, '') === 'LOOPDONE') || finished)) loopDoneAt = Date.now() - tClick
+        if (loopDoneAt !== null && Date.now() - tClick > loopDoneAt + 30_000) break
+        await sleep(500)
+      }
+      step.continueTrace = await page.evaluate((n) => (window.__orcaContinueTrace ?? []).slice(n), traceStart)
+      step.screenAfter = redact((await screen()).split('\n').filter((l) => l.trim()).slice(-25).join('\n'))
+      await shot(step, 'after')
+      step.timings.clickToContinueMs = continueAt
+      step.timings.clickToLoopDoneMs = loopDoneAt
+      step.continueSends = sends.length
+      const continueOk = continueAt !== null && continueAt > 10_000 && continueAt < 60_000
+      step.status = continueOk && loopDoneAt !== null && sends.length === 1 ? 'pass' : 'fail'
+      step.detail = `agent ready ${step.timings.agentReadyMs}ms; loop running ${step.timings.sendToLoopingMs}ms after send; Restart via ${step.restartVia}${step.confirmed ? ' (confirmed)' : ''} -> continue sent ${continueAt ?? 'never'}ms after the click (expected ~26-28 s), sends ${sends.length}; LOOPDONE ${loopDoneAt ?? 'never'}ms after the click`
+      if (step.status === 'fail') {
+        bug('life.auto-resume', { title: 'Restart mid-turn does not auto-continue the agent exactly once', expected: '`continue` once ~26-28 s after Restart, then LOOPDONE', actual: step.detail, repro: 'Cloud workspace with Claude running a 40 s loop -> status panel Restart', screenshot: step.screenshots.at(-1) })
+      }
+      // Destroy the VM through the UI.
+      const o = await uiDelete(step, ws.name, 'delete', 120_000)
+      step.deleteOutcome = o.kind
+      step.finalSandboxStatus = (await waitSandboxStatus(ws.sandboxId, ['destroyed'], 120_000)).status
+    } finally {
+      step.secretsDeleted = await agentSecrets('delete')
+    }
+  })
+}
+
 /**
  * W9D_MODE=targeted: picker sign-in (twice per process: fresh profile, then after a sign-out),
  * create + keystroke, Move to this computer (Archive afterwards on) then Delete within seconds,
  * and a normal Delete.
  */
 async function targetedFlow() {
+  if (process.env.W9D_ONLY === 'auto-resume') {
+    await store(() => window.__store.getState().connectCurrentOrcaProfile())
+    await sleep(1500)
+    await autoResumeStep()
+    return
+  }
   const pickerCheck = (id, label) =>
     runStep(id, `${label}: Run on -> "Orca Cloud: Sign in" -> signed in and Orca Cloud selected (#157)`, async (step) => {
       const watched = [USER, 'desktop-dogfood', 'dev-user']
@@ -1383,14 +1552,8 @@ async function targetedFlow() {
   })
   if (!ws) return
 
-  await runStep('term.keystroke', `First-keystroke latency in the cloud xterm (n=${KEY_SAMPLES})`, async (step) => {
-    await focusTerminal()
-    const samples = []
-    for (let i = 0; i < KEY_SAMPLES; i++) samples.push(await measureKeystroke(`k${i}${String.fromCharCode(97 + i)}q`))
-    step.timings.keystrokeToEchoMs = stats(samples)
-    step.status = pct(samples, 95) < 250 ? 'pass' : 'partial'
-    step.detail = `keydown -> char in xterm DOM: p50 ${pct(samples, 50)}ms, p95 ${pct(samples, 95)}ms`
-    await shot(step, 'typed')
+  await runStep('term.keystroke', `Keystroke -> echo in the cloud xterm (n=${KEY_SAMPLES})`, async (step) => {
+    await keystrokeSamples(step, ws.readyAt)
   })
 
   await runStep('life.move-then-delete', 'Move to this computer (Archive afterwards on), then Delete the cloud row within seconds: destroyed, no suspend/archive error toasts (#157)', async (step) => {
@@ -1454,6 +1617,8 @@ async function targetedFlow() {
       await waitRowGone(step.localRow, 'local', 60_000).catch(() => {})
     }
   })
+
+  if (process.env.W9D_AUTO_RESUME === '1') await autoResumeStep()
 
   await runStep('life.destroy', 'Normal Delete of an awake cloud workspace reaches destroyed', async (step) => {
     const w2 = await createExtraWorkspace(step, `${wsName}-del`)
