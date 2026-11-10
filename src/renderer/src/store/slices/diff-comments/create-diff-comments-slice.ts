@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   enqueueDiffCommentPersist,
@@ -50,10 +50,6 @@ export type DiffCommentDeliverySnapshot = Pick<
   DiffComment,
   'body' | 'filePath' | 'id' | 'lineNumber' | 'selectedText' | 'source' | 'startLine'
 >
-
-function generateId(): string {
-  return createBrowserUuid()
-}
 
 function deliverySnapshotMatches(
   comment: DiffComment,
@@ -105,7 +101,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
     const comment: DiffComment = normalizeDiffComment({
       ...input,
-      id: generateId(),
+      id: createNonSecureContextUuid(),
       createdAt: Date.now()
     })
     const result = mutateDiffComments(set, owner, (existing) => [...existing, comment])

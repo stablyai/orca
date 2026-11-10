@@ -20,7 +20,7 @@ import {
   type WorktreeCreateAgentLaunch
 } from './agent-launch-request'
 import { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
-import { structuredSessionOperationId } from '../session/structured-session-operation-id'
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 import type {

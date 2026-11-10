@@ -40,6 +40,7 @@ import {
   nativeChatSlotOffersFork,
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
+import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot =
@@ -73,6 +74,13 @@ export type NativeChatMessageSlot = {
    *  the last drawn response with words, else the last with images. Absent outside a turn and in
    *  subagent sections. */
   endsResponse?: boolean
+  /** This response is the newest one in the conversation. */
+  latestResponse?: boolean
+  /** Response controls under this row may hang into the gap below it: the row draws nothing after
+   *  its message, and what follows is the person's own right-aligned bubble or nothing. Absent when
+   *  something left-side follows (an agent's card, a notice, a task or subagent row, the turn's bar,
+   *  diff rollup or PR card), where the controls keep their own height, and in subagent sections. */
+  actionsHang?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** Pull requests this row's turn opened, drawn after it. */
   openedPullRequests?: readonly NativeChatOpenedPullRequest[]
@@ -116,6 +124,7 @@ export function buildNativeChatTranscript(
     subagentSections: sections = NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
     subagentChoices: choices = NO_NATIVE_CHAT_SUBAGENT_CHOICES,
     liveReasoningId = null,
+    tailRowBelow = false,
     forkOffer
   } = input
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
@@ -257,6 +266,19 @@ export function buildNativeChatTranscript(
       slot.endsResponse = true
     }
   }
+  const latestResponse = drawn.findLast(
+    (slot) =>
+      slot.kind === 'message' &&
+      slot.depth === 0 &&
+      slot.drawsMessage &&
+      !slot.receipt &&
+      slot.message.role === 'assistant' &&
+      (slot.endsResponse === true ||
+        (slot.endsResponse === undefined && nativeChatAgentRowWords(slot.message, t).length > 0))
+  )
+  if (latestResponse?.kind === 'message') {
+    latestResponse.latestResponse = true
+  }
   for (let index = 0; index < drawn.length - 1; index += 1) {
     const slot = drawn[index]!
     const next = drawn[index + 1]!
@@ -275,6 +297,7 @@ export function buildNativeChatTranscript(
       slot.continuesTurn = true
     }
   }
+  markNativeChatResponseActionsHang(drawn, tailRowBelow, typography)
   return {
     slots: drawn,
     forkPoint: forkOffer

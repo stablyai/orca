@@ -36,7 +36,8 @@ import {
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
-import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
+import '@/lib/workspace/creation/new-workspace-ssh-gate'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {
   connectRepoSshConnection,
   getRepoSshConnection,
@@ -158,7 +159,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
       return
     }
     const liveStatus = selectRepoSshGateInput(liveState, liveRepo).status
-    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
+    if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus)) {
       return
     }
 
@@ -180,7 +181,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     const liveStatus = useAppStore
       .getState()
       .sshConnectionStates.get(folderTargetConnectionId)?.status
-    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus ?? null)) {
+    if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus ?? null)) {
       return
     }
     try {

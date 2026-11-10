@@ -16,7 +16,7 @@ import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing
 import { useSettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
 import { useTranslate } from '@/i18n/use-translate'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'
 
 type NavSection = {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
+import { getSelectedTextForFileSearch } from '../lib/files/search/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-commands/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
@@ -10,7 +10,7 @@ import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
 } from '@/lib/plugin-command-keybindings'
-import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import {
   folderRelativePathToIncludeGlob,

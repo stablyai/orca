@@ -1,5 +1,5 @@
 import { useAgentPickerDraftScope } from '../agent/AgentLaunchSetupButton'
-import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'

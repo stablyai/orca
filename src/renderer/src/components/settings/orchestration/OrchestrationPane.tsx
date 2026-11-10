@@ -1,17 +1,17 @@
 import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
 import { useCallback, useState } from 'react'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
-import { buildSkillCommandForRuntime } from '../../../lib/skill-runtime-command'
+import { buildSkillCommandForRuntime } from '../../../lib/skills/runtime/skill-runtime-command'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/skills/installation/agent-feature-install-commands'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import type { SkillUsageExample } from '@/lib/skill-usage-example'
+import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
