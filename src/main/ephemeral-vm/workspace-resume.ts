@@ -17,11 +17,15 @@ import {
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
 import { isCloudWorkspaceArchivedOnControlPlane } from '../hosted-sandbox/hosted-workspace-runtime'
+import {
+  isCloudWorkspaceAsleepOnControlPlane,
+  markCloudRuntimeSleptElsewhere
+} from '../hosted-sandbox/hosted-remote-sleep'
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
 import { applyResumedRuntimePairing, probeSavedPairing } from './runtime-resume-pairing'
-import { isQuietWake } from './quiet-wakes'
+import { isQuietWake, noteQuietWakeResumed } from './quiet-wakes'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import {
   preconnectWokenServer,
@@ -58,10 +62,18 @@ export async function resumeEphemeralVmWorkspace(
   request: VmWakeRequest
 ): Promise<EphemeralVmRuntimeRecord | null> {
   const userDataPath = app.getPath('userData')
-  const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
-  if (!runtime) {
+  const found = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
+  if (!found) {
     return null
   }
+  // Slept from the CLI, the phone or another window: the record still says running, and the
+  // control plane says otherwise. Resume it now instead of waiting minutes for lost contact.
+  const runtime =
+    found.status === 'running' &&
+    found.recipe?.provider === 'orca-cloud' &&
+    (await isCloudWorkspaceAsleepOnControlPlane(workspaceId).catch(() => false))
+      ? (markCloudRuntimeSleptElsewhere(userDataPath, found) ?? found)
+      : found
   // A VM recorded as up whose host Orca gave up reaching may have been stopped or reclaimed by its
   // provider (#34089): its recipe's resume brings it back. A failure there keeps the record as it
   // was, so a VM that was only out of reach is still reconnected as before.
@@ -165,6 +177,8 @@ export async function resumeEphemeralVmWorkspace(
       ...pickEphemeralVmFailureCode(result)
     })
   }
+  // The VM really resumed (not an early return on a VM already up): a quiet wake may count it.
+  noteQuietWakeResumed(workspaceId)
   if (lostContact && runtime.runtimeEnvironmentId) {
     // The resume restarted the VM; its server's old failures say nothing about the new boot.
     clearRuntimeEnvironmentContactLoss(runtime.runtimeEnvironmentId)

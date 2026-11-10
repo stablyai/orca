@@ -3,7 +3,8 @@ import {
   claimQuietWake,
   endQuietWake,
   markQuietWake,
-  noteQuietWakeWoke
+  noteQuietWakeWoke,
+  takeQuietWakeResumed
 } from '../ephemeral-vm/quiet-wakes'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
@@ -61,10 +62,13 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       return toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId)).then(
         (result) => {
           if (args.quiet === true) {
-            if (result.ok) {
+            // A VM already up (or recorded so) resumes nothing: no wake to count, no short idle window.
+            const resumed = takeQuietWakeResumed(args.workspaceId)
+            if (result.ok && resumed) {
               noteQuietWakeWoke(args.workspaceId)
             }
             endQuietWake(args.workspaceId)
+            return result.ok ? { ...result, resumed } : result
           }
           return result
         }
