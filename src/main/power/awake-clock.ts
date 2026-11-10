@@ -1,22 +1,33 @@
-import { performance } from 'node:perf_hooks'
 import { subscribeSystemPowerLifecycle } from './system-power-lifecycle'
 
-/** A wall clock outrunning the monotonic clock by this much between samples means the machine
- *  slept without a power event (the monotonic clock stops while macOS and Linux sleep). */
-const SLEEP_GAP_MS = 10_000
+/** How often the clock samples itself while in use, so a stretch with no samples means the
+ *  process was not running (system sleep, or an App Nap-sized stall). */
+export const AWAKE_CLOCK_HEARTBEAT_MS = 20_000
 
-/** Monotonic time still marked suspended after which a resume event was evidently lost. Dark wakes
- *  run for seconds, so this never ends a real suspension early. */
+/** A sample gap this long means the process did not run in between. Sleeps shorter than this go
+ *  unnoticed without a power event. */
+export const AWAKE_CLOCK_SLEEP_GAP_MS = 3 * AWAKE_CLOCK_HEARTBEAT_MS
+
+/** The heartbeat stops after this long without a read. It outlasts the agent startup ceiling, and
+ *  the automation scheduler reads every tick. */
+export const AWAKE_CLOCK_IDLE_MS = 15 * 60_000
+
+/** Uninterrupted running while still marked suspended after which a resume event was evidently
+ *  lost. Dark wakes run for seconds, so this never ends a real suspension early. */
 const LOST_RESUME_MS = 2 * 60_000
 
 export type AwakeClockSources = {
   wallNow: () => number
+  /** Never runs backward or follows wall corrections. It may count sleep (macOS and Windows
+   *  Node clocks do) or not (Linux CLOCK_MONOTONIC); the clock is correct either way. */
   monotonicNow: () => number
+  /** Runs `beat` once after `ms`. Timers do not fire while the machine sleeps. */
+  after: (beat: () => void, ms: number) => void
 }
 
 export type AwakeClock = {
-  /** Wall-clock milliseconds minus every interval the system spent suspended; it stands still
-   *  while suspended. With no power events it equals the wall clock. */
+  /** Milliseconds of awake time, anchored to the wall clock at creation: it stands still while
+   *  suspended or in a stretch the process did not run, and ignores wall-clock corrections. */
   now(): number
   /** Not suspended, and awake for at least `settleMs` since the last wake. */
   settled(settleMs: number): boolean
@@ -25,62 +36,115 @@ export type AwakeClock = {
 }
 
 const SYSTEM_SOURCES: AwakeClockSources = {
-  // Read through the global each time so test fake timers apply.
+  // Read through the globals each time so test fake timers apply.
   wallNow: () => Date.now(),
-  monotonicNow: () => performance.now()
+  monotonicNow: () => globalThis.performance.now(),
+  after: (beat, ms) => {
+    setTimeout(beat, ms).unref()
+  }
 }
 
 /** Why: a wall-clock deadline expires the moment a laptop wakes from a sleep that outlasted it,
- *  so anything that times out an active process must not count the time the machine slept. */
+ *  so anything that times out an active process must not count the time the machine slept.
+ *  Limit: reads more than AWAKE_CLOCK_IDLE_MS apart, with no power event, cannot tell a sleep
+ *  between them from idle time on a counter that counts sleep. */
 export function createAwakeClock(sources: AwakeClockSources = SYSTEM_SOURCES): AwakeClock {
   const { wallNow, monotonicNow } = sources
+  const createdAt = { wall: wallNow(), monotonic: monotonicNow() }
+  /** Monotonic time excluded from awake time. */
   let slept = 0
-  let suspendedAt: { wall: number; monotonic: number } | null = null
+  let suspendedAt: number | null = null
+  /** Monotonic start of the current stretch the process has run without a gap. */
+  let runningSince = createdAt.monotonic
+  /** Awake reading at the last wake; null until the machine is seen to wake. */
   let lastWakeAt: number | null = null
-  let gapSample = { wall: wallNow(), monotonic: monotonicNow() }
+  let sample = { ...createdAt }
+  let lastReadAt = createdAt.monotonic
+  let beating = false
 
-  const now = (): number => {
-    if (suspendedAt && monotonicNow() - suspendedAt.monotonic >= LOST_RESUME_MS) {
-      // The process has run for minutes while marked suspended: treat it as the missing resume.
-      clock.resume()
+  const awake = (monotonic: number): number =>
+    monotonic - createdAt.monotonic - slept - (suspendedAt === null ? 0 : monotonic - suspendedAt)
+
+  const endSuspension = (resumedAt: number): void => {
+    if (suspendedAt === null) {
+      return
     }
-    return (suspendedAt ? suspendedAt.wall : wallNow()) - slept
+    slept += Math.max(0, resumedAt - suspendedAt)
+    suspendedAt = null
+    lastWakeAt = awake(resumedAt)
   }
 
-  const clock: AwakeClock = {
-    now,
-    settled(settleMs) {
-      const wall = wallNow()
-      const monotonic = monotonicNow()
-      const sleptUnseen = wall - gapSample.wall - (monotonic - gapSample.monotonic) > SLEEP_GAP_MS
-      gapSample = { wall, monotonic }
-      const current = now()
-      if (sleptUnseen && !suspendedAt) {
-        lastWakeAt = current
+  /** Reads both clocks and records any stretch the process did not run as a wake. */
+  const observe = (afterIdle: boolean): number => {
+    const wall = wallNow()
+    const monotonic = monotonicNow()
+    const sinceMonotonic = monotonic - sample.monotonic
+    // A counter that counts sleep shows the gap itself; one that excludes it shows only on the
+    // wall. After an unsampled idle stretch, only the wall gap is evidence of sleep.
+    const counterGap =
+      !afterIdle && (sinceMonotonic < 0 || sinceMonotonic > AWAKE_CLOCK_SLEEP_GAP_MS)
+    const wallGap = wall - sample.wall - sinceMonotonic > AWAKE_CLOCK_SLEEP_GAP_MS
+    sample = { wall, monotonic }
+    if (counterGap || wallGap) {
+      runningSince = monotonic
+      if (suspendedAt === null) {
+        // A suspension's span is excluded on resume; outside one, exclude the gap now.
+        slept += counterGap ? sinceMonotonic : 0
+        lastWakeAt = awake(monotonic)
       }
-      return !suspendedAt && (lastWakeAt === null || current - lastWakeAt >= settleMs)
+    }
+    if (suspendedAt !== null && monotonic - runningSince >= LOST_RESUME_MS) {
+      endSuspension(Math.max(suspendedAt, runningSince))
+    }
+    return monotonic
+  }
+
+  const beat = (): void => {
+    const monotonic = observe(false)
+    beating = monotonic - lastReadAt < AWAKE_CLOCK_IDLE_MS
+    if (beating) {
+      sources.after(beat, AWAKE_CLOCK_HEARTBEAT_MS)
+    }
+  }
+
+  const read = (): number => {
+    const monotonic = observe(!beating)
+    lastReadAt = monotonic
+    if (!beating) {
+      beating = true
+      sources.after(beat, AWAKE_CLOCK_HEARTBEAT_MS)
+    }
+    return monotonic
+  }
+
+  return {
+    now: () => createdAt.wall + awake(read()),
+    settled(settleMs) {
+      const monotonic = read()
+      return (
+        suspendedAt === null && (lastWakeAt === null || awake(monotonic) - lastWakeAt >= settleMs)
+      )
     },
     suspend() {
       // Dark wake can re-suspend without a resume; keep the earliest stamp.
-      suspendedAt ??= { wall: wallNow(), monotonic: monotonicNow() }
+      const monotonic = read()
+      if (suspendedAt === null) {
+        suspendedAt = monotonic
+        runningSince = monotonic
+      }
     },
     resume() {
-      if (!suspendedAt) {
-        return
-      }
-      const wall = wallNow()
-      slept += Math.max(0, wall - suspendedAt.wall)
-      suspendedAt = null
-      gapSample = { wall, monotonic: monotonicNow() }
-      lastWakeAt = wall - slept
+      const monotonic = read()
+      runningSince = monotonic
+      endSuspension(monotonic)
     }
   }
-  return clock
 }
 
 let systemAwakeClock: AwakeClock | null = null
 
-/** The process-wide awake clock, driven by the system's suspend and resume events. */
+/** The process-wide awake clock, driven by the system's suspend and resume events where a
+ *  publisher exists (desktop) and by its own sampling everywhere (including orcad). */
 export function getSystemAwakeClock(): AwakeClock {
   if (!systemAwakeClock) {
     const clock = createAwakeClock()

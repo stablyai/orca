@@ -1,48 +1,48 @@
 // The startup ceiling measures awake time: a machine that sleeps while an agent starts must not
-// expire the start the moment it wakes.
+// expire the start the moment it wakes. These run on the production default clock.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createAwakeClock, type AwakeClock } from '../../../power/awake-clock'
-import { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from './structured-agent-session-startup-attempt-contract'
+import type * as SystemPowerLifecycle from '../../../power/system-power-lifecycle'
+import type * as StartupAttempt from './structured-agent-session-startup-attempt'
 
-let monotonic = 0
-let clock: AwakeClock
+let power: typeof SystemPowerLifecycle
+let Attempts: typeof StartupAttempt.StructuredAgentSessionStartupAttempts
 
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+beforeEach(async () => {
+  vi.useFakeTimers({
+    toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout']
+  })
   vi.setSystemTime(new Date('2026-11-09T09:08:32-08:00'))
-  monotonic = 0
-  clock = createAwakeClock({ wallNow: () => Date.now(), monotonicNow: () => monotonic })
+  // A fresh process-wide awake clock and power state for each test.
+  vi.resetModules()
+  power = await import('../../../power/system-power-lifecycle')
+  ;({ StructuredAgentSessionStartupAttempts: Attempts } =
+    await import('./structured-agent-session-startup-attempt'))
 })
 
 afterEach(() => {
   vi.useRealTimers()
 })
 
-function attempts(expire: () => void) {
-  return new StructuredAgentSessionStartupAttempts({ expire, now: () => clock.now() })
-}
-
-/** The machine sleeps: wall time passes; timers due by then fire on wake, before the resume event. */
-async function sleepFor(ms: number): Promise<void> {
-  clock.suspend()
-  await vi.advanceTimersByTimeAsync(ms)
-  clock.resume()
+/** The machine sleeps: wall time passes while no timers run; then the system reports the wake. */
+function sleepFor(ms: number): void {
+  power.publishSystemSuspend()
+  vi.setSystemTime(Date.now() + ms)
+  power.publishSystemResume()
 }
 
 async function awakeFor(ms: number): Promise<void> {
-  monotonic += ms
   await vi.advanceTimersByTimeAsync(ms)
 }
 
 it('does not expire a start whose machine slept past the ceiling', async () => {
   const expire = vi.fn()
-  const startup = attempts(expire)
+  const startup = new Attempts({ expire })
   const { registeredAt } = startup.begin('session', 'attempt')
 
   await awakeFor(2_000)
-  await sleepFor(665_000)
+  sleepFor(665_000)
   await awakeFor(1_000)
 
   expect(expire).not.toHaveBeenCalled()
@@ -53,11 +53,11 @@ it('does not expire a start whose machine slept past the ceiling', async () => {
 
 it('still expires once the start has been awake for the whole ceiling', async () => {
   const expire = vi.fn()
-  const startup = attempts(expire)
+  const startup = new Attempts({ expire })
   const { registeredAt } = startup.begin('session', 'attempt')
 
   await awakeFor(2_000)
-  await sleepFor(665_000)
+  sleepFor(665_000)
   await awakeFor(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS - 3_000)
   expect(expire).not.toHaveBeenCalled()
 
@@ -67,11 +67,13 @@ it('still expires once the start has been awake for the whole ceiling', async ()
   startup.dispose()
 })
 
-it('measures the ceiling on the wall clock when nothing reports a sleep', async () => {
+it('measures the full ceiling when nothing reports a sleep', async () => {
   const expire = vi.fn()
-  const startup = attempts(expire)
+  const startup = new Attempts({ expire })
   startup.begin('session', 'attempt')
-  await awakeFor(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS)
+  await awakeFor(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS - 1_000)
+  expect(expire).not.toHaveBeenCalled()
+  await awakeFor(1_000)
   await vi.waitFor(() => expect(expire).toHaveBeenCalledOnce())
   startup.dispose()
 })

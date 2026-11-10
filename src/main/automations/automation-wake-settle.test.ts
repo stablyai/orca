@@ -28,126 +28,163 @@ const makeRepo = (): Repo => ({
   addedAt: 1
 })
 
-describe('scheduled catch-up after a wake', () => {
-  let clock: AwakeClock
+type CounterModel = 'counts sleep (macOS/Windows Node)' | 'stops in sleep (Linux)'
 
-  beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-automations-wake-test-'))
-    // Fake performance advances with timers but not with setSystemTime, as a sleeping machine's
-    // monotonic clock stands still while its wall clock moves on.
-    vi.useFakeTimers({
-      toFake: [
-        'Date',
-        'performance',
-        'setTimeout',
-        'clearTimeout',
-        'setInterval',
-        'clearInterval',
-        'setImmediate',
-        'clearImmediate'
-      ]
+describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in sleep (Linux)'])(
+  'scheduled catch-up after a wake, on a monotonic counter that %s',
+  (model) => {
+    let clock: AwakeClock
+    /** Sleep the fake monotonic counter missed: fake performance only moves with timers. */
+    let countedSleep = 0
+
+    beforeEach(() => {
+      testState.dir = mkdtempSync(join(tmpdir(), 'orca-automations-wake-test-'))
+      vi.useFakeTimers({
+        toFake: [
+          'Date',
+          'performance',
+          'setTimeout',
+          'clearTimeout',
+          'setInterval',
+          'clearInterval',
+          'setImmediate',
+          'clearImmediate'
+        ]
+      })
+      vi.setSystemTime(new Date('2026-11-09T08:00:00-08:00'))
+      countedSleep = 0
+      clock = createAwakeClock({
+        wallNow: () => Date.now(),
+        monotonicNow: () => performance.now() + countedSleep,
+        after: (beat, ms) => {
+          setTimeout(beat, ms)
+        }
+      })
     })
-    vi.setSystemTime(new Date('2026-11-09T08:00:00-08:00'))
-    clock = createAwakeClock({
-      wallNow: () => Date.now(),
-      monotonicNow: () => performance.now()
+
+    afterEach(async () => {
+      await closeTestStores()
+      vi.useRealTimers()
+      rmSync(testState.dir, { recursive: true, force: true })
     })
-  })
 
-  afterEach(async () => {
-    await closeTestStores()
-    vi.useRealTimers()
-    rmSync(testState.dir, { recursive: true, force: true })
-  })
+    async function awakeFor(ms: number): Promise<void> {
+      await vi.advanceTimersByTimeAsync(ms)
+    }
 
-  async function awakeFor(ms: number): Promise<void> {
-    await vi.advanceTimersByTimeAsync(ms)
+    /** Asleep: no timers run; the wall clock moves on, and so does the counter if it counts sleep. */
+    function asleepUntil(when: string): void {
+      const ms = new Date(when).getTime() - Date.now()
+      vi.setSystemTime(Date.now() + ms)
+      if (model === 'counts sleep (macOS/Windows Node)') {
+        countedSleep += ms
+      }
+    }
+
+    async function scheduledService(opts: { tickMs?: number; graceMinutes?: number } = {}) {
+      const tickMs = opts.tickMs ?? TICK_MS
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      const automation = store.createAutomation({
+        name: 'GitHub i18n issue and PR scan',
+        prompt: 'Scan',
+        agentId: 'codex',
+        projectId: 'r1',
+        workspaceMode: 'existing',
+        workspaceId: 'r1::wt1',
+        timezone: 'America/Los_Angeles',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-11-08T00:00:00-08:00').getTime(),
+        missedRunGraceMinutes: opts.graceMinutes ?? 720
+      })
+      const launch = vi.fn(async () => ({ workspaceId: 'wt-1', terminalSessionId: 'tab-1' }))
+      const service = new AutomationService(store, {
+        tickMs,
+        terminalLauncher: { launch, available: () => true }
+      })
+      service.wakeGate.settled = () => automationSystemSettled(clock)
+      service.start()
+      await awakeFor(tickMs)
+      const statuses = () => store.listAutomationRuns(automation.id).map((run) => run.status)
+      return { store, automation, launch, service, statuses }
+    }
+
+    it('does not start a missed run during a dark wake, then catches it up once awake and stable', async () => {
+      // A one-second tick runs the scheduler inside the two-second dark wake.
+      const { store, automation, launch, service, statuses } = await scheduledService({
+        tickMs: 1_000
+      })
+
+      // The machine sleeps through 09:00 and dark-wakes at 09:08:30 with no resume event.
+      clock.suspend()
+      asleepUntil('2026-11-09T09:08:30-08:00')
+      await awakeFor(2_000)
+      expect(statuses()).toEqual([])
+
+      // Back to sleep, then a full wake at 09:19:37.
+      asleepUntil('2026-11-09T09:19:37-08:00')
+      clock.resume()
+      await awakeFor(AUTOMATION_WAKE_SETTLE_MS - 1_000)
+      expect(statuses()).toEqual([])
+      expect(launch).not.toHaveBeenCalled()
+
+      await awakeFor(2_000)
+      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
+      expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
+        new Date('2026-11-09T09:00:00-08:00').getTime()
+      )
+      expect(launch).toHaveBeenCalledOnce()
+      service.stop()
+    })
+
+    it('also waits after a sleep that no power event reported', async () => {
+      const { launch, service, statuses } = await scheduledService({ tickMs: 1_000 })
+
+      asleepUntil('2026-11-09T09:08:30-08:00')
+      await awakeFor(2_000)
+      expect(statuses()).toEqual([])
+      expect(launch).not.toHaveBeenCalled()
+
+      await awakeFor(AUTOMATION_WAKE_SETTLE_MS)
+      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
+      service.stop()
+    })
+
+    it('does not let the wait after a wake use up a zero-minute grace', async () => {
+      const { store, automation, service, statuses } = await scheduledService({ graceMinutes: 0 })
+
+      // Without the wait, the 09:01:01 tick would have launched this run inside its grace.
+      clock.suspend()
+      asleepUntil('2026-11-09T09:00:01-08:00')
+      clock.resume()
+      await awakeFor(TICK_MS)
+      expect(statuses()).toEqual([])
+
+      await awakeFor(TICK_MS)
+      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
+      expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
+        new Date('2026-11-09T09:00:00-08:00').getTime()
+      )
+      service.stop()
+    })
+
+    it('still skips a run that was already past its grace when the machine woke', async () => {
+      const { launch, service, statuses } = await scheduledService({ graceMinutes: 0 })
+
+      clock.suspend()
+      asleepUntil('2026-11-09T09:03:00-08:00')
+      clock.resume()
+      await awakeFor(2 * TICK_MS)
+      await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
+      expect(launch).not.toHaveBeenCalled()
+      service.stop()
+    })
+
+    it('runs an on-time occurrence on a machine that stayed awake', async () => {
+      const { service, statuses } = await scheduledService()
+      await awakeFor(new Date('2026-11-09T09:00:30-08:00').getTime() - Date.now())
+      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
+      service.stop()
+    })
   }
-
-  /** Asleep: no timers run and the monotonic clock stands still. */
-  function asleepFor(ms: number): void {
-    vi.setSystemTime(Date.now() + ms)
-  }
-
-  async function scheduledService() {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = store.createAutomation({
-      name: 'GitHub i18n issue and PR scan',
-      prompt: 'Scan',
-      agentId: 'codex',
-      projectId: 'r1',
-      workspaceMode: 'existing',
-      workspaceId: 'r1::wt1',
-      timezone: 'America/Los_Angeles',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-11-08T00:00:00-08:00').getTime(),
-      missedRunGraceMinutes: 720
-    })
-    const launch = vi.fn(async () => ({ workspaceId: 'wt-1', terminalSessionId: 'tab-1' }))
-    const service = new AutomationService(store, {
-      tickMs: TICK_MS,
-      terminalLauncher: { launch, available: () => true }
-    })
-    service.systemSettled = () => automationSystemSettled(clock)
-    service.start()
-    await awakeFor(TICK_MS)
-    return { store, automation, launch, service }
-  }
-
-  it('does not start a missed run during a dark wake, then catches it up once awake and stable', async () => {
-    const { store, automation, launch, service } = await scheduledService()
-
-    // The machine sleeps through 09:00 and dark-wakes at 09:08:30 with no resume event.
-    clock.suspend()
-    asleepFor(new Date('2026-11-09T09:08:30-08:00').getTime() - Date.now())
-    await awakeFor(2_000)
-    expect(store.listAutomationRuns(automation.id)).toEqual([])
-
-    // Back to sleep, then a full wake at 09:19:37.
-    asleepFor(665_000)
-    clock.resume()
-    await awakeFor(TICK_MS)
-    expect(store.listAutomationRuns(automation.id)).toEqual([])
-    expect(launch).not.toHaveBeenCalled()
-
-    await awakeFor(AUTOMATION_WAKE_SETTLE_MS)
-    await vi.waitFor(() =>
-      expect(store.listAutomationRuns(automation.id).map((run) => run.status)).toEqual([
-        'dispatched'
-      ])
-    )
-    expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
-      new Date('2026-11-09T09:00:00-08:00').getTime()
-    )
-    expect(launch).toHaveBeenCalledOnce()
-    service.stop()
-  })
-
-  it('also waits after a sleep that no power event reported', async () => {
-    const { store, automation, service } = await scheduledService()
-
-    asleepFor(new Date('2026-11-09T09:08:30-08:00').getTime() - Date.now())
-    await awakeFor(TICK_MS)
-    expect(store.listAutomationRuns(automation.id)).toEqual([])
-
-    await awakeFor(AUTOMATION_WAKE_SETTLE_MS)
-    await vi.waitFor(() =>
-      expect(store.listAutomationRuns(automation.id).map((run) => run.status)).toEqual([
-        'dispatched'
-      ])
-    )
-    service.stop()
-  })
-
-  it('runs an on-time occurrence on a machine that stayed awake', async () => {
-    const { store, automation, service } = await scheduledService()
-    await awakeFor(new Date('2026-11-09T09:00:30-08:00').getTime() - Date.now())
-    await vi.waitFor(() =>
-      expect(store.listAutomationRuns(automation.id).map((run) => run.status)).toEqual([
-        'dispatched'
-      ])
-    )
-    service.stop()
-  })
-})
+)

@@ -30,12 +30,12 @@ import { createAutomationRunWriter, type AutomationRunWriter } from './automatio
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledTickRefusal,
-  missedBeyondGrace,
   recordMissedRun,
   recordRefusedAutomationRun,
   recordUnevaluableAutomation
 } from './dispatch-refusal'
 import type { RunTerminalRetention } from './run-terminal-retention'
+import { AutomationWakeGate } from './automation-wake-settle'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
@@ -63,8 +63,7 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
-  /** False while asleep, in a dark wake, or just woken; scheduled runs then wait a tick. */
-  systemSettled: () => boolean = () => true
+  readonly wakeGate = new AutomationWakeGate()
 
   constructor(
     store: Store,
@@ -218,9 +217,8 @@ export class AutomationService {
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    // A run started in a dark wake is cut off by the next sleep; a due run stays due, so a later
-    // settled tick starts it.
-    if (this.evaluating || this.stopped || !this.systemSettled()) {
+    // A run started in a dark wake is cut off by the next sleep.
+    if (this.evaluating || this.stopped || !this.wakeGate.admits(this.store, this.tickMs)) {
       return
     }
     this.evaluating = true
@@ -253,6 +251,7 @@ export class AutomationService {
       }
     } finally {
       this.evaluating = false
+      this.wakeGate.clear()
     }
   }
 
@@ -264,7 +263,7 @@ export class AutomationService {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }
-    if (missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
+    if (this.wakeGate.missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
       await recordMissedRun({ runs: this.runs, automation, scheduledFor })
       await this.runs.advanceNextRun(automation.id, now)
       return

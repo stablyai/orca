@@ -205,7 +205,7 @@ export function createRuntimeAutomationService(input: {
     },
     runTerminalRetention: (owner) => createRuntimeRunTerminalRetention(owner, store, runtime)
   })
-  service.systemSettled = () => automationSystemSettled()
+  service.wakeGate.settled = () => automationSystemSettled()
   runtime.setAutomationService(service)
   return service
 }
