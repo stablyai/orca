@@ -22,7 +22,9 @@ type ProducerCoverage = { epoch: string; lastSeq: number; projections: Map<strin
 
 const producers = new Map<string, ProducerCoverage>()
 
-const environmentKeyPrefix = (environmentId: string): string => `env:${environmentId}:`
+// Encoded: environment ids (WSL ones) may contain ':', which would let one id prefix another's keys.
+const environmentKeyPrefix = (environmentId: string): string =>
+  `env:${encodeURIComponent(environmentId)}:`
 
 function dropEnvironmentProducers(environmentId: string, except?: string): void {
   for (const key of producers.keys()) {

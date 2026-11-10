@@ -100,19 +100,21 @@ export function installGitHubIssueLinkTitleFill(deps: {
         if (disposed) {
           return
         }
-        const repo = currentTarget(job)
-          ? findRepoRowForHostScopedWrite(
-              deps.store.getRepos(),
-              getRepoIdFromWorktreeId(job.worktreeId),
-              job.hostId
-            )
-          : undefined
-        if (!repo) {
-          continue
-        }
-        const title = await deps.readIssueTitle(repo, job.link).catch(() => null)
-        if (title?.trim() && !disposed) {
-          apply(job, title.trim())
+        try {
+          const repo = currentTarget(job)
+            ? findRepoRowForHostScopedWrite(
+                deps.store.getRepos(),
+                getRepoIdFromWorktreeId(job.worktreeId),
+                job.hostId
+              )
+            : undefined
+          const title = repo ? await deps.readIssueTitle(repo, job.link).catch(() => null) : null
+          if (title?.trim() && !disposed) {
+            apply(job, title.trim())
+          }
+        } catch {
+          // One link whose target changed underneath it (e.g. an alias turned ambiguous) is skipped;
+          // the rest of the queue still drains.
         }
       }
     } finally {
