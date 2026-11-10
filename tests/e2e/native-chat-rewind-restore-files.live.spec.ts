@@ -14,9 +14,11 @@ import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams
 } from '../../src/shared/agent-session/structured-agent-session-create'
-import { createStructuredAgentSessionOperationId } from '../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+import {
+  createStructuredAgentSessionOperationId,
+  structuredAgentSessionPayloadFingerprint
+} from '../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredAgentSessionMessageSendMutation } from '../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
-import { structuredAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { agentJournalSubmissionKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionHistoryResult } from '../../src/shared/agent-session/agent-session-wire'
 import type {
@@ -57,6 +59,7 @@ test.describe('rewind with file restore, live agent', () => {
   test.skip(!KEY_FILE, 'needs a real model: set ORCA_E2E_AI_GATEWAY_KEY_FILE')
 
   test('restores the files a real agent changed, then undoes the restore', async () => {
+    // A real model runs two tool-using turns, a rewind and two restores: minutes, not seconds.
     test.setTimeout(900_000)
     const worktree = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-rewind-files-'))
     git(worktree, 'init', '-q')
@@ -132,24 +135,30 @@ test.describe('rewind with file restore, live agent', () => {
         )
         return clientOperationId
       }
-      /** The turn the message opened has an agent reply after it and nothing is still running. */
+      /** The turn the message opened has an agent reply after it and the chat has gone quiet
+       *  (no new rows across several polls): models don't always end with the word asked for. */
+      let lastSequence = -1
+      let quietPolls = 0
       const settled = async (clientOperationId: string): Promise<boolean> => {
         const page = (await tail()).page
         const index = page.items.findIndex(
           (item) => item.itemId === agentJournalSubmissionKey(clientOperationId)
         )
-        // The prompt asks for DONE last, so a reply saying it closes the turn.
-        return (
-          index >= 0 &&
+        const replied =
+          index !== -1 &&
           page.items
             .slice(index + 1)
-            .some(
-              (item) =>
-                item.body.kind === 'message' &&
-                item.body.role === 'assistant' &&
-                JSON.stringify(item.body.blocks).includes('DONE')
-            )
-        )
+            .some((item) => item.body.kind === 'message' && item.body.role === 'assistant')
+        const newest = page.items.at(-1)?.sequence ?? -1
+        quietPolls = newest === lastSequence ? quietPolls + 1 : 0
+        lastSequence = newest
+        if (!replied) {
+          const submission = page.submissions.find((entry) => entry.clientMessageId === clientOperationId)
+          console.log(
+            `[rewind-files live] waiting: dispatch=${submission?.dispatchState} refs=${git(worktree, 'for-each-ref', '--format=%(refname)', 'refs/orca/').split('\n').length} last=${JSON.stringify(page.items.at(-1)?.body).slice(0, 120)}`
+          )
+        }
+        return replied && quietPolls >= 4
       }
 
       const first = await send(
@@ -208,27 +217,29 @@ test.describe('rewind with file restore, live agent', () => {
           { timeout: 240_000, intervals: [5000] }
         )
         .toContain('"ok":true')
-      let restored: AgentSessionCheckpointRestoreResult | null = null
-      // The turn's tail (title naming, final events) may still count as working for a moment.
+      // The turn's tail (naming, final events) may still count as working for a moment.
+      const box: { restored?: AgentSessionCheckpointRestoreResult } = {}
       await expect
         .poll(
-          async () =>
-            (restored = await call<AgentSessionCheckpointRestoreResult>(
-              'agentSession.checkpointRestore',
-              { sessionId, itemId },
-              120_000
-            ).catch((error: unknown) => {
+          async () => {
+            try {
+              box.restored = await call<AgentSessionCheckpointRestoreResult>(
+                'agentSession.checkpointRestore',
+                { sessionId, itemId },
+                120_000
+              )
+              return 'restored'
+            } catch (error) {
               if (String(error).includes('agent_session_checkpoint_busy')) {
-                return null
+                return 'busy'
               }
               throw error
-            })) !== null,
+            }
+          },
           { timeout: 60_000, intervals: [2000] }
         )
-        .toBe(true)
-      if (!restored) {
-        throw new Error('restore never ran')
-      }
+        .toBe('restored')
+      const restored = box.restored!
       expect(restored.changedFiles).toBe(
         (preview.available && preview.changedFiles) || restored.changedFiles
       )
