@@ -16,6 +16,7 @@ import {
   remoteServerPin
 } from '../../db/remote-owned/remote-run-links'
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
+import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
@@ -33,6 +34,14 @@ const PulledPeerMail = z.object({
   )
 })
 
+/** What this Orca's pull loop last heard from a paired server; nothing until its first pull settles. */
+export type PeerServerAnswerStatus = {
+  /** When the server last answered a pull (an idle pull answers after its wait). */
+  answeredAt?: number
+  /** Set while pulls get no answer at all; cleared by the next answer. */
+  unreachableSince?: number
+}
+
 type Loop = {
   db: OrchestrationDb
   stopped: boolean
@@ -48,6 +57,7 @@ const ORPHAN_LOOKUP_INTERVAL_MS = 30_000
  *  them. Stops and cancels this Orca owes the server go out on the same loop. */
 export class PeerMailRelay {
   private readonly loops = new Map<string, Loop>()
+  private readonly answers = new Map<string, PeerServerAnswerStatus>()
 
   constructor(
     private readonly runtime: OrcaRuntimeService,
@@ -72,6 +82,10 @@ export class PeerMailRelay {
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
+  }
+
+  answerStatus(environmentId: string): PeerServerAnswerStatus | undefined {
+    return this.answers.get(environmentId)
   }
 
   stop(): void {
@@ -122,12 +136,24 @@ export class PeerMailRelay {
 
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
     this.resendOwed(environmentId, loop)
-    const response = await this.runtime.callOrchestrationWorkerServer(
-      environmentId,
-      'orchestration.peerMailPull',
-      { waitMs: PULL_WAIT_MS },
-      PULL_TIMEOUT_MS
-    )
+    const response = await this.runtime
+      .callOrchestrationWorkerServer(
+        environmentId,
+        'orchestration.peerMailPull',
+        { waitMs: PULL_WAIT_MS },
+        PULL_TIMEOUT_MS
+      )
+      .catch((error: unknown) => {
+        if (isRemoteServerUnreachable(error)) {
+          const known = this.answers.get(environmentId)
+          this.answers.set(environmentId, {
+            ...known,
+            unreachableSince: known?.unreachableSince ?? Date.now()
+          })
+        }
+        throw error
+      })
+    this.answers.set(environmentId, { answeredAt: Date.now() })
     if (!this.isCurrent(environmentId, loop)) {
       return
     }

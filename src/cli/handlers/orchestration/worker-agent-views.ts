@@ -40,8 +40,8 @@ export type WorkerShowResult = {
     terminalHandle?: string | null
   } | null
   observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
-  /** Present only when the worker's paired server could not be reached and this Orca's record answered. */
-  server?: RemoteWorkerServer & { reachable: false }
+  /** Present only for a worker a paired server runs, which this Orca's record answers. */
+  server?: RemoteWorkerServer & { reachable?: boolean }
   lastReport?: string | null
   autoReleaseAt?: string | null
   /** The paired Orca whose Run here coordinates this worker. */

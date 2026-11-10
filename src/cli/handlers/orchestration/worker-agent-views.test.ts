@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { WORKER_LIST_VIEW, WORKER_SHOW_VIEW } from './worker-agent-views'
 
 describe('worker views of a worker a paired server runs', () => {
-  it('labels an offline show with its server, record time, last report and note', () => {
+  it('labels a remote worker’s show with its server, record time, last report and note', () => {
     expect(
       WORKER_SHOW_VIEW.fields({
         dispatch: { id: 'ctx_w1', taskId: 'task_1', runId: 'run_1', status: 'dispatched' },
         worker: {
           dispatchId: 'ctx_w1',
           state: 'ready',
-          stage: 'server_unreachable',
+          stage: 'server_record',
           agentTerminalHandle: null
         },
         projection: null,
@@ -20,7 +20,7 @@ describe('worker views of a worker a paired server runs', () => {
     ).toMatchObject({
       dispatchId: 'ctx_w1',
       state: 'ready',
-      stage: 'server_unreachable',
+      stage: 'server_record',
       server: 'devB',
       asOf: '2026-11-09T08:30:00Z',
       lastReport: 'Halfway: tests written.',

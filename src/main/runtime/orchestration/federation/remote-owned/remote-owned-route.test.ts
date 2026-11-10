@@ -366,18 +366,42 @@ describe('commands about a worker a paired server owns', () => {
     expect(show.ok ? record(show.result).server : undefined).toMatchObject({ name: 'devB' })
   })
 
-  it("answers worker-show from this Orca's record within seconds when the server sleeps", async () => {
+  it("shows a remote worker from this Orca's record without calling its server", async () => {
+    const { runId } = await startOnB()
+    // devB is live and would say something newer; show still reads the record list reads.
+    answers['orchestration.workerShow'] = [
+      { result: { worker: { dispatchId: 'ctx_b1', state: 'running', stage: 'working' } } }
+    ]
+    const calls = sent.length
+    const show = await call('orchestration.workerShow', { dispatch: 'ctx_b1' })
+    const list = await call('orchestration.workerList', { run: runId, paginate: true })
+
+    expect(sent.slice(calls).map((s) => s.method)).not.toContain('orchestration.workerShow')
+    // What the pull loop last heard from devB, which answers its pulls.
+    expect(record(record(show.ok ? show.result : undefined).server).reachable).toBe(true)
+    const shown = record(show.ok ? show.result : undefined)
+    const workers = record(list.ok ? list.result : undefined).workers
+    const listed = (Array.isArray(workers) ? workers : [])
+      .map(record)
+      .find((worker) => worker.dispatchId === 'ctx_b1')
+    expect({
+      state: record(shown.worker).state,
+      asOf: record(shown.server).asOf
+    }).toEqual({ state: listed?.workerState, asOf: record(listed?.server).asOf })
+  })
+
+  it("gives up a worker-read within seconds when the server sleeps, in the server's terms", async () => {
     await startOnB()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     sleeping = true
-    let show: RpcResponse | undefined
-    void call('orchestration.workerShow', { dispatch: 'ctx_b1' }).then((answer) => {
-      show = answer
+    let read: RpcResponse | undefined
+    void call('orchestration.workerRead', { dispatch: 'ctx_b1' }).then((answer) => {
+      read = answer
     })
     await vi.advanceTimersByTimeAsync(10_000)
     vi.useRealTimers()
 
-    expect(show?.ok ? record(show.result).server : show).toMatchObject({ name: 'devB' })
+    expect(read?.ok ? undefined : read?.error.code).toBe('runtime_timeout')
   })
 
   it('scopes the retry key to the caller: two terminals reusing an ID never collide, one retrying gets its own key', async () => {

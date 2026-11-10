@@ -17,7 +17,7 @@ import {
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
 import { closeRemoteRunLink, openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../../rpc/methods/orchestration/worker/worker-list-method'
-import { offlineRemoteWorkerShow } from './remote-owned-reads'
+import { remoteWorkerShow } from './remote-owned-reads'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 
 const SERVER: OrchestrationWorkerServer = {
@@ -51,7 +51,10 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     })
   })
 
-  afterEach(() => db.close())
+  afterEach(() => {
+    vi.useRealTimers()
+    db.close()
+  })
 
   /** A worker devB started for Task `taskId`, as devB last reported it at LAST_HEARD. */
   function remoteWorker(taskId: string, dispatchId: string, environmentId = SERVER.environmentId) {
@@ -95,23 +98,44 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     } as never)) as ListedWorkers
   }
 
-  it('shows an unreachable server’s worker in the ordinary shape, labelled with its server and last report', () => {
-    const shown = offlineRemoteWorkerShow(runtime, remoteWorker('task_1', 'ctx_w1'))
+  it('shows a remote worker in the ordinary shape, labelled with its server, record time and last report', () => {
+    const shown = remoteWorkerShow(runtime, remoteWorker('task_1', 'ctx_w1'))
 
     expect(shown).toMatchObject({
       dispatch: { id: 'ctx_w1', taskId: 'task_1', runId: run.id, status: 'dispatched' },
-      worker: { dispatchId: 'ctx_w1', state: 'ready', stage: 'server_unreachable' },
-      server: { name: 'devB', reachable: false, asOf: '2026-11-09T08:30:00Z' },
+      worker: { dispatchId: 'ctx_w1', state: 'ready', stage: 'server_record' },
+      server: { name: 'devB', asOf: '2026-11-09T08:30:00Z' },
       lastReport: 'Halfway: tests written.'
     })
-    expect(shown.observation.reason).toContain('devB could not be reached')
+    expect(shown.server).not.toHaveProperty('reachable')
+    expect(shown.observation.reason).toBe(
+      "devB's state as of 2026-11-09T08:30:00Z. Its output is kept only on devB."
+    )
+  })
+
+  it('adds what the pull loop last heard from the server, and says unreachable only when it knows', () => {
+    const record = remoteWorker('task_1', 'ctx_w1')
+    const now = Date.parse('2026-11-10T12:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    const heard = vi.spyOn(runtime, 'getPeerServerAnswerStatus')
+    heard.mockReturnValue({ answeredAt: now - 12_000 })
+    const live = remoteWorkerShow(runtime, record)
+    expect(live.server).toMatchObject({ reachable: true })
+    expect(live.observation.reason).toContain('devB last answered 12 s ago.')
+
+    heard.mockReturnValue({ answeredAt: now - 40_000, unreachableSince: now - 5_000 })
+    const asleep = remoteWorkerShow(runtime, record)
+    expect(asleep.server).toMatchObject({ reachable: false })
+    expect(asleep.observation.reason).toContain(
+      'devB could not be reached; it last answered 40 s ago.'
+    )
   })
 
   it('keeps the time devB last reported when this Orca only owes it a stop', () => {
     const record = remoteWorker('task_1', 'ctx_w1')
     oweRemoteDispatchStop(db, record.dispatch_id, 'intent_1')
 
-    const shown = offlineRemoteWorkerShow(runtime, getRemoteDispatch(db, 'ctx_w1')!)
+    const shown = remoteWorkerShow(runtime, getRemoteDispatch(db, 'ctx_w1')!)
     expect(shown.server.asOf).toBe('2026-11-09T08:30:00Z')
     expect(shown.observation.reason).toContain('A stop is owed')
   })
@@ -120,7 +144,7 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     const record = remoteWorker('task_1', 'ctx_w1')
     closeRemoteRunLink(db, record.conversation_id, 'The pairing with this server was re-made.')
 
-    const shown = offlineRemoteWorkerShow(runtime, record)
+    const shown = remoteWorkerShow(runtime, record)
     expect(shown.server).toMatchObject({ name: 'devB', repaired: true })
     expect(shown.observation.reason).toContain('The pairing with devB was re-made')
     const listed = await listWorkers({ run: run.id, paginate: true })
@@ -143,7 +167,7 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
   })
 
   it('names a server removed since by its environment ID', () => {
-    const shown = offlineRemoteWorkerShow(runtime, remoteWorker('task_1', 'ctx_w1', 'env_gone'))
+    const shown = remoteWorkerShow(runtime, remoteWorker('task_1', 'ctx_w1', 'env_gone'))
     expect(shown.server.name).toBe('env_gone')
   })
 
