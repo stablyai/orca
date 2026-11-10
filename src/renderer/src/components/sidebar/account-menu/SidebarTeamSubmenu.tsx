@@ -1,6 +1,4 @@
-import { useSyncExternalStore } from 'react'
 import { ChevronsUpDown, User } from 'lucide-react'
-import { toast } from 'sonner'
 import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -11,25 +9,11 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
 import { openTeamPage } from '../../billing/team/team-page-store'
+import { switchActiveTeam, usePendingTeamSwitch } from './switch-active-team'
 
-// The pick in flight, shared across menu opens: the menu unmounts on select, so component state
-// would forget it and let a second pick race the first.
 const PERSONAL_VALUE = '__personal__'
-let pendingOrg: string | null = null
-const pendingListeners = new Set<() => void>()
-function setPendingOrg(next: string | null): void {
-  pendingOrg = next
-  for (const listener of pendingListeners) {
-    listener()
-  }
-}
-function subscribePending(listener: () => void): () => void {
-  pendingListeners.add(listener)
-  return () => pendingListeners.delete(listener)
-}
 
 /**
  * Team switcher in the account menu for signed-in accounts: the teams (radio items) and
@@ -44,8 +28,7 @@ export function SidebarTeamSubmenu({
   authStatus: OrcaProfileAuthStatus | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const selectOrg = useAppStore((state) => state.selectOrcaProfileOrg)
-  const pendingOrgId = useSyncExternalStore(subscribePending, () => pendingOrg)
+  const pendingOrgId = usePendingTeamSwitch()
   if (authStatus?.state !== 'connected') {
     return null
   }
@@ -57,30 +40,12 @@ export function SidebarTeamSubmenu({
   const switchTo = (value: string): void => {
     const personal = value === PERSONAL_VALUE
     const org = organizations.find((candidate) => candidate.orgId === value)
-    if ((!org && !personal) || value === (activeOrgId || PERSONAL_VALUE) || pendingOrg !== null) {
+    if ((!org && !personal) || value === (activeOrgId || PERSONAL_VALUE)) {
       return
     }
-    const orgId = personal ? null : value
     const label =
       org?.name ?? t('auto.components.sidebar.teamSwitcher.personal', 'Personal account')
-    setPendingOrg(value)
-    void selectOrg(orgId)
-      .then((result) => {
-        if (result?.status === 'selected') {
-          toast.success(
-            t('auto.components.sidebar.teamSwitcher.switched', 'Switched to {{value0}}', {
-              value0: label
-            })
-          )
-        } else {
-          toast.error(
-            t('auto.components.sidebar.teamSwitcher.failed', 'Couldn’t switch teams. Try again.')
-          )
-        }
-      })
-      .finally(() => {
-        setPendingOrg(null)
-      })
+    void switchActiveTeam({ orgId: personal ? null : value, label, pendingKey: value, t })
   }
 
   return (

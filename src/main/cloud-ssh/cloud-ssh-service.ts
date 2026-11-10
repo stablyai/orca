@@ -232,9 +232,13 @@ export function createCloudSshService(deps: CloudSshServiceDeps) {
     paths,
 
     /** For the menu: whether SSH applies, and whether this device already has access. */
-    async status(
-      workspaceId: string
-    ): Promise<{ cloud: boolean; hasAccess: boolean; asleep: boolean; alias: string | null }> {
+    async status(workspaceId: string): Promise<{
+      cloud: boolean
+      hasAccess: boolean
+      asleep: boolean
+      running?: boolean
+      alias: string | null
+    }> {
       const ws = cloudWorkspaces().find(
         (candidate) => candidate.runtime.workspaceId === workspaceId
       )
@@ -248,6 +252,7 @@ export function createCloudSshService(deps: CloudSshServiceDeps) {
         cloud: true,
         hasAccess: Boolean(entry?.installedAt),
         asleep: ws.runtime.status === 'suspended' || ws.runtime.status === 'resume_failed',
+        running: ws.runtime.status === 'running',
         alias: entry?.alias ?? null
       }
     },

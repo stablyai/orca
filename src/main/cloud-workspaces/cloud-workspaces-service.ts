@@ -164,6 +164,8 @@ export function createCloudWorkspacesService(deps: {
       wrap(() => client.putOrgPrompts(document, revision)),
     localWorkspaces: () => localWorkspaces(),
     noteSent: (id: string) => wrap(() => client.noteSent(id)),
+    sleep: (id: string) => wrap(() => client.sleep(id)),
+    destroy: (id: string) => wrap(() => client.destroy(id)),
 
     /**
      * A per-device credential for a workspace this desktop does not own: a fresh X25519 key lives

@@ -1,5 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { vmStateToDot } from '@/components/host-row-icon'
+import { cloudStateLabel } from '@/components/orca-cloud/cloud-state-copy'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 export function getHostHeaderDetail(
@@ -7,8 +9,14 @@ export function getHostHeaderDetail(
     HostHeaderRow,
     'health' | 'blockedReason' | 'vmState' | 'connectionStatus' | 'kind' | 'detail'
   >,
-  t: Translate = translate
+  t: Translate = translate,
+  /** Orca Cloud hosts use the cloud glossary: Asleep, Waking, Couldn't wake, never "Suspended". */
+  isOrcaCloud = false
 ): { text: string; isWarning: boolean } | null {
+  if (isOrcaCloud && row.vmState) {
+    const dot = vmStateToDot(row.vmState)
+    return { text: cloudStateLabel(dot, t), isWarning: dot === 'failed' || dot === 'wakeFailed' }
+  }
   // A VM's lifecycle names the state; suspended is intentional, so only failures warn.
   if (row.vmState === 'provision_failed') {
     return {

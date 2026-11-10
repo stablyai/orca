@@ -21,6 +21,8 @@ export type PendingConfirm =
   | { kind: 'owner'; workspace: CloudWorkspace; ownerUserId: string }
   /** Archiving a teammate's running workspace stops their agents. */
   | { kind: 'archive'; workspace: CloudWorkspace }
+  /** Deleting from the team list: the sandbox and its disk go (DS-07 copy). */
+  | { kind: 'delete'; workspace: CloudWorkspace }
 
 /** Teammates who would lose access: here now, or holding an active device grant. */
 function useConnectedTeammates(workspace: CloudWorkspace, selfId: string | null): string[] {
@@ -103,16 +105,20 @@ export function CloudWorkspaceConfirmDialog({
       ? t('auto.components.cloudWorkspaces.makePrivateTitle', 'Make {{title}} private?', {
           title: cloudWorkspaceTitle(w, t)
         })
-      : pending.kind === 'archive'
-        ? t('auto.components.cloudWorkspaces.archiveConfirmTitle', 'Archive {{name}}?', {
-            name: cloudWorkspaceTitle(w, t)
-          })
+      : pending.kind === 'archive' || pending.kind === 'delete'
+        ? pending.kind === 'archive'
+          ? t('auto.components.cloudWorkspaces.archiveConfirmTitle', 'Archive {{name}}?', {
+              name: cloudWorkspaceTitle(w, t)
+            })
+          : t('auto.components.cloudWorkspaces.deleteConfirmTitle', 'Delete {{name}}?', {
+              name: cloudWorkspaceTitle(w, t)
+            })
         : t('auto.components.cloudWorkspaces.reassignTitle', 'Make {{name}} the owner?', {
             name: memberName(directory, pending.ownerUserId, selfId, t)
           })
   const losesManagement = pending.kind === 'owner' && w.ownerUserId === selfId && !canAdmin
   // Destructive for someone else (their agents stop, or you lose access): focus starts on Cancel.
-  const focusCancel = losesManagement || pending.kind === 'archive'
+  const focusCancel = losesManagement || pending.kind === 'archive' || pending.kind === 'delete'
   return (
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-md">
@@ -120,6 +126,13 @@ export function CloudWorkspaceConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {pending.kind === 'private' ? (
             <MakePrivateBody workspace={w} directory={directory} selfId={selfId} />
+          ) : pending.kind === 'delete' ? (
+            <DialogDescription>
+              {t(
+                'auto.components.sidebar.DeleteCloudWorkspace.body',
+                "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead."
+              )}
+            </DialogDescription>
           ) : pending.kind === 'archive' ? (
             <DialogDescription>
               {t(
@@ -147,12 +160,19 @@ export function CloudWorkspaceConfirmDialog({
           <Button type="button" variant="ghost" onClick={onCancel} autoFocus={focusCancel}>
             {t('auto.components.cloudWorkspaces.cancel', 'Cancel')}
           </Button>
-          <Button type="button" onClick={onConfirm} autoFocus={!focusCancel}>
+          <Button
+            type="button"
+            variant={pending.kind === 'delete' ? 'destructive' : 'default'}
+            onClick={onConfirm}
+            autoFocus={!focusCancel}
+          >
             {pending.kind === 'private'
               ? t('auto.components.cloudWorkspaces.makePrivate', 'Make private')
-              : pending.kind === 'archive'
-                ? t('auto.components.cloudWorkspaces.archive', 'Archive')
-                : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
+              : pending.kind === 'delete'
+                ? t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete workspace')
+                : pending.kind === 'archive'
+                  ? t('auto.components.cloudWorkspaces.archive', 'Archive')
+                  : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
           </Button>
         </DialogFooter>
       </DialogContent>

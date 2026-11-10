@@ -15,6 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { repoLabel, type MemberDirectory } from './cloud-workspace-format'
+import { OrcaCloudTrialUsedUpBanner } from '../new-workspace/run-on/OrcaCloudTrialUsedUpNotice'
 
 export const ANY = '__any'
 
@@ -29,6 +30,16 @@ export type CloudWorkspacesFilters = {
   by: string
   repo: string
   archived: boolean
+  /** Only sandboxes that are running now (where the team's running slots go). */
+  running?: boolean
+}
+
+export const INITIAL_CLOUD_WORKSPACE_FILTERS: CloudWorkspacesFilters = {
+  scope: 'team',
+  by: ANY,
+  repo: ANY,
+  archived: false,
+  running: false
 }
 
 /** Row 1: title, count and cost, refresh. Row 2: whose, by whom, which repo, archived. */
@@ -166,6 +177,14 @@ export function CloudWorkspacesToolbar({
         </Select>
         <label className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
           <Switch
+            checked={filters.running === true}
+            onCheckedChange={(running) => onFiltersChange({ running })}
+            aria-label={t('auto.components.cloudWorkspaces.showRunningOnly', 'Show running only')}
+          />
+          {t('auto.components.cloudWorkspaces.running', 'Running')}
+        </label>
+        <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+          <Switch
             checked={filters.archived}
             onCheckedChange={(archived) => onFiltersChange({ archived })}
             aria-label={t('auto.components.cloudWorkspaces.showArchived', 'Show archived')}
@@ -173,6 +192,8 @@ export function CloudWorkspacesToolbar({
           {t('auto.components.cloudWorkspaces.archived', 'Archived')}
         </label>
       </div>
+      {/* T4: the team's trial ran out; running sandboxes sleep until a plan starts. */}
+      <OrcaCloudTrialUsedUpBanner />
     </div>
   )
 }

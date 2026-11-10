@@ -132,7 +132,7 @@ export const effectiveEmpty = defineFixture({
   render: () => (
     <Frame>
       <CloudSecretsPane
-        api={fixtureCloudSecretsApi({ caller: FIXTURE_SOLO, secrets: {} })}
+        api={fixtureCloudSecretsApi({ caller: FIXTURE_SOLO, secrets: {}, effective: [] })}
         repos={REPOS}
         people={people}
         onSetUpAgent={noop}
@@ -310,4 +310,24 @@ export const pastePreview = defineFixture({
       />
     </Frame>
   )
+})
+
+/** Keyboard focus on the tab panel (Radix makes it a tab stop): the focus-ring outline shows. */
+export const tabPanelFocused = defineFixture({
+  width: 760,
+  render: () => (
+    <Frame>
+      <CloudSecretsPane
+        api={fixtureCloudSecretsApi({})}
+        repos={REPOS}
+        people={people}
+        onSetUpAgent={noop}
+      />
+    </Frame>
+  ),
+  interact: async (frame) => {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    frame.querySelector<HTMLElement>('[role="tabpanel"][data-state="active"]')?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+  }
 })

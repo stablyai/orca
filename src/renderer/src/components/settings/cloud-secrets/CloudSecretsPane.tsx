@@ -7,7 +7,6 @@ import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
-import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { cloudSecretScopeLabel } from './cloud-secrets-copy'
 import { CloudSecretList, type CloudSecretPeople } from './CloudSecretList'
 import { CloudSecretsEffectiveView } from './CloudSecretsEffectiveView'
@@ -165,16 +164,8 @@ export function CloudSecretsPane({
   )
 
   return (
-    <div className="space-y-4 border-t border-border/60 pt-5" data-settings-section="cloud-secrets">
-      <SettingsGroupHeader
-        className="px-0"
-        title={t('cloudSecrets.title', 'Cloud secrets')}
-        description={t(
-          'cloudSecrets.description',
-          'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
-        )}
-      />
-
+    // Settings › Orca Cloud › Cloud secrets owns the title and the "never written to the sandbox" line.
+    <div className="space-y-4">
       <Tabs
         value={tab}
         onValueChange={(next) => {

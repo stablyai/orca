@@ -54,6 +54,7 @@ import {
   pickEphemeralVmFailureCode,
   type EphemeralVmFailure
 } from '../../shared/ephemeral-vm-failure-copy'
+import { registerRecipeForwardedEnvHandler } from './ephemeral-vm-forwarded-env'
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
@@ -96,6 +97,8 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
   ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
     return listPickerRecipes(store, args.repoId, pluginService)
   })
+
+  registerRecipeForwardedEnvHandler()
 
   ipcMain.handle(
     'ephemeralVm:listRecipeCatalog',

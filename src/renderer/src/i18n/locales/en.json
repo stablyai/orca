@@ -1342,6 +1342,62 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "agentApiKeys": {
+      "descriptionCloudSecretsLink": "Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in <secrets>Cloud secrets</secrets>.",
+      "searchTitle": "Agent API keys",
+      "title": "Agent API keys",
+      "descriptionCloudSecrets": "Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in Cloud secrets."
+    },
+    "orcaCloud": {
+      "mcp": {
+        "loadFailed": "Couldn’t list your cloud workspaces",
+        "emptyTitle": "No cloud workspace is running",
+        "emptyBody": "MCP servers sync to a cloud workspace while it runs. Start or wake one to choose which servers it gets.",
+        "unnamed": "Cloud workspace",
+        "workspaceLabel": "MCP servers in {{name}}",
+        "searchDescription": "Choose which MCP servers from this computer sync to your cloud workspaces.",
+        "keywordMcp": "mcp",
+        "keywordSync": "sync",
+        "keywordCloud": "cloud",
+        "openFor": "MCP servers for {{name}}",
+        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+      },
+      "environments": {
+        "title": "Cloud environments",
+        "unavailable": "Cloud environments aren’t available for this account yet.",
+        "searchDescription": "Repositories and install script built into a snapshot, and waking cloud workspaces before you open them.",
+        "keywordSnapshot": "snapshot",
+        "keywordInstall": "install script",
+        "keywordWake": "wake",
+        "keywordSandbox": "sandbox"
+      },
+      "signedOut": {
+        "reconnectTitle": "Sign in again",
+        "body": "Orca Cloud settings belong to your Orca account. Sign in to manage them."
+      },
+      "team": {
+        "unavailable": "Teams aren’t available for this account yet.",
+        "searchDescription": "Members, invites and seats for your Orca Cloud team.",
+        "keywordMembers": "members",
+        "keywordInvite": "invite",
+        "keywordSeats": "seats"
+      },
+      "billing": {
+        "searchDescription": "Your Orca Cloud plan, sandbox hours, overage and payment.",
+        "keywordPlan": "plan",
+        "keywordBilling": "billing",
+        "keywordInvoice": "invoice",
+        "keywordUsage": "usage",
+        "keywordOverage": "overage",
+        "description": "Your Orca Cloud plan, sandbox hours and payment."
+      }
+    },
+    "groups": {
+      "orcaCloud": "Orca Cloud"
+    },
+    "orcaAccount": {
+      "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
     }
   },
   "menu": {
@@ -2217,7 +2273,8 @@
         "checkingVmEnvironment": "Checking VM environment…",
         "vmChecksFailed": "Environment checks failed",
         "preparingCloudEnvironment": "Preparing environment…",
-        "startingSandbox": "Starting sandbox…"
+        "startingSandbox": "Starting sandbox…",
+        "cloningRepository": "Cloning the repository…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -4134,7 +4191,6 @@
           },
           "VmBuildSheet": {
             "checks": "Check environment",
-            "checksFailed": "The VM is up, but its environment checks failed",
             "create": "Create workspace",
             "editRecipe": "Edit recipe",
             "fixWithAgent": "Fix with agent",
@@ -4166,13 +4222,11 @@
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
-            "checksTitleCloud": "The sandbox is up, but its environment checks failed",
             "planTitle": "Orca Cloud needs a Team plan",
             "signInTitle": "Sign in to use Orca Cloud",
             "unavailableTitle": "Orca Cloud is unavailable right now",
             "networkTitle": "Couldn’t reach Orca Cloud",
             "snapshotTitle": "This project’s saved environment is missing",
-            "provisionBodyCloud": "Something went wrong while starting the sandbox. Try again, or open the logs for details.",
             "stillRunningCloud": "The sandbox is running and using sandbox hours until you choose.",
             "stillRunningLocal": "The VM is running and using hours until you choose.",
             "tryAgain": "Try again",
@@ -4181,7 +4235,6 @@
             "deleteSandbox": "Delete sandbox",
             "deleteVm": "Delete VM",
             "updatePayment": "Update payment method",
-            "checksBodyCloud": "Open anyway to fix these inside the workspace, or retry the checks after changing your project.",
             "showWorkspaces": "Show cloud workspaces",
             "contactSupport": "Contact support",
             "provisionTitleCloud": "The sandbox didn’t start",
@@ -4202,8 +4255,6 @@
             "paymentFailedBody": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.",
             "teamLimitTitle": "You’re at your team’s limit of running sandboxes",
             "limitBody": "Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
-            "teamLimitBody": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
-            "memberLimitBody2": "You can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitTitle": "You’re at your limit of running sandboxes",
             "githubNotConnectedTitle": "GitHub isn’t connected for {{repo}}",
             "githubNotConnectedBody": "Orca Cloud clones your code from GitHub and needs access to this repository first. Connect GitHub, then try again. Nothing was created, and you weren’t charged.",
@@ -4219,7 +4270,23 @@
             "planBodyMember3": "Nothing was created, and you weren’t charged. Ask an owner or admin to choose a Team plan.",
             "outOfHoursBodyMember3": "Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.",
             "spendCapReachedBodyMember4": "Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.",
-            "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method."
+            "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method.",
+            "checksAttentionTitleCloud": "The sandbox is up, but some environment checks need attention",
+            "checksAttentionTitleVm": "The VM is up, but some environment checks need attention",
+            "checksCountTitleCloud_one": "The sandbox is up, but {{count}} environment check failed",
+            "checksCountTitleCloud_other": "The sandbox is up, but {{count}} environment checks failed",
+            "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
+            "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
+            "checksBodyCloud2_one": "Open it anyway and fix it inside the workspace, or run the checks again after changing your project.",
+            "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
+            "provisionBodyCloudKept": "Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.",
+            "provisionBodyCloud2": "Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.",
+            "provisionBodyVm": "Your VM recipe stopped with an error before the VM was ready.",
+            "createBodyVm": "The VM started, but creating the workspace on it stopped with an error.",
+            "teamLimitBodyCount_one": "Your team can run {{count}} sandbox at once ({{value1}} per seat). Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "memberLimitBodyCount_other": "You can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4285,6 +4352,15 @@
             "bodyCloud": "The sandbox and anything on it are deleted, and the workspace isn’t created.",
             "bodyVm": "The VM and anything on it are destroyed, and the workspace isn’t created.",
             "keep": "Keep it"
+          },
+          "VmBuildErrorDetails": {
+            "copyFailed": "Couldn’t copy the details.",
+            "toggle": "Details",
+            "copied": "Copied",
+            "copy": "Copy details",
+            "copiedStatus": "Details copied",
+            "earlierLines_one": "…{{count}} earlier line. Copy details includes it.",
+            "earlierLines_other": "…{{count}} earlier lines. Copy details includes them."
           }
         }
       },
@@ -6606,7 +6682,8 @@
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
           "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
           "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
-          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged).",
+          "cloudSignsAgentsOut": "Signs agents out on the sandbox first."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
@@ -7979,6 +8056,15 @@
           "switched": "Switched to {{value0}}",
           "triggerLabel": "Team: {{value0}}, switch teams",
           "triggerPersonal": "Personal account, switch teams"
+        },
+        "DeleteCloudWorkspace": {
+          "title": "Delete {{name}}?",
+          "body": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead.",
+          "cancel": "Cancel",
+          "archiveInstead": "Archive instead",
+          "delete": "Delete workspace",
+          "uncommitted_one": "{{count}} uncommitted change",
+          "uncommitted_other": "{{count}} uncommitted changes"
         }
       },
       "shared": {
@@ -14222,20 +14308,17 @@
           "confirmRemove": "Remove key",
           "edit": "Edit key",
           "remove": "Remove key",
-          "promise": "Keys are sealed in your OS keychain. When an agent starts, here, on an SSH host or on a paired machine, Orca passes it the key for that run only and never writes it to that machine.",
           "unavailableTitle": "Orca won't store API keys on this computer",
           "noKey": "No key. The agent uses its own sign-in.",
           "addKey": "Add key",
           "anotherAgent": "Add a key for another agent",
           "search": {
-            "title": "Agent API Keys",
             "description": "Give agents an API key on every host or only some, without signing in on each machine.",
             "apiKey": "api key",
             "secret": "secret",
             "env": "environment",
             "bedrock": "bedrock"
           },
-          "title": "Agent API Keys",
           "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."
         },
         "ports": {
@@ -16271,7 +16354,6 @@
             "open": "Open link",
             "portHint": "The port your dev server listens on.",
             "portHintDetected": "Or pick a port that’s listening.",
-            "portInvalid": "Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.",
             "portLabel": "Port",
             "publicNote": "Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.",
             "revokeFailed": "Couldn’t turn it off. Try again.",
@@ -16290,7 +16372,8 @@
             "wakeHint": "Otherwise the link works only while the workspace is awake. Wake time counts toward your usage.",
             "wakeLabel": "Let visitors wake the workspace",
             "tryAgain": "Try again",
-            "sharePortLabel": "Share port {{port}}…"
+            "sharePortLabel": "Share port {{port}}…",
+            "portInvalidReserved": "Enter a port from 1 to 65535. Ports {{ports}} are used by Orca."
           }
         }
       },
@@ -19444,7 +19527,7 @@
       "agent": {
         "AgentCombobox": {
           "19522e25ee": "Manage agents",
-          "986f946354": "Blank Terminal",
+          "986f946354": "Blank terminal",
           "579c768bde": "No agents match your search.",
           "48c6a5a9b4": "Search agents...",
           "9c6b59fe58": "Set as default",
@@ -20699,6 +20782,7 @@
         "capUsedLabel": "Overage spend cap used",
         "enterpriseContactSales": "Contact sales",
         "openForbidden2": "Only an owner or admin can manage billing.",
+        "openTeamRequired": "Plans belong to a team. Create a team, then choose a plan.",
         "openSignedOut2": "Sign in to Orca again to manage your team.",
         "overageDescription7": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default).",
         "overageMemberHint": "Owners and admins can change overage.",
@@ -20733,7 +20817,25 @@
         "sandboxHoursLeftCount_other": "{{count}} sandbox hours left",
         "sandboxHoursOverIncluded_one": "{{count}} sandbox hour over the included amount this month",
         "sandboxHoursOverIncluded_other": "{{count}} sandbox hours over the included amount this month",
-        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours."
+        "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
+        "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
+        "usageAlertsNote": "Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.",
+        "choosePlan": "Choose plan",
+        "reasonTrialUnavailable": "This account or team already used its trial. Choose a plan to use Orca Cloud.",
+        "reasonTrialUnavailableMember": "This account or team already used its trial. Ask an owner or admin to choose a plan.",
+        "reasonTrialUsedUp2": "Your trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Choose a plan to keep using Orca Cloud.",
+        "reasonTrialUsedUpMember2": "Your team’s trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to choose a plan.",
+        "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
+        "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
+        "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used",
+        "trialHoursUsedLabel": "Trial sandbox hours used",
+        "trialOneTime": "Trial hours are a one-time allowance and don’t reset. When they’re used up, choose a plan to keep going. No card needed until then.",
+        "trialProduct": "Orca Cloud",
+        "trialRowChoosePlan": "{{trial}}. Choose plan",
+        "trialUsedUpTitle": "Your trial is used up",
+        "unconfigured": "Billing isn’t available in this build of Orca."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -20760,21 +20862,16 @@
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
         "copyWorkspaceLink": "Copy workspace link",
-        "daysAgo": "{{value0}}d ago",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
         "emptyFilteredTitle": "Nothing matches these filters",
-        "emptyMineBody": "Create one with Orca Cloud from New workspace. It keeps running while your laptop sleeps.",
         "emptyMineTitle": "No cloud workspaces yet",
         "emptyTeamBody": "Share a cloud workspace from its menu and everyone on your team can open it here.",
         "emptyTeamTitle": "No team workspaces yet",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
-        "errorConcurrencyLimitCount2": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
-        "errorSeatLimitSelf": "You already have {{value0}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
-        "errorSeatLimitOwner": "{{value0}} already has {{value1}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "errorSeatLimitOwnerNoCount": "{{value0}} is at their limit of running sandboxes. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "seatOwnerFallback": "The workspace owner",
         "errorConflict": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
@@ -20792,7 +20889,6 @@
         "goToChat": "Go to {{value0}}'s chat",
         "goToTeammateChat": "Go to a teammate's chat",
         "heading": "Cloud workspaces",
-        "hoursAgo": "{{value0}}h ago",
         "inAnyRepo": "In any repo",
         "inRepo": "In {{value0}}",
         "justNow": "just now",
@@ -20810,7 +20906,6 @@
         "memberTyping": "{{value0}} is typing",
         "memberViewing": "{{value0}} is viewing",
         "memberYou": "{{value0}} (you)",
-        "minutesAgo": "{{value0}}m ago",
         "moreMembers": "{{count}} more",
         "move": "Move",
         "moveToSection": "Move to section",
@@ -20873,7 +20968,18 @@
         "archiveConfirmTitle": "Archive {{name}}?",
         "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
         "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
-        "showCloudWorkspaces": "Show cloud workspaces"
+        "showCloudWorkspaces": "Show cloud workspaces",
+        "deleteConfirmTitle": "Delete {{name}}?",
+        "sleep": "Sleep",
+        "deleteWorkspace": "Delete…",
+        "showRunningOnly": "Show running only",
+        "running": "Running",
+        "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -22893,6 +22999,17 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "repository": {
+        "runOn": {
+          "title": "Default run on",
+          "description": "Where new workspaces in this project start. Orca Cloud is used only when it can start.",
+          "keywordRunOn": "run on",
+          "keywordCloud": "orca cloud",
+          "keywordThisComputer": "this computer",
+          "keywordDefault": "default",
+          "last": "Last used"
+        }
       }
     },
     "agentChildRow": {
@@ -22926,7 +23043,7 @@
       "startInTerminal": "Start {{value0}} in a terminal"
     },
     "newWorkspace": {
-      "agentOptional": "Agent [Optional]",
+      "agentOptional": "Agent (optional)",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
       "setupCheckFailed": "Could not check setup configuration. Try again.",
       "directSetup": {
@@ -22944,7 +23061,102 @@
         "yamlSource": "orca.yaml",
         "bothSources": "orca.yaml + local",
         "localSource": "local settings"
-      }
+      },
+      "cloudStart": {
+        "useThisComputer": "Use this computer instead",
+        "start": "Start in Orca Cloud",
+        "setUpAndStart": "Set up and start",
+        "choosePlanAndStart": "Choose plan and start",
+        "renewAndStart": "Renew and start",
+        "giveAccessAndStart": "Give access and start",
+        "checking": "Checking Orca Cloud…",
+        "githubGranted": "GitHub access granted for {{repo}}"
+      },
+      "cloudSetup": {
+        "account": "Orca account",
+        "team": "Team",
+        "plan": "Team plan",
+        "github": "GitHub access",
+        "githubNeeded": "Orca Cloud clones your code from GitHub. Give access to this repository once.",
+        "agent": "Agent",
+        "planAfterSignIn": "Checked after you sign in",
+        "askOwner": "Ask an owner or admin to fix it.",
+        "planEnded": "Your Team plan ended.",
+        "outOfHours": "Out of sandbox hours.",
+        "spendCap": "Spend cap reached.",
+        "paymentFailed": "Payment failed.",
+        "planMember": "Orca Cloud needs a Team plan. Only owners and admins can choose one.",
+        "planNeeded": "Orca Cloud needs a Team plan.",
+        "stateDone": "Done",
+        "stateOptional": "Optional",
+        "stateNext": "Next",
+        "stateInBrowser": "In browser",
+        "stateFailed": "Didn't finish",
+        "stateChecking": "Checking",
+        "stateNeeded": "Needed",
+        "allSet": "All set",
+        "title": "Set up Orca Cloud",
+        "starting": "Starting your cloud workspace…",
+        "agentSetUpAfterSignIn": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
+        "agentSetUpOnce": "{{agent}}: set up once in Settings → Agent accounts",
+        "accountNeededTeam": "Sign in or create one. We’ll make a team for you.",
+        "trial": "Trial",
+        "trialNoCard": "No card needed. Nothing is charged until you choose a plan.",
+        "stateIncluded": "Included",
+        "trialUsedUp": "Your trial is used up.",
+        "trialUsedUpMember": "Only owners and admins can choose a plan.",
+        "trialUsedUpOwner": "Choose a plan to keep using Orca Cloud. Your prompt is still here.",
+        "subtitleNoCard": "One visit to your browser, no card. Your prompt stays here and starts when you’re done.",
+        "trialUsedUpTitle": "Your trial is used up",
+        "choosePlan": "Choose plan",
+        "askChoosePlan": "Ask an owner or admin to choose a plan.",
+        "trialUsedUpChoose": "Choose a plan to keep using Orca Cloud.",
+        "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
+        "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud",
+        "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done."
+      },
+      "runOn": {
+        "thisComputer": "This computer",
+        "orcaCloud": "Orca Cloud",
+        "moreWithTarget": "More places to run: {{name}}",
+        "more": "More places to run",
+        "cloudUnreachableReason": "Orca Cloud: can't reach it right now. Check your connection.",
+        "thisComputerUnusable": "This computer, {{reason}}",
+        "locationNotSet": "Project location not set",
+        "cloudUnreachableName": "Orca Cloud, can't reach it right now",
+        "cloudHosted": "Hosted sandbox"
+      },
+      "cloudHours": {
+        "trialChip_one": "Trial · {{hours}} sandbox hour left",
+        "trialChip_other": "Trial · {{hours}} sandbox hours left",
+        "planChip_one": "{{hours}} sandbox hour left",
+        "planChip_other": "{{hours}} sandbox hours left",
+        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
+        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial",
+        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
+        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
+        "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
+      },
+      "trialUsedUp": {
+        "running": "Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe.",
+        "memberTitle": "{{team}}’s trial is used up",
+        "memberTitleNoTeam": "Your team’s trial is used up",
+        "askForPlan": "Ask for a Team plan"
+      },
+      "cloudOnly": {
+        "heading": "On GitHub · Orca Cloud only",
+        "detail": "Orca Cloud clones it. No copy on this computer needed.",
+        "moreAccess": "Give Orca Cloud access to more repositories…",
+        "notOnThisComputer": "Not on this computer · Orca Cloud only",
+        "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
+        "starting": "Starting {{repo}} in Orca Cloud…",
+        "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
+        "private": "{{owner}} · Private",
+        "public": "{{owner}} · Public",
+        "showMore": "Show more repositories…"
+      },
+      "orcaCloudAgentFallback": "{{agent}} isn’t available on Orca Cloud yet, so {{fallback}} is selected."
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
@@ -23296,6 +23508,20 @@
         "showMore_one": "Show {{count}} more",
         "showMore_other": "Show {{count}} more"
       }
+    },
+    "landing": {
+      "cloudCard": {
+        "title": "Run agents in Orca Cloud",
+        "notNow": "Not now",
+        "tryTitle": "Try Orca Cloud",
+        "planBody": "Agents keep running while your laptop sleeps.",
+        "trialBody": "Agents keep running while your laptop sleeps. No card needed.",
+        "try": "Try Orca Cloud"
+      }
+    },
+    "cloudWorkspaces": {
+      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
+      "newCloudWorkspace": "New cloud workspace"
     }
   },
   "dashboardPopout": {
@@ -26395,7 +26621,6 @@
       "memberAsk": "Ask an owner or admin to set it up."
     },
     "loading": "Loading environment…",
-    "title": "Cloud environment",
     "descriptionTeam": "Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.",
     "you": "You",
     "loadFailed": "Couldn’t load the cloud environment",
@@ -26442,7 +26667,7 @@
       "noEnvVars": "None",
       "envVarPlaceholder": "NPM_TOKEN, DATABASE_URL…",
       "envVarInvalid": "Skipped {{names}}: names use A–Z, 0–9 and _, and cannot start with a digit.",
-      "scriptTabHint": "Tab inserts two spaces. Press Escape, then Tab, to leave the editor."
+      "scriptTabHintVisible": "Tab indents · Esc then Tab to leave"
     },
     "import": {
       "failed": "Couldn’t read that project’s setup.",
@@ -26542,7 +26767,6 @@
       "pullRequests": "Pull requests",
       "lastChanges": "Last changes",
       "filesTitle": "Files",
-      "moreFiles": "{{count}} more files not shown",
       "detached": "Detached HEAD",
       "ahead": "{{count}} ahead",
       "behind": "{{count}} behind",
@@ -26552,7 +26776,9 @@
       "noCommits": "No commits on this branch yet.",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
-      "loadFailedDetail": "Your files are safe in the archive."
+      "loadFailedDetail": "Your files are safe in the archive.",
+      "moreFiles_one": "{{count}} more file not shown",
+      "moreFiles_other": "{{count}} more files not shown"
     },
     "state": {
       "archived": "Archived",
@@ -26579,7 +26805,6 @@
     "thisWorkspaceTitle": "This workspace",
     "overlay": {
       "restarting": "Restarting…",
-      "unarchiving": "Restoring from archive…",
       "waking": "Waking…",
       "connecting": "Connecting…",
       "terminalStalledTitle": "Couldn’t reconnect the terminal",
@@ -26592,18 +26817,18 @@
       "stalled": "Orca Cloud stopped responding while waking.",
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
-      "clearPendingKeys": "Discard waiting keys"
+      "clearPendingKeys": "Discard waiting keys",
+      "unarchivingNow": "Unarchiving…"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
-      "unarchiving": "Restoring {{name}} from archive.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
-      "asleep": "{{name}} is asleep."
+      "asleep": "{{name}} is asleep.",
+      "unarchivingNamed": "Unarchiving {{name}}."
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
-    "sandboxMarkLabel": "Sandbox: {{state}}",
     "archive": "Archive",
     "oom": {
       "titleRan": "{{name}} ran out of memory",
@@ -26619,16 +26844,16 @@
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
       "waking": "Waking…",
       "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
-      "starting": "Starting the sandbox…",
       "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
       "startFailed": "The sandbox couldn’t start. Nothing was lost.",
-      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
+      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe.",
+      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
+      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
     },
     "restarting": "Restarting…",
     "restart": "Restart",
     "sandboxTitle": "Sandbox",
     "statusUnavailable": "Status unavailable",
-    "statusUnavailableDetail": "Orca Cloud didn’t answer.",
     "loading": "Loading status",
     "cpu": "CPU",
     "cpuValue": "{{percent}}% of {{cpus}} vCPU",
@@ -26675,10 +26900,8 @@
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "moveToComputer": "Move to this computer",
-    "moveHere": "Move here",
     "openLocal": "Open local workspace",
     "copiedOn": "Moved to this computer · {{date}}",
-    "moveAgain": "Move again",
     "recovery": {
       "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
       "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
@@ -26704,7 +26927,12 @@
       "olderDetail": "This version of Orca can’t connect to it, and restarting won’t update it. Your files are safe. New cloud workspaces use the current version.",
       "checkForUpdates": "Check for updates",
       "createWorkspace": "Create workspace"
-    }
+    },
+    "deletedNamed": "Deleted {{name}}",
+    "deleteFailedNamed": "Couldn’t delete {{name}}",
+    "productName": "Orca Cloud",
+    "cloudMarkLabel": "Cloud workspace · {{state}}",
+    "statusUnavailableTitle": "Couldn’t get the sandbox status."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -26717,7 +26945,6 @@
     "openaiKey": "OpenAI API key",
     "gatewayKey": "AI Gateway API key",
     "claudeModel": "Claude model (optional)",
-    "gatewayModelHint": "Free gateway accounts can’t use anthropic/* models; try moonshotai/kimi-k2.",
     "codexModel": "Codex model (optional)",
     "gatewayCodexHint": "A gateway model id, such as openai/gpt-5.",
     "baseUrl": "Base URL",
@@ -26763,7 +26990,6 @@
     "composerHint": "Claude and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.",
     "later": "Later",
     "skippedTitle": "Agent setup skipped",
-    "skippedDetail": "Set it up any time from Settings › Orca Account › Cloud secrets.",
     "signInPending": "Agent sign-in",
     "signInPendingDetail": "Opens when the sandbox is ready. Keep Orca open until then.",
     "signInCancelled": "Sign-in cancelled",
@@ -26789,7 +27015,9 @@
       "failed": "Couldn’t save {{name}}. Nothing was changed.",
       "rowSaved": "{{agent}}: your API key ••••{{hint}}",
       "scopeNote": "Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces."
-    }
+    },
+    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
+    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets."
   },
   "cloudSecrets": {
     "editor": {
@@ -26904,7 +27132,9 @@
       "lineName": "line {{line}}",
       "skippedLine": "Line {{line}} · skipped",
       "renamed": "Renamed from {{name}}",
-      "normalized": "Spaces and dashes become underscores"
+      "normalized": "Spaces and dashes become underscores",
+      "valueLabel": "Value for {{name}}",
+      "valueLabelLine": "Value, line {{line}}"
     },
     "value": {
       "hide": "Hide value",
@@ -26922,7 +27152,7 @@
     "error": {
       "invalidName": "Use capital letters, digits and underscores, not starting with a digit.",
       "reservedName": "Orca manages this variable in cloud workspaces. Pick another name.",
-      "subscriptionToken": "This is a Claude or ChatGPT subscription token, which can’t be stored.",
+      "subscriptionToken": "This is a Claude or ChatGPT subscription token, so it can’t be saved as a secret. Set up Claude once in Settings → Agent accounts instead.",
       "valueTooLarge": "Values can be up to 8 KB.",
       "invalidValue": "Enter a value.",
       "repoRequired": "Choose a repository first.",
@@ -26936,13 +27166,16 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again.",
-      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that."
+      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that.",
+      "desktopKeyConflict": "Another agent’s key is saved in your Orca account under this name. Save this one to replace it."
     },
     "vm": {
       "badge": "Real value in sandbox",
       "warning": "Orca can’t swap AWS keys at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.",
-      "warningKey": "Orca can’t swap {{name}} at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it."
-    }
+      "warningKey": "Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it."
+    },
+    "loading": "Loading cloud secrets…",
+    "unavailable": "Cloud secrets aren’t available for this account yet."
   },
   "cloudMcpSync": {
     "appliesEverywhere": "Applies to every cloud workspace",
@@ -27010,18 +27243,18 @@
       "intro": "This creates a local workspace from {{name}}:",
       "branch": "The branch and its commits",
       "changes": "Uncommitted changes and untracked files",
-      "chats": "Claude and Codex chats, so agents can resume here",
       "branchTaken": "{{branch}} is already checked out on this computer",
       "branchTakenDetail": "It will be {{newName}}. Chats already on this computer are kept.",
       "action": "Move to this computer",
       "branchNamed": "Branch {{branch}} and its commits",
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
-      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
-      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
       "archiveAfter": "Archive the cloud workspace afterwards",
       "stopsAgents_one": "Stops {{count}} running agent",
-      "stopsAgents_other": "Stops {{count}} running agents"
+      "stopsAgents_other": "Stops {{count}} running agents",
+      "chatsContinue_one": "{{count}} agent chat, so you can continue it here",
+      "chatsContinue_other": "{{count}} agent chats, so you can continue them here",
+      "chatsContinueAny": "Claude and Codex chats, so you can continue them here"
     },
     "cancel": "Cancel",
     "steps": "Steps",
@@ -27080,7 +27313,6 @@
       "applying": "Applying the changes is taking too long, so Orca stopped waiting."
     },
     "openFolder": "Open folder",
-    "failedLocalNext": "Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.",
     "conflicts": "Changed here since: {{files}}",
     "failedLocalReapply": "Apply changes again to bring them over. Nothing you changed here is overwritten, and your files are safe in the cloud workspace.",
     "reapply": "Apply changes again",
@@ -27090,7 +27322,8 @@
       "stillLeft": "Some changes still conflict with edits made here. They stay saved.",
       "done": "All changes applied",
       "discard": "Discard"
-    }
+    },
+    "failedLocalNextV2": "Use Move to this computer from the sandbox panel to bring them over. Your files are safe in the cloud workspace."
   },
   "orcaCloud": {
     "continueOffer": {
@@ -27157,5 +27390,187 @@
     "showOutputTooltip": "Show {{name}} output",
     "shortcutRestarts": "{{shortcut}} restarts it",
     "menuRunning": "Run actions, {{count}} running"
+  },
+  "agentHostPanel": {
+    "recipeEnv": "This recipe's create script gets this computer's environment.",
+    "recipeEnvDetail_one": "{{count}} variable, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_other": "{{count}} variables, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_one": "{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_other": "{{count}} variables, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_one": "{{count}} variable, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_other": "{{count}} variables, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvReview": "Review",
+    "recipeEnvHide": "Hide",
+    "recipeEnvKeyLike": "Look like keys",
+    "recipeEnvOther": "Other variables",
+    "env": {
+      "add": "Add",
+      "addMine": "Add mine",
+      "missing": "Missing",
+      "askOwner": "Ask {{owner}}, an owner or an admin to add it.",
+      "valueLabel": "Value for {{name}}",
+      "valuePlaceholder": "Value",
+      "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "guestOwner": "In a shared workspace, Personal values come from its owner, {{owner}}, not from you.",
+      "guest": "In a shared workspace, Personal values come from its owner, not from you.",
+      "empty": "No variables from Cloud secrets yet.",
+      "overrides": "overrides {{scopes}}"
+    },
+    "keys": {
+      "askAdmin": "Ask an owner or admin to add one.",
+      "gateway": "AI Gateway",
+      "other": "Other",
+      "overrides": "{{scope}} · overrides {{others}}",
+      "readOnly": "{{scope}} · only owners and admins can change it",
+      "shadowedLabel": "Keys not used for {{name}}",
+      "editLabel": "Edit {{name}}",
+      "edit": "Edit",
+      "empty": "No agent keys in Cloud secrets.",
+      "emptyMember": "Add your own, or ask an owner or admin for a team key.",
+      "manage": "Open Cloud secrets"
+    },
+    "unreachable": "Couldn’t reach Orca Cloud.",
+    "section": {
+      "keysCloud": "API keys from Cloud secrets",
+      "env": "Environment"
+    },
+    "help": {
+      "cloudKeys": "From your Orca account and Cloud secrets. Keys only on this computer aren’t sent to Orca Cloud.",
+      "cloudEnv": "From Cloud secrets: Repository, then Personal, then Shared."
+    },
+    "retry": "Try again",
+    "asleepFooter": "Changes reach the sandbox when it wakes.",
+    "loadingSecrets": "Loading Cloud secrets…",
+    "details": "Details"
+  },
+  "cloudSecretsAsk": {
+    "scopeLabel": "Scope for {{name}}",
+    "memberRefused": "Only owners and admins can save team or repository values. Choose Personal.",
+    "missing_one": "{{count}} secret missing",
+    "missing_other": "{{count}} secrets missing",
+    "coverage": "The {{environment}} environment uses {{total}}. Your team and this repository provide {{covered}}.",
+    "skipped": "Secrets skipped",
+    "skippedDetail": "Add them later from the workspace’s cloud panel.",
+    "saved": "Secrets saved",
+    "savedDetail": "New terminals and agents in this workspace get them within a few seconds.",
+    "pasteEnv": "Paste .env",
+    "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.",
+    "pasteLabel": "Paste the contents of a .env file",
+    "pastePlaceholder": "NAME=value",
+    "pasteFound": "Found {{matched}} of {{count}}. {{ignored}} other lines ignored.",
+    "valuePlaceholder": "Value",
+    "unreachable": "Couldn’t reach Orca Cloud.",
+    "nothingChanged": "Nothing was changed.",
+    "retry": "Try again",
+    "memberFooter": "Saved to your personal Cloud secrets, so only your workspaces get them. To set them for the whole team, ask an owner or admin.",
+    "skip": "Skip",
+    "saveNone": "Save",
+    "save_one": "Save secret",
+    "save_other": "Save {{count}} secrets",
+    "add": "Add",
+    "dismissNotice": "Dismiss secrets missing notice",
+    "loading": "Loading secrets…",
+    "nothingMissing": "Nothing is missing.",
+    "dialogTitle": "Add missing secrets",
+    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds."
+  },
+  "cloudAgents": {
+    "source": {
+      "shadowedByTeam": "Not used while the team key is set.",
+      "shadowedByRepo": "Not used while the repository key is set."
+    }
+  },
+  "agentSources": {
+    "shared": "Personal accounts aren’t used in shared workspaces."
+  },
+  "secretRequest": {
+    "anAgent": "an agent",
+    "more_one": "{{count}} more request",
+    "more_other": "{{count}} more requests",
+    "expand": "Show request",
+    "collapse": "Hide request",
+    "from": "from {{agent}}",
+    "expired": "This request expired.",
+    "expiredDetail": "{{agent}} can ask again.",
+    "theAgent": "The agent",
+    "dismiss": "Dismiss",
+    "valueLabel": "Value for {{name}}",
+    "valuePlaceholder": "Value",
+    "repoHint": "{{agent}} suggested Repository",
+    "unreachable": "Couldn’t reach Orca Cloud.",
+    "nothingChanged": "Nothing was changed.",
+    "retry": "Try again",
+    "notNow": "Not now",
+    "add": "Add secret",
+    "title": "{{agent}} asked for {{name}}",
+    "titleUnknown": "A command asked for {{name}}",
+    "showLess": "Show less",
+    "showMore": "Show more",
+    "scopeLabel": "Scope for {{name}}",
+    "savedAfterExpiry": "Saved. {{agent}} stopped waiting, so tell it the secret is ready.",
+    "doneRepo": "{{name}} added to this repository’s secrets.",
+    "done": "{{name}} added to your personal secrets.",
+    "doneDetail": "New shells get it now. {{agent}} was told it’s ready.",
+    "doneDetailExpired": "New shells get it now.",
+    "restartDetail": "Restart {{agent}} to give its own shell the new value.",
+    "restart": "Restart {{agent}}",
+    "announce": "{{title}}. Press F6 to answer.",
+    "unseenIn": "In {{workspace}}. The request waits up to 15 minutes.",
+    "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
+    "openWorkspace": "Open",
+    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}."
+  },
+  "agentApiKeys": {
+    "cloud": {
+      "synced": "Saved in your Orca account · cached on this computer",
+      "notSwappable": "Only on this computer · not used in Orca Cloud",
+      "local": "Only on this computer",
+      "saveLabel": "Save {{name}} to your Orca account",
+      "save": "Save to your Orca account",
+      "updateFailed": "Saved on this computer. Couldn’t update your Orca account, so cloud workspaces still use the older copy.",
+      "saveFailedLocal": "Saved on this computer. Couldn’t save it to your Orca account.",
+      "retry": "Try again",
+      "staleCopy": "Your Orca account has an older copy. Cloud workspaces still use it.",
+      "updateLabel": "Update {{name}} in your Orca account",
+      "update": "Update your Orca account",
+      "unreachable": "Can’t reach your Orca account right now",
+      "unreachableDetail": "Showing the last known state. Keys you save now go to your Orca account when Orca is back."
+    },
+    "remove": {
+      "confirmLabel": "Remove {{name}}",
+      "fromAccountQuestion": "Also remove it from your Orca account? Cloud workspaces will stop using it.",
+      "thisComputerOnly": "Remove from this computer only",
+      "both": "Remove from both",
+      "cancel": "Cancel",
+      "stillInAccount": "Still in your Orca account. Manage it in Settings → Orca Cloud → Cloud secrets."
+    },
+    "import": {
+      "title": "Keys found on this computer",
+      "detailSignedIn": "Orca shows names only. Imported keys are sealed on this computer, used on every host, and saved in your Orca account.",
+      "detailSignedOut": "Orca shows names only. Imported keys are sealed on this computer and used on every host.",
+      "scanning": "Looking for keys…",
+      "scanFailed": "Couldn’t look for keys on this computer.",
+      "retry": "Try again",
+      "empty": "No agent API keys found in your shell environment, OpenCode or ~/.gemini/.env.",
+      "alreadySaved": "Already saved for {{agent}}",
+      "signIn": "{{agent}} is signed in with {{provider}}. Sign in once in Settings → Agent accounts.",
+      "failed": "Couldn’t import. Nothing was changed.",
+      "cancel": "Cancel",
+      "submitOne": "Import 1 key",
+      "submit": "Import {{count}} keys",
+      "doneOne": "Imported 1 key.",
+      "done": "Imported {{count}} keys.",
+      "cloudFailed": "{{name}} is saved on this computer, but not in your Orca account.",
+      "openComputer": "Import from this computer",
+      "source": {
+        "opencode": "OpenCode sign-in file",
+        "geminiEnv": "~/.gemini/.env",
+        "shell": "Shell environment"
+      }
+    },
+    "promiseAccount": "Keys are sealed on this computer. When you’re signed in to Orca, they’re also saved in your Orca account for cloud workspaces. On SSH hosts and paired machines, Orca passes a key for that run only and never writes it there."
   }
 }

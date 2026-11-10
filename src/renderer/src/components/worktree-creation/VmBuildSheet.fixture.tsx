@@ -12,10 +12,12 @@ import {
   frame,
   LOG_LINES,
   NOW,
+  seedFixtureRepo,
   sheet,
   stampsFor,
   T0
 } from './vm-build-sheet-fixture-support'
+import { secretsData, secretsRow } from './vm-build-secrets-fixture-data'
 
 const noop = (): void => {}
 
@@ -252,6 +254,26 @@ export const cloudChecksFailed = frame(
   )
 )
 
+// One failure plus a warning: the title counts failures only, in the singular.
+export const cloudChecksFailedOne = frame(
+  entry(
+    {
+      environmentCheck: {
+        status: 'failed',
+        checks: FAILED_CHECKS?.filter((check) => check.id !== 'git.push'),
+        ...CHECKS_FAILED_AT
+      }
+    },
+    CLOUD_RECIPE
+  )
+)
+
+// A narrow sheet: the pills keep one column and Delete sandbox wraps under the recovery actions.
+export const cloudChecksFailedNarrow = defineFixture({
+  ...cloudChecksFailed,
+  width: 420
+})
+
 // A build replayed on a timer, for recording the transitions: log streams, checks run and fail,
 // the card opens, Retry collapses it, and a second pass succeeds.
 const TIMELINE: { at: number; patch: Partial<PendingWorktreeCreation> }[] = [
@@ -310,3 +332,49 @@ function LiveBuild(): React.JSX.Element {
 }
 
 export const live = defineFixture({ width: 760, render: () => <LiveBuild /> })
+
+// Orca Cloud › Secrets (S2): the environment's names this person doesn't get a value for.
+
+const cloudBuilding = entry(
+  { environmentCheck: { status: 'running', startedAt: T0 + 4_800 }, provisioningLog: LOG },
+  CLOUD_RECIPE
+)
+const secretsFrame = (row: React.ReactNode) =>
+  defineFixture({
+    width: 760,
+    setup: () => seedFixtureRepo(),
+    render: () => sheet(cloudBuilding, null, T0 + 6_000, undefined, { secretsRow: row })
+  })
+const TYPED = { STRIPE_TEST_KEY: 'sk_test_51H8xQ2eZvKYlo2C' }
+
+export const secretsMissing = secretsFrame(secretsRow(secretsData('admin'), { values: TYPED }))
+export const secretsMember = secretsFrame(
+  secretsRow(secretsData('member', { missing: ['STRIPE_TEST_KEY', 'DATABASE_URL'] }))
+)
+export const secretsBuildOnlyTeam = secretsFrame(secretsRow(secretsData('member', { built: true })))
+export const secretsPasted = secretsFrame(
+  secretsRow(secretsData('admin'), {
+    values: { ...TYPED, SENTRY_DSN: 'https://k@o1.ingest.sentry.io/1' },
+    pasteSummary: { matched: 2, count: 2, ignored: 4 }
+  })
+)
+export const secretsPasteOpen = secretsFrame(secretsRow(secretsData('admin'), { pasteOpen: true }))
+export const secretsSaving = secretsFrame(
+  secretsRow(secretsData('admin'), { values: TYPED, phase: 'saving' })
+)
+export const secretsSaved = secretsFrame(
+  secretsRow(secretsData('admin', { missing: [] }), { phase: 'saved' })
+)
+export const secretsPartlySaved = secretsFrame(
+  secretsRow(secretsData('admin', { missing: ['SENTRY_DSN'] }), { phase: 'saved' })
+)
+export const secretsFailed = secretsFrame(
+  secretsRow(secretsData('admin'), { values: TYPED, phase: 'failed' })
+)
+export const secretsRefused = secretsFrame(
+  secretsRow(secretsData('admin'), {
+    values: TYPED,
+    refused: { STRIPE_TEST_KEY: 'value_too_large' }
+  })
+)
+export const secretsSkipped = secretsFrame(secretsRow(secretsData('admin'), { phase: 'skipped' }))

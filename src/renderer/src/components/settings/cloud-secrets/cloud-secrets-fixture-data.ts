@@ -142,6 +142,7 @@ export function fixtureCloudSecretsApi(options: {
     put: ({ target, name }) =>
       options.pendingWrites ? never() : ok(view(target.scope, name, 'env', null, 0, caller.userId)),
     remove: () => (options.pendingWrites ? never() : ok(true as const)),
+    workspaceSharing: () => ok({ shared: false, ownerName: null, isOwner: true }),
     batch: ({ target, set }) =>
       options.pendingWrites
         ? never()

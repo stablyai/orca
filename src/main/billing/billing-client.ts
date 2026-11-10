@@ -4,7 +4,8 @@ import { z } from 'zod'
 import type {
   OrcaBillingCheckoutArgs,
   OrcaBillingEntitlement,
-  OrcaBillingOverageArgs
+  OrcaBillingOverageArgs,
+  OrcaBillingTeamPlan
 } from '../../shared/orca-billing'
 import { ORCA_BILLING_INTERVALS, ORCA_BILLING_PLAN_IDS } from '../../shared/orca-billing'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
@@ -67,7 +68,7 @@ export async function mintBillingToken(
   return body.data.billingToken
 }
 
-async function billingRequest(
+export async function billingRequest(
   endpoints: BillingEndpoints,
   token: string,
   method: 'GET' | 'POST',
@@ -119,7 +120,14 @@ const OffersSchema = z
       priceLabel: z.string().max(40),
       // Opened in the browser: https only.
       contactUrl: z.string().url().startsWith('https://')
-    })
+    }),
+    // Absent from older services: no trial on offer.
+    trial: z
+      .object({ includedSeconds: z.number().nonnegative() })
+      .nullable()
+      .optional()
+      .catch(null)
+      .transform((value) => value ?? null)
   })
   .nullable()
   .catch(null)
@@ -139,6 +147,18 @@ const EntitlementSchema = z.object({
   period: window,
   usageWindow: window,
   cancelAtPeriodEnd: z.boolean().catch(false),
+  trial: z
+    .object({
+      includedSeconds: z.number().nonnegative(),
+      usedSeconds: z.number().nonnegative(),
+      remainingSeconds: z.number().nonnegative(),
+      exhausted: z.boolean(),
+      grantedAt: z.number()
+    })
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
   includedSeconds: seconds,
   usedSeconds: seconds,
   remainingIncludedSeconds: seconds,
@@ -168,7 +188,9 @@ const EntitlementSchema = z.object({
       'payment_past_due',
       'payment_grace_expired',
       'included_hours_exhausted',
-      'overage_cap_reached'
+      'overage_cap_reached',
+      'trial_used_up',
+      'trial_unavailable'
     ])
     .nullable()
     .catch(null),
@@ -220,7 +242,12 @@ export async function createCheckoutUrl(
     token,
     'POST',
     'v1/billing/checkout',
-    { plan: args.plan, interval: args.interval, seats: args.seats },
+    {
+      plan: args.plan,
+      interval: args.interval,
+      seats: args.seats,
+      ...(args.setupSessionId ? { setupSessionId: args.setupSessionId } : {})
+    },
     fetchImpl
   )
   return assertStripeHostedUrl(UrlBody.safeParse(body).data?.url)
@@ -252,5 +279,45 @@ export async function updateOverage(
         : { enabled: args.enabled, spendCapCents: args.spendCapCents },
       fetchImpl
     )
+  )
+}
+
+const TeamPlansBody = z.object({
+  teams: z
+    .array(
+      z.object({
+        orgId: z.string().min(1).max(128),
+        plan: z.string().max(40).nullable(),
+        planLabel: z.string().max(40).nullable(),
+        canStartSandbox: z.boolean()
+      })
+    )
+    .max(20)
+})
+
+/** Plan state for other teams the caller is on (cloud start B2), read with the caller's own token. */
+export async function fetchTeamPlans(
+  endpoints: BillingEndpoints,
+  token: string,
+  orgIds: readonly string[],
+  fetchImpl: typeof fetch = fetch
+): Promise<OrcaBillingTeamPlan[]> {
+  const body = TeamPlansBody.safeParse(
+    await billingRequest(endpoints, token, 'POST', 'v1/billing/team-plans', { orgIds }, fetchImpl)
+  )
+  if (!body.success) {
+    throw new Error('invalid_billing_response')
+  }
+  return body.data.teams
+}
+
+/** POST /v1/billing/trial: starts the team's one-time trial (idempotent) and returns the entitlement. */
+export async function claimTrial(
+  endpoints: BillingEndpoints,
+  token: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<OrcaBillingEntitlement> {
+  return normalizeEntitlement(
+    await billingRequest(endpoints, token, 'POST', 'v1/billing/trial', {}, fetchImpl)
   )
 }

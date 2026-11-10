@@ -1,3 +1,4 @@
+import type { CloudStartView } from './run-on/use-cloud-start-composer'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -48,6 +49,8 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
+  /** One muted line under the agent picker (Orca Cloud: why another agent is selected). */
+  agentNotice?: string
   agentPickerDraft?: AgentPickerDraft
   agentSetupDisabled?: boolean
   onQuickAgentChange: (
@@ -80,6 +83,8 @@ export type NewWorkspaceComposerCardProps = {
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   primaryActionLabel: string
+  /** "Start in Orca Cloud": Run on's segments, the setup panel and the fallback (absent without Orca Cloud). */
+  cloudStart?: CloudStartView | null
   projectLabel?: string
   projectPlaceholder?: string
   emptyProjectMessage?: string

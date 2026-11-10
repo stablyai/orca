@@ -116,7 +116,7 @@ export async function repoInstallUrl(
   deps: RepoAccessDeps,
   caller: { accountId: string; userId: string },
   repoUrl: string,
-  options: { setupSessionId?: string; repoId?: number; ownerId?: number } = {}
+  options: { setupSessionId?: string; repoId?: number; ownerId?: number; githubUser?: { id: number; login: string } } = {}
 ): Promise<{ url: string; state: string }> {
   const parsed = parseGitHubRepo(repoUrl)
   if (!parsed) {
@@ -127,7 +127,8 @@ export async function repoInstallUrl(
   }
   const state = await createConnectState(deps.db, deps.connect.stateSecret, caller, deps.now, {
     setupSessionId: options.setupSessionId,
-    repo: parsed
+    repo: parsed,
+    ...(options.githubUser ? { githubUser: options.githubUser } : {})
   })
   return { url: installUrl(deps.connect, state, await preselectIds(deps, parsed, options)), state }
 }

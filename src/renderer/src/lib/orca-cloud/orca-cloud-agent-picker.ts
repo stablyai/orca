@@ -57,3 +57,24 @@ export function orcaCloudAgentMenuModel(
     defaultTuiAgent: settings?.defaultTuiAgent
   }
 }
+
+/**
+ * The agent the user wanted (a local pick made before choosing Orca Cloud, or their default) when the
+ * image doesn't ship it and another agent is selected instead; null when nothing was substituted.
+ */
+export function orcaCloudAgentFallback(args: {
+  override: TuiAgent | null | undefined
+  defaultAgent: TuiAgent | 'blank' | null | undefined
+  selected: TuiAgent | null
+}): { wanted: TuiAgent; selected: TuiAgent } | null {
+  const wanted =
+    args.override !== undefined && args.override !== null
+      ? args.override
+      : args.override === null || args.defaultAgent === 'blank'
+        ? null
+        : (args.defaultAgent ?? null)
+  if (!wanted || !args.selected || isOrcaCloudImageAgent(wanted) || wanted === args.selected) {
+    return null
+  }
+  return { wanted, selected: args.selected }
+}

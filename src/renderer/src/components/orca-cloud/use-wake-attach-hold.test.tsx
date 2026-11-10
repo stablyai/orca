@@ -118,6 +118,40 @@ describe('useWakeAttachHold', () => {
     expect(result.current.wake).toBeUndefined()
   })
 
+  it('counts only visible time toward the reconnect cap', () => {
+    let visibility: DocumentVisibilityState = 'visible'
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => visibility
+    })
+    const setVisibility = (next: DocumentVisibilityState): void => {
+      visibility = next
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+    try {
+      const { result, rerender } = hook(() => false)
+      rerender({ wake: { ...waking, phase: 'ready' } })
+      act(() => vi.advanceTimersByTime(WAKE_ATTACH_HOLD_MAX_MS / 2))
+      act(() => setVisibility('hidden'))
+      // Far past the cap in wall time, but the window was hidden for all of it.
+      act(() => vi.advanceTimersByTime(WAKE_ATTACH_HOLD_MAX_MS * 3))
+      act(() => setVisibility('visible'))
+      expect(result.current.terminalStalled).toBe(false)
+      expect(result.current.wake?.phase).toBe('connecting')
+      act(() => vi.advanceTimersByTime(WAKE_ATTACH_HOLD_MAX_MS / 2 - WAKE_ATTACH_POLL_MS * 2))
+      expect(result.current.terminalStalled).toBe(false)
+      act(() => vi.advanceTimersByTime(WAKE_ATTACH_POLL_MS * 3))
+      expect(result.current.terminalStalled).toBe(true)
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(document, 'visibilityState', descriptor)
+      } else {
+        Reflect.deleteProperty(document, 'visibilityState')
+      }
+    }
+  })
+
   it('Dismiss clears the reconnect card', () => {
     const { result, rerender } = hook(() => false)
     rerender({ wake: { ...waking, phase: 'ready' } })

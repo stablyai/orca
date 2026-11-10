@@ -2,6 +2,8 @@ import React, { useRef } from 'react'
 import {
   Archive,
   ArchiveRestore,
+  Moon,
+  Trash2,
   ArrowUpRight,
   BookOpen,
   FolderInput,
@@ -52,6 +54,10 @@ export type RowActions = {
   /** Sleep and archive with a snapshot (Undo for 5 s); never just a label. */
   archive: (w: CloudWorkspace) => void
   unarchive: (w: CloudWorkspace) => void
+  /** Put a running sandbox to sleep (frees a running slot). */
+  sleep: (w: CloudWorkspace) => void
+  /** Delete the sandbox and its disk, after a confirmation. */
+  remove: (w: CloudWorkspace) => void
 }
 
 /** Placeholder replaced by the inline section editor in CloudWorkspacesHome. */
@@ -267,6 +273,12 @@ export function CloudWorkspaceRowMenu({
               </DropdownMenuSub>
             )}
             <DropdownMenuSeparator />
+            {w.status === 'running' && w.archivedAt === null ? (
+              <DropdownMenuItem onSelect={() => actions.sleep(w)}>
+                <Moon />
+                {t('auto.components.cloudWorkspaces.sleep', 'Sleep')}
+              </DropdownMenuItem>
+            ) : null}
             {w.archivedAt === null ? (
               <DropdownMenuItem onSelect={() => actions.archive(w)}>
                 <Archive />
@@ -278,6 +290,10 @@ export function CloudWorkspaceRowMenu({
                 {t('auto.components.cloudWorkspaces.unarchive', 'Unarchive')}
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(w)}>
+              <Trash2 />
+              {t('auto.components.cloudWorkspaces.deleteWorkspace', 'Delete…')}
+            </DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>

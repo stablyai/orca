@@ -8,10 +8,6 @@ import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrat
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
-import {
-  getCloudApiKeysSearchEntries,
-  getCloudRoutinesSearchEntries
-} from '@/components/settings/cloud-api/cloud-api-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration/orchestration-search'
 import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
@@ -23,19 +19,22 @@ import {
   Bot,
   CircleUserRound,
   KeyRound,
-  KeySquare,
   Mic,
   MousePointerClick,
   Network,
   SlidersHorizontal,
   Smartphone,
-  UserCog,
-  Workflow
+  UserCog
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildCapabilitySettingsSections(
-  { isLocalWindowsHost, isWebClient, isLinearConnected }: SettingsNavigationBuildOptions,
+  {
+    isLocalWindowsHost,
+    isWebClient,
+    isLinearConnected,
+    isOrcaCloudApiAvailable
+  }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -74,11 +73,16 @@ export function buildCapabilitySettingsSections(
       ? [
           {
             id: 'agent-api-keys',
-            title: t('auto.components.settings.agentApiKeys.title', 'Agent API Keys'),
-            description: t(
-              'auto.components.settings.agentApiKeys.description',
-              'Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine.'
-            ),
+            title: t('settings.agentApiKeys.title', 'Agent API keys'),
+            description: isOrcaCloudApiAvailable
+              ? t(
+                  'settings.agentApiKeys.descriptionCloudSecrets',
+                  'Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in Cloud secrets.'
+                )
+              : t(
+                  'auto.components.settings.agentApiKeys.description',
+                  'Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine.'
+                ),
             icon: KeyRound,
             searchEntries: getAgentApiKeysSearchEntries(),
             group: 'capabilities' as const,
@@ -155,39 +159,18 @@ export function buildSetupSettingsSections(
           {
             id: 'orca-account',
             title: t('auto.components.settings.orcaAccount.title', 'Orca Account'),
-            description: t(
-              'auto.components.settings.orcaAccount.description',
-              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-            ),
+            description: isOrcaCloudApiAvailable
+              ? t(
+                  'settings.orcaAccount.descriptionWithCloud',
+                  'Sign-in, plan, team and Orca Cloud settings.'
+                )
+              : t(
+                  'auto.components.settings.orcaAccount.description',
+                  'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+                ),
             icon: CircleUserRound,
             searchEntries: getOrcaAccountSettingsSearchEntries(),
             group: 'setup'
-          }
-        ]
-      : []),
-    ...(showDesktopOnlySettings && isOrcaCloudApiAvailable
-      ? [
-          {
-            id: 'cloud-api-keys',
-            title: t('auto.components.settings.cloudApi.sectionTitle', 'Orca API keys'),
-            description: t(
-              'auto.components.settings.cloudApi.sectionDescription',
-              'For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets.'
-            ),
-            icon: KeySquare,
-            searchEntries: getCloudApiKeysSearchEntries(),
-            group: 'setup' as const
-          },
-          {
-            id: 'cloud-routines',
-            title: t('auto.components.settings.cloudRoutines.sectionTitle', 'Routines'),
-            description: t(
-              'auto.components.settings.cloudRoutines.sectionDescription',
-              'Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook.'
-            ),
-            icon: Workflow,
-            searchEntries: getCloudRoutinesSearchEntries(),
-            group: 'setup' as const
           }
         ]
       : []),

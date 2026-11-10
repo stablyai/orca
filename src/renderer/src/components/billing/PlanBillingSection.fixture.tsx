@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { PlanBillingView } from './PlanBillingSection'
-import { sampleTeam } from './plan-billing-fixtures'
+import { sampleTeam, sampleTrial, sampleTrialUsedUp } from './plan-billing-fixtures'
 
 const HOUR = 3600
 
@@ -148,7 +148,7 @@ export const suspendedAdmin = defineFixture({
   )
 })
 
-/** First open of Settings › Orca account: the section holds its shape while billing answers. */
+/** First open of Settings › Orca Cloud › Plan & billing: the section holds its shape while billing answers. */
 export const loading = defineFixture({
   width: 600,
   render: () => <PlanBillingView {...handlers} loading result={null} />
@@ -193,6 +193,68 @@ export const usageWarning90 = defineFixture({
   )
 })
 
+/** 100% with overage off: the alert says sandboxes sleep and points at overage (no repeat below). */
+export const usageAlert100OverageOff = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 120 * HOUR,
+          remainingIncludedSeconds: 0,
+          usageWarningPercent: 100,
+          canStartSandbox: false,
+          reason: 'included_hours_exhausted'
+        }
+      }}
+    />
+  )
+})
+
+/** 100% with overage on: the alert names the spend cap the team keeps going up to. */
+export const usageAlert100OverageOn = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 123 * HOUR,
+          remainingIncludedSeconds: 0,
+          overageSeconds: 3 * HOUR,
+          usageWarningPercent: 100,
+          overage: { ...sampleTeam.overage, optedIn: true, active: true, spentCents: 300 }
+        }
+      }}
+    />
+  )
+})
+
+/** A member at billing's 90% level: no admin usage notice (members aren't alerted). */
+export const usageWarningMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 109 * HOUR,
+          remainingIncludedSeconds: 11 * HOUR,
+          usageWarningPercent: 90,
+          canManageBilling: false
+        }
+      }}
+    />
+  )
+})
+
 /** An admin types a cap above billing's maximum: the field says what the maximum is. */
 export const capTooHigh = defineFixture({
   width: 600,
@@ -220,4 +282,62 @@ export const capTooHigh = defineFixture({
     input.dispatchEvent(new Event('input', { bubbles: true }))
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
+})
+
+/** Spec T1: the team's one-time trial, owner view (Choose plan). */
+export const trial = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView {...handlers} result={{ status: 'ok', entitlement: sampleTrial }} />
+  )
+})
+
+export const trialMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{ status: 'ok', entitlement: { ...sampleTrial, canManageBilling: false } }}
+    />
+  )
+})
+
+export const trialUsedUp = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView {...handlers} result={{ status: 'ok', entitlement: sampleTrialUsedUp }} />
+  )
+})
+
+export const trialUsedUpMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{ status: 'ok', entitlement: { ...sampleTrialUsedUp, canManageBilling: false } }}
+    />
+  )
+})
+
+/** No plan and no trial on offer (this account or team already used one). */
+export const trialUnavailable = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTrial,
+          status: 'none',
+          trial: null,
+          includedSeconds: 0,
+          usedSeconds: 0,
+          remainingIncludedSeconds: 0,
+          canStartSandbox: false,
+          reason: 'trial_unavailable'
+        }
+      }}
+    />
+  )
 })

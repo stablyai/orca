@@ -55,6 +55,17 @@ function fakeGitHub() {
       const membership = user?.memberships[url.pathname.split('/').pop()!]
       return membership ? Response.json(membership) : new Response(null, { status: 404 })
     }
+    const appInstallation = /^\/app\/installations\/(\d+)$/.exec(url.pathname)
+    if (appInstallation) {
+      const found = installations.find((i) => i.id === Number(appInstallation[1]))
+      return found ? Response.json({ id: found.id, account: found.account }) : new Response(null, { status: 404 })
+    }
+    const orgMembership = /^\/orgs\/([^/]+)\/memberships\/([^/]+)$/.exec(url.pathname)
+    if (orgMembership && auth.startsWith('Bearer ghs_inst_')) {
+      const member = Object.values(users).find((u) => u.login === orgMembership[2])
+      const membership = member?.memberships[orgMembership[1]!]
+      return membership ? Response.json({ ...membership, user: { id: member!.id, login: member!.login } }) : new Response(null, { status: 404 })
+    }
     if (url.pathname === '/users/acme') {
       return Response.json({ id: 50, login: 'acme' })
     }
@@ -333,5 +344,31 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
       .run()
     expect((await h.call('GET', path, { bearer: CONTROL_PLANE_TOKEN })).body).toEqual({ access: 'granted', url: null })
     expect((await h.call('GET', path.replace(SESSION, 'bad'), { bearer: CONTROL_PLANE_TOKEN })).status).toBe(400)
+  })
+
+  it('N5: binds with the GitHub identity from the Orca sign-in, skipping GitHub’s Authorize page', async () => {
+    const { h, github, browser } = await setup()
+    const base = `/v1/internal/github/install-url?accountId=org:acme-team&userId=u1&repo=${encodeURIComponent(REPO)}&session=${SESSION}`
+    github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
+    github.installations.length = 0
+    // A member (not an org admin) falls back to OAuth.
+    const memberUrl = (await h.call('GET', `${base}&githubUserId=2&githubLogin=sam-gh`, { bearer: CONTROL_PLANE_TOKEN })).body.url
+    github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
+    const fallback = await browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(memberUrl))}`)
+    expect(fallback.location).toMatch(/^https:\/\/github\.com\/login\/oauth\/authorize/)
+    expect(await isInstallationBound(h.env.SANDBOX_DB, 900, 'org:acme-team')).toBe(false)
+
+    // The org admin is bound straight away and sent back to the setup session.
+    github.installations.length = 0
+    const adminUrl = (await h.call('GET', `${base}&githubUserId=3&githubLogin=admin-gh`, { bearer: CONTROL_PLANE_TOKEN })).body.url
+    github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
+    const bound = await browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(adminUrl))}`)
+    expect(bound.location).toBe(`https://auth.test/cloud/setup/next?session=${SESSION}&from=github`)
+    expect(await isInstallationBound(h.env.SANDBOX_DB, 900, 'org:acme-team')).toBe(true)
+    const row = h.raw.prepare('SELECT method, bound_by_github_user_id FROM github_installations WHERE installation_id = 900').get()
+    expect(row).toEqual({ method: 'idp', bound_by_github_user_id: 3 })
+    // The state is single-use.
+    const replay = await browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(adminUrl))}`)
+    expect(replay.text).toContain('already used')
   })
 })

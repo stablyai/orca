@@ -16,6 +16,10 @@ const ClaimsSchema = z.object({
   // Role in `org`. Only owners and admins may buy or manage the org's plan.
   orgRole: z.enum(['owner', 'admin', 'member']).optional(),
   email: z.string().email().max(320).optional(),
+  // Trial abuse limits (trial.ts): false refuses the trial; absent means auth's provider only signs
+  // in confirmed emails. The GitHub user id is present when the user signed in with GitHub.
+  emailVerified: z.boolean().optional(),
+  githubUserId: z.string().regex(/^\d{1,20}$/).optional(),
   purpose: z.literal('billing')
 })
 
@@ -24,6 +28,8 @@ export type BillingCaller = {
   accountId: string
   canManage: boolean
   email?: string
+  emailVerified?: boolean
+  githubUserId?: string
 }
 
 const keySets = new Map<string, JWTVerifyGetKey>()
@@ -136,7 +142,9 @@ export async function authenticateDesktop(
       userId: claims.sub,
       accountId: accountIdFor(claims),
       canManage: !claims.org || claims.orgRole === 'owner' || claims.orgRole === 'admin',
-      email: claims.email
+      email: claims.email,
+      ...(claims.emailVerified === undefined ? {} : { emailVerified: claims.emailVerified }),
+      ...(claims.githubUserId ? { githubUserId: claims.githubUserId } : {})
     }
   } catch {
     return null

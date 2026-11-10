@@ -6,7 +6,7 @@ import {
   requestOrcaCloudSelectionAfterSignIn
 } from '@/lib/orca-cloud-select-after-sign-in'
 import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
-import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
+import { classifyEntitlementDenial, isOrcaCloudTrial } from '../../../../shared/orca-billing'
 
 /** Signing in from the row selects Orca Cloud once main offers it (the recipe list reloads). */
 function signInThenSelectOrcaCloud(): void {
@@ -33,9 +33,11 @@ function choosePlanThenSelectOrcaCloud(): void {
  * - `loading`: the first billing read is in flight; picking waits briefly for it.
  * - `unknown`: billing unreachable or not signed in to billing; picking proceeds and the build reports.
  * - `signed-out`: the build offers Orca Cloud but nobody is signed in; picking starts sign-in.
- * - `entitled`: can start a sandbox; `remainingSeconds` is the included time left this window.
+ * - `entitled`: can start a sandbox; `remainingSeconds` is the included time left this window
+ *   (`trial` while those are the team's one-time trial hours).
  * - `no-plan`: no active Team subscription (`lapsed` when one existed); routes owners/admins to the
- *   plans page and, once paid, back to the composer with Orca Cloud picked.
+ *   plans page and, once paid, back to the composer with Orca Cloud picked. `trialUsedUp` when the
+ *   team's trial ran out; `trialOfferSeconds` when the team can still get its trial.
  * - `out-of-hours`: included hours are spent (`cause: 'hours'`) or the overage cap is (`'cap'`).
  * - `payment-issue`: a failed payment blocks new starts.
  * No plan, out-of-hours and payment issues are actionable only by owners/admins (`canManageBilling`).
@@ -44,8 +46,20 @@ export type OrcaCloudRunTargetAccess =
   | { state: 'loading' }
   | { state: 'unknown' }
   | { state: 'signed-out' }
-  | { state: 'entitled'; remainingSeconds: number }
-  | { state: 'no-plan'; lapsed: boolean; canManageBilling: boolean }
+  | {
+      state: 'entitled'
+      remainingSeconds: number
+      /** Set only during the trial, whose low-hours warning names who can choose a plan (T1). */
+      trial?: boolean
+      canManageBilling?: boolean
+    }
+  | {
+      state: 'no-plan'
+      lapsed: boolean
+      canManageBilling: boolean
+      trialUsedUp?: boolean
+      trialOfferSeconds?: number | null
+    }
   | { state: 'out-of-hours'; cause: 'hours' | 'cap'; canManageBilling: boolean }
   | { state: 'payment-issue'; canManageBilling: boolean }
 
@@ -59,7 +73,10 @@ export function toOrcaCloudRunTargetAccess(
   if (entitlement.canStartSandbox) {
     return {
       state: 'entitled',
-      remainingSeconds: Math.max(0, entitlement.remainingIncludedSeconds)
+      remainingSeconds: Math.max(0, entitlement.remainingIncludedSeconds),
+      ...(isOrcaCloudTrial(entitlement)
+        ? { trial: true, canManageBilling: entitlement.canManageBilling }
+        : {})
     }
   }
   const { canManageBilling } = entitlement
@@ -80,7 +97,11 @@ export function toOrcaCloudRunTargetAccess(
       return {
         state: 'no-plan',
         lapsed: entitlement.reason === 'subscription_inactive',
-        canManageBilling
+        canManageBilling,
+        ...(entitlement.reason === 'trial_used_up' ? { trialUsedUp: true } : {}),
+        ...(entitlement.offers?.trial
+          ? { trialOfferSeconds: entitlement.offers.trial.includedSeconds }
+          : {})
       }
   }
 }
@@ -119,13 +140,13 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
   }
 }
 
-/** Section id on the overage controls in Settings › Orca account, where the switch and cap live. */
+/** Section id on the overage controls in Settings › Orca Cloud › Plan & billing (switch and cap). */
 export const ORCA_BILLING_OVERAGE_SECTION_ID = 'orca-billing-overage'
 
 function openOverageSettings(): void {
   const state = useAppStore.getState()
   state.openSettingsTarget({
-    pane: 'orca-account',
+    pane: 'cloud-billing',
     repoId: null,
     sectionId: ORCA_BILLING_OVERAGE_SECTION_ID
   })

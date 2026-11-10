@@ -9,6 +9,9 @@ vi.mock('../orca-cloud/cloud-workspace-actions', () => ({
 
 import {
   archiveFromHome,
+  deleteFromHome,
+  destroyFromHome,
+  sleepFromHome,
   unarchiveFromHome,
   type HomeArchiveDeps
 } from './cloud-workspace-home-archive'
@@ -61,5 +64,25 @@ describe('archive from the team list', () => {
     const remote = deps(null)
     await unarchiveFromHome(w, 'Fix login', remote)
     expect(remote.patchArchived).toHaveBeenCalledWith('sbx_1', false)
+  })
+})
+
+describe('sleep and delete from the team list', () => {
+  it('sleeps and deletes a workspace this desktop does not run through the control plane', async () => {
+    const sleep = vi.fn(async () => ({ ok: true as const, value: undefined }))
+    const destroy = vi.fn(async () => ({ ok: true as const, value: undefined }))
+    vi.stubGlobal('window', {
+      api: { cloudWorkspaces: { localWorkspaces: async () => [], sleep, destroy } }
+    })
+    await sleepFromHome(w, 'Fix login')
+    expect(sleep).toHaveBeenCalledWith('sbx_1')
+    const confirm = vi.fn()
+    await deleteFromHome(w, confirm)
+    // Deleting asks first; the control plane only deletes after the confirmation.
+    expect(confirm).toHaveBeenCalledWith({ kind: 'delete', workspace: w })
+    expect(destroy).not.toHaveBeenCalled()
+    await destroyFromHome(w, 'Fix login')
+    expect(destroy).toHaveBeenCalledWith('sbx_1')
+    vi.unstubAllGlobals()
   })
 })

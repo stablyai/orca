@@ -7,7 +7,10 @@ import {
   seedCloudWorkspaceSnapshot,
   type CloudStatusEntry
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import {
+  ORCA_CLOUD_SANDBOX_SPEC,
+  type HostedWorkspaceStatus
+} from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type {
   CloudArchiveInfo,
   CloudWakeProgressEvent
@@ -20,7 +23,7 @@ import { CloudWorkspaceMark } from './CloudWorkspaceMark'
 import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 
-const NOW = Date.now()
+// Read per render: a clock frozen at server start made every wake fixture read "much longer than usual".
 const noop = (): void => {}
 const actions = { onWake: noop, onRestart: noop, onArchive: noop, onUnarchive: noop, onSleep: noop }
 
@@ -28,9 +31,9 @@ const running: HostedWorkspaceStatus = {
   state: 'ready',
   metrics: {
     cpuPercent: 37,
-    cpus: 4,
+    cpus: ORCA_CLOUD_SANDBOX_SPEC.vcpus,
     load1: 1.2,
-    memTotalBytes: 8e9,
+    memTotalBytes: ORCA_CLOUD_SANDBOX_SPEC.memoryGb * 1e9,
     memUsedBytes: 5.1e9,
     diskTotalBytes: 34.3e9,
     diskUsedBytes: 6.2e9,
@@ -42,7 +45,7 @@ const running: HostedWorkspaceStatus = {
   uptimeMs: 2 * 3_600_000 + 3 * 60_000,
   usage: { totalMs: 14.6 * 3_600_000, centsPerHour: 100, costCents: 1460 },
   archive: null,
-  checkedAt: NOW
+  checkedAt: Date.now()
 }
 const asleep: HostedWorkspaceStatus = {
   ...running,
@@ -57,7 +60,7 @@ const entry = (
   status,
   loading: false,
   error: null,
-  fetchedAt: NOW - 42_000,
+  fetchedAt: Date.now() - 42_000,
   ...over
 })
 
@@ -126,7 +129,7 @@ export const panelArchived = defineFixture({
       value={entry({
         ...asleep,
         state: 'archived',
-        archive: { archivedAt: NOW - 86_400_000, expiresAt: NOW + 29 * 86_400_000 }
+        archive: { archivedAt: Date.now() - 86_400_000, expiresAt: Date.now() + 29 * 86_400_000 }
       })}
     />
   )
@@ -220,8 +223,8 @@ const wake = (over: Partial<CloudWakeProgressEvent> = {}): CloudWakeProgressEven
   workspaceId: 'ws',
   phase: 'waking',
   source: 'open',
-  startedAt: NOW - 3_200,
-  at: NOW,
+  startedAt: Date.now() - 3_200,
+  at: Date.now(),
   ...over
 })
 
@@ -257,12 +260,12 @@ export const wakingFromMessage = defineFixture({
 
 export const wakingSlow = defineFixture({
   width: 640,
-  render: () => <Overlay value={wake({ startedAt: NOW - 24_000 })} />
+  render: () => <Overlay value={wake({ startedAt: Date.now() - 24_000 })} />
 })
 
 export const wakingStuck = defineFixture({
   width: 640,
-  render: () => <Overlay value={wake({ startedAt: NOW - 71_000 })} />
+  render: () => <Overlay value={wake({ startedAt: Date.now() - 71_000 })} />
 })
 
 export const wakingRestart = defineFixture({
@@ -293,7 +296,10 @@ export const noticeOom = defineFixture({
   render: () => (
     <div className="bg-background p-4">
       <CloudWorkspaceNotice
-        notice={{ kind: 'oom', oom: { workspaceId: 'ws', oomKills: 1, victim: 'node', at: NOW } }}
+        notice={{
+          kind: 'oom',
+          oom: { workspaceId: 'ws', oomKills: 1, victim: 'node', at: Date.now() }
+        }}
         restarting={false}
         onRestart={noop}
         onDismiss={noop}
@@ -324,7 +330,7 @@ export const idleSleepToast = defineFixture({
 })
 
 const archive: CloudArchiveInfo = {
-  capturedAt: NOW - 86_400_000,
+  capturedAt: Date.now() - 86_400_000,
   source: 'vm',
   metadata: {
     pullRequests: [
@@ -353,19 +359,19 @@ const archive: CloudArchiveInfo = {
           {
             sha: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
             author: 'Ada',
-            at: NOW - 26 * 3_600_000,
+            at: Date.now() - 26 * 3_600_000,
             subject: 'Refresh the session before redirecting'
           },
           {
             sha: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3',
             author: 'Ada',
-            at: NOW - 28 * 3_600_000,
+            at: Date.now() - 28 * 3_600_000,
             subject: 'Reproduce the redirect loop in a test'
           },
           {
             sha: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
             author: 'Grace',
-            at: NOW - 5 * 86_400_000,
+            at: Date.now() - 5 * 86_400_000,
             subject: 'Bump next to 16.2'
           }
         ],
@@ -395,18 +401,19 @@ function Archived({
 }: {
   load: React.ComponentProps<typeof CloudArchivedWorkspaceView>['load']
 }): React.JSX.Element {
+  const [now] = React.useState(() => Date.now())
   return (
     <div className="relative h-[620px]">
       <CloudArchivedWorkspaceView
         workspaceName="fix-auth-redirect"
-        archivedAt={NOW - 86_400_000}
-        expiresAt={NOW + 29 * 86_400_000}
+        archivedAt={now - 86_400_000}
+        expiresAt={now + 29 * 86_400_000}
         load={load}
         unarchiving={false}
         onUnarchive={noop}
         onRetry={noop}
         onOpenUrl={noop}
-        now={NOW}
+        now={now}
       />
     </div>
   )

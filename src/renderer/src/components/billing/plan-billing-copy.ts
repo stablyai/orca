@@ -65,6 +65,26 @@ export function denyReasonCopy(
             'auto.components.billing.reasonCapMember4',
             'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to raise the spend cap.'
           )
+    case 'trial_used_up':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonTrialUsedUp2',
+            'Your trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Choose a plan to keep using Orca Cloud.'
+          )
+        : t(
+            'auto.components.billing.reasonTrialUsedUpMember2',
+            'Your team’s trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to choose a plan.'
+          )
+    case 'trial_unavailable':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonTrialUnavailable',
+            'This account or team already used its trial. Choose a plan to use Orca Cloud.'
+          )
+        : t(
+            'auto.components.billing.reasonTrialUnavailableMember',
+            'This account or team already used its trial. Ask an owner or admin to choose a plan.'
+          )
   }
 }
 
@@ -73,6 +93,7 @@ export function statusLabel(status: string, t: Translate): string {
     case 'active':
       return t('auto.components.billing.statusActive', 'Active')
     case 'trialing':
+    case 'trial':
       return t('auto.components.billing.statusTrial', 'Trial')
     case 'past_due':
       return t('auto.components.billing.paymentFailed', 'Payment failed')
@@ -96,6 +117,11 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
       return t(
         'auto.components.billing.openAlreadySubscribed',
         'This account already has a plan. Use Manage billing to change it.'
+      )
+    case 'team-required':
+      return t(
+        'auto.components.billing.openTeamRequired',
+        'Plans belong to a team. Create a team, then choose a plan.'
       )
     case 'no-billing-account':
       return t(

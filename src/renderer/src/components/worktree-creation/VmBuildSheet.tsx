@@ -12,6 +12,7 @@ import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
+import { OrcaCloudHoursChip } from '@/components/new-workspace/run-on/OrcaCloudHoursChip'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
 import { formatEnvironmentDoctorChecks } from '../../../../shared/environment-doctor-types'
 import { VmBuildStepRow } from './VmBuildStepRow'
@@ -19,6 +20,7 @@ import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
 import { VmBuildCloudAgentStep } from '../cloud-agent-setup/VmBuildCloudAgentStep'
+import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
   classifyVmBuildFailure,
@@ -92,6 +94,7 @@ export function VmBuildSheet({
   onEditRecipe,
   agentSignInRow,
   cloudAgentStep,
+  secretsRow,
   stepTimings
 }: {
   creationId: string
@@ -110,6 +113,8 @@ export function VmBuildSheet({
   agentSignInRow?: React.ReactNode
   /** Fixtures only: a fixed "Add an agent" step (null for none) in place of the live one. */
   cloudAgentStep?: React.ReactNode
+  /** Fixtures only: a fixed Secrets row (null for none) in place of the live one. */
+  secretsRow?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
   stepTimings?: VmBuildStepTimings
 }): React.JSX.Element {
@@ -190,7 +195,11 @@ export function VmBuildSheet({
               ) : (
                 <AlertTriangle
                   aria-hidden
-                  className="size-4 text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200"
+                  // Failed checks leave a running sandbox that needs a decision, not a broken start.
+                  className={cn(
+                    'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
+                    failure?.kind === 'checks' ? 'text-status-warning-text' : 'text-destructive'
+                  )}
                 />
               )}
             </span>
@@ -206,6 +215,8 @@ export function VmBuildSheet({
             {gated ? null : (
               <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
             )}
+            {/* O4: which sandbox hours this start spends, while it starts. */}
+            <OrcaCloudHoursChip enabled={cloud && building} />
           </div>
           {building ? (
             <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
@@ -247,6 +258,11 @@ export function VmBuildSheet({
                     environmentId={entry.vmEnvironmentId}
                   />
                 ) : null)}
+              {secretsRow !== undefined ? (
+                secretsRow
+              ) : cloud ? (
+                <VmBuildSecretsRow entry={entry} />
+              ) : null}
             </ol>
           )}
 
@@ -290,7 +306,7 @@ export function VmBuildSheet({
               onOpenBilling: () => {
                 const store = useAppStore.getState()
                 store.openSettingsTarget({
-                  pane: 'orca-account',
+                  pane: 'cloud-billing',
                   repoId: null,
                   // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
                   // payment notice is at the top of the section already.
@@ -302,7 +318,7 @@ export function VmBuildSheet({
               },
               onSignIn: signIn,
               // Your workspaces on Home, where you can put one to sleep or delete it.
-              onShowWorkspaces: () => openCloudWorkspacesHome(),
+              onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

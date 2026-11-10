@@ -5,6 +5,8 @@ import type {
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
+import { sandboxLimitBody } from './vm-build-limit-copy'
+import { localRecipeFailureCopy } from './vm-build-recipe-failure-copy'
 
 /** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
 export type SandboxLimit = { perSeat: number; team: number }
@@ -41,33 +43,62 @@ export type VmBuildFailureCopyContext = {
   canManageBilling: boolean
   /** States the cap on the limit cards; omitted or null falls back to copy without numbers. */
   sandboxLimit?: SandboxLimit | null
+  /** A sandbox still exists (and uses hours), so the card can't say nothing was created. */
+  sandboxKept?: boolean
 }
 
 /** The card's cause-specific title and one plain-language sentence on what to do next. */
 export function vmBuildFailureCopy(
   failure: VmBuildFailure,
-  { cloud, canManageBilling, repoName, sandboxLimit }: VmBuildFailureCopyContext,
+  { cloud, canManageBilling, repoName, sandboxLimit, sandboxKept }: VmBuildFailureCopyContext,
   t: Translate
 ): { title: string; body: string | null } {
   switch (failure.kind) {
-    case 'checks':
+    case 'checks': {
+      // Warnings ride along in the list but don't count as failures in the title.
+      const count = failure.problems.filter((check) => check.status === 'fail').length
       return {
-        title: cloud
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.checksTitleCloud',
-              'The sandbox is up, but its environment checks failed'
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildSheet.checksFailed',
-              'The VM is up, but its environment checks failed'
-            ),
+        title:
+          count === 0
+            ? cloud
+              ? t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.checksAttentionTitleCloud',
+                  'The sandbox is up, but some environment checks need attention'
+                )
+              : t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.checksAttentionTitleVm',
+                  'The VM is up, but some environment checks need attention'
+                )
+            : cloud
+              ? t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.checksCountTitleCloud',
+                  'The sandbox is up, but {{count}} environment checks failed',
+                  {
+                    count,
+                    defaultValue_one: 'The sandbox is up, but {{count}} environment check failed'
+                  }
+                )
+              : t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.checksCountTitleVm',
+                  'The VM is up, but {{count}} environment checks failed',
+                  {
+                    count,
+                    defaultValue_one: 'The VM is up, but {{count}} environment check failed'
+                  }
+                ),
         body: cloud
           ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.checksBodyCloud',
-              'Open anyway to fix these inside the workspace, or retry the checks after changing your project.'
+              'auto.components.worktree.creation.VmBuildFailureCard.checksBodyCloud2',
+              'Open it anyway and fix them inside the workspace, or run the checks again after changing your project.',
+              {
+                count: failure.problems.length,
+                defaultValue_one:
+                  'Open it anyway and fix it inside the workspace, or run the checks again after changing your project.'
+              }
             )
           : null
       }
+    }
     case 'plan':
       return {
         title: t(
@@ -138,16 +169,7 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.teamLimitTitle',
           'You’re at your team’s limit of running sandboxes'
         ),
-        body: sandboxLimit
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.teamLimitBody',
-              'Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
-              { value0: String(sandboxLimit.team), value1: String(sandboxLimit.perSeat) }
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-            )
+        body: sandboxLimitBody(t, 'team', sandboxLimit)
       }
     case 'memberConcurrency':
       return {
@@ -155,16 +177,7 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.memberLimitTitle',
           'You’re at your limit of running sandboxes'
         ),
-        body: sandboxLimit
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.memberLimitBody2',
-              'You can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
-              { value0: String(sandboxLimit.perSeat) }
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-            )
+        body: sandboxLimitBody(t, 'member', sandboxLimit)
       }
     case 'githubNotConnected':
       return {
@@ -241,18 +254,17 @@ export function vmBuildFailureCopy(
               'auto.components.worktree.creation.VmBuildFailureCard.provisionTitleCloud',
               'The sandbox didn’t start'
             ),
-            body: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.provisionBodyCloud',
-              'Something went wrong while starting the sandbox. Try again, or open the logs for details.'
-            )
+            body: sandboxKept
+              ? t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.provisionBodyCloudKept',
+                  'Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.'
+                )
+              : t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.provisionBodyCloud2',
+                  'Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.'
+                )
           }
-        : {
-            title: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.provisionTitleVm',
-              'The VM recipe failed'
-            ),
-            body: failure.error
-          }
+        : localRecipeFailureCopy('provision', t)
     case 'create':
       return cloud
         ? {
@@ -265,12 +277,6 @@ export function vmBuildFailureCopy(
               'The sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details.'
             )
           }
-        : {
-            title: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.createTitleVm',
-              'Couldn’t create the workspace on the VM'
-            ),
-            body: failure.error
-          }
+        : localRecipeFailureCopy('create', t)
   }
 }

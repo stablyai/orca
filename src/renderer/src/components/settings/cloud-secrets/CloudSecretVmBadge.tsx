@@ -44,7 +44,6 @@ export function cloudSecretVmWarning(t: ReturnType<typeof useTranslate>, name: s
       )
     : t(
         'cloudSecrets.vm.warningKey',
-        'Orca can’t swap {{name}} at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.',
-        { name }
+        'Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.'
       )
 }
