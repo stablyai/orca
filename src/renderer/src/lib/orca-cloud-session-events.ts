@@ -1,5 +1,5 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
-import { offerPendingCloudTransfers } from '@/lib/orca-cloud-transfer-flow'
+import { offerPendingCloudTransfers } from '@/lib/orca-cloud-transfer-reapply'
 import {
   armInterruptedTurnsForHostRestart,
   continueInterruptedTurns,

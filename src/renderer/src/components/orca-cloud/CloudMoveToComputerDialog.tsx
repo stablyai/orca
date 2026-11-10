@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/dialog'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { reapplyOrcaCloudTransfer, runOrcaCloudTransferToLocal } from '@/lib/orca-cloud-transfer-flow'
+import { runOrcaCloudTransferToLocal } from '@/lib/orca-cloud-transfer-flow'
+import { reapplyOrcaCloudTransfer } from '@/lib/orca-cloud-transfer-reapply'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   closeMoveToThisComputer,

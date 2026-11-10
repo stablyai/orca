@@ -3,6 +3,7 @@
 // branch), apply the uncommitted work and chats, then open it. The cloud workspace is left as is.
 // Progress, success and failure render in CloudMoveToComputerDialog (orca-cloud-move-store).
 import { toast } from 'sonner'
+import { claimMoveRun, releaseMoveRun } from '@/lib/orca-cloud/orca-cloud-move-run'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -28,24 +29,7 @@ const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMo
 /** A move that hasn't settled by now is reported as failed (the pack or download stalled). */
 export const MOVE_TIMEOUT_MS = 15 * 60_000
 
-/** The run that holds the one-move-at-a-time guard; a timed-out run releases it. */
-let inFlightRun: number | null = null
-let runCounter = 0
 
-/** Shared with "Apply changes again": one move or re-apply at a time. */
-export function claimMoveRun(): number | null {
-  if (inFlightRun !== null) {
-    return null
-  }
-  inFlightRun = ++runCounter
-  return inFlightRun
-}
-
-export function releaseMoveRun(run: number): void {
-  if (inFlightRun === run) {
-    inFlightRun = null
-  }
-}
 
 export async function runOrcaCloudTransferToLocal(
   workspaceId: string,
@@ -54,11 +38,13 @@ export async function runOrcaCloudTransferToLocal(
 ): Promise<void> {
   const api = window.api?.orcaCloudWorkspace
   // One move at a time: a second click (or a retry racing the first) must not start another pack.
-  if (!api?.prepareTransferToLocal || inFlightRun !== null) {
+  if (!api?.prepareTransferToLocal) {
     return
   }
-  const run = ++runCounter
-  inFlightRun = run
+  const run = claimMoveRun()
+  if (run === null) {
+    return
+  }
   const archiveAfter = options.archiveAfter ?? false
   const startedAt = Date.now()
   let step: CloudMoveStep = 'packing'
@@ -94,9 +80,7 @@ export async function runOrcaCloudTransferToLocal(
     // Stop waiting: release the guard so Try again works; this run's late results are ignored
     // except a late success, which still lands as a notice (the workspace really is here).
     timedOut = true
-    if (inFlightRun === run) {
-      inFlightRun = null
-    }
+    releaseMoveRun(run)
     setCloudMoveState({
       stage: 'failed',
       workspaceId,
@@ -231,11 +215,7 @@ export async function runOrcaCloudTransferToLocal(
     }
   } finally {
     clearTimeout(timeout)
-    if (inFlightRun === run) {
-      inFlightRun = null
-    }
+    releaseMoveRun(run)
     dispose()
   }
 }
-
-export { offerPendingCloudTransfers, reapplyOrcaCloudTransfer } from './orca-cloud-transfer-reapply'

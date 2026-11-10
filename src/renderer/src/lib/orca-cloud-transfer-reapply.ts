@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { noteCloudWorkspaceMoved, setCloudMoveState } from '@/lib/orca-cloud/orca-cloud-move-store'
 import type { CloudTransferPrepared } from '../../../shared/hosted-sandbox/cloud-transfer-api'
-import { claimMoveRun, releaseMoveRun } from './orca-cloud-transfer-flow'
+import { claimMoveRun, releaseMoveRun } from '@/lib/orca-cloud/orca-cloud-move-run'
 
 /**
  * "Apply changes again": re-applies the saved changes and chats onto the SAME local worktree after
