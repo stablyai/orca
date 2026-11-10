@@ -156,3 +156,60 @@ describe('withoutCarriedAgentCredentials (on the VM)', () => {
     expect(withoutCarriedAgentCredentials(env, {})).toBe(env)
   })
 })
+
+describe('withHostAgentApiKeyEnv asks the host', () => {
+  it('sends no keys to a host that says it is an Orca Cloud VM, even one paired by hand', async () => {
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
+    environments.set('env-tunnel', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://127.0.0.1:6768' }]
+    })
+    launchEnv = { CODEX_API_KEY: 'custom-name-real-key' }
+    const params = { launchAgent: 'codex', command: 'codex', env: { A: '1' } }
+    const cloudStatus = async () => ({
+      ok: true as const,
+      id: 's',
+      result: { capabilities: ['host.orca-cloud.v1'] },
+      _meta: { runtimeId: 'r' }
+    })
+    expect(await withHostAgentApiKeyEnv('env-tunnel', 'terminal.create', params, cloudStatus)).toBe(
+      params
+    )
+  })
+
+  it('sends keys to a host that says otherwise, and nothing when the host does not answer', async () => {
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
+    environments.set('env-mac', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://192.168.1.4:6768' }]
+    })
+    environments.set('env-silent', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://192.168.1.5:6768' }]
+    })
+    launchEnv = { CODEX_API_KEY: 'custom-name-real-key' }
+    const params = { launchAgent: 'codex', command: 'codex', env: { A: '1' } }
+    const plainStatus = async () => ({
+      ok: true as const,
+      id: 's',
+      result: { capabilities: [] },
+      _meta: { runtimeId: 'r' }
+    })
+    expect(await withHostAgentApiKeyEnv('env-mac', 'terminal.create', params, plainStatus)).toEqual(
+      {
+        ...params,
+        env: { CODEX_API_KEY: 'custom-name-real-key', A: '1' }
+      }
+    )
+    const silent = async () => {
+      throw new Error('unreachable')
+    }
+    expect(await withHostAgentApiKeyEnv('env-silent', 'terminal.create', params, silent)).toBe(
+      params
+    )
+  })
+})

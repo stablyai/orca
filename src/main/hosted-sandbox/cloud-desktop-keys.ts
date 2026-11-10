@@ -10,6 +10,7 @@ import { withAgentApiKeyRuntimeEnv } from '../agent-api-keys/agent-api-key-runti
 import { isCloudSshAlias } from '../cloud-ssh/cloud-ssh-config'
 import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
 import { AGENT_CREDENTIAL_NAMES } from '../../shared/cloud-secrets/cloud-secret-rules'
+import { ORCA_CLOUD_HOST_RUNTIME_CAPABILITY } from '../../shared/hosted-sandbox/orca-cloud-host-capability'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getConnectionExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
@@ -92,7 +93,45 @@ export async function withHostAgentApiKeyEnv(
   ) {
     return params
   }
-  return withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)
+  const withKeys = await withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)
+  if (withKeys === params) {
+    return params
+  }
+  // Keys would go out: ask the host itself whether it is an Orca Cloud VM (covers a hand-made
+  // pairing this desktop has no record of). An unanswered question sends nothing.
+  return (await hostSaysOrcaCloud(environmentId, readStatus)) === false ? withKeys : params
+}
+
+const HOST_KIND_TTL_MS = 60_000
+const hostKinds = new Map<string, { cloud: boolean; at: number }>()
+
+async function hostSaysOrcaCloud(
+  environmentId: string,
+  readStatus: Parameters<typeof withAgentApiKeyRuntimeEnv>[3]
+): Promise<boolean | null> {
+  const cached = hostKinds.get(environmentId)
+  if (cached && Date.now() - cached.at < HOST_KIND_TTL_MS) {
+    return cached.cloud
+  }
+  try {
+    const status = await readStatus()
+    const result: unknown = status.ok ? status.result : null
+    const capabilities =
+      result !== null &&
+      typeof result === 'object' &&
+      'capabilities' in result &&
+      Array.isArray(result.capabilities)
+        ? result.capabilities
+        : null
+    if (!capabilities) {
+      return null
+    }
+    const cloud = capabilities.includes(ORCA_CLOUD_HOST_RUNTIME_CAPABILITY)
+    hostKinds.set(environmentId, { cloud, at: Date.now() })
+    return cloud
+  } catch {
+    return null
+  }
 }
 
 /**
