@@ -3,6 +3,7 @@ import { sessionLinkTestParticipants as participants } from '../../../../orchest
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
+import { stopStructuredAgentSessionRuntime } from '../../../../agent-session/structured-agent-session-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
 import '../../../../orchestration/db/messages/mailbox-routing-page'
@@ -501,7 +502,8 @@ async function outcome({ method, params }: Case, caller: string): Promise<string
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await stopStructuredAgentSessionRuntime()
   vi.restoreAllMocks()
 })
 
