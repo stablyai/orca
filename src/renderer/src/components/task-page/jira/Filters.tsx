@@ -10,7 +10,7 @@ import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-pag
 import { useTranslate } from '@/i18n/use-translate'
 import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { JiraProjectPicker } from '@/components/jira-project-picker'
 import { matchesJiraProject } from '../../../../../shared/jira/jira-project-reference'
 export function TaskPageJiraFilters({
