@@ -72,6 +72,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(1_780_358_400_000)
   mocks.sendNotesToActiveAgentSession.mockReset()
   mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
   mocks.sendStructuredAgentSessionMessage.mockReset()

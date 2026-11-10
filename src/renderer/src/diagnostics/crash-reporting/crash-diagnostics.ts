@@ -14,8 +14,6 @@ const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 let rendererCrashDiagnosticsInstalled = false
 let rendererMemoryInterval: number | null = null
 
-import './crash-breadcrumb-recorder'
-
 export function installRendererCrashDiagnostics(surface: RendererSurface = 'main'): void {
   if (rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
     return

@@ -12,8 +12,6 @@ import {
 } from '../../../../../shared/feedback-image-limits'
 import { shrinkFeedbackImage } from './feedback-image-shrink'
 
-import '../../../../../shared/feedback-image-limits'
-
 export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [
   'image/png',
   'image/jpeg',

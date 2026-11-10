@@ -1089,7 +1089,7 @@
       "id": "settings.terminal-section-lifetime",
       "title": "Terminal settings search preserves matching section state",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-runtime",
       "layer": "renderer-unit",
       "surfaces": [
@@ -1099,20 +1099,16 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [],
       "coveredProviders": [],
-      "coverageNotes": "Actual TerminalPane, ManageSessionsSection, health listener and scrollback form with mocked store/provider and display/action boundaries. Unix/Windows and Mac-client/Windows-host flags simulated; no physical provider, process-stop or native input coverage.",
+      "coverageNotes": "Module-layout wave1 retires the terminal-section lifetime owning suite and its complete dated receipt. The remaining TCC attribution notice suite does not establish the search-lifetime invariant. No current protection, replacement coverage, native/provider execution or fresh evidence is claimed. Historical scope before retirement: Actual TerminalPane, ManageSessionsSection, health listener and scrollback form with mocked store/provider and display/action boundaries. Unix/Windows and Mac-client/Windows-host flags simulated; no physical provider, process-stop or native input coverage.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/terminal/TerminalPane.tsx"
       ],
       "invariant": "A matching settings section retains its state when preceding sections are filtered away; a section removed from search releases its owner and refreshes when shown again. A retained section still refreshes when another surface invalidates the session inventory. Diagnostic inventory never becomes authority for process death.",
-      "oracle": "Across 15 matched search edits the matched section keeps the same DOM node and the inventory/health read counts do not grow, instead of six reads each. A foreign inventory invalidation still reads once on the retained section and not after unmount. A draft and pending target survive matched search; actual hide/reopen reloads, explicit Refresh still reads, and hidden/unmounted health listeners do not fire.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx"
-      ],
-      "testFiles": [
-        "src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx"
-      ],
+      "oracle": "Target oracle, currently unprotected after whole-suite retirement: Across 15 matched search edits the matched section keeps the same DOM node and the inventory/health read counts do not grow, instead of six reads each. A foreign inventory invalidation still reads once on the retained section and not after unmount. A draft and pending target survive matched search; actual hide/reopen reloads, explicit Refresh still reads, and hidden/unmounted health listeners do not fire.",
+      "commands": [],
+      "testFiles": [],
       "assertionRefs": [],
       "evidenceRuns": [],
       "runtimeBudget": {
@@ -1121,15 +1117,15 @@
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Author and independent local evidence only; no CI soak."
+        "evidence": "No current search-lifetime suite or soak evidence remains. Historical statement before retirement: Author and independent local evidence only; no CI soak."
       },
       "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Original new suite fails all three simulated platform read-count cases, draft and pending target; one cleanup/refresh control passes. Candidate6pass. Independent scratch5pass/original4fail1control."
+        "status": "missing",
+        "evidence": "The owning search-lifetime suite was retired whole. Its historical red/green result does not validate the remaining unrelated TCC attribution notice suite."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Actual child inventory and health reads 6 to 1 across 15 matched search edits. Fixed small section filter/map now lives in the shared SettingsSectionStack; no new polling, cache or subprocess. One added in-renderer invalidation listener replaces the incidental search-driven refresh, so a retained section stays as fresh as the signal every other inventory reader already uses. No packaged CPU/frame/heap claim."
+        "evidence": "Historical budget account only; no current selector or fresh performance measurement: Actual child inventory and health reads 6 to 1 across 15 matched search edits. Fixed small section filter/map now lives in the shared SettingsSectionStack; no new polling, cache or subprocess. One added in-renderer invalidation listener replaces the incidental search-driven refresh, so a retained section stays as fresh as the signal every other inventory reader already uses. No packaged CPU/frame/heap claim."
       },
       "knownGaps": [
         "CI soak pending.",
@@ -1138,7 +1134,8 @@
         "Pending action target and drafts remain while their parent section matches, including individual controls hidden inside a retained section.",
         "No packaged app latency, heap, real focus or pending destructive-mutation completion evidence. Hidden Electron component visual proof is separate from the gate.",
         "Module-layout wave1 intentionally retires complete prohibited owning registrations in src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx. Lost alarms: refreshes a retained section when another surface invalidates the inventory; refreshes explicitly, reloads genuinely hidden sections, and removes focus listeners; preserves an uncommitted scrollback draft while its section remains visible; retains a pending action target only while its section remains visible. No equivalent replacement coverage or pass for a reduced selector is claimed. All unrelated selectors and historical receipts retain their original scope.",
-        "Module-layout wave1 retires this complete historical receipt because its explicit current selector was reduced. It does not validate the reduced suite. Original receipt verbatim:\n{\n          \"date\": \"2026-09-26\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx\",\n          \"currentCommand\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 1.48,\n          \"summary\": \"12 tests/2 suites pass after the shared SettingsSectionStack adoption and the inventory-invalidation subscription. Read-count oracles restated as node identity plus non-growing read counts; original main fails all three simulated platform cases, the draft, the pending target and the foreign-invalidation refresh.\"\n        }"
+        "Module-layout wave1 retires this complete historical receipt because its explicit current selector was reduced. It does not validate the reduced suite. Original receipt verbatim:\n{\n          \"date\": \"2026-09-26\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx\",\n          \"currentCommand\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 1.48,\n          \"summary\": \"12 tests/2 suites pass after the shared SettingsSectionStack adoption and the inventory-invalidation subscription. Read-count oracles restated as node identity plus non-growing read counts; original main fails all three simulated platform cases, the draft, the pending target and the foreign-invalidation refresh.\"\n        }",
+        "Module-layout wave1 historical red/green statement before owning-suite retirement, retained verbatim without current validation credit: {\"status\":\"complete\",\"evidence\":\"Original new suite fails all three simulated platform read-count cases, draft and pending target; one cleanup/refresh control passes. Candidate6pass. Independent scratch5pass/original4fail1control.\"}"
       ],
       "promotionCriteria": [
         "Retain count, real draft, pending target and cleanup oracles; obtain stable CI history and relevant full-app/provider evidence before promotion."
@@ -9120,15 +9117,15 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Renderer unit coverage proves replay-guard lost-completion and certified-wedge events carry correlatable tab, worktree, durable leaf, pane, and redacted PTY identity without exposing path-bearing values. Full provider lifecycle attribution and diagnostics-bundle artifact proof remain gaps.",
+      "coverageNotes": "Retained renderer unit cases exercise guard release after a silent stalled parse and hardcoded breadcrumb event/pane identity with a fake terminal and mocked recorder. The identity-rich hashing/redaction registration was retired whole. No hashed tab/worktree/leaf identity, path-redaction, diagnostics-bundle export, live provider or packaged runtime coverage is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/issues/6773"
       ],
       "invariant": "Terminal lifecycle anomalies around reattach, restore, replay wedges, provider ownership, stale liveness, and fallback routing must leave compact, deduped, privacy-safe breadcrumbs in crash diagnostics so future reports can be attributed from evidence. Replay anomalies must distinguish pane managers and PTYs without recording path-bearing worktree or session identities.",
-      "oracle": "Drop a replay write completion while allowing its FIFO probe to parse, then require the lost-completion breadcrumb to include pane ID, stable hashes for tab/worktree/leaf identity, and a path-redacted PTY ID. Existing wedge tests require both lost-completion and certified-dead paths to record their distinct event names. Full pane transition traces and diagnostics-bundle artifact proof remain follow-ups.",
+      "oracle": "Simulate replay and probe completions that never arrive, advance fake timers through both quiet windows, and require the real replay guard to transition from engaged to released while the mocked recorder receives terminal_replay_guard_wedged_release with paneId 1. This does not establish correlation hashing, path redaction or diagnostics-bundle export.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts --maxWorkers=2"
       ],
       "testFiles": ["src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts"],
       "assertionRefs": [
@@ -9139,18 +9136,28 @@
           ]
         }
       ],
-      "evidenceRuns": [],
+      "evidenceRuns": [
+        {
+          "date": "2026-11-10",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts --maxWorkers=2",
+          "durationSeconds": 1.52,
+          "summary": "Retained replay-guard suite passed 19 cases on the module-layout wave1 candidate. The named breadcrumb case preserves real replay guard release and the hardcoded wedged event/pane1 with a fake terminal and mocked recorder. No identity-hash/redaction, live provider, diagnostics-bundle, fresh red/green, performance or CI-soak claim."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "renderer observability unit test"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The replay-guard unit slice passed locally once; no CI soak history yet."
+        "evidence": "Retained selector has no CI soak history; fresh focused execution is recorded separately."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Tests fail if replay anomalies stop recording their event name, omit pane/terminal correlation, or expose the fixture's path-bearing worktree and PTY prefixes. Needs diagnostics-bundle artifact proof and full transition-trace evidence before promotion."
+        "status": "missing",
+        "evidence": "No fresh revert/fault control was run for the retained selector. Historical richer-oracle statement before retirement is preserved in knownGaps and is not current reduced-selector evidence."
       },
       "performanceBudget": {
         "required": true,
@@ -9167,7 +9174,8 @@
         "Current coverage does not prove crash/diagnostics bundle export includes the breadcrumb.",
         "Current coverage does not assert forbidden transitions across live Electron/provider flows.",
         "Module-layout wave1 intentionally retires complete prohibited owning registrations in src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts. Lost alarms: a wedged release hands the terminal to pane recovery; a healthy parse completion never notifies pane recovery; HOLDS the guard while a slow replay is still parsing — a probe is queued, never a blind release; records correlatable replay identity without exposing worktree or PTY paths; holds past the probe deadline while sibling completions prove the parser alive; settles guards on a disposed xterm without certifying a wedge. No equivalent replacement coverage or pass for a reduced selector is claimed. All unrelated selectors and historical receipts retain their original scope.",
-        "Module-layout wave1 retires this complete historical receipt because its explicit current selector was reduced. It does not validate the reduced suite. Original receipt verbatim:\n{\n          \"date\": \"2026-07-29\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/replay-guard.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 0.201,\n          \"summary\": \"The focused file passed 29 tests; replay anomaly breadcrumbs preserved event classification while adding hashed tab/worktree/leaf correlation and a path-redacted PTY identity.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts\"\n        }"
+        "Module-layout wave1 retires this complete historical receipt because its explicit current selector was reduced. It does not validate the reduced suite. Original receipt verbatim:\n{\n          \"date\": \"2026-07-29\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/replay-guard.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 0.201,\n          \"summary\": \"The focused file passed 29 tests; replay anomaly breadcrumbs preserved event classification while adding hashed tab/worktree/leaf correlation and a path-redacted PTY identity.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/snapshots/replay-guard.test.ts\"\n        }",
+        "Module-layout wave1 historical richer-oracle metadata before identity-registration retirement, retained verbatim without current validation credit: {\"coverageNotes\":\"Renderer unit coverage proves replay-guard lost-completion and certified-wedge events carry correlatable tab, worktree, durable leaf, pane, and redacted PTY identity without exposing path-bearing values. Full provider lifecycle attribution and diagnostics-bundle artifact proof remain gaps.\",\"oracle\":\"Drop a replay write completion while allowing its FIFO probe to parse, then require the lost-completion breadcrumb to include pane ID, stable hashes for tab/worktree/leaf identity, and a path-redacted PTY ID. Existing wedge tests require both lost-completion and certified-dead paths to record their distinct event names. Full pane transition traces and diagnostics-bundle artifact proof remain follow-ups.\",\"redGreenEvidence\":{\"status\":\"partial\",\"evidence\":\"Tests fail if replay anomalies stop recording their event name, omit pane/terminal correlation, or expose the fixture's path-bearing worktree and PTY prefixes. Needs diagnostics-bundle artifact proof and full transition-trace evidence before promotion.\"}}"
       ],
       "demotionRule": "Cannot promote if diagnostics are console-only, unbounded, or missing from support artifacts."
     },
