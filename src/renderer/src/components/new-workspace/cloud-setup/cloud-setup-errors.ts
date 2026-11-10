@@ -1,5 +1,6 @@
 // X1: why a one-trip setup stopped, as the setup session reports it (`error.kind`), and the one
 // action each offers. Copy lives in CloudSetupErrorNotice; this file stays pure for tests.
+import { z } from 'zod'
 import { CLOUD_SETUP_ERROR_KIND_VALUES } from '../../../../../shared/telemetry-cloud-setup-event-schemas'
 
 export type CloudSetupErrorKind = Exclude<(typeof CLOUD_SETUP_ERROR_KIND_VALUES)[number], 'other'>
@@ -39,19 +40,24 @@ export function cloudSetupErrorTone(kind: CloudSetupErrorKind): 'error' | 'neutr
   return kind === 'team_create_failed' ? 'error' : 'neutral'
 }
 
-const KINDS = new Set<string>(CLOUD_SETUP_ERROR_KIND_VALUES)
+const KNOWN_KINDS = CLOUD_SETUP_ERROR_KIND_VALUES.filter(
+  (kind): kind is CloudSetupErrorKind => kind !== 'other'
+)
+const RawErrorSchema = z.object({ kind: z.string(), detail: z.unknown().optional() })
 
 /** Parses the session's untrusted `error` field; unknown kinds are dropped (shown as no error). */
 export function parseCloudSetupError(raw: unknown): CloudSetupError | null {
-  if (!raw || typeof raw !== 'object') {
+  const parsed = RawErrorSchema.safeParse(raw)
+  if (!parsed.success) {
     return null
   }
-  const { kind, detail } = raw as { kind?: unknown; detail?: unknown }
-  if (typeof kind !== 'string' || kind === 'other' || !KINDS.has(kind)) {
+  const kind = KNOWN_KINDS.find((known) => known === parsed.data.kind)
+  if (!kind) {
     return null
   }
+  const { detail } = parsed.data
   return {
-    kind: kind as CloudSetupErrorKind,
+    kind,
     ...(typeof detail === 'string' && detail.length > 0 && detail.length <= 320 ? { detail } : {})
   }
 }
