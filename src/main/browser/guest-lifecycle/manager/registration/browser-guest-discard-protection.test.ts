@@ -70,6 +70,7 @@ it('binds edit protection to the current main-frame document and real lifecycle 
       for (let event = 0; event < count; event++) {
         guest.emit('frame-created')
         guest.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false })
+        guest.emit('did-stop-loading')
       }
       expect(changed).not.toHaveBeenCalled()
       expect(mainFrame.send).toHaveBeenCalledTimes(challenges)

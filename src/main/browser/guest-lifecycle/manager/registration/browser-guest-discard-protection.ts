@@ -128,6 +128,15 @@ export function installBrowserGuestDiscardProtection(
     owner.unavailable = false
     snapshot()
   }
+  const loadStopped = (): void => {
+    const needsSnapshot = owner.navigating || owner.generation === null
+    owner.navigating = false
+    if (needsSnapshot) {
+      snapshot()
+    } else {
+      publish()
+    }
+  }
   const unresponsive = (): void => {
     owner.unavailable = true
     invalidate()
@@ -143,7 +152,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('ipc-message', report)
   guest.on('did-start-navigation', navigation)
   guest.on('dom-ready', settled)
-  guest.on('did-stop-loading', settled)
+  guest.on('did-stop-loading', loadStopped)
   guest.on('responsive', responsive)
   guest.on('unresponsive', unresponsive)
   guest.on('render-process-gone', unresponsive)
@@ -156,7 +165,7 @@ export function installBrowserGuestDiscardProtection(
     guest.off('ipc-message', report)
     guest.off('did-start-navigation', navigation)
     guest.off('dom-ready', settled)
-    guest.off('did-stop-loading', settled)
+    guest.off('did-stop-loading', loadStopped)
     guest.off('responsive', responsive)
     guest.off('unresponsive', unresponsive)
     guest.off('render-process-gone', unresponsive)
