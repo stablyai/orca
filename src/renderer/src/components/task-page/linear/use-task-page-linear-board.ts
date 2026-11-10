@@ -1,13 +1,13 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageLinearListProjectionModel } from './use-task-page-linear-list-projection'
 import React, { useMemo, useCallback } from 'react'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import {
   writeLinearBoardIssueDragData,
   readLinearBoardIssueDragData
-} from '@/lib/linear-board-drag-payload'
+} from '@/lib/work-items/linear/linear-board-drag-payload'
 import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
 import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'

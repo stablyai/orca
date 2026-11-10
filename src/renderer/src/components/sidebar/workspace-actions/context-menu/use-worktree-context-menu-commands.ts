@@ -16,7 +16,7 @@ import { runSleepWorktrees } from '../sleep/sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from '../sleep/sleep-twin-confirmation'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {

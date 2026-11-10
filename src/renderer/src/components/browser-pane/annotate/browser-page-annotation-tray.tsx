@@ -1,4 +1,4 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useState } from 'react'
 import {
   ChevronDown,

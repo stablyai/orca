@@ -1,4 +1,4 @@
-import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
+import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
 import type { AppState } from '../../types'
 import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-request-refresh-types'

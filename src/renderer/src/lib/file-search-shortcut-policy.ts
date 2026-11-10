@@ -1,6 +1,6 @@
 import { keybindingRunsInTextField, type KeybindingActionId } from '../../../shared/keybindings'
-import { isEditableTarget, isNativeChatPromptTarget } from './editable-target'
-import { getShortcutPlatform } from './shortcut-platform'
+import { isEditableTarget, isNativeChatPromptTarget } from './text-input/focus/editable-target'
+import { getShortcutPlatform } from './keyboard/shortcut-platform'
 import {
   nativeChatPromptClaimsShortcut,
   textInputOwnsComposition
