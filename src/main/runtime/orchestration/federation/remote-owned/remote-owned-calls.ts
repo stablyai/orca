@@ -53,11 +53,14 @@ export async function callRemoteOwnedServer(
       )
     }
     if (!current || !call.whileLink.includes(current.state)) {
-      throw new OrchestrationError(
-        'remote_link_closed',
-        `Run ${link.run_id} was reset on this Orca, so nothing more goes to ${server.name} for it. No effects were applied.`,
-        { effectsApplied: false }
-      )
+      // Only a re-made pairing closes a link; a reset leaves it owing a cancel.
+      const why =
+        current?.state === 'closed'
+          ? `The pairing with ${server.name} was re-made, so it no longer runs Run ${link.run_id}'s workers.`
+          : `Run ${link.run_id} was reset on this Orca, so nothing more goes to ${server.name} for it.`
+      throw new OrchestrationError('remote_link_closed', `${why} No effects were applied.`, {
+        effectsApplied: false
+      })
     }
   }
   requireLink()

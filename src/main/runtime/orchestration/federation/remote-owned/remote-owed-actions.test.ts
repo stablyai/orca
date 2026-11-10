@@ -407,6 +407,22 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
       expect(owed().stop_owed).toBe(0)
     })
+    it('names the re-pair, not a reset, when another path closed the link while a send waited', async () => {
+      startedOnB()
+      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
+      let release!: () => void
+      beforeSend = () => new Promise<void>((resolve) => (release = resolve))
+      const pending = sendOwedRemoteStop(runtime, owed())
+      await vi.waitFor(() => expect(release).toBeDefined())
+      server = { ...server, peerFingerprint: 'host_b_new' }
+      openRemoteRunLink(db, run.id, server)
+      release()
+      await expect(pending).rejects.toMatchObject({
+        code: 'remote_link_closed',
+        message: `The pairing with devB was re-made, so it no longer runs Run ${run.id}'s workers. No effects were applied.`
+      })
+      expect(sent).toEqual([])
+    })
   })
 
   describe('S4 orphan lookup', () => {
