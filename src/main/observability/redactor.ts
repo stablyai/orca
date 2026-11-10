@@ -23,8 +23,8 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'slack-token', re: /xox[baprsoe]-[A-Za-z0-9-]{10,}/g },
   {
     tag: 'pem',
-    // Lazy matching redacts adjacent PEM blocks independently.
-    re: /-----BEGIN [A-Z ]+-----[\s\S]+?-----END [A-Z ]+-----/g
+    // Keep complete blocks independent and remove unfinished secret suffixes.
+    re: /-----BEGIN [A-Z ]+-----[\s\S]*?(?:-----END [A-Z ]+-----|(?![\s\S]))/g
   }
 ]
 
@@ -95,12 +95,13 @@ export function redactString(input: string): string {
   }
   let out = input
 
-  out = redactCredentialAssignments(out).replace(STANDALONE_BEARER, '[redacted:labeled-kv]')
-
+  // Assignment rewrites can otherwise erase the markers identifying whole credentials.
   // Redaction tags are stable identifiers used by external NDJSON tools.
   for (const { tag, re } of PROVIDER_PATTERNS) {
     out = out.replace(re, `[redacted:${tag}]`)
   }
+
+  out = redactCredentialAssignments(out).replace(STANDALONE_BEARER, '[redacted:labeled-kv]')
 
   // Provider shapes run first to retain specific tags in URL userinfo.
   out = out.replace(URL_USERINFO, '$1[redacted]@')

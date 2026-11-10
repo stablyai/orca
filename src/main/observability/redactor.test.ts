@@ -73,6 +73,54 @@ describe('redactor — URL userinfo strip', () => {
   })
 })
 
+describe('redactor — complete credential spans', () => {
+  it.each([
+    {
+      name: 'unquoted, bare and adjacent complete private keys',
+      text: 'private_key: -----BEGIN PRIVATE KEY-----\nsynthetic-private-body\n-----END PRIVATE KEY-----\nbetween evidence\nsecret: -----BEGIN RSA PRIVATE KEY-----\nsynthetic-bare-body\n-----END RSA PRIVATE KEY-----\n-----BEGIN PRIVATE KEY-----\nsynthetic-unlabelled-body\n-----END PRIVATE KEY-----\nharness evidence',
+      secrets: ['synthetic-private-body', 'synthetic-bare-body', 'synthetic-unlabelled-body'],
+      keep: ['between evidence', 'harness evidence']
+    },
+    {
+      name: 'Node inspect concatenation',
+      text: String.raw`{ secretKey: '-----BEGIN PRIVATE KEY-----\n' +
+  'synthetic-inspect-body\n' +
+  '-----END PRIVATE KEY-----\n', cause: 'harness evidence' }`,
+      secrets: ['synthetic-inspect-body'],
+      keep: ['harness evidence']
+    },
+    {
+      name: 'a quoted key with actual line breaks',
+      text: '{"privateKey":"-----BEGIN RSA PRIVATE KEY-----\nsynthetic-quoted-body\n-----END RSA PRIVATE KEY-----","cause":"harness evidence"}',
+      secrets: ['synthetic-quoted-body'],
+      keep: ['harness evidence']
+    },
+    {
+      name: 'an AWS secret nested in an outer assignment',
+      text: 'harness evidence token: aws_secret_access_key=\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA next evidence',
+      secrets: ['AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      keep: ['harness evidence', 'next evidence']
+    }
+  ])('removes $name without losing surrounding evidence', ({ text, secrets, keep }) => {
+    const out = redactString(text)
+    for (const secret of secrets) {
+      expect(out).not.toContain(secret)
+    }
+    for (const evidence of keep) {
+      expect(out).toContain(evidence)
+    }
+    expect(redactString(out)).toBe(out)
+  })
+
+  it('removes an unfinished private key through the actual input end', () => {
+    const out = redactString(
+      'harness evidence private_key: -----BEGIN PRIVATE KEY-----\nsynthetic-unfinished-body\nsynthetic-final-line\n'
+    )
+    expect(out).toBe('harness evidence private_key: [redacted:labeled-kv]')
+    expect(redactString(out)).toBe(out)
+  })
+})
+
 describe('redactor — .env-shape line', () => {
   it('handles multi-line .env dumps', () => {
     const out = redactString(['DB_HOST=db.local', 'DB_PASSWORD=hunter2', '# comment'].join('\n'))
