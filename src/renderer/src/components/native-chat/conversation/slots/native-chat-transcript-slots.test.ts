@@ -115,7 +115,10 @@ describe('transcript slots', () => {
     ['![](/tmp/p.png)', false],
     ['$$\n![](/tmp/p.png)\n$$', true],
     ['```md\n![](/tmp/p.png)\n```', true],
-    ['[picture](/tmp/p.png)', true]
+    ['[picture](/tmp/p.png)', true],
+    ['<img src="/tmp/p.png" alt="Picture">', false],
+    ['<!-- <img src="/tmp/p.png"> -->', true],
+    ['`<img src="/tmp/p.png">`', true]
   ])('deduplicates only rendered image embeds in %s', (markdown, retained) => {
     const generated: NativeChatMessage = {
       ...text('image', ''),
@@ -168,6 +171,7 @@ describe('transcript slots', () => {
       const reads = vi.spyOn(imageSources, 'nativeChatMarkdownImageSources')
       try {
         const first = build(rows, overrides)
+        expect(reads).toHaveBeenCalledTimes(1)
         reads.mockClear()
         const next = build([...rows.slice(0, -1), text('stream', 'Streaming more.')], overrides)
         // Only live text changed: settled answers need zero source discovery and preserve row identity.
