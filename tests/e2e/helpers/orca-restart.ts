@@ -171,9 +171,7 @@ export function createRestartSession(
       const page = await app.firstWindow({ timeout: 120_000 })
       await page.waitForLoadState('domcontentloaded')
       await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-      if (options?.sidebarBody !== null) {
-        await selectSidebarBody(page, options?.sidebarBody ?? 'workspaces')
-      }
+      await selectSidebarBody(page, options?.sidebarBody)
       return { app, page }
     } catch (error) {
       await closeElectronAppForE2E(app)

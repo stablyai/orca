@@ -1,6 +1,6 @@
 import React from 'react'
 import type { Editor } from '@tiptap/react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { commitRow } from './rich-markdown-commands'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
 import { useTranslate } from '@/i18n/use-translate'

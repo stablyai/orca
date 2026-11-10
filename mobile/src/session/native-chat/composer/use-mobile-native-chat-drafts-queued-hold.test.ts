@@ -1,19 +1,29 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
-  resetMobileNativeChatDraftStoreForTests,
+  closeMobileNativeChatTabDraft,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
+
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
+
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { createInMemoryAsyncStorage } =
+    await import('../../../test-support/in-memory-async-storage')
+  return { default: createInMemoryAsyncStorage() }
+})
 
 describe('useMobileNativeChatDrafts with queued cards', () => {
   let renderer: ReactTestRenderer | null = null
   let state: (ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }) | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
-    resetMobileNativeChatDraftStoreForTests()
+    await loadMobileNativeChatDrafts('host', 'worktree')
+    closeMobileNativeChatTabDraft('host\0worktree\0a')
+    await loadMobileNativeChatDrafts('host', 'worktree')
     renderer = null
     state = null
   })

@@ -1,6 +1,9 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import {
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast
+} from '@/lib/files/os-open/local-path-open-guard'
 import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { useAppStore } from '@/store/index'

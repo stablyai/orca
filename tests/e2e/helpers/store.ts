@@ -4,8 +4,11 @@ import type { BrowserTabSummary, ExplorerFileSummary } from './runtime-types'
 
 export async function selectSidebarBody(
   page: Page,
-  body: 'conversations' | 'workspaces' | 'agents'
+  body: 'conversations' | 'workspaces' | 'agents' | null = 'workspaces'
 ): Promise<void> {
+  if (body === null) {
+    return
+  }
   await page.evaluate((selectedBody) => {
     const store = window.__store
     if (!store) {

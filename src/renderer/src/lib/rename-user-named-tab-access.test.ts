@@ -37,8 +37,11 @@ import {
   undoFileExplorer
 } from '@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
-import { editorTabDocumentFolderAccess, editorTabFileAccess } from './local-file-access'
-import { renameFileOnDisk } from './rename-file'
+import {
+  editorTabDocumentFolderAccess,
+  editorTabFileAccess
+} from './files/access/local-file-access'
+import { renameFileOnDisk } from './editor/file-operations/rename-file'
 import { withLoadedBaselines } from '@/components/editor/autosave/editor-autosave-controller-test-fixture'
 import {
   drawTabsFromMain,

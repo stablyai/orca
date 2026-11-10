@@ -353,9 +353,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   },
 
   orcaPage: async ({ sharedPage, sidebarBody }, provideFixture) => {
-    if (sidebarBody !== null) {
-      await selectSidebarBody(sharedPage, sidebarBody)
-    }
+    await selectSidebarBody(sharedPage, sidebarBody)
     await provideFixture(sharedPage)
   }
 })
