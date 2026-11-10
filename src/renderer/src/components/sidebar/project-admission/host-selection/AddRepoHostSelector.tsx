@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, ChevronRight, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -66,7 +66,12 @@ export function AddRepoHostSelector({
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const t = useTranslate()
   const [addHostOpen, setAddHostOpen] = useState(false)
-  const rows = useBoundedHostRows(hosts, new Set(selectedHostId ? [selectedHostId] : []))
+  const searchableHosts = useMemo(
+    () =>
+      hosts.map((host) => ({ ...host, searchText: translateExecutionHostLabel(host.label, t) })),
+    [hosts, t]
+  )
+  const rows = useBoundedHostRows(searchableHosts, new Set(selectedHostId ? [selectedHostId] : []))
   const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer || onAddWslHost)
   if (!shouldShowHostScopeControls(hosts) && !showHostSetupActions) {
     return null
@@ -91,7 +96,7 @@ export function AddRepoHostSelector({
             className="h-7 min-w-0 max-w-[18rem] gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <span className="min-w-0 truncate">
-              {translateExecutionHostLabel(selectedHost.label)}
+              {translateExecutionHostLabel(selectedHost.label, t)}
             </span>
             {selectedHost.health !== 'local' ? (
               <span
@@ -249,7 +254,7 @@ export function AddRepoHostSelector({
                 return (
                   <CommandItem
                     key={host.id}
-                    value={`${translateExecutionHostLabel(host.label)} ${host.detail}`}
+                    value={`${translateExecutionHostLabel(host.label, t)} ${host.detail}`}
                     disabled={disabled && !canConnect}
                     aria-disabled={disabled}
                     onSelect={() => {
@@ -273,7 +278,7 @@ export function AddRepoHostSelector({
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-medium">
-                          {translateExecutionHostLabel(host.label)}
+                          {translateExecutionHostLabel(host.label, t)}
                         </span>
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">

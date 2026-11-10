@@ -5288,7 +5288,7 @@
           "d628c416a2": "Git 工作树",
           "5845cfe543": "选择工作树或文件夹",
           "0e5b43a9e3": "工作区",
-          "0c10a406fb": "威斯尔·",
+          "0c10a406fb": "WSL ·",
           "e5b0d15e64": "主机操作系统",
           "cb47652227": "执行环境",
           "a4dfd33095": "单个工作区",
@@ -7667,7 +7667,7 @@
           "6f33c2a32f": "差异自动换行"
         },
         "AdvancedNetworkSettingsSection": {
-          "3e431564b5": "本地主机，127.0.0.1，*.internal",
+          "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "可选，用逗号、分号或换行符分隔主机",
           "0adfce9fa7": "支持HTTP、HTTP(s)、SOCKS、SOCKS5 和SOCKS5h",
           "476f302aca": "http://proxy.example.com:8080",
