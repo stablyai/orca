@@ -7,7 +7,7 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,7 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   Select,
   SelectTrigger,

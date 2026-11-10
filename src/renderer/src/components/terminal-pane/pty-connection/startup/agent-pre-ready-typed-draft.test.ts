@@ -21,7 +21,7 @@ import {
 } from '../test-fixtures/pty-connection-test-environment'
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
-import type * as TerminalWorktreeRouteModule from '@/lib/terminal-worktree-route'
+import type * as TerminalWorktreeRouteModule from '@/lib/workspace/ownership/terminal-worktree-route'
 const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
   '@/lib/agent-status/aggregation/worktree-agent-status'
 )
@@ -79,7 +79,7 @@ const pairedRoute = vi.hoisted(() => {
   return route
 })
 
-vi.mock('@/lib/terminal-worktree-route', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/terminal-worktree-route', async (importOriginal) => {
   const actual = await importOriginal<typeof TerminalWorktreeRouteModule>()
   return {
     ...actual,

@@ -7,7 +7,7 @@ import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import '@/lib/editor/monaco/monaco-setup'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { buildAutomationPromptEditorOptions } from './automation-editor-prompt-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 

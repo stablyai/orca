@@ -1,7 +1,7 @@
 {
   "agentLaunch": {
     "connectSsh": "Bu çalışma alanının SSH ana bilgisayarına bağlanıp tekrar deneyin.",
-    "sshUnavailable": "Bu SSH ana bilgisayarında terminalden başlatma kullanılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
+    "sshUnavailable": "Bu SSH ana bilgisayarında terminal başlatılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
     "reconnectServer": "Bu çalışma alanının Orca sunucusuna yeniden bağlanıp tekrar deneyin.",
     "updateServer": "Bu çalışma alanının sunucusunda Orca’yı güncelleyip tekrar deneyin.",
     "checkSettings": "Aracının başlatma ayarlarını kontrol edip tekrar deneyin.",
@@ -792,12 +792,12 @@
       "defaultOpensAsCli": "CLI",
       "save": "Kaydet",
       "clearDefault": "Varsayılan ajanı temizle",
-      "autoUnsupported": "Otomatik modu için bu ana makinede daha yeni bir Orca sürümü gerekir.",
+      "autoUnsupported": "“Benim yerime onayla” için bu ana makinede daha yeni bir Orca sürümü gerekir.",
       "permissionsDescription": "Ajanların size sormadan ne kadar işlem yapabileceği. Özel başlatma argümanları olan ajanlar bunları korur.",
       "permissionsAutoDescription": "<agents>Desteklenen ajanlar</agents> güvenli işlemleri kendileri onaylar.",
       "permissionsMixed": "Ajanların çoğu {{mode}} modunu kullanıyor. Bir mod seçmek, özel argümanlar dışındaki işaretli istisnaları sıfırlar.",
       "permissionsMixedNoMajority": "Ajanlar farklı ayarlar kullanıyor. Seçilen mod tümüne uygulanır.",
-      "permissionsSearchDescription": "Ajanları Manuel, Otomatik veya Yolo izinleriyle başlatın.",
+      "permissionsSearchDescription": "“Benim yerime onayla”, “Tam erişim” veya her ajanın kendi izin ayarlarını seçin.",
       "otherAgentsPermissions": "Diğer ajanlar",
       "otherAgentsPermissionsLabel": "Diğer ajanların izinleri",
       "customArgsBadge": "Özel",
@@ -820,6 +820,7 @@
       "permissionOwnDescription": "Terminaller ve sohbetler ajanın kendi izin ayarlarını kullanır.",
       "permissionOwnShort": "Kendi ayarları",
       "permissionWithoutAuto": "Benim için onayla seçeneği olmayan ajanlar",
+      "permissionMixed": "Karma",
       "permissionSurfaceDifference": "Terminaller ajanın kendi ayarlarını kullanır; yeni sohbetler {{mode}} ayarını kullanır.",
       "permissionSameAsAll": "Tüm ajanlarla aynı",
       "permissionChipRemove": "{{flag}} seçeneğini kaldır ve {{agent}} ajanının kendi ayarlarını kullan",
@@ -9408,13 +9409,9 @@
           "cd9fe37556": "Mikrofon izni verildi",
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
           "dictationModeAuto": "Otomatik",
-          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın.",
           "speechGpuLabel": "GPU kullan",
-          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın.",
-          "updateToFasterVersion": "Daha hızlı sürüme güncelle ({{value0}} MB)",
           "c5ea32143e": "Konuşma Modeli",
-          "ba4a900d1d": "Dikte Modu",
-          "0121960365": "Sesli Dikteyi Etkinleştir"
+          "ba4a900d1d": "Dikte Modu"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -11234,16 +11231,20 @@
               "vocabularyTitle": "Sözcük dağarcığı",
               "vocabularyDescription": "Diktenin senin yazımınla yazdığı adlar ve kod terimleri, senin için veya bir depo için.",
               "vocabularyKeyword": "sözlük",
-              "b3920972d4": "Konuşma modelini bellekten kaldır",
               "7f5a2416a6": "Konuşma Modeli",
               "9d83747eae": "Dikte dili",
-              "a5fb30e4da": "Sesli Yazmayı Etkinleştir",
               "ffaa3efe7c": "OpenAI Yazıya Dökme",
               "c7a7eaa0da": "Dolgu seslerini kaldır",
               "d0c230c061": "Dikte Modu",
               "silenceStopTitle": "Sessizlikten sonra durdur",
               "silenceStopDescription": "Konuşmayı bıraktığınızda diktenin ne kadar dinlemeye devam edeceğini seçin.",
-              "silenceStopKeyword": "sessizlik"
+              "silenceStopKeyword": "sessizlik",
+              "dictationTitle": "Dikte",
+              "shortcutTitle": "Kısayol",
+              "shortcutDescription": "Dikteyi başlatan tuş.",
+              "shortcutKeyword": "klavye",
+              "keepLoadedTitle": "Modeli yüklü tut",
+              "gpuKeyword": "ekran kartı"
             }
           }
         },
@@ -12200,7 +12201,6 @@
           "systemDefault": "Sistem varsayılanı",
           "unavailable": "kullanılamıyor",
           "label": "Mikrofon",
-          "description": "Sesli dikte için kullanılan giriş cihazı. Sistem varsayılanı, işletim sistemi mikrofon ayarını izler.",
           "accessHint": "Giriş cihazlarını listelemek için mikrofon erişimine izin verin.",
           "allowAccess": "Erişime izin ver",
           "noMicrophoneFound": "Mikrofon bulunamadı. Bir tane bağlayıp tekrar deneyin.",
@@ -14148,6 +14148,10 @@
                   "archived": {
                     "title": "Repository arşivlendi",
                     "body": "Bu repository arşivlendiği için Orca {{reviewLabel}} durumunu yenilemiyor."
+                  },
+                  "host_off": {
+                    "title": "WSL ana makinesi kapalı",
+                    "body": "Orca, {{reviewLabel}} durumunu bu projenin kapalı olan WSL ana makinesi üzerinden yeniler. Yenilemek için yeniden bağlayın."
                   },
                   "not_git": {
                     "title": "Git repository'si değil",
@@ -20632,55 +20636,34 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} yalnızca kendisi için hazırlandığı dilleri yazıya döker, bu yüzden bu ayarı yok sayar.",
           "unsupported": "{{model}} {{language}} dilini desteklemiyor, bu yüzden dili kendisi algılar.",
-          "description": "Konuştuğunuz dil. Otomatik algılama seçiliyse model dili her seferinde kendisi belirler.",
           "auto": "Otomatik algıla",
-          "a9df191aba": "Dikte dili"
+          "rated": "Konuştuğunuz dil. Kalite buna göre puanlanır.",
+          "alwaysUses": "Konuştuğunuz dil. {{model}} her zaman {{language}} kullanır.",
+          "detectsItself": "Konuştuğunuz dil. {{model}} dili kendisi algılar."
         },
         "modelUnload": {
-          "description": "Dikteyi bitirdikten sonra yerel modelin bellekte ne kadar kalacağı. Yüklü olduğu sürece dikte hemen başlar; \"Hemen\" belleği boşaltır, bu yüzden her dikte modelin yüklenmesini bekler.",
-          "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
-          "never": "Asla",
-          "immediately": "Hemen",
-          "94afd37271": "Konuşma modelini bellekten kaldır"
+          "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz."
         },
         "fillerWords": {
-          "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır.",
-          "0134406785": "Dolgu seslerini kaldır"
+          "0134406785": "Dolgu seslerini kaldır",
+          "short": "“ıı” ve “hmm” seslerini çıkarır."
         },
-        "sectionDescription": "Her bölmede yazmak yerine konuşun. Bulut modeli seçmediğiniz sürece konuşma bu bilgisayarda tanınır.",
         "input": {
           "title": "Giriş",
           "shortcut": "Kısayol",
-          "shortcutDescription": "Odaktaki bölmede dikteyi başlatır.",
-          "changeShortcut": "Değiştir"
+          "changeShortcut": "Değiştir",
+          "description": "Siz seçmedikçe sistem ayarını izler.",
+          "missing": "{{microphone}} bağlı değil. Geri gelene kadar sistem varsayılanı kullanılıyor."
         },
         "language": {
           "title": "Dil"
-        },
-        "cleanup": {
-          "title": "Temizleme"
         },
         "advanced": {
           "title": "Gelişmiş"
         },
         "setup": {
-          "downloadingDescription": "Bu sayfadan ayrılabilirsiniz. İndirme bitince dikte çalışır.",
-          "title": "Dikteyi kur",
-          "pickModel": "Her bölmede yazmak yerine konuşun. Başlamak için aşağıdan bir konuşma modeli indirin; bu bilgisayardaki modeller sesinizi burada tutar.",
-          "microphoneMissingTitle": "{{microphone}} bağlı değil",
-          "microphoneMissingDescription": "Geri gelene kadar dikte sistemin varsayılan mikrofonunu kullanır.",
-          "changeMicrophone": "Mikrofonu değiştir",
-          "onTitle": "Dikte açık",
-          "onLocal": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bu bilgisayarda çalışır.",
-          "onCloud": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bulutta çalışır.",
-          "offTitle": "Dikte kapalı",
-          "offDescription": "Her bölmede {{shortcut}} ile dikte etmek için açın.",
-          "savedMicrophone": "Mikrofonunuz",
-          "description": "Her bölmede yazmak yerine konuşun. Konuşma bu bilgisayarda tanındığı için sesiniz burada kalır.",
-          "setUp": "Kur",
-          "asksForMicrophone": "Orca mikrofon erişimi isteyecek."
+          "savedMicrophone": "Mikrofonunuz"
         },
         "quality": {
           "unsupported": "Dilinizi desteklemiyor",
@@ -20689,29 +20672,34 @@
           "fair": "Orta",
           "good": "İyi",
           "veryGood": "Çok iyi",
-          "excellent": "Mükemmel",
-          "characterErrorRate": "%{{percent}} karakter hata oranı",
-          "wordErrorRate": "%{{percent}} kelime hata oranı",
-          "librispeech": "Test: LibriSpeech (sesli okuma), {{clips}} klip, ölçüm tarihi {{date}}.",
-          "fleurs": "Test: FLEURS (sesli okuma), {{clips}} klip, ölçüm tarihi {{date}}.",
-          "bench": "Orca'nın Apple silikonlu bir Mac'teki kıyaslaması.",
-          "label": "Kalite: {{word}}"
+          "excellent": "Mükemmel"
         },
         "models": {
           "retired": "Artık sunulmuyor. Yer açmak için silin.",
           "sendsToOpenAi": "Sesinizi OpenAI'ye gönderir.",
           "delete": "Sil",
-          "cancelDownload": "İndirmeyi iptal et",
           "inUse": "Kullanımda",
           "use": "Kullan",
           "setUpCloud": "Kur",
           "download": "İndir",
           "cloud": "Bulut",
-          "description": "Kalite {{language}} için değerlendirildi. Testi görmek için bir puanın üzerine gelin.",
           "where": "Modellerin çalıştığı yer",
           "local": "Bu bilgisayarda",
-          "cloudDescription": "Bulut modelleri sesinizi sağlayıcıya gönderir. Bu bilgisayardaki modeller sesi burada tutar.",
-          "sendsToCompatible": "Sesinizi kurduğunuz hizmete gönderir."
+          "sendsToCompatible": "Sesinizi kurduğunuz hizmete gönderir.",
+          "downloadingProgress": "İndiriliyor, {{done}} / {{total}} MB (%{{percent}})",
+          "needsUpdate": "Daha hızlı motor için bir kerelik indirme gerekiyor.",
+          "recommended": "Önerilen",
+          "columnModel": "Model",
+          "columnQuality": "Kalite",
+          "columnSize": "Boyut",
+          "about": {
+            "parakeetV3": "Hızlı. {{languages}} Avrupa dili.",
+            "parakeetV2": "Hızlı. Yalnızca İngilizce, bunda en doğrusu.",
+            "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
+            "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
+            "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",
+            "nemotron": "Arapça, Hintçe ve Japonca dahil {{languages}} dil."
+          }
         },
         "vocabulary": {
           "title": "Sözcük dağarcığı",
@@ -20748,9 +20736,36 @@
           "heardFailed": "{{model}} kaydı yazıya dökemedi."
         },
         "silenceStop": {
-          "title": "Sessizlikten sonra durdur",
-          "description": "Bu kadar süre sessiz kaldığınızda dinlemeyi bırakır. Kısayolu basılı tuttuğunuz sürece asla.",
-          "off": "Kapalı"
+          "off": "Kapalı",
+          "label": "Sessizlikten sonra durdur",
+          "short": "Konuşmayı bıraktığınızda dikteyi bitirir."
+        },
+        "pageDescription": "Her bölmede yazmak yerine konuşun.",
+        "dictation": {
+          "label": "Dikte",
+          "ready": "Herhangi bir bölmede {{shortcut}} tuşuna basın.",
+          "off": "Her bölmede {{shortcut}} ile dikte etmek için açın.",
+          "noModel": "Başlamak için aşağıdan bir konuşma modeli indirin. Bu bilgisayarda çalışır, sesiniz burada kalır.",
+          "downloading": "{{model}} indirildiğinde çalışır.",
+          "needsUpdate": "Dikteye devam etmek için aşağıdan {{model}} modelini güncelleyin."
+        },
+        "mode": {
+          "label": "Mod",
+          "auto": "Başlatıp durdurmak için {{shortcut}} tuşuna dokunun veya konuşurken basılı tutun.",
+          "hold": "{{shortcut}} basılıyken konuşun.",
+          "toggle": "Başlatmak için {{shortcut}} tuşuna, durdurmak için yine basın."
+        },
+        "words": {
+          "title": "Kelimeler"
+        },
+        "gpu": {
+          "description": "Dikte bilgisayarınızı donduruyorsa kapatın."
+        },
+        "keepLoaded": {
+          "label": "Modeli yüklü tut",
+          "description": "Yüklü olduğu sürece dikte hemen başlar.",
+          "always": "Her zaman",
+          "never": "Asla"
         }
       },
       "repositoryHooks": {
@@ -21414,7 +21429,7 @@
       "dirty_other": "Dal değiştirmeden önce {{count}} değişmiş dosyayı commit edin veya atın.",
       "agentWorking": "Bu çalışma alanında bir ajan çalışıyor. Bitirdiğinde dal değiştirin veya durduysa sekmesini kapatın.",
       "listFailed": "Orca yerel dalları listeleyemedi. Seçiciyi yeniden açmayı deneyin.",
-      "discoveryFailed": "Orca uzak dal bulamadı. Yine de yerel dallara geçebilir veya bir dal oluşturabilirsiniz.",
+      "discoveryFailed": "Orca uzak dalları bulamadı. Yine de yerel dallara geçebilir veya bir dal oluşturabilirsiniz.",
       "switchFailed": "Orca dal değiştiremedi. Tekrar deneyin.",
       "switchFailedTitle": "Dal değiştirilemedi",
       "switchFailedIn": "{{workspace}} içinde dal değiştirilemedi",
@@ -23557,7 +23572,7 @@
     "argumentsTerminalHint": "Yalnızca terminal (CLI) başlatmaları için geçerlidir",
     "searchAgentModels": "{{agent}} modellerini ara…",
     "legacyModelCount": "{{total}} model",
-    "search": "Aracıları ve kurulumları ara…",
+    "search": "Ara, ör. Opus 5.5…",
     "configure": "{{agent}} yapılandır",
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
@@ -23589,7 +23604,7 @@
     "unsupportedDescription": "Apple bu Mac’te macOS {{macos}} sürümünü desteklemiyor.",
     "unknownDescription": "Bu Mac’in yükseltilebileceği doğrulanamadı. Apple’ın uyumluluk kılavuzu yardımcı olabilir.",
     "whyTitle": "Bu neden değişiyor?",
-    "whyIntro": "Orca’nın üzerinde çalıştığı Electron’u şu iyileştirmeler için güncelledik:",
+    "whyIntro": "Electron ve cihazdaki konuşma motoru gibi Orca’nın temel bileşenlerini şu iyileştirmeler için güncelledik:",
     "whySecurity": "Electron ve Chromium’dan sürekli güvenlik düzeltmeleri.",
     "whyPerformance": "Daha hızlı başlatma ve daha verimli yerel API çağrıları.",
     "whySystemApis": "Güncel macOS bildirim API’leri ve güvenli Anahtar Zinciri depolaması desteği.",
@@ -23664,29 +23679,23 @@
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   },
   "speechModelUpdate": {
-    "updateTitle": "Konuşma modelinizi güncelleyin",
-    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
     "update": "Güncelle",
-    "replacedTitle": "Konuşma modeliniz değiştirildi",
-    "replacedDescription": "{{old}} yeni konuşma motorunda çalışamıyor. Yerine {{model}} kullanılacak ({{size}} MB).",
-    "downloadReplacement": "{{model}} indir",
-    "later": "Daha sonra",
-    "dismiss": "Kapat",
-    "updatingTitle": "{{model}} güncelleniyor",
-    "downloadingTitle": "{{model}} indiriliyor",
-    "downloadingDescription": "Çalışmaya devam edebilirsiniz. Bu bittiğinde dikte geri gelir.",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "İptal",
-    "doneTitle": "Dikte hazır",
-    "doneDescription": "{{model}} güncellendi. Eski dosyalar kaldırıldı.",
-    "doneRetiredDescription": "{{model}} kuruldu. Eski {{old}} dosyaları hâlâ diskte.",
-    "keep": "Sakla",
-    "deleteOld": "Eski modeli sil",
-    "deleteFailed": "{{model}} silinemedi.",
-    "updateFailedTitle": "{{model}} güncellenemedi",
-    "downloadFailedTitle": "{{model}} indirilemedi",
-    "failedAtDescription": "İndirme {{mb}} MB'de durdu. Bağlantınızı kontrol edip yeniden deneyin.",
-    "failedDescription": "İndirme durdu. Bağlantınızı kontrol edip yeniden deneyin.",
-    "tryAgain": "Yeniden dene"
+    "pill": {
+      "updateNotice": "Daha hızlı dikte kurulmaya hazır",
+      "retiredNotice": "Dikte daha hızlı bir konuşma modeline geçti",
+      "install": "Yükle",
+      "installTooltip": "Tek seferlik indirme · {{size}} MB",
+      "downloading": "Dikte ayarlanıyor",
+      "downloadingTooltip": "{{done}} / {{size}} MB",
+      "ready": "Dikte hazır. <kbd></kbd> tuşuna basın",
+      "readyNoShortcut": "Dikte hazır.",
+      "failed": "İndirme durdu. Bağlantınızı kontrol edin.",
+      "tryAgain": "Tekrar dene",
+      "deleteOld": "Eski modeli sil",
+      "deleteFailed": "{{model}} silinemedi.",
+      "dismiss": "Kapat",
+      "cancelDownload": "İndirmeyi iptal et"
+    }
   }
 }

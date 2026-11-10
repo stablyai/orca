@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/dictation-audio-meter'
 import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { encodeMonoWav } from './voice-microphone-test-wav'
 

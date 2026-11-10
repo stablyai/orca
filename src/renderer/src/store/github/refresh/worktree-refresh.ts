@@ -10,14 +10,15 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
 import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 import {
   findIndexedReviewRepository,
   hasUniqueIndexedRepositoryHost
 } from '@/lib/workspace/ownership/repository-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
-import { prCacheKey } from '../cache/cache-identity'
+import '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from '../pull-requests/pr-result-routing'
 import { resolvePRBranchFallback } from '../../../../../shared/github/pr-branch-fallback-rule'
@@ -232,7 +233,7 @@ export function buildPRRefreshCandidate(
     return null
   }
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
-  const cacheKey = prCacheKey(
+  const cacheKey = getGitHubRepoCacheKey(
     repoPath ?? repo.path,
     repo.id,
     branch,

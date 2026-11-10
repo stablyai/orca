@@ -2,9 +2,9 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {

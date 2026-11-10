@@ -1,4 +1,5 @@
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import {
   taskProviderErrorMessage,
   taskProviderErrorText

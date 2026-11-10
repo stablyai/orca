@@ -3,7 +3,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 

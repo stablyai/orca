@@ -1,3 +1,4 @@
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AppState } from '../types'
 
 type TerminalTabReconnectState = Pick<
@@ -200,25 +201,22 @@ export function buildOrphanTerminalCleanupPatch(
     orphanTerminalIds,
     keptTabs
   )
-  const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
-  const nextRuntimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
-  const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
-  const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
-  for (const orphanTabId of orphanTerminalIds) {
-    delete nextPtyIdsByTabId[orphanTabId]
-    delete nextRuntimePaneTitlesByTabId[orphanTabId]
-    delete nextTerminalLayoutsByTabId[orphanTabId]
-    delete nextPendingStartupByTabId[orphanTabId]
-  }
+  const deletions = [...orphanTerminalIds].map((id) => [id, null] as const)
   return {
     ...companions,
-    tabsByWorktree: {
-      ...state.tabsByWorktree,
-      [worktreeId]: keptTabs
-    },
-    ptyIdsByTabId: nextPtyIdsByTabId,
-    runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
-    terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
-    pendingStartupByTabId: nextPendingStartupByTabId
+    tabsByWorktree: replaceTabBuckets(state.tabsByWorktree, [[worktreeId, keptTabs]]),
+    ptyIdsByTabId: replaceRecordEntries<string[]>(state.ptyIdsByTabId, deletions),
+    runtimePaneTitlesByTabId: replaceRecordEntries<Record<number, string>>(
+      state.runtimePaneTitlesByTabId,
+      deletions
+    ),
+    terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
+      state.terminalLayoutsByTabId,
+      deletions
+    ),
+    pendingStartupByTabId: replaceRecordEntries<AppState['pendingStartupByTabId'][string]>(
+      state.pendingStartupByTabId,
+      deletions
+    )
   }
 }

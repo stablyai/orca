@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { ChromePreview } from './theme-chrome-preview'

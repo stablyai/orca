@@ -1,6 +1,6 @@
 import React from 'react'
 import { getPageNumbers } from '@/components/task-page/task-page-pagination-page-numbers'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ChevronLeft, LoaderCircle, ChevronRight } from 'lucide-react'
 export function PaginationBar({
