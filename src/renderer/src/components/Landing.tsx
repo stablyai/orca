@@ -1,3 +1,4 @@
+import { LandingCloudCard } from './landing/LandingCloudCard'
 import {
   CloudWorkspacesHome,
   useCloudWorkspacesPresent
@@ -303,6 +304,8 @@ export default function Landing(): React.JSX.Element {
                 {createActionLabel}
               </button>
             </div>
+
+            {hasProjects ? <LandingCloudCard cloudWorkspacesPresent={cloudListPresent} /> : null}
 
             {!cloudListPresent && <LandingShortcutList shortcuts={shortcuts} />}
           </div>

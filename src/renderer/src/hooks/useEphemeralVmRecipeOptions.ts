@@ -1,3 +1,4 @@
+import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
@@ -18,6 +19,11 @@ type EphemeralVmRecipeOptionsArgs = {
   repoExecutionHostId: ExecutionHostId | null
   projectGroupTarget: boolean
   initialRecipeId?: string
+}
+
+/** Orca Cloud is shipped but the account isn't ready yet (signed out, or no plan/capability). */
+function orcaCloudNeedsSetup(availability: OrcaCloudAvailability | undefined): boolean {
+  return availability === 'needs-sign-in' || availability === 'needs-capability'
 }
 
 export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs): {
@@ -73,17 +79,21 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           // Why outside the updater: StrictMode runs updaters twice and keeps the second result, so
           // consuming the one-time intent inside it would always lose the selection.
           const afterSignIn = resetSelection ? null : takeOrcaCloudSelectionAfterSignIn(nextRecipes)
+          // Orca Cloud stays picked while the account still needs setup: the composer's setup panel
+          // says what's missing instead of the pick silently falling back to this computer.
+          const keeps = (recipeId: string): boolean =>
+            nextRecipes.some((recipe) => recipe.id === recipeId) ||
+            (recipeId === ORCA_CLOUD_RECIPE_ID && orcaCloudNeedsSetup(result.orcaCloud))
           setSelectedRecipeId((current) => {
             if (resetSelection) {
-              return args.initialRecipeId &&
-                nextRecipes.some((recipe) => recipe.id === args.initialRecipeId)
+              return args.initialRecipeId && keeps(args.initialRecipeId)
                 ? args.initialRecipeId
                 : null
             }
             if (afterSignIn) {
               return afterSignIn
             }
-            return current && nextRecipes.some((recipe) => recipe.id === current) ? current : null
+            return current && keeps(current) ? current : null
           })
           const diagnosticMessages = (result.diagnostics ?? []).map((diagnostic) => {
             const recipeLabel = `environmentRecipes[${diagnostic.index}]`

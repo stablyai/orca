@@ -34,6 +34,7 @@ export type KeybindingActionId =
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
+  | 'workspace.createCloud'
   | 'workspace.rename'
   | 'workspace.run'
   | 'workspace.delete'

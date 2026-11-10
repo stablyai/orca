@@ -7,6 +7,7 @@ import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import SidebarWorkspaceOptionsMenu from './worktree-list/controls/SidebarWorkspaceOptionsMenu'
+import { NewWorkspaceMoreMenu } from './NewWorkspaceMoreMenu'
 
 function AddProjectButton({
   preserveWorkspaceBoardOpen
@@ -98,7 +99,10 @@ export function SidebarHeaderActions({
         )}
       </div>
       <AddProjectButton preserveWorkspaceBoardOpen />
-      <NewWorkspaceButton preserveWorkspaceBoardOpen />
+      <div className="flex items-center">
+        <NewWorkspaceButton preserveWorkspaceBoardOpen />
+        <NewWorkspaceMoreMenu preserveWorkspaceBoardOpen />
+      </div>
     </div>
   )
 }

@@ -31,6 +31,7 @@ export function getRunTargetOrcaCloudOffer({
       // No billing read without the capability; unknown roles get the owner's way forward.
       return override ?? { state: 'no-plan', lapsed: false, canManageBilling: true }
     case 'offered':
+    case 'unreachable':
     case 'unavailable':
       return null
   }

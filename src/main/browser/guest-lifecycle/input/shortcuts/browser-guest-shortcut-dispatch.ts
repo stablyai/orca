@@ -188,6 +188,8 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:toggleQuickCommandsMenu')
   } else if (action?.type === 'openNewWorkspace') {
     renderer.send('ui:openNewWorkspace')
+  } else if (action?.type === 'openNewCloudWorkspace') {
+    renderer.send('ui:openNewCloudWorkspace')
   } else if (action?.type === 'deleteCurrentWorkspace') {
     renderer.send('ui:deleteCurrentWorkspace')
   } else if (action?.type === 'openWorkspaceBoard') {

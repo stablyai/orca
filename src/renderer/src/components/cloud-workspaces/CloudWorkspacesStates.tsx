@@ -1,6 +1,10 @@
 // Loading, empty and error states for the cloud workspaces list, and the new-section dialog.
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Cloud } from 'lucide-react'
+import { useAppStore } from '@/store'
+import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { openNewCloudWorkspace } from '@/hooks/ipc-events/new-workspace-command'
 import {
   Dialog,
   DialogContent,
@@ -130,6 +134,8 @@ export function EmptyState({
   filtered: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const keybindings = useAppStore((s) => s.keybindings)
+  const cloudShortcut = formatOptionalPrimaryShortcutLabel('workspace.createCloud', keybindings)
   const [title, body] = filtered
     ? [
         t('auto.components.cloudWorkspaces.emptyFilteredTitle', 'Nothing matches these filters'),
@@ -155,13 +161,29 @@ export function EmptyState({
             t('auto.components.cloudWorkspaces.emptyMineTitle', 'No cloud workspaces yet'),
             t(
               'auto.components.cloudWorkspaces.emptyMineBody',
-              'Create one with Orca Cloud from New workspace. It keeps running while your laptop sleeps.'
+              'Start one and it keeps running while your laptop sleeps.'
             )
           ]
+  // Spec E4: an empty Mine or Team list offers a real button, not just copy.
+  const offerCreate = !filtered && !archived
   return (
     <div className="flex flex-col items-center gap-1 px-6 py-8 text-center">
       <p className="text-sm font-medium text-foreground">{title}</p>
       <p className="max-w-sm text-xs text-muted-foreground">{body}</p>
+      {offerCreate ? (
+        <Button
+          type="button"
+          size="sm"
+          className="mt-3 text-xs"
+          onClick={() => openNewCloudWorkspace(useAppStore.getState(), 'unknown')}
+        >
+          <Cloud className="size-3.5" />
+          {t('keybindings.title.workspaceCreateCloud', 'New cloud workspace')}
+          {cloudShortcut ? (
+            <span className="ml-1 text-primary-foreground/70">{cloudShortcut}</span>
+          ) : null}
+        </Button>
+      ) : null}
     </div>
   )
 }

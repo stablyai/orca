@@ -26,6 +26,7 @@ import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
+import { RepositoryRunOnSection } from './RepositoryRunOnSection'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
@@ -294,6 +295,10 @@ export function RepositoryPane({
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
         />
+
+        {!isFolder ? (
+          <RepositoryRunOnSection repo={repo} forceVisible={forceFullPaneForRepoMatch} />
+        ) : null}
 
         {!isFolder ? (
           <>

@@ -17,6 +17,7 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'createDisabled'
   | 'creating'
   | 'primaryActionLabel'
+  | 'cloudStart'
 > & {
   submitShortcutModifierLabel: string
 }
@@ -30,7 +31,8 @@ export function NewWorkspaceComposerFooter({
   createDisabled,
   creating,
   primaryActionLabel,
-  submitShortcutModifierLabel
+  submitShortcutModifierLabel,
+  cloudStart
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -71,6 +73,17 @@ export function NewWorkspaceComposerFooter({
               {t('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>
           </button>
+        ) : null}
+        {cloudStart?.onUseThisComputer ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-xs"
+            onClick={cloudStart.onUseThisComputer}
+          >
+            {t('components.newWorkspace.cloudStart.useThisComputer', 'Use this computer instead')}
+          </Button>
         ) : null}
         <Button
           onClick={() => void onCreate()}

@@ -42,6 +42,9 @@ export function sendResolvedWindowShortcutAction(
     case 'openNewWorkspace':
       mainWindow.webContents.send('ui:openNewWorkspace')
       return
+    case 'openNewCloudWorkspace':
+      mainWindow.webContents.send('ui:openNewCloudWorkspace')
+      return
     case 'deleteCurrentWorkspace':
       mainWindow.webContents.send('ui:deleteCurrentWorkspace')
       return

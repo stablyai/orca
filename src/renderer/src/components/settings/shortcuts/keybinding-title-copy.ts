@@ -28,6 +28,8 @@ const STATIC_TITLE_COPY = {
   'worktree.navigateDown': () =>
     translate('keybindings.title.worktreeNavigateDown', 'Next worktree'),
   'workspace.create': () => translate('keybindings.title.workspaceCreate', 'Create worktree'),
+  'workspace.createCloud': () =>
+    translate('keybindings.title.workspaceCreateCloud', 'New cloud workspace'),
   'workspace.rename': () => translate('keybindings.title.workspaceRename', 'Rename worktree'),
   'workspace.run': () =>
     translate('keybindings.title.workspaceRun', 'Run or restart the run action'),

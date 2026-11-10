@@ -1,3 +1,4 @@
+import type { CloudStartView } from './run-on/use-cloud-start-composer'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -80,6 +81,8 @@ export type NewWorkspaceComposerCardProps = {
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   primaryActionLabel: string
+  /** "Start in Orca Cloud": Run on's segments, the setup panel and the fallback (absent without Orca Cloud). */
+  cloudStart?: CloudStartView | null
   projectLabel?: string
   projectPlaceholder?: string
   emptyProjectMessage?: string

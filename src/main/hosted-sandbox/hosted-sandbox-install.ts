@@ -244,9 +244,10 @@ export async function getOrcaCloudAvailability(): Promise<OrcaCloudAvailability>
   const session = await readFreshOrcaCloudSession(auth.config, active, userDataPath).catch(
     () => null
   )
-  // A refresh that failed (offline) is not a sign-out; hide the row rather than ask to sign in.
+  // A refresh that failed (offline) is not a sign-out: keep Orca Cloud visible but disabled
+  // (Run on says it can't be reached) rather than ask to sign in or make it vanish.
   if (session === null) {
-    return 'unavailable'
+    return 'unreachable'
   }
   if (session.status !== 'found') {
     return 'needs-sign-in'

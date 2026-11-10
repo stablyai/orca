@@ -1,0 +1,67 @@
+// Seam for the one-trip setup session (spec N1, owned by team-billing-ux / np4-setup). Until the
+// session exists, the composer derives setup rows from billing access and availability and "Set up
+// and start" runs today's sign-in / plans actions. When the session lands, np4-setup registers:
+// - a starter: "Set up and start" calls it and keeps the returned session id (also on the draft);
+// - a source: a synchronous read of the latest polled snapshot for a session id;
+// and calls notifyCloudSetupSessionChanged() after each poll so the panel re-renders.
+import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
+
+/**
+ * Start the workspace by itself once setup finishes (spec D4 / A8). Open question Q4 for Neil:
+ * flip to false to stop at a pre-focused "Start in Orca Cloud" button instead.
+ */
+export const CLOUD_SETUP_AUTO_START = true
+/** "All set" holds this long before the composer submits itself (0 with reduced motion). */
+export const CLOUD_SETUP_ALL_SET_HOLD_MS = 600
+
+export type CloudSetupSessionSnapshot = {
+  steps: CloudSetupStep[]
+  finished: boolean
+  /** A step the browser couldn't finish (kinds agreed with the setup-session API). */
+  error?: { kind: string; detail?: string }
+}
+
+type SessionSource = (sessionId: string) => CloudSetupSessionSnapshot | null
+
+export type CloudSetupStartRequest = {
+  repoId: string
+  /** The rows still open when the user clicked (account, team, plan, github). */
+  needs: CloudSetupStep['id'][]
+}
+/** Null when the session couldn't open; the composer then falls back to today's actions. */
+type SessionStarter = (request: CloudSetupStartRequest) => Promise<{ sessionId: string } | null>
+
+let source: SessionSource | null = null
+let starter: SessionStarter | null = null
+const listeners = new Set<() => void>()
+
+/** Register the session poller's read. Pass null to remove it. */
+export function setCloudSetupSessionSource(next: SessionSource | null): void {
+  source = next
+  notifyCloudSetupSessionChanged()
+}
+
+/** Register what "Set up and start" calls to open the one browser trip. Pass null to remove it. */
+export function setCloudSetupStarter(next: SessionStarter | null): void {
+  starter = next
+}
+
+export function getCloudSetupStarter(): SessionStarter | null {
+  return starter
+}
+
+export function readCloudSetupSession(sessionId: string | null): CloudSetupSessionSnapshot | null {
+  return sessionId && source ? source(sessionId) : null
+}
+
+/** Call after each poll so open composers re-read their session. */
+export function notifyCloudSetupSessionChanged(): void {
+  for (const listener of listeners) {
+    listener()
+  }
+}
+
+export function subscribeCloudSetupSession(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}

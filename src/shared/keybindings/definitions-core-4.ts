@@ -1,9 +1,18 @@
 import type { KeybindingDefinition } from './types'
-import { platformBindings } from './definitions-support'
+import { NEW_CLOUD_WORKSPACE_BINDING, platformBindings } from './definitions-support'
 
 const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
+  {
+    // Spec D8 / N8: opens the composer on Orca Cloud. Was a second binding of New workspace (Q2).
+    id: 'workspace.createCloud',
+    title: 'New cloud workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'cloud', 'orca cloud', 'sandbox', 'new cloud workspace'],
+    defaultBindings: platformBindings([NEW_CLOUD_WORKSPACE_BINDING])
+  },
   {
     id: 'workspace.run',
     title: 'Run or restart the run action',

@@ -57,6 +57,12 @@ export function cloudWorkspacesAvailable(): Promise<boolean> {
   return availability
 }
 
+/** The last availability answer without subscribing (palette actions); null until known. */
+export function getCloudWorkspacesAvailableSnapshot(): boolean | null {
+  void cloudWorkspacesAvailable()
+  return availableValue
+}
+
 /** null until the first availability answer arrives. */
 export function useCloudWorkspacesAvailable(): boolean | null {
   return useSyncExternalStore(

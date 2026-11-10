@@ -76,9 +76,16 @@ export type OrcaVmRecipeProviderId = 'orca-cloud'
 
 /**
  * Whether this build and account can use Orca Cloud: `offered` adds its recipe; `needs-sign-in` and
- * `needs-capability` let the picker show a sign-in or upsell row; `unavailable` hides it entirely.
+ * `needs-capability` let the picker show a sign-in or upsell row; `unreachable` means the build ships
+ * it but the account check failed (offline), so Run on keeps it visible and disabled;
+ * `unavailable` hides it entirely.
  */
-export type OrcaCloudAvailability = 'offered' | 'needs-sign-in' | 'needs-capability' | 'unavailable'
+export type OrcaCloudAvailability =
+  | 'offered'
+  | 'needs-sign-in'
+  | 'needs-capability'
+  | 'unreachable'
+  | 'unavailable'
 
 export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
 

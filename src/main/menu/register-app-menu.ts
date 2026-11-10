@@ -11,6 +11,7 @@ import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
+import { createNewCloudWorkspaceMenuItems } from './app-menu-cloud-items'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -143,9 +144,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
+  const newCloudWorkspaceItems = createNewCloudWorkspaceMenuItems()
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
-    submenu: [settingsItem, { type: 'separator' }, ...createAppMenuQuitItems(options)]
+    submenu: [
+      ...newCloudWorkspaceItems,
+      settingsItem,
+      { type: 'separator' },
+      ...createAppMenuQuitItems(options)
+    ]
   }
 
   // Keep menu hints while non-macOS Ctrl+Z/Ctrl+Y reach focused terminal or DOM controls.

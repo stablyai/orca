@@ -119,6 +119,11 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:openNewWorkspace', listener)
     return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
   },
+  onOpenNewCloudWorkspace: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:openNewCloudWorkspace', listener)
+    return () => ipcRenderer.removeListener('ui:openNewCloudWorkspace', listener)
+  },
   onDeleteCurrentWorkspace: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:deleteCurrentWorkspace', listener)

@@ -19,6 +19,7 @@ export function missingRecipeFailure(
         return ephemeralVmFailure('cloudSignInRequired')
       case 'needs-capability':
         return ephemeralVmFailure('cloudPlanRequired')
+      case 'unreachable':
       case 'unavailable':
         return ephemeralVmFailure('cloudUnavailable')
       case 'offered':

@@ -195,6 +195,7 @@ const MAIN_PROCESS_INTERCEPTED_ACTIONS: Partial<
   'sidebar.right.toggle': 'afterBrowserChords',
   'worktree.quickOpen': 'afterBrowserChords',
   'workspace.create': 'afterBrowserChords',
+  'workspace.createCloud': 'afterBrowserChords',
   'workspace.delete': 'afterBrowserChords',
   'workspace.openBoard': 'afterBrowserChords',
   'view.tasks': 'afterBrowserChords',

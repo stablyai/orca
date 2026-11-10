@@ -25,6 +25,8 @@ export type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
+  /** "New workspace on this computer": open on this computer, never the remembered Orca Cloud. */
+  initialRunOnLocal?: boolean
   initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
