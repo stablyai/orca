@@ -1,8 +1,8 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import {
   PR_FILE_CONTENT_CACHE_MAX_BYTES,
   getRetainedPRFileContentsByteCount
@@ -13,10 +13,9 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 
-// Why: bounded LRU so opening many PRs with many files doesn't grow this module-level map unboundedly until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
 type PRFileContentCacheEntry = {
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
@@ -39,7 +38,7 @@ function touchPRFileContentCache(
 
   const existing = prFileContentCache.get(key)
   prFileContentCacheBytes -= existing?.byteCount ?? 0
-  // Why: re-insert to move to MRU position; Map insertion order keeps the oldest key first for eviction.
+  // Reinsert as most recent; Map order supplies the eviction order.
   prFileContentCache.delete(key)
   const byteCount = retainedByteCount
   prFileContentCache.set(key, { value, byteCount })

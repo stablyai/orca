@@ -1,32 +1,32 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useRef, useCallback } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import {
   getGitHubPRReviewerQueryState,
   filterGitHubPRReviewerCandidates
 } from '@/components/github/github-pr-reviewer-candidate-filter'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewerRows,
   getGitHubPRReviewLabel
-} from '@/components/github-pr-reviewer-display'
-import { cn } from '@/lib/utils'
+} from '../../../../../shared/github/pr-reviewer-display'
+import { cn } from '@/lib/class-names'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger } from '@/components/ui/popover'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import {
   mergeReviewerSuggestions,
   resolveTaskPullRequestRepo
-} from '../../task-page-github-review-model'
+} from './task-page-github-review-model'
 import { ReviewChipAvatar } from './Avatars'
-import { createTaskPageGitHubReviewerActions } from '../../task-page-github-reviewer-actions'
+import { createTaskPageGitHubReviewerActions } from './task-page-github-reviewer-actions'
 import { TaskPageGitHubReviewerPicker } from './ReviewerPicker'
 export function PRReviewCell({
   item,
@@ -39,6 +39,7 @@ export function PRReviewCell({
   sourceContext?: TaskSourceContext | null
   workItemMutation: TaskPageGitHubWorkItemMutationRunner
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
@@ -212,7 +213,7 @@ export function PRReviewCell({
   if (item.type !== 'pr') {
     return (
       <span className="text-[11px] text-muted-foreground">
-        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}
+        {t('auto.components.TaskPage.b1eaa18ace', 'Issue')}
       </span>
     )
   }
@@ -281,7 +282,7 @@ export function PRReviewCell({
               ? 'gap-1 rounded-full border border-border/40 bg-background/70 px-1.5 text-muted-foreground hover:text-foreground'
               : 'min-w-7 text-muted-foreground hover:text-foreground'
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.TaskPage.editReviewersWithCurrent',
             'Edit reviewers: {{value0}}',
             {

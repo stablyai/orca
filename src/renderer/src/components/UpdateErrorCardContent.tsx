@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import type { UpdateInstallBlocker } from '../../../shared/update-status-types'
 import { Button } from './ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type UpdateErrorCardAction = {
   label: string
@@ -57,11 +57,9 @@ function ActionButton({
       variant={variant}
       size="sm"
       onClick={action.onClick}
-      // Why: hashing a 160 MB package takes seconds, and a native `disabled` would blur the button the
-      // user just pressed. The handlers self-guard, so keep focus and mark the state instead.
+      // Keep pressed actions focused during long package hashing; aria-disabled and handler guards replace native disabled.
       aria-disabled={action.isPending || action.disabled}
-      // Why: ui/button styles only `disabled:`, so aria-disabled needs its own dimming or a busy
-      // action looks fully live while it silently refuses.
+      // Explicitly dim aria-disabled because ui/button styles only native disabled.
       className="flex-1 gap-1.5 aria-disabled:cursor-default aria-disabled:opacity-50"
     >
       {action.isPending ? <Loader2 className="size-3.5 animate-spin" /> : leadingIcon}
@@ -86,7 +84,8 @@ export function UpdateErrorCardContent({
   footnote,
   onClose
 }: UpdateErrorCardModel & { onClose: () => void }) {
-  // Why: raw error starts collapsed so the card leads with the plain summary, not a stack dump.
+  const t = useTranslate()
+  // Lead with the summary; raw diagnostics stay collapsed.
   const [showDetails, setShowDetails] = useState(false)
   const detailId = useId()
   const isCompatibility = variant === 'http1Compatibility'
@@ -119,7 +118,7 @@ export function UpdateErrorCardContent({
           size="icon"
           className="shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label={translate('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
+          aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
         >
           <Minus className="size-3.5" />
         </Button>
@@ -133,29 +132,29 @@ export function UpdateErrorCardContent({
 
       {blockers && blockers.length > 0 && (
         <ul
-          aria-label={translate('updates.installBlock.instancesLabel', 'Instances using Orca')}
+          aria-label={t('updates.installBlock.instancesLabel', 'Instances using Orca')}
           className="space-y-2"
         >
           {blockers.map(({ pid, kind }) => (
             <li key={pid} className="flex items-center justify-between gap-3 text-xs">
               <span>
                 {kind === 'browser'
-                  ? translate('updates.installBlock.browserLabel', 'Background browser')
+                  ? t('updates.installBlock.browserLabel', 'Background browser')
                   : kind === 'server'
-                    ? translate('updates.installBlock.serverLabel', 'Background server')
+                    ? t('updates.installBlock.serverLabel', 'Background server')
                     : kind === 'window'
-                      ? translate('updates.installBlock.windowLabel', 'Other Orca window')
-                      : translate('updates.installBlock.instanceLabel', 'Other Orca instance')}
+                      ? t('updates.installBlock.windowLabel', 'Other Orca window')
+                      : t('updates.installBlock.instanceLabel', 'Other Orca instance')}
               </span>
               <span className="font-mono text-muted-foreground">
-                {translate('updates.installBlock.processId', 'PID {{pid}}', { pid })}
+                {t('updates.installBlock.processId', 'PID {{pid}}', { pid })}
               </span>
             </li>
           ))}
         </ul>
       )}
 
-      {/* Caret disclosure that reveals the raw error while the plain summary stays the lead. */}
+      {/* Keep raw diagnostics behind disclosure so the summary leads. */}
       {detail ? (
         <div className="flex flex-col gap-2">
           <Button
@@ -171,13 +170,13 @@ export function UpdateErrorCardContent({
               className={`size-3.5 transition-transform motion-reduce:transition-none ${showDetails ? 'rotate-90' : ''}`}
             />
             {showDetails
-              ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
-              : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
+              ? t('auto.components.UpdateCard.5194358929', 'Hide details')
+              : t('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
           </Button>
           {showDetails ? (
             <div id={detailId} className="rounded-md bg-muted/40 px-3 py-2">
               <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
-                {translate('auto.components.UpdateCard.3553a8672f', 'Details')}
+                {t('auto.components.UpdateCard.3553a8672f', 'Details')}
               </p>
               <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
                 {detail}
@@ -213,8 +212,7 @@ export function UpdateErrorCardContent({
               }}
               className="flex-1"
             >
-              {manualLabel ??
-                translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
+              {manualLabel ?? t('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
             </Button>
           )}
         </div>

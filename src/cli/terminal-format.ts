@@ -1,5 +1,8 @@
-import { PTY_LIVE_NOTE, describeUnconfirmedCloseStop } from '../shared/pty-liveness-verdict'
-import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
+import {
+  PTY_LIVE_NOTE,
+  describeUnconfirmedCloseStop
+} from '../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import { describeTerminalWaitBlockedReason } from '../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
@@ -29,7 +32,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -104,10 +107,9 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `branch: ${terminal.branch}`,
     `leaf: ${terminal.leafId}`,
     `ptyId: ${terminal.ptyId ?? 'none'}`,
+    ...(terminal.orphaned ? ['orphaned: true'] : []),
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
-    // Why listed above the preview: the preview is where a reader would otherwise have to
-    // spot the prompt by eye, which is the work this line exists to remove.
     `agentWait: ${formatAgentWait(terminal.agentWait)}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
@@ -143,8 +145,6 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
     ...latestCursor,
     ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
     ...(limitedWarning ? [limitedWarning] : []),
-    // Why: the caller asked for the rendered screen; say plainly that this is not it rather
-    // than let repaint fragments be read as what the terminal displayed.
     ...(terminal.source === 'screen-unavailable'
       ? [
           'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
@@ -208,12 +208,11 @@ function promptObservationWarning(
   if (prompt.observation === 'incarnation_replaced') {
     return 'delivery was not observed because the terminal process was replaced. Inspect the current terminal before sending a new prompt; do not retry with this request ID.'
   }
-  // Ordered before the unsupported arm: an agent provider that never reached turn_started
-  // needs the swallowed-Enter recovery even if this host could not observe the submit.
+  // Providers need swallowed-Enter recovery without turn_started, even if submit observation failed.
   if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
     return prompt.stages.includes('turn_started')
       ? null
-      : `input was accepted but no turn start was observed, so the Enter may have been swallowed. Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID replays the receipt instead of sending the prompt again.`
+      : `input was accepted, but no turn start was observed yet (a send without --wait-submit does not wait for one). Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID observes this prompt instead of sending it again.`
   }
   if (prompt.observation === 'unsupported') {
     return prompt.provider === 'old-host'

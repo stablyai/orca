@@ -1,29 +1,23 @@
 import { useState } from 'react'
 import { Globe, Monitor, Server } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID,
   BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID
-} from '@/lib/settings-navigation-types'
+} from '@/components/settings/navigation/settings-navigation-types'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../../shared/execution-host'
 import { getHostSettingOverride } from '../../../../../shared/host-setting-overrides'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 
-/**
- * The address bar's leading icon, egress-aware: pages that render locally and
- * pages whose traffic leaves from a remote host look identical when working,
- * so the globe slot becomes the one visible tell of where a page's traffic
- * leaves from. Hover shows the summary; clicking expands the explanation and
- * a settings link.
- */
+/** Use the shared globe slot to expose egress location because local and remotely routed pages otherwise look identical. */
 function EgressIndicatorButton({
   icon,
   egress,
@@ -37,6 +31,7 @@ function EgressIndicatorButton({
   detail: string
   settingsSectionId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -88,7 +83,7 @@ function EgressIndicatorButton({
             openSettingsPage()
           }}
         >
-          {translate('browser.sshEgress.settingsLink', 'Routing settings')}
+          {t('browser.sshEgress.settingsLink', 'Routing settings')}
         </Button>
       </PopoverContent>
     </Popover>
@@ -101,6 +96,7 @@ export function SshEgressIndicator({
 }: {
   worktreeId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings)
@@ -119,27 +115,20 @@ export function SshEgressIndicator({
       egress={routed ? 'ssh' : 'local'}
       description={
         routed
-          ? translate('browser.sshEgress.routedTooltip', 'Browsing through {{value0}}', {
+          ? t('browser.sshEgress.routedTooltip', 'Browsing through {{value0}}', {
               value0: hostLabel
             })
-          : translate(
-              'browser.sshEgress.localTooltip',
-              'Browsing from this device, not {{value0}}',
-              {
-                value0: hostLabel
-              }
-            )
+          : t('browser.sshEgress.localTooltip', 'Browsing from this device, not {{value0}}', {
+              value0: hostLabel
+            })
       }
       detail={
         routed
-          ? translate(
+          ? t(
               'browser.sshEgress.routedDetail',
               "Network traffic and DNS go through the workspace's SSH host."
             )
-          : translate(
-              'browser.sshEgress.localDetail',
-              'Pages load from this machine and its network.'
-            )
+          : t('browser.sshEgress.localDetail', 'Pages load from this machine and its network.')
       }
       settingsSectionId={BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID}
     />
@@ -154,6 +143,7 @@ export function RemoteRuntimeEgressIndicator({
   runtimeEnvironmentId: string
   presentation: 'client-hosted' | 'streamed'
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const environmentName = useAppStore(
     (s) =>
@@ -174,20 +164,20 @@ export function RemoteRuntimeEgressIndicator({
       egress="remote"
       description={
         clientHosted
-          ? translate('browser.remoteEgress.clientHostedTooltip', 'Browsing through {{value0}}', {
+          ? t('browser.remoteEgress.clientHostedTooltip', 'Browsing through {{value0}}', {
               value0: hostLabel
             })
-          : translate('browser.remoteEgress.streamedTooltip', 'Browsing on {{value0}}', {
+          : t('browser.remoteEgress.streamedTooltip', 'Browsing on {{value0}}', {
               value0: hostLabel
             })
       }
       detail={
         clientHosted
-          ? translate(
+          ? t(
               'browser.remoteEgress.clientHostedDetail',
               'The page renders on this device. Network traffic and DNS go through the remote host.'
             )
-          : translate(
+          : t(
               'browser.remoteEgress.streamedDetail',
               'The page runs on the remote host and streams to this device.'
             )

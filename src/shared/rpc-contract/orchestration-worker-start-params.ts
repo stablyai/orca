@@ -31,7 +31,9 @@ export const WorkerStartParams = z
     effort: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
-    devMode: z.boolean().optional()
+    devMode: z.boolean().optional(),
+    /** Only from the paired Orca coordinating this Run: its own ID for the Task this start creates or reopens. */
+    adoptTaskId: OptionalString
   })
   .superRefine((params, ctx) => {
     if (!params.task && !params.spec) {
@@ -48,8 +50,7 @@ export const WorkerStartParams = z
         message: '--task and --spec are mutually exclusive'
       })
     }
-    // Why: --spec creates a new Task, so a retry link to a prior Dispatch could never resolve and
-    // the refusal named a Task id the caller never supplied.
+    // spec creates a new Task, so retryOf cannot refer to a prior Dispatch for it.
     if (params.retryOf && params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

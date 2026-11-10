@@ -2,7 +2,7 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as Slot from 'radix-ui/slot'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const badgeVariants = cva(
   'inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3',
@@ -18,10 +18,14 @@ const badgeVariants = cva(
           'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 [a&]:hover:underline',
-        /** The chip naming the machine a workspace runs on — quieter and squarer than `secondary`,
-         *  so it reads as context beside a workspace name rather than as a status of its own. */
+        /** Workspace execution-host context, quieter and squarer than status chips. */
         hostContext:
-          'h-4 rounded border-border bg-accent px-1.5 text-[10px] leading-none text-muted-foreground dark:border-border/50 dark:bg-accent/80',
+          'h-4 rounded border-border bg-[var(--host-badge,var(--accent))] px-1.5 text-[10px] leading-none text-[var(--host-badge-foreground,var(--muted-foreground))] dark:border-border/50 dark:bg-[var(--host-badge,color-mix(in_oklab,var(--accent)_80%,transparent))]',
+        /** A task label inside a dense reference row's metadata line. */
+        referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
+        /** An uppercase kind label set before a banner title; takes its color from the parent. */
+        paneLabel:
+          'h-4 border-current/30 px-1.5 py-0 align-[1px] text-3xs font-semibold tracking-wider uppercase',
         /** A skill or file sitting inline in the chat message box, ringed while selected. */
         promptPill:
           'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring'

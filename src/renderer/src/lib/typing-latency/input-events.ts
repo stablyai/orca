@@ -1,8 +1,8 @@
 import {
   readTerminalImeCompositionSessionDetail,
   XTERM_COMPOSITION_SESSION_END_EVENT
-} from '@/components/terminal-pane/terminal-ime-composition-route'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+} from '@/components/terminal-pane/input/ime/terminal-ime-composition-route'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 
 export type TypingInputSource = 'direct' | 'ime'
 

@@ -3,6 +3,7 @@ import {
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 
 export async function removeEphemeralVmRuntimeSshTarget(args: {
   userDataPath: string
@@ -22,7 +23,7 @@ export async function removeEphemeralVmRuntimeSshTarget(args: {
     }
     return updateEphemeralVmRuntimeStatus(args.userDataPath, latest.id, {
       status: 'cleanup_failed',
-      cleanupLastError: 'Failed to remove the hidden SSH target.'
+      cleanupLastError: ephemeralVmFailure('sshTargetRemoveFailed')
     })
   }
   const latest = getCurrentRuntime(args.userDataPath, current)

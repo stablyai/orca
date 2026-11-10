@@ -1,4 +1,4 @@
-import type { AutomationRunUsage } from '../../shared/automations-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
 import { addBillableTokens, NO_TOKENS, type ClaudeBillableTokens } from './claude-billable-tokens'
@@ -113,9 +113,7 @@ export async function resolveAutomationRunUsage(
     estimatedCostUsd,
     estimatedCostSource: estimatedCostUsd === null ? null : 'api_equivalent',
     providerSessionId: session.sessionId,
-    // Why: Orca terminal tab ids and Claude usage session ids are different
-    // systems today, so attribution is intentionally limited to one local
-    // provider session in the run's worktree/time window.
+    // Terminal tab IDs differ from provider session IDs, so use a unique worktree/time match.
     attribution: 'provider_session_time_window',
     collectedAt,
     unavailableReason: null,

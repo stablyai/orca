@@ -1,6 +1,6 @@
 import { nativeImage } from 'electron'
 
-/** Decodes with Chromium's image stack and re-encodes as a PNG fitting `maxEdge`, never upscaling. */
+/** Re-encode as PNG within maxEdge without upscaling. */
 export function encodeRepoIconPng(bytes: Uint8Array, maxEdge: number): Uint8Array | null {
   const image = nativeImage.createFromBuffer(Buffer.from(bytes))
   const { width, height } = image.getSize()

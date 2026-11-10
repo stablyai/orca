@@ -3,6 +3,9 @@ name: Linux Wayland GPU Sandbox
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: wayland terminal input
@@ -76,7 +79,7 @@ jobs:
           set -euo pipefail
           git checkout --force "$GITHUB_SHA"
           rm -rf out
-          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+          node config/scripts/diagnostics/wayland/verify-linux-wayland-gpu-sandbox.mjs
 
       - name: Upload Weston log
         if: always()

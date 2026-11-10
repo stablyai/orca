@@ -1,25 +1,23 @@
-import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
-} from '@/lib/ai-vault-resume-target'
+} from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   clearAiVaultSessionDragData,
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData
-} from '@/lib/ai-vault-session-drag'
-import {
-  buildAiVaultDropRepinStartup,
-  getAiVaultAgentProviderSession
-} from '@/lib/ai-vault-resume-command'
+} from '@/lib/agent-session/resume/history/ai-vault-session-drag'
+import { buildAiVaultDropRepinStartup } from '@/lib/agent-session/resume/history/ai-vault-resume-command'
+import { getAiVaultAgentProviderSession } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
-import { prepareAiVaultTerminalResumeRequest } from '@/lib/ai-vault-session-resume-preparation'
-import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
+import { prepareAiVaultTerminalResumeRequest } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
+import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
@@ -178,8 +176,7 @@ export default function AiVaultSessionDropLayer({
         return true
       }
       if (payload.structuredSession) {
-        // Same row, same reveal as clicking Resume. Activating by id alone cannot reach a chat
-        // whose tab is closed, which is the case this drop is most often used for.
+        // Use Resume’s reveal path because activating a chat by ID alone cannot reopen its closed tab.
         void activateAiVaultStructuredSession(payload)
         return true
       }
@@ -251,13 +248,17 @@ export default function AiVaultSessionDropLayer({
                 })
               : payload
           if (!startup) {
-            // Why: the host just proved the prebuilt command pins another
-            // account's home, so an unrepinnable payload (older serializer)
-            // must fail loudly rather than silently resume under it.
+            // Refuse old payloads that cannot repin the startup command; silently using another account’s home is unsafe.
             throw new Error(
               result.substituteCodexHome
-                ? 'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
-                : 'Orca could not prepare this legacy Codex session. Retry resume.'
+                ? translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragCannotRetarget',
+                    'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
+                  )
+                : translate(
+                    'auto.components.tab.group.AiVaultSessionDropLayer.legacyDragPrepareFailed',
+                    'Orca could not prepare this legacy Codex session. Retry resume.'
+                  )
             )
           }
           const providerSession = getAiVaultAgentProviderSession({

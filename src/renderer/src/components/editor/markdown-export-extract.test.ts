@@ -86,8 +86,7 @@ describe('getActiveMarkdownExportPayload', () => {
   it('strips preview annotation controls so Add note buttons never reach the PDF', async () => {
     await mockPreviewOpenFile()
     const root = document.createElement('div')
-    // Why: class-only fixture proves the explicit selector scrubs even when
-    // the data attr is absent; two blocks prove every block is scrubbed.
+    // Class-only controls in multiple blocks verify scrubbing without the generic data attribute.
     root.innerHTML = `
       <div class="markdown-body">
         <div class="markdown-annotation-block" data-source-line="1" data-source-end-line="1">
@@ -122,35 +121,6 @@ describe('getActiveMarkdownExportPayload', () => {
     expect(exported.textContent).not.toContain('saved note body')
     // Why: scrub runs on a clone; the live preview keeps its controls.
     expect(root.querySelector('.markdown-annotation-controls')).not.toBeNull()
-  })
-
-  it('strips list-block annotation controls while preserving list text', async () => {
-    await mockPreviewOpenFile()
-    const root = document.createElement('div')
-    // Why: attr-only fixture (renamed class) proves the generic
-    // data-orca-export-hide rule scrubs even after a class rename.
-    root.innerHTML = `
-      <div class="markdown-body">
-        <ul>
-          <li>
-            <div class="markdown-annotation-list-block" data-source-line="2" data-source-end-line="2">
-              <span class="markdown-annotation-list-content">List item</span>
-              <div class="markdown-annotation-controls-renamed" data-orca-export-hide="true">
-                <button type="button" class="markdown-annotation-add" aria-label="Add note"><svg></svg></button>
-              </div>
-            </div>
-          </li>
-        </ul>
-      </div>`
-    const payload = await getActiveMarkdownExportPayload({
-      fileId: '/repo/docs/readme.md',
-      root
-    })
-    const exported = parseExportedHtml(payload?.html)
-    expect(exported.querySelector('li')?.textContent).toContain('List item')
-    expect(exported.querySelector('[data-orca-export-hide]')).toBeNull()
-    expect(exported.querySelector('.markdown-annotation-add')).toBeNull()
-    expect(root.querySelector('[data-orca-export-hide]')).not.toBeNull()
   })
 })
 

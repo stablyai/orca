@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import type { EditorExternalWatchBatchPathIndex } from '@/components/editor/editor-external-watch-path-index'
-import { isExternalReloadableEditorTab } from '@/components/editor/editor-autosave'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { EditorExternalWatchBatchPathIndex } from '@/components/editor/external-changes/editor-external-watch-path-index'
+import { isExternalReloadableEditorTab } from '@/components/editor/autosave/editor-autosave'
 import { forgetCombinedDiffViewBodiesForWorktree } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
+import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import {
   PATH_EXISTENCE_BATCH_MAX,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import {
   getLocalWindowsWslAliasOption,
   getOpenFileRuntimeOwner,
@@ -75,14 +75,10 @@ type EditTabProbe = {
   notification: EditorExternalWatchNotification
 }
 
-/**
- * An overflow names no paths, so every clean tab of the workspace reloads.
- * A resync (the watch was down) also probes clean edit tabs for deletion; an event-storm overflow
- * skips that so it never fans out per-tab probes.
- */
+/** Overflow reloads clean workspace tabs; reconnect resync also probes deletions, while event-storm overflow avoids per-tab probe fan-out. */
 export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync: boolean): void {
   if (resync) {
-    // Why: unmounted combined-diff tabs get no per-path reload, so drop their cached bodies before a remount replays them.
+    // Invalidate bodies for unmounted combined diffs too, before remount can replay stale cached content.
     forgetCombinedDiffViewBodiesForWorktree(target.worktreeId)
   }
   const state = useAppStore.getState()
@@ -178,7 +174,7 @@ async function probeEditTabs(
   }
 }
 
-// Why: reloading a file deleted while unwatched would swap the last content for a read error; mark it deleted as a watch event would.
+// Mark confirmed deletions instead of replacing last-known content with read errors.
 async function reloadEditTabsUnlessGone(
   target: OverflowTarget,
   probes: readonly EditTabProbe[]

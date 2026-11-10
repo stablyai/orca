@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
+import { refreshLocalRuntimeCapabilities } from '../hosts/capabilities/local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
   latchLocalStructuredSessionRestore,
@@ -10,10 +10,10 @@ import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
 } from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
-import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { callRuntimeRpc } from '../runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 
 type StructuredSessionInventoryResponse = {
   snapshots?: RuntimeMobileSessionTabsResult[]
@@ -35,9 +35,7 @@ function isStructuredSessionInventoryResponse(
 export function restoreLocalStructuredSessionTabsOnce(
   expectedGeneration = localStructuredSessionGeneration()
 ): Promise<void> {
-  // Why concurrent: the capability refresh only seeds the module cache that later launch
-  // flows read; the inventory fetch never reads it, so chaining them only paid a second
-  // serial IPC round-trip on the startup gate.
+  // Capability refresh only seeds later launch routing; inventory does not read it, so parallelize their startup IPC round trips.
   return latchLocalStructuredSessionRestore(() =>
     Promise.all([
       refreshLocalRuntimeCapabilities(),
@@ -56,8 +54,7 @@ export function refreshLocalStructuredSessionTabs(
 ): Promise<RuntimeMobileSessionTabsResult[]> {
   // Capture request order before IPC: a reply that began before a close cannot retire its fence.
   const authoritativeInventory = beginStructuredAgentSessionAuthoritativeInventory()
-  // An explicit authoritative request can start cleanup before IPC. Otherwise wait until the
-  // host labels the response authoritative so failed/retrying ordinary refreshes do not churn RPCs.
+  // Explicit authority can start cleanup before IPC; ordinary refreshes wait for host affirmation or failed retries churn RPCs.
   if (options.authoritative) {
     startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
       closeStructuredAgentSession({ kind: 'local' }, sessionId)

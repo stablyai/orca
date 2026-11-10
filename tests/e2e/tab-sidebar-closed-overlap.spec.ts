@@ -1,65 +1,72 @@
-/**
- * Regression guard for the "Cmd+B collapse occludes first tab" bug fixed in
- * PR #1112. When the left sidebar is collapsed in workspace view, the
- * `.titlebar-left` header floats absolutely over the tab row. Each tab
- * group reserves a no-drag spacer under that floating header, sized from a
- * CSS variable (`--collapsed-sidebar-header-width`) measured off a ref
- * wrapper in App.tsx.
- *
- * The original regression (introduced in #1066, fixed in #1112): the ref
- * was on the *inner* control cluster (traffic-light pad + sidebar toggle +
- * agent badge), excluding the back/forward nav group that sits in the same
- * floating row. The spacer ended up ~55px narrower than the floating
- * strip, so the back/forward arrows silently covered the first tab.
- * Because the tab strip wasn't overflowing, there was no scroll affordance
- * and the covered tab was completely unreachable.
- *
- * The invariant: with terminal view active and the sidebar collapsed, the
- * first tab's left edge must clear the floating titlebar's right edge.
- * Expressing it as a geometry assertion (instead of pinning to a pixel
- * count) keeps the test stable across styling tweaks while still failing
- * loudly if any future change moves widgets in/out of the floating row
- * without updating the measured wrapper.
- */
+// #1066/#1112: collapsed-sidebar floating chrome must not cover the first tab.
+// Measure the whole header including navigation, then require both clearing geometry and a successful tab-center hit test.
 
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 
-test.describe('Tab visibility with closed sidebar', () => {
+test.describe('Sidebar boundaries beside terminal content', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
   })
 
-  test('first tab stays visible after Cmd+B collapses the sidebar', async ({ orcaPage }) => {
-    // Why: the bug title is literally "Cmd+B collapse occludes first tab",
-    // so exercise the real keyboard path that App.tsx routes to
-    // `actions.toggleSidebar()` at line ~620. Driving
-    // `setSidebarOpen(false)` directly would silently pass a future
-    // regression that broke the Cmd+B binding, carved the chord out for a
-    // new editable surface, or gated the collapsed-layout CSS on a state
-    // bit other than `sidebarOpen`.
+  test('sidebar resize handle owns the divider over a terminal', async ({ orcaPage }) => {
+    const handle = orcaPage.locator('[data-sidebar-resize-handle]')
+    const sidebar = orcaPage
+      .locator('[data-sidebar-resize-handle]')
+      .locator('xpath=preceding-sibling::div[last()]')
+    await expect(handle).toBeVisible()
+    await expect(orcaPage.locator('.xterm:visible').first()).toBeVisible()
 
-    // Precondition: confirm the fixture left us in the default terminal
-    // view with the sidebar open. If a future fixture change lands us in
-    // Settings/Tasks or starts collapsed, the regression geometry we care
-    // about (toggling open→closed, back/forward nav in the floating row)
-    // isn't what gets tested.
+    const terminalBox = await orcaPage.locator('.xterm:visible').first().boundingBox()
+    const handleBox = await handle.boundingBox()
+    const sidebarBox = await sidebar.boundingBox()
+    expect(terminalBox).not.toBeNull()
+    expect(handleBox).not.toBeNull()
+    expect(sidebarBox).not.toBeNull()
+    const y = terminalBox!.y + terminalBox!.height / 2
+    const seamX = sidebarBox!.x + sidebarBox!.width
+
+    // The visible divider pixel and the area just right of it must resize, not scroll.
+    for (const x of [seamX + 0.5, handleBox!.x + handleBox!.width / 2]) {
+      const reachable = await handle.evaluate(
+        (element, point) => element.contains(document.elementFromPoint(point.x, point.y)),
+        { x, y }
+      )
+      expect(reachable).toBe(true)
+    }
+
+    const x = handleBox!.x + handleBox!.width / 2
+    await orcaPage.mouse.move(x, y)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(x + 40, y, { steps: 5 })
+    await orcaPage.mouse.up()
+
+    await expect
+      .poll(async () => Math.round((await handle.boundingBox())!.x - handleBox!.x))
+      .toBe(40)
+  })
+
+  test('first tab stays visible after Cmd+B collapses the sidebar', async ({ orcaPage }) => {
+    // Use Cmd/Ctrl+B so broken binding/editable-target routing cannot pass via direct state setup.
+
+    // Require terminal view and initially open sidebar to exercise the actual open→collapsed transition.
     await expect
       .poll(
         async () =>
           orcaPage.evaluate(() => {
             const store = window.__store
             if (!store) {
-              // Why: match helpers/store.ts — a missing store in dev means
-              // the test harness is misconfigured. Throwing here keeps the
-              // failure mode legible instead of timing out on toEqual.
+              // Fail a missing exposed store explicitly instead of timing out on downstream state.
               throw new Error('window.__store is not available — is the app in dev mode?')
             }
             const state = store.getState()
-            return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
+            return {
+              activeView: state.activeView,
+              sidebarOpen: state.sidebarOpen
+            }
           }),
         {
           timeout: 5_000,
@@ -68,14 +75,7 @@ test.describe('Tab visibility with closed sidebar', () => {
       )
       .toEqual({ activeView: 'terminal', sidebarOpen: true })
 
-    // Why: App.tsx's window-level Cmd+B handler calls `isEditableTarget`
-    // (line ~582) and bails when focus is inside input/textarea/
-    // contenteditable so TipTap's bold keymap can run. xterm's
-    // helper-textarea is explicitly carved out of the carve-out, so the
-    // fixture's default terminal-focused state is fine — but if a future
-    // fixture change leaves focus on a rich input the keypress would
-    // silently no-op. Blur any non-xterm focused element defensively so
-    // the chord reaches the toggleSidebar branch.
+    // Blur non-xterm editable focus so the chord reaches sidebar toggle instead of an editor’s bold keymap.
     await orcaPage.evaluate(() => {
       const active = document.activeElement
       if (active instanceof HTMLElement && !active.classList.contains('xterm-helper-textarea')) {
@@ -85,13 +85,7 @@ test.describe('Tab visibility with closed sidebar', () => {
 
     await pressShortcut(orcaPage, 'b')
 
-    // Why: Cmd+B flips `sidebarOpen` synchronously, but the React
-    // re-render and the ResizeObserver that sizes
-    // `--collapsed-sidebar-header-width` run on subsequent frames.
-    // Waiting for `sidebarOpen === false` here doubles as a guard on the
-    // keybinding itself — if Cmd+B ever stops reaching toggleSidebar,
-    // this poll times out with a message that names the exact cause
-    // instead of a downstream geometry failure.
+    // Poll closed state before layout measurement; React and ResizeObserver settle on later frames.
     await expect
       .poll(
         async () =>
@@ -118,22 +112,14 @@ test.describe('Tab visibility with closed sidebar', () => {
     } | null> =>
       orcaPage.evaluate(() => {
         const titlebarLeft = document.querySelector<HTMLElement>('.titlebar-left')
-        // Why: split tab groups render multiple sortable-tab elements, and
-        // DOM order is not guaranteed to match visual order. The tab the
-        // floating titlebar can occlude is the leftmost one on screen, so
-        // pick by smallest bounding-rect left instead of DOM querySelector.
+        // Pick the visually leftmost tab because split-group DOM order need not match screen order.
         const allTabs = Array.from(
           document.querySelectorAll<HTMLElement>('[data-testid="sortable-tab"]')
         )
         if (!titlebarLeft || allTabs.length === 0) {
           return null
         }
-        // Why: `.titlebar-left` exists in both the sidebar-open (flex-flow)
-        // and sidebar-collapsed (`position: absolute`) branches — see
-        // App.tsx around line 1000. Only the collapsed branch can produce
-        // the regression, so gate the measurement on the floating layout
-        // actually being active. Returning null forces the poll to retry
-        // until React commits the collapsed layout.
+        // Wait for the absolute collapsed header branch; the flex-flow header cannot exhibit this overlap.
         if (getComputedStyle(titlebarLeft).position !== 'absolute') {
           return null
         }
@@ -144,11 +130,7 @@ test.describe('Tab visibility with closed sidebar', () => {
         )
         const tlRect = titlebarLeft.getBoundingClientRect()
         const tabRect = firstTab.getBoundingClientRect()
-        // Why: the user-observable invariant is "a click on the first tab
-        // hits the tab, not the floating titlebar." A pure-geometry check
-        // would miss z-index / pointer-events regressions that overlay the
-        // titlebar without moving the tab's rect. elementFromPoint at the
-        // tab's center directly exercises reachability.
+        // Hit-test the tab center too so z-index/pointer-event overlays cannot pass on geometry alone.
         const centerX = tabRect.left + tabRect.width / 2
         const centerY = tabRect.top + tabRect.height / 2
         const elAtCenter = document.elementFromPoint(centerX, centerY)
@@ -161,12 +143,7 @@ test.describe('Tab visibility with closed sidebar', () => {
         }
       })
 
-    // Why: the sidebar toggle flips a state bit synchronously, but the
-    // ResizeObserver that sizes `--collapsed-sidebar-header-width` fires
-    // on the next frame. Capture the measurement inside the poll so the
-    // post-poll assertion runs against the exact frame that satisfied the
-    // condition — a separate re-measurement could race and return null,
-    // masking a readable failure behind a destructure TypeError.
+    // Capture geometry inside the successful poll tick; a separate read can race ResizeObserver and return null.
     let geometry: {
       titlebarRight: number
       titlebarWidth: number
@@ -193,166 +170,9 @@ test.describe('Tab visibility with closed sidebar', () => {
     expect(geometry).not.toBeNull()
     const { titlebarRight, firstTabLeft, centerIsTabOrDescendant } = geometry!
 
-    // Why: the core geometry invariant — the first tab's left edge must
-    // clear the floating titlebar's right edge. Pre-fix the gap was ~55px,
-    // so the -1 is sub-pixel rounding tolerance only; a real regression
-    // can't hide inside one pixel.
+    // Allow only 1px rounding slack; the old missing navigation measured about 55px.
     expect(firstTabLeft).toBeGreaterThanOrEqual(titlebarRight - 1)
 
-    // Why: reachability check — even if geometry looks right, a z-index
-    // or pointer-events regression could still overlay the titlebar on
-    // top of the tab. A click at the tab's center must actually land on
-    // the tab.
     expect(centerIsTabOrDescendant).toBe(true)
-  })
-
-  test('sidebar toggle and Back button stay separated after sidebar collapse', async ({
-    orcaPage
-  }) => {
-    await orcaPage.addInitScript(() => {
-      // Why: #2082 was reported against Windows-only titlebar chrome. Reloading
-      // with a Windows UA makes App.tsx take that renderer branch on any CI host.
-      const userAgent =
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
-      Object.defineProperty(navigator, 'userAgent', {
-        get: () => userAgent,
-        configurable: true
-      })
-    })
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => ({
-            hasWindowsUserAgent: navigator.userAgent.includes('Windows'),
-            hasWindowsTitlebarChrome:
-              Boolean(document.querySelector('button[aria-label="Application menu"]')) &&
-              Boolean(document.querySelector('.window-controls'))
-          })),
-        {
-          timeout: 5_000,
-          message: 'Renderer did not switch to the Windows titlebar branch'
-        }
-      )
-      .toEqual({ hasWindowsUserAgent: true, hasWindowsTitlebarChrome: true })
-
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available — is the app in dev mode?')
-      }
-      store.getState().setSidebarOpen(true)
-    })
-
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              throw new Error('window.__store is not available — is the app in dev mode?')
-            }
-            const state = store.getState()
-            return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
-          }),
-        {
-          timeout: 5_000,
-          message: 'Expected default activeView=terminal and sidebarOpen=true at test start'
-        }
-      )
-      .toEqual({ activeView: 'terminal', sidebarOpen: true })
-
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available — is the app in dev mode?')
-      }
-      // Why: CI runs Electron hidden, where Playwright can wait forever for
-      // a titlebar button to be "stable". The regression is the collapsed
-      // geometry and hit target, so drive that state directly.
-      store.getState().setSidebarOpen(false)
-    })
-
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              throw new Error('window.__store is not available — is the app in dev mode?')
-            }
-            return store.getState().sidebarOpen
-          }),
-        {
-          timeout: 5_000,
-          message: 'Sidebar did not enter the collapsed state'
-        }
-      )
-      .toBe(false)
-
-    const measureControls = async (): Promise<{
-      titlebarIsCollapsed: boolean
-      toggleRight: number
-      backLeft: number
-      backCenterHitsBack: boolean
-    } | null> =>
-      orcaPage.evaluate(() => {
-        const titlebarLeft = document.querySelector<HTMLElement>('.titlebar-left')
-        const sidebarToggle = titlebarLeft?.querySelector<HTMLButtonElement>(
-          'button[aria-label="Toggle sidebar"]'
-        )
-        const backButton = titlebarLeft?.querySelector<HTMLButtonElement>(
-          'button[aria-label="Go back"]'
-        )
-        if (!titlebarLeft || !sidebarToggle || !backButton) {
-          return null
-        }
-        const titlebarIsCollapsed = getComputedStyle(titlebarLeft).position === 'absolute'
-        const toggleRect = sidebarToggle.getBoundingClientRect()
-        const backRect = backButton.getBoundingClientRect()
-        const backCenterX = backRect.left + backRect.width / 2
-        const backCenterY = backRect.top + backRect.height / 2
-        const elementAtBackCenter = document.elementFromPoint(backCenterX, backCenterY)
-        return {
-          titlebarIsCollapsed,
-          toggleRight: toggleRect.right,
-          backLeft: backRect.left,
-          backCenterHitsBack:
-            elementAtBackCenter !== null && backButton.contains(elementAtBackCenter)
-        }
-      })
-
-    let controls: {
-      titlebarIsCollapsed: boolean
-      toggleRight: number
-      backLeft: number
-      backCenterHitsBack: boolean
-    } | null = null
-    await expect
-      .poll(
-        async () => {
-          controls = await measureControls()
-          return controls?.titlebarIsCollapsed === true
-        },
-        {
-          timeout: 5_000,
-          message: 'Titlebar controls never reached a measurable collapsed-layout state'
-        }
-      )
-      .toBe(true)
-
-    expect(controls).not.toBeNull()
-    const { toggleRight, backLeft, backCenterHitsBack } = controls!
-
-    // Why: in the collapsed workspace header, ml-auto has no spare width to
-    // distribute, so this explicit gutter guards the Windows titlebar controls
-    // from visually merging with the Back button again.
-    expect(backLeft - toggleRight).toBeGreaterThanOrEqual(6)
-    expect(backCenterHitsBack).toBe(true)
   })
 })

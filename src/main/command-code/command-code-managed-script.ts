@@ -1,10 +1,11 @@
-import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
+  buildWindowsHookEnvironmentGuardLines
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 export type CommandCodeManagedScriptTarget = 'local' | 'posix'
 
@@ -15,6 +16,7 @@ export function buildCommandCodeManagedScript(
     return [
       '@echo off',
       'setlocal',
+      `if "%${ORCA_AGENT_HOOKS_DISABLED_ENV}%"=="1" exit /b 0`,
       'if "%ORCA_AGENT_HOOK_PORT%"=="" if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if not "%ORCA_AGENT_HOOK_PORT%"=="" call :sourceEndpointByPort',
       ...buildWindowsHookEnvironmentGuardLines(),
@@ -23,13 +25,18 @@ export function buildCommandCodeManagedScript(
       ':sourceEndpointByPort',
       'if not defined APPDATA exit /b 0',
       'if exist "%APPDATA%\\orca-dev\\agent-hooks" for /r "%APPDATA%\\orca-dev\\agent-hooks" %%F in (endpoint.cmd) do call :maybeSourceEndpoint "%%~fF"',
+      // Per-worktree `pnpm dev` profiles live one level down; FOR /R cannot take a FOR variable as its root.
+      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if exist "%APPDATA%\\orca-dev-wt" for /d %%P in ("%APPDATA%\\orca-dev-wt\\*") do call :scanEndpointDir "%%~fP\\agent-hooks"',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if exist "%APPDATA%\\orca\\agent-hooks" for /r "%APPDATA%\\orca\\agent-hooks" %%F in (endpoint.cmd) do call :maybeSourceEndpoint "%%~fF"',
+      'exit /b 0',
+      ':scanEndpointDir',
+      'if not "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+      'if exist "%~1" for /r "%~1" %%F in (endpoint.cmd) do call :maybeSourceEndpoint "%%~fF"',
       'exit /b 0',
       ':maybeSourceEndpoint',
       'if not "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'for /f "tokens=2 delims==" %%P in (\'findstr /b /c:"set ORCA_AGENT_HOOK_PORT=" "%~1" 2^>nul\') do if "%%P"=="%ORCA_AGENT_HOOK_PORT%" call "%~1" 2>nul',
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -37,18 +44,22 @@ export function buildCommandCodeManagedScript(
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
+    `if [ "\${${ORCA_AGENT_HOOKS_DISABLED_ENV}:-}" = 1 ]; then exit 0; fi`,
     ...buildPosixHookSpoolLines('command-code'),
     '__orca_read_ancestor_var() {',
     '  __orca_name="$1"',
     '  __orca_pid="${PPID:-}"',
     '  while [ -n "$__orca_pid" ] && [ "$__orca_pid" != "0" ] && [ "$__orca_pid" != "1" ]; do',
-    '    __orca_value=""',
+    '    __orca_env=""',
     '    if [ -r "/proc/$__orca_pid/environ" ]; then',
-    '      __orca_value=$(tr "\\000" "\\n" < "/proc/$__orca_pid/environ" 2>/dev/null | sed -n "s/^${__orca_name}=//p" | head -n 1)',
+    '      __orca_env=$(tr "\\000" "\\n" < "/proc/$__orca_pid/environ" 2>/dev/null)',
     '    fi',
-    '    if [ -z "$__orca_value" ]; then',
-    '      __orca_value=$(ps eww -p "$__orca_pid" -o command= 2>/dev/null | tr " " "\\n" | sed -n "s/^${__orca_name}=//p" | head -n 1)',
+    '    if [ -z "$__orca_env" ]; then',
+    '      __orca_env=$(ps eww -p "$__orca_pid" -o command= 2>/dev/null | tr " " "\\n")',
     '    fi',
+    // A scrubbed hook may recover identity, but must never cross a background launch.
+    `    if printf '%s\\n' "$__orca_env" | grep -qx '${ORCA_AGENT_HOOKS_DISABLED_ENV}=1'; then return 1; fi`,
+    '    __orca_value=$(printf "%s\\n" "$__orca_env" | sed -n "s/^${__orca_name}=//p" | head -n 1)',
     '    if [ -n "$__orca_value" ]; then',
     '      printf "%s\\n" "$__orca_value"',
     '      return 0',
@@ -93,23 +104,22 @@ export function buildCommandCodeManagedScript(
     '    [ -n "$__orca_endpoint_value" ] && export "$__orca_endpoint_name=$__orca_endpoint_value"',
     '  done',
     '}',
-    '# Why: Command Code sanitizes hook subprocess env. The parent TUI process',
-    '# still has Orca pane/hook metadata, so recover it before posting.',
+    '# Recover pane/hook metadata from the parent TUI after Command Code sanitizes hook env.',
     'for __orca_name in ORCA_AGENT_HOOK_ENDPOINT ORCA_AGENT_HOOK_PORT ORCA_AGENT_HOOK_TOKEN ORCA_AGENT_HOOK_ENV ORCA_AGENT_HOOK_VERSION ORCA_PANE_KEY ORCA_TAB_ID ORCA_WORKTREE_ID ORCA_AGENT_LAUNCH_TOKEN; do',
     '  __orca_fill_from_ancestor "$__orca_name"',
     'done',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  __orca_fill_from_endpoint_file "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
-    '# Why: Command Code strips TOKEN-like env vars before invoking hooks. If',
-    '# ORCA_AGENT_HOOK_ENDPOINT was not exported into this PTY, recover the',
-    '# matching endpoint file by the unstripped loopback port.',
+    '# Recover stripped token metadata by matching the preserved loopback port.',
     'if [ -z "$ORCA_AGENT_HOOK_TOKEN" ] && [ -n "$ORCA_AGENT_HOOK_PORT" ]; then',
     '  for endpoint in \\',
     '    "$HOME/Library/Application Support/orca-dev/agent-hooks"/*/endpoint.env \\',
     '    "$HOME/Library/Application Support/orca-dev/agent-hooks/endpoint.env" \\',
     '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca-dev/agent-hooks"/*/endpoint.env \\',
     '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca-dev/agent-hooks/endpoint.env" \\',
+    '    "$HOME/Library/Application Support/orca-dev-wt"/*/agent-hooks/*/endpoint.env \\',
+    '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca-dev-wt"/*/agent-hooks/*/endpoint.env \\',
     '    "$HOME/Library/Application Support/orca/agent-hooks/endpoint.env" \\',
     '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca/agent-hooks/endpoint.env"; do',
     '    [ -r "$endpoint" ] || continue',
@@ -124,11 +134,8 @@ export function buildCommandCodeManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/command-code" \\',
+    // Bound stalled posts and pipe large payloads through stdin to avoid EDR command-line false positives.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/command-code" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

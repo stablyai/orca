@@ -1,0 +1,362 @@
+import type React from 'react'
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import {
+  normalizeProxyBypassRules,
+  normalizeProxyUrl,
+  PROXY_URL_FAILURE_COPY,
+  type ProxyUrlFailureCode
+} from '../../../../../../shared/network-proxy'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '../../../../store/index'
+import { Button } from '../../../ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
+import { Input } from '../../../ui/input'
+import { Label } from '../../../ui/label'
+import { Textarea } from '../../../ui/textarea'
+import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
+import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../../search/settings-search'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+
+export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
+  return (
+    normalizeSettingsSearchQuery(searchQuery) !== '' &&
+    matchesSettingsSearch(searchQuery, getAdvancedNetworkSearchEntries())
+  )
+}
+
+/** Reveal configured proxies so saved values cannot remain hidden. */
+export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
+  return Boolean(
+    settings.httpProxyUrl?.trim() ||
+    settings.httpProxyBypassRules?.trim() ||
+    settings.nodeDistMirrorUrl?.trim()
+  )
+}
+
+export type HttpProxyUrlDraftState = {
+  sourceValue: string
+  draft: string
+  // A code, so the message follows the UI language.
+  error: ProxyUrlFailureCode | null
+}
+
+function proxyUrlErrorText(code: ProxyUrlFailureCode, t: Translate = translate): string {
+  switch (code) {
+    case 'tooLong':
+      return t('settings.network.proxyUrlErrors.tooLong', PROXY_URL_FAILURE_COPY.tooLong)
+    case 'invalid':
+      return t('settings.network.proxyUrlErrors.invalid', PROXY_URL_FAILURE_COPY.invalid)
+    case 'unsupportedProtocol':
+      return t(
+        'settings.network.proxyUrlErrors.unsupportedProtocol',
+        PROXY_URL_FAILURE_COPY.unsupportedProtocol
+      )
+    case 'missingHost':
+      return t('settings.network.proxyUrlErrors.missingHost', PROXY_URL_FAILURE_COPY.missingHost)
+  }
+}
+
+export function createHttpProxyUrlDraftState(
+  httpProxyUrl: string | undefined
+): HttpProxyUrlDraftState {
+  const sourceValue = httpProxyUrl ?? ''
+  return {
+    sourceValue,
+    draft: sourceValue,
+    error: null
+  }
+}
+
+function resolveHttpProxyUrlDraftState(
+  state: HttpProxyUrlDraftState,
+  httpProxyUrl: string | undefined
+): HttpProxyUrlDraftState {
+  const sourceValue = httpProxyUrl ?? ''
+  return state.sourceValue === sourceValue ? state : createHttpProxyUrlDraftState(httpProxyUrl)
+}
+
+export function updateHttpProxyUrlDraftState(
+  state: HttpProxyUrlDraftState,
+  httpProxyUrl: string | undefined,
+  draft: string
+): HttpProxyUrlDraftState {
+  return {
+    // Persistence is async; edits after external reload must build on the latest proxy source.
+    ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
+    draft,
+    error: null
+  }
+}
+
+export function setHttpProxyUrlDraftErrorState(
+  state: HttpProxyUrlDraftState,
+  httpProxyUrl: string | undefined,
+  error: ProxyUrlFailureCode
+): HttpProxyUrlDraftState {
+  return {
+    ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
+    error
+  }
+}
+
+export type HttpProxyBypassRulesDraftState = {
+  sourceValue: string
+  draft: string
+}
+
+export function createHttpProxyBypassRulesDraftState(
+  httpProxyBypassRules: string | undefined
+): HttpProxyBypassRulesDraftState {
+  const sourceValue = httpProxyBypassRules ?? ''
+  return {
+    sourceValue,
+    draft: sourceValue
+  }
+}
+
+function resolveHttpProxyBypassRulesDraftState(
+  state: HttpProxyBypassRulesDraftState,
+  httpProxyBypassRules: string | undefined
+): HttpProxyBypassRulesDraftState {
+  const sourceValue = httpProxyBypassRules ?? ''
+  return state.sourceValue === sourceValue
+    ? state
+    : createHttpProxyBypassRulesDraftState(httpProxyBypassRules)
+}
+
+export function updateHttpProxyBypassRulesDraftState(
+  state: HttpProxyBypassRulesDraftState,
+  httpProxyBypassRules: string | undefined,
+  draft: string
+): HttpProxyBypassRulesDraftState {
+  return {
+    ...resolveHttpProxyBypassRulesDraftState(state, httpProxyBypassRules),
+    draft
+  }
+}
+
+type AdvancedNetworkSettingsSectionProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}
+
+export function AdvancedNetworkSettingsSection({
+  settings,
+  updateSettings
+}: AdvancedNetworkSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
+  const proxyConfigForcedOpen =
+    shouldOpenNetworkProxyConfig(searchQuery) || hasConfiguredNetworkProxy(settings)
+  const proxyConfigExpanded = proxyConfigOpen || proxyConfigForcedOpen
+
+  const [httpProxyUrlDraftState, setHttpProxyUrlDraftState] = useState(() =>
+    createHttpProxyUrlDraftState(settings.httpProxyUrl)
+  )
+  const [httpProxyBypassRulesDraftState, setHttpProxyBypassRulesDraftState] = useState(() =>
+    createHttpProxyBypassRulesDraftState(settings.httpProxyBypassRules)
+  )
+
+  const resolvedHttpProxyUrlDraftState = resolveHttpProxyUrlDraftState(
+    httpProxyUrlDraftState,
+    settings.httpProxyUrl
+  )
+  if (resolvedHttpProxyUrlDraftState !== httpProxyUrlDraftState) {
+    // Reconcile external settings before paint so stale network values cannot flash.
+    setHttpProxyUrlDraftState(resolvedHttpProxyUrlDraftState)
+  }
+  const httpProxyUrlDraft = resolvedHttpProxyUrlDraftState.draft
+  const httpProxyUrlError = resolvedHttpProxyUrlDraftState.error
+
+  const resolvedHttpProxyBypassRulesDraftState = resolveHttpProxyBypassRulesDraftState(
+    httpProxyBypassRulesDraftState,
+    settings.httpProxyBypassRules
+  )
+  if (resolvedHttpProxyBypassRulesDraftState !== httpProxyBypassRulesDraftState) {
+    // Reconcile local bypass drafts when external settings reload replaces their source.
+    setHttpProxyBypassRulesDraftState(resolvedHttpProxyBypassRulesDraftState)
+  }
+  const httpProxyBypassRulesDraft = resolvedHttpProxyBypassRulesDraftState.draft
+
+  const updateHttpProxyUrlDraft = (draft: string): void => {
+    setHttpProxyUrlDraftState((current) =>
+      updateHttpProxyUrlDraftState(current, settings.httpProxyUrl, draft)
+    )
+  }
+
+  const updateHttpProxyBypassRulesDraft = (draft: string): void => {
+    setHttpProxyBypassRulesDraftState((current) =>
+      updateHttpProxyBypassRulesDraftState(current, settings.httpProxyBypassRules, draft)
+    )
+  }
+
+  const commitHttpProxyUrl = (): void => {
+    const normalized = normalizeProxyUrl(httpProxyUrlDraft)
+    if (!normalized.ok) {
+      setHttpProxyUrlDraftState((current) =>
+        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.code)
+      )
+      return
+    }
+    setHttpProxyUrlDraftState((current) =>
+      updateHttpProxyUrlDraftState(current, settings.httpProxyUrl, normalized.value)
+    )
+    if (normalized.value !== (settings.httpProxyUrl ?? '')) {
+      updateSettings({ httpProxyUrl: normalized.value })
+    }
+  }
+
+  const commitHttpProxyBypassRules = (): void => {
+    const normalized = normalizeProxyBypassRules(httpProxyBypassRulesDraft)
+    setHttpProxyBypassRulesDraftState((current) =>
+      updateHttpProxyBypassRulesDraftState(current, settings.httpProxyBypassRules, normalized)
+    )
+    if (normalized !== (settings.httpProxyBypassRules ?? '')) {
+      updateSettings({ httpProxyBypassRules: normalized })
+    }
+  }
+
+  return (
+    <SearchableSetting
+      title={t('auto.components.settings.AdvancedNetworkSettingsSection.c46cdbbd4e', 'Network')}
+      description={t(
+        'auto.components.settings.AdvancedNetworkSettingsSection.823e0f15b1',
+        'Proxy URL for Orca network requests and local terminal children.'
+      )}
+      keywords={[
+        'proxy',
+        'http_proxy',
+        'https_proxy',
+        'no_proxy',
+        'network',
+        'bypass',
+        'localhost',
+        'mirror',
+        'nodejs'
+      ]}
+      className="space-y-3 py-3"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 space-y-0.5">
+          <Label>
+            {t('auto.components.settings.AdvancedNetworkSettingsSection.f8ec545b7c', 'HTTP proxy')}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.AdvancedNetworkSettingsSection.1e214e265a',
+              'Leave empty to use system proxy settings and inherited proxy environment variables.'
+            )}
+          </p>
+        </div>
+      </div>
+
+      <Collapsible open={proxyConfigExpanded} onOpenChange={setProxyConfigOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-ml-2 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {t(
+              'auto.components.settings.AdvancedNetworkSettingsSection.configureProxy',
+              'Configure proxy'
+            )}
+            <ChevronDown
+              className={cn('size-3.5 transition-transform', proxyConfigExpanded && 'rotate-180')}
+            />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 space-y-4 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+            <div className="space-y-2">
+              <Label htmlFor="settings-http-proxy-url">
+                {t(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.f8ec545b7c',
+                  'HTTP proxy'
+                )}
+              </Label>
+              <Input
+                id="settings-http-proxy-url"
+                value={httpProxyUrlDraft}
+                onChange={(e) => {
+                  updateHttpProxyUrlDraft(e.target.value)
+                }}
+                onBlur={commitHttpProxyUrl}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur()
+                  }
+                }}
+                placeholder={t(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.476f302aca',
+                  'http://proxy.example.com:8080'
+                )}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                aria-invalid={httpProxyUrlError ? true : undefined}
+                className="font-mono text-xs"
+              />
+              {httpProxyUrlError ? (
+                <p className="text-xs text-destructive">
+                  {proxyUrlErrorText(httpProxyUrlError, t)}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.AdvancedNetworkSettingsSection.0adfce9fa7',
+                    'Supports http, https, socks, socks4, and socks5 URLs.'
+                  )}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="settings-http-proxy-bypass-rules">
+                {t(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.abbc3efa4a',
+                  'Proxy bypass rules'
+                )}
+              </Label>
+              <Textarea
+                id="settings-http-proxy-bypass-rules"
+                value={httpProxyBypassRulesDraft}
+                onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
+                onBlur={commitHttpProxyBypassRules}
+                placeholder={t(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5',
+                  'localhost, 127.0.0.1, *.internal'
+                )}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                rows={3}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.33ee3ca3af',
+                  'Optional. Separate hosts with commas, semicolons, or new lines.'
+                )}
+              </p>
+            </div>
+
+            <NodeDistMirrorSettingField
+              value={settings.nodeDistMirrorUrl}
+              onCommit={(nodeDistMirrorUrl) => updateSettings({ nodeDistMirrorUrl })}
+            />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </SearchableSetting>
+  )
+}

@@ -1,3 +1,4 @@
+import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
 import type { LinearProjectDetail, LinearProjectSummary } from '../../shared/linear/project-types'
 import type {
   LinearCollectionResult,
@@ -28,12 +29,14 @@ import {
   normalizeConcreteWorkspaceId
 } from './linear-project-models'
 import { readCollection } from './linear-project-collection-read'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function listProjects(
   query: string | undefined,
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
   const first = clampLimit(limit)
   const trimmed = query?.trim()
@@ -50,17 +53,19 @@ export async function listProjects(
       const connection = trimmed ? result.data?.searchProjects : result.data?.projects
       return {
         items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: !!connection?.pageInfo?.hasNextPage
+        hasMore: linearConnectionHasNextPage(connection)
       }
     },
-    force
+    force,
+    signal
   )
 }
 
 export async function listProjectsByExactName(
   name: string,
   workspaceId: LinearConcreteWorkspaceId,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearProjectSummary[]> {
   const projectName = name.trim()
   if (!projectName) {
@@ -72,16 +77,17 @@ export async function listProjectsByExactName(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId)
+      const entries = getClients(concreteWorkspaceId, signal)
       const entry = entries[0]
       if (!entry) {
         return []
       }
-      await acquire()
+      await acquire(signal)
       try {
         const matches: LinearProjectSummary[] = []
         let after: string | undefined
         while (true) {
+          signal?.throwIfAborted()
           const result = await entry.client.client.rawRequest<
             ProjectConnectionResponse,
             LinearRawVariables
@@ -98,10 +104,10 @@ export async function listProjectsByExactName(
           }
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
           if (
-            connection?.pageInfo?.hasNextPage !== true ||
+            !linearConnectionHasNextPage(connection) ||
             !nextCursor ||
             nextCursor === after ||
-            (connection.nodes ?? []).length === 0
+            (connection?.nodes ?? []).length === 0
           ) {
             break
           }
@@ -117,14 +123,16 @@ export async function listProjectsByExactName(
         release()
       }
     },
-    force
+    force,
+    signal
   )
 }
 
 export async function getProject(
   id: string,
   workspaceId: LinearConcreteWorkspaceId,
-  force = false
+  force = false,
+  signal?: AbortSignal
 ): Promise<LinearProjectDetail | null> {
   const projectId = id.trim()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
@@ -135,13 +143,14 @@ export async function getProject(
   return coalesce(
     key,
     async () => {
-      const entries = getClients(concreteWorkspaceId)
+      const entries = getClients(concreteWorkspaceId, signal)
       const entry = entries[0]
       if (!entry) {
         return null
       }
-      await acquire()
+      await acquire(signal)
       try {
+        signal?.throwIfAborted()
         const result = await entry.client.client.rawRequest<
           ProjectConnectionResponse,
           LinearRawVariables
@@ -158,7 +167,8 @@ export async function getProject(
         release()
       }
     },
-    force
+    force,
+    signal
   )
 }
 
@@ -168,7 +178,7 @@ export async function createProject(
 ): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
@@ -180,7 +190,7 @@ export async function createProject(
     const payload = result.data?.projectCreate
     const project = payload?.project
     if (!payload?.success || !project) {
-      return { ok: false, error: 'Linear project create failed' }
+      return taskProviderFailure('linear.projectCreateFailed', 'Linear project create failed')
     }
     return { ok: true, project: mapProjectDetailForWorkspace(entry, project) }
   } catch (error) {

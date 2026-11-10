@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-11-01T21:32:23.000Z",
+  "platform": "darwin",
+  "command": [
+    "claude",
+    "--agent",
+    "ultracode",
+    "--agents",
+    "{\"ultracode\":{\"description\":\"QA composer capture\",\"prompt\":\"Assist with software tasks.\",\"color\":\"purple\"}}",
+    "--permission-mode",
+    "bypassPermissions"
+  ],
+  "env": {
+    "CLAUDE_CODE_NATIVE_CURSOR": "1",
+    "TERM": "xterm-256color"
+  },
+  "cols": 40,
+  "rows": 30,
+  "note": "Claude Code 2.1.316; real PTY in a throwaway home. Custom main-agent label; no prompt submitted. The empty composer draws no placeholder in this version. Snapshot retains terminal cursor and raw redraw bytes.",
+  "exitCode": -9
+}

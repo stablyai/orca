@@ -27,6 +27,9 @@ describe('WorkspaceGitIdentity', () => {
   it('clears branch-scoped links on a branch switch it saw, never on the first sight', () => {
     const identity = new WorkspaceGitIdentity()
     expect(identity.observeScan([row({ branch: 'refs/heads/z' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: '' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: 'refs/heads/z' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: '' })], SCANNED)).toEqual([])
     const clears = identity.observeScan([row()], SCANNED)
     expect(clears).toEqual([
       {
@@ -38,12 +41,10 @@ describe('WorkspaceGitIdentity', () => {
     expect(identity.observeScan([row({ linkedPR: null })], SCANNED)).toEqual([])
   })
 
-  it('keeps a link written after the last scan, which may belong to the new branch', () => {
+  it('preserves review links when first opened detached without a known owning branch', () => {
     const identity = new WorkspaceGitIdentity()
-    identity.observeScan([row({ linkedPR: null })], SCANNED)
-    expect(identity.observeScan([row({ branch: 'refs/heads/b', linkedPR: 9 })], SCANNED)).toEqual(
-      []
-    )
+    expect(identity.observeScan([row({ branch: '' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: 'refs/heads/b' })], SCANNED)).toEqual([])
   })
 
   it('keeps a PR linked on a new branch that a cached rescan still reported as the old one', () => {
@@ -56,15 +57,6 @@ describe('WorkspaceGitIdentity', () => {
     expect(identity.observeScan([row({ branch: 'refs/heads/b', linkedPR: 9 })], SCANNED)).toEqual(
       []
     )
-  })
-
-  it('records a link once git ran again on the same branch, so a later switch clears it', () => {
-    const identity = new WorkspaceGitIdentity()
-    identity.observeScan([row({ linkedPR: null })], SCANNED)
-    identity.observeScan([row({ linkedPR: 9 })], SCANNED)
-    expect(
-      identity.observeScan([row({ branch: 'refs/heads/b', linkedPR: 9 })], SCANNED)
-    ).toHaveLength(1)
   })
 
   it('treats a recreated workspace, or one with no instance id, as new', () => {

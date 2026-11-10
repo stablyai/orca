@@ -1,12 +1,12 @@
 import type React from 'react'
 import type { useAppStore } from '@/store'
-import type { parseGitHubIssueOrPRLink, RepoSlug } from '@/lib/github-links'
+import type { parseGitHubIssueOrPRLink, RepoSlug } from '../../../../shared/github/links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type {
   SmartNameMode,
   SmartWorkspaceSourceRow
@@ -105,7 +105,12 @@ export type WorkItemSourceSearchProps = Pick<
   | 'gitlabSourceContext'
   | 'linearSourceContext'
   | 'jiraSourceContext'
-> & { sourceSelected?: boolean; gitlabEnabled?: boolean; typedTextEnabled?: boolean }
+> & {
+  sourceSelected?: boolean
+  gitlabEnabled?: boolean
+  typedTextEnabled?: boolean
+  defaultLinearWorkspaceId?: string
+}
 export type NormalizedWorkItemSourceSearchProps = WorkItemSourceSearchProps & {
   disabled: boolean
   textOnly: boolean

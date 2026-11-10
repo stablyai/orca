@@ -1,5 +1,8 @@
-import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-range-read'
-import { readRuntimeFileRange, statRuntimeReadTarget } from '@/runtime/runtime-file-range-client'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-content/file-range-read'
+import {
+  readRuntimeFileRange,
+  statRuntimeReadTarget
+} from '@/runtime/files/reads/runtime-file-range-client'
 import type { CsvFilePreview } from './csv-file-content'
 import {
   CSV_MAX_PAGE_BYTES,
@@ -8,6 +11,7 @@ import {
   type CsvPageRange
 } from './csv-byte-index'
 import { CsvPreviewWorkerClient } from './csv-preview-worker-client'
+import { CsvPreviewError } from './csv-preview-error'
 
 const CACHE_CELLS = 512 * 1024
 const CACHE_BYTES = 8 * 1024 * 1024
@@ -32,7 +36,7 @@ export class CsvPagedPreview {
       current.isDirectory
     ) {
       this.clearCache()
-      throw new Error('CSV changed on disk. Reload the file to refresh the preview.')
+      throw new CsvPreviewError('changed-on-disk')
     }
     this.checkCanceled()
   }
@@ -135,7 +139,7 @@ export class CsvPagedPreview {
     const bytes = await this.read(range.start, range.end)
     const value = await this.worker.request({ kind: 'parse', bytes, stripBom: range.start === 0 })
     if (value.kind !== 'rows' || value.rows.length !== range.rowCount) {
-      throw new Error('CSV page boundary mismatch. Reload the preview.')
+      throw new CsvPreviewError('page-boundary-mismatch')
     }
     this.checkCanceled()
     const previous = this.cache.get(pageIndex)
@@ -181,7 +185,7 @@ export class CsvPagedPreview {
 
   private checkCanceled(): void {
     if (this.canceled) {
-      throw new Error('CSV preview was canceled')
+      throw new CsvPreviewError('canceled')
     }
   }
 }

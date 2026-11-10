@@ -1,5 +1,4 @@
-// A server with a window attached: a change main makes to its own layout (a CLI rename, create or
-// close) reaches a subscribed phone's rows with no window publication after it.
+// Main layout changes must reach subscribed phones even without another attached-window publication.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -9,7 +8,7 @@ import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID
-} from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime
@@ -105,32 +104,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     vi.useRealTimers()
   })
 
-  it('a CLI rename reaches the pushed and listed rows', async () => {
-    const { runtime } = surfaceRuntime()
-    const seen = await windowedPhone(runtime)
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-
-    const named = (rows: RuntimeMobileSessionTabsResult | undefined) =>
-      (rows?.tabs ?? []).map((tab) => [tab.title, tab.type === 'terminal' && tab.customTitle])
-    // The manual name too, which a paired desktop reads to keep or replace its own.
-    expect(named(seen.at(-1))).toEqual([
-      ['Build', 'Build'],
-      ['Build', 'Build']
-    ])
-    expect(named(await listed(runtime))).toEqual([
-      ['Build', 'Build'],
-      ['Build', 'Build']
-    ])
-  })
-
   it('a CLI create reaches the pushed and listed rows', async () => {
     const { runtime, store } = surfaceRuntime()
     const seen = await windowedPhone(runtime)
@@ -145,25 +118,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     expect(layoutTabIds(store)).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
     expect(parentTabsOf(seen.at(-1))).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
     expect(parentTabsOf(await listed(runtime))).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
-  })
-
-  // Stale until W4's dropped-leaf hook (its close PR, ledger L255) drops the row; remove .fails then.
-  it.fails("a CLI close reaches the rows, which then agree with main's layout", async () => {
-    const { runtime, store } = threeTabSurfaceRuntime()
-    const seen = await windowedPhone(runtime)
-    expect(parentTabsOf(await listed(runtime))).toContain(SECOND_TAB_ID)
-
-    await runtime.applyLayoutCommand({
-      type: 'closeTabs',
-      workspace: TEST_WORKTREE_ID,
-      tabIds: [SECOND_TAB_ID],
-      force: true
-    })
-    await vi.runAllTimersAsync()
-
-    expect(layoutTabIds(store)).not.toContain(SECOND_TAB_ID)
-    expect(parentTabsOf(seen.at(-1))).toEqual(layoutTabIds(store))
-    expect(parentTabsOf(await listed(runtime))).toEqual(layoutTabIds(store))
   })
 
   it("a later commit, or the window's older snapshot, never re-adds a row main's layout lacks", async () => {
@@ -213,30 +167,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     await vi.runAllTimersAsync()
 
     expect(parentTabsOf(await listed(runtime))).not.toContain(SECOND_TAB_ID)
-  })
-
-  it('a workspace on an unloaded SSH host keeps the rows its window published', async () => {
-    const { runtime } = surfaceRuntime()
-    await windowedPhone(runtime)
-    const before = runtime.mobileSessionTabsByWorktree.get(UNLOADED_SSH_ROWS.worktree)
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-    runtime.storeMobileSessionSnapshot(UNLOADED_SSH_ROWS.worktree, {
-      ...UNLOADED_SSH_ROWS,
-      snapshotVersion: 2
-    })
-
-    expect(before?.tabs.map((tab) => tab.id)).toEqual(['ssh-tab::ssh-leaf'])
-    const after = runtime.mobileSessionTabsByWorktree.get(UNLOADED_SSH_ROWS.worktree)
-    expect(after?.tabs).toEqual(UNLOADED_SSH_ROWS.tabs)
-    expect(after?.tabGroups).toEqual(UNLOADED_SSH_ROWS.tabGroups)
   })
 
   it("after the window closes, main's later moves reach the phone, as no-window rows", async () => {

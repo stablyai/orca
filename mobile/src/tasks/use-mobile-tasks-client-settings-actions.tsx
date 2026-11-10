@@ -1,20 +1,23 @@
 import type { ProjectRepositoryResolutionModel } from './use-mobile-tasks-project-repository-resolution'
 import {
   type GitHubProjectSettings,
-  type TaskProvider,
-  trustedOrcaHooksWithSetupApproval,
+  persistSetupHookTrustApproval,
   useCallback,
   useLayoutEffect,
   useState
 } from './mobile-tasks-dependencies'
+import type { TaskProvider } from '../../../src/shared/work-items/task-providers'
 import type { GitHubPreset, RepoSummary, TaskResumeState } from './mobile-tasks-legacy-foundation'
 import { taskSettingsWrite, taskUiStateWrite } from './mobile-task-runtime-operations'
+import { patchTaskHydration, type TaskHydration } from './task-queries'
+import { replaceEqualDeep, useQueryClient } from '@tanstack/react-query'
 
 export function useMobileTasksClientSettingsActions(model: ProjectRepositoryResolutionModel) {
   const {
     client,
     clientRef,
     githubProjectFieldVisibilityScope,
+    hostId,
     setDefaultGitHubPreset,
     setGithubCurrentPage,
     setGithubPages,
@@ -62,8 +65,22 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     taskUiReady,
     trustedOrcaHooks
   } = model
-  // Why: task-loading effects use this as a stale-client guard, so the ref
-  // must be current before those passive effects can run after commit.
+  const queryClient = useQueryClient()
+  // Each write also lands in the kept hydration, so the next visit opens where this one left.
+  const keepSettings = useCallback(
+    (settings: Partial<TaskHydration['settings']>) =>
+      patchTaskHydration(queryClient, hostId, (kept) => ({
+        ...kept,
+        settings: { ...kept.settings, ...settings }
+      })),
+    [hostId, queryClient]
+  )
+  const keepUi = useCallback(
+    (ui: NonNullable<TaskHydration['ui']>) =>
+      patchTaskHydration(queryClient, hostId, (kept) => ({ ...kept, ui: { ...kept.ui, ...ui } })),
+    [hostId, queryClient]
+  )
+  // Commit stale-client guards before task-loading passive effects run.
   const resetGitHubItemsState = useCallback(() => {
     setGithubRepoSources({})
     setGithubPages([])
@@ -73,9 +90,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setGithubSourceFallbacks([])
   }, [])
 
-  // Why: Expo reuses this screen for the next host, so an effect reset runs a
-  // render too late and the previous host's rows show under the new one. The
-  // repo list resets itself; these are the other client-scoped caches.
+  // Reset reused-screen caches during render; passive resets expose the previous host’s rows for a frame.
   const [boundClient, setBoundClient] = useState(client)
   if (boundClient !== client) {
     setBoundClient(client)
@@ -96,12 +111,17 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
         return
       }
       const next = { ...taskResumeRef.current, ...updates }
+      // Restoring a view re-runs its persistence effects; writing back what is already saved could overwrite a newer desktop copy.
+      if (replaceEqualDeep(taskResumeRef.current, next) === taskResumeRef.current) {
+        return
+      }
       taskResumeRef.current = next
+      keepUi({ taskResumeState: next })
       void taskUiStateWrite.request(client, { taskResumeState: next }).catch(() => {
-        // Best-effort: desktop treats task resume as a convenience preference.
+        // Task resume persistence is best-effort; keep the current session usable.
       })
     },
-    [client, taskUiReady]
+    [client, keepUi, taskUiReady]
   )
 
   const toggleGitHubProjectFieldVisibility = useCallback(
@@ -134,11 +154,12 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client || !taskUiReady) {
         return
       }
+      keepSettings({ defaultTaskSource: nextProvider })
       void taskSettingsWrite.request(client, { defaultTaskSource: nextProvider }).catch(() => {
-        // Best-effort: a failed settings write should not block switching views.
+        // Failed preference persistence must not block a view switch.
       })
     },
-    [client, taskUiReady]
+    [client, keepSettings, taskUiReady]
   )
 
   const persistRepoSelection = useCallback(
@@ -148,11 +169,12 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       }
       const nextSelection =
         selection.size === 0 || selection.size === allRepos.length ? null : [...selection]
+      keepSettings({ defaultRepoSelection: nextSelection })
       void taskSettingsWrite.request(client, { defaultRepoSelection: nextSelection }).catch(() => {
-        // Best-effort: the in-memory repo picker already reflects the change.
+        // The local repo picker already reflects the choice.
       })
     },
-    [client, taskUiReady]
+    [client, keepSettings, taskUiReady]
   )
 
   const persistDefaultGitHubPreset = useCallback(
@@ -161,11 +183,12 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client || !taskUiReady) {
         return
       }
+      keepSettings({ defaultTaskViewPreset: preset })
       void taskSettingsWrite.request(client, { defaultTaskViewPreset: preset }).catch(() => {
-        // Best-effort: the current session still uses the selected preset.
+        // The selected preset remains usable in this session.
       })
     },
-    [client, taskUiReady]
+    [client, keepSettings, taskUiReady]
   )
 
   const persistGitHubProjectSettings = useCallback(
@@ -174,11 +197,12 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client || !taskUiReady) {
         return
       }
+      keepSettings({ githubProjects: nextSettings })
       void taskSettingsWrite.request(client, { githubProjects: nextSettings }).catch(() => {
-        // Best-effort: project selection can still work for the current session.
+        // Project selection remains usable in this session.
       })
     },
-    [client, taskUiReady]
+    [client, keepSettings, taskUiReady]
   )
 
   const persistSetupHookTrust = useCallback(
@@ -186,16 +210,17 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client) {
         return
       }
-      const next = trustedOrcaHooksWithSetupApproval({
+      const trusted = await persistSetupHookTrustApproval({
+        client,
         trust: trustedOrcaHooks,
         repoId,
         contentHash,
         alwaysTrust
       })
-      taskUiStateWrite.interpret(await taskUiStateWrite.request(client, { trustedOrcaHooks: next }))
-      setTrustedOrcaHooks(next)
+      setTrustedOrcaHooks(trusted)
+      keepUi({ trustedOrcaHooks: trusted })
     },
-    [client, trustedOrcaHooks]
+    [client, keepUi, trustedOrcaHooks]
   )
 
   const resetWorkspaceCreateState = useCallback((): void => {
@@ -232,6 +257,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setOrcaYamlTrustPrompt(null)
   }, [])
   return Object.assign(model, {
+    keepSettings,
     resetGitHubItemsState,
     boundClient,
     persistTaskResumeState,

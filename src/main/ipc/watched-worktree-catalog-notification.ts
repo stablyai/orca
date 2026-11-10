@@ -4,7 +4,7 @@ import { notifyWorktreesChanged } from './worktree-remote'
 
 type WorktreeCatalogRemoteClientNotifier = Pick<
   OrcaRuntimeService,
-  'notifyWorktreeCatalogChangedForRemoteClients'
+  'notifyWorktreeCatalogChangedForRemoteClients' | 'notifyGitStatusChangedForRemoteClients'
 >
 
 let remoteClientNotifier: WorktreeCatalogRemoteClientNotifier | null = null
@@ -17,17 +17,24 @@ export function setWorktreeCatalogRemoteClientNotifier(
 
 export function notifyWatchedWorktreeCatalogChanged(
   mainWindow: BrowserWindow,
-  repoId: string,
-  connectionId?: string
+  repoId: string
 ): void {
   notifyWorktreesChanged(mainWindow, repoId)
-  if (connectionId) {
-    return
-  }
   try {
     remoteClientNotifier?.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   } catch (error) {
-    // Why: remote fanout must not block the host renderer's watcher refresh.
+    // Remote fanout failure must not block host renderer refresh.
     console.error('[worktrees] failed to notify remote clients of watched catalog change', error)
+  }
+}
+
+export function notifyGitStatusChangedForRemoteClients(
+  repoId: string,
+  worktreePaths: readonly string[] | null
+): void {
+  try {
+    remoteClientNotifier?.notifyGitStatusChangedForRemoteClients(repoId, worktreePaths)
+  } catch (error) {
+    console.error('[worktrees] failed to notify remote clients of git status change', error)
   }
 }

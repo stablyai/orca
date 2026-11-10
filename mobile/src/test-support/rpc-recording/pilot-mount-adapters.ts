@@ -5,12 +5,7 @@ import { bindSalvageObserver } from './salvage-observation'
 import type { MountOptions } from './mounted-operation-module'
 import type { MountAdapter } from './recording-scenario'
 
-/**
- * The mount table one recording runs against: every registered domain module, merged.
- *
- * Each module gets its own loader, carrying its own exposures. One recording mounts one adapter, so
- * a golden is only ever influenced by the exposures its own module declares.
- */
+// Give each adapter module its own loader/exposures so unrelated domains cannot influence its golden.
 export function pilotMountAdapters(
   root: string,
   options: MountOptions & { mutation?: OperationMutation; device?: DeclaredDeviceState } = {}
@@ -26,12 +21,10 @@ export function pilotMountAdapters(
       if (operation in adapters) {
         throw new Error(`Two adapter modules mount ${operation}`)
       }
-      // The declared device writes through the same effect recorder the adapter is handed, so a
-      // scenario records one without its adapter having to wire the sink itself.
+      // Bind device writes to this recording’s effect sink before the adapter mounts.
       adapters[operation] = (context) => {
         device.bind(context.effect)
-        // Same reason as the device sink: the reply classifier is loaded per adapter module, and
-        // the mount is what knows which recording a salvaged read belongs to.
+        // Bind salvage reads here too because classifiers load per adapter while the mount owns the recording.
         bindSalvageObserver(context.effect)
         return adapter(context)
       }

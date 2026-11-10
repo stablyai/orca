@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -15,18 +15,19 @@ import {
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
-// ── Stable sort order ──────────────────────────────────────────
-// Why sortEpoch (not selection): selection side-effects (clearing isUnread, PR-cache refresh) must not reorder the sidebar under the user.
-// Why useMemo not useEffect: order must be computed synchronously before the worktrees memo reads it.
+// Compute settled order synchronously; selection side effects must not reorder rows under the user.
 function useSettledSidebarWorktreeSortOrder(args: {
   repoMap: Map<string, Repo>
   sortBy: SortBy
 }): string[] {
   const { repoMap, sortBy } = args
-  // Why settled (not live): the store coalesces bump bursts so rows don't jump (store/settled-sort-epoch.ts).
+  // Coalesce sort bumps so bursts cannot make rows jump.
   const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
   const sortOrderEpoch = useAppStore((s) => s.sortOrderEpoch)
 
@@ -42,7 +43,9 @@ function useSettledSidebarWorktreeSortOrder(args: {
   const recomputedSort = useMemo(() => {
     const state = useAppStore.getState()
     const ranking = rankWorktreesForSort({
-      worktrees: getAllWorktreesFromState(state).filter((worktree) => !worktree.isArchived),
+      worktrees: getIndexedAllWorktrees(selectWorktreesByRepo(state)).filter(
+        (worktree) => !worktree.isArchived
+      ),
       sortBy,
       latched: sessionHasHadLiveSmartSignal.current,
       repoMap,
@@ -50,7 +53,8 @@ function useSettledSidebarWorktreeSortOrder(args: {
       sources: state
     })
     return {
-      sortedIds: ranking.sorted.map((w) => w.id),
+      // Why host identity: same-id copies on two machines are separate cards with their own ranks.
+      sortedIds: ranking.sorted.map(getWorktreeHostIdentity),
       detectedLiveSmartSignal: ranking.detectedLiveSmartSignal
     }
     // settledSortEpoch is an intentional trigger not read in the memo; its change signals a recompute.
@@ -78,17 +82,16 @@ function useSettledSidebarWorktreeSortOrder(args: {
       return
     }
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.
-    persistWorktreeSortOrderByHost(useAppStore.getState(), sortedIds)
+    persistWorktreeSortOrderByHost(
+      useAppStore.getState(),
+      sortedIds.map(getWorktreeIdFromHostIdentity)
+    )
   }, [sortedIds, sortBy])
 
   return sortedIds
 }
 
-/**
- * Switch on: the order is a pure read of the owning hosts' stamps on the rows, so a re-list is
- * what re-sorts. No settle window, latch, saved Smart order or create grace. Host identities, so a
- * same-id pair on two hosts keeps its own ranks.
- */
+/** Rank by host-owned stamps without clocks, settle windows or latches; same-ID host copies retain separate ranks. */
 function useStampSidebarWorktreeSortOrder(args: {
   repoMap: Map<string, Repo>
   sortBy: SortBy
@@ -98,7 +101,7 @@ function useStampSidebarWorktreeSortOrder(args: {
   const ranked = useMemo(
     () =>
       rankWorktreesForSort({
-        worktrees: getAllWorktreesFromState({ worktreesByRepo }).filter(
+        worktrees: getIndexedAllWorktrees(worktreesByRepo).filter(
           (worktree) => !worktree.isArchived
         ),
         sortBy,

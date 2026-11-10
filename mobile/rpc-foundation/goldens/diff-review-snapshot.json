@@ -4,11 +4,6 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "values": {
-    "1069be6ec9cc": {
-      "name": "git.branchCompare#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
-    },
     "11e9ea6be860": {
       "name": "git.status#1",
       "ordinal": 1,
@@ -35,18 +30,17 @@
         "startedAt": 0
       }
     },
-    "15f193a5a1c7": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
+    "1f10fad6906c": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
-          "value": "git.branchCompare"
+          "value": "worktree.show"
         },
         {
           "name": "params",
           "value": {
-            "baseRef": "origin/main",
             "worktree": "id:repo-9::/w"
           }
         },
@@ -58,168 +52,37 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": {
-            "entries": [
-              {
-                "added": 1,
-                "path": "src/old.ts",
-                "removed": 0,
-                "status": "modified"
-              }
-            ],
-            "summary": {
-              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-              "baseRef": "origin/main",
-              "changedFiles": 1,
-              "compareRef": "feature",
-              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
-              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
-              "status": "ready"
-            }
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "16364e8e8caf": {
-      "branchCompare": "unloaded",
-      "diff": "unloaded",
-      "snapshot": {
-        "branchCompare": {
-          "entries": [
-            {
-              "added": 1,
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/old.ts",
-              "removed": 0,
-              "status": "modified"
-            }
-          ],
-          "summary": {
-            "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-            "baseRef": "origin/main",
-            "changedFiles": 1,
-            "commitsAhead": {
-              "$rpc": "undefined"
-            },
-            "compareRef": "feature",
-            "errorMessage": {
-              "$rpc": "undefined"
-            },
-            "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
-            "mergeBase": "0123456789abcdef0123456789abcdef01234567",
-            "status": "ready"
+    "3374ccf2bc9a": {
+      "name": "repo.list#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
           }
         },
-        "branchError": {
-          "$rpc": "undefined"
-        },
-        "comments": [],
-        "kind": "ready",
-        "reviewState": {
-          "completedAt": {
-            "$rpc": "undefined"
-          },
-          "files": {
-            "branch\u0000branch\u0000\u0000src/old.ts": {
-              "filePath": "src/old.ts",
-              "key": "branch\u0000branch\u0000\u0000src/old.ts",
-              "lastOpenedAt": {
-                "$rpc": "undefined"
-              },
-              "lastSeenDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "reviewDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "reviewedAt": {
-                "$rpc": "undefined"
-              },
-              "scope": "branch"
-            },
-            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
-              "filePath": "src/app.ts",
-              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
-              "lastOpenedAt": {
-                "$rpc": "undefined"
-              },
-              "lastSeenDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "reviewDiffIdentity": {
-                "$rpc": "undefined"
-              },
-              "reviewedAt": {
-                "$rpc": "undefined"
-              },
-              "scope": "unstaged"
-            }
-          },
-          "updatedAt": 1767225600000,
-          "version": 1
-        },
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": 3,
-              "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "head": "head-sha-1",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
           }
         }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "168d1f64ca9b": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "16c1635cc4a4": {
+    "411c662db736": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
@@ -308,23 +171,10 @@
         },
         "status": {
           "branch": "feature",
-          "conflictOperation": "unknown",
           "entries": [
             {
               "added": 3,
               "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
               "path": "src/app.ts",
               "removed": 1,
               "status": "modified"
@@ -334,23 +184,125 @@
           "upstreamStatus": {
             "ahead": 1,
             "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
+            "hasUpstream": true
           }
         }
       }
     },
-    "1cb6dd8e325b": {
-      "name": "worktree.show#2",
-      "ordinal": 5,
+    "5abf3b2ba503": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": {
+        "branchCompare": {
+          "entries": [
+            {
+              "added": 1,
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/old.ts",
+              "removed": 0,
+              "status": "modified"
+            }
+          ],
+          "summary": {
+            "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "baseRef": "origin/main",
+            "changedFiles": 1,
+            "commitsAhead": {
+              "$rpc": "undefined"
+            },
+            "compareRef": "feature",
+            "errorMessage": {
+              "$rpc": "undefined"
+            },
+            "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+            "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+            "status": "ready"
+          }
+        },
+        "branchError": {
+          "$rpc": "undefined"
+        },
+        "comments": [],
+        "kind": "ready",
+        "reviewState": {
+          "completedAt": {
+            "$rpc": "undefined"
+          },
+          "files": {
+            "branch\u0000branch\u0000\u0000src/old.ts": {
+              "filePath": "src/old.ts",
+              "key": "branch\u0000branch\u0000\u0000src/old.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "branch"
+            },
+            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
+              "filePath": "src/app.ts",
+              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "unstaged"
+            }
+          },
+          "updatedAt": 1767225600000,
+          "version": 1
+        },
+        "status": {
+          "branch": "feature",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "hasUpstream": true
+          }
+        }
+      }
+    },
+    "5dbd52d6a1c7": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "5dd74fdeb001": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -374,11 +326,13 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-4",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "worktree": {
+              "baseRef": "origin/main",
               "diffComments": [],
+              "linkedPR": 12,
               "mobileDiffReview": {
                 "files": []
               }
@@ -387,19 +341,28 @@
         }
       }
     },
-    "4a899e079b42": {
+    "622e5aadb43d": {
+      "name": "git.branchCompare#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
+    },
+    "648638103acb": {
       "name": "repo.list#1",
-      "ordinal": 7,
+      "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
-    "80f12d7d71e7": {
-      "name": "worktree.show#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    "8db27b0778a5": {
+      "name": "git.status#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
-    "8f95d359947c": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9affac551982": {
       "name": "repo.list#1",
-      "ordinal": 4,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -436,14 +399,56 @@
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "bbb1719b8559": {
-      "name": "worktree.show#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    "c0f7fd87f4a5": {
+      "name": "git.branchCompare#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/main",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 1,
+                "path": "src/old.ts",
+                "removed": 0,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "baseRef": "origin/main",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+              "status": "ready"
+            }
+          }
+        }
+      }
     },
     "d0e28a73dae6": {
       "name": "git.status#1",
@@ -494,43 +499,6 @@
         }
       }
     },
-    "d7e7bd22e9f6": {
-      "name": "worktree.show#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "baseRef": "origin/main",
-              "linkedPR": 12
-            }
-          }
-        }
-      }
-    },
     "e39817462870": {
       "branchCompare": "unloaded",
       "diff": "unloaded",
@@ -543,8 +511,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["11e9ea6be860"],
-          "payloads": ["168d1f64ca9b"],
+          "sender": ["11e9ea6be860", "1f10fad6906c", "3374ccf2bc9a"],
+          "payloads": ["8db27b0778a5", "5dbd52d6a1c7", "648638103acb"],
           "settlements": {
             "snapshot": "9270aeb7d9c6"
           },
@@ -555,24 +523,12 @@
       {
         "id": "snapshot",
         "observation": {
-          "sender": [
-            "d0e28a73dae6",
-            "d7e7bd22e9f6",
-            "8f95d359947c",
-            "1cb6dd8e325b",
-            "15f193a5a1c7"
-          ],
-          "payloads": [
-            "168d1f64ca9b",
-            "80f12d7d71e7",
-            "4a899e079b42",
-            "bbb1719b8559",
-            "1069be6ec9cc"
-          ],
+          "sender": ["d0e28a73dae6", "5dd74fdeb001", "9affac551982", "c0f7fd87f4a5"],
+          "payloads": ["8db27b0778a5", "5dbd52d6a1c7", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "snapshot": "16c1635cc4a4"
+            "snapshot": "411c662db736"
           },
-          "state": "16364e8e8caf",
+          "state": "5abf3b2ba503",
           "effects": []
         }
       }

@@ -1,3 +1,4 @@
+import { ProfileStateLegacyDocumentRefresh } from '../persistence/profile-state/profile-state-legacy-document-refresh'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
@@ -26,7 +27,7 @@ export type ReadProfileProjectTransferResult = ReadProfileStateResult & {
   documents?: readonly ProfileStateParsedDocument[]
 }
 
-/** Keep checked domain values for transfer without joining and reparsing the complete profile. */
+/** Preserve checked domain values without reparsing the whole profile. */
 export function readProfileProjectTransferState(
   profileId: string,
   userDataPath: string
@@ -78,6 +79,8 @@ export function writeProfileProjectDomainChanges(
     if (!result.changed || result.revision !== changes.expectedRevision + 1) {
       throw new Error('Profile domain transfer did not commit its expected revision')
     }
+    // This profile may not be running; keep the copy older builds read current too.
+    new ProfileStateLegacyDocumentRefresh().refresh(opened.db)
   } finally {
     opened.db.close()
   }

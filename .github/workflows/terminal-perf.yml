@@ -1,5 +1,6 @@
 name: Terminal Perf
 
+# On demand only; see docs/readme/terminal-perf.md.
 on:
   workflow_dispatch:
     inputs:
@@ -43,15 +44,18 @@ on:
         description: Comma-separated hidden real-PTY pressure pane counts
         required: false
         type: string
-  schedule:
-    # Why: keep the expensive scale run off PRs, but exercise it daily so
-    # terminal throughput regressions are caught before users report typing lag.
-    - cron: '30 8 * * *'
+
+permissions:
+  contents: read
+
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
 
 jobs:
   terminal-perf:
     name: terminal scale perf
-    runs-on: ubuntu-latest
+    # Presented-frame measurement only accepts GitHub-hosted Xvfb displays.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096
@@ -82,17 +86,21 @@ jobs:
           const action = fs.existsSync(actionPath) ? fs.readFileSync(actionPath, 'utf8') : ''
           const inputs = action.split(/^inputs:[ \t]*\r?$/m)[1]?.split(/^\S/m)[0] ?? ''
           const supportedPostinstalls = [
+            'node config/scripts/native-build/node-addons/rebuild-native-deps.mjs',
             'node config/scripts/rebuild-native-deps.mjs',
+            'pnpm run build:packages && node config/scripts/native-build/node-addons/rebuild-native-deps.mjs',
             'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
           ]
-          const shared = process.env.RUNNER_KIND === 'github-hosted' && !process.env.JOB_CONTAINER &&
+          const supportedRunner = process.env.RUNNER_KIND === 'github-hosted' ||
+            process.env.RUNNER_NAME?.startsWith('blacksmith-')
+          const shared = supportedRunner && !process.env.JOB_CONTAINER &&
             process.env.RUNNER_OS === 'Linux' && process.env.RUNNER_ARCH === 'X64' &&
             manifest.engines?.node === '24' && typeof manifest.packageManager === 'string' &&
             manifest.packageManager.split('+')[0] === 'pnpm@12.14.0' &&
             supportedPostinstalls.includes(manifest.scripts?.postinstall) &&
             /^  native-runtime:/m.test(inputs) && /^  cache-pnpm-store-lookup-only:/m.test(inputs) &&
             fs.existsSync('.github/actions/prepare-native-runtime/action.yml') &&
-            fs.existsSync('config/scripts/ensure-native-runtime.mjs')
+            (fs.existsSync('config/scripts/native-build/node-addons/ensure-native-runtime.mjs') || fs.existsSync('config/scripts/ensure-native-runtime.mjs'))
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `shared=${shared}\n`)
           NODE
 

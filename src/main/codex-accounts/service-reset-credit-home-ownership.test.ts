@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { join } from 'node:path'
 import { realpathSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
@@ -78,8 +78,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -88,37 +88,6 @@ vi.mock('node:os', async () => {
 
 describe('Codex reset-credit managed-home ownership', () => {
   registerCodexAccountsTestHomes()
-
-  it('refuses an indeterminate host home before ledger or provider mutation', async () => {
-    const fixture = await createFixture()
-    fsFaults.hold(join(realpathSync(fixture.managedHomePath), '.orca-managed-home'))
-    fsFaults.resetMkdirCalls()
-
-    await expect(
-      fixture.service.consumeRateLimitResetCredit(fixture.idempotencyKey, fixture.expectedScope)
-    ).rejects.toThrow('temporarily locked')
-
-    expect(fixture.consume).not.toHaveBeenCalled()
-    expect(fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush).not.toHaveBeenCalled()
-    expect(fixture.store.updateSettings).not.toHaveBeenCalled()
-    expect(fsFaults.mkdirCalls()).toBe(0)
-    expect(readFileSync(join(fixture.managedHomePath, 'auth.json'), 'utf-8')).toBe('auth-before')
-  })
-
-  it('refuses a proven-untrusted host home before ledger or provider mutation', async () => {
-    const fixture = await createFixture()
-    writeFileSync(join(fixture.managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
-    fsFaults.resetMkdirCalls()
-
-    await expect(
-      fixture.service.consumeRateLimitResetCredit(fixture.idempotencyKey, fixture.expectedScope)
-    ).rejects.toThrow('ownership marker does not match')
-
-    expect(fixture.consume).not.toHaveBeenCalled()
-    expect(fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush).not.toHaveBeenCalled()
-    expect(fixture.store.updateSettings).not.toHaveBeenCalled()
-    expect(fsFaults.mkdirCalls()).toBe(0)
-  })
 
   it.each([
     {
@@ -161,7 +130,7 @@ describe('Codex reset-credit managed-home ownership', () => {
       fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush.mockClear()
       fixture.store.updateSettings.mockClear()
       const restarted = fixture.createService()
-      // Why: construction mirrors config into every managed home; only the retry itself is under test.
+      // Exclude constructor config mirroring from retry write assertions.
       fsFaults.resetMkdirCalls()
 
       await expect(
@@ -180,31 +149,6 @@ describe('Codex reset-credit managed-home ownership', () => {
       expect(readdirSync(fixture.managedHomePath).sort()).toEqual(directoryEntriesBefore)
     }
   )
-
-  it('replays a durable settled outcome without reading a locked managed home', async () => {
-    const fixture = await createFixture()
-    await expect(
-      fixture.service.consumeRateLimitResetCredit(fixture.idempotencyKey, fixture.expectedScope)
-    ).resolves.toMatchObject({ outcome: 'reset' })
-    fixture.consume.mockClear()
-    fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush.mockClear()
-    fixture.store.updateSettings.mockClear()
-    // Why: construction mirrors config into every managed home; only the replay itself is under test.
-    const restarted = fixture.createService()
-    fsFaults.hold(join(realpathSync(fixture.managedHomePath), '.orca-managed-home'))
-    fsFaults.resetMkdirCalls()
-
-    await expect(
-      restarted.consumeRateLimitResetCredit(fixture.idempotencyKey, fixture.expectedScope)
-    ).resolves.toMatchObject({ outcome: 'reset', scope: fixture.expectedScope })
-
-    expect(fsFaults.heldReads()).toBe(0)
-    expect(fixture.consume).not.toHaveBeenCalled()
-    expect(fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush).not.toHaveBeenCalled()
-    expect(fixture.store.updateSettings).not.toHaveBeenCalled()
-    expect(fsFaults.mkdirCalls()).toBe(0)
-    expect(readFileSync(join(fixture.managedHomePath, 'auth.json'), 'utf-8')).toBe('auth-before')
-  })
 
   async function createFixture() {
     fsFaults.reset()

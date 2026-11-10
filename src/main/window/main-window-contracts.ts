@@ -16,19 +16,19 @@ export type MainWindowLoadObserver = {
 export type CreateMainWindowOptions = {
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
-  /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
+  /** Clear the quit latch if renderer beforeunload vetoes app.quit. */
   onQuitAborted?: () => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number,
     liveness: RendererLivenessAtDeath
   ) => void
-  /** Returns true when Orca should reload after renderer loss; update-relaunch/quit tear down children intentionally, so don't fight shutdown. */
+  /** Intentional update/quit teardown must not trigger renderer recovery. */
   shouldRecoverRenderer?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => boolean
-  /** Called when auto-recovery gives up — the breaker opened, or the recovery reload never produced a document. */
+  /** Surface breaker exhaustion or a recovery load that produced no document. */
   onRendererRecoveryExhausted?: (info: {
     details: Electron.RenderProcessGoneDetails
     webContentsId: number
@@ -36,7 +36,7 @@ export type CreateMainWindowOptions = {
     cause?: RecoveryExhaustionCause
     /** Set with cause 'low-commit': the Windows commit reading that stopped the auto-reload. */
     lowCommit?: LowCommitOomVerdict
-    /** Watched manual retry for the recovery prompt; an unwatched one cannot re-raise the prompt when it stalls too. */
+    /** Watch manual retries too so a second stall can raise the prompt again. */
     retry?: () => void
   }) => void
   /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
@@ -46,13 +46,9 @@ export type CreateMainWindowOptions = {
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
-  /**
-   * Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore
-   * re-attaches (#5787). The prompt's manual Reload is one too, so `trigger` keeps the automatic-recovery
-   * breadcrumb counting only automatic recoveries.
-   */
+  /** Spare live PTYs from orphan sweeping until recovery restore (#5787); distinguish manual retries from automatic-recovery breadcrumbs. */
   onBeforeRecoveryReload?: (webContentsId: number, trigger: RecoveryReloadTrigger) => void
-  /** Pairs an outcome with the recovery-reload intent crumb: bundles could not tell a landed reload from a stalled one. */
+  /** Pair load outcomes with reload-intent breadcrumbs so stalled and landed attempts are distinguishable. */
   onRecoveryReloadOutcome?: (outcome: {
     status: 'loaded' | 'timeout' | 'failed'
     attempt: number
@@ -63,7 +59,7 @@ export type CreateMainWindowOptions = {
     afterPrompt?: boolean
     /** True when a later navigation replaced this load: elapsedMs then measures the replacement, not the reload. */
     superseded?: boolean
-    /** `ERR_*` code only, for the same reason — Electron's load-error message embeds the URL. */
+    /** ERR_* only; Electron load-error messages embed private URLs. */
     errorCode?: string
   }) => void
 }

@@ -1,11 +1,11 @@
 import { PassThrough } from 'node:stream'
 import { ChildProcess } from 'node:child_process'
+import { once } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPairingRedactor,
   PAIRING_HIDDEN_LINE,
-  redactingSpawn,
-  shouldRedactSupervisedStdout
+  redactingSpawn
 } from './serve-pairing-redaction'
 
 const READY = [
@@ -48,12 +48,6 @@ describe('supervised pairing redaction', () => {
     })
   })
 
-  it('redacts only supervised output that is not a terminal', () => {
-    expect(shouldRedactSupervisedStdout(true, false)).toBe(true)
-    expect(shouldRedactSupervisedStdout(true, true)).toBe(false)
-    expect(shouldRedactSupervisedStdout(false, false)).toBe(false)
-  })
-
   it('pipes only stdout through the redactor and keeps the ipc slot', async () => {
     const stdout = new PassThrough()
     const child = new ChildProcess()
@@ -69,8 +63,10 @@ describe('supervised pairing redaction', () => {
       program: 'orca',
       stdio: ['inherit', 'pipe', 'inherit', 'ipc']
     })
+    const drained = once(stdout, 'end')
     stdout.end(`${READY.join('\n')}\n`)
-    await vi.waitFor(() => expect(written.join('')).toContain('later log line'))
+    await drained
+    expect(written.join('')).toContain('later log line')
     expect(written.join('')).not.toContain('secret')
   })
 })

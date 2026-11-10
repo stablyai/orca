@@ -1,14 +1,46 @@
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 
 export function buildCombinedGitStatusSignature(
   sections: readonly { path: string }[],
   gitStatusEntries: readonly GitStatusEntry[]
 ): string {
+  return JSON.stringify(getCombinedGitStatusEntries(sections, gitStatusEntries))
+}
+
+export function buildCombinedGitStatusSnapshot(
+  sections: readonly { path: string }[],
+  gitStatusEntries: readonly GitStatusEntry[]
+): { signature: string; pathSignatures: ReadonlyMap<string, string> } {
+  const matching = getCombinedGitStatusEntries(sections, gitStatusEntries)
+  const entriesByPath = new Map<string, typeof matching>()
+  for (const entry of matching) {
+    const entries = entriesByPath.get(entry.path)
+    if (entries) {
+      entries.push(entry)
+    } else {
+      entriesByPath.set(entry.path, [entry])
+    }
+  }
+  return {
+    signature: JSON.stringify(matching),
+    pathSignatures: new Map(
+      [...entriesByPath].map(([path, entries]) => [
+        path,
+        JSON.stringify(entries.sort((left, right) => left.area.localeCompare(right.area)))
+      ])
+    )
+  }
+}
+
+function getCombinedGitStatusEntries(
+  sections: readonly { path: string }[],
+  gitStatusEntries: readonly GitStatusEntry[]
+) {
   const sectionPaths = new Set(sections.map((section) => section.path))
-  const matching = gitStatusEntries.filter((entry) => sectionPaths.has(entry.path))
-  return JSON.stringify(
-    matching.map((entry) => ({
+  return gitStatusEntries
+    .filter((entry) => sectionPaths.has(entry.path))
+    .map((entry) => ({
       path: entry.path,
       oldPath: entry.oldPath ?? null,
       area: entry.area,
@@ -16,7 +48,6 @@ export function buildCombinedGitStatusSignature(
       added: entry.added ?? null,
       removed: entry.removed ?? null
     }))
-  )
 }
 
 export function getRetainedResolvedSnapshotEntries(

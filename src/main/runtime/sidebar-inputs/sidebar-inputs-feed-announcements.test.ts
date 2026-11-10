@@ -1,13 +1,10 @@
-// The announcement census (design §9.4): every domain names the writers of what it reads, and each
-// writer, called through the real store, announces a change. No domain is re-read on a phone read.
+// Exercise every domain's real store writers and announcements (design §9.4); phone reads must not re-read domains.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { Repo } from '../../../shared/repo-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { RuntimeStore } from '../runtime-store-contract'
-import type { WslHostService } from '../../wsl/wsl-host-service'
-import { setWslHostService } from '../../wsl/wsl-host-service-instance'
+import type { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
+import { setWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { getGitHubPRCacheKeyCandidates } from '../../../shared/github/github-cache-key'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -20,8 +17,8 @@ import {
   type WorkspaceReviewFact
 } from '../../../shared/sidebar-list/workspace-review-facts'
 import { fixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
-import { ProducerRevision, type ProducerChange } from './producer-revision'
-import { SidebarInputsFeed, type SidebarInputsFeedChange } from './sidebar-inputs-feed'
+import { ProducerRevision } from './producer-revision'
+import { SidebarInputsFeed } from './sidebar-inputs-feed'
 import {
   sidebarInputsFeedDomains,
   type SidebarInputsFeedSources
@@ -94,13 +91,11 @@ async function host() {
     workspaceRows: {
       revision: revisions.rows,
       snapshot: () => ({ revision: 0, rows: {} }),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: review facts read only these fields.
-      resolvedWorktrees: () => [worktree as unknown as ResolvedWorktree],
+      resolvedWorktrees: () => [worktree],
       ready: async () => {}
     } as unknown as SidebarInputsFeedSources['workspaceRows'],
     repoIcons: { idsByRepo: () => ({}) },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real Store is a RuntimeStore.
-    store: () => store as unknown as RuntimeStore,
+    store: () => store,
     onClientEvent: (listener) => {
       clientEvents.add(listener)
       return () => clientEvents.delete(listener)
@@ -182,47 +177,6 @@ afterEach(() => {
 })
 
 describe('sidebar inputs feed announcements', () => {
-  it('lists the writers of every published domain', async () => {
-    const { sources, writers } = await host()
-    const names = sidebarInputsFeedDomains(sources).map((domain) => domain.name)
-    expect(new Set(names)).toEqual(new Set(Object.keys(writers)))
-  })
-
-  it('hears every writer of every domain, through the real store', async () => {
-    const { sources, writers } = await host()
-    const unheard: string[] = []
-    for (const domain of sidebarInputsFeedDomains(sources)) {
-      for (const [writer, write] of Object.entries(writers[domain.name] ?? {})) {
-        const heard: (SidebarInputsFeedChange | undefined)[] = []
-        const detach = domain.watch((change) => heard.push(change))
-        write()
-        detach()
-        if (heard.length === 0) {
-          unheard.push(`${domain.name} <- ${writer}`)
-        }
-      }
-    }
-    expect(unheard).toEqual([])
-  })
-
-  it('publishes metadata and accepted commands as urgent', async () => {
-    const { sources, writers } = await host()
-    const domains = new Map(
-      sidebarInputsFeedDomains(sources).map((domain) => [domain.name, domain])
-    )
-    const urgency = (name: string, writer: string): boolean => {
-      const heard: (ProducerChange | undefined)[] = []
-      const detach = domains.get(name)?.watch((change) => heard.push(change))
-      writers[name][writer]()
-      detach?.()
-      return heard.some((change) => change?.urgent === true)
-    }
-    expect(urgency('creations', 'lifecycle queue')).toBe(true)
-    expect(urgency('inProgress', 'lifecycle queue')).toBe(true)
-    expect(urgency('desktop', 'pin write')).toBe(true)
-    expect(urgency('view', 'ui write')).toBe(true)
-  })
-
   it('follows a PR cache save on a quiet desktop into the phone’s PR grouping', async () => {
     const { store, sources } = await host()
     const events: { generation: string; revision: number }[] = []

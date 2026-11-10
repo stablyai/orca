@@ -1,5 +1,5 @@
 import { resolveLoginShellEnvironment } from '../main/startup/login-shell-environment'
-import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup-env'
+import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup/shell-startup-env'
 import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
@@ -56,9 +56,7 @@ export function resolvePiSourceAgentDir(
   const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
   const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
 
-  // Why: a mismatched Orca overlay shadow means this shell inherited the other
-  // Pi-compatible agent's PTY overlay. Do not remirror that overlay into this
-  // launch; let plugin-overlay default to the selected kind's own home dir.
+  // Reject another Pi-compatible agent’s inherited overlay so the chosen agent resolves its own home.
   if (
     env[primaryKey] &&
     env[primaryKey] !== env[overlayKey] &&

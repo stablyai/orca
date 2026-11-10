@@ -13,15 +13,10 @@ import {
   type BridgeReplyPayload
 } from './bridge-envelope'
 
-/**
- * Replies too big for one frame, split and put back together.
- *
- * A reply is never refused for being over the frame cap: the native screens have no reply byte cap,
- * so refusing one would invent a failure the phone does not have today. It is refused only over the
- * absolute ceiling, which aborts the request rather than truncating an answer the caller will read.
- */
+// Split replies above the frame cap rather than inventing native-incompatible refusals; abort only above the absolute reply ceiling, never truncate the caller’s answer.
+// Frames are ready JSON: the payload is serialized once and spliced into envelopes that match JSON.stringify of the frame objects byte for byte.
 export type BridgeReplySplit =
-  | { ok: true; frames: BridgeReplyMessage[] }
+  | { ok: true; frames: string[] }
   | { ok: false; refusal: BridgeRefusal }
 
 export type BridgeReplyAssembly =
@@ -29,46 +24,31 @@ export type BridgeReplyAssembly =
   | { status: 'complete'; payload: BridgeReplyPayload }
   | { status: 'failed'; refusal: BridgeRefusal }
 
-/**
- * `of` is unknown until the split finishes, so a candidate frame is measured with the widest part
- * numbers the schema allows. A chunk that fits under that bound fits under the real one.
- */
-function partFrameBytes(id: string, chunk: string): number {
-  return utf8ByteLength(
-    JSON.stringify({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id,
-      part: { i: BRIDGE_MAX_REPLY_PARTS, of: BRIDGE_MAX_REPLY_PARTS },
-      chunk
-    })
-  )
+function partHead(head: string, i: number, of: number): string {
+  return `${head}"part":{"i":${i},"of":${of}},"chunk":`
 }
 
-/**
- * Measure, then accept: the frame that ships is the one that was weighed, so escaping a control
- * character or a surrogate split across the cut cannot push it over. A single code unit always
- * fits, since the envelope is under a hundred bytes against a 640 KiB frame.
- */
-function chunkEnd(id: string, serialized: string, start: number): number {
+// Ship the exact measured frame so JSON escaping cannot exceed the cap; even a single code unit fits the envelope budget.
+function nextChunk(
+  serialized: string,
+  start: number,
+  envelopeBytes: number
+): { end: number; escaped: string } {
   let end = Math.min(serialized.length, start + BRIDGE_MAX_MESSAGE_BYTES)
-  while (end - start > 1) {
-    const bytes = partFrameBytes(id, serialized.slice(start, end))
-    if (bytes <= BRIDGE_MAX_MESSAGE_BYTES) {
-      break
+  for (;;) {
+    const escaped = JSON.stringify(serialized.slice(start, end))
+    const bytes = envelopeBytes + utf8ByteLength(escaped)
+    if (end - start <= 1 || bytes <= BRIDGE_MAX_MESSAGE_BYTES) {
+      return end - start > 1 && splitsASurrogatePair(serialized, end)
+        ? { end: end - 1, escaped: JSON.stringify(serialized.slice(start, end - 1)) }
+        : { end, escaped }
     }
     const scaled = Math.floor((end - start) * (BRIDGE_MAX_MESSAGE_BYTES / bytes))
     end = start + Math.max(1, Math.min(scaled, end - start - 1))
   }
-  return end - start > 1 && splitsASurrogatePair(serialized, end) ? end - 1 : end
 }
 
-/**
- * A pair cut in half encodes as two replacements, three bytes each, where the pair is four: the
- * halves would disagree with the whole about the reply's size, and neither frame would be
- * well-formed UTF-8 for the native bridge to carry. Backing the cut up one unit costs one code unit
- * of a frame, and shrinking a frame that already fits keeps it fitting.
- */
+// Keep surrogate pairs together so chunk byte counts agree with the joined reply; backing up one unit preserves a frame that already fits.
 function splitsASurrogatePair(serialized: string, end: number): boolean {
   if (end >= serialized.length) {
     return false
@@ -78,11 +58,7 @@ function splitsASurrogatePair(serialized: string, end: number): boolean {
   return last >= 0xd800 && last <= 0xdbff && next >= 0xdc00 && next <= 0xdfff
 }
 
-/**
- * A reply at the ceiling splits into fewer parts than the schema admits, because a chunk is JSON
- * text re-escaped inside a JSON string and that at worst doubles it. The part cap is stated once,
- * by `replyPartSchema`; the derivation is pinned by this module's test.
- */
+// JSON-in-JSON escaping at worst doubles printable reply text; tests pin the maximum accepted reply below replyPartSchema’s part count.
 export function splitBridgeReply(id: string, payload: BridgeReplyPayload): BridgeReplySplit {
   let serialized: string
   try {
@@ -90,55 +66,39 @@ export function splitBridgeReply(id: string, payload: BridgeReplyPayload): Bridg
   } catch {
     return { ok: false, refusal: 'malformed-json' }
   }
-  if (utf8ByteLength(serialized) > BRIDGE_MAX_REPLY_BYTES) {
+  const payloadBytes = utf8ByteLength(serialized)
+  if (payloadBytes > BRIDGE_MAX_REPLY_BYTES) {
     return { ok: false, refusal: 'reply-too-large' }
   }
-  const whole: BridgeReplyMessage = { v: BRIDGE_PROTOCOL_VERSION, type: 'reply', id, payload }
-  if (utf8ByteLength(JSON.stringify(whole)) <= BRIDGE_MAX_MESSAGE_BYTES) {
-    return { ok: true, frames: [whole] }
+  // Envelope text is ASCII-delimited, so its bytes add to the payload's without recounting the payload.
+  const head = `{"v":${BRIDGE_PROTOCOL_VERSION},"type":"reply","id":${JSON.stringify(id)},`
+  const wholeHead = `${head}"payload":`
+  if (utf8ByteLength(wholeHead) + payloadBytes + 1 <= BRIDGE_MAX_MESSAGE_BYTES) {
+    return { ok: true, frames: [`${wholeHead}${serialized}}`] }
   }
-  const chunks: string[] = []
+  // Measure with the widest allowed part counters because `of` is unknown until splitting finishes.
+  const envelopeBytes =
+    utf8ByteLength(partHead(head, BRIDGE_MAX_REPLY_PARTS, BRIDGE_MAX_REPLY_PARTS)) + 1
+  const frames: string[] = []
   for (let start = 0; start < serialized.length;) {
-    const end = chunkEnd(id, serialized, start)
-    chunks.push(serialized.slice(start, end))
-    start = end
+    const chunk = nextChunk(serialized, start, envelopeBytes)
+    frames.push(chunk.escaped)
+    start = chunk.end
   }
-  return {
-    ok: true,
-    frames: chunks.map((chunk, index) => ({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id,
-      part: { i: index, of: chunks.length },
-      chunk
-    }))
+  // Wrap in place so each escaped chunk can be released as its frame is built.
+  for (let index = 0; index < frames.length; index += 1) {
+    frames[index] = `${partHead(head, index, frames.length)}${frames[index]}}`
   }
+  return { ok: true, frames }
 }
 
 type PendingReply = { of: number; chunks: Map<number, string>; units: number }
 
-/**
- * Every half-assembled reply together. Without it, the per-reply ceiling times the in-flight cap is
- * half a gigabyte of parts that never complete. Four whole replies at once is more than the page
- * asks for and far less than the phone can lose.
- */
+// Bound aggregate assembly memory too; per-reply ceiling times request cap otherwise permits half a gigabyte of incomplete parts.
 const BRIDGE_MAX_ASSEMBLING_BYTES = BRIDGE_MAX_REPLY_BYTES * 4
 
-/**
- * Parts may arrive in any order, so they are held by index rather than appended.
- *
- * A failed id stays failed while the page still holds it. Dropping the refusal and starting over on
- * the next part is what would let a sender walk past the ceiling one refusal at a time, so every
- * later part for that id gets the same answer instead. Nothing is remembered for long: `discard`
- * reopens the id, and the page's request ledger calls it as it settles the caller, so the tombstone
- * normally lives no longer than the rest of the reply that raised it. The bound below is for the
- * ids nothing settles.
- *
- * The number of ids held at once is bounded by the in-flight request cap, since a reply only exists
- * for a request the page made, and their bytes together by `BRIDGE_MAX_ASSEMBLING_BYTES`. Nothing
- * here expires an id on its own, so C0.4 has to `discard` the id of every request it settles or
- * abandons, or a lost final part holds a slot until teardown.
- */
+// Hold out-of-order parts by index and retain refusal until discard; restarting failed ids would let senders evade the ceiling.
+// Bound ids and aggregate bytes; request bookkeeping must discard settled/abandoned ids because the assembler has no expiry.
 export class BridgeReplyAssembler {
   private readonly pending = new Map<string, PendingReply>()
   private readonly refused = new Map<string, BridgeRefusal>()
@@ -167,10 +127,7 @@ export class BridgeReplyAssembler {
     if (this.assemblingUnits() + chunk.length > BRIDGE_MAX_ASSEMBLING_BYTES) {
       return this.fail(id, 'too-many-pending')
     }
-    // Code units, not bytes: a reply is never fewer bytes than code units, so this bounds what is
-    // held without refusing a reply the joined measurement would accept. The ceiling itself is
-    // checked once, on the joined text, because a pair split across two parts is four bytes whole
-    // and six counted half by half.
+    // Bound held code units, then measure joined UTF-8 once: surrogate halves cost six bytes separately but their pair costs four.
     const units = entry.units + chunk.length
     if (units > BRIDGE_MAX_REPLY_BYTES) {
       return this.fail(id, 'reply-too-large')
@@ -185,7 +142,6 @@ export class BridgeReplyAssembler {
     return readAssembledPayload(entry)
   }
 
-  /** For a request the page abandoned, and for teardown. Also how a refused id is reopened. */
   discard(id: string): void {
     this.pending.delete(id)
     this.refused.delete(id)
@@ -196,7 +152,6 @@ export class BridgeReplyAssembler {
     this.refused.clear()
   }
 
-  /** Code units, for the same reason the per-reply bound counts them: never more than the bytes. */
   private assemblingUnits(): number {
     let units = 0
     for (const entry of this.pending.values()) {
@@ -207,8 +162,7 @@ export class BridgeReplyAssembler {
 
   private fail(id: string, refusal: BridgeRefusal): BridgeReplyAssembly {
     this.pending.delete(id)
-    // The oldest refusal goes rather than the map growing: an id the page has not discarded in 64
-    // refusals is one it is no longer waiting on.
+    // Evict the oldest refusal at the bound; unobserved tombstones must not grow forever.
     if (this.refused.size >= BRIDGE_MAX_PENDING_REQUESTS) {
       const oldest = this.refused.keys().next()
       if (!oldest.done) {
@@ -220,11 +174,7 @@ export class BridgeReplyAssembler {
   }
 }
 
-/**
- * The reassembled body is checked as a reply payload and against the reply ceiling, which the
- * assembler already applied, and against nothing else: the document caps bound the page's traffic,
- * not the desktop's answers.
- */
+// Apply reply schema/byte ceiling only; page document-depth/node caps must not reject ordinary desktop listings.
 function readAssembledPayload(entry: PendingReply): BridgeReplyAssembly {
   const joined = [...entry.chunks.entries()]
     .sort(([left], [right]) => left - right)

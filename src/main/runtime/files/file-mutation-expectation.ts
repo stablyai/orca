@@ -2,15 +2,16 @@ import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
+import {
+  assertSshMutationExpectation,
+  getSshConnectionGeneration
+} from '../../ssh/connection/authority/ssh-connection-generation'
 
 export const RUNTIME_FILE_MUTATION_UPDATE_REQUIRED =
   'Remote file changes require a newer Orca client. Update the paired client and try again.'
 
 export function assertRuntimeFileMutationExpectation(
-  // The resolved host, not a repo row's connection: recomputing it from `connectionId` here spelled
-  // `runtime:<env>` and "unresolved" as `local`, so a client's host expectation could pass against
-  // a host it never named (#11163).
+  // #11163: use the resolved host; connectionId would collapse runtime/unresolved to local.
   executionHostId: ExecutionHostId,
   expectedExecutionHostId: string | undefined,
   expectedSshTargetId: string | undefined,
@@ -27,4 +28,24 @@ export function assertRuntimeFileMutationExpectation(
     expectedSshTargetId,
     expectedSshConnectionGeneration
   )
+}
+
+export type RuntimeFileMutationExpectation = {
+  expectedExecutionHostId: ExecutionHostId
+  expectedSshTargetId?: string
+  expectedSshConnectionGeneration?: number
+}
+
+/** The expectation a server-originated write pins at its start, so a moved or reconnected host refuses the rest. */
+export function captureRuntimeFileMutationExpectation(
+  executionHostId: ExecutionHostId
+): RuntimeFileMutationExpectation {
+  const sshTargetId = getSshTargetIdForExecutionHost(executionHostId)
+  return sshTargetId
+    ? {
+        expectedExecutionHostId: executionHostId,
+        expectedSshTargetId: sshTargetId,
+        expectedSshConnectionGeneration: getSshConnectionGeneration(sshTargetId)
+      }
+    : { expectedExecutionHostId: executionHostId }
 }

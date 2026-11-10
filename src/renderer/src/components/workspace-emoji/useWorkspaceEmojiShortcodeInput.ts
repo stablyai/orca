@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,

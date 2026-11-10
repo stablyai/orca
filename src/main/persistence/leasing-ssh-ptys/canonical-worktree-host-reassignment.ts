@@ -24,7 +24,7 @@ type AliasMove = {
   identities: IdentityMove[]
 }
 
-/** Move canonical aliases only after every destination occupant is proven compatible. */
+/** Prove all destination occupants compatible before moving any canonical aliases. */
 export function reassignCanonicalWorktreeMetadataHost(
   state: PersistedState,
   oldHostId: ExecutionHostId,

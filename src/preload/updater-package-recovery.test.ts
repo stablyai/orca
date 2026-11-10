@@ -68,7 +68,6 @@ describe('native preload linux package recovery methods', () => {
       packageFileName: 'orca.deb'
     })
 
-    // Why: the renderer must never reach a generic shell/path channel for this cache artifact.
     expect(invoke.mock.calls).toEqual([['updater:getLinuxPackageInstallInstructions']])
   })
 

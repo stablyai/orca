@@ -9,7 +9,7 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { linearListCustomViews } from '@/runtime/runtime-linear-project-client'
+import { linearListCustomViews } from '@/runtime/linear/runtime-linear-project-client'
 import {
   collectionWithWorkspaceError,
   emptyLinearCollection,
@@ -67,7 +67,7 @@ export function createLinearCustomViewListActions(
         inflight &&
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
+        !options?.force
       ) {
         return inflight.promise
       }
@@ -137,7 +137,6 @@ export function createLinearCustomViewListActions(
 
       entry = {
         promise,
-        force: Boolean(options?.force),
         generation: requestCacheGeneration,
         contextKey,
         mutationGeneration: requestMutationGeneration

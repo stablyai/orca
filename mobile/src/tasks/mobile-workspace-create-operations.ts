@@ -1,10 +1,11 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   isAgentLaunchResult,
   type AgentLaunchResult
-} from '../../../src/shared/agent-launch-intent'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentLaunchCreateReceiptSchema,
   worktreeCreateReceiptSchema,
@@ -12,18 +13,9 @@ import {
 } from './workspace-create-reply-schema'
 import { taskRuntimeStatusSchema } from './task-runtime-reply-schema'
 
-// Creating a workspace from a task. Checked against workspace-create-reply-schema.ts; the
-// create-time status probe reads through the Tasks screen's own status schema, because the two
-// operations differ in acceptance and not in what the host sends. The replay-required launch keeps
-// the shared `isAgentLaunchResult` guard it shipped with rather than the receipt schema beside it:
-// a replayed receipt is the host's own record, so it is held to the full shared contract.
+// Replay receipts retain the full shared launch guard; create-time status shares the Tasks schema with different acceptance.
 
-/**
- * worktree.create. A lost reply is *unknown*, never failed — `worktree-create-retry.ts` replays on
- * the same clientMutationId — so this operation never interprets a transport rejection: `request`
- * hands back the transport promise itself and the delivery-unknown mark reaches the retry loop on
- * the original rejection object.
- */
+// Preserve the original delivery-unknown rejection so retries reuse clientMutationId after lost replies.
 export const worktreeCreateRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.create',
@@ -34,11 +26,7 @@ export const worktreeCreateRun = bindDeferredRpcOperation(
   })
 )
 
-/**
- * agent.launch carrying a create payload: the host settles whether the agent lands in a structured
- * session or a terminal. Same reply discipline as worktreeCreateRun, and for the same reason — the
- * two share one clientMutationId, so the retry loop must see an unlost reply either way.
- */
+// Launch-create shares the mutation id and lost-reply discipline with legacy worktree creation.
 export const agentLaunchRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'agent.launch',
@@ -59,10 +47,6 @@ export const agentLaunchReplayRun = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The start point for a workspace created from a linked pull request. Refusal throws the host's
- * message; an accepted reply can still carry a soft `{ error }` the caller raises itself.
- */
 export const worktreePrBaseResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.resolve-pr-base',
@@ -73,7 +57,6 @@ export const worktreePrBaseResolve = bindDeferredRpcOperation(
   })
 )
 
-/** The GitLab merge-request equivalent; same acceptance, same soft-error convention. */
 export const worktreeMrBaseResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.resolve-mr-base',
@@ -84,28 +67,20 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
   })
 )
 
-/**
- * status.get read for create-time capabilities, with its own policy on that method.
- *
- * Separately named because the callers disagree about what a refused status means: the
- * Tasks screen cannot hydrate without it and surfaces the host's message (`taskRuntimeStatusRead`),
- * while create-time capability probing degrades to "no capabilities" and creates anyway, so here a
- * refusal is a skip. One reader serves both, and it is now the same checked schema in each.
- */
-export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'status.create-capabilities-or-skip',
-    method: 'status.get',
-    acceptance: 'success-result-or-skip',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
-  })
+// Create-time status is advisory and may skip refusal; Tasks hydration requires the same reply to succeed.
+export const worktreeCreateCapabilityRead = connectionHostStatusRead(
+  bindDeferredRpcOperation(
+    defineRpcOperation({
+      name: 'status.create-capabilities-or-skip',
+      method: 'status.get',
+      acceptance: 'success-result-or-skip',
+      barrier: 'after-caller-barrier',
+      read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
+    })
+  )
 )
 
-/**
- * Warms the host for an imminent create: fetches the base and prepares a checkout the create can
- * claim. Best effort — a refusal (or an older host without the method) only costs the speed-up.
- */
+// Warmup refusal only loses a speed-up, including on older hosts without the method.
 export const worktreeCreateBasePrefetch = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.prefetch-create-base-or-skip',

@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type ts from 'typescript-api'
 import type { Plugin } from 'rolldown'
-import { createWorkspaceSourceResolver } from '../scripts/workspace-source-exports.mjs'
+import { createWorkspaceSourceResolver } from '../scripts/workspace/source-exports/workspace-source-exports.mjs'
 
 function configError(diagnostic: ts.Diagnostic, compiler: typeof ts): Error {
   return new Error(compiler.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
@@ -142,8 +142,7 @@ export function createProcessHostDevRebuildPlugin(root = process.cwd()): Plugin 
       if (!packageDirty) {
         return
       }
-      // The external package must finish emitting before electron-vite restarts the app. The
-      // package's own build keeps its compiler and per-file atomic dist sync identical to build:packages.
+      // Finish external-package atomic dist emission before electron-vite restarts the app.
       const result = runProcessSync({
         program: process.execPath,
         args: [

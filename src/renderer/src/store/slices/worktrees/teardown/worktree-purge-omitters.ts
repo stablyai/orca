@@ -1,7 +1,7 @@
 import type { AppState } from '../../../types'
 import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage-types'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { normalizeRightSidebarRoute } from '../../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../../right-sidebar/right-sidebar-route'
 import type { WorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { omitRecordKeys } from './record-key-omission'
 
@@ -40,7 +40,10 @@ export function createWorktreePurgeOmitters(
   const omitByPtyId = <T>(obj: Record<string, T>): Record<string, T> =>
     omitRecordKeys(obj, doomedPtyIds)
   // Pane-scoped maps are keyed `${tabId}:${leafId}`; tabId never contains ":", so the prefix before the first ":" is the owning tab.
-  const omitByPaneKeyTabPrefix = <T>(obj: Record<string, T>): Record<string, T> => {
+  const omitByPaneKeyTabPrefix = <T>(
+    obj: Record<string, T>,
+    removedPaneKeys?: Set<string>
+  ): Record<string, T> => {
     // Null-tolerant like omitByTabId: some worktree-isolation callers omit these slices (production store always inits to {}).
     if (!obj) {
       return obj
@@ -49,7 +52,11 @@ export function createWorktreePurgeOmitters(
       obj,
       Object.keys(obj).filter((paneKey) => {
         const sep = paneKey.indexOf(':')
-        return sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))
+        const removed = sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))
+        if (removed) {
+          removedPaneKeys?.add(paneKey)
+        }
+        return removed
       })
     )
   }

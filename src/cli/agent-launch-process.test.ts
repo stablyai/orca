@@ -10,7 +10,7 @@ import { z } from 'zod'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITIES,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
-} from '../shared/agent-launch-runtime-capability'
+} from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { agentLaunchFixture } from './agent-launch-test-fixtures'
 
 it('real CLI processes carry surface choices and refuse invalid or unsupported picks before mutation', async () => {

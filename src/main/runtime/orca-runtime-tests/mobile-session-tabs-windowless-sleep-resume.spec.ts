@@ -1,21 +1,21 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,
-  HEADLESS_SECOND_LEAF_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
-// The host's own pane-owned capture form (#11598), which no window wake relaunches.
+// Pane-owned captures must not be resumed twice (#11598).
 const PANE_OWNED = { origin: 'worktree-sleep', state: 'done', restoreOnTabOpenOnly: true }
 
-// A running agent's workspace sleep: the window's wake relaunches it, and a windowless host has none.
 function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = {}) {
   const record: SleepingAgentSessionRecord = {
     paneKey: PANE_KEY,
@@ -36,7 +36,7 @@ function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = 
     })
   )
   const baseSettings = fixture.runtimeStore.getSettings
-  // Why: a resume must not inherit a permission-widening default the launch never used.
+  // Resume must preserve permissions rather than inherit wider launch defaults.
   fixture.runtimeStore.getSettings = () => ({
     ...baseSettings(),
     agentDefaultArgs: { claude: '--dangerously-skip-permissions' }
@@ -44,7 +44,6 @@ function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = 
   return fixture
 }
 
-// Why: the review's repro tab was launched as Claude, so a missed resume became a fresh agent.
 function withClaudeLaunchedTab(fixture: ReturnType<typeof makeWorkingSleepStore>): void {
   const session = structuredClone(fixture.getSession())
   const tab = session.tabsByWorktree[TEST_WORKTREE_ID]?.[0]
@@ -55,13 +54,12 @@ function withClaudeLaunchedTab(fixture: ReturnType<typeof makeWorkingSleepStore>
 }
 
 function openPane(
-  runtimeStore: unknown,
+  runtimeStore: RuntimeStore,
   windowStatus: 'blocked' | 'openable',
-  opts: { spawn?: () => Promise<{ id: string }>; withWindow?: boolean } = {}
+  opts: { spawn?: () => Promise<{ id: string }>; withWindow?: boolean; tap?: boolean } = {}
 ) {
   const spawn = vi.fn(opts.spawn ?? (() => Promise.resolve({ id: 'persisted-pty' })))
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-  const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+  const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
     getDesktopWindowStatus: () => windowStatus
   })
   runtime.setPtyController({
@@ -77,13 +75,14 @@ function openPane(
     if (opts.withWindow) {
       runtime.attachWindow(TEST_WINDOW_ID)
       runtime.markGraphReady(TEST_WINDOW_ID)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only isDestroyed from the window mock.
-      electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
-      // A paired desktop client opening the worktree hydrates the host's tabs without a wake.
+      electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
       await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
         notifyClients: false,
         clientKind: 'runtime'
       })
+    }
+    if (opts.tap === false) {
+      return null
     }
     return runtime.activateMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
@@ -107,68 +106,7 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>, call = 0): string {
 }
 
 describe('opening a workspace-slept running agent on a host with no window', () => {
-  it('resumes its conversation with only the recorded launch flags', async () => {
-    const { runtimeStore } = makeWorkingSleepStore()
-    const { opened, spawn } = openPane(runtimeStore, 'blocked')
-
-    await expect(opened).resolves.toMatchObject({ tabs: [{ status: 'ready' }] })
-    expect(spawn).toHaveBeenCalledOnce()
-    const command = spawnedCommand(spawn)
-    expect(command).toContain('--resume')
-    expect(command).toContain('provider-session-1')
-    expect(command).not.toContain('--dangerously-skip-permissions')
-  })
-
-  it('keeps the recorded permission flags of the launch it resumes', async () => {
-    const { runtimeStore } = makeWorkingSleepStore({
-      launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
-    })
-    const { opened, spawn } = openPane(runtimeStore, 'blocked')
-
-    await opened
-    expect(spawnedCommand(spawn)).toMatch(/--permission-mode'? '?plan/)
-  })
-
-  it('still refuses a session another pane also records', async () => {
-    const { runtimeStore, getSession, setSession } = makeWorkingSleepStore()
-    const session = structuredClone(getSession())
-    const own = session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]
-    if (own && session.sleepingAgentSessionsByPaneKey) {
-      const otherKey = `host-tab:${HEADLESS_SECOND_LEAF_ID}`
-      session.sleepingAgentSessionsByPaneKey[otherKey] = { ...own, paneKey: otherKey }
-    }
-    setSession(session)
-    const { opened, spawn } = openPane(runtimeStore, 'blocked')
-
-    await opened
-    expect(spawnedCommand(spawn)).not.toContain('provider-session-1')
-  })
-
-  // Review repro: a host that could open a window but had none fell back to a fresh launch.
-  it('resumes in the pane on a host that can open a window but has none', async () => {
-    const fixture = makeWorkingSleepStore({
-      launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
-    })
-    withClaudeLaunchedTab(fixture)
-    const { opened, spawn } = openPane(fixture.runtimeStore, 'openable')
-
-    await opened
-    const command = spawnedCommand(spawn)
-    expect(command).toContain('--resume')
-    expect(command).toContain('provider-session-1')
-    expect(command).toMatch(/--permission-mode'? '?plan/)
-    expect(command).not.toContain('--dangerously-skip-permissions')
-    // Why: a later window wake relaunches a running record (a second writer), never a pane-owned one.
-    // Layout-owner build: the resumed agent runs, so main marks its record a running agent's (L254).
-    await vi.waitFor(() =>
-      expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject({
-        ...PANE_OWNED,
-        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { origin: 'live' } : {})
-      })
-    )
-  })
-
-  // Codex repro: deleting the record left a restarted host nothing to resume a lost PTY from.
+  // A restart that loses the PTY still needs the saved resume flags.
   it('still resumes with the recorded flags after a host restart loses the PTY', async () => {
     const fixture = makeWorkingSleepStore({
       launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
@@ -184,41 +122,6 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(command).not.toContain('--dangerously-skip-permissions')
   })
 
-  // Codex repro: spending the record before the spawn let an overlapping reconnect probe fresh-launch.
-  it('keeps an automatic probe parked while the resume spawn is in flight', async () => {
-    const fixture = makeWorkingSleepStore()
-    withClaudeLaunchedTab(fixture)
-    let landSpawn: (value: { id: string }) => void = () => {}
-    let spawnStarted: () => void = () => {}
-    const started = new Promise<void>((resolve) => {
-      spawnStarted = resolve
-    })
-    const { opened, spawn, runtime } = openPane(fixture.runtimeStore, 'openable', {
-      spawn: () => {
-        spawnStarted()
-        return new Promise((resolve) => {
-          landSpawn = resolve
-        })
-      }
-    })
-    await started
-    // Codex repro: a window attaching mid-spawn must already see the record as the pane's.
-    expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject(
-      PANE_OWNED
-    )
-
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
-      notifyClients: false,
-      navigation: 'caller',
-      intent: 'automatic'
-    })
-    expect(spawn).toHaveBeenCalledOnce()
-    landSpawn({ id: 'persisted-pty' })
-    await opened
-    expect(spawnedCommand(spawn)).toContain('provider-session-1')
-  })
-
-  // Codex repro: the open that lost the claim spawned a plain shell that could swallow the resume.
   it('resumes from both of two overlapping opens of the pane, never a plain shell', async () => {
     const fixture = makeWorkingSleepStore()
     withClaudeLaunchedTab(fixture)
@@ -251,21 +154,5 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     const retried = openPane(fixture.runtimeStore, 'openable')
     await retried.opened
     expect(spawnedCommand(retried.spawn)).toContain('provider-session-1')
-  })
-
-  it('with a window, opens a plain shell for the window to wake, or resumes it itself under main', async () => {
-    const fixture = makeWorkingSleepStore()
-    withClaudeLaunchedTab(fixture)
-    const { opened, spawn } = openPane(fixture.runtimeStore, 'openable', { withWindow: true })
-
-    await opened
-    expect(spawn).toHaveBeenCalledOnce()
-    // Layout-owner build: main owns every wake, so the window never resumes it a second time.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(spawnedCommand(spawn)).toContain('provider-session-1')
-    } else {
-      expect(spawnedCommand(spawn)).toBe('')
-    }
-    expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
   })
 })

@@ -1,23 +1,18 @@
-// Editor tabs whose file record the window dropped, in a layout-owner build: main closes them.
-// A single tab's close goes through `closeContentTabThroughLayoutOwner`.
+// Main closes orphaned editor tabs in layout-owner builds; single-tab close uses closeContentTabThroughLayoutOwner.
 
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   afterPendingTabs,
   hasPendingEntityTab,
   isTabClosePending,
   markPendingCloseCleansFile,
   pendingCloseCleansFile
-} from '@/runtime/layout-owner-pending-tabs'
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
 
-/**
- * closeFile's tabs: main closes each, and the file's content goes once every close is in, unless
- * one was refused or the file reopened meanwhile. A repeat close joins the one in flight; so does
- * the file's cleanup, unless that close (a bulk close's) carries none.
- */
+/** Drop file content once all tab closes succeed, unless reopened/refused. Repeated closeFile joins pending closes and their existing cleanup; bulk closes may carry none. */
 export function closeFileTabsThroughLayoutOwner(
   get: () => AppState,
   tabIds: readonly string[],
@@ -30,16 +25,16 @@ export function closeFileTabsThroughLayoutOwner(
   }
   for (const tabId of tabIds) {
     if (!isTabClosePending(tabId)) {
-      get().closeUnifiedTab(tabId)
+      get().closeUnifiedTab(tabId, { editorRetirementHandled: true })
     }
   }
   tabIds.forEach(markPendingCloseCleansFile)
   afterPendingTabs(tabIds, (outcomes) => {
     const reopened =
-      hasPendingEntityTab(file.worktreeId, file.fileId) ||
-      (get().unifiedTabsByWorktree[file.worktreeId] ?? []).some(
-        (tab) => tab.entityId === file.fileId
-      )
+      hasPendingEntityTab(null, file.fileId) ||
+      Object.values(get().unifiedTabsByWorktree)
+        .flat()
+        .some((tab) => tab.entityId === file.fileId)
     if (outcomes.every((outcome) => outcome !== null) && !reopened) {
       cleanUp()
     }

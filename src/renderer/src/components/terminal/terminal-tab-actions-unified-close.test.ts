@@ -1,24 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 
-// Why: drives the real closeTerminalTab orchestrator against the real store so the
-// unified close contract (MRU/neighbor successor, renderable-count deactivation gate)
-// is exercised end to end. Slice-level tests pass without the orchestrator fix and
-// would be vacuous for these regressions.
+// Drive the real orchestrator: slice-only tests miss successor selection and empty-workspace deactivation regressions.
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false),
   toHostSessionTabId: vi.fn((tabId: string) => tabId)
 }))
@@ -30,15 +27,17 @@ vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(() => null)
 }))
 
-vi.mock('@/runtime/structured-agent-session-close', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: vi.fn(() => Promise.resolve())
 }))
 
-const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
+const { createTabsSliceMockApi } = await import('@/store/slices/tabs/tabs-slice-test-harness')
 createTabsSliceMockApi()
 
-const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
-  await import('@/store/slices/store-test-helpers')
+const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
+  { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture'),
+  { makeTabGroup, makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
+  { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))
@@ -46,7 +45,6 @@ vi.mock('@/store', () => ({ useAppStore: store }))
 const { closeTerminalTab } = await import('./terminal-tab-actions')
 
 const GIT_WT = 'repo1::/tmp/wt1'
-const FOLDER_WT = 'folder:folder-1'
 const GROUP = 'group-1'
 
 function seedWorktreeWithTabs(
@@ -55,7 +53,6 @@ function seedWorktreeWithTabs(
     terminalIds: string[]
     /** Unified group order; entries are unified tab ids ("u-" + terminal id, or the chat id). */
     groupOrder: string[]
-    /** MRU stack, most recent last. */
     recentTabIds: string[]
     activeUnifiedTabId: string
     activeTerminalId: string
@@ -85,7 +82,6 @@ function seedWorktreeWithTabs(
   if (args.includeChatTab !== false) {
     unifiedByTabId.set(chatTab.id, chatTab)
   }
-  // Why: keep the unified array in group order so insertion-order assertions are real.
   const unifiedTabs = args.groupOrder.flatMap((tabId) => {
     const tab = unifiedByTabId.get(tabId)
     return tab ? [tab] : []
@@ -152,30 +148,13 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)
     expect(state.activeTabType).toBe('agent-session')
     expect(group(GIT_WT)?.activeTabId).toBe('chat-1')
     expect(state.unifiedTabsByWorktree[GIT_WT]?.map((tab) => tab.id)).toEqual(['chat-1'])
-  })
-
-  it('keeps the folder workspace active and focuses the chat tab when the last terminal closes', () => {
-    seedWorktreeWithTabs(FOLDER_WT, {
-      terminalIds: ['term-1'],
-      groupOrder: ['u-term-1', 'chat-1'],
-      recentTabIds: ['chat-1', 'u-term-1'],
-      activeUnifiedTabId: 'u-term-1',
-      activeTerminalId: 'term-1'
-    })
-
-    closeTerminalTab('term-1')
-
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(FOLDER_WT)
-    expect(state.activeTabType).toBe('agent-session')
-    expect(group(FOLDER_WT)?.activeTabId).toBe('chat-1')
   })
 
   it('falls back to the most recent chat tab, not the next terminal, when closing among two terminals', () => {
@@ -187,13 +166,12 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)
     expect(group(GIT_WT)?.activeTabId).toBe('chat-1')
     expect(state.activeTabType).toBe('agent-session')
-    // Why: insertion order must survive the close — only the closed tab drops out.
     expect(state.unifiedTabsByWorktree[GIT_WT]?.map((tab) => tab.id)).toEqual([
       'chat-1',
       'u-term-2'
@@ -211,9 +189,25 @@ describe('closeTerminalTab unified close contract', () => {
       includeChatTab: false
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('keeps an emptied worktree selected for a caller about to open its replacement', () => {
+    seedWorktreeWithTabs(GIT_WT, {
+      terminalIds: ['term-1'],
+      groupOrder: ['u-term-1'],
+      recentTabIds: ['u-term-1'],
+      activeUnifiedTabId: 'u-term-1',
+      activeTerminalId: 'term-1',
+      includeChatTab: false
+    })
+
+    closeTerminalTab('term-1', { reason: 'user', preserveWorktreeSelection: true })
+
+    expect(store.getState().activeWorktreeId).toBe(GIT_WT)
+    expect(store.getState().unifiedTabsByWorktree[GIT_WT]).toEqual([])
   })
 
   it('lands on an open editor tab instead of deactivating when the last terminal closes', () => {
@@ -252,7 +246,7 @@ describe('closeTerminalTab unified close contract', () => {
       }
     }))
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)

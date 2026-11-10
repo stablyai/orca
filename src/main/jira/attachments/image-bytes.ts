@@ -11,7 +11,7 @@ import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_PENDING_READS,
   isJiraImageMimeType
-} from '../../../shared/jira-attachment-image'
+} from '../../../shared/jira/jira-attachment-image'
 import { withJiraDeadline } from '../jira-read-failure'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'

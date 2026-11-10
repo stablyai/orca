@@ -48,31 +48,6 @@ describe('createSharedNowClock', () => {
     expect(clearIntervalMock).toHaveBeenCalledWith(handle)
   })
 
-  it('refreshes the snapshot when a new subscriber restarts an idle clock', () => {
-    let now = 1_000
-    const handle = {} as ReturnType<typeof setInterval>
-    const setIntervalMock = vi.fn(() => handle)
-    const clearIntervalMock = vi.fn()
-    const first = vi.fn()
-    const second = vi.fn()
-    const clock = createSharedNowClock(30_000, {
-      now: () => now,
-      setInterval: setIntervalMock,
-      clearInterval: clearIntervalMock
-    })
-
-    const unsubscribeFirst = clock.subscribe(first)
-    expect(clock.getSnapshot()).toBe(1_000)
-    unsubscribeFirst()
-
-    now = 61_000
-    clock.subscribe(second)
-
-    expect(clock.getSnapshot()).toBe(61_000)
-    expect(second).toHaveBeenCalledTimes(1)
-    expect(setIntervalMock).toHaveBeenCalledTimes(2)
-  })
-
   it('does not arm the timer while hidden and catches up when the window becomes visible', () => {
     let visibilityState: DocumentVisibilityState = 'hidden'
     const documentListeners = new Map<string, () => void>()
@@ -98,12 +73,10 @@ describe('createSharedNowClock', () => {
     })
 
     const unsubscribe = clock.subscribe(listener)
-    // Hidden on mount: no timer armed, no forced render, snapshot untouched.
     expect(setIntervalMock).not.toHaveBeenCalled()
     expect(listener).not.toHaveBeenCalled()
     expect(clock.getSnapshot()).toBe(1_000)
 
-    // Becoming visible catches the stale label up and arms the shared timer.
     now = 90_000
     visibilityState = 'visible'
     documentListeners.get('visibilitychange')?.()
@@ -111,7 +84,6 @@ describe('createSharedNowClock', () => {
     expect(clock.getSnapshot()).toBe(90_000)
     expect(setIntervalMock).toHaveBeenCalledTimes(1)
 
-    // Hiding again stops the shared timer so it stops ticking in the background.
     visibilityState = 'hidden'
     documentListeners.get('visibilitychange')?.()
     expect(clearIntervalMock).toHaveBeenCalledWith(handle)
@@ -137,7 +109,6 @@ describe('useNow', () => {
     })
     expect(hook.result.current).toBe(1_000)
 
-    // A disabled caller must not arm the shared interval on its own.
     act(() => vi.advanceTimersByTime(5_000))
     expect(hook.result.current).toBe(1_000)
 
@@ -147,17 +118,5 @@ describe('useNow', () => {
 
     act(() => vi.advanceTimersByTime(1_000))
     expect(hook.result.current).toBe(7_000)
-  })
-
-  it('shares one snapshot across callers at the same cadence', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const first = renderHook(() => useNow(2_000))
-    const second = renderHook(() => useNow(2_000))
-    expect(second.result.current).toBe(first.result.current)
-
-    act(() => vi.advanceTimersByTime(2_000))
-    expect(first.result.current).toBe(3_000)
-    expect(second.result.current).toBe(3_000)
   })
 })

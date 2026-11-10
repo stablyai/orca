@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, ExternalLink, Copy, CopyX, Pin, PinOff } from 'lucide-react'
+import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { TabHoverCard } from './TabHoverCard'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -24,19 +25,26 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
-import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
-import { cn } from '@/lib/utils'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
+import { cn } from '@/lib/class-names'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
+import {
+  useBrowserAgentControllerHost,
+  useBrowserAgentDrivesAnyPage
+} from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { useAppStore } from '@/store/index'
 
-export function formatBrowserTabUrlLabel(url: string): string {
+export function formatBrowserTabUrlLabel(url: string, t: Translate = translate): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
-    return 'New Tab'
+    return t('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')
   }
   try {
     const parsed = new URL(url)
@@ -46,19 +54,19 @@ export function formatBrowserTabUrlLabel(url: string): string {
   }
 }
 
-export function getBrowserTabLabel(tab: BrowserTabState): string {
+export function getBrowserTabLabel(tab: BrowserWorkspace, t?: Translate): string {
   if (
     !tab.title ||
     tab.title === tab.url ||
     tab.title === ORCA_BROWSER_BLANK_URL ||
     tab.title === 'about:blank'
   ) {
-    return formatBrowserTabUrlLabel(tab.url)
+    return formatBrowserTabUrlLabel(tab.url, t)
   }
   return tab.title || tab.url
 }
 
-function isBlankBrowserTab(tab: BrowserTabState): boolean {
+function isBlankBrowserTab(tab: BrowserWorkspace): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
@@ -78,7 +86,7 @@ export default function BrowserTab({
   dropIndicator,
   includeTopTabBorder = true
 }: {
-  tab: BrowserTabState
+  tab: BrowserWorkspace
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
@@ -96,18 +104,15 @@ export default function BrowserTab({
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
-  // Why: no transform/transition/isDragging styling — the drag design is
-  // that tabs stay visually anchored; only the blue insertion bar moves.
+  const t = useTranslate()
+  // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
     data: dragData
   })
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
-  // Why: about:blank and other non-http URLs should not be sent to the
-  // system browser. Disable the context menu item instead of silently
-  // calling shell.openUrl with an unsupported URL.
+  // Only HTTP(S) URLs can open in the system browser; disable unsupported or malformed destinations.
   const openInBrowserUrl = redactKagiSessionToken(getLiveBrowserUrl(tab.id) ?? tab.url)
   let isHttpUrl = false
   try {
@@ -116,7 +121,23 @@ export default function BrowserTab({
   } catch {
     // invalid URL — leave disabled
   }
-  const tabLabel = getBrowserTabLabel(tab)
+  const tabLabel = getBrowserTabLabel(tab, t)
+  const audible = useAppStore((s) =>
+    (s.browserPagesByWorkspace[tab.id] ?? []).some((page) => s.browserAudiblePageIds[page.id])
+  )
+  const audioMuted = useAppStore((s) => Boolean(s.browserAudioMutedTabIds[tab.id]))
+  // Why: a muted tab keeps its icon after sound stops, so it can be unmuted from the strip.
+  const showAudioControl = audible || audioMuted
+  const setBrowserTabAudioMuted = useAppStore((s) => s.setBrowserTabAudioMuted)
+  const toggleAudioMutedLabel = audioMuted
+    ? t('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
+    : t('components.tab.bar.BrowserTab.muteTab', 'Mute Tab')
+  const tabPageIds = tab.pageIds ?? [tab.activePageId]
+  const agentDriving = useBrowserAgentDrivesAnyPage(tabPageIds)
+  const controllerHost = useBrowserAgentControllerHost(tabPageIds)
+  const agentDrivingLabel = controllerHost
+    ? t('browserTab.controlledByHost', 'Controlled by {{host}}', { host: controllerHost })
+    : t('browserTab.agentDriving', 'An agent is using this page')
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -124,11 +145,7 @@ export default function BrowserTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
-  // Why: Electron <webview> elements run in a separate process, so clicking
-  // inside one never dispatches a pointerdown on the renderer document. Radix
-  // DropdownMenu relies on document pointerdown for outside-click detection,
-  // so it misses webview clicks. Listening for window blur catches the moment
-  // focus leaves the renderer (including into a webview).
+  // Webview clicks bypass renderer pointerdown, so window blur dismisses menus Radix cannot detect as outside clicks.
   useEffect(() => {
     if (!menuOpen) {
       return
@@ -138,9 +155,11 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
-  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
-  // another pane / split) does not switch the active tab mid-gesture.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+  // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
+  const { onPointerDown: onTabPointerDown, retirePendingActivation } = useTabStripPointerActivation(
+    { onActivate }
+  )
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive)
 
   const tabRoot = (
@@ -151,7 +170,7 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -176,21 +195,42 @@ export default function BrowserTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-      {/* Why: the browser tab icon is the only non-terminal, non-editor
-          surface in the tab strip. Coloring the Globe blue (matching the
-          in-app browser's identity and the default tab insertion bar)
-          gives it a distinct, recognizable anchor so users can spot
-          browser tabs at a glance even when the strip is saturated. We
-          keep full color on both active and inactive tabs — dimming to
-          muted-foreground made the icon read as "disabled" in practice. */}
-      <BrowserFavicon
-        faviconUrl={tab.faviconUrl}
-        loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
-        className="size-3 mr-1"
-        fallbackClassName="text-blue-500"
-      />
+      {/* Keep browser identity distinct on inactive tabs too; muted icons look disabled. */}
+      {agentDriving ? (
+        // Why: the dimmed favicon keeps the site recognizable under the agent's arrow.
+        <span role="img" aria-label={agentDrivingLabel} className="relative mr-1 size-3 shrink-0">
+          <BrowserFavicon
+            faviconUrl={tab.faviconUrl}
+            className="size-3 opacity-30"
+            fallbackClassName="text-blue-500"
+          />
+          <AgentCursorGlyph className="pointer-events-none absolute inset-0 size-3" />
+        </span>
+      ) : (
+        <BrowserFavicon
+          faviconUrl={tab.faviconUrl}
+          loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
+          className="size-3 mr-1"
+          fallbackClassName="text-blue-500"
+        />
+      )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
+      {showAudioControl && (
+        // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
+        <button
+          type="button"
+          aria-label={toggleAudioMutedLabel}
+          className="flex items-center justify-center w-4 h-4 rounded-sm shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            setBrowserTabAudioMuted(tab.id, !audioMuted)
+          }}
+        >
+          {audioMuted ? <VolumeX className="size-3" /> : <Volume2 className="size-3" />}
+        </button>
+      )}
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
@@ -211,90 +251,84 @@ export default function BrowserTab({
   )
 
   return (
-    <>
-      <div
-        {...slotProps}
-        onContextMenuCapture={(event) => {
-          event.preventDefault()
-          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-          setMenuPoint({ x: event.clientX, y: event.clientY })
-          setMenuOpen(true)
-        }}
-      >
-        {menuOpen ? (
-          tabRoot
-        ) : (
-          <TabHoverCard
-            title={tabLabel}
-            icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
-            programName={
-              isBlankBrowserTab(tab)
-                ? translate('tabHoverCard.browser', 'Browser')
-                : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
-            }
-          >
-            {tabRoot}
-          </TabHoverCard>
-        )}
-      </div>
-
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className={cn(
-            'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
-            TAB_CONTEXT_MENU_CONTENT_CLASS
-          )}
-          sideOffset={0}
-          align="start"
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+      <ContextMenuTrigger asChild>
+        <div
+          {...slotProps}
+          onContextMenu={() => {
+            window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+            handleMenuOpenChange(true)
+          }}
         >
-          <TabWorkspaceLayoutMenuSection
-            unifiedTabId={dragData.unifiedTabId}
-            groupId={dragData.groupId}
-            trailingSeparator
-          />
-          {onDuplicate ? (
-            <>
-              <DropdownMenuItem onSelect={onDuplicate}>
-                <Copy className="size-3.5" />
-                {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          ) : null}
-          <DropdownMenuItem onSelect={onTogglePin}>
-            {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-            {isPinned
-              ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
-              : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
-          </DropdownMenuItem>
-          <CopyTabIdMenuItem unifiedTabId={dragData.unifiedTabId} />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
-            <X className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
-            <CopyX className="size-3.5" />
-            {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
-          </DropdownMenuItem>
-          <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
-          <DropdownMenuItem
-            onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
-            disabled={!isHttpUrl}
-          >
-            <ExternalLink className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+          {menuOpen ? (
+            tabRoot
+          ) : (
+            <TabHoverCard
+              title={tabLabel}
+              showWhenUnclipped={controllerHost !== null}
+              icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
+              programName={
+                agentDriving
+                  ? agentDrivingLabel
+                  : isBlankBrowserTab(tab)
+                    ? t('tabHoverCard.browser', 'Browser')
+                    : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url), t)
+              }
+            >
+              {tabRoot}
+            </TabHoverCard>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        animation="none"
+        className={cn(
+          'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
+          'min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap'
+        )}
+      >
+        <TabWorkspaceLayoutMenuSection
+          unifiedTabId={dragData.unifiedTabId}
+          groupId={dragData.groupId}
+          trailingSeparator
+        />
+        {onDuplicate ? (
+          <>
+            <ContextMenuItem inset onSelect={onDuplicate}>
+              {t('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
+        <ContextMenuItem onSelect={onTogglePin}>
+          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {isPinned
+            ? t('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
+            : t('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
+        </ContextMenuItem>
+        {showAudioControl ? (
+          <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
+            {toggleAudioMutedLabel}
+          </ContextMenuItem>
+        ) : null}
+        <CopyTabIdMenuItem menuKind="context" unifiedTabId={dragData.unifiedTabId} />
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+          <X className="size-3.5" />
+          {t('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
+        </ContextMenuItem>
+        <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
+          {t('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
+        </ContextMenuItem>
+        <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
+        <ContextMenuItem
+          inset
+          onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
+          disabled={!isHttpUrl}
+        >
+          {t('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

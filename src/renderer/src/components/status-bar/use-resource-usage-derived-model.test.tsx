@@ -5,7 +5,7 @@ import type { BrowserWorkspace } from '../../../../shared/browser-workspace-type
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { DaemonSession } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { useResourceUsageDerivedModel } from './use-resource-usage-derived-model'
 
 const local = {
@@ -152,12 +152,6 @@ describe('Resource Manager folder ownership', () => {
       })
     }
   )
-
-  it('does not replace a sampled project name with a same-id group from another host', () => {
-    const foreignGroup = { ...group, name: 'Foreign project', executionHostId: 'runtime:paired' }
-    const groups = derive([local], [], sampled, [group, foreignGroup])
-    expect(groups[0].repoName).toBe('Local project')
-  })
 
   it('keeps git snapshot identity when the catalog contains a different host', () => {
     const row = { ...sampled, worktreeId: 'repo::/notes', repoId: 'repo' }

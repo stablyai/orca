@@ -1,16 +1,18 @@
-import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
-import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import {
   applyGeneratedTabTitleUpdates,
   applyTerminalTabTitleUpdates
-} from '../slices/terminal-tab-title-batch'
+} from './terminal-tab-title-batch'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwnerWorktreeId
-} from '../slices/terminal-tab-owner-index'
+} from './terminal-tab-owner-index'
 import { getTabIdFromPaneKey } from './terminal-pty-identities'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 
 export function createTerminalTabPresentationActions(
   set: TerminalStoreSet,
@@ -56,15 +58,13 @@ export function createTerminalTabPresentationActions(
         }
         const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
         const current = tabs.find((tab) => tab.id === tabId)
-        const sameTitle =
-          current?.aiVaultTitle?.agent === aiVaultTitle?.agent &&
-          current?.aiVaultTitle?.sessionId === aiVaultTitle?.sessionId &&
-          current?.aiVaultTitle?.title === aiVaultTitle?.title
-        if (!current || sameTitle) {
+        if (!current || sameAiVaultSessionTitle(current.aiVaultTitle, aiVaultTitle)) {
           return s
         }
         const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
-        const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
+        const nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [
+          [ownerWorktreeId, ownerTabs]
+        ])
         const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
         const nextUnifiedTabs = unifiedTabs.map((tab) =>
           tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
@@ -75,15 +75,14 @@ export function createTerminalTabPresentationActions(
         scheduleRuntimeGraphSync()
         return {
           tabsByWorktree: nextTabsByWorktree,
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [ownerWorktreeId]: nextUnifiedTabs
-          }
+          unifiedTabsByWorktree: replaceTabBuckets(s.unifiedTabsByWorktree, [
+            [ownerWorktreeId, nextUnifiedTabs]
+          ])
         }
       })
     },
     setGeneratedTabTitleFromAgentPrompt: (paneKey, prompt, options) => {
-      // Why: setAgentStatus is high-frequency; skip derive/set unless the feature is on and this tab still needs a (re)generated title.
+      // setAgentStatus is frequent; derive only when enabled and this tab needs a generated title.
       const state = get()
       const tabId = getTabIdFromPaneKey(paneKey)
       if (!tabId || prompt.length === 0 || state.settings?.tabAutoGenerateTitle !== true) {
@@ -139,7 +138,9 @@ export function createTerminalTabPresentationActions(
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+        return {
+          tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[ownerWorktreeId, nextTabs]])
+        }
       })
     },
     setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -154,7 +155,7 @@ export function createTerminalTabPresentationActions(
         }
         // Why: re-sort hookless title changes only when their activity classification changes.
         const classificationChanged =
-          classifyTitleActivity(prevTitle ?? '') !== classifyTitleActivity(title)
+          detectAgentStatusFromTitle(prevTitle ?? '') !== detectAgentStatusFromTitle(title)
         // Why: skip active-worktree remount side effects and orphaned panes.
         const ownerWorktreeId = classificationChanged
           ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
@@ -162,10 +163,9 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: {
-            ...s.runtimePaneTitlesByTabId,
-            [tabId]: { ...currentByPane, [paneId]: title }
-          },
+          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+            [tabId, { ...currentByPane, [paneId]: title }]
+          ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })
@@ -179,22 +179,18 @@ export function createTerminalTabPresentationActions(
         const prevTitle = currentByPane[paneId]
         const nextByPane = { ...currentByPane }
         delete nextByPane[paneId]
-        const next = { ...s.runtimePaneTitlesByTabId }
-        if (Object.keys(nextByPane).length > 0) {
-          next[tabId] = nextByPane
-        } else {
-          delete next[tabId]
-        }
-        // Why: clearing a classified title changes the smart-sort title-heuristic verdict, so it needs a re-sort. See setRuntimePaneTitle.
-        const hadClassification = classifyTitleActivity(prevTitle ?? '') !== null
-        // Why: same active-worktree gate as setRuntimePaneTitle — click-driven teardown clears must not re-rank the sidebar; skip when owner is missing (orphaned).
+        // Clearing a classified title changes smart-sort’s verdict, like setRuntimePaneTitle.
+        const hadClassification = detectAgentStatusFromTitle(prevTitle ?? '') !== null
+        // Click-driven teardown must not re-rank active worktrees; skip orphaned owners too.
         const ownerWorktreeId = hadClassification
           ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
           : null
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: next,
+          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+            [tabId, Object.keys(nextByPane).length > 0 ? nextByPane : null]
+          ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })

@@ -4,8 +4,7 @@ import {
   type WorktreeVisibilitySourceMatcher
 } from './worktree/visibility-sources'
 
-/** Why: agent CLIs reserve these repo-root paths for scratch; broader matches
- *  can hide legitimate user worktrees (#9388). */
+/** Restrict agent scratch matches to reserved repo-root paths; broader matches hide user worktrees (#9388). */
 const AGENT_SCRATCH_PATH_PREFIXES: readonly (readonly string[])[] = [
   ['.claude', 'worktrees'],
   ['.gsd-workspaces']
@@ -42,8 +41,7 @@ export function isAgentScratchWorktreePath(
   )(worktreePath)
 }
 
-/** Why: agent CLIs also mint whole scratch *repos* under these containers; a
- *  repo registered at such a root is agent-internal, not a user project (#9388). */
+/** Agent-created repos under these reserved containers are internal rather than user projects (#9388). */
 const AGENT_SCRATCH_REPO_ROOT_SEGMENTS: readonly (readonly string[])[] = [
   ['.codex-tmp'],
   ['.codex', 'vendor_imports'],
@@ -54,9 +52,7 @@ const AGENT_SCRATCH_REPO_ROOT_SEGMENTS: readonly (readonly string[])[] = [
 export function isAgentScratchRepoRootPath(repoPath: string): boolean {
   const segments = normalizeRuntimePathForComparison(repoPath).split('/')
   for (const marker of AGENT_SCRATCH_REPO_ROOT_SEGMENTS) {
-    // Why: match the marker anywhere above the repo root (the repo lives at or
-    // under the scratch container), unlike worktree matching which anchors to a
-    // registered checkout path.
+    // Repo scratch containers may occur anywhere above the root; worktree matches instead anchor to a registered checkout.
     for (let index = 0; index + marker.length <= segments.length; index += 1) {
       if (marker.every((segment, offset) => segments[index + offset] === segment)) {
         return true

@@ -1,15 +1,14 @@
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { useWorktreeCardFoundation } from '../../sidebar/use-worktree-card-foundation'
-import { useWorktreeCardReviewDetails } from '../../sidebar/use-worktree-card-review-details'
-import { useWorktreeCardLinkedDetails } from '../../sidebar/use-worktree-card-linked-details'
-import { useWorktreeCardLifecycleEffects } from '../../sidebar/use-worktree-card-lifecycle-effects'
+import { useWorktreeCardFoundation } from '../../sidebar/workspace-card/controller/use-worktree-card-foundation'
+import { useWorktreeCardReviewDetails } from '../../sidebar/workspace-card/details/use-worktree-card-review-details'
+import { useWorktreeCardLinkedDetails } from '../../sidebar/workspace-card/details/use-worktree-card-linked-details'
+import { useWorktreeCardLifecycleEffects } from '../../sidebar/workspace-card/controller/use-worktree-card-lifecycle-effects'
 import {
   getWorkspaceLinkedItemRows,
   type WorkspaceLinkedItemRow
-} from '../../sidebar/workspace-hover-attachments'
+} from '../../sidebar/workspace-card/review/workspace-hover-attachments'
 
-/** The worktree's linked reviews and tasks, fetched and resolved the way its sidebar card does. */
 export function useBrowserNewTabLinkedItems(
   worktree: Worktree,
   repo: Repo | undefined

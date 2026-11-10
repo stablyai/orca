@@ -1,25 +1,16 @@
-/**
- * The path half of orcad's `AppEnvironment`: every `AppPathName` gets a real answer for
- * a Node host, or throws.
- *
- * Why not a catch-all: returning the data directory for names this host had not thought
- * about — `'exe'` above all — hands the caller a plausible string it then forks, installs
- * beside, or resolves resources against. The failure surfaces far from here, as a missing
- * file rather than a missing implementation.
- */
+// Return real Node-host paths or throw: plausible catch-all directories can be forked as executables.
 import { realpathSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import type { AppPathName } from '../../shared/app-environment'
 
-/** Empty is unset: a supervisor that exports `APPDATA=` has configured nothing. */
+// Empty exported paths remain unset.
 function env(name: string): string | null {
   const value = process.env[name]
   return value ? value : null
 }
 
-/** XDG-ish data root. `$ORCA_USER_DATA` wins so a smoke test can isolate state. */
 export function resolveUserDataPath(): string {
   const explicit = env('ORCA_USER_DATA')
   if (explicit) {
@@ -29,7 +20,6 @@ export function resolveUserDataPath(): string {
   return xdg ? join(xdg, 'Orca') : join(homedir(), '.orca')
 }
 
-/** Electron's `'appData'` definition, computed without Electron. */
 function resolveAppDataPath(): string {
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support')
@@ -40,16 +30,7 @@ function resolveAppDataPath(): string {
   return env('XDG_CONFIG_HOME') ?? join(homedir(), '.config')
 }
 
-/**
- * The directory orcad was launched from — the bundle root that `orcad.js` and the
- * children shipped beside it (the watcher entry, the agent-browser binary) live in.
- *
- * Why argv[1] and not cwd: cwd is wherever the operator or supervisor happened to be,
- * so resolving siblings against it finds them only by luck. Node resolves argv[1] to an
- * absolute path before we see it; `resolve` covers a caller-supplied relative one.
- * Node does not dereference a symlinked script in argv[1], so realpath does: the siblings
- * live beside the bundle, not beside the link.
- */
+/** Resolve bundle siblings beside the real entry script; cwd and symlink locations can be unrelated. */
 export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
   if (!scriptPath) {
     throw new Error(
@@ -62,7 +43,7 @@ export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
   try {
     script = realpathSync(absolute)
   } catch {
-    // A missing script still names its directory; the sibling lookups report what is absent.
+    // Missing scripts still establish a directory; sibling lookups diagnose missing resources.
   }
   return dirname(script)
 }
@@ -77,15 +58,11 @@ export function resolveOrcadPath(name: AppPathName): string {
       return tmpdir()
     case 'appData':
       return resolveAppDataPath()
-    // Why inside userData rather than Electron's macOS ~/Library/Logs: a headless
-    // deployment's whole state is one removable directory, and a service account
-    // often has no Library tree to write into.
+    // Keep headless state in one removable userData tree; service accounts may lack macOS Library.
     case 'logs':
       return join(resolveUserDataPath(), 'logs')
-    // The Node binary running this bundle. There is no app executable to point at.
     case 'exe':
       return process.execPath
-    // The XDG user-dirs override, else the cross-platform default location.
     case 'downloads':
       return env('XDG_DOWNLOAD_DIR') ?? join(homedir(), 'Downloads')
   }

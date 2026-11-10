@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: vi.fn() }
 }))
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
     ...actual,
@@ -20,16 +20,16 @@ import {
 } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { createTestStore } from '@/store/slices/store-test-helpers'
-import { getOpenFilesForExternalFileChange } from '@/components/editor/editor-autosave'
-import { __clearSelfWriteRegistryForTests } from '@/components/editor/editor-self-write-registry'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { getOpenFilesForExternalFileChange } from '@/components/editor/autosave/editor-autosave'
+import { __clearSelfWriteRegistryForTests } from '@/components/editor/external-changes/editor-self-write-registry'
 import {
   __clearEditorPathMovesForTests,
   beginEditorPathMove,
   settleEditorPathMove
 } from '@/components/editor/editor-path-move-inflight'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 
 const findTarget = (worktreePath: string, runtimeEnvironmentId: string | null = null) =>
   worktreePath === '/repo'
@@ -92,9 +92,7 @@ describe('self-move source suppression (in-flight)', () => {
   })
 
   it('does not tombstone a tab opened UNDER a moving directory mid-rename', () => {
-    // A directory move registers the root; a file opened under it during the
-    // in-flight window is not in the registered tab list but must still be
-    // recognized as the move's own echo (prefix match) — no false conflict.
+    // Root move provenance must cover files opened during the move, even absent from its original tab list.
     const lateTab = {
       id: 'file-late',
       worktreeId: 'wt-1',
@@ -118,7 +116,6 @@ describe('self-move source suppression (in-flight)', () => {
     })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    // The rename echo arrives as a delete+create pair for the old subtree path.
     handleFsChanged(
       payload([
         { kind: 'delete', absolutePath: '/repo/src/late.md' },
@@ -163,7 +160,6 @@ describe('self-move echo verification (content identity)', () => {
       mode: 'edit' as const,
       isDirty: true,
       lastKnownDiskSignature: baselineSignature,
-      // Installed on the tab by the rekey; routes the echo into verification.
       pendingSelfMoveEcho: { operationId: 'op-1', targetPath: TARGET_PATH },
       ...overrides
     }
@@ -272,7 +268,6 @@ describe('self-move echo verification (content identity)', () => {
     handleFsChanged(payloadFor())
     await vi.advanceTimersByTimeAsync(100)
 
-    // No provenance -> not treated as a move echo -> normal path marks it changed.
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     dispose()
   })
@@ -284,8 +279,7 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
 
   const CONTENT = 'the echoed file on disk\n'
   const baseline = getDiskBaselineSignature(CONTENT)
-  // A floating-workspace tab: relativePath is relative to its OWN root (`../…`)
-  // and must NOT be joined onto the initiating worktree path.
+  // Floating tabs use their own root-relative paths, never the initiating workspace root.
   const FLOATING_FILE_PATH = '/elsewhere/notes/readme.md'
   const floatingTab = {
     id: 'file-x',
@@ -325,9 +319,8 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     await vi.advanceTimersByTimeAsync(50)
 
     expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: FLOATING_FILE_PATH }))
-    // Disk == baseline -> echo -> suppress, no false banner.
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-x', 'changed')
-    // Safety net does NOT consume provenance (a later watcher event still needs it).
+    // Proactive verification must retain provenance for later watcher echoes.
     expect(clearSelfMoveEcho).not.toHaveBeenCalled()
   })
 })

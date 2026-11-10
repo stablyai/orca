@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
-// Why enum-only (design D6): these rows size the old-glibc and no-runtime fleet. A hostname,
-// user, path or raw loader error would identify a machine, so none of them may appear.
+// Measure runtime compatibility with closed enums; hostnames, users, paths and loader errors would identify machines.
 
 /** Minors between the oldest glibc any rung admits and a generous ceiling; the rest bucket. */
 const GLIBC_MINORS = [
@@ -89,8 +88,7 @@ export const sshRemoteRuntimeResolvedSchema = z
     // Rung C only: the one rung whose behavior depends on the host's own Node.
     host_node_major: z.enum(SSH_RUNTIME_HOST_NODE_MAJOR_VALUES).optional(),
     duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS),
-    // Why: a connect whose self-test was unverifiable or failed settles no rung; without this the
-    // event only ever saw successes.
+    // Failed or unverifiable self-tests settle no rung; include them to avoid measuring only successes.
     outcome: z.enum(SSH_RUNTIME_OUTCOME_VALUES)
   })
   .strict()

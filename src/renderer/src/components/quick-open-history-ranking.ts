@@ -2,14 +2,21 @@ import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles,
   QUICK_OPEN_RESULT_LIMIT
-} from './quick-open-search'
+} from '../../../shared/quick-open/quick-open-path-search'
+
+// One listing serves every keystroke; rebuilding its membership set per query scanned it all again.
+const availablePaths = new WeakMap<readonly string[], ReadonlySet<string>>()
 
 export function rankQuickOpenFilesWithHistory(
   query: string,
   files: readonly string[],
   history: readonly string[]
 ): { path: string; score: number }[] {
-  const available = new Set(files)
+  let available = availablePaths.get(files)
+  if (!available) {
+    available = new Set(files)
+    availablePaths.set(files, available)
+  }
   const eligibleHistory = history.filter((path) => available.has(path))
   const recent = rankQuickOpenFiles(
     query,

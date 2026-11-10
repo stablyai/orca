@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readProfileStateSplitDocumentForRow } from './profile-state-document-parts-reader'
 import type Database from '../../sqlite/sync-database'
 import {
   ProfileStateRecoveryCommandError,
+  profileStateRepairSectionApproval,
   type ProfileStateRecoveryRepairSection
 } from '../../../shared/profile-state-recovery-command'
 import type { ProfileStateMaintenance } from './profile-state-access'
@@ -28,10 +30,7 @@ import {
   readProfileStateRevision
 } from './profile-state-revision'
 
-export type ProfileStateRepairSection = {
-  domain: string
-  /** The newest retained backup holding a readable copy, or null when the section starts empty. */
-  backupId: string | null
+export type ProfileStateRepairSection = ProfileStateRecoveryRepairSection & {
   backupCreatedAtMs?: number
 }
 
@@ -39,7 +38,7 @@ export type ProfileStateSectionRepairPlan = {
   profileId: string
   revision: number
   sections: readonly ProfileStateRepairSection[]
-  /** The whole profile after repair: every intact live section plus each damaged section's backup value. */
+  /** Intact live sections plus repaired backup values. */
   repairedState: Record<string, unknown>
 }
 
@@ -51,10 +50,7 @@ export type ProfileStateSectionRepairResult = {
   sections: readonly ProfileStateRepairSection[]
 }
 
-/**
- * Replace only the damaged sections, keeping every intact section's current value. Refuses when
- * the damage or the chosen backups differ from what the user approved.
- */
+/** Preserve intact sections; refuse if damage or backups changed after user approval. */
 export function repairProfileStateSections(options: {
   maintenance: ProfileStateMaintenance
   location: ProfileStateLocation & { dataFile: string }
@@ -82,7 +78,7 @@ export function repairProfileStateSections(options: {
       'The damaged sections or their backups changed since you chose to repair. Nothing was changed.'
     )
   }
-  // The pre-repair file is the only copy of the damaged bytes, so no copy means no repair.
+  // Preserve damaged bytes before repair or refuse without changing them.
   const quarantine = quarantineProfileStateDatabase(
     location.databaseFile,
     location.profileId,
@@ -103,7 +99,7 @@ export function repairProfileStateSections(options: {
   return { revision, quarantineDirectory: quarantine.directory, sections: plan.sections }
 }
 
-/** Run the read ordinary startup runs, so a repair that still won't open says so now. */
+/** Confirm repaired state passes the ordinary startup read. */
 function assertProfileOpens(
   location: ProfileStateLocation & { dataFile: string },
   quarantineDirectory: string
@@ -131,14 +127,13 @@ function sameSections(
   planned: readonly ProfileStateRepairSection[]
 ): boolean {
   const key = (sections: readonly ProfileStateRecoveryRepairSection[]): string =>
-    JSON.stringify(sections.map(({ domain, backupId }) => `${domain}\0${backupId}`).sort())
+    JSON.stringify(
+      sections.map((section) => JSON.stringify(profileStateRepairSectionApproval(section))).sort()
+    )
   return key(approved) === key(planned)
 }
 
-/**
- * Plan a repair when only some sections fail their checks; undefined means the damage isn't
- * confined to sections. Whole-file damage (open, schema, profile revision) throws.
- */
+/** Undefined means damage is not section-confined; database/schema/revision failures throw. */
 export function planProfileStateSectionRepair(
   location: ProfileStateLocation
 ): ProfileStateSectionRepairPlan | undefined {
@@ -161,6 +156,9 @@ export function planProfileStateSectionRepair(
   const repairedState = scan.intact
   const backups = profileStateDatabaseBackups(location.databaseFile)
   const resolved = new Map<string, ProfileStateRepairSection>()
+  if (scan.currentHistory) {
+    resolved.set('automationRuns', { domain: 'automationRuns', source: 'current' })
+  }
   for (const backup of backups) {
     const pending = [...scan.damaged].filter((domain) => !resolved.has(domain))
     if (pending.length === 0) {
@@ -202,18 +200,23 @@ export function planProfileStateSectionRepair(
   }
 }
 
-type SectionScan = { revision: number; intact: Map<string, unknown>; damaged: Set<string> }
+type SectionScan = {
+  revision: number
+  intact: Map<string, unknown>
+  damaged: Set<string>
+  currentHistory: boolean
+}
 
 function scanProfileStateSections(db: Database.Database): SectionScan | undefined {
   const revision = readProfileStateRevision(db)
-  // Without a committed profile revision nothing can tell a damaged row from a damaged counter.
+  // Revision zero cannot distinguish a corrupt row from a corrupt counter.
   if (revision === 0) {
     return undefined
   }
   assertProfileStateRepairRevision(db, revision)
   const intact = new Map<string, unknown>()
   const damaged = new Set<string>()
-  // Undefined: history is stored in its document row. Null: absent, or damaged.
+  // Undefined selects document history; null means absent or damaged.
   let normalizedRuns: ProfileStateParsedDocument | null | undefined
   try {
     normalizedRuns = readProfileStateAutomationRunsDocument(db, revision, 'parsed')
@@ -224,6 +227,7 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     damaged.add('automationRuns')
     normalizedRuns = null
   }
+  const normalizedHistoryIntact = normalizedRuns !== undefined && !damaged.has('automationRuns')
   const rows = db
     .prepare(
       `SELECT domain, payload, domain_version, revision, updated_at, content_hash
@@ -234,7 +238,9 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     const domain = isRecord(row) && typeof row.domain === 'string' ? row.domain : undefined
     let document: ReturnType<typeof validateProfileStateDocumentRow>
     try {
-      document = validateProfileStateDocumentRow(row, { retainParsedValue: true })
+      document =
+        readProfileStateSplitDocumentForRow(db, row, true) ??
+        validateProfileStateDocumentRow(row, { retainParsedValue: true })
     } catch (error) {
       if (!(error instanceof ProfileStateDocumentCorruptionError) || domain === undefined) {
         throw error
@@ -243,7 +249,7 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
       continue
     }
     if (document.domain === 'automationRuns' && normalizedRuns !== undefined) {
-      // Normalized history is authoritative; its document row is only a 'null' placeholder.
+      // Normalized history owns the data; its document must remain a null placeholder.
       if (document.payload !== 'null') {
         damaged.add('automationRuns')
       }
@@ -251,8 +257,13 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     }
     intact.set(document.domain, document.value)
   }
-  if (normalizedRuns && !damaged.has('automationRuns')) {
+  if (normalizedRuns && normalizedHistoryIntact) {
     intact.set('automationRuns', normalizedRuns.value)
   }
-  return { revision, intact, damaged }
+  return {
+    revision,
+    intact,
+    damaged,
+    currentHistory: normalizedHistoryIntact && damaged.has('automationRuns')
+  }
 }

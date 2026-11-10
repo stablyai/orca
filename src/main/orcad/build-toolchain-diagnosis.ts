@@ -1,9 +1,4 @@
-/**
- * Diagnose a host's C/C++ build toolchain from a POSIX-sh probe. Pure: it builds a shell
- * command and parses its output, so the Node-only orcad bundle runs it over a local shell.
- */
-// Why: a host with no usable node-pty binary needs a C/C++ toolchain to build one (#1693);
-// probing lets orcad's blocked report name the install command.
+// Probe build tools so hosts without usable node-pty binaries receive an actionable install hint.
 const PROBED_TOOLS = [
   'make',
   'gcc',
@@ -16,8 +11,7 @@ const PROBED_TOOLS = [
   'python'
 ] as const
 
-// Package managers mapped to the one-liner that installs a C/C++ toolchain on
-// the matching distro family. Ordered by detection priority.
+// Detection priority determines which distro’s install hint wins.
 const PACKAGE_MANAGER_HINTS: readonly { bin: string; install: string }[] = [
   { bin: 'apt-get', install: 'sudo apt-get install -y build-essential python3' },
   { bin: 'dnf', install: 'sudo dnf install -y make gcc gcc-c++ python3' },
@@ -30,21 +24,9 @@ const PACKAGE_MANAGER_HINTS: readonly { bin: string; install: string }[] = [
 type BuildToolchainStatus = {
   present: string[]
   packageManager: string | null
-  // A node-pty source build needs make, Python, and a C++ compiler.
-  toolchainMissing: boolean
 }
 
-function hasCxxCompiler(present: ReadonlySet<string>): boolean {
-  return present.has('g++') || present.has('c++') || present.has('clang++')
-}
-
-function hasPython(present: ReadonlySet<string>): boolean {
-  return present.has('python3') || present.has('python')
-}
-
-// POSIX-sh probe: echo a `HAVE <tool>` line per resolvable build tool and a
-// single `PKG <manager>` line for the host's package manager. Runs under
-// `/bin/sh -c` (see wrapRemoteCommandForPosixShell), so it stays portable.
+/** Emit HAVE/PKG records using portable POSIX sh. */
 export function buildToolchainProbeCommand(): string {
   const toolLoop = `for t in ${PROBED_TOOLS.join(
     ' '
@@ -70,12 +52,10 @@ export function parseBuildToolchainProbe(output: string): BuildToolchainStatus {
   }
   return {
     present: PROBED_TOOLS.filter((tool) => present.has(tool)),
-    packageManager,
-    toolchainMissing: !present.has('make') || !hasCxxCompiler(present) || !hasPython(present)
+    packageManager
   }
 }
 
-/** Install hint for the host's package manager, or the cross-distro list when it is unknown. */
 export function toolchainInstallHintLines(status: BuildToolchainStatus): string[] {
   const tailored = status.packageManager
     ? PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === status.packageManager)?.install

@@ -11,7 +11,6 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const worktreesApi = {
-  list: (args) => ipcRenderer.invoke('worktrees:list', args),
   listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
 
   listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
@@ -24,11 +23,13 @@ export const worktreesApi = {
 
   cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
 
-  listAll: () => ipcRenderer.invoke('worktrees:listAll'),
+  scanStartingWslDistro: (args) => ipcRenderer.invoke('worktrees:scanStartingWslDistro', args),
 
   create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
+
+  runApprovedSetup: (args) => ipcRenderer.invoke('worktrees:runApprovedSetup', args),
 
   onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: CreateWorktreeProgressEvent) =>
@@ -44,6 +45,13 @@ export const worktreesApi = {
   resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
   previewNestedRemoval: (args) => ipcRenderer.invoke('worktrees:previewNestedRemoval', args),
+
+  sleep: (request) => ipcRenderer.invoke('worktrees:sleep', request),
+  sleepReopened: (worktreeId) => ipcRenderer.invoke('worktrees:sleepReopened', worktreeId),
+  resumeSleptPane: (pane, automatic) =>
+    ipcRenderer.invoke('worktrees:resumeSleptPane', pane, automatic),
+  retireStrandedSleepRecord: (args) =>
+    ipcRenderer.invoke('worktrees:retireStrandedSleepRecord', args),
 
   remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 

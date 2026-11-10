@@ -1,11 +1,14 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { findLegacyNumericSleepingRecord } from '../../../../shared/sleeping-record-legacy-pane-key'
-import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../../shared/runtime-pane-title-leaf-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { collectPersistedTerminalLeafIds } from '../../mobile-session-layout-projection'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { collectPersistedTerminalLeafIds } from '../../terminal/surface/mobile-session-layout-projection'
 
 /** The pane's record and, for a numbered one, its tab's numbered keys: aliases, not other panes. */
 export function findPaneSleepingRecord(
@@ -18,7 +21,6 @@ export function findPaneSleepingRecord(
   if (record) {
     return worktreeIdsEqual(record.worktreeId, worktreeId) ? { record, aliases: [] } : null
   }
-  // Switch point: main starts every pane, so it reads the numbered records the window read.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN || !records) {
     return null
   }
@@ -41,8 +43,7 @@ export function findPaneSleepingRecord(
     inWorkspace
   )
   const exact = parseLegacyNumericPaneKey(found?.paneKey)?.numericPaneId === numericPaneId
-  // Why: in a split the one-conversation fallback goes to pane 1 alone, and only when no pane
-  // owns a numbered record, so no two panes resume one conversation.
+  // Only pane 1 may take an unowned fallback, and only with no numbered owner, or two panes could resume one conversation.
   const fallback =
     collectPersistedTerminalLeafIds(layoutOf(session, pane)).length <= 1 ||
     (owned.length === 0 && resolveRuntimePaneTitleLeafIdFromRoot(root, '1') === pane.leafId)

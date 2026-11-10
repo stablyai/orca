@@ -1,13 +1,11 @@
-/**
- * `orca serve` on this machine's orcad slot. Whether to (and the slot itself) is decided
- * app-side by `src/main/orcad/orcad-local-serve-selection.ts`; the CLI only asks and runs.
- */
+/** The app selects the local serve runtime; the CLI runs that selection. */
 import { dirname, join } from 'node:path'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   ORCAD_LOCAL_SERVE_SELECTION_ENTRY,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS,
+  SERVE_RUNTIME_ENV,
   parseServeRuntimeSelection,
   type ServeRuntimeSelection
 } from '../../shared/orcad-local-serve-selection'
@@ -17,23 +15,24 @@ import { isSupervisedSpawnHeld } from './serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
 import { orcadServeArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../shared/speech-recognizer-package'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
 
-/** Asks the app's own entry, run on the app's executable as plain Node, which host to serve on. */
 export async function resolveLocalServeRuntime(
   options: {
     executable: string
     appRoot: string
     userDataPath: string
     usesMacUpdateHandoff: boolean
+    env?: NodeJS.ProcessEnv
   },
   run: typeof runProcess = runProcess
 ): Promise<ServeRuntimeSelection> {
-  // Why: only packaged macOS serve can take a remote app update, through Electron's updater and
-  // this CLI's supervisor; orcad has no updater, so switching would drop that.
-  if (options.usesMacUpdateHandoff) {
+  // orcad has no updater; keep Electron for packaged macOS update handoffs unless orcad is asked for,
+  // e.g. over SSH with no desktop login, where Electron cannot start.
+  if (options.usesMacUpdateHandoff && (options.env ?? process.env)[SERVE_RUNTIME_ENV] !== 'orcad') {
     return {
       kind: 'electron',
       reason:
@@ -46,8 +45,7 @@ export async function resolveLocalServeRuntime(
       program: options.executable,
       args: [entry, FLAGS.userData, options.userDataPath, FLAGS.appRoot, options.appRoot],
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      // Why inherit stderr: a first run may download the pinned Node, and that progress is the
-      // only sign `orca serve` is not hung.
+      // Show pinned-Node download progress so first-run selection does not appear hung.
       stdio: ['ignore', 'pipe', 'inherit'],
       timeoutMs: SELECTION_TIMEOUT_MS
     })
@@ -74,7 +72,7 @@ export function serveWithOrcad(
   baseEnv: NodeJS.ProcessEnv,
   /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
   webClientRoot?: string,
-  /** The app's speech recognizer; the slot does not carry one either. */
+  /** orcad’s slot has no speech recognizer; use the app’s copy. */
   speechRecognizerDir?: string
 ): Promise<number> {
   const spec: ProcessSpec = {
@@ -89,7 +87,9 @@ export function serveWithOrcad(
       ORCA_USER_DATA: userDataPath,
       ORCA_VERSION: selection.version,
       // Always set: a value inherited from an Orca terminal would name another install's copy.
-      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? ''
+      [SPEECH_RECOGNIZER_DIR_ENV]: speechRecognizerDir ?? '',
+      // A service manager restarts this server, so it must not run terminals that die with it.
+      [ORCA_SERVE_SUPERVISED_ENV]: args.supervise === true ? '1' : ''
     }
   }
   const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)

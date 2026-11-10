@@ -1,10 +1,4 @@
-// Starts Electron's Crashpad handler and pairs a written minidump with the
-// `render-process-gone` / `child-process-gone` event that reported the death.
-//
-// Upload stays off: dumps contain process memory, and the only transport we
-// have (observability/diagnostic-bundle-upload) is a user-initiated 4 MiB text
-// bundle. We keep dumps on disk and lift the *text* signature out of them, so
-// a CHECK failure becomes nameable without shipping raw memory anywhere.
+// Keep raw process-memory dumps local; extract text signatures to identify crashes.
 
 import { constants as fsConstants } from 'node:fs'
 import type { Dirent } from 'node:fs'
@@ -18,20 +12,14 @@ import {
   type MinidumpCrashSignature
 } from './minidump-crash-signature'
 
-// Why: Crashpad writes the dump from the handler process while Electron
-// delivers process-gone on the main thread; the two race. Poll a short window
-// rather than sampling once and losing the dump most of the time.
+// Crashpad writes asynchronously after process-gone; poll briefly to avoid missing its dump.
 const DUMP_WAIT_TIMEOUT_MS = 8_000
 const DUMP_POLL_INTERVAL_MS = 250
-// A dump older than this belongs to an earlier crash, not the one we're pairing.
 const DUMP_RECENCY_WINDOW_MS = 30_000
-// Renderer dumps run ~1-15 MiB; well past that means we mis-picked a file.
 const MAX_DUMP_BYTES = 64 * 1024 * 1024
-// Match Crashpad's default budget, but enforce it after crashes instead of
-// waiting for its first 10-minute and later daily pruning passes.
+// Enforce Crashpad's storage budget without waiting for its delayed pruning passes.
 const MAX_STORED_DUMP_BYTES = 128 * 1024 * 1024
-// A burst of small dumps stays under the byte budget while still growing the
-// directory walk, so cap the file count too.
+// Small dumps can exhaust directory-walk time without hitting the byte budget.
 const MAX_STORED_DUMPS = 64
 const DUMP_PRUNE_DELAY_MS = 2_000
 
@@ -41,9 +29,7 @@ type DumpCandidate = {
   readonly size: number
 }
 
-// Why: `app.getPath('crashDumps')` is derived from userData, which shifts when app.setName runs
-// (at whenReady for packaged builds; before startCrashpadCapture in dev). Snapshot where Crashpad
-// was actually pointed.
+// Keep Crashpad's original directory: app.setName can later change userData and crashDumps.
 let crashpadDumpDirectory: string | null = null
 let captureStarted = false
 let captureStartedAtMs: number | null = null
@@ -56,21 +42,16 @@ export type CrashpadCaptureOptions = {
   readonly dumpDirectory?: string
 }
 
-/**
- * Must run before `app.whenReady()`. Safe to call twice; the second call is a
- * no-op so a re-entrant startup path cannot restart the handler.
- */
+/** Start before app.whenReady(); repeated calls must not restart the handler. */
 export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): boolean {
   if (captureStarted) {
     return true
   }
   try {
     crashReporter.start({
-      // Why: no submitURL is configured anywhere, and uploadToServer:true with
-      // an unset URL makes Crashpad retry against a bogus endpoint forever.
+      // No submitURL is configured; avoid uploads and endless retries to an invalid endpoint.
       uploadToServer: false,
-      // Keep the OS handler (WER / Apple crash reporter) in the loop; it costs
-      // nothing and is the only signal left if Crashpad itself fails to init.
+      // Preserve OS crash handling if Crashpad initialization fails.
       ignoreSystemCrashHandler: false,
       compress: false
     })
@@ -82,11 +63,7 @@ export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): bool
   }
   installAppImageCrashpadHandlerExit()
   crashpadDumpDirectory = options.dumpDirectory ?? resolveDumpDirectory()
-  // Why: a dying main process never delivers process-gone, so a crash loop
-  // never reaches the post-crash prune, and Crashpad's own pass runs in the
-  // handler child after a delayed first sweep. Pruning here is the only thing
-  // that bounds disk across repeatedly crashed launches, so it must not be
-  // deferred behind the coalescing timer a crash loop outruns.
+  // Prune immediately: repeated main-process crashes can outrun deferred cleanup.
   void pruneCrashpadDumps().catch((error) => {
     console.error('[crash-reporting] Crashpad startup dump pruning failed:', error)
   })
@@ -101,7 +78,6 @@ function resolveDumpDirectory(): string | null {
   }
 }
 
-/** Test seam; production callers go through startCrashpadCapture. */
 export function _setCrashpadCaptureStateForTest(
   state: { dumpDirectory: string | null; started: boolean; startedAtMs?: number } | null
 ): void {
@@ -158,8 +134,7 @@ async function pruneCrashpadDumps(
   let retainedCount = 0
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]
-    // claimed dumps are referenced by a persisted report; pruning one leaves a
-    // dangling minidumpPath behind.
+    // Keep dumps referenced by persisted reports to avoid dangling minidump paths.
     const mustKeep =
       index === 0 ||
       reservedDumpPaths.has(candidate.filePath) ||
@@ -177,7 +152,6 @@ async function pruneCrashpadDumps(
   }
 }
 
-/** Coalesces crash-burst pruning; there is no timer or directory scan while idle. */
 export function scheduleCrashpadDumpPrune(): void {
   if (!crashpadDumpDirectory || dumpPruneTimer) {
     return
@@ -194,7 +168,6 @@ export function scheduleCrashpadDumpPrune(): void {
   dumpPruneTimer.unref()
 }
 
-/** Test seam for byte/count-budget behavior without a real Crashpad database. */
 export async function _pruneCrashpadDumpsForTest(
   maxBytes: number,
   maxDumps = MAX_STORED_DUMPS
@@ -257,11 +230,7 @@ async function pollDumpCandidates<T>(
   }
 }
 
-/**
- * Waits for the dump Crashpad writes for a crash observed at `crashedAtMs`.
- * Resolves null when capture is off, the handler wrote nothing, or the only
- * dumps on disk predate this crash.
- */
+/** Wait briefly for a fresh dump; return null if capture is off or no matching dump arrives. */
 export async function waitForCrashMinidump(
   crashedAtMs: number,
   options: DumpPollingOptions = {}
@@ -292,8 +261,7 @@ export async function captureMinidumpSignature(
       }
       reservedDumpPaths.add(dump.filePath)
       try {
-        // Reject symlink swaps where the platform exposes O_NOFOLLOW; the regular-file
-        // check below covers descriptors opened on every platform.
+        // Reject symlink swaps where O_NOFOLLOW is available; also verify the opened file is regular.
         const noFollow = fsConstants.O_NOFOLLOW ?? 0
         const handle = await open(
           dump.filePath,

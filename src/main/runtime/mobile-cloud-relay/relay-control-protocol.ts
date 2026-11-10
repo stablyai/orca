@@ -3,7 +3,7 @@ import type { RawData } from 'ws'
 import {
   DeviceCredentialInstalledSchema,
   DeviceResumeConfirmedSchema
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
@@ -28,19 +28,19 @@ export const RelayHostChallengeMessageSchema = z
 
 const ConnectionKindSchema = z.enum(['invite', 'resume'])
 
-// Mirrors RELAY_HOST_CAPABILITIES_HEADER in the relay contract. It rides the
-// control upgrade rather than host-hello because the cell parses host-hello
-// strictly: a new hello key is refused by every already-deployed cell.
+// Strict deployed cells reject new hello keys; mirror contract capabilities in upgrade headers.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
-  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1'
+  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1,client-keepalive-v1'
 } as const
 
-// Mirrors RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs in the relay contract: the
-// window the cell keeps a phone waiting for the host's data socket.
+// Mirror relay-contract RELAY_CLIENT_KEEPALIVE_*: sent only after a relay's keepalive-offer. The
+// relay answers it without waking, so the bytes must match exactly.
+export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
+
+// Mirror RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs, the phone's data-socket attach window.
 export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
 
-// kind/relayDeviceId are accepted but not required: today's cells restate only
-// the identifiers, and a strict schema would make adding them a breaking change.
+// Older cells send only ids; optional kind/device fields allow additive evolution.
 const PendingConnectionSchema = z
   .object({
     connId: OpaqueIdSchema,
@@ -89,6 +89,18 @@ export const RelayPingMessageSchema = z
   .object({ type: z.literal('ping'), t: EpochMsSchema })
   .strict()
 
+export const RelayKeepaliveOfferMessageSchema = z
+  .object({
+    type: z.literal('keepalive-offer'),
+    v: z.literal(1),
+    intervalMs: z.number().int().min(1_000).max(60_000)
+  })
+  .strict()
+
+export const RelayKeepaliveAckMessageSchema = z
+  .object({ type: z.literal('keepalive-ack') })
+  .strict()
+
 export const RelayInviteCreatedMessageSchema = z
   .object({
     type: z.literal('invite-created'),
@@ -131,8 +143,7 @@ export const RelayDeviceResumeConfirmedMessageSchema = DeviceResumeConfirmedSche
   type: z.literal('device-resume-confirmed')
 }).strict()
 
-// Not strict: a relay that adds a field (e.g. a retry hint) must not make every
-// shipped desktop drop its control-error as unrecognized. Unknown keys are stripped.
+// Strip new fields instead of rejecting newer relay retry hints.
 export const RelayControlErrorMessageSchema = z.object({
   type: z.literal('control-error'),
   reqId: OpaqueIdSchema.optional(),
@@ -174,8 +185,7 @@ export type RelayHostHello = {
   controlResumeSecret?: string
 }
 
-// Optional members are omitted rather than sent as undefined: the cell parses
-// host-hello strictly and an explicit null is not the same as absent.
+// Strict hello parsers distinguish absent from null; omit optional members.
 export function encodeRelayHostHello(hello: RelayHostHello): string {
   return JSON.stringify({
     type: 'host-hello',

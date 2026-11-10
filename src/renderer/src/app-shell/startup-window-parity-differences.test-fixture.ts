@@ -1,10 +1,8 @@
-// Where the window shows a stored session differently once the shared Loader has rewritten it,
-// each with the Loader rule that causes it. Shared by every parity test that compares a window
-// built from the Loader's result with the window restored from disk.
+// Shared expected differences between disk restore and Loader-rewritten startup views, each attributed to its Loader rule.
 
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { sweepUnattachedTerminalRows } from '../../../shared/workspace-layout/unattached-terminal-row-sweep'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 export const GIT = 'repo-1::/Users/dev/orca'
 

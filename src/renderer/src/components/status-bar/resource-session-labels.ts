@@ -1,7 +1,9 @@
 import type { SessionMemory } from '../../../../shared/process-stats-types'
-import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey as parseStablePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
-import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
+import { translate } from '@/i18n/i18n'
+import type { MergeContext } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type { ResourceSessionBindingIndex } from './resource-session-bindings'
 
 export function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
@@ -40,21 +42,40 @@ export function resolveSnapshotSessionLabel(
       if (custom) {
         return custom
       }
-      return tab.defaultTitle?.trim() || tab.title?.trim() || `Terminal ${tabIndex + 1}`
+      return (
+        tab.defaultTitle?.trim() ||
+        tab.title?.trim() ||
+        translate(
+          'auto.components.status.bar.resourceSessionLabels.terminalNumber',
+          'Terminal {{number}}',
+          { number: tabIndex + 1 }
+        )
+      )
     }
   }
   if (session.pid > 0) {
-    return `pid ${session.pid}`
+    return translate('auto.components.status.bar.resourceSessionLabels.pid', 'pid {{pid}}', {
+      pid: session.pid
+    })
   }
   const fallback = session.sessionId?.slice(0, 8)
-  return fallback ? `session ${fallback}` : '(unknown session)'
+  return fallback
+    ? translate(
+        'auto.components.status.bar.resourceSessionLabels.sessionPrefix',
+        'session {{id}}',
+        { id: fallback }
+      )
+    : translate(
+        'auto.components.status.bar.resourceSessionLabels.unknownSession',
+        '(unknown session)'
+      )
 }
 
 export function resolveDaemonSessionLabel(
   session: DaemonSession,
   resolvedWorktreeId: string | null,
   tabId: string | null,
-  ctx: MergeContext,
+  ctx: Pick<MergeContext, 'runtimePaneTitlesByTabId'>,
   index: ResourceSessionBindingIndex
 ): string {
   if (tabId && resolvedWorktreeId) {
@@ -86,5 +107,5 @@ export function resolveDaemonSessionLabel(
   if (session.title) {
     return session.title
   }
-  return 'unknown'
+  return translate('auto.components.status.bar.resourceSessionLabels.unknown', 'unknown')
 }

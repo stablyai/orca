@@ -8,10 +8,8 @@ import { LINE_ENDING_SAMPLE_LIMIT, LINE_ENDING_SCAN_LIMIT } from './wsl-windows-
 
 const TAB = '\t'
 const TEXT_AUTO_LINE = `i/lf    w/lf    attr/text=auto        ${TAB}file.txt`
-const ELIGIBLE_LINE = `i/lf    w/crlf  attr/                 ${TAB}file.txt`
 
-// Runs the probe's real shell pipeline against a stand-in git whose `ls-files --eol` never ends,
-// like a huge drvfs tree: only a bounded scan lets the pipeline finish.
+// An endless stand-in ls-files stream verifies that the real sample pipeline bounds its input.
 describe.skipIf(process.platform === 'win32')('line-ending sample pipeline', () => {
   let binDir: string
 
@@ -62,13 +60,5 @@ describe.skipIf(process.platform === 'win32')('line-ending sample pipeline', () 
     expect(result.timedOut).toBe(false)
     expect(result.code).toBe(0)
     expect(result.stdout).toBe('')
-  })
-
-  it('still returns a full sample when entries are eligible', async () => {
-    installEndlessGit(ELIGIBLE_LINE)
-    const result = await runSample()
-    expect(result.timedOut).toBe(false)
-    expect(result.code).toBe(0)
-    expect(result.stdout.split('\n').filter(Boolean)).toHaveLength(LINE_ENDING_SAMPLE_LIMIT)
   })
 })

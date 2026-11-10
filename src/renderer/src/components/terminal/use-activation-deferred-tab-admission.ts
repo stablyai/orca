@@ -8,17 +8,7 @@ import {
 import { revealActivationDeferredTabs } from './background-terminal-worktree-mount'
 import type { TerminalColdActivationController } from '../terminal-cold-activation'
 
-/**
- * Mounts the active worktree's activation-deferred tabs, one per idle frame.
- *
- * Why after the reveal and not during it: the switch only owes the user the
- * pane they are looking at. Everything else is warm-up, so it runs where it
- * cannot delay a frame — and the worktree still ends up as fully mounted as it
- * was before deferral, which is what keeps later tab switches instant.
- *
- * One tab per effect run, not a loop: admitting bumps the mount revision, which
- * re-runs this effect and schedules the next one. The drain is the render cycle.
- */
+/** Warm one deferred tab per idle effect pass after reveal; mount revision schedules the next pass without blocking the switch frame. */
 export function useActivationDeferredTabAdmission(
   controller: TerminalColdActivationController
 ): void {
@@ -30,12 +20,7 @@ export function useActivationDeferredTabAdmission(
     renderedActiveWorktreeId,
     setBackgroundMountRevision
   } = controller
-  // Why the high-water mark rather than the live count: draining must not walk an
-  // over-cap worktree down into eligibility and warm up tabs the pre-deferral
-  // behaviour left unmounted — but a verdict latched on one reading would never
-  // recover either. At launch the active worktree is restored before hydration
-  // opens the startup gate, so the first reading is an empty set; only re-reading
-  // on growth lets that worktree's real plan be judged when it finally lands.
+  // Track peak deferral size so draining cannot make over-cap plans eligible; recheck growth because startup hydration initially exposes an empty plan.
   const admissionRef = useRef<{ worktreeId: string; maxDeferredTabCount: number } | null>(null)
 
   useEffect(() => {
@@ -58,8 +43,7 @@ export function useActivationDeferredTabAdmission(
       return
     }
     return scheduleActivationDeferredAdmission(() => {
-      // Why re-read: tabs can be created or closed between the scheduling frame
-      // and this one, and admitting a stale id would strand the restriction.
+      // Tabs can change between scheduling and admission; stale IDs would strand the restriction.
       const allTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(
         (tab) => tab.id
       )
@@ -79,10 +63,13 @@ export function useActivationDeferredTabAdmission(
       })
       setBackgroundMountRevision((revision) => revision + 1)
     })
-    // Why activationDeferralPlanRevision is a dep: a startup-gate-open pass can
-    // install a plan for the already-active worktree by mutating only refs —
-    // neither other dep changes, and without this revision the tabs stay
-    // unmounted until the user switches workspaces and back.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [activationDeferralPlanRevision, backgroundMountRevision, renderedActiveWorktreeId])
+    // Opening the startup gate can install a refs-only plan for the active workspace; its revision must trigger mounting.
+  }, [
+    activationDeferralPlanRevision,
+    activationDeferredMountTabIdsByWorktreeRef,
+    backgroundMountRevision,
+    backgroundMountTabIdsByWorktreeRef,
+    renderedActiveWorktreeId,
+    setBackgroundMountRevision
+  ])
 }

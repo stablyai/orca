@@ -1,4 +1,4 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-explorer-display-root'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
@@ -8,10 +8,13 @@ import type {
   VisibleWorkspaceHostIds,
   StatusBarItem
 } from '../../../../../shared/ui-chrome-types'
-import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
-import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
+
+import {
+  type WorkspaceCleanupDismissal,
+  WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { isTopLevelView } from '../../../../../shared/top-level-view'
-import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status-freshness'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
@@ -125,10 +128,7 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cleared-at cutoffs must outlive any persisted status entry they guard: main prunes entries
- *  at AGENT_STATUS_HYDRATE_MAX_AGE_MS from receivedAt, and cutoff values trail receipt time, so pruning them
- *  on the same clock can resurrect a cleared entry. Double the TTL keeps the guard alive past
- *  every entry it can still shadow. */
+/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
   return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
 }

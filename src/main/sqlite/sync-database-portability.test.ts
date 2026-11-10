@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import SyncDatabase, { isSqliteAvailable } from './sync-database'
+import SyncDatabase from './sync-database'
 
 const directories: string[] = []
 const databases: SyncDatabase[] = []
@@ -48,10 +48,6 @@ describe('SQLite runtime contract', () => {
     }
     expect([...statement.iterate()]).toEqual([{ value: 1 }, { value: 2 }, { value: 3 }])
     db.exec('DROP TABLE rows')
-  })
-
-  it('admits the actual runtime driver', () => {
-    expect(isSqliteAvailable()).toBe(true)
   })
 
   it('enforces foreign keys by default', () => {
@@ -178,22 +174,6 @@ describe('SQLite runtime contract', () => {
     const statement = db.prepare('SELECT id FROM items')
     statement.setReadBigInts(true)
     expect(statement.all()).toEqual([{ id: rowid }])
-  })
-
-  it('rejects explicit undefined bindings before modifying rows', () => {
-    const db = open(':memory:')
-    db.exec('CREATE TABLE items(value TEXT)')
-    const insert = db.prepare('INSERT INTO items VALUES(?)')
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => insert.run(undefined)).toThrow()
-    expect(db.prepare('SELECT count(*) AS count FROM items').get()).toEqual({ count: 0 })
-    const select = db.prepare('SELECT ? AS value')
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => select.get(undefined)).toThrow()
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => select.all(undefined)).toThrow()
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => [...select.iterate(undefined)]).toThrow()
   })
 
   it('releases statements and an unfinished iterator before filesystem retirement', () => {

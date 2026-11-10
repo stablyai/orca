@@ -1,14 +1,16 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
-import { translate } from '@/i18n/i18n'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
-import { BrowserImportHintButton } from './BrowserImportHintButton'
+import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
 import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
+import { BrowserExtensionToolbar, BrowserExtensionsMenuSub } from './browser-extension-toolbar'
+import { BrowserOpenSourceFileButton, BrowserPageStateChips } from './browser-address-chips'
+import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
 import { SshEgressIndicator } from './browser-egress-indicator'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
@@ -27,9 +29,11 @@ import type {
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
-} from '@/lib/browser-page-conversion-history'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+} from '@/lib/browser/history/browser-page-conversion-history'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserChromeNoteActions } from './browser-chrome-toolbar'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
@@ -68,6 +72,8 @@ export function BrowserPageToolbar({
   markupCancel,
   grabElementShortcut,
   browserAnnotationsLength,
+  notes,
+  onOpenFind,
   shareableArtifactFile,
   currentBrowserUrl,
   externalUrl
@@ -109,6 +115,8 @@ export function BrowserPageToolbar({
   markupCancel: () => void
   grabElementShortcut: string
   browserAnnotationsLength: number
+  notes: BrowserChromeNoteActions
+  onOpenFind: () => void
   shareableArtifactFile: { filePath: string } | null
   currentBrowserUrl: string
   externalUrl: string | null
@@ -117,12 +125,6 @@ export function BrowserPageToolbar({
   const browserTourStep = useAppStore((state) =>
     state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
   )
-  const pinnedStage =
-    browserTourStep === 0
-      ? ('grab' as const)
-      : browserTourStep === 1
-        ? ('annotate' as const)
-        : undefined
   const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
   // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
   const canOpenSourceFile = useAppStore(
@@ -132,17 +134,21 @@ export function BrowserPageToolbar({
     canOpenSourceFile && localHtmlFilePath !== null
       ? () => openBrowserFileSource(worktreeId, localHtmlFilePath)
       : null
+  const extensionToolbar = useBrowserExtensionToolbar(
+    browserPageId,
+    isActive,
+    `${currentBrowserUrl}\n${loading}`
+  )
 
   return (
     <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
-      pinnedStage={pinnedStage}
+      pinAnnotateLabel={browserTourStep === 0}
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
-        // Why the fallbacks: guest history cannot survive a conversion (the guest was replaced),
-        // so once it runs out Back returns across the conversion — and Forward re-crosses it —
-        // instead of going dead.
+        // Guest replacement loses history; Back/Forward cross the conversion once guest history runs out.
         goBack: () => {
           if (canGoBack) {
             webviewRef.current?.goBack()
@@ -177,6 +183,25 @@ export function BrowserPageToolbar({
           inputRef={addressBarInputRef}
           dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
           leadingIcon={<SshEgressIndicator worktreeId={worktreeId} />}
+          trailing={
+            <>
+              <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
+              <BrowserPageStateChips
+                browserPageId={browserPageId}
+                url={currentBrowserUrl}
+                viewportPresetId={viewportPresetId}
+                isActive={isActive}
+              />
+              {openSourceFile ? <BrowserOpenSourceFileButton onOpen={openSourceFile} /> : null}
+              {shareableArtifactFile ? (
+                <ArtifactPublishButton
+                  sourceKey={shareableArtifactFile.filePath}
+                  size="icon-xs"
+                  createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
+                />
+              ) : null}
+            </>
+          }
           loading={loading}
           loadFailed={loadFailed}
         />
@@ -195,9 +220,17 @@ export function BrowserPageToolbar({
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
       }
-      importControl={(compact) => (
-        <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />
-      )}
+      extensionActions={
+        extensionToolbar &&
+        ((compact, menuTriggerRef) => (
+          <BrowserExtensionToolbar
+            browserPageId={browserPageId}
+            state={extensionToolbar}
+            compact={compact}
+            fallbackAnchorRef={menuTriggerRef}
+          />
+        ))
+      }
       elementTools={{
         activeIntent: grab.state !== 'idle' ? grabIntent : null,
         onStartIntent: startGrabIntent,
@@ -212,50 +245,7 @@ export function BrowserPageToolbar({
         onToggle: () => (markupIsActive ? markupCancel() : void markupStart()),
         canShowDiscoveryHint: isActive
       }}
-      shareControl={
-        shareableArtifactFile
-          ? (control) => {
-              const props = {
-                sourceKey: shareableArtifactFile.filePath,
-                className: 'h-7 w-7',
-                createRequest: () => readBrowserHtmlArtifactRequest(currentBrowserUrl)
-              }
-              return <ArtifactPublishButton {...props} {...control} />
-            }
-          : undefined
-      }
-      viewSource={
-        openSourceFile
-          ? {
-              onSelect: openSourceFile,
-              label: translate(
-                'auto.components.editor.HtmlDocPreview.openSourceControl',
-                'Open source file'
-              ),
-              alreadyInOverflowMenu: true
-            }
-          : {
-              onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
-              label: translate(
-                'auto.components.browser.pane.BrowserPane.ec75d0c412',
-                'Open browser devtools'
-              )
-            }
-      }
-      openExternal={{
-        onSelect: () => {
-          if (!externalUrl) {
-            return
-          }
-          void window.api.shell.openUrl(externalUrl)
-        },
-        label: translate(
-          'auto.components.browser.pane.BrowserPane.0f41bf80c7',
-          'Open in default browser'
-        ),
-        disabled: !externalUrl
-      }}
-      // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserToolbarMenu stays one stable component.
+      notes={notes}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}
@@ -264,7 +254,23 @@ export function BrowserPageToolbar({
           viewportPresetId={viewportPresetId}
           onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
-          onOpenSourceFile={openSourceFile}
+          isBlankTab={isBlankTab}
+          pageActions={{
+            onFind: onOpenFind,
+            onHardReload: () => runReloadTrigger('hard-reload'),
+            onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
+            onOpenExternal: externalUrl ? () => void window.api.shell.openUrl(externalUrl) : null
+          }}
+          extensionsSub={
+            extensionToolbar ? (
+              <BrowserExtensionsMenuSub
+                browserPageId={browserPageId}
+                state={extensionToolbar}
+                anchorRef={overflow.triggerRef}
+                deferUntilClose={overflow.deferUntilClose}
+              />
+            ) : null
+          }
           overflow={overflow}
         />
       )}

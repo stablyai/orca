@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { LaunchedAgentForeground } from '../../../../launched-agent-foreground'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { LaunchedAgentForeground } from '../../../../terminal/wait/launched-agent-foreground'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 
 const PTY_ID = 'pty_worker'
 
-// Why: a shell back at its prompt after the agent exits reads as ready too, so the worker host
-// must find the launched agent in front before it types the brief, or the shell runs the brief.
+// A returned shell also looks ready; prove the launched agent is in front before typing its brief.
 describe('a paired-server worker start writes its brief only into the agent it launched', () => {
   const databases: OrchestrationDb[] = []
 

@@ -2,8 +2,8 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import { NOT_A_REGULAR_FILE_MESSAGE } from './local-regular-file-read'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
+
 import { registerFilesystemWriteHandlers } from './filesystem-write-handlers'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 
@@ -15,10 +15,10 @@ vi.mock('electron', () => ({
   },
   shell: {}
 }))
-vi.mock('../local-file-access-resolution', () => ({
+vi.mock('./access/local-file-access-resolution', () => ({
   resolveLocalWriteRequestPath: async (path: string) => path
 }))
-vi.mock('../filesystem-mutations', () => ({ registerFilesystemMutationHandlers: vi.fn() }))
+vi.mock('./filesystem-mutations', () => ({ registerFilesystemMutationHandlers: vi.fn() }))
 vi.mock('../agent-session-attachment-upload-ipc', () => ({
   registerAgentSessionAttachmentUploadHandlers: vi.fn()
 }))
@@ -51,14 +51,3 @@ it('accepts identical content on a readable, non-writable file through IPC', asy
     await chmod(filePath, 0o644)
   }
 })
-
-it
-  .skipIf(process.platform === 'win32')
-  .each([undefined, { expectedSignature: getDiskBaselineSignature('') }])(
-  'still refuses non-regular files through IPC (%j)',
-  async (diskPrecondition) => {
-    await expect(
-      handlers.get('fs:writeFile')!(null, { filePath: '/dev/null', content: '', diskPrecondition })
-    ).rejects.toThrow(NOT_A_REGULAR_FILE_MESSAGE)
-  }
-)

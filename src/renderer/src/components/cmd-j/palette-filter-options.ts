@@ -13,11 +13,11 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
-import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
+import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts
-} from '../../../../shared/managed-orcad-execution-host'
+} from '../../../../shared/execution-host/managed-orcad-execution-host'
 import { buildPaletteFilterOptionSearchText } from './palette-filter-option-list'
 
 export type PaletteFilterOption = {

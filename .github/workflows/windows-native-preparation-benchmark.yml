@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 concurrency:
   group: windows-native-preparation-comparison-${{ github.ref }}
   cancel-in-progress: false
@@ -59,14 +62,14 @@ jobs:
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BENCHMARK_RUNNER: ${{ matrix.os }}
-        run: node config/scripts/benchmark-windows-native-preparation.mjs
+        run: node "$(if [ -f config/scripts/native-build/windows/benchmark-windows-native-preparation.mjs ]; then printf %s config/scripts/native-build/windows/benchmark-windows-native-preparation.mjs; else printf %s config/scripts/benchmark-windows-native-preparation.mjs; fi)"
       - name: Compare warm Windows security builds and qualify fallback
         if: inputs.comparison == 'windows-security'
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BENCHMARK_RUNNER: ${{ matrix.os }}
-        run: node config/scripts/benchmark-windows-security-reuse.mjs
+        run: node config/scripts/performance/windows-security/benchmark-windows-security-reuse.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

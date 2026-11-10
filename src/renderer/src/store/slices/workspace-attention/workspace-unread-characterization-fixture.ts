@@ -2,13 +2,16 @@ import { vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { AppState } from '../../types'
 import { persistWorktreeMeta } from '../worktrees/metadata/worktree-meta-persist'
-import { createTestStore, makeTab, makeWorktree, TEST_REPO } from '../store-test-helpers'
-import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { createTabsSliceMockApi } from '../tabs/tabs-slice-test-harness'
 import { createUnreadBadgeCountSelector } from '@/lib/unread-badge-count-selector'
 import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectFloatingWorkspaceHasUnread
-} from '@/store/selectors'
+} from '@/store/workspaces/floating/floating-workspace-unread-selector'
 import { startOnScreenAttentionScan } from '@/hooks/on-screen-attention-scan'
 
 // Store setup and observables for the unread characterization suites; the events live in the driver.
@@ -56,10 +59,7 @@ export function screenOf(store: AttentionStore): AttentionScreen {
   return screen
 }
 
-/**
- * Runs the hook's scan against `store`, with the window's visibility+focus behind a fake document
- * so marking and the scan read the same gate; no native idle query keeps it synchronous.
- */
+/** Drive the production hook scan with fake visibility/focus shared by marking; skip native idle queries for synchronous tests. */
 export function installAttentionScreen(
   store: AttentionStore,
   onScreen: boolean,

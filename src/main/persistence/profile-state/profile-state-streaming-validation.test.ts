@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { PROFILE_STATE_AUTOMATION_RUNS_TABLE } from './profile-state-automation-runs-model'
 import { openProfileStateDatabase } from './profile-state-database'
 import { verifyProfileStateSchema } from './profile-state-database-validation'
 import {
@@ -26,6 +27,21 @@ function fixture(source = '{"automationRuns":[{"id":"a"},{"id":"b"}],"last":null
   fixtures.push({ directory, db })
   importProfileStateJson(db, source)
   return db
+}
+
+// SQLite 3.54 rejects ADD COLUMN rowid aliases; CREATE TABLE and older files still allow them.
+function shadowRowidAliases(db: ReturnType<typeof fixture>): void {
+  const table = PROFILE_STATE_AUTOMATION_RUNS_TABLE
+  const schema = db.prepare('SELECT sql FROM sqlite_schema WHERE name = ?').get(table)?.sql
+  if (typeof schema !== 'string') {
+    throw new Error(`missing ${table} schema`)
+  }
+  const columns = 'run_id, ordinal, payload, content_hash, revision, updated_at'
+  const shadows = ['rowid', '_rowid_', 'oid'].map((name) => `${name} TEXT DEFAULT 'shadow'`)
+  db.exec(`ALTER TABLE ${table} RENAME TO legacy_runs;
+    ${schema.replace(/\)\s*$/, `, ${shadows.join(', ')})`)};
+    INSERT INTO ${table}(${columns}) SELECT ${columns} FROM legacy_runs;
+    DROP TABLE legacy_runs;`)
 }
 
 const readers = [
@@ -55,9 +71,14 @@ describe('complete streaming profile validation', () => {
   it('accepts extra columns that shadow every SQLite rowid alias', () => {
     const db = fixture()
     const before = readProfileStateSnapshot(db)
-    db.exec("ALTER TABLE profile_state_automation_runs ADD COLUMN rowid TEXT DEFAULT 'shadow'")
-    db.exec("ALTER TABLE profile_state_automation_runs ADD COLUMN _rowid_ TEXT DEFAULT 'shadow'")
-    db.exec("ALTER TABLE profile_state_automation_runs ADD COLUMN oid TEXT DEFAULT 'shadow'")
+    shadowRowidAliases(db)
+    expect(
+      db.prepare('SELECT rowid, _rowid_, oid FROM profile_state_automation_runs').get()
+    ).toEqual({
+      rowid: 'shadow',
+      _rowid_: 'shadow',
+      oid: 'shadow'
+    })
     verifyProfileStateSchema(db, 'stream-test')
     expect(readProfileStateSnapshot(db)).toEqual(before)
     expect(readProfileStateParsedSnapshot(db).state).toEqual(JSON.parse(before.json))

@@ -1,16 +1,15 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { githubPrRepoSlugSchema } from '../session/github-pr-read-reply-schema'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { githubPrRepoSlugSchema } from '../source-control/review/github-pr-read-reply-schema'
 import {
   taskGitHubWorkItemListSchema,
   taskGitLabWorkItemListSchema,
   taskLinearIssueListSchema,
   taskWorkItemLookupSchema
 } from './task-source-search-reply-schema'
-
-// The Smart workspace-source picker's provider reads: per-repo search, and the single-item lookups
-// a pasted link or number resolves to. Provider-specific fallbacks stay at their own call sites,
-// and the readers are checked against task-source-search-reply-schema.ts.
 
 export const githubWorkItemSearchRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -22,7 +21,6 @@ export const githubWorkItemSearchRead = bindDeferredRpcOperation(
   })
 )
 
-/** GitLab answers in-band too: an accepted reply can carry a provider `error` the caller raises. */
 export const gitlabWorkItemSearchRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'gitlab.work-item-search',
@@ -33,11 +31,7 @@ export const gitlabWorkItemSearchRead = bindDeferredRpcOperation(
   })
 )
 
-// Linear replies either as a bare array or as an `{ items }` envelope, and the picker has always
-// accepted both through this projection. Two operations share it because the empty-query path asks
-// a different method, not because the two answers differ. The union in the schema is what used to
-// be linear-mobile-issue-read.ts's hand reader, whose `throw new Error('Unexpected Linear tasks
-// response')` reached the screen as unattributed copy; the same payloads now name the method.
+// Linear search/list share a reader accepting both bare arrays and items envelopes.
 const linearIssueReader = rpcResultVariant('linear-issues', taskLinearIssueListSchema)
 
 export const linearIssueSearchRead = bindDeferredRpcOperation(
@@ -60,12 +54,7 @@ export const linearAssignedIssueListRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * A repo's owner/repo slug, asked per repo so a pasted cross-repo URL can be matched without
- * assuming github.com syntax. A refusal means "this repo cannot answer", which the caller caches
- * as no slug rather than failing the paste — so refusal is a skip. The caller still reads the
- * refusal code directly, because `method_not_found` is host-wide and retires the whole probe.
- */
+// Cache repo slug refusal as no slug; inspect method_not_found to retire the probe for the whole host.
 export const githubRepoSlugRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.repo-slug-or-skip',
@@ -85,6 +74,17 @@ export const githubWorkItemByNumberRead = bindDeferredRpcOperation(
     read: rpcResultVariant('github-work-item', taskWorkItemLookupSchema)
   })
 )
+
+export async function readGitHubWorkItemByNumber(
+  client: RpcClient,
+  params: { repo: string; number: number; type?: 'issue' | 'pr' },
+  // A rest tuple keeps the request's recorded arity when no options are given.
+  ...options: [SendRequestOptions?]
+): Promise<GitHubWorkItem | null> {
+  const reply = await githubWorkItemByNumberRead.request(client, params, ...options)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup decodes the same `workItemRow`, so the assertion only fills in members the row omits, each read through a guard or interpolated as text; what the schema adds is that a non-object payload is now a named incompatible reply rather than a spread over a string.
+  return githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
+}
 
 export const githubWorkItemBySlugRead = bindDeferredRpcOperation(
   defineRpcOperation({

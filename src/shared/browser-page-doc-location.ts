@@ -1,11 +1,7 @@
 import type { BrowserPageDocLocation } from './browser-workspace-types'
 import { relativePathInsideRoot, resolveRuntimePath } from './cross-platform-path'
 
-/**
- * Why an explicit comparison and not object identity: the mirror rebuilds the workspace's copy of
- * this on every page change, so identity is never equal and the store would write a new workspace
- * object — and republish the tab — on every unrelated update.
- */
+/** Compare fields: mirrors rebuild object identity on every page update, which would otherwise republish unchanged workspace tabs. */
 export function browserPageDocLocationsEqual(
   left: BrowserPageDocLocation | null,
   right: BrowserPageDocLocation | null

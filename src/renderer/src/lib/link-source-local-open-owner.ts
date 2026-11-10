@@ -3,9 +3,9 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { HttpLinkSourceOwner } from './http-link-routing'
+import type { HttpLinkSourceOwner } from './browser/navigation/http-link-routing'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 
 /** The host that owns a link's source document, for the local-open guard. */
 export function getLinkSourceLocalOpenOwner(
@@ -21,8 +21,7 @@ export function getLinkSourceLocalOpenOwner(
     case 'unknown':
       return 'unresolved'
     case 'local':
-      // Why: a runtime workspace without a nested SSH target also reports no connection, so only
-      // the catalog row proves the document is on this computer.
+      // No connection can also mean runtime-owned; require catalog proof before opening the path locally.
       return worktreeId
         ? (getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? 'unresolved')
         : 'local'

@@ -1,17 +1,10 @@
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import { resolveWorkspaceDocAddressTarget } from '@/lib/workspace-doc-address-input'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { resolveWorkspaceDocAddressTarget } from '@/lib/browser/documents/workspace-doc-address-input'
 import { useAppStore } from '@/store'
 
-/**
- * The workspace-document leg of an address-bar submission, shared by every URL pane: a typed
- * workspace path converts the page (or activates the tab already showing that document) instead of
- * navigating — checked before the URL pipeline turns paths into file://, which a client-hosted
- * guest refuses and which resolves on the wrong machine for a remote worktree.
- *
- * Returns true when the submission was consumed (converted, activated, or refused with an error);
- * false hands the input to the URL pipeline untouched.
- */
+/** Consume workspace paths before URL resolution targets the wrong host or a refused file: URL; return false to continue URL handling. */
 export function routeWorkspaceDocAddressSubmission(params: {
   worktreeId: string
   pageId: string

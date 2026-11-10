@@ -5,8 +5,7 @@ export function resolveMobileWorkspaceCreateName(args: {
   return args.draft?.trim() || args.fallback
 }
 
-// Why: mirrors the desktop issue-name slugger so contractions do not create
-// branch/path names like `can-t-enable` in mobile-created workspaces.
+// Use the desktop slugger so contractions cannot introduce stray branch/path separators.
 function removeIntraWordApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'").replace(/([\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
 }

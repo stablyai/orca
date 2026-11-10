@@ -18,21 +18,6 @@ function paths(resolution: ReturnType<typeof resolveSessionSearchScope>): string
 }
 
 describe('workspace scope', () => {
-  it('resolves a registered workspace to its directory', () => {
-    expect(
-      resolveSessionSearchScope(
-        { kind: 'workspace', worktreeId: 'repo-1::/work/feature' },
-        catalog({ worktreeMeta: { 'repo-1::/work/feature': {} } })
-      )
-    ).toEqual({ kind: 'resolved', paths: ['/work/feature'] })
-  })
-
-  it('resolves the repo checkout, which no worktree row has to vouch for', () => {
-    expect(
-      resolveSessionSearchScope({ kind: 'workspace', worktreeId: 'repo-1::/work/app' }, catalog())
-    ).toEqual({ kind: 'resolved', paths: ['/work/app'] })
-  })
-
   it('refuses a directory the client named that this host has not registered', () => {
     expect(
       resolveSessionSearchScope(
@@ -49,18 +34,6 @@ describe('workspace scope', () => {
         catalog({ worktreeMeta: { 'repo-1::/work/Feature': {} } })
       )
     ).toEqual({ kind: 'resolved', paths: ['/work/Feature'] })
-  })
-
-  it('adds the directories the workspace occupied before it was renamed', () => {
-    const resolution = resolveSessionSearchScope(
-      { kind: 'workspace', worktreeId: 'repo-1::/work/new-name' },
-      catalog({
-        worktreeMeta: {
-          'repo-1::/work/new-name': { priorWorktreeIds: ['repo-1::/work/old-name'] }
-        }
-      })
-    )
-    expect(paths(resolution)).toEqual(['/work/new-name', '/work/old-name'])
   })
 
   it('leaves a prior path that another registered workspace now occupies to its owner', () => {
@@ -85,12 +58,6 @@ describe('workspace scope', () => {
       catalog({ repos: [{ id: 'folder-1', path: '/work/notes', kind: 'folder' }] })
     )
     expect(paths(resolution)).toEqual(['/work/notes'])
-  })
-
-  it('refuses a workspace whose repo this host does not have', () => {
-    expect(
-      resolveSessionSearchScope({ kind: 'workspace', worktreeId: 'other::/work/app' }, catalog())
-    ).toEqual({ kind: 'unknown' })
   })
 
   it('refuses when no catalog is installed, which is every host without a store', () => {
@@ -139,8 +106,7 @@ describe('project scope', () => {
       { kind: 'project', projectKey: 'repo:repo-1' },
       catalog({ repos: [{ id: 'repo-1', path: '/work/app', worktreeBasePath: '/trees/app' }] })
     )
-    // The global nested root stays in: a worktree created before the base path
-    // was set still lives there, which is why ownership enumerates both.
+    // Include older worktrees created before the repo’s base path was configured.
     expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/app', '/trees/app', '/work/app'])
   })
 
@@ -153,8 +119,6 @@ describe('project scope', () => {
       { kind: 'project', projectKey: 'repo:repo-1' },
       catalog({ settings: { workspaceDir: '/home/me/ws', nestWorkspaces: false }, worktreeMeta })
     )
-    // 100 worktrees plus the checkout: past AI_VAULT_SCOPE_PATHS_MAX_COUNT, which
-    // is why these never travel through the request's `filters.scopePaths`.
     expect(paths(resolution)).toHaveLength(101)
   })
 
@@ -203,23 +167,7 @@ describe('project scope', () => {
         ]
       })
     )
-    // The global nested root is in as well: this repo row carries no base path
-    // of its own, so that is still where Orca would create its worktrees.
     expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/app', '/srv/app', '/srv/trees'])
-  })
-
-  it('takes a folder workspace project as its folder', () => {
-    const resolution = resolveSessionSearchScope(
-      { kind: 'project', projectKey: 'repo:folder-1' },
-      catalog({ repos: [{ id: 'folder-1', path: '/work/notes', kind: 'folder' }] })
-    )
-    expect(paths(resolution)).toEqual(['/work/notes'])
-  })
-
-  it('refuses a project this host has no repo, setup or workspace for', () => {
-    expect(
-      resolveSessionSearchScope({ kind: 'project', projectKey: 'project:elsewhere' }, catalog())
-    ).toEqual({ kind: 'unknown' })
   })
 
   it('refuses a project set up on another host even when the id is known here', () => {

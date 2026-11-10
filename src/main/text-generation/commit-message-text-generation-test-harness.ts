@@ -1,22 +1,56 @@
-import { EventEmitter } from 'node:events'
+import { ChildProcess } from 'node:child_process'
+import { PassThrough } from 'node:stream'
+import { isProviderRecord } from '../provider-process/provider-json-record'
 import { expect, vi } from 'vitest'
 
-export type MockDiscoveryChild = EventEmitter & {
+export type MockDiscoveryChild = ChildProcess & {
   pid: number
-  kill: ReturnType<typeof vi.fn>
-  stdout: EventEmitter
-  stderr: EventEmitter
-  stdin: { end: ReturnType<typeof vi.fn> }
+  kill: ReturnType<typeof vi.fn<() => boolean>>
+  stdout: PassThrough
+  stderr: PassThrough
+  stdin: PassThrough & { end: ReturnType<typeof vi.fn> }
 }
 
 export function createMockDiscoveryChild(): MockDiscoveryChild {
-  const child = new EventEmitter() as MockDiscoveryChild
-  child.pid = 123
-  child.kill = vi.fn()
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.stdin = { end: vi.fn() }
-  return child
+  const child = new ChildProcess()
+  Object.defineProperties(child, {
+    stdout: { writable: true, configurable: true, enumerable: true },
+    stderr: { writable: true, configurable: true, enumerable: true },
+    stdin: { writable: true, configurable: true, enumerable: true }
+  })
+  return Object.assign(child, {
+    pid: 123,
+    kill: vi.fn(() => true),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    stdin: Object.assign(new PassThrough(), { end: vi.fn() })
+  })
+}
+
+/** Answers initialize, then each `model/list` with the next page (`{ rpcError }` replies an error), as a Codex app-server child. */
+export function answerCodexAppServer(
+  child: { stdin: NodeJS.EventEmitter; stdout: NodeJS.EventEmitter },
+  pages: unknown[]
+): void {
+  let page = 0
+  child.stdin.on('data', (chunk: Buffer) => {
+    for (const line of chunk.toString('utf8').split('\n').filter(Boolean)) {
+      const message: unknown = JSON.parse(line)
+      if (isProviderRecord(message) && typeof message.id === 'number') {
+        const answer = message.method === 'model/list' ? pages[page++] : {}
+        const error = isProviderRecord(answer) ? answer.rpcError : undefined
+        const reply = Buffer.from(
+          `${JSON.stringify(error ? { id: message.id, error } : { id: message.id, result: answer })}\n`
+        )
+        // Real streams may be piped onward by the spawner; plain emitters only have listeners.
+        if (child.stdout instanceof PassThrough) {
+          child.stdout.write(reply)
+        } else {
+          child.stdout.emit('data', reply)
+        }
+      }
+    }
+  })
 }
 
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
@@ -29,9 +63,7 @@ export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   }
 }
 
-// Binds the caller's hoisted tree-kill mock so test bodies keep calling
-// expectChildTerminated(child) with no extra argument. Asserts the Windows direct-child kill; a
-// supervised POSIX child is stopped with SIGTERM instead (source-control-local-process.test.ts).
+// Bind the hoisted Windows tree-kill mock; supervised POSIX stop uses SIGTERM in source-control-local-process.test.ts.
 export function createChildTerminationExpectation(
   terminateWindowsProcessTreeMock: ReturnType<typeof vi.fn>
 ): (child: { pid: number; kill: ReturnType<typeof vi.fn> }) => Promise<void> {
@@ -41,15 +73,12 @@ export function createChildTerminationExpectation(
         site: 'source-control-text-generation'
       })
     }
-    // Every platform kills the root by its own handle. On win32 that is not a
-    // duplicate of the tree walk: it is what keeps a refused walk from resolving
-    // having killed nothing while the caller releases the managed-home lock. It
-    // runs after the walk there, so it can be a tick behind the caller.
+    // Kill the owned root handle too so refused Windows tree walks cannot release the home lock having killed nothing; root kill follows the walk.
     await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
   }
 }
 
-/** The argv a spawn started as the agent: past the supervisor script's '--' when supervised. */
+/** Unwrap supervisor -- before inspecting the actual agent argv. */
 export function spawnedAgentArgv([file, args]: readonly unknown[]): unknown[] {
   const argv: unknown[] = Array.isArray(args) ? args : []
   return file === process.execPath && argv[0] === '-e'

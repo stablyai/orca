@@ -1,17 +1,13 @@
-/**
- * Deploys orcad onto an empty SSH host and pairs this client with it through a loopback tunnel.
- * The target claim is the resume point: an interrupted deploy leaves the target owned by the
- * environment id it was creating, and the next deploy of that target finishes the same one.
- */
+// Target claims preserve environment identity so interrupted deploys resume the same registration.
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { randomUUID } from 'node:crypto'
-import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/runtime-environment-reconciliation-record'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ORCAD_MANAGED_REMOTE_PORT,
   type OrcadManagedDeferral,
@@ -26,22 +22,22 @@ import {
   startOrcadManagedTunnel
 } from './orcad-managed-tunnel'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
-import { wakeAlreadyActiveOrcad } from '../../ssh/orcad-already-active-wake'
+import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
-import { deployOrcad } from '../../ssh/orcad-remote-deploy'
+import { deployOrcad } from '../install/orcad-remote-deploy'
 import {
   adoptRunningOrcadVersion,
   type OrcadRunningAdoption
-} from '../../ssh/orcad-running-version-adoption'
+} from '../activation/orcad-running-version-adoption'
 import { readLocalFullVersion } from '../install/remote-versioned-install'
-import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
-import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../ssh/orcad-installed-activation'
+
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../activation/orcad-installed-activation'
 import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
-import { resolveOrcadMigrationFence } from '../../ssh/orcad-migration-source-fence'
+import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
+import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { findCollidingEnvironmentName } from '../../../shared/runtime-environment-name-collision'
+import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import {
   isForceableOrcadDeferral,
@@ -58,7 +54,6 @@ export async function createManagedOrcadEnvironment(
     sshTargetId: string
     force?: boolean
     signal?: AbortSignal
-    /** Deploying into a target fenced by a migration journal rather than claiming an empty one. */
     migration?: boolean
   }
 ): Promise<OrcadManagedDeployResult> {
@@ -66,7 +61,8 @@ export async function createManagedOrcadEnvironment(
     const { connectionManager, targetStore, claims } = requireManagedOrcadInfrastructure()
     const environmentId =
       getManagedOrcadFenceEnvironmentId(targetStore.getTarget(args.sshTargetId)) ?? randomUUID()
-    const environments = listEnvironments(userDataPath)
+    // Duplicate/name checks before an add: a crash-zeroed list (#18766) must read as empty here.
+    const environments = listEnvironments(userDataPath, { recoverBlankStore: true })
     const registered = environments.find((entry) => entry.id === environmentId)
     if (registered) {
       assertRuntimeEnvironmentNotReconciling(registered)
@@ -86,9 +82,7 @@ export async function createManagedOrcadEnvironment(
       assertMigrationFence(userDataPath, current, environmentId, args.name)
     }
     const claimed = claims.claim(args.sshTargetId, environmentId, {
-      // A migration records itself in its journal, not as a provisioning intent.
       ...(args.migration ? {} : { deployName: args.name }),
-      // Why: this deploy's own claim left a provisioning intent or a journal, or registered a server.
       ownerRecorded:
         Boolean(args.migration) || Boolean(current?.orcadProvisioning) || Boolean(registered)
     })
@@ -103,11 +97,7 @@ export async function createManagedOrcadEnvironment(
     let environmentRegistered = false
     try {
       const connection = await connectionManager.connect(claimed)
-      let context = await resolveOrcadRemoteContext(
-        claimed,
-        sshOrcadHostTransport(connection),
-        args.signal
-      )
+      let context = await resolveOrcadRemoteContext(claimed, connection, args.signal)
       const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, args.signal)
       const recovery = await recoverInterruptedOrcadActivation(slot)
       if (recovery.outcome === 'pending' || recovery.outcome === 'refused') {
@@ -132,15 +122,14 @@ export async function createManagedOrcadEnvironment(
       const localOrcadDir = await materializeOrcadArtifact(context.serverTarget, {
         signal: args.signal
       })
-      // Before any upload, so a host another version serves is left exactly as it was. A migration
-      // adopts too: only the paired server can count its terminals, so its own deploy would defer.
+      // Adopt before upload: only the paired incumbent can count terminals; redeploy would defer.
       const localVersion = readLocalFullVersion(localOrcadDir)
       const adopted = args.force
         ? null
         : await adoptRunningOrcadVersion(slot, context.activationRecord, localVersion)
       const { active } = context.activationRecord
       if (!adopted && !args.force && active && active !== localVersion) {
-        // The wake re-read a record another desktop changed; the census policy follows it.
+        // Wake may observe a peer's changed record; census admission must use that same record.
         context = { ...context, activationRecord: await readOrcadActivationRecord(slot) }
       }
       const serving: DeployedOrcad | OrcadManagedDeferral =
@@ -149,7 +138,7 @@ export async function createManagedOrcadEnvironment(
       if ('outcome' in serving) {
         return serving
       }
-      // Why read back: orcad binds another port when the preferred one is taken on the host.
+      // Read the bound port: the preferred port may belong to another host process.
       const tunnel = deployedOrcadTunnelChecks(serving.readiness, serving.reprobe)
       const localPort = await startOrcadManagedTunnel(
         environmentId,
@@ -171,7 +160,6 @@ export async function createManagedOrcadEnvironment(
       })
       environmentRegistered = true
       return {
-        // An adopted server keeps its version; the linked update check may replace it later.
         outcome: serving.created ? 'created' : 'already-current',
         environment: redactRuntimeEnvironment(environment),
         activeVersion: serving.version

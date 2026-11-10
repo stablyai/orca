@@ -1,23 +1,5 @@
-/**
- * Measures DEC 2026 render blackouts in the focused pane's xterm.
- *
- * Why buffer polling cannot see this bug: xterm's parser writes into the buffer
- * whether or not synchronized output is open, so the existing bench's
- * xterm-buffer observation reports a keystroke as "echoed" while the screen is
- * still showing the previous frame. What the user sees is the RENDER.
- *
- * xterm suppresses all row rendering while
- * `decPrivateModes.synchronizedOutput` is set — `RenderService.refreshRows`
- * returns early into `SyncOutputHandler.bufferRows` — and the only escapes are
- * the closing `\x1b[?2026l` or a 1000 ms timeout armed once per buffering
- * episode. So a frame whose close is delayed freezes the pane for up to a
- * second and then repaints everything at once, which is exactly the reported
- * symptom.
- *
- * This probe records actual `onRender` timestamps and how long the
- * synchronized-output latch stays open, so a run can distinguish "echo arrived
- * late" from "echo arrived on time but was not painted".
- */
+// Measure onRender gaps and DEC 2026 latch-open durations; parser buffer updates can arrive before any visible render.
+// An unclosed synchronized frame suppresses rows until ?2026l or xterm’s 1s forced flush.
 import type { Page } from '@stablyai/playwright-test'
 
 export type SynchronizedOutputBlackoutSnapshot = {
@@ -45,18 +27,12 @@ type BlackoutProbeTerminal = {
 
 type BlackoutProbePane = { terminal?: BlackoutProbeTerminal }
 
-// Matches the sibling probes (runtime-graph-publication-probe): the handle must
-// live on `window` to survive between page.evaluate calls, and `declare global`
-// would need an `interface` the lint rules forbid.
+// Keep the probe handle on window across evaluate calls, matching runtime-graph-publication-probe.
 type BlackoutProbeWindow = Window & {
   __orcaSyncOutputBlackoutProbe?: { stop: () => SynchronizedOutputBlackoutSnapshot }
 }
 
-/**
- * Installs the probe on the focused pane of `tabId`. Sampling runs on a short
- * interval; a renderer thread blocked for N ms shows up as a sampling gap,
- * which is reported rather than hidden.
- */
+// Sample the target pane’s latch and report blocked-thread sampling gaps rather than hiding them.
 export async function startSynchronizedOutputBlackoutProbe(
   page: Page,
   tabId: string
@@ -73,8 +49,7 @@ export async function startSynchronizedOutputBlackoutProbe(
       return { installed: false, reason: 'no focused pane terminal' }
     }
     if (typeof terminal.modes?.synchronizedOutputMode !== 'boolean') {
-      // Why fail loudly: a silently absent latch would report zero blackouts
-      // and read as "not reproduced".
+      // Refuse a missing latch so zero blackouts cannot masquerade as a valid measurement.
       return { installed: false, reason: 'terminal.modes.synchronizedOutputMode not reachable' }
     }
     if (typeof terminal.onRender !== 'function') {

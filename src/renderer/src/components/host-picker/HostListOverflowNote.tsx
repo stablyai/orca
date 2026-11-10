@@ -1,6 +1,5 @@
 import { moreHostsLabel } from './host-picker-copy'
 
-/** Says how many hosts a bounded list left out and that searching reaches them. */
 export function HostListOverflowNote({
   hiddenCount,
   label = moreHostsLabel

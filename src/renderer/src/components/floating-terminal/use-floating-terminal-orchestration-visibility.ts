@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
+import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
 import {
   ORCHESTRATION_SETUP_STATE_EVENT,
   hasOrchestrationSetupMarker,
@@ -29,7 +29,9 @@ export function useFloatingTerminalOrchestrationVisibility({
     try {
       const status = await window.api.cli.getInstallStatus()
       if (mountedRef.current) {
-        setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+        const cliRegistrationUnavailable =
+          status?.state === 'unsupported' && status.unsupportedReason === 'launch_mode_unavailable'
+        setShowOrchestrationSetup(!cliRegistrationUnavailable && !isOrcaCliAvailableOnPath(status))
       }
     } catch {
       if (mountedRef.current) {

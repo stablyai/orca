@@ -1,18 +1,11 @@
-/**
- * The identity a page claims, and the device identity the shell swaps in for it.
- *
- * `terminal.send` refuses a query reply whose `client.id` is not the credential the socket
- * authenticated with, so the shell, which owns the socket, resolves the placeholder on the way out.
- */
+// Swap the page placeholder for the socket’s authenticated identity; terminal.send rejects query replies naming a different client.id.
 
-/** What a page puts in `client.id`. Fixed, so a resent message fingerprints the same caller. */
+// Keep the placeholder stable so resent messages fingerprint the same caller.
 export const BRIDGE_PAGE_CLIENT_ID = 'orca-page-client'
 
-/** The two fields a page carries an identity in. `mobileClient` is native chat's spelling. */
 const IDENTITY_FIELDS = ['client', 'mobileClient'] as const
 
-/** A placeholder the shell cannot resolve. Refused rather than stripped: a request without the
- *  field is one the page did not make, and the host would read it as a different caller. */
+// Refuse unresolved placeholders rather than strip them; omitting identity changes the caller the page requested.
 export class BridgePageClientIdentityUnavailableError extends Error {
   readonly code = 'bridge_client_identity_unavailable'
 
@@ -30,12 +23,7 @@ function claimsPageIdentity(value: unknown): boolean {
   return isRecord(value) && value.id === BRIDGE_PAGE_CLIENT_ID
 }
 
-/**
- * One method's params on their way out of the shell, with the page's placeholder resolved.
- *
- * Returns the same object when nothing claimed it, so an unchanged request replays byte-exact and
- * absent params stay absent. Throws when the shell has no identity, which both doors answer with.
- */
+// Preserve the original object/absent params when no placeholder is present for exact replay. Missing device identity throws on both request/subscription paths.
 export function substituteBridgePageClientIdentity(
   params: unknown,
   clientIdentity: string | null

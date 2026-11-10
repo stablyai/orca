@@ -1,8 +1,7 @@
-// A client's layout command written to the partitions holding its tab, routed partition first,
-// with main's in-memory editor views carried past the saved form each partition is loaded from.
+// Apply routed-partition commands first while carrying in-memory editor views through saved-session loads.
 
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   LayoutApplyOutcome,
   LayoutCommand,
@@ -25,15 +24,14 @@ import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 import { resolveWindowPaneDetach, type WindowPaneDetachCommand } from './window-pane-detach'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 
-/** The runtime's side of a layout command: live facts in, the routed partition's effects out. */
 export type LayoutCommandRun = {
   live?: LayoutLiveContext
-  /** Stops the terminals the command replaces, before its write; false keeps their bindings. */
+  /** Stop replacements before writing; false preserves existing bindings. */
   stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
   noteEffects?: (effects: LayoutEffects) => void
 }
 
-// A paused WSL move keeps its local rows as the quiesce left them.
+// Preserve quiesced WSL rows.
 export function keepFrozen(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
@@ -44,11 +42,12 @@ export function keepFrozen(
     : session
 }
 
-/** A window's drag-out: checked across every partition, then moved in each holder as one write. */
+/** Validate all partition holders before one atomic detach write. */
 export function commitWindowPaneDetach(
   hostIds: readonly ExecutionHostId[],
   command: WindowPaneDetachCommand,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  run: LayoutCommandRun = {}
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const resolved = resolveWindowPaneDetach(
     context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
@@ -58,7 +57,7 @@ export function commitWindowPaneDetach(
   if (resolved && 'code' in resolved) {
     return { value: { ok: false, code: resolved.code }, persist: false }
   }
-  const committed = commitLayoutCommand(hostIds, resolved?.command ?? command, context)
+  const committed = commitLayoutCommand(hostIds, resolved?.command ?? command, context, run)
   if (!resolved || !committed.value.ok || committed.persist === false) {
     return committed
   }
@@ -93,8 +92,7 @@ export function commitLayoutCommand(
     return { value: { ok: false, code: 'workspace_not_found' }, persist: false }
   }
   const effects = routed.ok ? changes[0]!.change.effects : undefined
-  // Why before the write: a terminal that would not stop keeps its pane. A write that then fails
-  // restores the binding to the stopped terminal, which the pane's next start replaces.
+  // Stop first so refusal retains the pane; failed writes restore bindings for the next spawn to replace.
   if (effects?.stopPtyIds.length && run.stopBeforeWrite?.(effects.stopPtyIds) === false) {
     return { value: { ok: false, code: 'pane_already_bound' }, persist: false }
   }
@@ -104,7 +102,7 @@ export function commitLayoutCommand(
   return written(routed, routed.ok ? changes.filter(({ change }) => change.value.ok) : [], context)
 }
 
-/** Each partition's own command in one write: any refusal refuses all, and nothing is written. */
+/** Any partition refusal prevents the whole write. */
 export function commitLayoutCommandsAcrossPartitions(
   batches: readonly { hostId: ExecutionHostId; command: LayoutCommand }[],
   context: TerminalTopologyCommitContext
@@ -139,14 +137,14 @@ function changeIn(
   }
 }
 
-/** Writes the applied partitions' sessions and keeps their views, restored together on rollback. */
+/** Sessions and in-memory views roll back together. */
 function written(
   value: LayoutApplyOutcome,
   applied: readonly PartitionChange[],
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const { editorViews } = context
-  // A view-only change writes nothing durable; its partition is still re-published (writingOnly).
+  // View-only changes still need publication even without a durable session write.
   const viewRestores = applied.flatMap(({ hostId, change }) =>
     editorViews && change.views ? [keepPartitionEditorViews(editorViews, hostId, change.views)] : []
   )

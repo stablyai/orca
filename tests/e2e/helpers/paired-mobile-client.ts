@@ -1,33 +1,30 @@
-import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../../mobile/src/transport/mobile-runtime-client-capabilities'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { decodePairingOffer, type PairingOffer } from '../../../src/shared/pairing'
-import {
-  sendRemoteRuntimeRequest,
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionCallbacks
-} from '../../../src/shared/remote-runtime-client'
+import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../../mobile/src/transport/connection/mobile-runtime-client-capabilities'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type {
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
-import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime-passthrough-socket'
+import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RuntimeCapability } from '../../../src/shared/protocol-version'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
-} from '../../../src/shared/browser-screencast-protocol'
+} from '../../../src/shared/browser/screencast/browser-screencast-protocol'
 import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 
 const DEFAULT_TIMEOUT_MS = 15_000
 
-/**
- * A phone paired to one runtime: the mobile-scoped device token and the phone app's own
- * capability list, over the app's E2EE transport. Each request opens a fresh socket, so requests
- * reach a restarted host; subscriptions do not reconnect across a host restart.
- */
+// Use phone capabilities and mobile-scope E2EE; per-request sockets reach restarted hosts, but subscriptions do not reconnect.
 export type PairedMobileClient = {
   /** Raw response, for asserting a refusal. */
   request: <T>(
@@ -40,9 +37,9 @@ export type PairedMobileClient = {
   subscribe: <T>(
     method: string,
     params: unknown,
-    callbacks: RemoteRuntimeSubscriptionCallbacks<T>,
+    callbacks: RemoteRuntimeTransportSubscriptionCallbacks<T>,
     timeoutMs?: number
-  ) => Promise<RemoteRuntimeSubscription>
+  ) => Promise<RemoteRuntimeTransportSubscription>
   /** One persistent phone socket, as the app holds one; needed for streams and `executionHost`. */
   openSocket: () => Promise<PairedMobileSocket>
   /** Closes every subscription and socket this client opened. */
@@ -52,11 +49,14 @@ export type PairedMobileClient = {
 /** Raw frames over one authenticated phone socket, exactly as the app writes them. */
 export type PairedMobileSocket = {
   token: string
-  /** Every text frame received, parsed, in order. */
-  frames: { id?: string; ok?: boolean; result?: unknown; error?: { code: string } }[]
+  frames: {
+    id?: string
+    ok?: boolean
+    result?: unknown
+    error?: { code: string; message?: string }
+  }[]
   /** Terminal output text per stream id, decoded from binary frames. */
   output: Map<number, string>
-  /** Browser screencast frames, decoded from binary frames, in order. */
   screencastFrames: BrowserScreencastFrame[]
   send: (id: string, method: string, params: unknown, executionHost?: string) => void
   /** Resolves the moment `text` appears in the stream's output, so callers can time an echo. */
@@ -81,14 +81,17 @@ export function pairMobileClient(
     params: unknown = {},
     timeoutMs = DEFAULT_TIMEOUT_MS
   ): Promise<RuntimeRpcResponse<T>> =>
-    sendRemoteRuntimeRequest<T>(
+    sendRemoteRuntimeRequestOnSocket<T>(
       connection,
       method,
       params,
       timeoutMs,
       undefined,
       undefined,
-      capabilities
+      undefined,
+      capabilities,
+      undefined,
+      undefined
     )
   return {
     request,
@@ -100,7 +103,7 @@ export function pairMobileClient(
       return response.result
     },
     subscribe: async (method, params, callbacks, timeoutMs = DEFAULT_TIMEOUT_MS) => {
-      const subscription = await subscribeRemoteRuntimeRequest(
+      const subscription = await subscribeRemoteRuntimeTransport(
         connection,
         method,
         params,

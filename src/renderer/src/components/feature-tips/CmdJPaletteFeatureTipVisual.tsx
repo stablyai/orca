@@ -2,11 +2,10 @@ import { Fragment, useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
 import { formatShortcutKeyComboDetails, useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const TYPED_QUERY = 'auth'
-// Why: the real palette lists recent worktrees on open; typing only narrows the
-// list. Mix done + running states so the tip reads like a live worktree switcher.
+// Mirror the real palette’s recent worktrees before typing narrows them.
 const DEMO_WORKTREES: readonly {
   key: string
   name: string
@@ -31,27 +30,21 @@ function filterDemoWorktrees(query: string): typeof DEMO_WORKTREES {
   )
 }
 
-// Why: cycle phases are sequenced so the keypress visibly precedes the palette
-// opening (cause → effect), matching what the user will see when they actually
-// press the shortcut.
+// Show the keypress before opening the palette to preserve cause and effect.
 type CyclePhase = 'idle' | 'pressed' | 'open' | 'typing'
 
 const KEYPRESS_AT_MS = 450
 const PALETTE_OPEN_AT_MS = 850
-// Why: linger on the empty-query worktree list so users notice the palette
-// already shows recent worktrees before filtering kicks in.
+// Pause on recent worktrees so users see that the palette works before typing.
 const HOLD_BEFORE_TYPING_MS = 700
-// Per-character typing interval. Kept tight and constant so the cursor advances
-// at an even cadence instead of feeling staggered.
 const TYPE_INTERVAL_MS = 120
 
 export function CmdJPaletteFeatureTipVisual(): JSX.Element {
+  const t = useTranslate()
   const reducedMotion = usePrefersReducedMotion()
-  // Why: render the live binding so the cue stays correct after a rebind and on
-  // platforms where Cmd+J is not the default (Linux/Windows use Ctrl+Shift+J).
+  // Read the live binding to reflect rebindings and platform defaults.
   const shortcut = useShortcutKeyDetails('worktree.palette')
-  // Why: the press animation staggers per-key chips (⌘ then J); fall back to the
-  // platform default when the user disables the binding.
+  // Use platform defaults when the binding is disabled so the demo still has a shortcut cue.
   const displayShortcut =
     shortcut.keys.length > 0 ? shortcut : formatShortcutKeyComboDetails('worktree.palette')[0]
   const displayShortcutKeys = displayShortcut?.keys ?? []
@@ -60,8 +53,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const [phase, setPhase] = useState<CyclePhase>('idle')
   const [typedLength, setTypedLength] = useState(0)
 
-  // Why: for reduced-motion users, jump straight to the fully-populated end
-  // state so they see what the feature does without any animation.
+  // Reduced motion shows the completed state directly.
   const isPressed = !reducedMotion && phase === 'pressed'
   const effectiveTypedLength = reducedMotion ? TYPED_QUERY.length : typedLength
   const currentQuery = TYPED_QUERY.slice(0, effectiveTypedLength)
@@ -70,11 +62,8 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const renderQuery = currentQuery
   const renderWorktrees = visibleWorktrees
   const renderShowCreate = showCreateAction
-  // Why: mirror WorktreeJumpPalette — recent worktrees render as soon as the
-  // palette opens; typing only filters them down.
   const showWorktreeList = reducedMotion || phase === 'open' || phase === 'typing'
-  // Why: keep the palette hidden during `pressed` so the keypress visibly
-  // precedes the palette opening.
+  // Keep the palette hidden until the keypress finishes.
   const paletteMounted = reducedMotion || phase === 'open' || phase === 'typing'
   const paletteOpaque = reducedMotion || paletteMounted
   const resultEnterClass =
@@ -110,8 +99,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
       later(typeNext, TYPE_INTERVAL_MS)
     }
 
-    // Why: this tip may remain open while Orca is idle. Play the demo once,
-    // then settle on the final useful state instead of looping timers forever.
+    // Play once and settle; an idle tip must not keep scheduling timers.
     later(() => setPhase('pressed'), KEYPRESS_AT_MS)
     later(() => setPhase('open'), PALETTE_OPEN_AT_MS)
     later(() => {
@@ -166,16 +154,14 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
               : 'opacity-0'
         }`}
       >
-        {/* Why: search and results are absolutely positioned so row content
-            changes during the demo never reflow the input bar mid-animation. */}
+        {/* Absolute positioning prevents changing results from moving the search bar. */}
         <div className="absolute inset-x-0 top-0 flex h-11 items-center gap-2 border-b border-border bg-muted/20 px-3">
           <Search className="size-4 shrink-0 text-muted-foreground/70" />
           <div className="h-5 min-w-0 flex-1 overflow-hidden text-[13px] leading-5 text-foreground/90">
             <span className="block truncate">
               {renderQuery}
               {!reducedMotion && (phase === 'open' || phase === 'typing') ? (
-                // Why: this tip can sit open while Orca is idle; keep the
-                // caret static so the preview does not wake the compositor.
+                // A static caret avoids waking the compositor while the tip is idle.
                 <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75" />
               ) : null}
             </span>
@@ -193,8 +179,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   {result.status === 'done' ? (
                     <span className="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   ) : (
-                    // Why: this tip can stay mounted while Orca is idle; mirror
-                    // the sidebar's static working ring instead of spinning.
+                    // Use the sidebar’s static working ring to avoid idle compositor work.
                     <span className="block size-2.5 rounded-full border-[1.5px] border-yellow-500 bg-yellow-500/15" />
                   )}
                 </span>
@@ -216,7 +201,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   <Plus size={13} aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1 truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
-                  {translate(
+                  {t(
                     'auto.components.feature.tips.CmdJPaletteFeatureTipVisual.ab94e16d44',
                     'Create worktree "{{value0}}"',
                     { value0: renderQuery.trim() }

@@ -3,7 +3,7 @@ import { AlertTriangle, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { HostRowIcon } from '../host-row-icon'
 
 /** Glyph for a host that can't run yet: connecting, broken, or merely dormant. */
@@ -25,7 +25,6 @@ export function NeedsSetupHostIcon({
   return <HostRowIcon hostId={hostId} />
 }
 
-/** Inline Connect action on a disconnected host row. */
 export function ConnectHostButton({
   connecting,
   onConnect
@@ -33,13 +32,12 @@ export function ConnectHostButton({
   connecting: boolean
   onConnect: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       type="button"
       variant="ghost"
       size="xs"
-      // Why: only the row being connected is disabled, so one slow connect
-      // can't lock out connecting to the others.
       disabled={connecting}
       className="ml-1 shrink-0 gap-1 self-center text-muted-foreground/70 hover:text-foreground"
       onMouseDown={(event) => {
@@ -49,24 +47,22 @@ export function ConnectHostButton({
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        // Why: keep the picker open so the connecting state stays visible; the
-        // row updates in place once store SSH state resolves.
+        // Keep the picker open so connection progress and resolved host state remain visible.
         onConnect()
       }}
     >
       {connecting ? (
         <>
           <LoaderCircle className="size-3 animate-spin" />
-          {translate('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')}
+          {t('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')}
         </>
       ) : (
-        translate('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')
+        t('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')
       )}
     </Button>
   )
 }
 
-/** Inline Set project location action on a host that still needs a project path. */
 export function SetLocationButton({
   hostLabel,
   onSetLocation
@@ -74,10 +70,8 @@ export function SetLocationButton({
   hostLabel: string
   onSetLocation: () => void
 }): React.JSX.Element {
-  const label = translate(
-    'auto.components.NewWorkspaceComposerCard.setLocation',
-    'Set project location'
-  )
+  const t = useTranslate()
+  const label = t('auto.components.NewWorkspaceComposerCard.setLocation', 'Set project location')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -86,7 +80,7 @@ export function SetLocationButton({
           variant="outline"
           size="xs"
           className="ml-auto shrink-0 self-center"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.NewWorkspaceComposerCard.setLocationOnHost',
             'Set project location on {{host}}',
             { host: hostLabel }
@@ -105,7 +99,7 @@ export function SetLocationButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
-        {translate(
+        {t(
           'auto.components.NewWorkspaceComposerCard.setLocationTooltip',
           'Choose a folder or clone this project onto {{host}}.',
           { host: hostLabel }

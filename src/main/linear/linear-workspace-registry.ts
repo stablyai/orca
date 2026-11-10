@@ -1,7 +1,4 @@
-// ── Token + workspace storage ────────────────────────────────────────
-// Why: tokens remain encrypted via safeStorage, while workspace metadata stays
-// plaintext so status checks can render connected accounts without decrypting
-// and triggering OS keychain prompts after app updates.
+// Keep account metadata readable without decrypting tokens or triggering keychain prompts.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
@@ -16,8 +13,8 @@ import {
   type LinearWorkspaceFile
 } from './linear-workspace-record'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
-import { createIntegrationStateFileCache } from '../integration-state-file-cache'
-import { createIntegrationTokenFileCache } from '../integration-token-file-cache'
+import { createIntegrationStateFileCache } from '../credentials/integration-state-file-cache'
+import { createIntegrationTokenFileCache } from '../credentials/integration-token-file-cache'
 
 export const workspaceTokenFileCache = createIntegrationTokenFileCache({
   service: 'Linear',

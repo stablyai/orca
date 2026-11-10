@@ -1,7 +1,4 @@
-/**
- * The GLM Coding Plan key on this host, shared by the desktop's IPC and the runtime RPC so a
- * paired client saves it where the usage poller runs. Nothing here may import Electron.
- */
+/** Share host-local key ownership across IPC/RPC so paired clients save where usage polling runs; remain Electron-free. */
 import {
   clearZcodePlanApiKey,
   getZcodePlanApiKeyProtection,
@@ -14,9 +11,9 @@ import {
   refuseCredentialSealedElsewhere,
   savedCredentialUnreadable
 } from '../credentials/saved-credential-readability'
-import { hasZcodeCliPlanCredentials } from '../rate-limits/zcode-usage-fetcher'
+import { hasZcodeCliPlanCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
 import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateZcodeCredentialState'>
@@ -38,7 +35,7 @@ function apiKeyUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
   })
 }
 
-/** For a paired client's save; forgetting is always allowed, since nobody here can read the file. */
+/** Reject save when this host cannot open the existing seal; forgetting remains allowed. */
 export function assertZcodePlanApiKeyOpensHere(): void {
   if (apiKeyUnreadable() === 'sealed-elsewhere') {
     refuseCredentialSealedElsewhere('GLM Coding Plan API key')
@@ -57,7 +54,7 @@ export function saveZcodePlanApiKeyCredential(
   rateLimits: UsageRefresher | null,
   key: unknown
 ): ZcodePlanCredentialsStatus {
-  // Why: the value arrives as unknown over IPC/RPC; the declared type is compile-time only.
+  // Runtime-check IPC/RPC input; compile-time types do not constrain the wire.
   if (typeof key !== 'string') {
     throw new Error('GLM Coding Plan API key must be a string')
   }

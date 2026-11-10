@@ -4,8 +4,9 @@ import {
   type NeedsSetupProjectHostOption,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { boundHostList } from '@/components/host-picker/bounded-host-list'
 
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
@@ -20,11 +21,8 @@ export type RunTargetRowModel =
   | { key: typeof RUN_TARGET_RECIPES_KEY; kind: 'recipes' }
   | { key: typeof RUN_TARGET_ADD_HOST_KEY; kind: 'add-host' }
 
-export function getEphemeralVmLabel(): string {
-  return translate(
-    'auto.components.NewWorkspaceComposerCard.ephemeralVm',
-    'Per-Workspace Environment'
-  )
+export function getEphemeralVmLabel(t: Translate = translate): string {
+  return t('auto.components.NewWorkspaceComposerCard.ephemeralVm', 'Per-Workspace Environment')
 }
 
 export function getRecipeCommandDisplay(command: string): string {
@@ -33,33 +31,28 @@ export function getRecipeCommandDisplay(command: string): string {
   return quoted?.[1] ?? trimmed.split(/\s+/)[0] ?? trimmed
 }
 
-export function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
+export function getRecipeDestroyLabel(
+  recipe: EphemeralVmRecipeOption,
+  t: Translate = translate
+): string {
   if (recipe.destroyDisabled) {
-    return translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
+    return t('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
   }
   if (recipe.destroy) {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.destroyConfigured',
-      'destroy configured'
-    )
+    return t('auto.components.NewWorkspaceComposerCard.destroyConfigured', 'destroy configured')
   }
-  return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
+  return t('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
 }
 
-/** One line under a recipe name: what it runs and whether it tears down. */
-export function getRecipeDetail(recipe: EphemeralVmRecipeOption): string {
-  return `${getRecipeCommandDisplay(recipe.create)} · ${getRecipeDestroyLabel(recipe)}`
+export function getRecipeDetail(recipe: EphemeralVmRecipeOption, t?: Translate): string {
+  return `${getRecipeCommandDisplay(recipe.create)} · ${getRecipeDestroyLabel(recipe, t)}`
 }
 
 function matches(haystack: string, query: string): boolean {
   return haystack.toLowerCase().includes(query)
 }
 
-/**
- * Ready hosts first, then hosts that still need a connection or a project location. Ready hosts
- * already hold the project, so they are few; the rest can be every configured SSH host, so they
- * are bounded and ranked by name.
- */
+/** Show ready hosts first; bound and rank unready hosts, which may include every configured SSH host. */
 function buildHostRows(
   hostOptions: readonly ProjectHostSetupOption[],
   query: string
@@ -106,18 +99,18 @@ function buildHostRows(
 
 function matchRecipes(
   recipes: readonly EphemeralVmRecipeOption[],
-  query: string
+  query: string,
+  t?: Translate
 ): EphemeralVmRecipeOption[] {
   return recipes.filter(
     (recipe) =>
       query === '' ||
       matches(recipe.name, query) ||
-      matches(getEphemeralVmLabel(), query) ||
+      matches(getEphemeralVmLabel(t), query) ||
       matches(recipe.description ?? '', query)
   )
 }
 
-/** The rows that open a nested list rather than committing. */
 function buildSubmenuRows(hasRecipes: boolean, hasAddHost: boolean): RunTargetRowModel[] {
   const rows: RunTargetRowModel[] = []
   if (hasRecipes) {
@@ -129,29 +122,28 @@ function buildSubmenuRows(hasRecipes: boolean, hasAddHost: boolean): RunTargetRo
   return rows
 }
 
-/**
- * Filters hosts and recipes by a typed query. The submenu rows survive filtering
- * only while they still have something to show — "Add host" always survives, so
- * it stays reachable in every state including no-matches.
- */
-export function buildRunTargetRows({
-  hostOptions,
-  recipes,
-  query,
-  hasAddHost
-}: {
-  hostOptions: readonly ProjectHostSetupOption[]
-  recipes: readonly EphemeralVmRecipeOption[]
-  query: string
-  hasAddHost: boolean
-}): {
+/** Filter host/recipe rows but always keep Add host reachable; other submenus require matching contents. */
+export function buildRunTargetRows(
+  {
+    hostOptions,
+    recipes,
+    query,
+    hasAddHost
+  }: {
+    hostOptions: readonly ProjectHostSetupOption[]
+    recipes: readonly EphemeralVmRecipeOption[]
+    query: string
+    hasAddHost: boolean
+  },
+  t?: Translate
+): {
   rows: RunTargetRowModel[]
   matchedRecipes: EphemeralVmRecipeOption[]
   /** Hosts the row limit left out; typing narrows them in. */
   hiddenHostCount: number
 } {
   const trimmed = query.trim().toLowerCase()
-  const matchedRecipes = matchRecipes(recipes, trimmed)
+  const matchedRecipes = matchRecipes(recipes, trimmed, t)
   const hostRows = buildHostRows(hostOptions, trimmed)
   const rows: RunTargetRowModel[] = [
     ...hostRows.rows,

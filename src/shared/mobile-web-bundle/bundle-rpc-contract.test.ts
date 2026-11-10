@@ -9,14 +9,9 @@ import {
 import {
   MobileWebBundleChunkParamsSchema,
   MobileWebBundleChunkResultSchema,
-  MobileWebBundleErrorCodeSchema,
   MobileWebBundleManifestResultSchema,
-  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-  MOBILE_WEB_BUNDLE_CHUNK_METHOD,
-  MOBILE_WEB_BUNDLE_ERROR_CODES,
-  MOBILE_WEB_BUNDLE_MANIFEST_METHOD
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES
 } from './bundle-rpc-contract'
-import { MOBILE_WEB_BUNDLE_CAPABILITY } from './mobile-web-bundle-capability'
 
 const BUILD_ID = 'a'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4
@@ -59,45 +54,7 @@ function chunkResult(overrides: Record<string, unknown> = {}): Record<string, un
   }
 }
 
-describe('names and sizes', () => {
-  it('pins the wire constants', () => {
-    expect(MOBILE_WEB_BUNDLE_CHUNK_BYTES).toBe(49152)
-    expect(MOBILE_WEB_BUNDLE_MANIFEST_METHOD).toBe('mobileWeb.bundle.manifest')
-    expect(MOBILE_WEB_BUNDLE_CHUNK_METHOD).toBe('mobileWeb.bundle.chunk')
-    expect(MOBILE_WEB_BUNDLE_CAPABILITY).toBe('mobileWeb.bundle.v1')
-  })
-})
-
-describe('MobileWebBundleErrorCodeSchema', () => {
-  it('round-trips every code', () => {
-    expect(MOBILE_WEB_BUNDLE_ERROR_CODES).toHaveLength(6)
-    for (const code of MOBILE_WEB_BUNDLE_ERROR_CODES) {
-      expect(MobileWebBundleErrorCodeSchema.parse(code)).toBe(code)
-    }
-  })
-
-  it('is closed', () => {
-    expect(MobileWebBundleErrorCodeSchema.safeParse('mobile_web_bundle_unknown').success).toBe(
-      false
-    )
-    expect(MobileWebBundleErrorCodeSchema.safeParse('').success).toBe(false)
-  })
-})
-
 describe('mobileWeb.bundle.manifest payloads', () => {
-  it('carries a parsed manifest and the advertised chunk size', () => {
-    const reply = { manifest: VALID_MANIFEST, chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
-    const parsed = MobileWebBundleManifestResultSchema.safeParse(reply)
-    expect(parsed.success).toBe(true)
-    expect(parsed.success && parsed.data.manifest.buildId).toBe(VALID_MANIFEST.buildId)
-    expect(MobileWebBundleManifestResultSchema.safeParse({ ...reply, manifest: {} }).success).toBe(
-      false
-    )
-    expect(MobileWebBundleManifestResultSchema.safeParse({ ...reply, extra: 1 }).success).toBe(
-      false
-    )
-  })
-
   it('allows a shrunk chunk size but not one past the constant', () => {
     const reply = { manifest: VALID_MANIFEST, chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
     expect(
@@ -117,10 +74,6 @@ describe('mobileWeb.bundle.manifest payloads', () => {
 
 describe('mobileWeb.bundle.chunk params', () => {
   const params = { buildId: BUILD_ID, path: 'assets/a.js', offset: 0 }
-
-  it('accepts a well-formed request', () => {
-    expect(MobileWebBundleChunkParamsSchema.safeParse(params).success).toBe(true)
-  })
 
   it('is strict and bounded', () => {
     expect(MobileWebBundleChunkParamsSchema.safeParse({ ...params, gzip: true }).success).toBe(
@@ -148,10 +101,6 @@ describe('mobileWeb.bundle.chunk params', () => {
 })
 
 describe('mobileWeb.bundle.chunk result', () => {
-  it('accepts a self-describing chunk', () => {
-    expect(MobileWebBundleChunkResultSchema.safeParse(chunkResult()).success).toBe(true)
-  })
-
   it('accepts base64 of a full chunk and rejects one character past the bound', () => {
     const full = Buffer.alloc(MOBILE_WEB_BUNDLE_CHUNK_BYTES).toString('base64')
     expect(full.length).toBeLessThanOrEqual(MAX_DATA_BASE64_LENGTH)

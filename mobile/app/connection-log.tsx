@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { View, Text, Pressable } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { loadHosts } from '../src/transport/host-store'
-import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
-import { useRpcClientContext } from '../src/transport/client-context'
-import { useHostClient } from '../src/transport/host-client-hooks'
+import { loadHosts } from '../src/host-catalog/host-store'
+import { connectionLogStore } from '../src/diagnostics/connection/persisted-connection-log-store'
+import { useRpcClientContext } from '../src/transport/connection/client-context'
+import { useHostClient } from '../src/transport/connection/host-client-hooks'
 import {
   useConnectionPathStatus,
   useReconnectAttempt
-} from '../src/transport/client-context-connection-metrics'
-import { useHostStatusGates } from '../src/transport/host-status-gates'
+} from '../src/transport/connection/client-context-connection-metrics'
+import { useHostStatusGates } from '../src/transport/connection/host-status-gates'
 import { ConnectionDiagnosticsScreen } from '../src/diagnostics/connection-diagnostics-screen'
 import { createNativeDiagnosticsOperations } from '../src/diagnostics/native-diagnostics-operations'
 import {
@@ -19,16 +19,21 @@ import {
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
-import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import type { HostProfile } from '../src/host-catalog/host-profile'
+import { pressedStyle } from '../src/theme/mobile-theme'
 
-// Why: getSnapshot must be referentially stable when there's no data —
-// a fresh [] per call would make useSyncExternalStore re-render forever.
+// Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
+const subscribeAppLog = (listener: () => void) =>
+  connectionLogStore.subscribe(NATIVE_APP_LOG_ID, listener)
+const getAppLog = () => connectionLogStore.get(NATIVE_APP_LOG_ID)
 
-// Why: reading the log is most needed while a host is failing, so this
-// route also *acquires* the host client — opening it kicks a dial and the
-// log fills live instead of showing a stale tail.
+// Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
+  useMobileColorScheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
@@ -60,6 +65,7 @@ export default function NativeConnectionLogRoute() {
   const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
 
   useEffect(() => {
+    void readHydratedConnectionLog(connectionLogStore, NATIVE_APP_LOG_ID)
     if (selectedId) {
       void readHydratedConnectionLog(connectionLogStore, selectedId)
     }
@@ -74,16 +80,19 @@ export default function NativeConnectionLogRoute() {
     () => (selectedId ? connectionLogStore.get(selectedId) : EMPTY_ENTRIES),
     [selectedId]
   )
-  const entries = useSyncExternalStore(subscribe, getSnapshot)
+  const hostEntries = useSyncExternalStore(subscribe, getSnapshot)
+  const appEntries = useSyncExternalStore(subscribeAppLog, getAppLog)
+  const entries = useMemo(
+    () => [...hostEntries, ...appEntries].sort((a, b) => a.ts - b.ts),
+    [hostEntries, appEntries]
+  )
   const device = useMemo(
     () =>
-      selected
-        ? createNativeDiagnosticsOperations(
-            selected,
-            clientContext,
-            statusPending ? null : desktopAppVersion
-          )
-        : null,
+      createNativeDiagnosticsOperations(
+        selected,
+        clientContext,
+        statusPending ? null : desktopAppVersion
+      ),
     [selected, clientContext, desktopAppVersion, statusPending]
   )
 
@@ -104,7 +113,11 @@ export default function NativeConnectionLogRoute() {
             {hosts.map((host) => (
               <Pressable
                 key={host.id}
-                style={[styles.hostChip, host.id === selectedId && styles.hostChipActive]}
+                style={({ pressed }) => [
+                  styles.hostChip,
+                  host.id === selectedId && styles.hostChipActive,
+                  pressed && pressedStyle
+                ]}
                 onPress={() =>
                   setManualSelection({ hostId: host.id, requestedHostId: params.hostId, routeKey })
                 }

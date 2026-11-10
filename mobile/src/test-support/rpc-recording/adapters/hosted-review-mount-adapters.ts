@@ -10,7 +10,6 @@ const STATUS_WITH_STAGED_CHANGE = {
   upstreamStatus: { ahead: 1, behind: 0, hasUpstream: true }
 }
 
-/** Hosted-review create: the mutation chain (status, stage, commit, push, create, link). */
 export function hostedReviewMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -49,17 +48,17 @@ export function hostedReviewMountAdapters(
       let outcome: unknown = 'unapplied'
       return {
         action(name, args) {
-          const patchEquivalent = args.patchEquivalent === true
           return apply(
             context.client,
             WORKTREE,
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the blocked reason as JSON, not as a typed prefill.
             { blockedReason: args.blockedReason } as Parameters<typeof apply>[2],
             {
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prerequisite reads only upstreamStatus off the status.
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prerequisite reads only branch and upstreamStatus off the status.
               status: {
                 entries: [],
-                upstreamStatus: { behindCommitsArePatchEquivalent: patchEquivalent }
+                branch: 'feature',
+                upstreamStatus: args.upstreamStatus
               } as unknown as Parameters<typeof apply>[3]['status'],
               onProgress: (progress) => context.effect('progress', progress)
             }

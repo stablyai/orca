@@ -1,18 +1,22 @@
 import { assertRuntimeFileMutationExpectation } from './file-mutation-expectation'
+import { formatEditorText } from '../../editor/format-editor-text'
 import {
   requireLocalRuntimeFileRoute,
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
-  resolveFileExplorerPaths
+  resolveFileExplorerPaths,
+  runtimeFileRouteForTarget
 } from './file-target'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import { constants, copyFile, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
+import { replaceLocalFileBytesIfUnchanged } from '../../ipc/filesystem/local-disk-bytes-replace'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../../shared/file-write-disk-precondition'
+} from '../../../shared/file-write/file-write-disk-precondition'
 
 type RuntimeFileMutationHost = Pick<
   RuntimeFileCommandHost,
@@ -21,6 +25,28 @@ type RuntimeFileMutationHost = Pick<
 
 export class RuntimeFileMutations {
   constructor(private readonly host: RuntimeFileMutationHost) {}
+
+  async formatFileExplorerText(
+    worktreeSelector: string,
+    relativePath: string,
+    text: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ) {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    return formatEditorText(this.host.requireStore(), target, text, () => {
+      if (runtimeFileRouteForTarget(target).kind !== 'local') {
+        throw new Error('Format on Save does not support SSH-hosted files yet.')
+      }
+    })
+  }
 
   async writeFileExplorerFile(
     worktreeSelector: string,
@@ -161,7 +187,7 @@ export class RuntimeFileMutations {
       expectedSshConnectionGeneration
     )
     requireLocalRuntimeFileRoute(tempTarget)
-    // Why: commit through the resolved (not symlink-preserving) temp and final paths.
+    // Commit resolved temp/final paths, not symlink-preserving spellings.
     const store = this.host.requireStore()
     const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
     const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
@@ -169,6 +195,41 @@ export class RuntimeFileMutations {
     await copyFile(tempPath, finalPath, constants.COPYFILE_EXCL)
     await rm(tempPath, { force: true })
     return { ok: true }
+  }
+
+  /** Atomically replaces a file with an uploaded temp file unless its bytes changed meanwhile. */
+  async replaceFileExplorerFileWithUpload(
+    worktreeSelector: string,
+    tempRelativePath: string,
+    finalRelativePath: string,
+    precondition: FileBytesWritePrecondition,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<FileWriteResult> {
+    const [tempTarget, finalTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
+      tempRelativePath,
+      finalRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      tempTarget.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    requireLocalRuntimeFileRoute(tempTarget)
+    const store = this.host.requireStore()
+    const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
+    const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
+    try {
+      return await replaceLocalFileBytesIfUnchanged(
+        finalPath,
+        (replacement) => copyFile(tempPath, replacement),
+        precondition
+      )
+    } finally {
+      await rm(tempPath, { force: true })
+    }
   }
 
   async renameFileExplorerPath(
@@ -237,7 +298,7 @@ export class RuntimeFileMutations {
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    // Why: a non-local runtime has no client Trash; this delete is permanent, so the renderer confirms before calling.
+    // Remote runtimes have no client Trash; callers confirm this permanent delete.
     await requireRuntimeFileProvider(target, this.host).deletePath(target.path, recursive)
     return { ok: true }
   }

@@ -1,10 +1,6 @@
-/**
- * The profile a relay-era build (v1.4.218, the last before auto-conversion) leaves behind for an
- * SSH host: the target without a fence, its repository and remote folder workspace, and an editor
- * tab (optionally beside a terminal tab) in the host's session partition. Seeded into a stopped profile, so the next launch is the
- * user's first on a converting build.
- */
-import type { FolderWorkspace } from '../../../src/shared/folder-workspace-types'
+// Seed a stopped v1.4.218 relay-era profile with unfenced SSH target, repo/folder workspaces and saved editor/terminal state.
+// The next launch then exercises first-time automatic conversion.
+import type { FolderWorkspace } from '../../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import type { Repo } from '../../../src/shared/repo-types'
 import type { SshTarget, SshTargetCreateInput } from '../../../src/shared/ssh-types'

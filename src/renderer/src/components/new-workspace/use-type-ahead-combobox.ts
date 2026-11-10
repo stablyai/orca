@@ -1,19 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useWheelScrollable } from './use-wheel-scrollable'
 
-/**
- * The machinery shared by the composer's type-ahead pickers (Project, Run on):
- * the field is the search box, exactly one row is armed at a time, and Enter
- * takes it.
- *
- * Two subtleties worth keeping:
- * - Armed is tracked by row *key*, not index, so a list arriving late over SSH
- *   cannot slide a different row under a keypress the user already aimed. The
- *   query it was aimed at rides along, so a newer query drops a stale arm
- *   during render rather than needing a reset effect.
- * - Closing without committing clears the query, or the field is left showing
- *   text that matches nothing while hiding the committed selection.
- */
+/** Track selection by row key and query so late host lists cannot retarget a keypress; clear queries on close to restore the committed display. */
 export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly string[]): {
   query: string
   setQuery: (value: string) => void
@@ -23,7 +11,6 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
   close: () => void
   /** Radix `onOpenChange`: closing always drops an uncommitted query. */
   handleOpenChange: (next: boolean) => void
-  /** Row keys for the current query, as returned by `deriveRowKeys`. */
   rowKeys: readonly string[]
   armedKey: string | null
   arm: (key: string) => void
@@ -39,8 +26,7 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
   const [armed, setArmed] = useState<{ key: string; query: string } | null>(null)
   const rowKeys = deriveRowKeys(query)
   const inputRef = useRef<HTMLInputElement>(null)
-  // react-remove-scroll (Radix Dialog) cancels wheel events for this portaled
-  // pane, so the list has to scroll itself.
+  // Radix Dialog’s react-remove-scroll cancels portaled wheel events; scroll this pane explicitly.
   const { ref: listRef, setNode: setListNode } = useWheelScrollable<HTMLDivElement>()
   const listId = React.useId()
 
@@ -55,11 +41,7 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
     }
   }, [listRef, open, armedIndex, rowKeys.length])
 
-  const arm = useCallback(
-    // `query` is read at call time; the closure refreshes each render.
-    (key: string) => setArmed({ key, query }),
-    [query]
-  )
+  const arm = useCallback((key: string) => setArmed({ key, query }), [query])
 
   const moveArm = useCallback(
     (step: number): void => {
@@ -107,7 +89,6 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
   )
 }
 
-/** True when an event target lies inside the control marked by `rootAttribute`. */
 export function isWithinComboboxRoot(target: EventTarget | null, rootAttribute: string): boolean {
   return target instanceof Element && target.closest(`[${rootAttribute}="true"]`) !== null
 }

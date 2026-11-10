@@ -1,7 +1,6 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { stubRuntime, makeRequest } from './terminal-multiplex-test-harness'
 import type { TerminalOutputMeta } from './terminal-output-frame-chunks'
 import {
@@ -9,7 +8,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 describe('mobile subscribe residual metadata', () => {
   it.each([undefined, 5, 12])(
@@ -98,10 +97,11 @@ describe('mobile subscribe residual metadata', () => {
           ...(transformedRawLength === undefined
             ? []
             : [
+                // Phones never decoded OutputSpan, so a transformed span reaches them as text.
                 {
-                  opcode: TerminalStreamOpcode.OutputSpan,
+                  opcode: TerminalStreamOpcode.Output,
                   seq: 15 + transformedRawLength,
-                  payload: { data: 'PAINT', rawLength: transformedRawLength, transformed: true }
+                  payload: 'PAINT'
                 }
               ])
         ])

@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type WorktreeListReviewCacheState = Pick<
   AppState,
@@ -33,8 +33,7 @@ export function selectWorktreeListReviewCacheInputs(
   const needsPrCache = groupBy === 'pr-status' || folderCardsNeedReview
   const needsHostedReviewCache = newCardStyle && folderCardsNeedReview
 
-  // Why: ordinary git worktree cards own entry-level subscriptions. The list
-  // needs whole caches only for PR grouping or synthetic folder-card displays.
+  // Cards subscribe per entry; only PR grouping and synthetic folder cards need whole caches.
   if (!needsPrCache && !needsHostedReviewCache) {
     return EMPTY_WORKTREE_LIST_REVIEW_CACHE_INPUTS
   }

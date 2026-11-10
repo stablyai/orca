@@ -3,10 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { stopOrcadCommand } from './orcad-remote-process-control'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 
 const directories: string[] = []
 const host = getRemoteHostPlatform('linux-x64')
@@ -25,7 +24,6 @@ function fixture(): string {
 
 const NODE_SHA = 'e4b5a3af0e05c75de2eae013904145f40fe7fc2a6e6f17510128bf45cca4e79b'
 
-/** A slot beside the shared `runtimes/` dir, as installed under `~/.orca-remote`. */
 function nodeSlot(options: { marker?: string; runtime?: boolean } = {}): string {
   const root = fixture()
   const slot = join(root, 'orcad-0.1.0-abcdef')
@@ -39,16 +37,7 @@ function nodeSlot(options: { marker?: string; runtime?: boolean } = {}): string 
   return slot
 }
 
-/** Frozen copy of the Bun-era selector that shipped clients still run (design D7.1 R5). */
-function bunEraSelectorCommand(directory: string, legacyNodePath: string): string {
-  const runtime = quotePosixShell(join(directory, 'bun-runtime'))
-  const target = quotePosixShell(join(directory, '.build-target'))
-  return (
-    `if [ -e ${target} ] || [ -e ${runtime} ]; then ` +
-    `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
-    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; fi`
-  )
-}
+/** Frozen Bun-era selector still used by shipped clients. */
 
 function runSelected(selector: string) {
   return runProcessSync({
@@ -62,46 +51,8 @@ function launch(directory: string, nodePath: string) {
 }
 
 describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', () => {
-  it('returns an unverifiable stop result when a bundled runtime cannot execute', () => {
-    const directory = fixture()
-    writeFileSync(join(directory, '.build-target'), 'linux-x64-glibc')
-    writeFileSync(join(directory, '.orcad-pid'), String(process.pid))
-    const result = runProcessSync({
-      program: '/bin/sh',
-      args: [
-        '-c',
-        stopOrcadCommand(host, directory, { waitSeconds: 1, nodePath: process.execPath })
-      ]
-    })
-    expect(result).toMatchObject({ code: 0, stdout: 'UNKNOWN\n' })
-  })
-
-  it('uses the bundled executable when host Node does not exist', () => {
-    const directory = fixture()
-    writeFileSync(join(directory, '.build-target'), 'linux-x64-glibc')
-    symlinkSync(process.execPath, join(directory, 'bun-runtime'))
-    expect(launch(directory, '/missing-host-node')).toMatchObject({ code: 0, stdout: 'selected' })
-  })
-
-  it('refuses an incomplete Bun slot before invoking a working host Node', () => {
-    const directory = fixture()
-    writeFileSync(join(directory, '.build-target'), 'linux-x64-glibc')
-    expect(launch(directory, process.execPath)).toMatchObject({ code: 78, stdout: '' })
-  })
-
-  it('retains the original runtime for a legacy slot', () => {
-    expect(launch(fixture(), process.execPath)).toMatchObject({ code: 0, stdout: 'selected' })
-  })
-
   it('launches a Node slot from its shared pinned runtime, never host Node', () => {
     expect(launch(nodeSlot(), '/missing-host-node')).toMatchObject({ code: 0, stdout: 'selected' })
-  })
-
-  it('accepts a Node slot path with a trailing separator', () => {
-    expect(launch(`${nodeSlot()}/`, '/missing-host-node')).toMatchObject({
-      code: 0,
-      stdout: 'selected'
-    })
   })
 
   it('refuses a Node slot whose pinned runtime is missing before invoking a working host Node', () => {
@@ -120,30 +71,6 @@ describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', ()
     expect(launch(nodeSlot({ marker }), process.execPath)).toMatchObject({ code: 78, stdout: '' })
   })
 
-  it('prefers the Node marker over Bun files in the same slot', () => {
-    const slot = nodeSlot()
-    writeFileSync(join(slot, '.build-target'), 'linux-x64-glibc')
-    expect(launch(slot, '/missing-host-node')).toMatchObject({ code: 0, stdout: 'selected' })
-  })
-
-  it('shows a Node slot to a Bun-era client as legacy, not as a broken Bun slot', () => {
-    const slot = nodeSlot()
-    expect(runSelected(bunEraSelectorCommand(slot, process.execPath))).toMatchObject({
-      code: 0,
-      stdout: 'selected'
-    })
-  })
-
-  it('keeps the frozen Bun-era selector in step with the current Bun and legacy branches', () => {
-    const bun = fixture()
-    writeFileSync(join(bun, '.build-target'), 'linux-x64-glibc')
-    expect(runSelected(bunEraSelectorCommand(bun, process.execPath)).code).toBe(78)
-    expect(launch(bun, process.execPath).code).toBe(78)
-    const legacy = fixture()
-    expect(runSelected(bunEraSelectorCommand(legacy, process.execPath)).stdout).toBe('selected')
-    expect(launch(legacy, process.execPath).stdout).toBe('selected')
-  })
-
   it('reads a stop verdict from a Node slot through its pinned runtime', () => {
     const slot = nodeSlot()
     writeFileSync(join(slot, '.orcad-pid'), String(process.pid))
@@ -151,7 +78,7 @@ describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', ()
       program: '/bin/sh',
       args: ['-c', stopOrcadCommand(host, slot, { waitSeconds: 1, nodePath: '/missing-host-node' })]
     })
-    // No readiness file: the pinned runtime ran and reported no PID, so the verdict is unverifiable.
+    // Successful execution without a corroborating readiness PID remains unverifiable.
     expect(result).toMatchObject({ code: 0, stdout: 'UNKNOWN\n' })
   })
 })

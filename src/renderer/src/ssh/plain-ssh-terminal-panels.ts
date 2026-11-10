@@ -1,7 +1,4 @@
-/**
- * Which plain SSH terminal windows are open, one per host. Deliberately outside the app store and
- * the workspace session: these windows are never persisted, restored or synced.
- */
+// Keep one plain SSH window per host outside store/session; never persist, restore or sync it.
 import { useSyncExternalStore } from 'react'
 
 export type PlainSshPanel = { targetId: string; label: string; minimized: boolean }

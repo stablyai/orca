@@ -2,10 +2,13 @@ import type { PreloadApi } from '../../../preload/api-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
-import type { RuntimeFileSnapshot } from '../runtime/runtime-file-range-client'
-import { pagedTextFileResult, readFileInChunks } from '../runtime/runtime-paged-file-read'
-import type { RuntimeFileReadChunkResult } from '../../../shared/runtime-types'
+import { toRuntimeWorktreeSelector } from '../runtime/rpc/targets/runtime-worktree-selector'
+import type { RuntimeFileSnapshot } from '../runtime/files/reads/runtime-file-range-client'
+import {
+  pagedTextFileResult,
+  readFileInChunks
+} from '../runtime/files/reads/runtime-paged-file-read'
+import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/runtime-file-read'
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
@@ -17,7 +20,7 @@ import {
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../shared/file-write-disk-precondition'
+} from '../../../shared/file-write/file-write-disk-precondition'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."
@@ -34,10 +37,7 @@ type ResolvedWebRuntimeFile = {
 
 type WebFileMutationSession = {
   resolveFilePath: (filePath: string) => Promise<ResolvedWebRuntimeFile>
-  /**
-   * Resolves to the host's advertised capabilities. `pinConnection` sends the session's later
-   * calls only over the connection that answered, for writes whose choice depends on that host.
-   */
+  /** Pin later writes to the connection that advertised these capabilities so host-dependent choices stay valid. */
   assertMutationSupported: (options: { pinConnection: boolean }) => Promise<readonly string[]>
   callRuntimeResult: (method: string, params: unknown) => Promise<unknown>
   getSshState: (targetId: string) => Promise<SshConnectionState | null>
