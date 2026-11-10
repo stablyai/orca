@@ -1,4 +1,6 @@
 import { useId, useState } from 'react'
+import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
+import { cloudSecretVmWarning } from './CloudSecretVmBadge'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
@@ -164,6 +166,12 @@ export function CloudSecretEditor({
           ) : (
             <p id={`${formId}-help`} className="text-2xs text-muted-foreground">
               {t('cloudSecrets.editor.help', 'Write-only. You won’t see it again after saving.')}
+              {cloudSecretStoredOnVm(name.trim()) ? (
+                <>
+                  {' '}
+                  <span className="text-foreground">{cloudSecretVmWarning(t)}</span>
+                </>
+              ) : null}
             </p>
           )}
         </div>

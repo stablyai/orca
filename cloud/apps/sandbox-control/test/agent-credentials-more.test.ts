@@ -59,6 +59,22 @@ describe('credential routes for Gemini, Cursor and Copilot BYOK', () => {
     expect(credentialTargets(env, { COPILOT_PROVIDER_BASE_URL: 'user:mia', COPILOT_PROVIDER_API_KEY: 'org:acme' })).toEqual([])
   })
 
+  it('routes GOOGLE_API_KEY to the Gemini API and Vertex AI, and COPILOT_GITHUB_TOKEN to GitHub and the Copilot API', () => {
+    const targets = credentialTargets({ GOOGLE_API_KEY: GEMINI_KEY, COPILOT_GITHUB_TOKEN: COPILOT_KEY })
+    expect(targets.map((t) => `${t.secret}@${t.host}${t.allowUnclaimed ? ' open' : ''}`)).toEqual([
+      'GOOGLE_API_KEY@generativelanguage.googleapis.com',
+      'GOOGLE_API_KEY@aiplatform.googleapis.com',
+      'COPILOT_GITHUB_TOKEN@api.github.com',
+      'COPILOT_GITHUB_TOKEN@api.githubcopilot.com open',
+      'COPILOT_GITHUB_TOKEN@api.individual.githubcopilot.com open',
+      'COPILOT_GITHUB_TOKEN@api.business.githubcopilot.com open',
+      'COPILOT_GITHUB_TOKEN@api.enterprise.githubcopilot.com open'
+    ])
+    // Several hosts per credential survive the row encoding.
+    const row = { egress_secret_hosts: encodeEgressSecretHosts(targets) }
+    expect(egressSecretHosts(row).map((t) => `${t.secret}@${t.host}`)).toEqual(targets.map((t) => `${t.secret}@${t.host}`))
+  })
+
   it('round-trips through the row with the policy taken from code, never from the row', () => {
     const row = {
       egress_secret_hosts: encodeEgressSecretHosts(credentialTargets({ CURSOR_API_KEY: CURSOR_KEY, GEMINI_API_KEY: GEMINI_KEY }))
@@ -172,6 +188,24 @@ describe('egress swap on a sandbox with the new keys', () => {
     expect(upstream.at(-1)!.url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse')
     expect(upstream.at(-1)!.headers.get('x-goog-api-key')).toBe(GEMINI_KEY)
     expect(logs.some((line) => line.includes('"event":"egress_swap"') && line.includes('"credential":"GEMINI_API_KEY"'))).toBe(true)
+  })
+
+  it('Copilot token: swapped on api.github.com next to the workspace token, in Bearer or gh-style token form', async () => {
+    const { h, id, send, upstream } = await setup()
+    const mia = await h.token('mia', undefined, 'sandbox')
+    expect((await h.call('PUT', '/v1/secrets/personal/COPILOT_GITHUB_TOKEN', { body: { value: COPILOT_KEY }, bearer: mia })).status).toBe(200)
+    const ph = `orca-ph-copilot-github-token-${id}`
+    const policy = [...h.vercel.boxes.values()][0]!.policy
+    const values = policy.allow['api.github.com']!.flatMap((rule) => ('match' in rule && rule.match?.headers ? [rule.match.headers[0]!.value.exact] : []))
+    expect(values).toEqual(expect.arrayContaining([`Bearer ${ph}`, `token ${ph}`, `Bearer orca-ph-${id}`]))
+    expect(policy.allow['api.github.com']!.at(-1)).toEqual(DENY)
+    expect(policy.allow['api.individual.githubcopilot.com']!.some((rule) => 'response' in rule)).toBe(false)
+    for (const header of [`Bearer ${ph}`, `token ${ph}`]) {
+      expect((await send('api.github.com', 'GET', '/copilot_internal/user', { authorization: header })).status).toBe(200)
+      expect(upstream.at(-1)!.headers.get('authorization')).toBe(`Bearer ${COPILOT_KEY}`)
+    }
+    expect((await send('api.individual.githubcopilot.com', 'POST', '/chat/completions', { authorization: `Bearer ${ph}` })).status).toBe(200)
+    expect(upstream.at(-1)!.url).toBe('https://api.individual.githubcopilot.com/chat/completions')
   })
 
   it('Cursor: only the key exchange carries the key, and the refresh token never reaches the VM', async () => {

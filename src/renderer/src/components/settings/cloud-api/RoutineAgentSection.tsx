@@ -1,11 +1,28 @@
 import { useId } from 'react'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { FormField } from './cloud-api-parts'
+import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
+import {
+  ROUTINE_AGENTS,
+  type RoutineAgent
+} from '../../../../../shared/cloud-api/cloud-api-routine-types'
 import type { RoutineDraft, RoutineDraftField } from './routine-draft'
+
+/** The Select hands back a string; only the image's agents are routine agents. */
+export function agentFrom(value: string): RoutineAgent {
+  return ROUTINE_AGENTS.find((agent) => agent === value) ?? 'claude'
+}
 
 export function routineFieldError(
   code: string | undefined,
@@ -84,23 +101,22 @@ export function RoutineAgentSection({
         <p id={`${ids}-agent`} className="text-xs font-medium">
           {t('auto.components.settings.cloudRoutines.editor.agent', 'Agent')}
         </p>
-        <SettingsSegmentedControl<'claude' | 'codex'>
-          size="sm"
-          value={draft.agent}
-          onChange={(agent) => update({ agent })}
-          equalWidth
-          ariaLabelledBy={`${ids}-agent`}
-          options={[
-            {
-              value: 'claude',
-              label: t('auto.components.settings.cloudRoutines.agentClaude', 'Claude Code')
-            },
-            {
-              value: 'codex',
-              label: t('auto.components.settings.cloudRoutines.agentCodex', 'Codex')
-            }
-          ]}
-        />
+        <Select value={draft.agent} onValueChange={(agent) => update({ agent: agentFrom(agent) })}>
+          <SelectTrigger
+            id={`${ids}-agent-select`}
+            className="w-full"
+            aria-labelledby={`${ids}-agent`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            {ROUTINE_AGENTS.map((agent) => (
+              <SelectItem key={agent} value={agent}>
+                {formatAgentTypeLabel(agent)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <FormField
         id={`${ids}-prompt`}

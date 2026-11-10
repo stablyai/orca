@@ -12,6 +12,7 @@ import {
   type DotenvPasteIssue
 } from '../../../../../shared/cloud-secrets/dotenv-paste'
 import { Badge } from '../../ui/badge'
+import { CloudSecretVmBadge } from './CloudSecretVmBadge'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
@@ -176,6 +177,7 @@ export function PasteRowEditor({
         {row.name && cloudSecretKind(row.name) === 'agent_key' ? (
           <Badge variant="referenceLabel">{cloudSecretKindLabel(row.name, t)}</Badge>
         ) : null}
+        {row.name ? <CloudSecretVmBadge name={row.name} /> : null}
         {removeButton}
       </div>
       <p

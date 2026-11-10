@@ -44,7 +44,8 @@ while IFS= read -r line; do
     OPENAI_MODEL) openai_model="$(printf '%s' "$b64" | base64 -d)" ;;
     ANTHROPIC_MODEL) anthropic_model="$(printf '%s' "$b64" | base64 -d)" ;;
     AI_GATEWAY_API_KEY) gateway_key=1 ;;
-    GEMINI_API_KEY) gemini_key=1 ;;
+    GEMINI_API_KEY | GOOGLE_API_KEY) gemini_key="${gemini_key:-gemini-api-key}" ;;
+    GOOGLE_GENAI_USE_VERTEXAI) case "$(printf '%s' "$b64" | base64 -d)" in true | 1) gemini_key=vertex-ai ;; esac ;;
     # Claude Code asks once per key whether to use ANTHROPIC_API_KEY; it remembers the last 20 chars.
     ANTHROPIC_API_KEY) anthropic_key_tail="$(printf '%s' "$b64" | base64 -d | tail -c 20)" ;;
   esac
@@ -160,7 +161,9 @@ if (isObject(g)) {
   general.disableAutoUpdate ??= true
   general.disableUpdateNag ??= true
   section(g, "privacy").usageStatisticsEnabled ??= false
-  if (process.env.ORCA_GEMINI_KEY) section(section(g, "security"), "auth").selectedType ??= "gemini-api-key"
+  // gemini-api-key or vertex-ai (GOOGLE_GENAI_USE_VERTEXAI=true with an API key): headless runs
+  // refuse to start without a method ("Invalid auth method selected").
+  if (process.env.ORCA_GEMINI_KEY) section(section(g, "security"), "auth").selectedType ??= process.env.ORCA_GEMINI_KEY
   if (JSON.stringify(g) !== gBefore) write(geminiSettingsFile, g)
 }
 

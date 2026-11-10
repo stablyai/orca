@@ -89,7 +89,7 @@ import { GuardrailError, consumeCreateToken, guardrailsFromEnv } from './guardra
 import { handleOperator, isOperator } from './operator'
 import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
-import { egressSecretHosts, secretPlaceholder } from './secret-egress'
+import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
@@ -250,17 +250,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         : null
     }
   })
-  return async (row, host) => {
-    if (host === 'github.com') {
-      return members.routes(row, host)
-    }
-    if (host === 'api.github.com') {
-      return [
-        // Members first: a member placeholder must never fall through to the app's token.
-        ...(await members.routes(row, host)),
-        { header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) }
-      ]
-    }
+  const secretRoutes = (row: SandboxRow, host: string): ProxiedRoute[] => {
     const entries = egressSecretHosts(row).filter((candidate) => candidate.host === host)
     const keyring = keyringFor(env)
     if (entries.length === 0 || !keyring) {
@@ -269,7 +259,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     return entries.flatMap((entry) =>
       Object.entries(entry.headers).map(([header, format]): ProxiedRoute => ({
         header,
-        placeholders: [format(secretPlaceholder(row, entry.secret))],
+        placeholders: placeholderValues(entry, header, secretPlaceholder(row, entry.secret)),
         label: entry.secret,
         ...(entry.paths ? { pathAllowed: requestMatches(entry.paths) } : {}),
         ...(entry.keepResponseFields ? { keepResponseFields: entry.keepResponseFields } : {}),
@@ -285,6 +275,21 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         }
       }))
     )
+  }
+  return async (row, host) => {
+    if (host === 'github.com') {
+      return members.routes(row, host)
+    }
+    if (host === 'api.github.com') {
+      return [
+        // Members first: a member placeholder must never fall through to the app's token.
+        ...(await members.routes(row, host)),
+        { header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) },
+        // A user's own GitHub token for Copilot CLI (COPILOT_GITHUB_TOKEN), on its own placeholder.
+        ...secretRoutes(row, host)
+      ]
+    }
+    return secretRoutes(row, host)
   }
 }
 

@@ -95,6 +95,26 @@ codex)
     --output-last-message "$D/last.txt" - >"$D/agent.out" 2>"$D/agent.err" <"$D/prompt.txt" || code=$?
   summary="$(head -c 6000 "$D/last.txt" 2>/dev/null || true)"
   ;;
+opencode)
+  # "--" ends the flags, so a prompt starting with "-" stays the message.
+  timeout --kill-after=20 "$limit" opencode run --auto -- "$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  ;;
+gemini)
+  # --prompt=TEXT, not "-p TEXT": a prompt starting with "-" would read as a flag.
+  timeout --kill-after=20 "$limit" gemini --yolo --output-format json --prompt="$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  summary="$(jq -r '.response // empty' "$D/agent.out" 2>/dev/null | head -c 6000)"
+  if [ "$code" = 0 ] && [ -n "$(jq -r '.error // empty' "$D/agent.out" 2>/dev/null)" ]; then code=1; fi
+  ;;
+cursor)
+  timeout --kill-after=20 "$limit" cursor-agent --print --force --trust --output-format text -- "$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  ;;
+copilot)
+  timeout --kill-after=20 "$limit" copilot --allow-all --silent --prompt="$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  ;;
 *) code=2; note=unknown_agent; finish ;;
 esac
 [ -n "$summary" ] || summary="$(tail -c 2000 "$D/agent.out" 2>/dev/null || true)"
