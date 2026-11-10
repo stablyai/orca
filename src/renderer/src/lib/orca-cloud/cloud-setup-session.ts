@@ -2,6 +2,7 @@
 // session while it is open, and keeps the latest snapshot for the composer's setup panel
 // (w2-lifecycle's seam reads it synchronously) and the setup tracker (np4-shell).
 import { useAppStore } from '@/store'
+import { onCloudSetupReturn } from './cloud-setup-return'
 import type {
   CloudSetupNeed,
   CloudSetupSession,
@@ -137,8 +138,16 @@ export async function refreshCloudSetupSession(sessionId: string): Promise<void>
   }
 }
 
+let disposeReturnLink: (() => void) | null = null
+
 /** Starts polling a session (e.g. one restored from the on-disk draft after a restart). */
 export function watchCloudSetupSession(sessionId: string): Entry {
+  // The done page's orca://cloud/setup/return link polls at once instead of on the next tick.
+  disposeReturnLink ??= onCloudSetupReturn((returned) => {
+    if (entries.has(returned)) {
+      void refreshCloudSetupSession(returned)
+    }
+  })
   let entry = entries.get(sessionId)
   if (!entry) {
     entry = {
@@ -202,4 +211,6 @@ export function resetCloudSetupSessionsForTests(): void {
     stopWatchingCloudSetupSession(sessionId)
   }
   listeners.clear()
+  disposeReturnLink?.()
+  disposeReturnLink = null
 }
