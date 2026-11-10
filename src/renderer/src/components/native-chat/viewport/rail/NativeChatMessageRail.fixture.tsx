@@ -30,7 +30,7 @@ function MessageDirectory({ count }: { count: number }): React.JSX.Element {
 
   return (
     <div className="native-chat-appearance relative h-[640px] bg-background text-foreground">
-      <div ref={scrollRef} className="h-full overflow-y-auto p-6">
+      <div ref={scrollRef} className="scrollbar-sleek h-full overflow-y-auto p-6">
         <input aria-label="Composer" />
         <output aria-label="Selected message">{selected}</output>
       </div>
