@@ -23638,29 +23638,23 @@
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   },
   "speechModelUpdate": {
-    "updateTitle": "Konuşma modelinizi güncelleyin",
-    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
     "update": "Güncelle",
-    "replacedTitle": "Konuşma modeliniz değiştirildi",
-    "replacedDescription": "{{old}} yeni konuşma motorunda çalışamıyor. Yerine {{model}} kullanılacak ({{size}} MB).",
-    "downloadReplacement": "{{model}} indir",
-    "later": "Daha sonra",
-    "dismiss": "Kapat",
-    "updatingTitle": "{{model}} güncelleniyor",
-    "downloadingTitle": "{{model}} indiriliyor",
-    "downloadingDescription": "Çalışmaya devam edebilirsiniz. Bu bittiğinde dikte geri gelir.",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "İptal",
-    "doneTitle": "Dikte hazır",
-    "doneDescription": "{{model}} güncellendi. Eski dosyalar kaldırıldı.",
-    "doneRetiredDescription": "{{model}} kuruldu. Eski {{old}} dosyaları hâlâ diskte.",
-    "keep": "Sakla",
-    "deleteOld": "Eski modeli sil",
-    "deleteFailed": "{{model}} silinemedi.",
-    "updateFailedTitle": "{{model}} güncellenemedi",
-    "downloadFailedTitle": "{{model}} indirilemedi",
-    "failedAtDescription": "İndirme {{mb}} MB'de durdu. Bağlantınızı kontrol edip yeniden deneyin.",
-    "failedDescription": "İndirme durdu. Bağlantınızı kontrol edip yeniden deneyin.",
-    "tryAgain": "Yeniden dene"
+    "pill": {
+      "updateNotice": "Daha hızlı dikte kurulmaya hazır",
+      "retiredNotice": "Dikte daha hızlı bir konuşma modeline geçti",
+      "install": "Yükle",
+      "installTooltip": "Tek seferlik indirme · {{size}} MB",
+      "downloading": "Dikte ayarlanıyor",
+      "downloadingTooltip": "{{done}} / {{size}} MB",
+      "ready": "Dikte hazır. <kbd></kbd> tuşuna basın",
+      "readyNoShortcut": "Dikte hazır.",
+      "failed": "İndirme durdu. Bağlantınızı kontrol edin.",
+      "tryAgain": "Tekrar dene",
+      "deleteOld": "Eski modeli sil",
+      "deleteFailed": "{{model}} silinemedi.",
+      "dismiss": "Kapat",
+      "cancelDownload": "İndirmeyi iptal et"
+    }
   }
 }
