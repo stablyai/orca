@@ -134,7 +134,12 @@ function readState(dir: string) {
   return profile.readState()
 }
 
-function stallCommit(dir: string) {
+function stallCommit(
+  dir: string,
+  writer:
+    | 'writeSerializedDomains'
+    | 'writeCompleteSerializedDomains' = 'writeCompleteSerializedDomains'
+) {
   const profile = profiles.get(dir)
   if (!profile) {
     throw new Error('Missing test profile')
@@ -142,14 +147,12 @@ function stallCommit(dir: string) {
   const started = Promise.withResolvers<void>()
   const finish = Promise.withResolvers<void>()
   releases.push(finish.resolve)
-  const original = profile.authority.writeCompleteSerializedDomains.bind(profile.authority)
-  vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockImplementationOnce(
-    async (rows) => {
-      started.resolve()
-      await finish.promise
-      await original(rows)
-    }
-  )
+  const original = profile.authority[writer].bind(profile.authority)
+  vi.spyOn(profile.authority, writer).mockImplementationOnce(async (rows) => {
+    started.resolve()
+    await finish.promise
+    await original(rows)
+  })
   return { started: started.promise, release: finish.resolve }
 }
 
@@ -271,7 +274,8 @@ describe('quit-path durable writes never park the main thread', () => {
   it('store.flushAsync() drains an in-flight debounced write before writing', async () => {
     const dir = makeDir()
     const store = await createStore(dir)
-    const gate = stallCommit(dir)
+    // The debounced UI save writes only the ui domain.
+    const gate = stallCommit(dir, 'writeSerializedDomains')
     vi.useFakeTimers()
     store.updateUI({ sidebarWidth: 100 })
     await vi.advanceTimersByTimeAsync(1_000)

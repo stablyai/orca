@@ -18,14 +18,13 @@ describe('loading Store write-risk characterization', () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     const committed = maintenanceBarrier()
     const acknowledge = maintenanceBarrier()
-    const writeDomains = authority.writeCompleteSerializedDomains.bind(authority)
-    vi.spyOn(authority, 'writeCompleteSerializedDomains').mockImplementationOnce(
-      async (replacements) => {
-        await writeDomains(replacements)
-        committed.resolve()
-        await acknowledge.promise
-      }
-    )
+    // A UI change saves only the ui domain.
+    const writeDomains = authority.writeSerializedDomains.bind(authority)
+    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async (replacements) => {
+      await writeDomains(replacements)
+      committed.resolve()
+      await acknowledge.promise
+    })
     const close = vi.spyOn(authority, 'close')
 
     store.updateUI({ sidebarWidth: 712 })
