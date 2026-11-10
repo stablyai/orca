@@ -7,7 +7,7 @@ import {
   updateMobileNativeChatDraftInputs
 } from './mobile-native-chat-draft-inputs'
 import {
-  resetMobileNativeChatDraftStoreForTests,
+  closeMobileNativeChatTabDraft,
   setMobileNativeChatDraftText,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
@@ -17,7 +17,7 @@ let text = ''
 
 afterEach(() => {
   act(() => renderer?.unmount())
-  resetMobileNativeChatDraftStoreForTests()
+  closeMobileNativeChatTabDraft('scope')
   renderer = null
 })
 
