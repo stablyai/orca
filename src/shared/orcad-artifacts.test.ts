@@ -13,4 +13,15 @@ describe('standalone runtime artifacts', () => {
       ORCAD_MOBILE_WEB_MANIFEST
     )
   })
+
+  it('ships the brotli copy of every asset whose entry lists one', () => {
+    const manifest = {
+      assets: [{ path: 'index.html', brotliByteLength: 120 }, { path: 'assets/icon.png' }]
+    }
+    expect(orcadMobileWebAssetFilenames(JSON.stringify(manifest))).toEqual([
+      'out/mobile-web/assets/icon.png',
+      'out/mobile-web/index.html',
+      'out/mobile-web/index.html.br'
+    ])
+  })
 })
