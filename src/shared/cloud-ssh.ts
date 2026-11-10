@@ -38,6 +38,8 @@ export type CloudSshStatus = {
   hasAccess: boolean
   /** The VM sleeps: the next SSH action wakes it first. */
   asleep: boolean
+  /** The sandbox is running, so a delete signs its agents out first. Absent from older mains. */
+  running?: boolean
   alias: string | null
   /** ~/.ssh/config includes Orca's config, so editors resolve the alias. */
   includeInstalled: boolean
