@@ -1,8 +1,8 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
-import { ImeInput } from '@/lib/ime-text-field'
+import { cn } from '@/lib/class-names'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 
 const inputVariants = cva('', {
   variants: {

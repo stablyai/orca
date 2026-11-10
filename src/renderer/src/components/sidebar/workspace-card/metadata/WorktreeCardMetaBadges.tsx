@@ -1,6 +1,6 @@
 import React from 'react'
 import { CalendarClock, CircleDot, Link2, SquareTerminal, StickyNote } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'

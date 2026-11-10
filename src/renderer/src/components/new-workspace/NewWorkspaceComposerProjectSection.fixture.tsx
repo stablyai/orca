@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import {
   getProjectHostSetupSelectionKey,
   type ProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { NewWorkspaceComposerProjectSection } from './NewWorkspaceComposerProjectSection'
 
 const projects: NewWorkspaceProjectOption[] = [

@@ -7,17 +7,17 @@ import {
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments/catalog/runtime-environments-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
-import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
   useChatSettingsOwnPermissions,
@@ -37,7 +37,7 @@ import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabi
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-export { isWebClientLocation } from '@/lib/web-client-location'
+export { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export function buildSettingsNavigationMetadata(
   {

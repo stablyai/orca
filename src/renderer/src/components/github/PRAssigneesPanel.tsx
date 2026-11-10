@@ -3,13 +3,13 @@ import { useShallow } from 'zustand/react/shallow'
 import { LoaderCircle, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo,

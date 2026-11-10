@@ -1,7 +1,5 @@
-import type {
-  LinearIssueData,
-  LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
+import type { LinearIssueData } from '@/store/slices/linear/linear-issue-read'
+import type { LinearIssueView } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'

@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationCompatibilityCallerAuthority } from '../../../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
@@ -13,7 +13,6 @@ import {
 import type { RpcContext } from '../../../core'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
-import type { ORCHESTRATION_SEND_METHODS } from './send-methods'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -21,7 +20,7 @@ const NOTHING_SENT = { effectsApplied: false } as const
 export function peerMailLocalCaller(args: {
   runtime: OrcaRuntimeService
   from: string | undefined
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationEntryCaller | undefined
   attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
 }): { address: string; paneKey: string | null } {
   if (args.orchestrationCaller) {
@@ -52,7 +51,7 @@ export function peerMailLocalCaller(args: {
 export async function sendPeerMail(args: {
   params: z.infer<typeof SendParams> & { on: string }
   runtime: OrcaRuntimeService
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationEntryCaller | undefined
   attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
   orchestrationMutation: { callerFingerprint: string; requestId: string } | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
@@ -108,26 +107,25 @@ export async function sendPeerMail(args: {
   )
 }
 
-/** `orchestration.send` with `on` set goes to the paired server; every other send runs unchanged. */
-export function withPeerMailSend(
-  methods: typeof ORCHESTRATION_SEND_METHODS
-): typeof ORCHESTRATION_SEND_METHODS {
-  return methods.map((method) => ({
-    ...method,
-    handler: (params: Parameters<typeof method.handler>[0], ctx: RpcContext) => {
-      const on = params.on
-      if (on === undefined || ctx.replayedMutationReceipt !== undefined) {
-        return method.handler(params, ctx)
-      }
-      const attested = ctx.orchestrationCompatibilityCallerAuthority
-      return sendPeerMail({
-        params: { ...params, on },
-        runtime: ctx.runtime,
-        orchestrationCaller: ctx.orchestrationCaller,
-        attestedCaller: attested?.terminalHandle === params.from ? attested : undefined,
-        orchestrationMutation: ctx.orchestrationMutation,
-        recordMutationReceipt: ctx.recordMutationReceipt
-      })
+type SendInput = z.infer<typeof SendParams>
+
+/** `send --on` goes to the paired server; every other send, and every replay, runs `send`. */
+export function withPeerMailSend<R>(
+  send: (params: SendInput, ctx: RpcContext) => Promise<R>
+): (params: SendInput, ctx: RpcContext) => Promise<unknown> {
+  return async (params, ctx) => {
+    const on = params.on
+    if (on === undefined || ctx.replayedMutationReceipt !== undefined) {
+      return await send(params, ctx)
     }
-  }))
+    const attested = ctx.orchestrationCompatibilityCallerAuthority
+    return await sendPeerMail({
+      params: { ...params, on },
+      runtime: ctx.runtime,
+      orchestrationCaller: ctx.orchestrationCaller,
+      attestedCaller: attested?.terminalHandle === params.from ? attested : undefined,
+      orchestrationMutation: ctx.orchestrationMutation,
+      recordMutationReceipt: ctx.recordMutationReceipt
+    })
+  }
 }

@@ -1,5 +1,5 @@
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import { useMobileNativeChatModelDiscovery } from '../../use-mobile-native-chat-model-discovery'
+import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
@@ -12,7 +12,7 @@ import type {
   SessionOptionsSurface
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,

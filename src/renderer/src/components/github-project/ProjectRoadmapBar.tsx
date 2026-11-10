@@ -1,7 +1,7 @@
 import React from 'react'
 import { GitPullRequest, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { chipStyle, labelChipColors, singleSelectChipColors } from './project-cell-chip-colors'
 import { formatRoadmapSpan } from './roadmap-tick-format'

@@ -17,9 +17,9 @@ import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearanc
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 // The tip's chat miniature, finished and denser so it fits a tile; nothing here animates.
 const CHAT_SCALE: CSSProperties & { '--chat-font-size': string } = { '--chat-font-size': '10px' }

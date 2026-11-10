@@ -7,13 +7,13 @@ import {
 } from './workspace-setup-composer-copy'
 import { toast } from 'sonner'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from '@/lib/text-input/paste/text-control-paste-model'
 import {
-  TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
   measureTextControlPasteByteLength,
   pasteTextIntoTextControl,
   shouldHandleTextControlPaste
-} from '@/lib/text-control-paste'
+} from '@/lib/text-input/paste/text-control-paste'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { ComposerParentWorktreePicker } from './ComposerParentWorktreePicker'

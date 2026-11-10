@@ -1,11 +1,12 @@
+import { retireRemovedWorktreeTerminalNotices } from '../../../terminals/terminal-notice-removal'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
-import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
+import { cleanupEphemeralVmRuntimesForDeleted } from '@/runtime/ephemeral-vm/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
-import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
@@ -99,6 +100,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
     requiredExecutionHostId ?? hostId,
     args.confirmedDiscards
   )
+  retireRemovedWorktreeTerminalNotices(beforeRemoval.terminalNotices)
   // Purge destroyed-target projects after row removal so selection clears with the row, not earlier.
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   get().removeWorkspaceSpaceWorktrees?.(

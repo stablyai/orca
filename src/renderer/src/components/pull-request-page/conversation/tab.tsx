@@ -1,17 +1,17 @@
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
-} from '@/lib/github-source-runtime-context'
-import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -39,7 +39,7 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PullRequestPageProjectOrigin } from '../page-types'

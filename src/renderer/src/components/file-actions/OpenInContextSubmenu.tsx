@@ -9,10 +9,10 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
-import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
+import { getRouteForLocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
 import { getWorkspaceEditorSshHost } from '@/components/file-actions/workspace-editor-ssh-target'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/files/os-open/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { useTranslate } from '@/i18n/use-translate'

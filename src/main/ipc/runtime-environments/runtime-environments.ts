@@ -31,7 +31,7 @@ import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment
 import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
 import {
   advanceRuntimeEnvironmentTransportGeneration,
-  onRuntimeEnvironmentTransportGenerationAdvanced
+  onRuntimeEnvironmentTransportGenerationRetired
 } from './runtime-environment-transport-generation'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
@@ -57,7 +57,8 @@ const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscrip
 const getUserDataPath = getRuntimeEnvironmentRegistryRoot
 
 /** Ends every stream whose transport generation has moved on; readers reopen on the new one. */
-function closeStaleSubscriptions(): void {
+function closeStaleSubscriptions(environmentId: string): void {
+  let closed = 0
   for (const pending of pendingSubscriptions.values()) {
     if (!pending.transportIsCurrent()) {
       pending.close()
@@ -68,6 +69,7 @@ function closeStaleSubscriptions(): void {
     if (subscription.transportIsCurrent()) {
       continue
     }
+    closed += 1
     remoteRuntimeSubscriptions.delete(subscriptionId)
     // Isolate close and notification failures so neither strands this environment's sibling subscriptions.
     try {
@@ -81,6 +83,11 @@ function closeStaleSubscriptions(): void {
     } catch (error) {
       console.warn('[runtime-environments] subscription close notice failed:', error)
     }
+  }
+  if (closed > 0) {
+    console.warn(`[runtime-environments] transport retired; reopening ${closed} stream(s)`, {
+      environmentId
+    })
   }
 }
 /** Returns once the environment's client-hosted browser pages have been released. */
@@ -119,7 +126,7 @@ function reactivateRuntimeEnvironmentStatus(environmentId: string): void {
 }
 
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
-onRuntimeEnvironmentTransportGenerationAdvanced(closeStaleSubscriptions)
+onRuntimeEnvironmentTransportGenerationRetired(closeStaleSubscriptions)
 let stopPreferenceWatch: (() => void) | undefined
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {

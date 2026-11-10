@@ -11,7 +11,10 @@ import { searchKeywordTranslator } from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './source-control/repository-git-author-search-entries'
 import { getRepositoryMcpConfigSearchEntries } from './mcp/mcp-config-search'
 import { getRepositoryGitHooksSearchEntries } from './hooks/repository-git-hooks-search-entries'
-import { getRepositoryGitWorktreeSearchEntries } from './worktrees/repository-git-worktree-search-entries'
+import {
+  getRepositoryGitWorktreeSearchEntries,
+  getRepositoryGitWorktreeSearchMetadata
+} from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 
@@ -20,238 +23,284 @@ type RepositoryPaneSearchOptions = {
   windowsRuntimeSupported?: boolean
 }
 
-export function getRepositoryPaneSearchEntries(
+function getRepositorySearchParts(
   repo: Repo,
   options: RepositoryPaneSearchOptions = {},
   t: Translate = translate
-): SettingsSearchEntry[] {
+) {
   const translateSearchKeyword = searchKeywordTranslator(t)
   const isFolder = isFolderRepo(repo)
   const isLocalWindowsProject =
     options.isLocalWindowsProject ??
     (Boolean(options.windowsRuntimeSupported) &&
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
-  return [
+
+  const jira = {
+    title: t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
+    description: t(
+      'components.RepositoryJiraProjectSection.description',
+      'Default the Jira issue picker and Tasks list to this project. You can change it for each worktree.'
+    ),
+    keywords: [
+      repo.displayName,
+      ...translateSearchKeyword('components.RepositoryJiraProjectSection.keywordJira', 'jira'),
+      ...translateSearchKeyword(
+        'components.RepositoryJiraProjectSection.keywordDefaultProject',
+        'default project'
+      ),
+      ...translateSearchKeyword(
+        'components.RepositoryJiraProjectSection.keywordIssuePicker',
+        'issue picker'
+      )
+    ]
+  }
+  const displayName = {
+    title: t('auto.components.settings.repository.search.7f380f89ea', 'Display name'),
+    description: t(
+      'auto.components.settings.repository.search.883aad2801',
+      'Project-specific display details for the sidebar and tabs.'
+    ),
+    keywords: [
+      repo.displayName,
+      repo.path,
+      ...translateSearchKeyword(
+        'auto.components.settings.repository.search.92af66c7ce',
+        'project name'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.repository.search.cd73b976d7',
+        'repository name'
+      )
+    ]
+  }
+  const icon = {
+    title: t('auto.components.settings.repository.search.0fe07b9e90', 'Project icon'),
+    description: t(
+      'auto.components.settings.repository.search.a1f3a2bd47',
+      'Project icon and color used in the sidebar and tabs.'
+    ),
+    keywords: [
+      repo.displayName,
+      ...translateSearchKeyword(
+        'auto.components.settings.repository.search.6438a94c63',
+        'project icon'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.repository.search.b2546efab5',
+        'repository icon'
+      ),
+      ...translateSearchKeyword('auto.components.settings.repository.search.8d045419b1', 'color'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.6d8de2f090', 'hex'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.c1075178cf', 'badge'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.cb4b4de666', 'avatar'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.9dc60d7f6d', 'github'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.1e73e840ff', 'emoji'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.27733eb6c1', 'favicon')
+    ]
+  }
+  const github = !isFolder
+    ? {
+        title: t('auto.components.settings.repository.search.eefc3e51ef', 'GitHub account'),
+        description: t(
+          'auto.components.settings.repository.search.githubAccountDescription',
+          'Bind a keyring gh login for this project’s GitHub API calls.'
+        ),
+        keywords: [
+          repo.displayName,
+          ...translateSearchKeyword(
+            'auto.components.settings.repository.search.9dc60d7f6d',
+            'github'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.repository.search.githubAccountKeyword',
+            'github account'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.repository.search.ghAccount',
+            'gh account'
+          ),
+          ...translateSearchKeyword('auto.components.settings.repository.search.login', 'login'),
+          ...translateSearchKeyword('auto.components.settings.repository.search.token', 'token')
+        ]
+      }
+    : undefined
+  const fork =
+    repo.upstream && !isFolder
+      ? {
+          title: t('auto.components.settings.repository.search.f94afd4078', 'Keep fork up to date'),
+          description: t(
+            'auto.components.settings.repository.search.keepForkUpToDateDescription',
+            'Safely fast-forward this fork from upstream.'
+          ),
+          keywords: [
+            repo.displayName,
+            repo.upstream.owner,
+            repo.upstream.repo,
+            ...translateSearchKeyword('auto.components.settings.repository.search.fork', 'fork'),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.upstream',
+              'upstream'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.syncFork',
+              'sync fork'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.fastForward',
+              'fast-forward'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.behindUpstream',
+              'behind upstream'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.origin',
+              'origin'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.defaultBranch',
+              'default branch'
+            )
+          ]
+        }
+      : undefined
+  const projectRuntime =
+    isFolder || !isLocalWindowsProject
+      ? undefined
+      : {
+          title: t('auto.components.settings.repository.search.7a89e2dc09', 'Project runtime'),
+          description: t(
+            'auto.components.settings.repository.search.projectRuntimeDescription',
+            'Choose whether this project runs on Windows or WSL.'
+          ),
+          keywords: [
+            repo.displayName,
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.runtime',
+              'runtime'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.execution',
+              'execution'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.windowsHost',
+              'windows host'
+            ),
+            ...translateSearchKeyword('auto.components.settings.repository.search.wsl', 'wsl'),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.distro',
+              'distro'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.agentRuntime',
+              'agent runtime'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.repository.search.skillRuntime',
+              'skill runtime'
+            )
+          ]
+        }
+  const removeProject: SettingsSearchEntry = {
+    title: t('auto.components.settings.repository.search.bbbe994528', 'Remove project'),
+    description: t(
+      'auto.components.settings.repository.search.c86478c3d8',
+      'Remove this project from Orca.'
+    ),
+    keywords: [
+      repo.displayName,
+      ...translateSearchKeyword('auto.components.settings.repository.search.3067595d82', 'delete'),
+      ...translateSearchKeyword('auto.components.settings.repository.search.6469de5368', 'project'),
+      ...translateSearchKeyword(
+        'auto.components.settings.repository.search.cc876ca5f2',
+        'repository'
+      )
+    ]
+  }
+  return {
+    agentTrust: getRepositoryAgentTrustSearchEntry(),
+    jira,
+    displayName,
+    icon,
+    github,
+    fork,
+    projectRuntime,
+    removeProject,
+    sourceControlAi: isFolder ? undefined : getRepositoryGitAuthorSearchEntries(repo, t),
+    mcp: isFolder ? undefined : getRepositoryMcpConfigSearchEntries(repo, t),
+    hooks: getRepositoryGitHooksSearchEntries(repo, t)
+  }
+}
+
+export function getRepositoryPaneSearchEntries(
+  repo: Repo,
+  options: RepositoryPaneSearchOptions = {},
+  t: Translate = translate
+): SettingsSearchEntry[] {
+  const parts = getRepositorySearchParts(repo, options, t)
+  const entries = [
     getRepositoryFormatterSearchEntry(t),
-    getRepositoryAgentTrustSearchEntry(),
-    {
-      title: t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
-      description: t(
-        'components.RepositoryJiraProjectSection.description',
-        'Default the Jira issue picker and Tasks list to this project. You can change it for each worktree.'
-      ),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword('components.RepositoryJiraProjectSection.keywordJira', 'jira'),
-        ...translateSearchKeyword(
-          'components.RepositoryJiraProjectSection.keywordDefaultProject',
-          'default project'
-        ),
-        ...translateSearchKeyword(
-          'components.RepositoryJiraProjectSection.keywordIssuePicker',
-          'issue picker'
-        )
-      ]
-    },
-    {
-      title: t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-      description: t(
-        'auto.components.settings.repository.search.883aad2801',
-        'Project-specific display details for the sidebar and tabs.'
-      ),
-      keywords: [
-        repo.displayName,
-        repo.path,
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.92af66c7ce',
-          'project name'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.cd73b976d7',
-          'repository name'
-        )
-      ]
-    },
-    {
-      title: t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
-      description: t(
-        'auto.components.settings.repository.search.a1f3a2bd47',
-        'Project icon and color used in the sidebar and tabs.'
-      ),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.6438a94c63',
-          'project icon'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.b2546efab5',
-          'repository icon'
-        ),
-        ...translateSearchKeyword('auto.components.settings.repository.search.8d045419b1', 'color'),
-        ...translateSearchKeyword('auto.components.settings.repository.search.6d8de2f090', 'hex'),
-        ...translateSearchKeyword('auto.components.settings.repository.search.c1075178cf', 'badge'),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.cb4b4de666',
-          'avatar'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.9dc60d7f6d',
-          'github'
-        ),
-        ...translateSearchKeyword('auto.components.settings.repository.search.1e73e840ff', 'emoji'),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.27733eb6c1',
-          'favicon'
-        )
-      ]
-    },
-    ...(!isFolder
-      ? [
-          {
-            title: t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
-            description: t(
-              'auto.components.settings.repository.search.githubAccountDescription',
-              'Bind a keyring gh login for this project’s GitHub API calls.'
-            ),
-            keywords: [
-              repo.displayName,
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.9dc60d7f6d',
-                'github'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.githubAccountKeyword',
-                'github account'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.ghAccount',
-                'gh account'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.login',
-                'login'
-              ),
-              ...translateSearchKeyword('auto.components.settings.repository.search.token', 'token')
-            ]
-          }
-        ]
-      : []),
-    ...(repo.upstream && !isFolder
-      ? [
-          {
-            title: t(
-              'auto.components.settings.repository.search.keepForkUpToDate',
-              'Keep Fork Up to Date'
-            ),
-            description: t(
-              'auto.components.settings.repository.search.keepForkUpToDateDescription',
-              'Safely fast-forward this fork from upstream.'
-            ),
-            keywords: [
-              repo.displayName,
-              repo.upstream.owner,
-              repo.upstream.repo,
-              ...translateSearchKeyword('auto.components.settings.repository.search.fork', 'fork'),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.upstream',
-                'upstream'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.syncFork',
-                'sync fork'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.fastForward',
-                'fast-forward'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.behindUpstream',
-                'behind upstream'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.origin',
-                'origin'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.defaultBranch',
-                'default branch'
-              )
-            ]
-          }
-        ]
-      : []),
-    ...(isFolder || !isLocalWindowsProject
-      ? []
-      : [
-          {
-            title: t(
-              'auto.components.settings.repository.search.projectRuntime',
-              'Project Runtime'
-            ),
-            description: t(
-              'auto.components.settings.repository.search.projectRuntimeDescription',
-              'Choose whether this project runs on Windows or WSL.'
-            ),
-            keywords: [
-              repo.displayName,
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.runtime',
-                'runtime'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.execution',
-                'execution'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.windowsHost',
-                'windows host'
-              ),
-              ...translateSearchKeyword('auto.components.settings.repository.search.wsl', 'wsl'),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.distro',
-                'distro'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.agentRuntime',
-                'agent runtime'
-              ),
-              ...translateSearchKeyword(
-                'auto.components.settings.repository.search.skillRuntime',
-                'skill runtime'
-              )
-            ]
-          }
-        ]),
-    ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo, t)),
-    {
-      title: t('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
-      description: t(
-        'auto.components.settings.repository.search.c86478c3d8',
-        'Remove this project from Orca.'
-      ),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.3067595d82',
-          'delete'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.6469de5368',
-          'project'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.cc876ca5f2',
-          'repository'
-        )
-      ]
-    },
-    ...(isFolder
-      ? []
-      : [
-          ...getRepositoryGitAuthorSearchEntries(repo, t),
-          ...getRepositoryMcpConfigSearchEntries(repo, t),
-          ...getRepositoryGitHooksSearchEntries(repo, t)
-        ])
+    parts.agentTrust,
+    parts.jira,
+    parts.displayName,
+    parts.icon
   ]
+  if (parts.github) {
+    entries.push(parts.github)
+  }
+  if (parts.fork) {
+    entries.push(parts.fork)
+  }
+  if (parts.projectRuntime) {
+    entries.push(parts.projectRuntime)
+  }
+  if (!isFolderRepo(repo)) {
+    entries.push(...getRepositoryGitWorktreeSearchEntries(repo, t))
+  }
+  entries.push(parts.removeProject)
+  if (parts.sourceControlAi) {
+    entries.push(...parts.sourceControlAi)
+  }
+  if (parts.mcp) {
+    entries.push(...parts.mcp)
+  }
+  if (parts.hooks) {
+    entries.push(...parts.hooks)
+  }
+  return entries
+}
+
+export function getRepositoryPaneSearchMetadata(
+  repo: Repo,
+  options: RepositoryPaneSearchOptions = {},
+  t: Translate = translate
+) {
+  const parts = getRepositorySearchParts(repo, options, t)
+  const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
+  const identity = [parts.agentTrust, parts.jira, parts.displayName, parts.icon]
+  if (parts.github) {
+    identity.push(parts.github)
+  }
+  if (parts.fork) {
+    identity.push(parts.fork)
+  }
+  if (parts.projectRuntime) {
+    identity.push(parts.projectRuntime)
+  }
+  if (worktrees) {
+    identity.push(...worktrees.identity)
+  }
+  identity.push(parts.removeProject)
+  return {
+    identity,
+    projectRuntime: parts.projectRuntime ? [parts.projectRuntime] : [],
+    sparsePresets: worktrees?.sparsePresets ?? [],
+    sharedPaths: worktrees?.sharedPaths ?? [],
+    sourceControlAi: parts.sourceControlAi ?? [],
+    mcp: parts.mcp ?? [],
+    hooks: parts.hooks ?? [],
+    // Host setups has no indexed descriptor; keep its existing empty-query admission.
+    hostSetups: [] satisfies SettingsSearchEntry[]
+  }
 }

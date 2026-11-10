@@ -1,5 +1,4 @@
 import { pickAdjacentLinkOpenGroupId } from '@/lib/adjacent-link-open-group'
-export { findNeighbor } from '@/lib/adjacent-link-open-group'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../../shared/tab-types'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 

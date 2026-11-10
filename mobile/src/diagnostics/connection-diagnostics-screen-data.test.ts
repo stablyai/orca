@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDiagnosticsHostId } from './connection-diagnostics-screen-data'
 
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 
 const host = (id: string): HostProfile => ({
   id,

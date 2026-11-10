@@ -32,7 +32,8 @@ export function handleGuestWindowCloseMessage(
   const tab = (state.unifiedTabsByWorktree[owner.worktreeId] ?? []).find(
     (candidate) => candidate.contentType === 'browser' && candidate.entityId === owner.workspaceId
   )
-  if (tab?.isPinned) {
+  // A script may not discard what the user pinned or left unsent; the page's notes are all it closes.
+  if (tab?.isPinned || (state.browserAnnotationsByPageId[pageId]?.length ?? 0) > 0) {
     return
   }
   pagesOpenedByPage.delete(pageId)

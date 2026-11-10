@@ -2,11 +2,14 @@ const generationByEnvironment = new Map<string, number>()
 const MAX_TRACKED_ENVIRONMENTS = 512
 let generationSequence = 0
 let evictedGeneration = 0
-const advanceListeners = new Set<() => void>()
+const retirementListeners = new Set<(environmentId: string) => void>()
 
 /** Owners of generation-fenced streams end the ones an advance (or eviction) left behind. */
-export function onRuntimeEnvironmentTransportGenerationAdvanced(listener: () => void): void {
-  advanceListeners.add(listener)
+export function onRuntimeEnvironmentTransportGenerationRetired(
+  listener: (environmentId: string) => void
+): () => void {
+  retirementListeners.add(listener)
+  return () => retirementListeners.delete(listener)
 }
 
 export function getRuntimeEnvironmentTransportGeneration(environmentId: string): number {
@@ -31,9 +34,9 @@ export function advanceRuntimeEnvironmentTransportGeneration(environmentId: stri
     generationByEnvironment.delete(oldest.value)
   }
   // A fenced stream drops every later frame, so it must end rather than wait silently.
-  for (const listener of advanceListeners) {
+  for (const listener of retirementListeners) {
     try {
-      listener()
+      listener(environmentId)
     } catch (error) {
       console.warn('[runtime-environments] retiring stale-generation streams failed:', error)
     }

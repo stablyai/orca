@@ -8,7 +8,7 @@ import {
   type QueuePauseContext
 } from '../queued-messages/queued-message-pause'
 import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
-import { journalInputOrder } from './journal-input-order'
+import type { JournalInputOrderResolver } from './journal-input-order-registry'
 
 import { JournalQueuedRowIndex } from './journal-queued-row-index'
 
@@ -27,6 +27,7 @@ export class JournalInputCardIndex {
   private pauseContext: QueuePauseContext | undefined
   private clearIds: readonly string[] | undefined
   private clearMembers: ReadonlySet<string> = new Set()
+  constructor(private readonly journalInputOrder: JournalInputOrderResolver) {}
   private failed = false
 
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
@@ -62,10 +63,10 @@ export class JournalInputCardIndex {
       }
     }
     const marks = state.queuePauseMarks
-    const failedAt = journalInputOrder(state).newestTurn.failure()
+    const failedAt = this.journalInputOrder(state).newestTurn.failure()
     const key = [
       state.latestAcceptedTurnSequence,
-      journalInputOrder(state).latestPersonAcceptedSequence(),
+      this.journalInputOrder(state).latestPersonAcceptedSequence(),
       journalManualStop(marks)?.sequence,
       marks.resumedSequence,
       marks.reopenedSequence,
@@ -87,7 +88,8 @@ export class JournalInputCardIndex {
           epoch: state.epoch,
           marks,
           latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-          latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+          latestPersonAcceptedTurnSequence:
+            this.journalInputOrder(state).latestPersonAcceptedSequence(),
           failedAt,
           reopenFloor: this.floor
         },

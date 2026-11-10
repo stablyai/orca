@@ -6,7 +6,7 @@ import type {
 } from '../../../../../shared/developer-permissions-types'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
 import { Input } from '../../ui/input'
@@ -196,8 +196,8 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
                     'Testing...'
                   )
                 : t(
-                    'auto.components.settings.DeveloperPermissionsPane.connectionTestAction',
-                    'Test Connection'
+                    'auto.components.settings.DeveloperPermissionsPane.a162df27d5',
+                    'Test connection'
                   )}
             </Button>
           </form>

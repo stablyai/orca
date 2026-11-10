@@ -22,7 +22,7 @@ import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-his
 import { GitGraphFilter } from './git-graph-filter'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined

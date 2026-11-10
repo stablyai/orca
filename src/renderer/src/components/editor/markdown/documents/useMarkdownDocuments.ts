@@ -7,7 +7,7 @@ import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { acquireEditorFileOperation } from '@/lib/editor/file-operations/editor-file-operation-owner'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   createMarkdownDocumentIndex,

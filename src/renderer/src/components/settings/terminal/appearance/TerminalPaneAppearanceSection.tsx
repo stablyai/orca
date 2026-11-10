@@ -20,14 +20,14 @@ export function TerminalPaneAppearanceSection({
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
-        title={t('auto.components.settings.TerminalAppearanceSection.e1a5c25555', 'Terminal Panes')}
+        title={t('auto.components.settings.TerminalAppearanceSection.0f6515bf50', 'Terminal panes')}
       />
 
       <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
           title={t(
-            'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
-            'Inactive Pane Opacity'
+            'auto.components.settings.TerminalAppearanceSection.4d8b35c479',
+            'Inactive pane opacity'
           )}
           description={t(
             'auto.components.settings.TerminalAppearanceSection.db632cb50e',
@@ -37,8 +37,8 @@ export function TerminalPaneAppearanceSection({
         >
           <NumberField
             label={t(
-              'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
-              'Inactive Pane Opacity'
+              'auto.components.settings.TerminalAppearanceSection.4d8b35c479',
+              'Inactive pane opacity'
             )}
             description={t(
               'auto.components.settings.TerminalAppearanceSection.dimUnfocusedPanes',
@@ -59,8 +59,8 @@ export function TerminalPaneAppearanceSection({
         </SearchableSetting>
         <SearchableSetting
           title={t(
-            'auto.components.settings.TerminalAppearanceSection.f27a99978d',
-            'Divider Thickness'
+            'auto.components.settings.TerminalAppearanceSection.835aad4f9d',
+            'Divider thickness'
           )}
           description={t(
             'auto.components.settings.TerminalAppearanceSection.a14a427ae4',
@@ -70,8 +70,8 @@ export function TerminalPaneAppearanceSection({
         >
           <NumberField
             label={t(
-              'auto.components.settings.TerminalAppearanceSection.f27a99978d',
-              'Divider Thickness'
+              'auto.components.settings.TerminalAppearanceSection.835aad4f9d',
+              'Divider thickness'
             )}
             description=""
             value={paneStyleOptions.dividerThicknessPx}

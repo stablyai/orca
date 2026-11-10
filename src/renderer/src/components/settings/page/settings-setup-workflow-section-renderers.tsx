@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import { SessionHistorySettingsPane } from '../session-history/SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
@@ -62,6 +63,7 @@ export function renderGeneralSettingsSection(
     <SettingsSection
       id="general"
       grouped
+      hideHeader
       title={t('auto.components.settings.Settings.7807c11c4d', 'General')}
       description={t(
         'auto.components.settings.Settings.f9b77539fd',
@@ -71,6 +73,19 @@ export function renderGeneralSettingsSection(
     >
       {view.isSectionMounted('general') ? (
         <GeneralPane
+          subPage={model.generalSubPage}
+          onSelectSubPage={(page, sectionId) => {
+            if (sectionId) {
+              useAppStore
+                .getState()
+                .openSettingsTarget({ pane: 'general', repoId: null, sectionId })
+              return
+            }
+            model.setGeneralSubPage(page)
+            model.setHighlightedSettingsTarget(null)
+            model.setSettingsSearchQuery('')
+            interactions.contentScrollRef.current?.scrollTo({ top: 0 })
+          }}
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
@@ -186,7 +201,7 @@ export function renderShareSkillsSettingsSection(
     <SettingsSection
       id="share-skills"
       grouped
-      title={t('auto.components.settings.shareSkills.title', 'Share Skills')}
+      title={t('auto.components.settings.shareSkills.ca754fefa1', 'Share skills')}
       badge="Beta"
       description={t(
         'auto.components.settings.shareSkills.description',

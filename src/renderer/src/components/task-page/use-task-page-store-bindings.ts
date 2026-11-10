@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
@@ -9,7 +9,7 @@ import {
   isEnvironmentRuntimeContextKey
 } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useRef } from 'react'
-import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
+import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useTaskPageStoreBindings() {
