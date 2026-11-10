@@ -14207,7 +14207,7 @@
             "value": "Key",
             "keepValue": "Leave empty to keep ••••{{hint}}",
             "where": "Use it on",
-            "allHosts": "Every host except Orca Cloud",
+            "allHosts": "Every host",
             "someHosts": "Only these hosts",
             "cancel": "Cancel",
             "update": "Save",
@@ -14215,7 +14215,7 @@
             "customPlaceholder": "MY_PROVIDER_API_KEY"
           },
           "scope": {
-            "all": "Every host except Orca Cloud",
+            "all": "Every host",
             "gone": "A host that is no longer listed"
           },
           "keep": "Keep",
