@@ -281,7 +281,11 @@ export async function deleteSecret(db: D1Database, scope: SecretScope, ownerId: 
   return result.meta.changes === 1
 }
 
-/** Higher wins. Env: repo and personal beat org. Agent keys: org-shared beats repo beats personal. */
+/**
+ * Higher wins. Variables (env): Repository > Personal > Shared. Agent keys (AGENT_KEY_NAMES, incl.
+ * provider base URLs/models and AWS_*): Shared (team) > Repository > Personal. The egress swap resolves the
+ * real key through this same function, so a placeholder always stands for the value plain injection would give.
+ */
 const RANK: Record<SecretKind, Record<SecretScope, number>> = {
   env: { repo: 3, personal: 2, org: 1 },
   agent_key: { org: 3, repo: 2, personal: 1 }

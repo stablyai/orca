@@ -4,6 +4,32 @@ import { createVercelSandboxApi } from '../src/vercel-sandbox-api'
 
 type Seen = { method: string; url: URL; headers: Headers; body: any }
 
+describe('command exit codes', () => {
+  it('asks with wait=true and treats a bounded wait that runs out as still running', async () => {
+    const seen: URL[] = []
+    const client = createVercelSandboxApi({
+      token: 'vercel_test_token',
+      teamId: 'team_orca',
+      projectId: 'prj_orca',
+      fetch: (input, init) => {
+        seen.push(new URL(String(input)))
+        // A running command: the provider holds the wait open until the caller gives up.
+        return new Promise<Response>((_, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+        )
+      }
+    })
+    expect(await client.getCommand('sess_1', 'cmd_1', { wait: true, waitMs: 20 })).toEqual({ exitCode: null })
+    expect(seen[0]!.searchParams.get('wait')).toBe('true')
+  })
+
+  it('reports the exit code a finished command answers the wait with', async () => {
+    const { client, seen } = api(() => Response.json({ command: { id: 'cmd_1', exitCode: 0 } }))
+    expect(await client.getCommand('sess_1', 'cmd_1', { wait: true, waitMs: 4000 })).toEqual({ exitCode: 0 })
+    expect(seen[0]!.url.searchParams.get('wait')).toBe('true')
+  })
+})
+
 function api(answer: (seen: Seen) => Response) {
   const seen: Seen[] = []
   const client = createVercelSandboxApi({

@@ -124,6 +124,46 @@ describe('org environments', () => {
     expect(refused.body.reason).toBe('hours_exhausted')
   })
 
+  it('finishes a build server-side with nobody streaming or polling it (regression: W9 poll-only stall)', async () => {
+    const scheduled: { id: string; environmentId: string }[] = []
+    const h = await createHarness({}, { scheduleBuild: async (build) => void scheduled.push(build) })
+    h.vercel.buildResult = RESULT
+    const admin = await h.token('alice', 'acme', 'sandbox', { orgRole: 'admin' })
+    const env = await h.call('POST', '/v1/environments', { bearer: admin, body: { name: 'Default', repos: [{ url: 'acme/web' }], installScript: 'echo hi' } })
+    const started = await h.call('POST', `/v1/environments/${env.body.environment.id}/builds`, { bearer: admin })
+    expect(started.body.build.status).toBe('running')
+    // The build is handed to its runner at start; no reader ever looks at it again.
+    expect(scheduled).toEqual([{ id: started.body.build.id, environmentId: env.body.environment.id }])
+    const { tickBuild, unfinishedBuilds } = await import('../src/environment-builds')
+    const deps = {
+      db: h.env.SANDBOX_DB,
+      provider: h.vercel,
+      entitlements: { checkStart: async () => h.billing.decision, reportUsage: async (s: never) => { h.billing.usage.push(s); return h.billing.usageAnswer }, listSuspensions: async () => [] },
+      now: h.now,
+      config: { environment: 'test', goldenSnapshotId: 'snap_golden', region: 'iad1' }
+    }
+    // While the VM command runs, the runner keeps a short cadence.
+    expect(await tickBuild(deps, env.body.environment.id, started.body.build.id)).toBe(3_000)
+    expect(await unfinishedBuilds(h.env.SANDBOX_DB)).toHaveLength(1)
+    const command = [...h.vercel.buildCommands.values()].at(-1)!
+    command.logs = log('::orca-step:: install\nhi\n')
+    command.exitCode = 0
+    h.advance(3_000)
+    // The next alarm finalizes it (snapshot, smoke boot, activation, billing) and stops.
+    expect(await tickBuild(deps, env.body.environment.id, started.body.build.id)).toBeNull()
+    const row = h.raw.prepare('SELECT status, usage_reported_at, log_bytes FROM environment_builds WHERE id = ?').get(started.body.build.id) as {
+      status: string
+      usage_reported_at: number | null
+      log_bytes: number
+    }
+    expect(row.status).toBe('succeeded')
+    expect(row.usage_reported_at).not.toBeNull()
+    expect(row.log_bytes).toBeGreaterThan(0)
+    expect(await unfinishedBuilds(h.env.SANDBOX_DB)).toEqual([])
+    const environment = (await h.call('GET', `/v1/environments/${env.body.environment.id}`, { bearer: admin })).body.environment
+    expect(environment.activeBuildId).toBe(started.body.build.id)
+  })
+
   it('refuses a second concurrent build and can cancel one', async () => {
     const { adminCall, envId } = await setup()
     const started = await adminCall('POST', `/v1/environments/${envId}/builds`)

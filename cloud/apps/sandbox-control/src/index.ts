@@ -98,7 +98,7 @@ import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
 import { audit } from './api/audit'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
-import { advanceAllBuilds, type BuildDeps } from './environment-builds'
+import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
 import { environmentErrorResponse, handleEnvironmentRoute, isEnvironmentRoute } from './environment-routes'
 import { EnvironmentError } from './environments'
 import type { GoldenImageProviderApi } from './golden-image-provider'
@@ -178,6 +178,8 @@ export type Deps = {
   retention?: RetentionConfig
   /** Anonymous github.com reachability (tests stub it). */
   publicRepoCheck?: (repoUrl: string) => Promise<boolean>
+  /** Build runner override (tests tick builds by hand). */
+  scheduleBuild?: BuildDeps['schedule']
   /** ctx.waitUntil from the Worker entry; tests collect the promises. */
   waitUntil?: (work: Promise<unknown>) => void
   /** Route groups mounted on the public API (routines, see src/routines). */
@@ -525,8 +527,22 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
   }
 }
 
-function buildDeps(life: LifecycleDeps, deps: Deps): BuildDeps {
+/** Arms the build's runner (one Durable Object per build); a no-op where the binding is absent. */
+function buildScheduler(env: Env): BuildDeps['schedule'] {
+  const runners = env.ENV_BUILD_RUNNER
+  if (!runners) {
+    return undefined
+  }
+  return async (build) => {
+    const stub = runners.get(runners.idFromName(build.id))
+    const response = await stub.fetch('https://runner/start', { method: 'POST', body: JSON.stringify(build) })
+    await response.body?.cancel()
+  }
+}
+
+function buildDeps(life: LifecycleDeps, deps: Deps, env?: Env): BuildDeps {
   return {
+    schedule: deps.scheduleBuild ?? (env ? buildScheduler(env) : undefined),
     db: life.db,
     // SAFETY: the Vercel client implements both; test fakes for builds do too.
     provider: life.provider as BuildDeps['provider'],
@@ -980,7 +996,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (!life) {
         return fail('not_configured', 503)
       }
-      return await handleEnvironmentRoute(request, url, caller, buildDeps(life, deps), () => readJson(request))
+      return await handleEnvironmentRoute(request, url, caller, buildDeps(life, deps, env), () => readJson(request))
     }
     if (/^\/v1\/sandboxes\/[A-Za-z0-9_]+\/shares(?:\/|$)|^\/v1\/shares\//.test(url.pathname)) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
@@ -1401,6 +1417,23 @@ export default {
         }
       })
     )
+    // Environment builds: every minute and on their own, so a failing reconcile never stalls one.
+    // Advances what nobody watches and re-arms each build's runner in case one was lost.
+    ctx.waitUntil(
+      lifecycleDeps(env, {}).then(async (life) => {
+        if (!life) {
+          return
+        }
+        const deps = buildDeps(life, {}, env)
+        const builds = await advanceAllBuilds(deps).catch(() => 0)
+        if (builds > 0) {
+          console.log(JSON.stringify({ event: 'environment_builds_advanced', builds }))
+        }
+        for (const build of await unfinishedBuilds(env.SANDBOX_DB).catch(() => [])) {
+          await deps.schedule?.({ id: build.id, environmentId: build.environment_id }).catch(() => undefined)
+        }
+      })
+    )
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) {
       return
     }
@@ -1410,10 +1443,6 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
-          const builds = await advanceAllBuilds(buildDeps(life, {})).catch(() => 0)
-          if (builds > 0) {
-            console.log(JSON.stringify({ event: 'environment_builds_advanced', builds }))
-          }
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
@@ -1438,3 +1467,48 @@ export default {
     )
   }
 } satisfies ExportedHandler<Env>
+
+/**
+ * One per environment build: wakes on an alarm, advances the build one step (finalize, snapshot,
+ * smoke boot, billing all run here) and re-arms until the build is final. Builds therefore finish
+ * with no client watching, at most a few seconds after their VM command ends.
+ */
+export class EnvironmentBuildRunner implements DurableObject {
+  constructor(
+    private readonly state: DurableObjectState,
+    private readonly env: Env
+  ) {}
+
+  async fetch(request: Request): Promise<Response> {
+    const body = (await request.json().catch(() => null)) as { id?: string; environmentId?: string } | null
+    if (!body?.id || !body.environmentId) {
+      return new Response('bad request', { status: 400 })
+    }
+    await this.state.storage.put('build', { id: body.id, environmentId: body.environmentId })
+    if ((await this.state.storage.getAlarm()) === null) {
+      await this.state.storage.setAlarm(Date.now() + 2_000)
+    }
+    return new Response(null, { status: 204 })
+  }
+
+  async alarm(): Promise<void> {
+    const build = await this.state.storage.get<{ id: string; environmentId: string }>('build')
+    const life = build ? await lifecycleDeps(this.env, {}) : null
+    if (!build || !life) {
+      await this.state.storage.deleteAll()
+      return
+    }
+    let next: number | null
+    try {
+      next = await tickBuild(buildDeps(life, {}, this.env), build.environmentId, build.id)
+    } catch (error) {
+      console.log(JSON.stringify({ event: 'environment_build_tick_failed', buildId: build.id, error: String(error).slice(0, 200) }))
+      next = 15_000
+    }
+    if (next === null) {
+      await this.state.storage.deleteAll()
+      return
+    }
+    await this.state.storage.setAlarm(Date.now() + next)
+  }
+}

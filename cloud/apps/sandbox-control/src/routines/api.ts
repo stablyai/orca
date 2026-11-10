@@ -10,6 +10,7 @@
 //   POST   /v1/routines/:id/rotate-webhook      -> {url}
 //   GET    /v1/routines/:id/runs?limit=&before= -> {runs, nextBefore}
 //   GET    /v1/routines/:id/runs/:runId         -> {run}
+import { memberNamesFor } from '../member-names'
 import { z } from 'zod'
 import { auditCaller, consumeRate } from '../api/audit'
 import { ApiError, isAdmin, requireScope, type ApiCaller } from '../api/caller'
@@ -217,7 +218,9 @@ export function createRoutinesApi(options: { publicUrl: string; deps: () => Rout
 
     if (!id && method === 'GET') {
       requireScope(caller, 'routines:read')
-      return json({ routines: (await listRoutines(ctx.db, caller.accountId)).map(routineView) })
+      const routines = await listRoutines(ctx.db, caller.accountId)
+      const names = await memberNamesFor(ctx.db, caller.accountId, routines.map((r) => r.created_by))
+      return json({ routines: routines.map((r) => routineView(r, names)) })
     }
 
     if (!id && method === 'POST') {

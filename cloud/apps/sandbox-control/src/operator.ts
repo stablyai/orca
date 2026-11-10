@@ -5,9 +5,11 @@
 //   POST   /v1/internal/housekeeping                    orphan sweep + retention now
 //   POST   /v1/internal/github/bindings {installationId, accountId}   support binding (audited as `operator`)
 //   DELETE /v1/internal/github/bindings {installationId, accountId?}
+//   POST   /v1/internal/members/role-changed {accountId, userId, role}   re-cap their keys and MCP grants (auth calls this)
 //   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's API keys, disable their routines (auth calls this)
 import { z } from 'zod'
 import { audit } from './api/audit'
+import { syncMemberRole } from './api/member-role-sync'
 import { readBearer } from './auth'
 import type { GitHubAppMinter } from './github-app'
 import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-connect'
@@ -29,6 +31,7 @@ const BindingBody = z
   .strict()
   .refine((body) => (body.installationId === undefined) !== (body.repoUrl === undefined))
 const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128) }).strict()
+const RoleChangedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), role: z.enum(['owner', 'admin', 'member']) }).strict()
 const UnbindBody = z.object({ installationId: z.number().int().positive(), accountId: AccountId.optional() }).strict()
 
 async function digest(value: string): Promise<Uint8Array> {
@@ -114,6 +117,15 @@ export async function handleOperator(
       const revoked = await revokeInstallation(life.db, body.data.installationId, body.data.accountId ?? null, now)
       console.log(JSON.stringify({ event: 'github_unbind_operator', installationId: body.data.installationId, revoked }))
       return Response.json({ revoked })
+    }
+    case 'POST /v1/internal/members/role-changed': {
+      const body = RoleChangedBody.safeParse(await deps.readJson())
+      if (!body.success) {
+        return Response.json({ error: 'invalid_request' }, { status: 400 })
+      }
+      const updated = await syncMemberRole(life.db, body.data.accountId, body.data.userId, body.data.role)
+      await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.role_changed', detail: { role: body.data.role, keysUpdated: updated } }, now)
+      return Response.json({ updated })
     }
     case 'POST /v1/internal/members/removed': {
       const body = MemberRemovedBody.safeParse(await deps.readJson())

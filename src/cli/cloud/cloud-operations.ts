@@ -24,6 +24,11 @@ export type CloudHandlerDeps = {
 }
 
 export const CLOUD_AGENTS = ['claude', 'codex'] as const
+export type CloudAgent = (typeof CLOUD_AGENTS)[number]
+
+export function isCloudAgent(value: string): value is CloudAgent {
+  return CLOUD_AGENTS.some((agent) => agent === value)
+}
 const WORKSPACE_ID = /^sbx_[A-Za-z0-9]+$/
 const PROJECT_ID = /^prj_[A-Za-z0-9]+$/
 const SESSION_HANDLE = /^term_[A-Za-z0-9-]{1,80}$/
@@ -71,7 +76,7 @@ export function getAgentFlag(
   if (agent === undefined) {
     return undefined
   }
-  if (!(CLOUD_AGENTS as readonly string[]).includes(agent)) {
+  if (!isCloudAgent(agent)) {
     throw new RuntimeClientError(
       'invalid_argument',
       `--agent must be one of: ${CLOUD_AGENTS.join(', ')}`,
@@ -80,7 +85,7 @@ export function getAgentFlag(
       }
     )
   }
-  return agent as (typeof CLOUD_AGENTS)[number]
+  return agent
 }
 
 /**

@@ -42,6 +42,8 @@ export type Env = {
   BILLING_URL?: string
   /** Service binding to the billing Worker; Workers on one account cannot reach each other over workers.dev. */
   BILLING?: Fetcher
+  /** Durable Object that advances environment builds on alarms (EnvironmentBuildRunner in index.ts). */
+  ENV_BUILD_RUNNER?: DurableObjectNamespace
   CONTROL_PLANE_TOKEN?: string
   /** `stub` allows every start and records nothing: local dev only, refused when SANDBOX_ENV=prod. */
   ENTITLEMENTS_MODE?: string

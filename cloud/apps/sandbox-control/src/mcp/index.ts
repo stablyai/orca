@@ -1,5 +1,6 @@
 // Hosted MCP server: routing for /mcp, the OAuth endpoints and their discovery documents, plus the
 // /v1/oauth-approvals API route the desktop uses to approve an MCP client.
+import { memberNamesFor } from '../member-names'
 import { z } from 'zod'
 import { auditCaller } from '../api/audit'
 import { ApiError, isAdmin, scopesForRole, type ApiCaller } from '../api/caller'
@@ -194,7 +195,8 @@ export const oauthGrantsApi: ApiExtension = async (request, url, caller, ctx) =>
   const familyId = match[1]
   if (!familyId && request.method === 'GET') {
     const rows = await listGrants(ctx.db, caller.accountId, now, isAdmin(caller) ? undefined : caller.userId)
-    return Response.json({ grants: rows.map(grantView) }, { headers: { 'cache-control': 'no-store' } })
+    const names = await memberNamesFor(ctx.db, caller.accountId, rows.map((row) => row.created_by))
+    return Response.json({ grants: rows.map((row) => grantView(row, names)) }, { headers: { 'cache-control': 'no-store' } })
   }
   if (familyId && request.method === 'DELETE') {
     const owner = await grantOwner(ctx.db, caller.accountId, familyId)

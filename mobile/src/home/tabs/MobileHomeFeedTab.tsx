@@ -1,4 +1,9 @@
+import { useMemo } from 'react'
 import { ScrollView } from 'react-native'
+import type { CloudWorkspace } from '../../cloud/cloud-control-plane-client'
+import { cloudDeviceLabel } from '../../cloud/cloud-device-label'
+import { useCloudHostIds } from '../../cloud/use-cloud-host-ids'
+import { useCloudEnrollment } from '../../cloud/use-cloud-workspaces'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { spacing } from '../../theme/mobile-theme'
@@ -6,6 +11,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import type { AgentListRowHandlers } from '../../agents/MobileAgentListRows'
 import type { HostCatalogEntry } from '../../transport/hosts/host-profile'
 import { MobileHomeAppUpdateCard } from '../MobileHomeAppUpdateCard'
+import { MobileHomeCloudSection } from '../MobileHomeCloudSection'
 import { MobileHomeEmptyState } from '../MobileHomeEmptyState'
 import { MobileHomeHostList } from '../MobileHomeHostList'
 import { MobileHomeNeedsYou } from '../MobileHomeNeedsYou'
@@ -23,10 +29,27 @@ export function MobileHomeFeedTab(props: {
   onOpenHostActions: (host: HostCatalogEntry) => void
   onPairDesktop: () => void
   onOpenTasks: (hostId: string) => void
+  onOpenCloudWorkspace: (workspace: CloudWorkspace) => void
+  onNewCloudWorkspace: () => void
+  onManageCloudAccess: () => void
 }) {
   const t = useMobileTranslation()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data } = props
+  const enrollment = useCloudEnrollment()
+  const cloudHostIds = useCloudHostIds(enrollment)
+  // Cloud VMs are paired hosts too, but they belong in Cloud, not under Desktops.
+  const desktopCatalog = useMemo(
+    () => data.sortedHostCatalog.filter((host) => !cloudHostIds.has(host.id)),
+    [data.sortedHostCatalog, cloudHostIds]
+  )
+  const enrollDesktop = useMemo(() => {
+    const host = data.connectedHosts.find((entry) => !cloudHostIds.has(entry.id))
+    const client = host
+      ? data.allClients.find((entry) => entry.hostId === host.id)?.client
+      : undefined
+    return host && client ? { name: host.personalName ?? host.name, client } : null
+  }, [data.connectedHosts, data.allClients, cloudHostIds])
   const title = <MobileHomeTabHeader title={t('home.tabs.feed', 'Feed')} />
   // Keychain reads can outlast the splash; show the title instead of a blank frame.
   if (!data.hostCatalogLoaded) {
@@ -66,13 +89,21 @@ export function MobileHomeFeedTab(props: {
           hostAttempts={data.hostAttempts}
           hostLastConnected={data.hostLastConnected}
           hostConnections={data.hostConnections}
-          hosts={data.sortedHostCatalog}
+          hosts={desktopCatalog}
           hostStates={data.hostStates}
           needsYouByHost={data.needsYouByHost}
           worktreeInfo={data.worktreeInfo}
           onOpen={props.onOpenHost}
           onOpenActions={props.onOpenHostActions}
           onPairDesktop={props.onPairDesktop}
+        />
+        <MobileHomeCloudSection
+          enrollment={enrollment}
+          enrollDesktop={enrollDesktop}
+          deviceLabel={cloudDeviceLabel()}
+          onOpenWorkspace={props.onOpenCloudWorkspace}
+          onNewWorkspace={props.onNewCloudWorkspace}
+          onManageAccess={props.onManageCloudAccess}
         />
         <MobileHomeTasksSection connectedHosts={data.connectedHosts} onOpen={props.onOpenTasks} />
         <MobileHomeAppUpdateCard />

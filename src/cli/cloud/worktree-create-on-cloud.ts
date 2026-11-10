@@ -4,7 +4,7 @@
 //   --on cloud:<project>  uses an Orca Cloud project's repo and environment defaults.
 // It creates an Orca Cloud workspace through the public API with the same credentials as
 // `orca cloud …`, so it works on a desktop and inside a VM (no Orca runtime involved).
-import { execFileSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import type { HandlerContext } from '../dispatch'
@@ -17,6 +17,7 @@ import {
   createCloudWorkspace,
   defaultCloudHandlerDeps,
   getSizeFlag,
+  isCloudAgent,
   normalizeCloudRepoUrl,
   resolveCloudProjectId,
   type CloudHandlerDeps,
@@ -46,11 +47,12 @@ export type CloudOnDeps = CloudHandlerDeps & {
 
 function gitOriginUrl(dir: string): string | null {
   try {
-    const out = execFileSync('git', ['-C', dir, 'remote', 'get-url', 'origin'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000
-    }).trim()
+    const result = runProcessSync({
+      program: 'git',
+      args: ['-C', dir, 'remote', 'get-url', 'origin'],
+      timeoutMs: 5000
+    })
+    const out = result.code === 0 ? result.stdout.trim() : ''
     return out || null
   } catch {
     return null
@@ -139,7 +141,7 @@ export async function createWorktreeOnCloud(
   }
   const agent = getOptionalStringFlag(flags, 'agent')
   const prompt = getOptionalStringFlag(flags, 'prompt')
-  if (agent !== undefined && !(CLOUD_AGENTS as readonly string[]).includes(agent)) {
+  if (agent !== undefined && !isCloudAgent(agent)) {
     throw new RuntimeClientError(
       'invalid_argument',
       `--on cloud runs ${CLOUD_AGENTS.join(' or ')}; --agent ${agent} is not available there yet.`,
@@ -181,9 +183,7 @@ export async function createWorktreeOnCloud(
     ...(target.project ? { projectId: await resolveCloudProjectId(api, target.project) } : {}),
     ...(repo ? { repo: { url: repo.url, ...(ref ? { ref } : {}) } } : {}),
     ...(machineSize ? { machineSize } : {}),
-    ...(prompt && agent
-      ? { message: { text: prompt, agent: agent as (typeof CLOUD_AGENTS)[number] } }
-      : {})
+    ...(prompt && agent ? { message: { text: prompt, agent } } : {})
   }
   const phase = (name: string, text: string) => {
     if (progress === 'json') {

@@ -363,3 +363,71 @@ describe('workspace tool hosts (synced remote MCP servers)', () => {
     expect((await h.call('GET', `/v1/sandboxes/${id}/egress/hosts`, { bearer: mia })).body).toEqual({ hosts: ['mcp.linear.app', 'mcp.notion.com'] })
   })
 })
+
+describe('precedence is the same for plain injection and the egress swap', () => {
+  // Agent keys: Shared (team) > Repository > Personal. Variables: Repository > Personal > Shared.
+  async function egressKey(placeholders: 'on' | 'off', personal: boolean, team: boolean) {
+    const { privateKey, publicKey } = await generateKeyPair('RS256')
+    const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
+    const upstream: Headers[] = []
+    const { h, as, put, commandEnv } = await setup(
+      { SECRETS_EGRESS_PLACEHOLDERS: placeholders, EGRESS_PROXY_URL: PROXY_URL },
+      {
+        egressKeysForIssuer: () => createLocalJWKSet(jwks),
+        credentials: { authorizationFor: async () => null },
+        egressFetch: async (_input, init) => {
+          upstream.push(new Headers(init?.headers))
+          return new Response('ok')
+        }
+      }
+    )
+    const ada = await as('ada', 'acme', 'admin')
+    const mia = await as('mia', 'acme', 'member')
+    if (team) {
+      await put('org', 'ANTHROPIC_API_KEY', ORG_KEY, ada)
+      await put('org', 'AWS_REGION', 'us-east-1', ada)
+      await put('org', 'APP_MODE', 'team', ada)
+    }
+    if (personal) {
+      await put('personal', 'ANTHROPIC_API_KEY', PERSONAL_KEY, mia)
+      await put('personal', 'AWS_REGION', 'eu-west-1', mia)
+      await put('personal', 'APP_MODE', 'mine', mia)
+    }
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const env = commandEnv(START_COMMAND)
+    if (placeholders === 'off') {
+      return { key: env.ANTHROPIC_API_KEY, region: env.AWS_REGION, mode: env.APP_MODE }
+    }
+    const oidc = await new SignJWT({ team_id: 'team_orca', project_id: 'prj_orca', sandbox_name: `orca-test-${id}` })
+      .setProtectedHeader({ alg: 'RS256', kid: 'v1' })
+      .setIssuer('https://oidc.vercel.com/team_orca')
+      .setAudience(PROXY_URL)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey)
+    await h.send(
+      new Request(`${PROXY_URL}/v1/messages`, {
+        method: 'POST',
+        body: '{}',
+        headers: {
+          'vercel-forwarded-host': 'api.anthropic.com',
+          'vercel-forwarded-scheme': 'https',
+          'vercel-forwarded-port': '443',
+          'vercel-forwarded-path': '/v1/messages',
+          'vercel-sandbox-oidc-token': oidc,
+          'x-api-key': env.ANTHROPIC_API_KEY!
+        }
+      })
+    )
+    return { key: upstream.at(-1)?.get('x-api-key'), region: env.AWS_REGION, mode: env.APP_MODE }
+  }
+
+  it('a team key beats a personal key in both modes; a personal key is used when the team has none', async () => {
+    for (const mode of ['off', 'on'] as const) {
+      expect(await egressKey(mode, true, true)).toEqual({ key: ORG_KEY, region: 'us-east-1', mode: 'mine' })
+      expect((await egressKey(mode, true, false)).key).toBe(PERSONAL_KEY)
+      expect((await egressKey(mode, false, true)).key).toBe(ORG_KEY)
+    }
+  })
+})
