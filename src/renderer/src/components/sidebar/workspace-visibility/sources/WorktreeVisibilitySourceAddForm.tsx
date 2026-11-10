@@ -13,12 +13,15 @@ export type WorktreeVisibilitySourceAddResult =
 
 export function WorktreeVisibilitySourceAddForm({
   disabled,
+  compact = false,
   onAdd
 }: {
   disabled: boolean
+  compact?: boolean
   onAdd: (rootPath: string) => Promise<WorktreeVisibilitySourceAddResult>
 }): React.JSX.Element {
   const t = useTranslate()
+  const [expanded, setExpanded] = useState(!compact)
   const [rootPath, setRootPath] = useState('')
   const [inputError, setInputError] = useState<string | null>(null)
 
@@ -28,6 +31,7 @@ export function WorktreeVisibilitySourceAddForm({
     const result = await onAdd(rootPath)
     if (result === 'added') {
       setRootPath('')
+      setExpanded(!compact)
       return
     }
     if (result === 'save-failed') {
@@ -51,6 +55,21 @@ export function WorktreeVisibilitySourceAddForm({
     )
   }
 
+  if (!expanded) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={disabled}
+        className="justify-self-start"
+        onClick={() => setExpanded(true)}
+      >
+        {t('settings.general.worktrees.addFolder', 'Add folder…')}
+      </Button>
+    )
+  }
+
   return (
     <form
       className="grid gap-2 border-t border-border bg-background/50 px-2.5 py-2.5"
@@ -68,6 +87,7 @@ export function WorktreeVisibilitySourceAddForm({
           id="custom-worktree-root"
           className="font-mono text-xs"
           value={rootPath}
+          autoFocus={compact}
           autoComplete="off"
           spellCheck={false}
           disabled={disabled}
@@ -82,6 +102,21 @@ export function WorktreeVisibilitySourceAddForm({
           {t('auto.components.sidebar.WorktreeVisibilitySourceList.add', 'Add')}
         </Button>
       </div>
+      {compact ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="justify-self-start"
+          onClick={() => {
+            setExpanded(false)
+            setRootPath('')
+            setInputError(null)
+          }}
+        >
+          {t('settings.general.worktrees.cancelAdd', 'Cancel')}
+        </Button>
+      ) : null}
       <p
         id="custom-worktree-root-help"
         className={`text-[11px] ${inputError ? 'text-destructive' : 'text-muted-foreground'}`}

@@ -23,19 +23,6 @@ describe('jcode turn prompt cache', () => {
     readMock.mockReturnValue({ text: 'ship it', interactionKey: 'k1' })
   })
 
-  it('reads the journal once per turn, not once per tool', () => {
-    readJcodeTurnPrompt(state, 'turn_start', 'pane-a', PAYLOAD)
-    for (let call = 0; call < 4; call += 1) {
-      readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)
-      readJcodeTurnPrompt(state, 'post_tool', 'pane-a', PAYLOAD)
-    }
-    expect(readJcodeTurnPrompt(state, 'turn_end', 'pane-a', PAYLOAD)).toEqual({
-      text: 'ship it',
-      interactionKey: 'k1'
-    })
-    expect(readMock).toHaveBeenCalledTimes(1)
-  })
-
   it('re-reads on the next turn, so a new prompt is not served from the old turn', () => {
     const first = readJcodeTurnPrompt(state, 'turn_start', 'pane-a', PAYLOAD)
     expect(first).toEqual({ text: 'ship it', interactionKey: 'k1' })

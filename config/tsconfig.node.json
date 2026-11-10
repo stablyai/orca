@@ -23,7 +23,7 @@
     "../src/cli/runtime/runtime-access-denied.ts",
     "../src/cli/runtime/runtime-pid-liveness.ts",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
-    "../src/renderer/src/lib/orca-hook-trust.ts",
+    "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
     "../src/renderer/src/lib/sha256.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
     "../src/renderer/src/components/native-chat/structured-agent-question-projection.ts",

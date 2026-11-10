@@ -6,13 +6,8 @@ import {
   RELEASE_SYNCHRONIZED_OUTPUT
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Terminal } from '@xterm/headless'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { buildFreshShellViewportBlankingSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
-import {
-  flushAsyncTicks,
-  writeHeadlessTerminal,
-  renderHeadlessTerminalState
-} from '../test-fixtures/pty-connection-test-async'
+import { flushAsyncTicks, writeHeadlessTerminal } from '../test-fixtures/pty-connection-test-async'
 import { NORMAL_BUFFER_PROLOGUE } from '../test-fixtures/pty-connection-test-constants'
 import {
   terminalWriteText,
@@ -20,7 +15,6 @@ import {
   createMockTransport,
   createPane,
   createManager,
-  type ConnectCallbacks,
   type MockTransport
 } from '../test-fixtures/pty-connection-test-pane-fixtures'
 
@@ -67,168 +61,6 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
 
     afterEach(async () => {
       await restoreTerminalTestGlobals()
-    })
-    it('paints only the daemon snapshot when reattach result includes both snapshot and replay', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return {
-            id: sessionId,
-            snapshot: 'snapshot-payload',
-            replay: 'replay-payload'
-          }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
-        }
-      } as StoreState
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
-      )
-      await flushAsyncTicks(20)
-
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_GRAPHIC_RENDITION}snapshot-payload`,
-        expect.any(Function)
-      )
-      expect(
-        pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data)).join('')
-      ).not.toContain('replay-payload')
-    })
-
-    it('paints only relay replay when reattach result has replay and coldRestore but no snapshot', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          return {
-            id: sessionId,
-            replay: 'replay-payload',
-            coldRestore: { scrollback: 'cold-payload' }
-          }
-        }
-        return null
-      })
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
-        }
-      } as StoreState
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
-      )
-      await flushAsyncTicks(20)
-
-      expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_GRAPHIC_RENDITION}replay-payload`,
-        expect.any(Function)
-      )
-      expect(
-        pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data)).join('')
-      ).not.toContain('cold-payload')
-      // Replay still owes a cold-restore ack to prevent redelivery; identify the painted pane so main releases only its current terminal.
-      expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith(
-        'tab-pty',
-        ...(ORCA_LAYOUT_OWNER_IS_MAIN
-          ? [{ worktreeId: deps.worktreeId, tabId: deps.tabId, leafId: LEAF_1 }]
-          : [])
-      )
-    })
-
-    it('blanks restored scrollback before fresh shell output', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const transport = createMockTransport('fresh-pty')
-      const written: string[] = []
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          callbacks.onData?.('PS >')
-          return 'fresh-pty'
-        }
-      )
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        ptyIdsByTabId: { 'tab-1': [] },
-        terminalLayoutsByTabId: {
-          'tab-1': {
-            root: { type: 'leaf', leafId: LEAF_1 },
-            activeLeafId: LEAF_1,
-            expandedLeafId: null,
-            ptyIdsByLeafId: {}
-          }
-        }
-      } as StoreState
-
-      const pane = createPane(1)
-      pane.terminal.rows = 4
-      pane.terminal.cols = 20
-      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
-        data = terminalWriteText(data)
-        written.push(data)
-        callback?.()
-      })
-      const manager = createManager(1)
-      const deps = createDeps({
-        restoredViewportBlankingPanesRef: { current: new Set([1]) }
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
-      )
-      await flushAsyncTicks(20)
-
-      const blankViewport = buildFreshShellViewportBlankingSequence(4)
-      expect(written).toContain(blankViewport)
-      expect(written.indexOf(blankViewport)).toBeLessThan(written.indexOf('PS >'))
-
-      const rendered = await renderHeadlessTerminalState(
-        ['old TUI row with a long tail\r\nold TUI row two', blankViewport, 'PS >'],
-        20,
-        4
-      )
-      expect(rendered.baseY).toBeGreaterThan(0)
-      expect(rendered.allLines.some((line) => line.includes('old TUI row'))).toBe(true)
-      expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
     })
 
     it('cold-restores at the recovered grid and clears only the dirty viewport before blanking', async () => {

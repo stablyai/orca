@@ -308,3 +308,17 @@ it('keeps the main view and workspace selected when revealing a floating HTTP li
   expect(useAppStore.getState().activeGroupIdByWorktree[floating]).toBe('b')
   expect(useAppStore.getState().groupsByWorktree[floating]).toHaveLength(3)
 })
+
+it('reports where an opened link went', () => {
+  const openUrl = vi.fn(async () => undefined)
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+
+  expect(openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE })).toBe('orca-browser')
+  expect(openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, forceSystemBrowser: true })).toBe(
+    'system-browser'
+  )
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
+  expect(
+    openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, sourceOwner: { kind: 'unknown' } })
+  ).toBe('none')
+})

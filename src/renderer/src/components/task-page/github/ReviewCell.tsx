@@ -5,7 +5,7 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import React, { useState, useMemo, useRef, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import {
   getGitHubPRReviewerQueryState,

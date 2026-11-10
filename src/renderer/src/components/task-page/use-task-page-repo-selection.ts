@@ -28,7 +28,7 @@ import {
 } from '@/components/task-page/task-page-localized-options'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   const {
     settings,

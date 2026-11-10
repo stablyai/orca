@@ -9,7 +9,7 @@ import {
   WORKSPACE_FILE_PATHS_MIME,
   writeWorkspaceFileDragSourceIfResolved,
   type WorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { TreeNode } from '../tree/file-explorer-types'

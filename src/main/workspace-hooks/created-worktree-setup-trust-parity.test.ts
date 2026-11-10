@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
-import '../../renderer/src/lib/orca-hook-trust'
+import '../../renderer/src/runtime/repo-hooks/orca-hook-trust'
 import '../runtime/repositories/runtime-repository-hooks-commands'
 import { loadHooks } from './hooks'
 import { hashOrcaHookTrustContent } from './created-worktree-setup-trust'

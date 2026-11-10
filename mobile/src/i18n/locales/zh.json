@@ -1315,13 +1315,47 @@
       "durationSeconds_one": "{{count}} 秒",
       "durationSeconds_other": "{{count}} 秒",
       "durationMinutes_one": "{{count}} 分钟",
-      "durationMinutes_other": "{{count}} 分钟"
+      "durationMinutes_other": "{{count}} 分钟",
+      "discard": "丢弃录音",
+      "retry": "重试听写",
+      "retryShort": "重试"
     },
     "status": {
       "finishingOn": "正在 {{computer}} 上完成",
       "finishingOnComputer": "正在电脑上完成",
       "movedTo": "已转到 {{computer}}",
       "movedToComputer": "已转到电脑"
+    },
+    "failure": {
+      "connectionLost": "连接已断开",
+      "connectionSlow": "连接太慢",
+      "phoneStopped": "已在此手机上停止",
+      "stopped": "听写已停止",
+      "recordingKept": "录音已保留"
+    },
+    "announce": {
+      "typedInto": "已输入到 {{target}}",
+      "insertedIn": "已插入到 {{target}}",
+      "listeningOnPhone": "正在听。正在此手机上转写。",
+      "listeningOn": "正在听。正在 {{computer}} 上转写。",
+      "listeningOnComputer": "正在听。正在电脑上转写。",
+      "finishing": "正在完成。",
+      "inserted": "已插入。",
+      "cancelled": "已取消听写。",
+      "movedTo": "此手机已停止转写。在 {{computer}} 上继续。",
+      "movedToComputer": "此手机已停止转写。在电脑上继续。",
+      "stoppedKept": "听写已停止。{{reason}}。录音已保留。",
+      "stoppedKeptGeneric": "听写已停止。录音已保留。",
+      "stillListening": "仍在听。"
+    },
+    "pill": {
+      "open": "打开",
+      "listening": "正在听",
+      "starting": "正在开始",
+      "finishing": "正在完成",
+      "stopped": "听写已停止",
+      "label": "听写到 {{target}}，{{duration}}",
+      "hint": "轻点两下返回"
     }
   },
   "files": {
@@ -2126,6 +2160,10 @@
       "providerExitedRejection": "{{agent}} 在发送此消息前已停止。",
       "providerExitedRow": "{{agent}} 在生成此回复时停止了。您可以在此对话中继续。",
       "providerRateLimited": "{{agent}} 已被限流，正在重试。",
+      "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
+      "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
+      "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "selectedModel": "所选模型",
       "providerRejected": "{{agent}} 未接受此消息。",
       "providerRejectedQuoted": "{{agent}} 未接受此消息：{{detail}}。",
       "providerRetryLastError": "上次错误：{{detail}}。",
@@ -2526,8 +2564,8 @@
       "insertFailed": "无法插入听写文本",
       "insertFailedCopied": "无法插入听写文本，已复制到剪贴板",
       "inserted": "已插入听写文本",
-      "stoppedAfterSilence": "静音一分钟后已停止",
-      "stoppedAtCloudLimit": "已达 10 分钟云端上限。听写已停止。"
+      "stoppedAtCloudLimit": "已达 10 分钟云端上限。听写已停止。",
+      "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止指令未发送",
@@ -3402,6 +3440,16 @@
     "githubViewControls": {
       "openView": "在 GitHub 中打开视图"
     },
+    "hostedMerge": {
+      "merged": "已合并",
+      "closed": "已关闭",
+      "conflicts": "有冲突",
+      "behind": "落后",
+      "blocked": "已阻止",
+      "checksPending": "检查待完成",
+      "ableToMerge": "可以合并",
+      "unknown": "未知"
+    },
     "itemActions": {
       "changeStatus": "更改状态",
       "copyGitHubLink": "复制 GitHub 链接",
@@ -3547,6 +3595,11 @@
       "team": "团队",
       "updated": "已更新",
       "updatedSortDescription": "最新活动优先"
+    },
+    "pagination": {
+      "pageUnreachable": "第 {{page}} 页超出了 GitHub 搜索可返回的范围。",
+      "loadPageFailed": "无法从 GitHub 加载第 {{page}} 页。",
+      "noMoreResults": "第 {{page}} 页没有更多结果。"
     },
     "pickerProjection": {
       "allRepos": "所有仓库",

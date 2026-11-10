@@ -1,7 +1,7 @@
 import {
   holdBrowserAttachmentFiles,
   readBrowserAttachmentFile
-} from '@/lib/browser-attachment-files'
+} from '@/lib/files/drop/browser-attachment-files'
 import { decodeBase64Bytes, encodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   agentSessionPastedImageName,
@@ -26,7 +26,7 @@ import {
 } from '../../../../shared/clipboard-image'
 import { withSniffedImageExtension } from '../../../../shared/image-file-signature'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
-import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
+import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
 import { callEnvironmentEnvelope, callRuntimeEnvelope } from './web-runtime-calls'
 

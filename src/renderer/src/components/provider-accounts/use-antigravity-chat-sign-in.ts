@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { translate } from '../../i18n/i18n'
 import { useTranslate, type Translate } from '../../i18n/use-translate'
-import { useClipboardTextCopyFeedback } from '../../hooks/use-clipboard-text-copy-feedback'
+import { useClipboardTextCopyFeedback } from '../../hooks/clipboard/use-clipboard-text-copy-feedback'
 import {
   antigravityChatSignInRunning as running,
   cancelAntigravityChatSignIn,

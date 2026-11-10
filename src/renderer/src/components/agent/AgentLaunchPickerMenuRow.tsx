@@ -161,6 +161,11 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           onSelectAgent?.(entry.agent)
         }
       }}
+      onSelect={
+        mode === 'select'
+          ? (draft) => runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+          : undefined
+      }
       onUse={(draft) => {
         const chosen = mode === 'select' ? draft.surface : undefined
         const result =
