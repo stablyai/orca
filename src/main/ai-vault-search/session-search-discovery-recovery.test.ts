@@ -318,7 +318,7 @@ it.each(['first-file', 'accepted-file', 'directory'] as const)(
   async (kind) => {
     const harness = await openSessionSearchIndexerHarness('ss-refused-observation')
     const clock = new FakeSessionSearchClock()
-    const directory = join(harness.roots.claudeProjectsDir, 'refused')
+    const directory = join(harness.roots.claudeProjectsDir ?? '', 'refused')
     const path = join(directory, 'history.jsonl')
     const subject = new SessionSearchIndexer({
       databasePath: harness.databasePath,

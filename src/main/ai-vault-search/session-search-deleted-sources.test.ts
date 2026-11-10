@@ -23,7 +23,10 @@ beforeEach(async () => {
   harness = await openSessionSearchIndexerHarness('ss-deleted-sources')
   removed = []
   store = new SessionSearchStore(harness.databasePath)
-  store.removeFile = (path: string) => removed.push(path)
+  store.removeFile = (path: string) => {
+    removed.push(path)
+    return true
+  }
 })
 
 afterEach(async () => {
