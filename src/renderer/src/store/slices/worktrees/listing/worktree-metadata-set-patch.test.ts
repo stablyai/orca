@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
+import type { AppState } from '../../../types'
 import { useAppStore } from '../../..'
 import {
   makeRepo,
@@ -47,7 +48,7 @@ function record(seq: number, title: string, epoch: string) {
   }
 }
 
-function sshRowLinks(value: ReturnType<typeof state>) {
+function sshRowLinks(value: AppState) {
   return selectWorktreesByRepo(value)['repo-1'].find((row) => row.hostId === 'ssh:build-box')
     ?.linkedItems
 }
