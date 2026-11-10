@@ -310,8 +310,8 @@ export function dryRunWorkload(workload: Workload): Record<string, unknown> {
       'invalidation after real send'
     ],
     forkPressure: {
-      unrelatedRetiredRows: workload.maintenance.debtTools,
-      toolBytes: workload.maintenance.debtToolBytes,
+      unrelatedRetiredRows: expectedItems(workload.history.largeTurns, workload),
+      preparation: 'stopped profile copy; original restored after pressure case',
       concurrent: 'other-chat send',
       peaks: 'WAL and file bytes'
     },

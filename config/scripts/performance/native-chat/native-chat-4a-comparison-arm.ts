@@ -44,6 +44,7 @@ export async function runArm(input: {
   const stream = await import('./native-chat-4a-ops-stream')
   const reads = await import('./native-chat-4a-ops-reads')
   const shapes = await import('./native-chat-4a-ops-shapes')
+  const forkPressure = await import('./native-chat-4a-ops-fork-pressure')
   const rows: Row[] = []
   const startedAt = new Date().toISOString()
 
@@ -121,6 +122,7 @@ export async function runArm(input: {
           skipped: `guard failed: ${String(error).slice(0, 250)}`
         })
       }
+      await run('outline', () => forkPressure.forkPressureRows(ctx))
       await run('send', () => queue.sendAndQueueRows(ctx))
       await run('stream', () => stream.streamingRows(ctx))
       await run('history', async () => {
