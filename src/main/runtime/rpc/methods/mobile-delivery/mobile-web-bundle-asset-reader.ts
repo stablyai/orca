@@ -22,19 +22,15 @@ export function verifyMobileWebBundleAsset(
   if (cached) {
     return cached
   }
-  const verdict = hashAsset(root, asset).then(
+  const verdict = hashAsset(root, asset)
+  // Keep only a match: a package install may still be writing this build's files, and a failed read proves nothing.
+  void verdict.then(
     (matches) => {
-      // A package install may still be writing this build's files; only a match is final.
       if (!matches) {
         verdicts.delete(key)
       }
-      return matches
     },
-    (error: unknown) => {
-      // A read that failed is not evidence the bytes changed, so it is not remembered as a verdict.
-      verdicts.delete(key)
-      throw error
-    }
+    () => verdicts.delete(key)
   )
   verdicts.set(key, verdict)
   return verdict

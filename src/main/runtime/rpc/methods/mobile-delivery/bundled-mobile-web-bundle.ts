@@ -41,13 +41,8 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
 
 let probedRoot: { appPath: string; root: string } | undefined
 
-/** Whether this install ships a bundle, without reading it. */
-export function hasBundledMobileWebBundle(): boolean {
-  return getBundledMobileWebBundleRoot() !== undefined
-}
-
 // Linux package managers replace the install under a running app, so the cache holds only while manifest.json's bytes do.
-let cached: { root: string; raw: string; bundle: BundledMobileWebBundle | null } | undefined
+let cached: { root: string; raw: Buffer; bundle: BundledMobileWebBundle | null } | undefined
 
 export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBundle | null> {
   const root = getBundledMobileWebBundleRoot()
@@ -55,15 +50,19 @@ export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBund
     return null
   }
   const manifestPath = join(root, MANIFEST_FILENAME)
-  let raw: string
+  let raw: Buffer
   try {
-    raw = await readFile(manifestPath, 'utf8')
+    raw = await readFile(manifestPath)
   } catch (error) {
     console.warn(`[mobile-web-bundle] cannot read ${manifestPath}:`, error)
     return null
   }
-  if (cached?.root !== root || cached.raw !== raw) {
-    cached = { root, raw, bundle: parseBundledMobileWebBundle(root, manifestPath, raw) }
+  if (cached?.root !== root || !cached.raw.equals(raw)) {
+    cached = {
+      root,
+      raw,
+      bundle: parseBundledMobileWebBundle(root, manifestPath, raw.toString('utf8'))
+    }
   }
   return cached.bundle
 }
