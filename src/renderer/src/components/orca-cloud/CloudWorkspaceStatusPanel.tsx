@@ -1,5 +1,14 @@
 import React from 'react'
-import { Archive, ArchiveRestore, Cloud, Laptop, Loader2, Moon, Play, RotateCw } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  Cloud,
+  Loader2,
+  Monitor,
+  Moon,
+  Play,
+  RotateCw
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { cloudWorkspaceMoved } from '@/lib/orca-cloud/orca-cloud-move-store'
@@ -312,13 +321,10 @@ export function CloudWorkspaceStatusPanel({
                 size="xs"
                 variant="ghost"
                 className="text-muted-foreground"
-                aria-label={t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
                 {...busyProps(false, anyBusy, actions.onMoveToComputer)}
               >
-                <Laptop />
-                {moved
-                  ? t('orcaCloudWorkspace.moveAgain', 'Move again')
-                  : t('orcaCloudWorkspace.moveHere', 'Move here')}
+                <Monitor />
+                {t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
               </Button>
             ) : null}
             {actions.onSleep && state === 'running' && !restarting ? (
