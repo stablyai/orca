@@ -3,6 +3,7 @@ import { registerAgentApiKeyHandlers } from '../agent-api-keys/agent-api-key-ipc
 import { registerCloudWorkspacesHandlers } from '../ipc/cloud-workspaces'
 import { registerCloudApiHandlers } from '../cloud-api/cloud-api-ipc'
 import { registerCloudSecretsHandlers } from '../cloud-secrets/cloud-secrets-ipc'
+import { registerOrcaCloudAgentsHandlers } from '../orca-cloud-agents/orca-cloud-agents-ipc'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
 import { initTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'
@@ -73,6 +74,7 @@ export function attachMainWindowCoreServices(
   registerCloudWorkspacesHandlers()
   registerCloudApiHandlers()
   registerCloudSecretsHandlers(app.getPath('userData'))
+  registerOrcaCloudAgentsHandlers(app.getPath('userData'))
   registerCoreHandlers(
     store,
     runtime,

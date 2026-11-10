@@ -130,6 +130,7 @@ import {
 } from './telemetry-wsl-move-event-schemas'
 
 import {
+  cloudFirstStartAgentCoverageSchema,
   cloudSetupFirstSandboxSchema,
   cloudSetupPlanChosenSchema,
   cloudSetupStepDoneSchema,
@@ -271,5 +272,6 @@ export const eventSchemas = {
   cloud_setup_step_done: cloudSetupStepDoneSchema,
   cloud_setup_step_failed: cloudSetupStepFailedSchema,
   cloud_setup_first_sandbox: cloudSetupFirstSandboxSchema,
-  cloud_setup_plan_chosen: cloudSetupPlanChosenSchema
+  cloud_setup_plan_chosen: cloudSetupPlanChosenSchema,
+  cloud_first_start_agent_coverage: cloudFirstStartAgentCoverageSchema
 } as const

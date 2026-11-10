@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
-import { ComposerCloudAgentHint } from '../cloud-agent-setup/ComposerCloudAgentHint'
+import { OrcaCloudAgentSetupRow } from './OrcaCloudAgentSetupRow'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/new-workspace-project-options'
@@ -21,7 +21,7 @@ import { RunOnHintLine } from './run-on/RunOnHintLine'
 import { OrcaCloudSetupPanel } from './run-on/OrcaCloudSetupPanel'
 import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
 import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
-import { orcaCloudCanStart, type OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
+import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -44,25 +44,26 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'ephemeralVmRecipeError'
   | 'orcaCloudAvailability'
   | 'cloudStart'
-> & {
-  disabled?: boolean
-  projectDescriptionId: string
-  onAddProject: () => void
-  focusNameInput: () => void
-  shouldShowRunTargetPicker: boolean
-  projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
-  ephemeralVmRecipes: EphemeralVmRecipeOption[]
-  handleProjectHostSetupChange: (setupId: string) => void
-  handleAddSshHost: () => void
-  handleAddRemoteServer: () => void
-  handleConnectRunTargetHost: (option: NeedsProjectHostOption) => Promise<void>
-  handleSetLocation: (option: NeedsProjectHostOption) => void
-  sshStatusLabel: string
-  connectButtonLabel: string
-  selectedProjectName: string
-  /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
-  orcaCloudAccess?: OrcaCloudRunTargetAccess
-}
+> &
+  Partial<Pick<NewWorkspaceComposerCardProps, 'quickAgent'>> & {
+    disabled?: boolean
+    projectDescriptionId: string
+    onAddProject: () => void
+    focusNameInput: () => void
+    shouldShowRunTargetPicker: boolean
+    projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
+    ephemeralVmRecipes: EphemeralVmRecipeOption[]
+    handleProjectHostSetupChange: (setupId: string) => void
+    handleAddSshHost: () => void
+    handleAddRemoteServer: () => void
+    handleConnectRunTargetHost: (option: NeedsProjectHostOption) => Promise<void>
+    handleSetLocation: (option: NeedsProjectHostOption) => void
+    sshStatusLabel: string
+    connectButtonLabel: string
+    selectedProjectName: string
+    /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
+    orcaCloudAccess?: OrcaCloudRunTargetAccess
+  }
 
 export function NewWorkspaceComposerProjectSection({
   disabled = false,
@@ -99,6 +100,7 @@ export function NewWorkspaceComposerProjectSection({
   connectButtonLabel,
   selectedProjectName,
   orcaCloudAccess,
+  quickAgent = null,
   cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   const cloudOnly =
@@ -246,11 +248,14 @@ export function NewWorkspaceComposerProjectSection({
         ) : null}
       </div>
       {cloudStart?.panelVisible && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
+        // The panel's own Agent row (G) comes from the same model as the standalone one below.
         <OrcaCloudSetupPanel steps={cloudStart.steps} allSet={cloudStart.allSet} />
-      ) : // Agent access is moot while Orca Cloud can't start (no plan, cap, payment, signed out).
-      selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID &&
-        orcaCloudCanStart(orcaCloudAccess ?? fetchedOrcaCloudAccess) ? (
-        <ComposerCloudAgentHint />
+      ) : // Agent row (cloud-start G) without the panel: links to the one-time setup; never blocks Start.
+      selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
+        <OrcaCloudAgentSetupRow
+          agent={quickAgent}
+          access={orcaCloudAccess ?? fetchedOrcaCloudAccess}
+        />
       ) : null}
       {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (
         <p className="whitespace-pre-line text-2xs text-destructive">{ephemeralVmRecipeError}</p>

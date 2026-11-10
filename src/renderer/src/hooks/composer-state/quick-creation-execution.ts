@@ -14,6 +14,8 @@ import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
+import { reportCloudStartAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-agent-coverage'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -127,6 +129,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           projectId: selectedWorkspaceTarget.target.projectId,
           ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {}),
           ...(selectedRecipe?.provider ? { provider: selectedRecipe.provider } : {})
+        }
+        if (activeEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID) {
+          reportCloudStartAgentCoverage(agent)
         }
       }
 

@@ -16,7 +16,7 @@ import {
 } from './cloud-start-model'
 import type { CloudStartView } from './use-cloud-start-composer'
 import { getCloudPrimaryLabel } from './cloud-start-actions'
-import { decorateCloudSetupStep } from './use-cloud-start-steps'
+import { decorateCloudSetupSteps } from './use-cloud-start-steps'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 
 const projects: NewWorkspaceProjectOption[] = [
@@ -86,8 +86,10 @@ export function ComposerPreview({
   const [host, setHost] = useState('local')
   const [recipe, setRecipe] = useState<string | null>(cloudSelected ? 'cloud' : null)
   const signedOut = availability === 'needs-sign-in' || access.state === 'signed-out'
-  const steps = (pinnedSteps ?? deriveCloudSetupSteps({ availability, access, github })).map(
-    (step) => decorateCloudSetupStep(step, 'claude', signedOut)
+  // G: Claude not set up yet, so the Agent row offers the one-time setup (or waits for sign-in).
+  const steps = decorateCloudSetupSteps(
+    pinnedSteps ?? deriveCloudSetupSteps({ availability, access, github }),
+    signedOut ? { kind: 'signedOut', agent: 'claude' } : { kind: 'notSetUp', agent: 'claude' }
   )
   const selected = recipe === 'cloud'
   const panelVisible = selected && (isCloudSetupPanelVisible(steps) || allSet)

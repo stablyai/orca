@@ -1398,6 +1398,18 @@
     },
     "orcaAccount": {
       "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
+    },
+    "agentAccounts": {
+      "searchTitle": "Agent accounts",
+      "searchDescription": "Use your Claude and ChatGPT accounts in every cloud workspace.",
+      "search": {
+        "subscription": "subscription",
+        "signIn": "sign in",
+        "chatgpt": "chatgpt",
+        "setupToken": "setup-token"
+      },
+      "title": "Agent accounts",
+      "description": "Use your Claude and ChatGPT accounts in every cloud workspace. Set up once on this computer."
     }
   },
   "menu": {
@@ -23097,8 +23109,6 @@
         "allSet": "All set",
         "title": "Set up Orca Cloud",
         "starting": "Starting your cloud workspace…",
-        "agentSetUpAfterSignIn": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
-        "agentSetUpOnce": "{{agent}}: set up once in Settings → Agent accounts",
         "accountNeededTeam": "Sign in or create one. We’ll make a team for you.",
         "trial": "Trial",
         "trialNoCard": "No card needed. Nothing is charged until you choose a plan.",
@@ -26987,7 +26997,6 @@
     "gotIt": "Got it",
     "save": "Save",
     "done": "Done",
-    "composerHint": "Claude and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.",
     "later": "Later",
     "skippedTitle": "Agent setup skipped",
     "signInPending": "Agent sign-in",
@@ -27572,5 +27581,125 @@
       }
     },
     "promiseAccount": "Keys are sealed on this computer. When you’re signed in to Orca, they’re also saved in your Orca account for cloud workspaces. On SSH hosts and paired machines, Orca passes a key for that run only and never writes it there."
+  },
+  "orcaCloudAgentRow": {
+    "fromAccount": "{{agent}} · from your Orca account",
+    "viaKey": "{{agent}} · {{key}}",
+    "notSetUp": "{{agent}} isn’t set up for Orca Cloud yet. Set it up once in Settings → Agent accounts.",
+    "setUpOnce": "Set up once",
+    "expired": "Your {{agent}} sign-in for Orca Cloud expired. Renew it once in Settings → Agent accounts.",
+    "renew": "Renew",
+    "killSwitch": "{{agent}} signs in for each cloud workspace while Orca account sign-in is paused.",
+    "signedOut": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
+    "optional": "Optional",
+    "error": "Couldn’t check whether {{agent}} is set up for Orca Cloud. You can still start.",
+    "tryAgain": "Try again",
+    "label": "Agent",
+    "checking": "Checking {{agent}}"
+  },
+  "orcaCloudAccounts": {
+    "paste": {
+      "label": "Claude setup token",
+      "placeholder": "sk-ant-oat01-…",
+      "save": "Save",
+      "help": "Write-only. You won’t see it again after saving.",
+      "captureFailed": "Orca couldn’t read the token from claude setup-token. Run it in a terminal, then paste the token it prints.",
+      "noCli": "The claude command isn’t on this computer. Run claude setup-token anywhere, then paste the token.",
+      "chosen": "Run claude setup-token anywhere, then paste the token it prints."
+    },
+    "cancel": "Cancel",
+    "settingUp": "Finish in your browser",
+    "settingUpClaudeDetail": "Orca runs claude setup-token on this computer, then saves the result to your Orca account.",
+    "openAgain": "Open again",
+    "preparing": "Getting ChatGPT sign-in ready",
+    "preparingDetail": "Codex signs in once in a short-lived sandbox. Orca then keeps the sign-in in your Orca account.",
+    "deviceEnter": "Enter",
+    "deviceOn": "on {{host}}",
+    "deviceGuard": "Only continue if you started this sign-in in Orca.",
+    "pasteInstead": "Paste the token instead",
+    "saving": "Saving to your Orca account…",
+    "yourAccount": "Your {{product}} account",
+    "removeConfirm": "Remove your {{product}} account from Orca? Cloud workspaces use the team key, or ask you to sign in.",
+    "remove": "Remove",
+    "renewsBy": "Renews by {{date}}.",
+    "activeDetail": "Kept in your Orca account, never in a sandbox.",
+    "active": "{{email}} · from your Orca account",
+    "activeKeyFirst": "{{email}} · saved, using {{key}}",
+    "sourceLabel": "Source for {{agent}}",
+    "source": {
+      "account": "Your account",
+      "teamKey": "Team key",
+      "repositoryKey": "Repository key",
+      "ownKey": "Your API key"
+    },
+    "removeEllipsis": "Remove…",
+    "choice": "Saved. Use your {{product}} account instead of {{key}} in your cloud workspaces?",
+    "choiceDetail": "Your account’s usage limits apply instead of the team’s bill. You can change this any time.",
+    "choiceDetailKey": "Your account’s usage limits apply instead of the key’s billing. You can change this any time.",
+    "useMine": "Use my account",
+    "useClaude": "Use my Claude account",
+    "useChatGPT": "Use my ChatGPT account",
+    "notSetUpKey": "Not set up · using {{key}}",
+    "notSetUp": "Not set up",
+    "notSetUpDetail": "One sign-in on this computer. Then every cloud workspace can use it.",
+    "tryAgain": "Try again",
+    "expired": "Your {{agent}} sign-in expired",
+    "expiredDetail": "Cloud workspaces use {{key}} until you renew. Nothing else changed.",
+    "expiredDetailNoKey": "Cloud workspaces ask you to sign in until you renew.",
+    "renew": "Renew",
+    "killSwitch": "Signs in for each cloud workspace",
+    "killSwitchDetail": "Orca can’t use your {{product}} account in cloud workspaces right now. Each new cloud workspace asks once until it’s back.",
+    "error": {
+      "saveFailed": "Couldn’t save to your Orca account.",
+      "nothingChanged": "Nothing was changed.",
+      "denied": "The sign-in was declined in your browser.",
+      "timedOut": "The sign-in took too long to finish.",
+      "codeExpired": "The code expired · start again",
+      "notChatGpt": "That sign-in wasn’t a ChatGPT account. Use the ChatGPT account you use with Codex.",
+      "brokerBusy": "A ChatGPT sign-in is already running. Finish it, or try again in a minute.",
+      "rateLimited": "Too many sign-in attempts. Try again in a few minutes.",
+      "invalidToken": "This token isn’t valid · run claude setup-token again",
+      "notEnabled": "Orca can’t use your {{product}} account in cloud workspaces right now.",
+      "signedOut": "Sign in to Orca again, then try again."
+    },
+    "dismiss": "Dismiss",
+    "announce": {
+      "browser": "finish in your browser",
+      "preparing": "getting sign-in ready",
+      "device": "enter the code on the sign-in page",
+      "paste": "paste the token",
+      "saving": "saving",
+      "saved": "set up"
+    },
+    "loading": "Loading agent accounts…",
+    "signedOut": "Sign in to Orca to use your accounts in cloud workspaces.",
+    "signIn": "Sign in",
+    "loadFailed": "Couldn’t load your agent accounts.",
+    "title": "Orca Cloud",
+    "help": "Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.",
+    "policy": "Your Claude and ChatGPT accounts are used only in your own workspaces. Teammates never use them.",
+    "codeCopied": "Code copied",
+    "agent": {
+      "claude": "Claude",
+      "codex": "Codex"
+    },
+    "product": {
+      "claude": "Claude",
+      "codex": "ChatGPT"
+    },
+    "key": {
+      "team": "the team key",
+      "repository": "the repository key",
+      "personal": "your API key"
+    },
+    "keepTeam": "Keep the team key",
+    "keepRepository": "Keep the repository key",
+    "keepOwn": "Keep your API key",
+    "via": {
+      "team": "team key",
+      "repository": "repository key",
+      "personal": "your API key"
+    },
+    "copyAndOpen": "Copy code and open"
   }
 }

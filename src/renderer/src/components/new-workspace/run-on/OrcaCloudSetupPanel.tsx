@@ -260,10 +260,12 @@ export function OrcaCloudSetupPanel({
                   <span className="block text-[11px] text-muted-foreground">{note}</span>
                 ) : null}
                 {step.action ? (
+                  // One shared in-row action ("Set up once", "How to push"): it must read as a button.
                   <Button
                     type="button"
-                    variant="link"
-                    size="statusAction"
+                    variant="outline"
+                    size="xs"
+                    className="mt-1"
                     onClick={step.action.onClick}
                   >
                     {step.action.label}

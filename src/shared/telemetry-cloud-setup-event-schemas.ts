@@ -50,3 +50,14 @@ export const cloudSetupFirstSandboxSchema = z
 
 /** Trial → plan conversion: a setup session's plan step finished. */
 export const cloudSetupPlanChosenSchema = z.object({ after_trial: z.boolean() }).strict()
+
+/** Cloud-start G: how the composer's agent was covered at this install's first cloud start. */
+export const CLOUD_START_AGENT_VALUES = ['claude', 'codex', 'other'] as const
+export const CLOUD_START_AGENT_COVERAGE_VALUES = ['account', 'key', 'none', 'unknown'] as const
+
+export const cloudFirstStartAgentCoverageSchema = z
+  .object({
+    agent: z.enum(CLOUD_START_AGENT_VALUES),
+    coverage: z.enum(CLOUD_START_AGENT_COVERAGE_VALUES)
+  })
+  .strict()
