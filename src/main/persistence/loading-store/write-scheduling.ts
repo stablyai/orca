@@ -117,9 +117,12 @@ function scheduleDomainSave(
     listener(dirtyDomains)
   }
   runtime.automationListProjectionCache = null
-  // A named automationRuns save supersedes older run lists, including one a failed in-flight write restores.
-  if (dirtyDomains?.includes('automationRuns')) {
-    runtime.pendingAutomationRunsAfter = runtime.state.automationRuns
+  // A run list replaced outside the run-delta path saves as a whole row; an older pending delta is stale.
+  if (
+    dirtyDomains?.includes('automationRuns') &&
+    runtime.pendingAutomationRunsAfter !== runtime.state.automationRuns
+  ) {
+    runtime.pendingAutomationRunsAfter = undefined
   }
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {
