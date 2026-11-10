@@ -29,6 +29,7 @@ import {
   normalizeConcreteWorkspaceId
 } from './linear-project-models'
 import { readCollection } from './linear-project-collection-read'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function listProjects(
   query: string | undefined,
@@ -52,7 +53,7 @@ export async function listProjects(
       const connection = trimmed ? result.data?.searchProjects : result.data?.projects
       return {
         items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: !!connection?.pageInfo?.hasNextPage
+        hasMore: linearConnectionHasNextPage(connection)
       }
     },
     force,
@@ -103,10 +104,10 @@ export async function listProjectsByExactName(
           }
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
           if (
-            connection?.pageInfo?.hasNextPage !== true ||
+            !linearConnectionHasNextPage(connection) ||
             !nextCursor ||
             nextCursor === after ||
-            (connection.nodes ?? []).length === 0
+            (connection?.nodes ?? []).length === 0
           ) {
             break
           }
