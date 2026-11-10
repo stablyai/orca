@@ -94,6 +94,23 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Alt+Z'])
   },
   {
+    id: 'editor.toggleDiffViewer',
+    title: 'Toggle Diff Viewer',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: [
+      'shortcut',
+      'editor',
+      'diff',
+      'viewer',
+      'changes',
+      'edit',
+      'toggle'
+    ],
+    // Why: unbound by default so users opt in; avoids colliding with existing editor chords (#11095).
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'editor.copyContext',
     title: 'Copy Context',
     group: 'Editors',
