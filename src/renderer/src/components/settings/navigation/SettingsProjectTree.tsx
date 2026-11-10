@@ -13,10 +13,7 @@ import { RepoIconGlyph } from '../../repo/repo-icon'
 import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 
-export type RepoNavSection = Pick<
-  SettingsNavSection,
-  'id' | 'title' | 'badgeColor' | 'repoIcon' | 'upstream' | 'isRemote' | 'projectCopy'
->
+export type RepoNavSection = Omit<SettingsNavSection, 'description' | 'searchEntries' | 'group'>
 
 function checkoutDisplayPath(path: string): string {
   // Recognized per-user roots belong to the checkout's host, not the renderer's host.
@@ -73,7 +70,7 @@ export function SettingsProjectTree({
   const renderRow = (section: RepoNavSection, child: boolean): React.JSX.Element => {
     const copy = child ? section.projectCopy : undefined
     const active = activeSectionId === section.id
-    const name = copy ? basename(copy.path) || section.title : section.title
+    const name = copy ? basename(copy.path) || copy.projectTitle : section.title
     const hostLabel = copy
       ? (hostLabels.get(copy.hostId) ?? getExecutionHostLabel(copy.hostId))
       : ''
