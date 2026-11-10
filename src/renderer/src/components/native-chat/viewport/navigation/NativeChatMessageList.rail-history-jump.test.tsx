@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { render } from '../../messages/actions/native-chat-tooltip-test-harness'
 import { useCallback, useMemo, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -242,7 +242,7 @@ describe('jumping from the rail while following the end', () => {
   }
 
   function rowOffsetFromViewportTop(prompt: string): number {
-    const row = screen.getByText(prompt).closest<HTMLElement>('[data-index]')
+    const row = within(scroller()).getByText(prompt).closest<HTMLElement>('[data-index]')
     if (!row) {
       throw new Error(`${prompt} has no mounted row`)
     }
@@ -302,6 +302,26 @@ describe('jumping from the rail while following the end', () => {
     fireEvent.click(screen.getByRole('button', { name: prompt }))
     await frame()
   }
+
+  it('pages to an unloaded message from the expanded directory and keeps it open at the landing', async () => {
+    const pages = holdFirstPage()
+    render(<PagedTranscript holdPage={pages.holdPage} />)
+    await settle(10)
+    fireEvent.click(screen.getByRole('button', { name: 'Expand message list' }))
+    await pickUnloadedWhilePaging('prompt-5')
+    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBe('true')
+    expect(within(scroller()).queryByText('prompt-5')).toBeNull()
+
+    pages.release()
+    await settle(60)
+
+    expect(Math.abs(rowOffsetFromViewportTop('prompt-5'))).toBeLessThanOrEqual(2)
+    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-current')).toBe(
+      'true'
+    )
+    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Collapse message list' })).not.toBeNull()
+  })
 
   it.each([
     ['a wheel over the transcript', () => fireEvent.wheel(scroller(), { deltaY: -40 })],

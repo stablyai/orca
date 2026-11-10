@@ -8,6 +8,7 @@ import { NativeChatMessageRail } from './NativeChatMessageRail'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
 
 afterEach(cleanup)
+afterEach(() => vi.restoreAllMocks())
 
 const NO_SLOTS: never[] = []
 const NO_ROWS = { messages: [], turnKeys: [] }
@@ -71,6 +72,24 @@ const preview = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[data-slot="hover-card-content"]')
 
 describe('message rail interaction', () => {
+  it('focuses and selects a windowed message after walking to both ends of a long outline', async () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(300)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800)
+    const user = userEvent.setup()
+    const select = vi.fn()
+    render(<Rail count={10_000} activeIndex={9999} onSelect={select} />)
+
+    await user.click(screen.getByRole('button', { name: 'Expand message list' }))
+    await waitFor(() => expect(document.activeElement).toBe(tick('Prompt 9999')))
+    await user.keyboard('{Home}')
+    await waitFor(() => expect(document.activeElement).toBe(tick('Prompt 0')))
+    await user.keyboard('{ArrowDown}{End}{Enter}')
+    expect(document.activeElement).toBe(tick('Prompt 9999'))
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-9999' }))
+    await user.keyboard('{Escape}')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Expand message list' }))
+  })
+
   it('keeps the complete message list open after a jump and restores the toggle on Escape', async () => {
     const user = userEvent.setup()
     const select = vi.fn()
