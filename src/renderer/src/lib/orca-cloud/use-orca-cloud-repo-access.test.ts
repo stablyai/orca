@@ -28,11 +28,11 @@ it('caches an answer for 5 minutes, shares one request, and re-asks when forced'
   ])
   expect(a).toEqual(b)
   expect(getRepoAccess).toHaveBeenCalledOnce()
-  await fetchOrcaCloudRepoAccess(REPO, { now: Date.now() + REPO_ACCESS_CACHE_MS - 1_000 })
+  await fetchOrcaCloudRepoAccess(REPO, { now: REPO_ACCESS_CACHE_MS - 1_000 })
   expect(getRepoAccess).toHaveBeenCalledOnce()
-  await fetchOrcaCloudRepoAccess(REPO, { force: true })
+  await fetchOrcaCloudRepoAccess(REPO, { force: true, now: 0 })
   expect(getRepoAccess).toHaveBeenCalledTimes(2)
-  await fetchOrcaCloudRepoAccess(REPO, { setupSessionId: 'cs_abcdefghijklmnopqrstuv' })
+  await fetchOrcaCloudRepoAccess(REPO, { setupSessionId: 'cs_abcdefghijklmnopqrstuv', now: 0 })
   expect(getRepoAccess).toHaveBeenLastCalledWith({
     repoUrl: REPO,
     setupSessionId: 'cs_abcdefghijklmnopqrstuv'
@@ -41,10 +41,10 @@ it('caches an answer for 5 minutes, shares one request, and re-asks when forced'
 
 it('does not cache "couldn’t tell" (signed out, offline)', async () => {
   getRepoAccess.mockResolvedValueOnce({ ok: false, code: 'unauthorized', message: 'x' })
-  expect(await fetchOrcaCloudRepoAccess(REPO)).toBeNull()
+  expect(await fetchOrcaCloudRepoAccess(REPO, { now: 0 })).toBeNull()
   getRepoAccess.mockResolvedValueOnce({
     ok: true,
     value: { access: 'granted', owner: 'acme', repo: REPO }
   })
-  expect(await fetchOrcaCloudRepoAccess(REPO)).toMatchObject({ access: 'granted' })
+  expect(await fetchOrcaCloudRepoAccess(REPO, { now: 0 })).toMatchObject({ access: 'granted' })
 })

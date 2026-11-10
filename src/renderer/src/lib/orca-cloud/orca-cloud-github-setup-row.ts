@@ -112,7 +112,7 @@ export function orcaCloudGitHubSetupRow(
         status: translate('orcaCloud.setup.github.doneStatus', 'Done'),
         blocksStart: false
       }
-    default:
+    case 'unknown':
       // Checking (Skeleton), or couldn't tell (signed out, offline): never blocks; the create path
       // still refuses an unreachable repository before any sandbox starts.
       return { step: { id: 'github', state: 'active' }, label, blocksStart: false }

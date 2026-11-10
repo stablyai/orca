@@ -62,7 +62,7 @@ export function repoAccessState(
       return 'needs-install'
     case 'requested':
       return 'pending-approval'
-    default:
+    case undefined:
       return 'unknown'
   }
 }
@@ -116,7 +116,7 @@ export async function fetchOrcaCloudRepoAccess(
     .then((result) => (result.ok ? result.value : null))
     .catch(() => null)
     .then((value) => {
-      cache.set(key, { at: Date.now(), value })
+      cache.set(key, { at: now, value })
       return value
     })
     .finally(() => inflight.delete(key))

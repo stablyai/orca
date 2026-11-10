@@ -1,7 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-// oxlint-disable-next-line typescript/no-explicit-any -- IPC handlers take (event, args).
-const handlers = new Map<string, (...args: any[]) => unknown>()
+const handlers = new Map<string, (...args: unknown[]) => unknown>()
 const { openExternal } = vi.hoisted(() => ({ openExternal: vi.fn(async () => {}) }))
 
 vi.mock('electron', () => ({
