@@ -45,8 +45,16 @@ afterEach(async () => {
   await rm(root, { force: true, recursive: true })
 })
 
-function copy(uuid: string, settled: boolean, before?: string, opener?: string, source = SOURCE) {
+function copy(
+  uuid: string,
+  settled: boolean,
+  before?: string,
+  opener?: string,
+  source = SOURCE,
+  destinationCwd?: string
+) {
   return copyClaudeConversation({
+    ...(destinationCwd ? { destinationCwd } : {}),
     identity: {
       sessionId: 'orca-source',
       workspaceId: 'workspace',
@@ -215,3 +223,21 @@ it.each(['fork', 'rewind'] as const)(
     })
   }
 )
+
+it("writes a copy for another worktree into that worktree's project, where Claude resumes it", async () => {
+  const prefix = rows.slice(0, 28)
+  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
+  const assistant = prefix.findLast((row) => row.type === 'assistant')!
+  const result = await copy(
+    assistant.uuid,
+    true,
+    undefined,
+    undefined,
+    SOURCE,
+    '/repo/feature.fork'
+  )
+  expect(result.filePath).toBe(
+    join(selectedHome, 'projects', '-repo-feature-fork', `${result.sessionId}.jsonl`)
+  )
+  expect(await readdir(join(selectedHome, 'projects'))).toEqual(['-repo-feature-fork'])
+})

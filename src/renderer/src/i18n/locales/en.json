@@ -20933,7 +20933,26 @@
         "commandDescription": "Fork this chat from its latest response",
         "commandWorking": "Wait for the response to finish, then fork.",
         "commandNothing": "There’s no response to fork yet.",
-        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "worktree": {
+          "notGit": "This chat’s workspace is not a git worktree, so it can’t fork into a new one.",
+          "createFailed": "Couldn’t create the worktree",
+          "title": "Fork into a new worktree",
+          "description": "The new worktree opens a copy of this chat, up to this response, so you can take it another way. This chat stays as it is.",
+          "baseLabel": "Start the branch from",
+          "baseMain": "Main branch",
+          "baseMainHint": "The project’s default base, like any new worktree.",
+          "baseCurrent": "This branch",
+          "baseCurrentHint": "{{branch}}, as last committed. Uncommitted changes stay here.",
+          "baseCurrentUnavailable": "This workspace has no branch to start from.",
+          "cancel": "Cancel",
+          "creating": "Creating worktree…",
+          "confirm": "Fork",
+          "action": "Fork into a new worktree",
+          "tooltip": "Fork into a new worktree. Its chat includes this whole response, up to the end of its turn.",
+          "menu": "Fork into New Worktree…",
+          "sidebarMenu": "Fork Chat into New Worktree"
+        }
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

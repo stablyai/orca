@@ -1,6 +1,6 @@
 import { useContext, useSyncExternalStore } from 'react'
 import { Pressable, View } from 'react-native'
-import { GitFork } from 'lucide-react-native'
+import { GitBranchPlus, GitFork } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { colors, radii } from '../../../theme/mobile-theme'
@@ -45,15 +45,21 @@ export function MobileNativeChatResponseActions({
       {fork && offer !== 'hidden' ? (
         <ForkButton offer={offer} onFork={() => fork.fork(message)} />
       ) : null}
+      {fork && offer !== 'hidden' && offer !== 'reserved' && fork.worktreeForkOffered() ? (
+        <ForkButton offer={offer} worktree onFork={() => fork.forkToWorktree(message)} />
+      ) : null}
     </View>
   )
 }
 
 function ForkButton({
   offer,
+  worktree = false,
   onFork
 }: {
   offer: Exclude<MobileNativeChatForkOffer, 'hidden'>
+  /** Forks into a new worktree instead of beside this chat. */
+  worktree?: boolean
   onFork: () => void
 }): React.JSX.Element {
   const t = useMobileTranslation()
@@ -68,16 +74,35 @@ function ForkButton({
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       hitSlop={10}
       accessibilityRole="button"
-      accessibilityLabel={t('chat.message.forkFromResponse', 'Fork from this response')}
-      accessibilityHint={t(
-        'chat.message.forkFromResponseHint',
-        'A new chat with this whole response, up to the end of its turn'
-      )}
+      accessibilityLabel={
+        worktree
+          ? t('chat.message.forkIntoWorktree', 'Fork into a new worktree')
+          : t('chat.message.forkFromResponse', 'Fork from this response')
+      }
+      accessibilityHint={
+        worktree
+          ? t(
+              'chat.message.forkIntoWorktreeHint',
+              'A new worktree with a chat holding this whole response, up to the end of its turn'
+            )
+          : t(
+              'chat.message.forkFromResponseHint',
+              'A new chat with this whole response, up to the end of its turn'
+            )
+      }
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onFork}
     >
-      <GitFork size={14} color={colors.textMuted} style={disabled ? styles.disabled : null} />
+      {worktree ? (
+        <GitBranchPlus
+          size={14}
+          color={colors.textMuted}
+          style={disabled ? styles.disabled : null}
+        />
+      ) : (
+        <GitFork size={14} color={colors.textMuted} style={disabled ? styles.disabled : null} />
+      )}
     </Pressable>
   )
 }

@@ -15,7 +15,8 @@ import {
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY
 } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import { latestAgentSessionContextClearSequence } from '../../../../src/shared/agent-session/agent-session-context-clear'
 import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
@@ -42,6 +43,11 @@ export type MobileNativeChatFork = {
   subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
   fork: (message: NativeChatMessage) => void
+  /** Whether this host can fork a chat into a new worktree. */
+  worktreeForkOffered: () => boolean
+  forkToWorktree: (message: NativeChatMessage) => void
+  /** Forks the newest response that can fork into a new worktree; false when none can. */
+  forkLatestToWorktree: () => boolean
 }
 
 /** Fixed by the row's own kind, never by support or turn state, so the meta row never shifts. */
@@ -165,6 +171,7 @@ export function useMobileNativeChatFork(input: {
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
   sessionForkSupport: AgentSessionOptionsResult['forkSupport']
   createFork: (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => Promise<void>
+  createWorktreeFork: (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => Promise<void>
 }): MobileNativeChatFork {
   const host: StructuredAgentSessionHostCapabilityState = !input.hostCapabilities
     ? 'unknown'
@@ -182,7 +189,10 @@ export function useMobileNativeChatFork(input: {
     () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),
     [host, registered, input.sessionForkSupport, inheritedOriginal]
   )
-  const { messages, turnJournal, agentWorking, sessionId, agent, createFork } = input
+  const worktreeForkSupported =
+    input.hostCapabilities?.includes(AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY) === true
+  const { messages, turnJournal, agentWorking, sessionId, agent, createFork, createWorktreeFork } =
+    input
   const turns = useMemo(() => {
     const membership = nativeChatTurnMembership(messages, turnJournal)
     const keyById = new Map(
@@ -239,8 +249,8 @@ export function useMobileNativeChatFork(input: {
       turns
     ]
   )
-  const fork = useCallback(
-    (message: NativeChatMessage) => {
+  const start = useCallback(
+    (message: NativeChatMessage, create: typeof createFork): boolean => {
       if (
         inFlight.current ||
         offerFor(message) !== 'available' ||
@@ -248,27 +258,50 @@ export function useMobileNativeChatFork(input: {
         !agent ||
         !isTuiAgent(agent)
       ) {
-        return
+        return false
       }
       inFlight.current = true
       setPending(true)
-      void createFork(agent, { sessionId, throughItemId: message.id }).finally(() => {
+      void create(agent, { sessionId, throughItemId: message.id }).finally(() => {
         inFlight.current = false
         setPending(false)
       })
+      return true
     },
-    [agent, createFork, offerFor, sessionId]
+    [agent, offerFor, sessionId]
   )
+  const fork = useCallback(
+    (message: NativeChatMessage) => void start(message, createFork),
+    [createFork, start]
+  )
+  const forkToWorktree = useCallback(
+    (message: NativeChatMessage) => {
+      if (worktreeForkSupported) {
+        start(message, createWorktreeFork)
+      }
+    },
+    [createWorktreeFork, start, worktreeForkSupported]
+  )
+  const forkLatestToWorktree = useCallback((): boolean => {
+    const message = messages.findLast((candidate) => offerFor(candidate) === 'available')
+    return worktreeForkSupported && !!message && start(message, createWorktreeFork)
+  }, [createWorktreeFork, messages, offerFor, start, worktreeForkSupported])
   // One stable value: each button re-renders only when its own offer changes, not on every
   // streamed revision of the transcript.
-  const latest = useRef({ offerFor, fork })
+  const latest = useRef({
+    offerFor,
+    fork,
+    forkToWorktree,
+    forkLatestToWorktree,
+    worktreeForkSupported
+  })
   const listeners = useRef(new Set<() => void>())
   useLayoutEffect(() => {
-    latest.current = { offerFor, fork }
+    latest.current = { offerFor, fork, forkToWorktree, forkLatestToWorktree, worktreeForkSupported }
     for (const listener of listeners.current) {
       listener()
     }
-  }, [offerFor, fork])
+  }, [offerFor, fork, forkToWorktree, forkLatestToWorktree, worktreeForkSupported])
   return useMemo(
     () => ({
       subscribe: (listener) => {
@@ -276,7 +309,10 @@ export function useMobileNativeChatFork(input: {
         return () => listeners.current.delete(listener)
       },
       offerFor: (message) => latest.current.offerFor(message),
-      fork: (message) => latest.current.fork(message)
+      fork: (message) => latest.current.fork(message),
+      worktreeForkOffered: () => latest.current.worktreeForkSupported,
+      forkToWorktree: (message) => latest.current.forkToWorktree(message),
+      forkLatestToWorktree: () => latest.current.forkLatestToWorktree()
     }),
     []
   )

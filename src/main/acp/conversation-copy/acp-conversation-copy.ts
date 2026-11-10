@@ -33,7 +33,7 @@ export async function copyAcpConversation(
   >,
   input: Pick<
     StructuredAgentSessionConversationCopyInput,
-    'identity' | 'providerSessionId' | 'accountHome' | 'checkpoint'
+    'identity' | 'providerSessionId' | 'accountHome' | 'checkpoint' | 'destinationCwd'
   >,
   options: {
     timeoutMs?: number
@@ -72,7 +72,12 @@ export async function copyAcpConversation(
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(
-        forkAdvertised(connection, input.providerSessionId, launch.cwd, deps.spec.agent),
+        forkAdvertised(
+          connection,
+          input.providerSessionId,
+          input.destinationCwd ?? launch.cwd,
+          deps.spec.agent
+        ),
         signal
       )
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)

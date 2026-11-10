@@ -31,7 +31,8 @@ export async function prepareStructuredAgentSessionFork(
     providerSessionId,
     requireCurrent,
     fail,
-    throughItemId
+    throughItemId,
+    destinationCwd
   } = await admitStructuredAgentSessionFork(input)
   const title = normalizeAgentSessionConversationName(
     `${sliceAtCodeUnitLimit(record.conversationName?.trim() || defaultAgentChatLabel(input.agent), AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH - 5)} fork`
@@ -48,7 +49,8 @@ export async function prepareStructuredAgentSessionFork(
       providerHandle: sourceHead.handle
     },
     providerSessionId,
-    accountHome: record.accountHome
+    accountHome: record.accountHome,
+    ...(destinationCwd ? { destinationCwd } : {})
   }).catch((error: unknown) => {
     if (isAgentSessionRefusalError(error)) {
       return fail(error)

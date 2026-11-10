@@ -4,6 +4,15 @@ import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agen
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './native-chat/transcript/mobile-native-chat-notice-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
+import { forkMobileStructuredChatIntoWorktree } from './mobile-structured-chat-worktree-fork'
+import { useMobileWorktreeForkRequest } from './native-chat/mobile-native-chat-worktree-fork-requests'
+import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
+import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
+import {
+  useWorkspaceExecutionHost,
+  workspaceRouteHref
+} from '../navigation/workspace-execution-host'
+import { translate } from '../i18n/mobile-i18n'
 import {
   MobileNativeChatForkContext,
   useMobileNativeChatFork
@@ -31,6 +40,29 @@ export function MobileNativeChatForkProvider({
       forkMobileStructuredChat(latestController.current, agent, forkFrom),
     []
   )
+  const executionHost = useWorkspaceExecutionHost()
+  const { getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(client, true)
+  const createWorktreeFork = useCallback(
+    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => {
+      const current = latestController.current
+      return forkMobileStructuredChatIntoWorktree({
+        client: current.client,
+        sourceWorktreeId: current.worktreeId,
+        agent,
+        forkFrom,
+        worktreeCreateIdempotency: getWorktreeCreateCutoverSupport(),
+        showToast: current.showToast,
+        openWorktree: (worktreeId, name, warning) =>
+          current.router.push(
+            workspaceRouteHref(
+              hostNewWorktreeSessionRoute(current.hostId, worktreeId, name, warning),
+              executionHost
+            )
+          )
+      })
+    },
+    [executionHost, getWorktreeCreateCutoverSupport]
+  )
   const fork = useMobileNativeChatFork({
     client,
     hostCapabilities: controller.hostCapabilities,
@@ -41,8 +73,18 @@ export function MobileNativeChatForkProvider({
     turnJournal: chat.nativeChatTurnJournal,
     agentWorking: chat.nativeChatTurnActive,
     sessionForkSupport: chat.nativeChatForkSupport,
-    createFork
+    createFork,
+    createWorktreeFork
   })
+  const showNothingToFork = useCallback(
+    () =>
+      latestController.current.showToast(
+        translate('chat.fork.worktree.nothing', 'There’s no response to fork yet.'),
+        3000
+      ),
+    []
+  )
+  useMobileWorktreeForkRequest(fork.forkLatestToWorktree, showNothingToFork)
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
     () =>

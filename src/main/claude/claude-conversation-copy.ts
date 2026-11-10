@@ -5,6 +5,24 @@ import { AgentConversationCopyError } from '../native-chat/agent-conversation-co
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { materializeClaudeConversationTranscript } from './claude-rewind-transcript'
+import { encodeClaudeProjectPath } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
+
+// Claude names a longer path's bucket with a hash Orca cannot reproduce.
+const CLAUDE_PLAIN_BUCKET_NAME_MAX_LENGTH = 200
+
+/** Claude resumes a chat only from its working folder's bucket, so a copy for another worktree goes there. */
+function claudeDestinationBucket(destinationCwd: string | undefined): string | null {
+  if (destinationCwd === undefined) {
+    return null
+  }
+  const bucket = encodeClaudeProjectPath(destinationCwd)
+  if (bucket.length > CLAUDE_PLAIN_BUCKET_NAME_MAX_LENGTH) {
+    throw new AgentConversationCopyError(
+      'Claude cannot copy this chat into a worktree with such a long path. Use a shorter worktree path, then try again.'
+    )
+  }
+  return bucket
+}
 
 export const copyClaudeConversation: NonNullable<
   StructuredAgentSessionAdapter['copyConversation']
@@ -26,6 +44,7 @@ export const copyClaudeConversation: NonNullable<
     ...(input.signal ? [input.signal] : [])
   ])
   const destinationHome = requireLegacyAgentSessionAccountHome(input.accountHome).path
+  const destinationBucket = claudeDestinationBucket(input.destinationCwd)
   const router = getClaudeProfileRouter()
   const homes = new Set([
     destinationHome,
@@ -47,7 +66,11 @@ export const copyClaudeConversation: NonNullable<
         sourcePath,
         sourceSessionId,
         checkpoint,
-        destinationDirectory: join(destinationHome, 'projects', basename(dirname(sourcePath))),
+        destinationDirectory: join(
+          destinationHome,
+          'projects',
+          destinationBucket ?? basename(dirname(sourcePath))
+        ),
         title: input.title,
         signal
       })) ?? Promise.reject(unavailable())

@@ -9,6 +9,7 @@ import {
   type NativeChatTabSession
 } from './tab-session-history-switch'
 import { runNativeChatCliFork, useNativeChatCliForkPending } from './native-chat-cli-fork-run'
+import { NativeChatWorktreeForkMenuItem } from '../native-chat/messages/actions/NativeChatWorktreeForkMenuItem'
 
 export function NativeChatCliForkMenuItems({
   tab,
@@ -49,6 +50,7 @@ export function NativeChatCliForkMenuItems({
           void runNativeChatCliFork({ subject: chat, tab, agent, commandOverrides, onComplete })
         }}
       />
+      <NativeChatWorktreeForkMenuItem tab={tab} menuKind={menuKind} onComplete={onComplete} />
     </>
   )
 }
