@@ -179,6 +179,13 @@ function keepPublishedLinkTitles<T extends Worktree>(
   })
 }
 
+function currentRows(state: AppState, repoId: string, hostId: ExecutionHostId): Worktree[] {
+  const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
+  return (selectWorktreesByRepo(state)[repoId] ?? []).filter((row) =>
+    worktreeMatchesHost(row, hostId, matchOptions)
+  )
+}
+
 type FetchWorktrees = (repoId: string, options: WorktreeFetchOptions) => Promise<unknown>
 
 /**
@@ -198,10 +205,6 @@ export function listingMetadataCoverage(
     hostId,
     refresh.result.workspaceMetadata
   )
-  const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
-  const current = (selectWorktreesByRepo(state)[repoId] ?? []).filter((row) =>
-    worktreeMatchesHost(row, hostId, matchOptions)
-  )
   // Keeping titles already shown is always safe (it never adds or restores a link), so any listing that
   // can't prove it includes the newest record keeps them.
   const keep = coverage === 'stale' || coverage === 'unstamped'
@@ -211,7 +214,10 @@ export function listingMetadataCoverage(
           ...refresh,
           result: {
             ...refresh.result,
-            worktrees: keepPublishedLinkTitles(refresh.result.worktrees, current)
+            worktrees: keepPublishedLinkTitles(
+              refresh.result.worktrees,
+              currentRows(state, repoId, hostId)
+            )
           }
         }
       : refresh,
