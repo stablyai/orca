@@ -48,7 +48,7 @@ export function ErrorState({
           : t('orcaCloudWorkspace.tryAgain', 'Try again')
       }
       retrying={retrying}
-      onRetry={atLimit ? () => openCloudWorkspacesHome() : onRetry}
+      onRetry={atLimit ? () => openCloudWorkspacesHome({ running: true }) : onRetry}
     />
   )
 }

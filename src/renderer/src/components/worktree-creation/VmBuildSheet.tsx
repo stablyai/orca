@@ -302,7 +302,7 @@ export function VmBuildSheet({
               },
               onSignIn: signIn,
               // Your workspaces on Home, where you can put one to sleep or delete it.
-              onShowWorkspaces: () => openCloudWorkspacesHome(),
+              onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

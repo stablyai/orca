@@ -20885,7 +20885,12 @@
         "archiveConfirmTitle": "Archive {{name}}?",
         "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
         "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
-        "showCloudWorkspaces": "Show cloud workspaces"
+        "showCloudWorkspaces": "Show cloud workspaces",
+        "deleteConfirmTitle": "Delete {{name}}?",
+        "sleep": "Sleep",
+        "deleteWorkspace": "Delete…",
+        "showRunningOnly": "Show running only",
+        "running": "Running"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26716,7 +26721,9 @@
       "olderDetail": "This version of Orca can’t connect to it, and restarting won’t update it. Your files are safe. New cloud workspaces use the current version.",
       "checkForUpdates": "Check for updates",
       "createWorkspace": "Create workspace"
-    }
+    },
+    "deletedNamed": "Deleted {{name}}",
+    "deleteFailedNamed": "Couldn’t delete {{name}}"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
