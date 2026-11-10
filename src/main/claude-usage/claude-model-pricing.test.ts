@@ -48,7 +48,7 @@ describe('model pricing name matching', () => {
   it.each([
     'claude-opus-5-6',
     'claude-sonnet-5-6',
-    'claude-fable-5-2',
+    'claude-fable-5-3',
     'claude-opus-6',
     'claude-opus-4.9',
     'claude-opus-5-50',

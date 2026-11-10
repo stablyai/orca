@@ -35,6 +35,7 @@ describe('speechModelRatingLanguage', () => {
     expect(speechModelRatingLanguage('de', 'ja-JP')).toBe('de')
     expect(speechModelRatingLanguage('auto', 'zh-Hant-TW')).toBe('zh')
     expect(speechModelRatingLanguage('auto', 'pt_BR')).toBe('pt')
+    expect(speechModelRatingLanguage('auto', 'nb-NO')).toBe('no')
     expect(speechModelRatingLanguage('auto', undefined)).toBeUndefined()
   })
 })

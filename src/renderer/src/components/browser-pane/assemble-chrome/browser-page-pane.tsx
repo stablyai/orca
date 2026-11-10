@@ -344,6 +344,7 @@ export function BrowserPagePane({
         grab={grab}
         grabAnnotations={grabAnnotations}
         annotationSend={annotationSend}
+        onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
         markupStart={markup.start}
         markupCancel={markup.cancel}
@@ -385,6 +386,7 @@ export function BrowserPagePane({
               }
               browserOverlayViewport={browserOverlayViewport}
               worktreeId={worktreeId}
+              importProfileId={sessionProfileId}
               grab={grab}
               annotationSend={annotationSend}
               grabAnnotations={grabAnnotations}

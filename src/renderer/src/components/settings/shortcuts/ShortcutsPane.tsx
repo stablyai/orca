@@ -323,7 +323,7 @@ export function ShortcutsPane(): React.JSX.Element {
         ) : null}
 
         <SettingsSubsectionHeader
-          title={t('auto.components.settings.ShortcutsPane.47f8f7aef9', 'Keyboard Shortcuts')}
+          title={t('auto.components.settings.ShortcutsPane.9a3a3ca03d', 'Keyboard shortcuts')}
           description={
             <>
               {t(

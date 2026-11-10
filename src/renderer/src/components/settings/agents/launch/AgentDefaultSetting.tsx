@@ -68,7 +68,7 @@ export function AgentDefaultSetting({
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
+      title={t('auto.components.settings.AgentsPane.3bddd54c9e', 'Default agent')}
       description={description}
     >
       <div className="flex flex-wrap gap-2 py-4">

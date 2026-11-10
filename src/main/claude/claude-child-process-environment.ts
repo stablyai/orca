@@ -1,14 +1,9 @@
 import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../native-chat/native-chat-visuals-delivery'
-
-const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
-  'CLAUDE_CODE_CHILD_SESSION',
-  'CLAUDE_CODE_SESSION_ID',
-  'CLAUDE_CODE_BRIDGE_SESSION_ID'
-] as const
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
@@ -35,19 +30,11 @@ function stripEnvKeys(
   return env
 }
 
-function stripClaudeChildSessionStamps(
-  env: Record<string, string>,
-  platform: NodeJS.Platform
-): Record<string, string> {
-  return stripEnvKeys(env, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS, platform)
-}
-
 export function buildClaudeChildProcessEnv(
   configuredEnv: Record<string, string> = {},
   options: {
     inheritedEnv?: NodeJS.ProcessEnv
     platform?: NodeJS.Platform
-    scrubConfiguredChildSessionStamps?: boolean
   } = {}
 ): Record<string, string> {
   const inheritedEnv = options.inheritedEnv ?? process.env
@@ -83,9 +70,6 @@ export function buildClaudeChildProcessEnv(
       platform
     )
   }
-  if (options.scrubConfiguredChildSessionStamps) {
-    return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
-  }
-  stripClaudeChildSessionStamps(env, platform)
+  stripInheritedClaudeSessionEnv(env, { platform })
   return { ...env, ...configuredEnv }
 }

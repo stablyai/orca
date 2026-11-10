@@ -16,10 +16,8 @@ import { readRemoteAttachmentArchive } from './remote-attachment-archive-read'
 import { WorkerTerminalReleaseSingleFlight } from '../worker/worker-terminal-release-single-flight'
 import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 import { archiveSummary } from '../worker/worker-terminal-resource-presentation'
-import {
-  releaseUnknownRecovery,
-  type WorkerReleaseReceipt
-} from '../worker/worker-release-completion'
+import type { WorkerReleaseReceipt } from '../worker/worker-release-completion'
+import { releaseUnknownRecovery } from '../worker/worker-release-unknown-recovery'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
 import type { inspectRemoteAttachment } from './federation-attachment-observation'
 import {
