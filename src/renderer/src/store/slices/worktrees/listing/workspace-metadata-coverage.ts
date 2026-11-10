@@ -38,6 +38,15 @@ function producerFor(key: string, epoch: string): ProducerCoverage {
   }
   // A new epoch is a restarted producer: what it lists already includes its earlier writes.
   const fresh = { epoch, lastSeq: 0, requiredByRepo: new Map<string, number>() }
+  if (key.startsWith('env:')) {
+    // A re-paired or reconnected environment is a new producer; its earlier bookkeeping dies here.
+    const environmentPrefix = key.slice(0, key.indexOf(':', 4) + 1)
+    for (const other of producers.keys()) {
+      if (other !== key && other.startsWith(environmentPrefix)) {
+        producers.delete(other)
+      }
+    }
+  }
   producers.set(key, fresh)
   return fresh
 }
