@@ -25,6 +25,7 @@ import {
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
+import { structuredAgentSessionTurnCheckpoint } from '../checkpoints/agent-session-checkpoints-host'
 
 type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
 
@@ -293,7 +294,8 @@ export async function beginStructuredAgentSessionInputHandover(
       },
       get recordRanOptions() {
         return recorder
-      }
+      },
+      captureTurnCheckpoint: structuredAgentSessionTurnCheckpoint(deps, sessionId)
     },
     next,
     // Re-read right before the provider call, which runs outside the serialize.

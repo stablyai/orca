@@ -8,7 +8,7 @@ Code: `cloud/apps/billing` (Worker), desktop `src/main/billing`, `src/renderer/s
 | Plan | Price | Includes |
 |---|---|---|
 | Team | $50/seat/mo or $480/seat/yr | 60 sandbox hours per seat per month, pooled across the org; one sandbox size, 8 vCPU / 16 GB (`ORCA_CLOUD_SANDBOX_SPEC`), at 1x; 3 running sandboxes per seat; 15-min idle sleep |
-| Overage | opt-in, off by default | $0.75 per sandbox hour; monthly spend cap, default $25, admins can raise (max $5,000); warnings at 80% / 100% of included hours |
+| Overage | opt-in, off by default | $1.00 per sandbox hour (`overageCentsPerHour` in plans.ts, the single source); monthly spend cap, default $25, admins can raise (max $5,000); warnings at 80% / 100% of included hours |
 | Enterprise | Custom | "Contact us" (no Stripe price) |
 
 No free plan, no trial, no other tiers. Numbers and labels live in `src/plans.ts` defaults and can be overridden
@@ -162,7 +162,7 @@ account is the upgrade path for strict per-account start locking.
   subscription from the API (order/staleness-proof). Handles `checkout.session.completed`, `customer.subscription.*`,
   `invoice.paid`, `invoice.payment_failed` (old and new payload shapes). Credited only to the customer billing created
   for that account. Live-mode events are acked and ignored. Failures → 500 so Stripe retries.
-- **Meter**: `orca_sandbox_seconds` (sum by customer); overage price $0.75/h via `transform_quantity.divide_by=3600`.
+- **Meter**: `orca_sandbox_seconds` (sum by customer); overage price $1.00/h via `transform_quantity.divide_by=3600`.
   Only billable overage is sent, at most the remaining spend cap; `identifier=usageId` + Idempotency-Key.
 
 ## Entitlements

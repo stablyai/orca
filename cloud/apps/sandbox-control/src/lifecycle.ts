@@ -42,12 +42,13 @@ import {
   type SessionFields
 } from './store'
 import { flushUsage, queueUsage } from './usage'
+import { SANDBOX_VCPUS } from './machine-size'
+import { isRegionalFailure } from './regions'
 
 export const LEASE_MS = 30 * 60_000
 const PROVIDER_SESSION_CAP_MS = 24 * 60 * 60_000
 /** Orca stops 10 min early so it, not the provider, ends the session (drain first). */
 export const SESSION_DEADLINE_MS = PROVIDER_SESSION_CAP_MS - 10 * 60_000
-const VCPUS: Record<MachineSize, number> = { standard: 4, large: 8 }
 const DAY_MS = 24 * 60 * 60_000
 /** Provider-side backstop: longer than idle retention (90d) + its warning, so Orca deletes first. */
 export const DEFAULT_SNAPSHOT_EXPIRATION_MS = 104 * DAY_MS
@@ -88,8 +89,13 @@ export type LifecycleDeps = {
   }
   config: {
     environment: string
+    /** The default region's golden image. */
     goldenSnapshotId: string
+    /** Every region's golden image (a snapshot only boots in its own region); absent = default region only. */
+    goldenSnapshots?: Record<string, string>
     defaultRegion: string
+    /** Tried in order when the default region's create fails on capacity (regions.ts); each has a golden image. */
+    fallbackRegions?: readonly string[]
     egressProxyUrl?: string
     /** Staging rehearsals shorten the cap; production uses SESSION_DEADLINE_MS. */
     sessionDeadlineMs?: number
@@ -102,6 +108,19 @@ export type LifecycleDeps = {
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
     shareLinkSecret?: string
   }
+}
+
+/** The golden image new sandboxes in `region` boot from; null when that region has none. */
+export function goldenFor(deps: Pick<LifecycleDeps, 'config'>, region: string): string | null {
+  if (region === deps.config.defaultRegion) {
+    return deps.config.goldenSnapshotId
+  }
+  return deps.config.goldenSnapshots?.[region] ?? null
+}
+
+/** Every region's golden image: shared, never deleted with a sandbox. */
+export function goldenSnapshotIds(config: { goldenSnapshotId: string; goldenSnapshots?: Record<string, string> }): string[] {
+  return [config.goldenSnapshotId, ...Object.values(config.goldenSnapshots ?? {})]
 }
 
 export class LifecycleError extends Error {
@@ -424,7 +443,7 @@ export async function createSandbox(
     visibility?: 'private' | 'team'
     section?: string
   },
-  options: { pool?: boolean } = {}
+  options: { pool?: boolean; fallback?: boolean } = {}
 ): Promise<Ready> {
   const existing = await liveSandboxForWorkspace(deps.db, caller.accountId, request.workspaceId)
   if (existing) {
@@ -442,7 +461,7 @@ export async function createSandbox(
     return { row: existing, connection }
   }
   const timer = phaseTimer(deps.now)
-  // An environment build carries the repo prebuilt and its own machine size (Large bills 2x).
+  // An environment build carries the repo prebuilt and its own machine size.
   const source: BootSource | null =
     request.environmentBuildId || request.useEnvironment !== false
       ? await timer.time('environment', () =>
@@ -454,14 +473,17 @@ export async function createSandbox(
       : null
   const machineSize = source?.machineSize ?? request.machineSize
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
-  const region = request.region ?? deps.config.defaultRegion
+  // A snapshot only boots in its own region: an environment build pins the region it was built in.
+  const region = source?.region ?? request.region ?? deps.config.defaultRegion
+  const bootSnapshotId = source?.snapshotId ?? goldenFor(deps, region)
+  if (!bootSnapshotId) {
+    throw new LifecycleError('conflict', 'region_unavailable')
+  }
   // The pool keeps warm VMs per image: the golden one, and the active build of recently used environments.
   const pooled =
     options.pool === false
       ? null
-      : await timer.time('pool', () =>
-          claimPooledVm(deps, machineSize, region, source?.snapshotId ?? deps.config.goldenSnapshotId).catch(() => null)
-        )
+      : await timer.time('pool', () => claimPooledVm(deps, machineSize, region, bootSnapshotId).catch(() => null))
   if (deps.config.pool) {
     // Refill behind the response, on a miss too (empty, or stale after a golden rotation), so the next
     // create finds one without waiting for the cron.
@@ -491,7 +513,7 @@ export async function createSandbox(
         repo_url: request.repo?.url ?? null,
         environment_id: source?.environmentId ?? null,
         environment_build_id: source?.buildId ?? null,
-        source_snapshot_id: source?.snapshotId ?? deps.config.goldenSnapshotId,
+        source_snapshot_id: bootSnapshotId,
         repo_branch: request.repo?.ref ?? null,
         name: request.title ?? null,
         // A personal account has no team: its workspaces are always private.
@@ -539,8 +561,8 @@ export async function createSandbox(
     state = await timer.time('vm', () =>
       deps.provider.createSandbox({
         name: row.provider_name,
-        snapshotId: source?.snapshotId ?? deps.config.goldenSnapshotId,
-        vcpus: VCPUS[row.machine_size],
+        snapshotId: bootSnapshotId,
+        vcpus: SANDBOX_VCPUS,
         region: row.region,
         timeoutMs: LEASE_MS,
         ports: [ORCAD_PORT, SHARE_PROXY_PORT],
@@ -551,6 +573,17 @@ export async function createSandbox(
     )
   } catch (error) {
     await failAndRelease(deps, row)
+    // Only a create nothing pinned to a region moves on: no explicit region, no environment build.
+    const fallback =
+      options.fallback !== false && !request.region && !source && isRegionalFailure(error)
+        ? deps.config.fallbackRegions?.find((candidate) => candidate !== region && goldenFor(deps, candidate))
+        : undefined
+    if (fallback) {
+      console.log(JSON.stringify({ event: 'region_fallback', from: region, to: fallback, error: String(error).slice(0, 200) }))
+      // The failed row never got a VM; it lets go of the workspace so the retry can take it.
+      await detachFromWorkspace(deps.db, row.id)
+      return createSandbox(deps, caller, { ...request, region: fallback }, { pool: false, fallback: false })
+    }
     throw error
   }
   try {
@@ -777,7 +810,7 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   const listed = await deps.provider.listSnapshots(destroying.provider_name)
   await recordSnapshots(deps.db, row.id, listed.map((s) => s.id), deps.now())
   // The image it booted from (golden or an environment build) is shared: never this sandbox's to delete.
-  const shared = new Set([deps.config.goldenSnapshotId, row.source_snapshot_id].filter((id): id is string => !!id))
+  const shared = new Set([...goldenSnapshotIds(deps.config), row.source_snapshot_id].filter((id): id is string => !!id))
   for (const id of await recordedSnapshotIds(deps.db, row.id)) {
     if (!shared.has(id)) {
       await deps.provider.deleteSnapshot(id)

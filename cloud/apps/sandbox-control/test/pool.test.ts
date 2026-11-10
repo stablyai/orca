@@ -136,12 +136,14 @@ describe('warm pool', () => {
     expect((h.raw.prepare('SELECT status FROM sandboxes WHERE id = ?').get(pooledId) as { status: string }).status).toBe('destroyed')
   })
 
-  it('skips the pool for sizes and regions it does not hold', async () => {
+  it('serves a legacy `large` request as standard, from the pool', async () => {
     const { h, deps, poolRows } = await pooledHarness('1')
     await maintainPool(deps())
+    const pooledId = poolRows()[0]!.id as string
     const res = await h.call('POST', '/v1/sandboxes', { body: { ...create, machineSize: 'large' } })
     expect(res.status).toBe(200)
-    expect(poolRows()).toHaveLength(1)
+    expect(res.body.sandbox.id).toBe(pooledId)
+    expect(res.body.sandbox.machineSize).toBe('standard')
   })
 
   it('recycles VMs past max age or on an old golden image, deleting them and their snapshots', async () => {

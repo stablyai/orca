@@ -6,8 +6,9 @@
 //   STRIPE_SECRET_KEY=sk_test_... BILLING_RETURN_URL=https://... tsx scripts/stripe-test-setup.ts
 //
 // Prices (cents) default to the agreed Team pricing; override with
-//   STRIPE_SETUP_PRICES='{"teamMonthly":5000,"teamAnnual":48000,"overagePerHour":75}'
+//   STRIPE_SETUP_PRICES='{"teamMonthly":5000,"teamAnnual":48000,"overagePerHour":100}'
 // Idempotency keys include the prices, so a re-run within 24h returns the same objects.
+import { DEFAULT_PLANS } from '../src/plans'
 import { encodeForm } from '../src/stripe'
 
 const key = process.env.STRIPE_SECRET_KEY ?? ''
@@ -40,7 +41,7 @@ async function post<T extends StripeObject>(path: string, params: Record<string,
   return json
 }
 
-const prices = { teamMonthly: 5000, teamAnnual: 48000, overagePerHour: 75, ...JSON.parse(process.env.STRIPE_SETUP_PRICES ?? '{}') }
+const prices = { teamMonthly: 5000, teamAnnual: 48000, overagePerHour: DEFAULT_PLANS.team.overageCentsPerHour, ...JSON.parse(process.env.STRIPE_SETUP_PRICES ?? '{}') }
 const suffix = `${prices.teamMonthly}-${prices.teamAnnual}-${prices.overagePerHour}`
 
 const team = await post('/v1/products', { name: 'Orca Team', unit_label: 'seat', metadata: { orca_plan: 'team' } }, 'product:team')

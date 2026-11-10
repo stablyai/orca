@@ -69,4 +69,6 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   now: () => number
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   recordRanOptions?: StructuredAgentSessionRanRecorder
+  /** Where a chat's worktree is, for the file checkpoint taken before each turn. */
+  resolveWorkspacePath?: ((workspaceId: string) => Promise<string>) | undefined
 }

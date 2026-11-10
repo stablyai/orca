@@ -20,11 +20,11 @@
     "<b>Stray sandbox resolved:</b> <code>desktop-dogfood</code>'s sbx_36ffc95c… was W2's w2predict sandbox, created by <code>~/w2-close/launch.sh</code> with ORCA_CLOUD_DEV_USER_ID=desktop-dogfood, and has been deleted."
   ],
   "gaps": [
-    "Real Anthropic-model run is pending an AI Gateway top-up; all agent checks use kimi-k2. About $4.19 of credit is left."
+    "Real-model agent run and subscription sign-in on a VM: to be proven in the user's own e2e session with their own credentials (no AI Gateway runs, per the user decision). Both rows stay capped at partial until then."
   ],
   "auditCaps": {
-    "agent.real-task": "Proven with moonshotai/kimi-k2 through the Claude Code CLI only, not a real Anthropic model, and only Claude Code and Codex are on the image. Conductor ran Claude Code, Codex and Cursor. Needs a real Anthropic model run (gateway top-up or org key) and Cursor/OpenCode on the image.",
-    "agent.signin": "Proves that agent auth folders survive sleep/wake and rollover, and that API-key agents work. Subscription OAuth sign-in on a VM (Claude/ChatGPT) was never exercised end to end.",
+    "agent.real-task": "Proven only with moonshotai/kimi-k2 through the Claude Code CLI. Per the user decision (2026-11-10), there will be no AI Gateway real-model runs; this cap is lifted by the user's own e2e session with their own credentials (local subscription or API key transferred to the VM). It is on the coordinator's e2e checklist. Cursor/OpenCode are still not on the image.",
+    "agent.signin": "Auth folders persist across sleep/wake and rollover, but subscription OAuth on a VM was never exercised. This cap is lifted by the user's own e2e session with their own credentials (after their review of #40228). It is on the coordinator's e2e checklist.",
     "sub.size": "Standard is 4 vCPU / 8 GB; Conductor gives 8 / 16 to everyone. Large (8/16) exists but uses included hours at 2x. Not parity on default hardware."
   }
 }

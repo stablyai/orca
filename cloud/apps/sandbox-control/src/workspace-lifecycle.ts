@@ -60,7 +60,8 @@ const ARCHIVE_DRAIN_SECONDS = 60
  * surface (scheduler, toasts, plans); must equal billing's plan `idleSleepMinutes` (test-enforced).
  */
 export const DEFAULT_IDLE_SLEEP_MINUTES = ORCA_CLOUD_IDLE_SLEEP_MINUTES
-export const DEFAULT_CENTS_PER_HOUR: Record<MachineSize, number> = { standard: 75, large: 150 }
+// A legacy `large` row is the same 8 vCPU box as standard and billing counts it 1x (U18).
+export const DEFAULT_CENTS_PER_HOUR: Record<MachineSize, number> = { standard: 75, large: 75 }
 
 export type WorkspaceConfig = {
   /** IDLE_SLEEP_MINUTES; DEFAULT_IDLE_SLEEP_MINUTES when unset. */

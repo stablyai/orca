@@ -75,6 +75,8 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   /** What orca-desktop-start answers; exitCode 127 = the image has no such command. */
   desktop: { exitCode: number; stdout: string }
   failCreate: boolean
+  /** Regions whose creates answer 503 (out of capacity). */
+  failCreateRegions: Set<string>
   /** Answers `bash -c <script>` probes (metrics, archive capture); undefined falls through to 127. */
   onScript?: (script: string, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
   /** Provider snapshot expiry per sandbox name, as last set by create or update. */
@@ -170,6 +172,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
     authorizedKeys: new Map(),
     desktop: { exitCode: 0, stdout: `{"schemaVersion":2,"port":6080,"display":":1","path":"vnc.html","ticket":"${'t'.repeat(43)}","expiresInMs":60000}\n` },
     failCreate: false,
+    failCreateRegions: new Set(),
     snapshotExpirations: new Map(),
     expire(name) {
       const box = boxes.get(name)
@@ -180,6 +183,9 @@ export function createFakeVercel(now: () => number): FakeVercel {
     async createSandbox(params) {
       if (fake.failCreate) {
         throw new ProviderError(500, 'internal_error')
+      }
+      if (fake.failCreateRegions.has(params.region)) {
+        throw new ProviderError(503, 'no_capacity')
       }
       if (boxes.has(params.name)) {
         throw new ProviderError(409, 'conflict')

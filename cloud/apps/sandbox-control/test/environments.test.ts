@@ -113,7 +113,7 @@ describe('org environments', () => {
       config: { environment: 'test', goldenSnapshotId: 'snap_golden', region: 'iad1' }
     })
     expect(h.billing.usage).toEqual([
-      expect.objectContaining({ usageId: `build:${first.id}`, sandboxId: first.id, machineSize: 'large', userId: 'alice', accountId: 'org:acme' })
+      expect.objectContaining({ usageId: `build:${first.id}`, sandboxId: first.id, machineSize: 'standard', userId: 'alice', accountId: 'org:acme' })
     ])
     const failed = await build(20)
     expect(h.billing.usage.at(-1)).toMatchObject({ usageId: `build:${failed.id}`, userId: 'alice' })

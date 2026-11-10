@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
-import { advanceGoldenImages, currentGoldenSnapshotId, type GoldenImageDeps } from '../src/golden-images'
+import { activeGoldenSnapshots, advanceGoldenImages, currentGoldenSnapshotId, type GoldenImageDeps } from '../src/golden-images'
 import { createFakeD1 } from './d1-fake'
 import { createFakeVercel } from './fake-vercel'
-import { createHarness } from './harness'
+import { GOLDEN, createHarness } from './harness'
 import { touchesVm } from '../src/golden-source'
 
 const HOUR = 60 * 60_000
@@ -72,9 +72,9 @@ describe('golden image rotation', () => {
     expect(await advanceGoldenImages(t.deps)).toBe('seeded')
     expect(await advanceGoldenImages(t.deps)).toBe('refresh-started')
     // Not active until the smoke boot passes.
-    expect(await currentGoldenSnapshotId(t.deps.db)).toBe('snap_seed')
+    expect(await currentGoldenSnapshotId(t.deps.db, 'iad1')).toBe('snap_seed')
     expect(await advanceGoldenImages(t.deps)).toBe('activated')
-    expect(await currentGoldenSnapshotId(t.deps.db)).toBe('snap_gold_1')
+    expect(await currentGoldenSnapshotId(t.deps.db, 'iad1')).toBe('snap_gold_1')
     expect(t.statuses()).toEqual([
       { source: 'seed', status: 'retired', snapshot_id: 'snap_seed' },
       { source: 'clone:snap_seed', status: 'active', snapshot_id: 'snap_gold_1' }
@@ -91,7 +91,7 @@ describe('golden image rotation', () => {
     await advanceGoldenImages(t.deps)
     t.vercel.failStart = true
     expect(await advanceGoldenImages(t.deps)).toBe('failed')
-    expect(await currentGoldenSnapshotId(t.deps.db)).toBe('snap_seed')
+    expect(await currentGoldenSnapshotId(t.deps.db, 'iad1')).toBe('snap_seed')
     expect(t.vercel.snapshots.get('snap_gold_1')!.status).toBe('deleted')
     // Backs off instead of rebuilding every five minutes.
     expect(await advanceGoldenImages(t.deps)).toBe('idle')
@@ -171,6 +171,63 @@ describe('golden image rotation', () => {
     // A host RPC change: rebuild.
     changed = ['src/renderer/src/components/Foo.tsx', 'src/main/runtime/rpc/methods/ports.ts']
     expect(await advanceGoldenImages(t.deps)).toBe('source-started')
+  })
+
+  it('keeps one active image per region: a region without one builds its own from source', async () => {
+    const SHA = 'a'.repeat(40)
+    const github: GoldenImageDeps['config']['github'] = async (_method, path) =>
+      path.endsWith('/installation') ? Response.json({ id: 9 }) : Response.json({ token: 'ghs_read' })
+    const fetchFake = (async (url: string) =>
+      url.includes('/commits/') ? Response.json({ sha: SHA }) : Response.json({ files: [] })) as typeof fetch
+    const t = setup({ source: 'git:https://github.com/acme/orca-private#cloud/integration', github, fetch: fetchFake })
+    const iad1 = t.deps
+    // The seed var is an iad1 snapshot: pdx1 never adopts it.
+    const pdx1: GoldenImageDeps = { ...t.deps, config: { ...t.deps.config, region: 'pdx1', seedSnapshotId: undefined } }
+    expect(await advanceGoldenImages(iad1)).toBe('seeded')
+    expect(await advanceGoldenImages(pdx1)).toBe('source-started')
+    expect([...t.vercel.boxes.values()].map((b) => b.params.region)).toEqual(['pdx1'])
+    t.commands.set([...t.commands.keys()][0]!, 0)
+    expect(await advanceGoldenImages(pdx1)).toBe('built')
+    expect(await advanceGoldenImages(pdx1)).toBe('activated')
+    // Activating pdx1's image left iad1's active.
+    expect(await currentGoldenSnapshotId(t.deps.db, 'iad1')).toBe('snap_seed')
+    expect(await currentGoldenSnapshotId(t.deps.db, 'pdx1')).toBe('snap_gold_2')
+    expect(await activeGoldenSnapshots(t.deps.db)).toEqual({ iad1: 'snap_seed', pdx1: 'snap_gold_2' })
+    expect(await advanceGoldenImages(pdx1)).toBe('idle')
+    // iad1 rebuilds the same commit in its own region.
+    expect(await advanceGoldenImages(iad1)).toBe('source-started')
+    expect(t.raw.prepare(`SELECT region FROM golden_images WHERE status = 'building'`).all()).toEqual([{ region: 'iad1' }])
+  })
+
+  it('creates in the default region on its image, falls back on capacity, and never moves a pinned create', async () => {
+    const h = await createHarness({ VERCEL_REGION: 'pdx1', VERCEL_FALLBACK_REGIONS: 'iad1' })
+    h.raw
+      .prepare(`INSERT INTO golden_images (id, region, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g1', 'pdx1', 'seed', 'active', 'snap_pdx1', 1, 1, 1)`)
+      .run()
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })
+    expect(created.status).toBe(200)
+    expect(created.body.sandbox.region).toBe('pdx1')
+    expect(h.vercel.boxes.get(`orca-test-${created.body.sandbox.id}`)!.params).toMatchObject({ region: 'pdx1', snapshotId: 'snap_pdx1' })
+
+    h.vercel.failCreateRegions.add('pdx1')
+    const fellBack = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-2', machineSize: 'standard' } })
+    expect(fellBack.status).toBe(200)
+    expect(fellBack.body.sandbox.region).toBe('iad1')
+    // iad1 boots its own region's image (the seed), never pdx1's.
+    expect(h.vercel.boxes.get(`orca-test-${fellBack.body.sandbox.id}`)!.params).toMatchObject({ region: 'iad1', snapshotId: GOLDEN })
+
+    const pinned = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-3', machineSize: 'standard', region: 'pdx1' } })
+    expect(pinned.status).not.toBe(200)
+    // A region with no image is refused up front rather than booted from another region's snapshot.
+    const unknown = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-4', machineSize: 'standard', region: 'sfo1' } })
+    expect(unknown.status).toBe(409)
+  })
+
+  it('keeps creating in the fallback region until the default region has an image', async () => {
+    const h = await createHarness({ VERCEL_REGION: 'pdx1', VERCEL_FALLBACK_REGIONS: 'iad1' })
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })
+    expect(created.status).toBe(200)
+    expect(created.body.sandbox.region).toBe('iad1')
   })
 
   it('classifies VM paths', () => {
