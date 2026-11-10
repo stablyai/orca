@@ -8,6 +8,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
+import { hasStructuredAgentSessionConversation } from '@/lib/agent-session/structured-agent-session-conversation'
 import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 
@@ -77,7 +78,9 @@ export function createWorkspaceTabCloseCommands({
                   resolve()
                 }
               }
-              if (!busy) {
+              const hasConversation =
+                busy || hasStructuredAgentSessionConversation(item, useAppStore.getState())
+              if (!hasConversation) {
                 return confirmed()
               }
               useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({

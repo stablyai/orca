@@ -258,7 +258,7 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  it('does not warn for an agent session when it is idle', async () => {
+  it('does not warn for an empty untouched agent session when it is idle', async () => {
     getStateMock.mockReturnValue({
       settings: { activeRuntimeEnvironmentId: null },
       unifiedTabsByWorktree: {
@@ -285,6 +285,37 @@ describe('assessWindowCloseRunningWork', () => {
 
     await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'none'
+    })
+  })
+
+  it('warns with kind chat when an agent session is idle but has an active conversation', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-1',
+            entityId: 'session-1',
+            contentType: 'agent-session',
+            customLabel: 'My Discussion'
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+    admitStructuredAgentSessionMock.mockImplementation((_ws, _tab, _intent, effect) => {
+      effect(false, {
+        current: () => true,
+        busy: () => false,
+        signal: new AbortController().signal
+      })
+      return Promise.resolve()
+    })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'chat'
     })
   })
 

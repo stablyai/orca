@@ -132,4 +132,30 @@ describe('structured agent-session close ordering', () => {
 
     expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id)
   })
+
+  it('prompts before closing an idle chat session that has an active conversation', async () => {
+    const chatWithConversation = {
+      ...AGENT_TAB,
+      id: 'agent-tab-2',
+      entityId: 'session-2',
+      customLabel: 'My Discussion'
+    }
+    store.unifiedTabsByWorktree = { 'wt-1': [chatWithConversation] }
+    const requestConfirmMock = vi.fn()
+    const { useRunningTerminalCloseConfirmStore } = await import('@/store/running-terminal-close-confirm')
+    vi.spyOn(useRunningTerminalCloseConfirmStore, 'getState').mockReturnValue({
+      requestRunningTerminalCloseConfirm: requestConfirmMock
+    } as unknown as ReturnType<typeof useRunningTerminalCloseConfirmStore.getState>)
+
+    const { closeItem } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
+    closeItem(chatWithConversation.id)
+
+    expect(requestConfirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabLabel: 'My Discussion',
+        copyKind: 'chat-agent'
+      })
+    )
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
 })

@@ -5,6 +5,7 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { collectTabPtyIds } from './running-terminal-close-guard'
 import { probePtyRunningWork } from './pty-running-work-probe'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
+import { hasStructuredAgentSessionConversation } from '@/lib/agent-session/structured-agent-session-conversation'
 import { shouldConfirmPinnedTabClose } from '@/store/pinned-tab-close-guard'
 
 /** Bound quit probes to 1.5s; expiry prompts because an unanswered SSH host is unverifiable, never proof remote work stopped. */
@@ -118,7 +119,11 @@ export async function assessWindowCloseRunningWork(params: {
         : Promise.resolve([])
     ])
 
-    if (anyChatBusy) {
+    const anyChatActive =
+      anyChatBusy ||
+      agentSessions.some(({ tab }) => hasStructuredAgentSessionConversation(tab, state))
+
+    if (anyChatActive) {
       return { kind: 'chat' }
     }
     if (probes.some((probe) => probe.verdict === 'live')) {
