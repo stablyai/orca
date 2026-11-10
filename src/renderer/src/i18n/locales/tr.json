@@ -860,7 +860,7 @@
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
       "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
-      "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
+      "chatUnavailableOnWindows": "Windows'ta {{value0}} Chat agy üzerinden çalışır. Bu bilgisayarda agy'yi güncelleyin ve agy'yi çalıştırarak kişisel bir Google hesabıyla oturum açın; o zamana kadar {{value0}} bir terminalde açılır.",
       "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4249,7 +4249,7 @@
             "startChat": "{{value0}} ile sohbet başlat",
             "cliTag": "(CLI)",
             "agentsLoading": "Ajanlar yükleniyor",
-            "chatNotOnWindows": "Windows'ta henüz sohbet yok"
+            "chatNotOnWindows": "agy oturumu gerekli"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Sekme Değiştir",
@@ -20184,7 +20184,7 @@
         "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın.",
+      "explicitChatWindows": "Windows'ta bu sohbet agy üzerinden çalışır. agy'yi güncelleyin, çalıştırın ve kişisel bir Google hesabıyla oturum açın; ardından tekrar deneyin veya bunun yerine bir terminalde açın.",
       "fork": {
         "action": "Bu yanıttan çatalla",
         "hostUnsupported": "Bu ana makinede eski bir Orca sürümü çalışıyor. Ana makinedeki Orca’yı güncelleyip tekrar deneyin.",
