@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 
 // Legacy restore cases need finite 5s (the clamp floor); production defaults to indefinite hold.
 const LEGACY_RESTORE_MS = 5_000
@@ -159,7 +160,14 @@ describe('mobile subscribe integration', () => {
       secondWriteGate.release()
 
       const snapshot = await racedSnapshot
-      expect(snapshot?.seq).toBe(first.length + second.length)
+      expect(snapshot?.seq).toBe(first.length + second.length + third.length)
+      const restored = new HeadlessEmulator({ cols: 150, rows: 40 })
+      try {
+        await restored.write(snapshot!.data)
+        expect(restored.getVisibleLines().filter(Boolean)).toEqual(['one', 'two', 'three'])
+      } finally {
+        restored.dispose()
+      }
       expect(snapshot?.source).toBe('headless')
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(
         first.length + second.length + third.length
