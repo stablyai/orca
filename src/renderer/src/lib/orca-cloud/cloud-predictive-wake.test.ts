@@ -30,12 +30,11 @@ function harness(
     setTimer: (run, ms) => {
       const id = nextId++
       timers.push({ at: now + ms, run, id })
-      return id
-    },
-    clearTimer: (id) => {
-      const index = timers.findIndex((t) => t.id === id)
-      if (index !== -1) {
-        timers.splice(index, 1)
+      return () => {
+        const index = timers.findIndex((t) => t.id === id)
+        if (index !== -1) {
+          timers.splice(index, 1)
+        }
       }
     }
   })

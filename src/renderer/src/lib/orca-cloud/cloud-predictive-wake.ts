@@ -15,8 +15,8 @@ export type PredictiveWakeDeps = {
   isWakeCandidate: (workspaceId: string) => boolean
   /** Starts the ordinary wake; resolves when it settles. Errors are swallowed by the caller. */
   wake: (workspaceId: string) => Promise<unknown>
-  setTimer: (run: () => void, ms: number) => unknown
-  clearTimer: (timer: unknown) => void
+  /** Schedules `run`; returns a cancel function. */
+  setTimer: (run: () => void, ms: number) => () => void
 }
 
 export const HOVER_DWELL_MS = 400
@@ -46,15 +46,15 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
   const sleptAt = new Map<string, number>()
   const running = new Set<string>()
   const silent = new Set<string>()
-  const pending = new Map<string, unknown>()
+  const pending = new Map<string, () => void>()
   let lastHoverWakeAt = Number.NEGATIVE_INFINITY
   // Why: the first focus after launch is the app opening, not someone coming back to it.
   let blurredSinceLaunch = false
 
   const cancelPending = (workspaceId: string): void => {
-    const timer = pending.get(workspaceId)
-    if (timer !== undefined) {
-      deps.clearTimer(timer)
+    const cancel = pending.get(workspaceId)
+    if (cancel) {
+      cancel()
       pending.delete(workspaceId)
     }
   }

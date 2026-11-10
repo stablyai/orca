@@ -6,6 +6,11 @@
 export const PRECONNECT_RETRY_MS = 300
 export const PRECONNECT_MAX_MS = 60_000
 
+function defaultTimer(run: () => void, ms: number): () => void {
+  const timer = setTimeout(run, ms)
+  return () => clearTimeout(timer)
+}
+
 export type WakePreconnectDeps = {
   /** Creates (or keeps) the control socket for the saved pairing. */
   ensure: () => void
@@ -15,28 +20,24 @@ export type WakePreconnectDeps = {
   /** False once the wake ended (settled or abandoned). */
   isWaking: () => boolean
   now?: () => number
-  setTimer?: (run: () => void, ms: number) => unknown
-  clearTimer?: (timer: unknown) => void
+  /** Schedules `run`; returns a cancel function. */
+  setTimer?: (run: () => void, ms: number) => () => void
 }
 
 /** Starts pre-connecting; returns a stop function. Stops on its own once ready, done or timed out. */
 export function startWakePreconnect(deps: WakePreconnectDeps): () => void {
   const now = deps.now ?? Date.now
-  const setTimer = deps.setTimer ?? ((run, ms) => setTimeout(run, ms))
-  const clearTimer =
-    deps.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>))
+  const setTimer = deps.setTimer ?? defaultTimer
   const startedAt = now()
-  let timer: unknown = null
+  let cancel: (() => void) | null = null
   let stopped = false
   const stop = (): void => {
     stopped = true
-    if (timer !== null) {
-      clearTimer(timer)
-      timer = null
-    }
+    cancel?.()
+    cancel = null
   }
   const tick = (): void => {
-    timer = null
+    cancel = null
     if (stopped) {
       return
     }
@@ -49,7 +50,7 @@ export function startWakePreconnect(deps: WakePreconnectDeps): () => void {
     } catch {
       // A transient failure of one nudge must not end the pre-connect.
     }
-    timer = setTimer(tick, PRECONNECT_RETRY_MS)
+    cancel = setTimer(tick, PRECONNECT_RETRY_MS)
   }
   try {
     deps.ensure()
@@ -57,7 +58,7 @@ export function startWakePreconnect(deps: WakePreconnectDeps): () => void {
     stop()
     return stop
   }
-  timer = setTimer(tick, PRECONNECT_RETRY_MS)
+  cancel = setTimer(tick, PRECONNECT_RETRY_MS)
   return stop
 }
 
@@ -72,10 +73,10 @@ export function waitForControlReadySince(deps: {
   timeoutMs: number
   pollMs?: number
   now?: () => number
-  setTimer?: (run: () => void, ms: number) => unknown
+  setTimer?: (run: () => void, ms: number) => () => void
 }): Promise<boolean> {
   const now = deps.now ?? Date.now
-  const setTimer = deps.setTimer ?? ((run, ms) => setTimeout(run, ms))
+  const setTimer = deps.setTimer ?? defaultTimer
   const pollMs = deps.pollMs ?? 50
   const deadline = now() + deps.timeoutMs
   return new Promise((resolve) => {

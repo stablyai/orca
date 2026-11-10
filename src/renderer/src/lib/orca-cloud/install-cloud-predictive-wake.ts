@@ -34,8 +34,10 @@ export function installCloudPredictiveWake(): () => void {
         await window.api.ephemeralVm.resumeWorkspace({ workspaceId }).catch(() => null)
         await refreshCloudWorkspaceStatus(workspaceId)
       },
-      setTimer: (run, ms) => setTimeout(run, ms),
-      clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>)
+      setTimer: (run, ms) => {
+        const timer = setTimeout(run, ms)
+        return () => clearTimeout(timer)
+      }
     })
   )
   const onFocus = (): void =>

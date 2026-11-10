@@ -14614,6 +14614,11 @@
           "keywordCloud": "cloud",
           "sectionTitle": "Routines",
           "sectionDescription": "Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook."
+        },
+        "orcaCloudPredictiveWake": {
+          "title": "Wake cloud workspaces early",
+          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
+          "toggleLabel": "Wake cloud workspaces early"
         }
       },
       "right": {

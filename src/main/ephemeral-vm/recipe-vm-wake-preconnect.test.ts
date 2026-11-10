@@ -15,12 +15,11 @@ function clock() {
     setTimer: (run: () => void, ms: number) => {
       const id = nextId++
       timers.push({ at: now + ms, run, id })
-      return id
-    },
-    clearTimer: (id: unknown) => {
-      const index = timers.findIndex((t) => t.id === id)
-      if (index !== -1) {
-        timers.splice(index, 1)
+      return () => {
+        const index = timers.findIndex((t) => t.id === id)
+        if (index !== -1) {
+          timers.splice(index, 1)
+        }
       }
     },
     advance(ms: number) {
