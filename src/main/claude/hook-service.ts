@@ -209,7 +209,8 @@ export class ClaudeHookService {
       (eventName) =>
         getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
       getManagedScriptFileName(this.options.settings),
-      plan
+      plan,
+      process.platform !== 'win32'
     )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
@@ -254,7 +255,8 @@ export class ClaudeHookService {
         (eventName) =>
           buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
-        this.managedHookPlan(options)
+        this.managedHookPlan(options),
+        true
       )
 
       // Publish scripts before settings can reference them.

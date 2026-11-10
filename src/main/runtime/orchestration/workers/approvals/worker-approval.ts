@@ -7,12 +7,16 @@ import type {
 
 export type WorkerApprovalDecision = 'allow' | 'deny'
 export type WorkerApprovalState = 'open' | 'answered' | 'expired'
-/** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or terminal, or no one Orca can name. */
+/** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or
+ *  terminal, the agent's own timeout, or no one Orca can name. `terminal-only`: still open, but only
+ *  a person at the worker's terminal can answer it now. */
 export type WorkerApprovalAnswerer =
   | 'person'
   | 'coordinator'
   | 'worker-chat'
   | 'worker-terminal'
+  | 'auto'
+  | 'terminal-only'
   | 'unknown'
 
 export type WorkerApprovalOutcome = {

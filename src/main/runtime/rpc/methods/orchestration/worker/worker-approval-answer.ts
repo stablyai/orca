@@ -63,9 +63,7 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
           message: access.reason ?? 'Denied by the owner.'
         })
         if (!answered.ok) {
-          throw new OrchestrationError(answered.code, answered.message, {
-            effectsApplied: answered.code === 'approval_refused'
-          })
+          throw new OrchestrationError(answered.code, answered.message, { effectsApplied: false })
         }
         reportWorkerApprovalClosed(
           db,
