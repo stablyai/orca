@@ -9,6 +9,7 @@ import {
 import { withAgentApiKeyRuntimeEnv } from '../agent-api-keys/agent-api-key-runtime-call'
 import { isCloudSshAlias } from '../cloud-ssh/cloud-ssh-config'
 import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
+import { AGENT_CREDENTIAL_NAMES } from '../../shared/cloud-secrets/cloud-secret-rules'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getConnectionExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
@@ -123,4 +124,26 @@ export async function withHostAgentApiKeyLaunchEnv(
     return env
   }
   return withAgentApiKeyLaunchEnv(env, agent, getConnectionExecutionHostId(connectionId))
+}
+
+/**
+ * On an Orca Cloud VM (orcad runs with ORCA_IS_CLOUD=1, set by the image), a launch's env may not
+ * set an agent credential to anything but the value this session already has (a stand-in or the
+ * Cloud secret): a key carried in from a desktop, however the client is paired, is dropped here.
+ */
+export function withoutCarriedAgentCredentials(
+  env: Record<string, string> | undefined,
+  host: Readonly<Record<string, string | undefined>> = process.env
+): Record<string, string> | undefined {
+  if (!env || host.ORCA_IS_CLOUD !== '1') {
+    return env
+  }
+  let kept: Record<string, string> | undefined
+  for (const [name, value] of Object.entries(env)) {
+    if (AGENT_CREDENTIAL_NAMES.includes(name) && value !== host[name]) {
+      kept ??= { ...env }
+      delete kept[name]
+    }
+  }
+  return kept ?? env
 }
