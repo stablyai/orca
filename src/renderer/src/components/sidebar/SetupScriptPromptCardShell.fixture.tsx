@@ -64,7 +64,9 @@ export const conductor = defineFixture({
           setup: shortSetup,
           archive: null,
           editable: false,
-          skippedFields: ['scripts.run']
+          skippedFields: ['environment_variables'],
+          runActions:
+            '# Web (web)\npnpm dev --port $CONDUCTOR_PORT\n\n# Worker (worker)\npnpm worker:dev'
         }}
       />
     </Frame>
@@ -90,7 +92,8 @@ export const devcontainer = defineFixture({
           setup: longSetup,
           archive: 'docker compose -f infra/docker-compose.dev.yml down --volumes',
           editable: false,
-          skippedFields: ['postStartCommand', 'postAttachCommand', 'features', 'forwardPorts']
+          skippedFields: ['postStartCommand', 'postAttachCommand', 'features', 'forwardPorts'],
+          runActions: null
         }}
       />
     </Frame>
@@ -136,7 +139,8 @@ export const hugeReviewExpanded = defineFixture({
           setup: hugeSetup,
           archive: hugeSetup,
           editable: false,
-          skippedFields: Array.from({ length: 30 }, (_, index) => `steps.${index}.uses`)
+          skippedFields: Array.from({ length: 30 }, (_, index) => `steps.${index}.uses`),
+          runActions: null
         }}
       />
     </Frame>
@@ -157,7 +161,8 @@ export const packageManager = defineFixture({
           setup: 'pnpm install',
           archive: null,
           editable: true,
-          skippedFields: []
+          skippedFields: [],
+          runActions: null
         }}
       />
     </Frame>

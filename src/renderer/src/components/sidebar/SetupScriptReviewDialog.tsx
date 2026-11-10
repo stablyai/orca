@@ -21,6 +21,8 @@ export type SetupScriptReviewDialogProps = {
   repoDisplayName: string
   setup: string
   archive: string | null
+  /** Imported run actions; saved with setup and started from the Run button. */
+  runActions?: string | null
   skippedFields: readonly string[]
   provenance: string | null
   isSaving: boolean
@@ -59,6 +61,7 @@ export function SetupScriptReviewDialog({
   repoDisplayName,
   setup,
   archive,
+  runActions,
   skippedFields,
   provenance,
   isSaving,
@@ -109,6 +112,15 @@ export function SetupScriptReviewDialog({
                 'Archive script'
               )}
               script={archive}
+            />
+          ) : null}
+          {runActions ? (
+            <SetupScriptCodeBlock
+              heading={t(
+                'auto.components.sidebar.SetupScriptReviewDialog.runActions',
+                'Run actions'
+              )}
+              script={runActions}
             />
           ) : null}
 

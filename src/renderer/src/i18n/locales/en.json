@@ -6684,7 +6684,13 @@
           "newVmRecipe": "New VM recipe",
           "vmRecipe": "VM recipe",
           "thisRepository": "this repository",
-          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>"
+          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>",
+          "runChangedTitle": "{{repo}}'s run actions changed — run the new version?",
+          "runRunTitle": "Run actions from {{repo}}?",
+          "runChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before these run from the Run button.",
+          "runRunBody": "This repository's <code>orca.yaml</code> defines these run actions. They run in this workspace's terminal when you start them. Only run if you trust <repo/>.",
+          "newRunActions": "New run actions",
+          "runActions": "Run actions"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
@@ -6790,7 +6796,8 @@
           "save": "Save local setup",
           "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "notImported": "Not imported",
-          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved.",
+          "runActions": "Run actions"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -25209,7 +25216,8 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "cloudWorkspaceCopyLink": "Copy cloud workspace link"
+      "cloudWorkspaceCopyLink": "Copy cloud workspace link",
+      "workspaceRun": "Run or restart the run action"
     },
     "group": {
       "global": "Global",
@@ -26973,5 +26981,29 @@
       "title": "An agent was interrupted by the restart",
       "action": "Continue"
     }
+  },
+  "runActions": {
+    "status": {
+      "running": "Running",
+      "stopping": "Stopping…",
+      "stopped": "Stopped",
+      "exited": "Exited",
+      "failed": "Failed",
+      "failedWithCode": "Failed (exit {{code}})",
+      "notRunning": "Not running"
+    },
+    "restart": "Restart",
+    "stop": "Stop",
+    "runAgain": "Run again",
+    "run": "Run",
+    "showOutput": "Show output",
+    "showRunning": "Show {{name}}",
+    "runNamed": "Run {{name}}",
+    "menu": "Run actions",
+    "ports": "Ports",
+    "noPorts": "No servers listening in this workspace yet.",
+    "tabTitle": "Run: {{name}}",
+    "noneTitle": "No run actions for this workspace",
+    "noneBody": "Add a command under scripts.run in orca.yaml, for example a dev server on $ORCA_PORT."
   }
 }
