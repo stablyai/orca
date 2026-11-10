@@ -1,5 +1,23 @@
 import type { Translate } from '@/i18n/use-translate'
+import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
+
+/** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
+export type SandboxLimit = { perSeat: number; team: number }
+
+/** Mirrors billing's checkStart limits; null until the plan has loaded. */
+export function sandboxLimitFromBilling(
+  status: OrcaBillingStatusResult | null
+): SandboxLimit | null {
+  if (status?.status !== 'ok') {
+    return null
+  }
+  const perSeat = status.entitlement.offers?.team.concurrentSandboxesPerSeat
+  if (!perSeat) {
+    return null
+  }
+  return { perSeat, team: perSeat * Math.max(1, status.entitlement.seats) }
+}
 
 export type VmBuildFailureCopyContext = {
   cloud: boolean
@@ -7,12 +25,14 @@ export type VmBuildFailureCopyContext = {
   repoName: string
   /** False for team members who can't change billing; they are told to ask an owner or admin. */
   canManageBilling: boolean
+  /** States the cap on the limit cards; omitted or null falls back to copy without numbers. */
+  sandboxLimit?: SandboxLimit | null
 }
 
 /** The card's cause-specific title and one plain-language sentence on what to do next. */
 export function vmBuildFailureCopy(
   failure: VmBuildFailure,
-  { cloud, canManageBilling, repoName }: VmBuildFailureCopyContext,
+  { cloud, canManageBilling, repoName, sandboxLimit }: VmBuildFailureCopyContext,
   t: Translate
 ): { title: string; body: string | null } {
   switch (failure.kind) {
@@ -104,10 +124,16 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.teamLimitTitle',
           'You’re at your team’s limit of running sandboxes'
         ),
-        body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-          'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-        )
+        body: sandboxLimit
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.teamLimitBody',
+              'Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
+              { value0: String(sandboxLimit.team), value1: String(sandboxLimit.perSeat) }
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
+              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
+            )
       }
     case 'memberConcurrency':
       return {
@@ -115,10 +141,16 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.memberLimitTitle',
           'You’re at your limit of running sandboxes'
         ),
-        body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-          'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-        )
+        body: sandboxLimit
+          ? t(
+              'auto.components.worktree.creation.VmBuildFailureCard.memberLimitBody',
+              'Each person can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
+              { value0: String(sandboxLimit.perSeat) }
+            )
+          : t(
+              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
+              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
+            )
       }
     case 'githubNotConnected':
       return {

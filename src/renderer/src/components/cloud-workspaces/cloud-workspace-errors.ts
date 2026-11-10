@@ -1,6 +1,8 @@
 // Copy for control-plane error codes from the team workspace registry.
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
+import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
 
 export function describeError(error: string, reason?: string, t: Translate = translate): string {
   if (error === 'not_found') {
@@ -10,10 +12,23 @@ export function describeError(error: string, reason?: string, t: Translate = tra
     )
   }
   if (error === 'entitlement_denied') {
-    return reason === 'concurrency_limit'
+    if (reason === 'concurrency_limit') {
+      const limit = sandboxLimitFromBilling(getLastBillingStatus())
+      return limit
+        ? t(
+            'auto.components.cloudWorkspaces.errorConcurrencyLimitCount',
+            "You're at your team's limit: your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.",
+            { value0: String(limit.team), value1: String(limit.perSeat) }
+          )
+        : t(
+            'auto.components.cloudWorkspaces.errorConcurrencyLimit',
+            "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again."
+          )
+    }
+    return reason === 'member_concurrency_limit'
       ? t(
-          'auto.components.cloudWorkspaces.errorConcurrencyLimit',
-          "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again."
+          'auto.components.cloudWorkspaces.errorMemberConcurrencyLimit',
+          "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again."
         )
       : t(
           'auto.components.cloudWorkspaces.errorEntitlementDenied',

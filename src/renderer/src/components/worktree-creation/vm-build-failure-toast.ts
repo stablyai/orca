@@ -4,7 +4,8 @@ import type { Translate } from '@/i18n/use-translate'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { classifyVmBuildFailure, type VmBuildFailure } from './vm-build-failure'
-import { vmBuildFailureCopy } from './vm-build-failure-copy'
+import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
+import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
 import { isOrcaCloudBuild } from './vm-build-steps'
 import { orcaCloudRepoName } from './vm-build-repo-actions'
 import type { Repo } from '../../../../shared/repo-types'
@@ -26,7 +27,11 @@ export function vmBuildFailureSummary(
     recipe ? repos.find((repo) => repo.id === recipe.sourceRepoId) : undefined
   )
   // Unknown here; the card itself refines the copy for members once billing status loads.
-  return { failure, ...vmBuildFailureCopy(failure, { cloud, canManageBilling: true, repoName }, t) }
+  const sandboxLimit = sandboxLimitFromBilling(getLastBillingStatus())
+  return {
+    failure,
+    ...vmBuildFailureCopy(failure, { cloud, canManageBilling: true, repoName, sandboxLimit }, t)
+  }
 }
 
 /** The build sheet's card as a toast, for a VM build that failed while its sheet was off screen. */
