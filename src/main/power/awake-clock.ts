@@ -9,7 +9,7 @@ export const AWAKE_CLOCK_HEARTBEAT_MS = 20_000
 export const AWAKE_CLOCK_SLEEP_GAP_MS = 3 * AWAKE_CLOCK_HEARTBEAT_MS
 
 /** The heartbeat stops after this long without a read. It outlasts the agent startup ceiling, and
- *  the automation scheduler reads every tick. */
+ *  the automation scheduler reads every tick only while an automation is enabled. */
 export const AWAKE_CLOCK_IDLE_MS = 15 * 60_000
 
 /** Uninterrupted running while still marked suspended after which a resume event was evidently

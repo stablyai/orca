@@ -1,6 +1,7 @@
 import { getSystemAwakeClock, type AwakeClock } from '../power/awake-clock'
 import type { Store } from '../persistence/loading-store/store'
 import { missedBeyondGrace } from './dispatch-refusal'
+import type { Automation } from '../../shared/automations/automation-definition'
 
 /** How long the machine must stay awake after a wake before scheduled runs start. A dark wake
  *  (macOS maintenance or Power Nap) lasts seconds, so a run never starts inside one only to have
@@ -14,23 +15,44 @@ export function automationSystemSettled(clock: AwakeClock = getSystemAwakeClock(
   return clock.settled(AUTOMATION_WAKE_SETTLE_MS)
 }
 
+/** The definition state a hold was granted under. `updatedAt` moves on every write to the row, so
+ *  an edit or a disable/re-enable while the gate is closed (even one no held tick observed, such
+ *  as across another sleep) revokes the hold; the named fields also catch a same-millisecond edit. */
+function eligibilityRevision(automation: Automation): string {
+  return JSON.stringify([
+    automation.updatedAt,
+    automation.enabled,
+    automation.rrule,
+    automation.dtstart,
+    automation.timezone,
+    automation.missedRunPolicy,
+    automation.missedRunGraceMinutes
+  ])
+}
+
 /** Holds scheduled runs while the system is not settled. It remembers each due occurrence a held
  *  tick would have launched inside its missed-run grace, so the settled tick that finally
- *  evaluates it does not count the gate's own delay against that grace. */
+ *  evaluates it does not count the gate's own delay against that grace. A hold is bound to the
+ *  definition it was granted under: once the user edits or pauses the automation, the current
+ *  definition's own grace decides. */
 export class AutomationWakeGate {
   /** False while asleep, in a dark wake, or just woken. */
   settled: () => boolean = () => true
-  private readonly held = new Map<string, number>()
+  private readonly held = new Map<string, { scheduledFor: number; revision: string }>()
 
   admits(
     store: Pick<Store, 'listAutomations' | 'getLatestAutomationOccurrence'>,
     tickMs: number
   ): boolean {
-    if (this.settled()) {
+    const automations = store.listAutomations()
+    // Why: each settled() read keeps the awake clock's heartbeat running. With nothing enabled
+    // there is nothing to hold, so the heartbeat can idle out. Limit: the first read after one is
+    // enabled has no gap evidence from before it, like a fresh process.
+    if (!automations.some((automation) => automation.enabled) || this.settled()) {
       return true
     }
     const now = Date.now()
-    for (const automation of store.listAutomations()) {
+    for (const automation of automations) {
       if (!automation.enabled || automation.nextRunAt > now) {
         continue
       }
@@ -40,7 +62,7 @@ export class AutomationWakeGate {
           scheduledFor !== null &&
           !missedBeyondGrace({ automation, scheduledFor, now, tickMs })
         ) {
-          this.held.set(automation.id, scheduledFor)
+          this.held.set(automation.id, { scheduledFor, revision: eligibilityRevision(automation) })
         }
       } catch {
         // A malformed schedule is recorded by the settled tick's own evaluation.
@@ -49,9 +71,15 @@ export class AutomationWakeGate {
     return false
   }
 
-  /** `missedBeyondGrace`, except an occurrence this gate held while in grace stays eligible. */
+  /** `missedBeyondGrace`, except an occurrence this gate held while in grace stays eligible
+   *  while its definition is unchanged. */
   missedBeyondGrace(input: Parameters<typeof missedBeyondGrace>[0]): boolean {
-    return this.held.get(input.automation.id) !== input.scheduledFor && missedBeyondGrace(input)
+    const hold = this.held.get(input.automation.id)
+    const held =
+      hold !== undefined &&
+      hold.scheduledFor === input.scheduledFor &&
+      hold.revision === eligibilityRevision(input.automation)
+    return !held && missedBeyondGrace(input)
   }
 
   clear(): void {
