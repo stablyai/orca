@@ -91,6 +91,31 @@ describe('plugins.panelSession', () => {
     expect(emit).toHaveBeenLastCalledWith({ type: 'end' })
   })
 
+  it('keeps a panel session that another stream on the socket still uses', async () => {
+    const { service, cleanups, context } = host('fp-1')
+    const first = panelSession().handler(params, context, vi.fn())
+    const second = panelSession().handler(params, { ...context, requestId: 'request-2' }, vi.fn())
+    await vi.waitFor(() => expect(cleanups.size).toBe(2))
+    const [endFirst, endSecond] = [...cleanups.values()]
+
+    endFirst?.()
+    await first
+    expect(service.panels.revokeSession).not.toHaveBeenCalled()
+
+    endSecond?.()
+    await second
+    expect(service.panels.revokeSession).toHaveBeenCalledWith('runtime:socket-1', HOST_TOKEN)
+  })
+
+  it("leaves the socket's other panels open when the panel is missing", async () => {
+    const { service, context } = host('fp-1')
+    service.panels.open.mockResolvedValue(null)
+    await expect(panelSession().handler(params, context, vi.fn())).rejects.toThrow(
+      'has no panel main'
+    )
+    expect(service.panels.revokeOwner).not.toHaveBeenCalled()
+  })
+
   it('refuses a client whose copy of the plugin differs', async () => {
     const { service, context } = host('fp-other')
     await expect(panelSession().handler(params, context, vi.fn())).rejects.toThrow(

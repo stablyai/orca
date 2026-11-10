@@ -3,6 +3,27 @@ import { PluginPanelSessionParams } from '../../../../../shared/rpc-contract/plu
 import { bindRpcPanelOwner, requirePluginService } from './plugins'
 
 let panelSessionSeq = 0
+// One socket's streams for the same panel share its token, so only the last one revokes it.
+const streamsByToken = new Map<string, number>()
+
+function holdToken(ownerKey: string, sessionToken: string): () => boolean {
+  const key = `${ownerKey}\0${sessionToken}`
+  streamsByToken.set(key, (streamsByToken.get(key) ?? 0) + 1)
+  let released = false
+  return () => {
+    if (released) {
+      return false
+    }
+    released = true
+    const left = (streamsByToken.get(key) ?? 1) - 1
+    if (left > 0) {
+      streamsByToken.set(key, left)
+      return false
+    }
+    streamsByToken.delete(key)
+    return true
+  }
+}
 
 export const PLUGIN_PANEL_SESSION_METHODS = [
   defineStreamingMethod({
@@ -23,9 +44,18 @@ export const PLUGIN_PANEL_SESSION_METHODS = [
       }
       const ownerKey = bindRpcPanelOwner(service, context)
       const entry = await service.panels.open(ownerKey, params.pluginKey, params.panelId)
-      const session = entry ? service.panels.sessionCaller(ownerKey, entry.sessionToken) : null
-      if (!entry || !session || context.signal?.aborted) {
-        service.panels.revokeOwner(ownerKey)
+      if (!entry) {
+        throw new Error(`${params.pluginKey} has no panel ${params.panelId} on this host`)
+      }
+      const releaseToken = holdToken(ownerKey, entry.sessionToken)
+      const revokeIfLast = (): void => {
+        if (releaseToken()) {
+          service.panels.revokeSession(ownerKey, entry.sessionToken)
+        }
+      }
+      const session = service.panels.sessionCaller(ownerKey, entry.sessionToken)
+      if (!session || context.signal?.aborted) {
+        revokeIfLast()
         throw new Error(`${params.pluginKey} has no panel ${params.panelId} on this host`)
       }
       await new Promise<void>((resolve) => {
@@ -36,7 +66,7 @@ export const PLUGIN_PANEL_SESSION_METHODS = [
           `plugins-panel-session-${context.connectionId ?? 'inproc'}-${++panelSessionSeq}`,
           () => {
             stop()
-            service.panels.revokeSession(ownerKey, entry.sessionToken)
+            revokeIfLast()
             emit({ type: 'end' })
             resolve()
           },

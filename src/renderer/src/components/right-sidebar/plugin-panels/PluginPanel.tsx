@@ -43,13 +43,13 @@ function PluginPanelHostNote({ host }: { host: PluginFrameHost }): React.JSX.Ele
   const t = useTranslate()
   const text =
     host.kind === 'paired'
-      ? t('auto.components.right.sidebar.PluginPanel.onPairedHost', 'Running on {{value0}}', {
-          value0: host.name
+      ? t('auto.components.right.sidebar.PluginPanel.onPairedHost', 'Running on {{hostName}}', {
+          hostName: host.name
         })
       : t(
           'auto.components.right.sidebar.PluginPanel.onThisHost',
-          'Running on this computer: {{value0}}',
-          { value0: host.reason }
+          'Running on this computer: {{reason}}',
+          { reason: host.reason }
         )
   return (
     <div

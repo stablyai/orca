@@ -15328,8 +15328,8 @@
             "loadFailed": "The plugin panel could not be loaded.",
             "needsDesktop": "This panel runs only in the Orca desktop app.",
             "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off.",
-            "onPairedHost": "Running on {{value0}}",
-            "onThisHost": "Running on this computer: {{value0}}"
+            "onPairedHost": "Running on {{hostName}}",
+            "onThisHost": "Running on this computer: {{reason}}"
           },
           "activityBar": {
             "error": "Error",

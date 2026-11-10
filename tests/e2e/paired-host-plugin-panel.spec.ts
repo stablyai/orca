@@ -98,6 +98,7 @@ function panelHome(page: Page): Promise<string | null> {
 test('a plugin panel runs on the paired host whose workspace is focused', async ({
   testRepoPath
 }, testInfo) => {
+  // Two Orca processes start (a headless host and a paired desktop client), and both load the plugin.
   test.setTimeout(300_000)
   const pluginRoot = await mkdtemp(join(tmpdir(), 'orca-which-orca-'))
   await writeWhichOrcaPlugin(pluginRoot)

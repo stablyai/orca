@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginFrameGuest } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
+import type { PluginRemotePanelBinding } from '../../../../../shared/plugins/frames/plugin-remote-panel'
 import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
 import { notePluginFrameIsolation } from '@/store/plugins/frames/plugin-frame-isolation'
 
@@ -48,6 +49,8 @@ export function usePluginFrameEntry(
     let revision = 0
     // Why: refresh events start overlapping reads; only the newest may set the entry.
     let latestRead = 0
+    // One bind per session token, shared by overlapping reads; the newest read keeps only its own.
+    const binds = new Map<string, Promise<PluginRemotePanelBinding>>()
     // The session token whose calls go to the paired host, and what the panel shows about it.
     let boundToken: string | null = null
     let host: PluginFrameHost | undefined
@@ -61,39 +64,49 @@ export function usePluginFrameEntry(
       currentHtml = null
       setEntry({ status: 'error' })
     }
-    const unbind = (): void => {
-      if (boundToken) {
-        void pluginsApi.unbindRemotePanel?.({ sessionToken: boundToken }).catch(() => undefined)
+    // Unbinds once that token's bind lands, even if it is still in flight.
+    const release = (sessionToken: string): void => {
+      const pending = binds.get(sessionToken)
+      binds.delete(sessionToken)
+      if (boundToken === sessionToken) {
         boundToken = null
       }
+      void pending?.then((binding) => {
+        if (binding.bound) {
+          void pluginsApi.unbindRemotePanel?.({ sessionToken }).catch(() => undefined)
+        }
+      })
     }
     // Binds before the frame mounts, so its first call already reaches the host.
-    const bindHost = async (sessionToken: string | null): Promise<void> => {
+    const bindHost = async (sessionToken: string | null, isLatest: () => boolean) => {
       const bindRemotePanel = pluginsApi.bindRemotePanel
       if (surface !== 'panel' || !pairedEnvironmentId || !bindRemotePanel || !sessionToken) {
         return
       }
-      if (boundToken === sessionToken) {
+      let pending = binds.get(sessionToken)
+      if (!pending) {
+        pending = bindRemotePanel({ sessionToken, environmentId: pairedEnvironmentId }).catch(
+          (error: unknown) => ({ bound: false as const, reason: String(error) })
+        )
+        binds.set(sessionToken, pending)
+      }
+      const binding = await pending
+      // Main holds nothing for a refused bind, so the next read asks again.
+      if (!binding.bound && binds.get(sessionToken) === pending) {
+        binds.delete(sessionToken)
+      }
+      if (!isLatest()) {
         return
       }
-      unbind()
-      const binding = await bindRemotePanel({
-        sessionToken,
-        environmentId: pairedEnvironmentId
-      }).catch((error: unknown) => ({
-        bound: false as const,
-        reason: String(error)
-      }))
-      if (!binding.bound) {
-        host = { kind: 'local', reason: binding.reason }
-        return
+      for (const token of binds.keys()) {
+        if (token !== sessionToken) {
+          release(token)
+        }
       }
-      if (cancelled) {
-        void pluginsApi.unbindRemotePanel?.({ sessionToken }).catch(() => undefined)
-        return
-      }
-      boundToken = sessionToken
-      host = { kind: 'paired', name: binding.hostName }
+      boundToken = binding.bound ? sessionToken : null
+      host = binding.bound
+        ? { kind: 'paired', name: binding.hostName }
+        : { kind: 'local', reason: binding.reason }
     }
     const load = (): void => {
       const readId = ++latestRead
@@ -116,7 +129,7 @@ export function usePluginFrameEntry(
             fail()
             return
           }
-          await bindHost(result.sessionToken)
+          await bindHost(result.sessionToken, () => !cancelled && readId === latestRead)
           if (cancelled || readId !== latestRead) {
             return
           }
@@ -171,6 +184,8 @@ export function usePluginFrameEntry(
       if (cancelled || sessionToken !== boundToken) {
         return
       }
+      // Main already ended that binding.
+      binds.delete(sessionToken)
       boundToken = null
       currentHtml = null
       setEntry({ status: 'loading' })
@@ -180,7 +195,9 @@ export function usePluginFrameEntry(
       cancelled = true
       unsubscribe?.()
       unsubscribeClosed?.()
-      unbind()
+      for (const token of binds.keys()) {
+        release(token)
+      }
     }
   }, [surface, pluginKey, contributionId, pairedEnvironmentId])
 
