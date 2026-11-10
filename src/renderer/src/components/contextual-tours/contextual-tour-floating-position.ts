@@ -9,7 +9,10 @@ import {
   type Placement
 } from '@floating-ui/dom'
 import type { CSSProperties } from 'react'
-import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
 import type { ContextualTourStepPlacement } from '../../../../shared/contextual-tours'
 
 export type ContextualTourPanelPlacement = 'top' | 'right' | 'bottom' | 'left'
@@ -119,21 +122,21 @@ export function watchContextualTourFloatingPosition(args: {
     tracker.wake()
   })
   const reconcileVisibility = (): void => {
-    if (isWindowVisible()) {
+    if (getWindowParkVisible()) {
       update()
       tracker.wake()
     } else {
       tracker.pause()
     }
   }
-  document.addEventListener('visibilitychange', reconcileVisibility)
+  const stopVisibility = subscribeWindowParkVisibility(reconcileVisibility)
   // Event-driven placement must work even when Chromium's hidden state is stale after sleep.
-  if (!isWindowVisible()) {
+  if (!getWindowParkVisible()) {
     tracker.pause()
   }
   return () => {
     disposed = true
-    document.removeEventListener('visibilitychange', reconcileVisibility)
+    stopVisibility()
     tracker.stop()
     stopAutoUpdate()
   }
@@ -150,7 +153,7 @@ function createTargetMotionTracker(target: Element, onMove: () => void): TargetM
   let lastRect = target.getBoundingClientRect()
 
   const park = (): void => {
-    if (stopped || probeTimer !== null || !isWindowVisible()) {
+    if (stopped || probeTimer !== null || !getWindowParkVisible()) {
       return
     }
     probeTimer = window.setTimeout(() => {
