@@ -63,12 +63,15 @@ export async function deleteHostAiVaultSession(
     deps.invalidateMultiHostListCache?.()
     invalidateAiVaultSessionListCache()
     // Use the scanner's raw key; path normalization could miss its parse-cache entry.
-    invalidateSessionParseCacheEntry(args?.filePath ?? '')
-    await (deps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)([
-      args?.filePath ?? ''
-    ]).catch((error) => {
-      console.warn('[ai-vault] background cache invalidation failed:', error)
-    })
+    const filePaths = [...new Set([args?.filePath ?? '', ...(result.filePaths ?? [])])]
+    for (const filePath of filePaths) {
+      invalidateSessionParseCacheEntry(filePath)
+    }
+    await (deps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)(filePaths).catch(
+      (error) => {
+        console.warn('[ai-vault] background cache invalidation failed:', error)
+      }
+    )
   }
 
   return result

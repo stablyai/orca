@@ -14436,6 +14436,9 @@
             "sessionHostMismatchUnsupported": "此工作階段屬於其他主機。請開啟同一主機上的工作區以恢復它。",
             "prepareSessionResumeFailed": "無法準備恢復此工作階段。",
             "sessionDeleted": "工作階段已刪除",
+            "codexDeleteUnsupported": "此 Codex 版本不支援刪除工作階段。請更新 Codex 後再試一次。",
+            "codexDeleteActive": "此工作階段仍由 Codex 終端機或原生聊天使用中。請關閉其終端機，或從其聊天中刪除。",
+            "codexDeleteIncomplete": "刪除未完成。部分 Codex 工作階段資料可能仍然存在。請再次按下「刪除」以完成清理。",
             "sessionDeleteFailed": "無法刪除工作階段",
             "sessionDeleteCheckingHost": "正在檢查 {{value0}}…",
             "resumeInChatConflict": "此對話已在另一個聊天中開啟。",
@@ -14550,6 +14553,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "要刪除此工作階段嗎？",
             "description": "「{{value0}}」將被刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
+            "codexDescription": "「{{value0}}」將從此裝置的 Codex 歷史記錄中永久刪除。你的工作區檔案會保留。刪除前，請關閉 Orca 以外使用它的任何 Codex 工作階段；Orca 無法偵測這些工作階段。",
             "remoteDescription": "「{{value0}}」將從 {{value2}} 刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "confirm": "刪除"
           },

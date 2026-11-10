@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { createCodexRolloutVisibilityPredicate } from '../codex/history/deletion/codex-session-deletion-record'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
@@ -74,6 +75,7 @@ export type AiVaultAgentSource = {
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
+  createFilePredicate?: () => Promise<(filePath: string) => boolean>
   // Sidecar stats affect freshness and recency; async resolution supports non-derived paths.
   contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
   // Return false to skip a directory; depth 0 is a child of the root.
@@ -118,6 +120,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
   codex: {
+    createFilePredicate: createCodexRolloutVisibilityPredicate,
     rootDirs: (options, wslHomeDirs) =>
       uniqueCodexSessionsDirs([
         options.codexSessionsDir ?? codexHomeSessionsDir(),

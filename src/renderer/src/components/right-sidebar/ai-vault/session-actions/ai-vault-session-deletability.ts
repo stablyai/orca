@@ -9,6 +9,7 @@ import type { Translate } from '@/i18n/use-translate'
 import '../session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
+import { isWslUncPath } from '../../../../../../shared/wsl-paths'
 
 /** How the row's owning host answers delete; null support means not yet probed, so the click checks. */
 export type AiVaultSessionDeleteHost = {
@@ -42,7 +43,10 @@ export function aiVaultSessionDeleteBlockedReason(
   t: Translate = translate
 ): string | null {
   const runtimeHosted = aiVaultSessionRuntimeEnvironmentId(session) !== null
-  if (!runtimeHosted && !canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
+  if (
+    (!runtimeHosted && !canUseLocalAiVaultSessionPathActions(session.executionHostId)) ||
+    (session.agent === 'codex' && (runtimeHosted || isWslUncPath(session.filePath)))
+  ) {
     return t(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonNonLocalHost',
       'Only sessions on this device can be deleted.'

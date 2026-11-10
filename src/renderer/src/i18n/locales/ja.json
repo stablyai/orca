@@ -13969,6 +13969,9 @@
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
             "prepareSessionResumeFailed": "このセッションを再開用に準備できませんでした。",
             "sessionDeleted": "セッションを削除しました",
+            "codexDeleteUnsupported": "このバージョンの Codex はセッションの削除に対応していません。Codex を更新して、もう一度お試しください。",
+            "codexDeleteActive": "このセッションは Codex のターミナルまたはネイティブチャットでまだ使用されています。ターミナルを閉じるか、チャットから削除してください。",
+            "codexDeleteIncomplete": "削除が完了していません。Codex のセッションデータが残っている可能性があります。もう一度「削除」を選択して、削除を完了してください。",
             "sessionDeleteFailed": "セッションを削除できませんでした",
             "sessionDeleteCheckingHost": "{{value0}} を確認しています…",
             "resumeInChatConflict": "別のチャットですでにこの会話が行われています。",
@@ -14082,6 +14085,7 @@
           },
           "AiVaultSessionDeleteDialog": {
             "title": "このセッションを削除しますか?",
+            "codexDescription": "「{{value0}}」は、このデバイスの Codex 履歴から完全に削除されます。ワークスペースのファイルは保持されます。削除する前に、Orca の外でこのセッションを使用している Codex を閉じてください。Orca はそれらのセッションを検出できません。",
             "description": "「{{value0}}」を削除します。削除すると、{{value1}} 自体のコマンドラインからも再開できなくなります。",
             "remoteDescription": "「{{value0}}」は {{value2}} から削除されます。削除後は {{value1}} 自身のコマンドラインからも再開できなくなります。",
             "confirm": "削除"

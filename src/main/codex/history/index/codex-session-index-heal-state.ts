@@ -6,6 +6,8 @@ import {
 } from '../../../../shared/cross-platform-path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
+import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-identity'
+import { createCodexRolloutVisibilityPredicate } from '../deletion/codex-session-deletion-record'
 
 // Bump after semantics changes to retry outcomes recorded under older versions.
 export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
@@ -13,9 +15,6 @@ export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
 // Daily probes detect CLI upgrades without spawning on every startup.
 const HEAL_UNSUPPORTED_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 const HEAL_FAILED_THREAD_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
-
-const CODEX_ROLLOUT_THREAD_ID_PATTERN =
-  /^rollout-(.+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl(?:\.zst)?$/i
 
 export type CodexSessionIndexHealPaths = {
   auditLogPath: string
@@ -43,6 +42,7 @@ export type HealMarkerSummary = {
 export async function collectPendingHealThreads(
   paths: CodexSessionIndexHealPaths
 ): Promise<PendingHealThread[]> {
+  const canPublish = await createCodexRolloutVisibilityPredicate({ includePending: true })
   const processed = await readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
   for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
@@ -59,7 +59,7 @@ export async function collectPendingHealThreads(
       continue
     }
     const rollout = parseCodexRolloutThreadId(line.target)
-    if (!rollout) {
+    if (!rollout || !canPublish(line.target)) {
       continue
     }
     const { threadId } = rollout
@@ -80,17 +80,6 @@ export async function collectPendingHealThreads(
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
   )
-}
-
-export function parseCodexRolloutThreadId(
-  filePath: string
-): { threadId: string; rolloutStamp: string } | null {
-  const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(filePath))
-  return match ? { threadId: match[2].toLowerCase(), rolloutStamp: match[1] } : null
-}
-
-function lastPathSegment(filePath: string): string {
-  return filePath.split(/[\\/]/).at(-1) ?? ''
 }
 
 async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Promise<{

@@ -43,6 +43,7 @@ let root = ''
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-hardlink-only-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'orca'))
   mkdirSync(join(root, 'account', 'sessions', '2026', '10', '28'), { recursive: true })
   writeFileSync(join(root, 'account', 'sessions', ROLLOUT), '{"type":"session_meta"}\n')
   mkdirSync(join(root, 'codex'))
@@ -52,6 +53,7 @@ beforeEach(() => {
 afterEach(() => {
   crossVolume.on = false
   crossVolume.beforeLink = undefined
+  vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
 })
 

@@ -146,12 +146,11 @@
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 8 src/main/codex/configuration/toml/config-toml-atomic-write.ts
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
-17 src/main/codex/history/bridges/codex-session-bridge.ts
+16 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
 2 src/main/codex/history/index/codex-state-db.ts
 2 src/main/codex/history/resume/codex-session-resume-home.ts
 2 src/main/codex/history/rollouts/codex-account-home-discovery.ts
-1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
 1 src/main/codex/hooks/installation/codex-hook-local-install.ts
 2 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts

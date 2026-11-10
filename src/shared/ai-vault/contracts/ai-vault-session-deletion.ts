@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../execution-host'
 // IPC payload for aiVault:deleteSession.
 export type AiVaultDeleteSessionArgs = {
   agent: AiVaultAgent
-  // Mixed-version optional field; delete validates path/host/agent only, never session identity/liveness.
+  // Optional for older renderers; required for Codex identity and ownership checks.
   sessionId?: string
   filePath: string
   // The session's host; a runtime-hosted session is deleted by that host.
@@ -14,13 +14,20 @@ export type AiVaultDeleteSessionArgs = {
 }
 
 export type AiVaultDeleteSessionResult =
-  | { outcome: 'deleted' }
+  | { outcome: 'deleted'; filePaths?: string[] }
   | { outcome: 'rejected'; agent: AiVaultAgent; reason: AiVaultSessionDeleteRejectionCode }
-  | { outcome: 'failed'; agent: AiVaultAgent; error: string }
+  | {
+      outcome: 'failed'
+      agent: AiVaultAgent
+      error: string
+      detail?: 'unsupported' | 'incomplete' | 'active'
+    }
 
-// Allow only sessions whose complete unshared data is derivable from the scanned path.
-// Exclude Antigravity/Kimi registries (Antigravity lacks IDs), Codex indexes/hardlink aliases (one-sided deletion reappears), and OpenCode 1.17.x SQLite rows.
+// Providers offered Delete in history. Codex uses its CLI; others use a file plan.
+// The generic file validator deliberately excludes Codex.
+// Antigravity/Kimi registries and OpenCode SQLite rows need separate executors.
 export const AI_VAULT_DELETABLE_AGENTS = [
+  'codex',
   'gemini',
   'copilot',
   'cursor',

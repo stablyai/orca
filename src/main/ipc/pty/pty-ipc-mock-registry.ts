@@ -81,6 +81,9 @@ export const electronModuleMock = (): ElectronModuleMock => ({
 export const fsModuleMock = () => ({
   existsSync: existsSyncMock,
   statSync: statSyncMock,
+  lstatSync: () => {
+    throw Object.assign(new Error('No deletion record in the PTY fixture'), { code: 'ENOENT' })
+  },
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
   readFileSync: readFileSyncMock,

@@ -14619,6 +14619,9 @@
             "sessionHostMismatchUnsupported": "Bu oturum farklı bir host'a ait. Devam ettirmek için aynı host'ta bir çalışma alanı açın.",
             "prepareSessionResumeFailed": "Bu oturum devam ettirme için hazırlanamadı.",
             "sessionDeleted": "Oturum silindi",
+            "codexDeleteUnsupported": "Bu Codex sürümü oturum silmeyi desteklemiyor. Codex'i güncelleyip tekrar deneyin.",
+            "codexDeleteActive": "Bu oturum hâlâ bir Codex terminali veya yerel sohbet tarafından kullanılıyor. Terminalini kapatın ya da sohbetinden silin.",
+            "codexDeleteIncomplete": "Silme tamamlanmadı. Bazı Codex oturum verileri kalmış olabilir. Temizliği bitirmek için Sil'e tekrar tıklayın.",
             "sessionDeleteFailed": "Oturum silinemedi",
             "sessionDeleteCheckingHost": "{{value0}} kontrol ediliyor…",
             "resumeInChatConflict": "Bu konuşmayı başka bir sohbet zaten kullanıyor.",
@@ -14737,6 +14740,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Bu oturum silinsin mi?",
             "description": "\"{{value0}}\" silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemez.",
+            "codexDescription": "\"{{value0}}\" bu cihazdaki Codex geçmişinden kalıcı olarak silinecek. Çalışma alanı dosyalarınız korunacak. Silmeden önce Orca dışında onu kullanan Codex oturumlarını kapatın; Orca bu oturumları algılayamaz.",
             "remoteDescription": "\"{{value0}}\", {{value2}} konumundan silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemeyecek.",
             "confirm": "Sil"
           },
