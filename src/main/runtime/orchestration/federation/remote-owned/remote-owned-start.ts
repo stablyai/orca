@@ -147,7 +147,7 @@ export async function startRemoteOwnedWorker(
   }
   const started = StartedOnServer.safeParse(receipt)
   if (started.success) {
-    recordRemoteStart(db, {
+    const recorded = recordRemoteStart(db, {
       conversationId: link.conversation_id,
       taskId,
       dispatchId: started.data.dispatchId,
@@ -155,6 +155,13 @@ export async function startRemoteOwnedWorker(
       peerRunId: started.data.run?.id,
       agent: started.data.agent ?? null
     })
+    if (!recorded) {
+      throw new OrchestrationError(
+        'run_not_found',
+        `Run ${run.id} was reset, or its pairing with ${server.name} re-made, while this start was waiting, so this Orca records nothing for the worker it started there (Dispatch ${started.data.dispatchId}).`,
+        { server: server.name }
+      )
+    }
     prepareWorkerStartCard(
       runtime,
       ctx.orchestrationCaller
