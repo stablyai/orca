@@ -172,7 +172,7 @@ describe('chat send', () => {
     expect(client.call).toHaveBeenCalledTimes(6)
     expect(result).toMatchObject({
       delivery: 'queued',
-      settled: 'idle',
+      settled: 'done',
       entries: [{ kind: 'message', role: 'assistant', text: 'All pass' }]
     })
   })

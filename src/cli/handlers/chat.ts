@@ -13,6 +13,7 @@ import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
 } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { AGENT_STATUS_STATES } from '../../shared/agent-status/contracts/agent-status-types'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import {
   DEFAULT_READ_LIMIT,
@@ -84,6 +85,13 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => `Renamed chat to "${value.name}".`)
   },
   'chat list': async ({ flags, client, cwd, json }) => {
+    const state = getOptionalStringFlag(flags, 'state')
+    if (state !== undefined && !AGENT_STATUS_STATES.some((known) => known === state)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--state must be one of: ${AGENT_STATUS_STATES.join(', ')}.`
+      )
+    }
     const selector = await getOptionalWorktreeSelector(flags, 'worktree', cwd, client)
     const shown = selector
       ? (
@@ -100,7 +108,6 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
         (w.worktreeId === shown.id &&
           (w.hostId === undefined || shown.hostId === undefined || w.hostId === shown.hostId))
     )
-    const state = getOptionalStringFlag(flags, 'state')
     const chats = listChatSessions(worktrees).filter((chat) => !state || chat.state === state)
     printResult({ ...result, result: { chats } }, json, formatChatList)
   },

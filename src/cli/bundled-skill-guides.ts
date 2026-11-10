@@ -523,7 +523,7 @@ const ORCA_CLI_MARKDOWN = [
   "- `chat read` returns messages, tool calls, errors, and approvals or questions; `pending: true` marks one waiting for the user.",
   "- `chat send` sends the text as the user's message. While the agent works, a host with a message queue holds it until the turn ends and reports `delivery: \"queued\"`.",
   "- A refused send was not delivered. Read the chat again before resending.",
-  "- `chat send --wait` (or `chat wait`) returns when the chat is idle or `settled: \"waiting\"` on an approval or question, with the entries since the last user message; `settled: \"timeout\"` or `\"held\"` (queued message stopped or failed) exits 1. Pass `--timeout-ms`. Long or quoted text goes through `--text-file -` on stdin.",
+  "- `chat send --wait` (or `chat wait`) returns when the chat settles, using `chat list` states: `settled: \"done\"`, or `\"blocked\"` on an approval or question, with the entries since the last user message; `settled: \"timeout\"` or `\"held\"` (queued message stopped or failed) exits 1. Pass `--timeout-ms`. Long or quoted text goes through `--text-file -` on stdin.",
   "- Paired hosts can `chat list` only; read, send and wait run on the host machine.",
   "- When relaying for a user from outside Orca (for example a voice or messaging assistant on the same machine), report from `chat list` and `chat read`, repeat an instruction back and get the user's confirmation before `chat send`, and send the user's words without adding instructions.",
   "",

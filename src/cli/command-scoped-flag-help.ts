@@ -8,7 +8,7 @@ const CHAT_SESSION_HELP =
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'chat rename': { session: CHAT_SESSION_HELP },
   'chat list': {
-    state: '--state <state>       Only chats in this state: working, waiting, blocked or done'
+    state: '--state <state>       Only chats in this state: working, blocked, waiting or done'
   },
   'chat read': { session: CHAT_SESSION_HELP },
   'chat send': {

@@ -20,8 +20,11 @@ export type ChatTranscript = {
   entries: ChatTranscriptEntry[]
   /** Newest journal row read, so a later `--since` can continue from it. */
   cursor: AgentSessionHistoryPage['window']['newest']
+  /** Older rows exist that this 200-row read did not reach, and they were needed. */
+  truncated: boolean
 }
-export type ChatSettled = 'idle' | 'waiting' | 'held' | 'timeout'
+/** The `chat list` states a chat settles in (as structuredAgentSessionLeadState names them), plus two wait-only outcomes. */
+export type ChatSettled = 'done' | 'blocked' | 'held' | 'timeout'
 
 export async function readHistory(
   client: RuntimeClient,
@@ -49,7 +52,8 @@ export async function readTranscript(
   const { page } = response.result
   const all = chatTranscript(page.items, page.actionablePromptIds)
   const entries = limit === undefined ? all : all.slice(-limit)
-  return { ...response, result: { session, entries, cursor: page.window.newest } }
+  const truncated = page.hasOlder && (limit === undefined || all.length < limit)
+  return { ...response, result: { session, entries, cursor: page.window.newest, truncated } }
 }
 
 export function requireWorkingFlag(page: AgentSessionHistoryPage): void {
@@ -73,7 +77,7 @@ export async function waitForChat(
     const { page } = (await readHistory(client, session, 1)).result
     requireWorkingFlag(page)
     if ((page.actionablePromptIds?.length ?? 0) > 0) {
-      return 'waiting'
+      return 'blocked'
     }
     // Between turns the host names its next automatic send while working is briefly false.
     const sendsNext = structuredAgentSessionQueueSendsNext(
@@ -83,7 +87,7 @@ export async function waitForChat(
     if (!page.working && !sendsNext) {
       // Still queued with nothing running or about to send: stopped, failed or held across a reopen.
       const held = page.queuedMessages?.some((m) => m.messageId === queuedMessageId) === true
-      return held ? 'held' : 'idle'
+      return held ? 'held' : 'done'
     }
     if (Date.now() >= deadline) {
       return 'timeout'
@@ -103,11 +107,14 @@ export async function readSettledTurn(
     process.exitCode = 1
   }
   const response = await readTranscript(client, session)
-  const { entries } = response.result
+  const { entries, truncated } = response.result
   const lastUser = entries.findLastIndex((e) => e.kind === 'message' && e.role === 'user')
   // A held message never ran, so the last turn on the page is not its reply.
   const turn = settled === 'held' ? [] : entries.slice(lastUser + 1)
-  return { ...response, result: { ...response.result, entries: turn, settled } }
+  return {
+    ...response,
+    result: { ...response.result, entries: turn, truncated: truncated && lastUser === -1, settled }
+  }
 }
 
 export function formatSettled(result: ChatTranscript & { settled: ChatSettled }): string {
@@ -116,8 +123,8 @@ export function formatSettled(result: ChatTranscript & { settled: ChatSettled })
       ? 'Still working when the wait timed out.'
       : result.settled === 'held'
         ? 'Your message is held in the queue (the chat was stopped or the send failed). Resume it in Orca.'
-        : result.settled === 'waiting'
-          ? 'Waiting for you to answer.'
+        : result.settled === 'blocked'
+          ? 'Blocked: waiting for you to answer an approval or question.'
           : 'Done.'
   return result.entries.length === 0 ? status : `${formatChatRead(result)}\n${status}`
 }

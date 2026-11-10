@@ -23,7 +23,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'state'],
     notes: [
       'Lists the top-level chats Orca shows as agent tabs. Terminal agents are read with `orca terminal`.',
-      '--state keeps chats in one state, such as working, done, blocked or waiting.'
+      '--state keeps chats in one state: working, blocked, waiting or done. Chats report working, blocked or done.'
     ],
     examples: ['orca chat list --json', 'orca chat list --state working']
   },
@@ -63,7 +63,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca chat wait --session <id-or-handle> [--timeout-ms <ms>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'session', 'timeout-ms'],
     notes: [
-      'Returns at once when the chat is idle. "waiting" means an approval or question needs an answer.',
+      'Settles with the same states as `chat list`: "done", or "blocked" on an approval or question. "held" and "timeout" exit 1.',
       'Prints what the chat did since the last user message. A wait that times out exits 1.'
     ],
     examples: ['orca chat wait --session codex_1234 --timeout-ms 600000 --json']
