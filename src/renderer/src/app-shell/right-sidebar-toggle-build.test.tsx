@@ -15,6 +15,7 @@ function showCloudBuild(): void {
     activePendingCreationId: 'c1',
     rightSidebarOpen: false,
     pendingWorktreeCreations: {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the toggle reads only the fields set here.
       c1: {
         creationId: 'c1',
         status: 'creating',

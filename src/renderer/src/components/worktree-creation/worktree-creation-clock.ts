@@ -53,6 +53,7 @@ const durationFormatters = new Map<string, DurationFormatter | null>()
 function durationFormatter(locale: string, withHours: boolean): DurationFormatter | null {
   const key = `${locale}|${withHours}`
   if (!durationFormatters.has(key)) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the TS lib lacks Intl.DurationFormat; it is read as optional and only constructed when present.
     const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor })
       .DurationFormat
     let formatter: DurationFormatter | null = null
