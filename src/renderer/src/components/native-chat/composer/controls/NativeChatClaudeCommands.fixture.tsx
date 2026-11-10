@@ -135,7 +135,7 @@ export const terminalMenu = defineFixture({
     await new Promise<void>((resolve, reject) => {
       const ready = () =>
         [...frame.querySelectorAll('button')].some(
-          (button) => button.textContent === 'Next' && !button.disabled
+          (button) => button.getAttribute('aria-label') === 'Next' && !button.disabled
         )
       const observer = new MutationObserver(() => {
         if (ready()) {

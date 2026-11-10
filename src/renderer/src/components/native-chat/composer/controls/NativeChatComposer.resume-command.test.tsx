@@ -273,7 +273,8 @@ describe('structured composer control picks', () => {
             readTerminalDraft: () => ''
           }}
           onSwitchToTerminal={openTerminal}
-        />
+        />,
+        { wrapper: TooltipProvider }
       )
       await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Run in Chat' })))
       expect(mocks.sendNativeChatObservedWrites).toHaveBeenCalledWith(

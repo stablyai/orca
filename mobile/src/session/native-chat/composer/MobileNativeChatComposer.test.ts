@@ -13,7 +13,10 @@ import {
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
 
-import { captureMobileNativeChatTextDestination } from './mobile-native-chat-draft-inputs'
+import {
+  captureMobileNativeChatTextDestination,
+  updateMobileNativeChatDraftInputs
+} from './mobile-native-chat-draft-inputs'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -53,6 +56,9 @@ vi.mock('react-native', async () => {
 })
 
 vi.mock('lucide-react-native', () => ({
+  AtSign: 'AtSign',
+  Image: 'Image',
+  Paperclip: 'Paperclip',
   ArrowUp: 'ArrowUp',
   ListEnd: 'ListEnd',
   CornerDownRight: 'CornerDownRight',
@@ -121,6 +127,88 @@ describe('MobileNativeChatComposer', () => {
         String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     )
   }
+
+  it('opens MCP controls without sending or consuming the draft, while a picked same-name skill still sends', async () => {
+    const request = vi.fn(async () => ({ status: 'ok' as const, servers: [] }))
+    const onSend = vi.fn(async () => true)
+    const onChangeText = vi.fn()
+    const props = {
+      agent: 'claude',
+      value: '/mcp',
+      onSend,
+      onChangeText,
+      sendSurfaceId: 'mcp-chat',
+      getSendCompletionGeneration: () => 0,
+      structured: {
+        catalog: { reported: [], conversationCommands: [] },
+        onSlashMenuOpen: () => {},
+        files: [],
+        onRemoveFile: () => {},
+        mcp: { sessionKey: 'mcp-session', request }
+      }
+    }
+    await act(async () => {
+      renderer = create(createElement(MobileNativeChatComposer, props))
+    })
+    await act(async () => sendButton().props.onPress())
+    expect(request).toHaveBeenCalledWith({ action: 'status' })
+    expect(onSend).not.toHaveBeenCalled()
+    expect(onChangeText).not.toHaveBeenCalled()
+    act(() => renderer?.unmount())
+    updateMobileNativeChatDraftInputs('mcp-chat', () => ({
+      images: [],
+      files: [],
+      skills: [{ name: 'mcp', path: '/workspace/mcp/SKILL.md' }]
+    }))
+    await act(async () => {
+      renderer = create(createElement(MobileNativeChatComposer, props))
+    })
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).toHaveBeenCalledWith('/mcp')
+    updateMobileNativeChatDraftInputs('mcp-chat', () => ({ images: [], files: [], skills: [] }))
+  })
+
+  it('holds the MCP command entry until an in-flight message finishes', async () => {
+    const sent = Promise.withResolvers<boolean>()
+    const request = vi.fn(async () => ({ status: 'ok' as const, servers: [] }))
+    const draw = (value: string) =>
+      createElement(MobileNativeChatComposer, {
+        agent: 'claude',
+        value,
+        onSend: () => sent.promise,
+        onChangeText: vi.fn(),
+        sendSurfaceId: 'mcp-send-lock',
+        getSendCompletionGeneration: () => 0,
+        structured: {
+          catalog: { reported: [], conversationCommands: [] },
+          onSlashMenuOpen: () => {},
+          files: [],
+          onRemoveFile: () => {},
+          mcp: { sessionKey: 'mcp-send-lock', request }
+        }
+      })
+    await act(async () => {
+      renderer = create(draw('hello'))
+    })
+    let pendingSend!: Promise<void>
+    await act(async () => {
+      pendingSend = sendButton().props.onPress()
+    })
+    await act(async () => renderer!.update(draw('/mcp')))
+    const commandEntry = () =>
+      renderer!.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === '/mcp'
+      )
+    expect(commandEntry().props.disabled).toBe(true)
+    await act(async () => commandEntry().props.onPress())
+    expect(request).not.toHaveBeenCalled()
+    await act(async () => {
+      sent.resolve(true)
+      await pendingSend
+    })
+    await act(async () => commandEntry().props.onPress())
+    expect(request).toHaveBeenCalledWith({ action: 'status' })
+  })
 
   it('appends dictation until a selection is read, then replaces the selection it started on', async () => {
     const scope = 'dictation-ordinary'

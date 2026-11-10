@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatClaudeTerminalCommand } from './NativeChatClaudeTerminalCommand'
 import { sendNativeChatObservedWrites } from '../../session/terminal/send/native-chat-observed-send'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('../../session/terminal/send/native-chat-observed-send', () => ({
   sendNativeChatObservedWrites: vi.fn()
@@ -39,7 +40,8 @@ it('runs the command in the owning PTY and allows menu navigation without cleari
       readDraft={readDraft}
       disabled={false}
       remote
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Run in Chat' })))
   expect(sendNativeChatObservedWrites).toHaveBeenCalledWith(
@@ -54,6 +56,15 @@ it('runs the command in the owning PTY and allows menu navigation without cleari
   expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
     'remote:windows@@pty-1',
     '\x1b[B',
+    'driving',
+    { requireWriteSettlement: true }
+  )
+  await act(async () =>
+    fireEvent.keyDown(screen.getByLabelText('Live Claude menu'), { key: 'ArrowUp' })
+  )
+  expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
+    'remote:windows@@pty-1',
+    '\x1b[A',
     'driving',
     { requireWriteSettlement: true }
   )

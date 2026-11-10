@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { NativeChatMcpPanel } from './NativeChatMcpPanel'
 import type { AgentSessionMcpResult } from '../../../../../../shared/agent-session/agent-session-mcp'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn()
@@ -25,7 +26,8 @@ it('authenticates on the conversation host and waits for its observed result', a
     <NativeChatMcpPanel
       transport={{ sessionId: 'windows-chat', runtimeEnvironmentId: 'windows' }}
       fallback={null}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   await act(async () => {})
   expect(rpc).toHaveBeenCalledWith(
@@ -54,7 +56,10 @@ it('authenticates on the conversation host and waits for its observed result', a
     })
   )
   expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
-  expect(screen.getByRole('button', { name: 'Reconnect' })).toHaveProperty('disabled', false)
+  expect(screen.getByRole('button', { name: 'Actions for figma' })).toHaveProperty(
+    'disabled',
+    false
+  )
 })
 
 it('drops a delayed response from a previous session', async () => {
@@ -66,7 +71,8 @@ it('drops a delayed response from a previous session', async () => {
     <NativeChatMcpPanel
       transport={{ sessionId: 'old-chat', runtimeEnvironmentId: null }}
       fallback={null}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   rerender(
     <NativeChatMcpPanel
@@ -82,4 +88,32 @@ it('drops a delayed response from a previous session', async () => {
   )
   expect(screen.queryByText('old-server')).toBeNull()
   expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
+})
+
+it('keeps the last observed server after an unconfirmed action and requires a refresh before retrying', async () => {
+  const rpc = vi.mocked(callStructuredAgentSession)
+  const status: AgentSessionMcpResult = {
+    status: 'ok',
+    servers: [{ name: 'figma', status: 'needs-auth', canAuthenticate: true }]
+  }
+  rpc
+    .mockResolvedValueOnce(status)
+    .mockResolvedValueOnce({ status: 'failed' })
+    .mockResolvedValueOnce(status)
+  render(
+    <NativeChatMcpPanel
+      transport={{ sessionId: 'chat', runtimeEnvironmentId: null }}
+      fallback={null}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign in' })))
+  expect(screen.getByRole('button', { name: 'Sign in' })).toHaveProperty('disabled', true)
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Refresh' })))
+  expect(rpc).toHaveBeenLastCalledWith({ kind: 'local' }, 'agentSession.mcp', {
+    sessionId: 'chat',
+    operation: { action: 'status' }
+  })
+  expect(screen.getByRole('button', { name: 'Sign in' })).toHaveProperty('disabled', false)
 })

@@ -13,6 +13,7 @@ import {
 } from '../../../../../../shared/native-chat/input/native-chat-paste-bytes'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../../../shared/native-chat/input/native-chat-answer-stepping'
 import { stripScrollbackAnsi } from '../../session/terminal/assembly/native-chat-scrape-fallback'
+import { NativeChatClaudeMenuNavigation } from './NativeChatClaudeMenuNavigation'
 
 export function NativeChatClaudeTerminalCommand({
   command,
@@ -77,6 +78,8 @@ export function NativeChatClaudeTerminalCommand({
       busy.current = false
       setPending(false)
       setFailed(true)
+      setStarted(false)
+      onActiveChange?.(false)
       return
     }
     handle.current = sendNativeChatObservedWrites(
@@ -117,6 +120,7 @@ export function NativeChatClaudeTerminalCommand({
   }
   const menuDisabled =
     disabled || pending || !screen || readDraft() !== null || readScreen() !== screen
+  const atPrompt = started && !pending && readDraft() !== null
   return (
     <SecuritySurface>
       <section
@@ -127,15 +131,31 @@ export function NativeChatClaudeTerminalCommand({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-mono">/{command}</span>
-          {!started && (
-            <Button size="xs" disabled={disabled || pending} onClick={() => void start()}>
-              {t('components.native-chat.commands.runInChat', 'Run in Chat')}
+          {openTerminal && (
+            <Button
+              size="sm"
+              className="pointer-coarse:min-h-11"
+              variant="ghost"
+              onClick={openTerminal}
+            >
+              {t('components.native-chat.mcp.openTerminal', 'Open terminal')}
             </Button>
           )}
-          {!started && (
+        </div>
+        {!started && (
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              size="xs"
-              variant="outline"
+              size="sm"
+              className="pointer-coarse:min-h-11"
+              disabled={disabled || pending}
+              onClick={() => void start()}
+            >
+              {t('components.native-chat.commands.runInChat', 'Run in Chat')}
+            </Button>
+            <Button
+              size="sm"
+              className="pointer-coarse:min-h-11"
+              variant="ghost"
               disabled={disabled || pending}
               onClick={() => {
                 if (readDraft() !== null || !readScreen()) {
@@ -148,85 +168,70 @@ export function NativeChatClaudeTerminalCommand({
             >
               {t('components.native-chat.commands.currentMenu', 'Show current menu')}
             </Button>
-          )}
-          {openTerminal && (
-            <Button size="xs" variant="ghost" onClick={openTerminal}>
-              {t('components.native-chat.mcp.openTerminal', 'Open terminal')}
-            </Button>
-          )}
-        </div>
+          </div>
+        )}
         {started && (
           <>
             <pre
-              className="scrollbar-sleek max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-chat-code"
+              className="scrollbar-sleek max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 font-mono text-chat-code focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+                  return
+                }
+                const keys: Record<string, string> = {
+                  ArrowUp: '\x1b[A',
+                  ArrowDown: '\x1b[B',
+                  ArrowLeft: '\x1b[D',
+                  ArrowRight: '\x1b[C',
+                  Enter: '\r',
+                  Escape: '\x1b'
+                }
+                const key = keys[event.key]
+                if (key && !menuDisabled) {
+                  event.preventDefault()
+                  void press(key)
+                }
+              }}
               aria-label={t('components.native-chat.commands.liveMenu', 'Live Claude menu')}
             >
               {screen && stripScrollbackAnsi(screen)}
             </pre>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={menuDisabled}
-                onClick={() => void press('\x1b[D')}
-              >
-                {t('components.native-chat.commands.left', 'Left')}
-              </Button>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={menuDisabled}
-                onClick={() => void press('\x1b[C')}
-              >
-                {t('components.native-chat.commands.right', 'Right')}
-              </Button>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={menuDisabled}
-                onClick={() => void press('\x1b[A')}
-              >
-                {t('components.native-chat.commands.previous', 'Previous')}
-              </Button>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={menuDisabled}
-                onClick={() => void press('\x1b[B')}
-              >
-                {t('components.native-chat.commands.next', 'Next')}
-              </Button>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={menuDisabled}
-                onClick={() => void press('\r')}
-              >
-                {t('components.native-chat.commands.select', 'Select')}
-              </Button>
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={menuDisabled}
-                onClick={() => void press('\x1b')}
-              >
-                {t('components.native-chat.commands.back', 'Back')}
-              </Button>
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => {
-                  if (readDraft() === null) {
-                    setFailed(true)
-                    return
-                  }
-                  setStarted(false)
-                  onActiveChange?.(false)
-                }}
-              >
-                {t('components.native-chat.commands.done', 'Done')}
-              </Button>
+            <div className="flex items-end justify-between gap-3">
+              {!atPrompt && (
+                <NativeChatClaudeMenuNavigation
+                  disabled={menuDisabled}
+                  onPress={(key) => void press(key)}
+                />
+              )}
+              {!atPrompt && (
+                <Button
+                  size="sm"
+                  className="pointer-coarse:min-h-11"
+                  variant="ghost"
+                  disabled={menuDisabled}
+                  onClick={() => void press('\x1b')}
+                >
+                  {t('components.native-chat.commands.back', 'Back')}
+                </Button>
+              )}
+              {atPrompt && (
+                <Button
+                  size="sm"
+                  className="pointer-coarse:min-h-11"
+                  disabled={pending}
+                  onClick={() => {
+                    if (readDraft() === null) {
+                      setFailed(true)
+                      return
+                    }
+                    setStarted(false)
+                    onActiveChange?.(false)
+                  }}
+                >
+                  {t('components.native-chat.commands.done', 'Done')}
+                </Button>
+              )}
             </div>
           </>
         )}
@@ -242,7 +247,7 @@ export function NativeChatClaudeTerminalCommand({
           {started &&
             t(
               'components.native-chat.commands.returnToPrompt',
-              'Use Back to leave the menu, then Done to return to your draft. '
+              'Select an item, or use Back to leave the menu. '
             )}
           {remote
             ? t(

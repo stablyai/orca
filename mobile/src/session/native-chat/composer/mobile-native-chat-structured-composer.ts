@@ -1,8 +1,10 @@
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
+import type { AgentSessionMcpRequest } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp'
 
 export type MobileNativeChatStructuredComposer = {
+  mcp?: { sessionKey: string; request: AgentSessionMcpRequest }
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void
   onSlashMenuDemand?: (open: boolean) => void

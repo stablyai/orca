@@ -20992,19 +20992,22 @@
         "openTerminal": "Open terminal",
         "servers": "MCP servers",
         "refresh": "Refresh",
-        "waitingForConsent": "Waiting for you to finish sign-in in the browser on the computer running Claude. This can take up to 3 minutes.",
+        "waitingForConsent": "Finish sign-in in the browser on the computer running Claude. Waiting up to 3 minutes…",
         "checking": "Checking the session’s MCP connection…",
         "empty": "This session reports no MCP servers.",
         "authenticate": "Sign in",
         "reconnect": "Reconnect",
         "enable": "Enable",
         "disable": "Disable",
-        "actionUnavailable": "MCP controls could not complete on this session. Refresh to check its state. An active Claude session and a compatible host are required.",
+        "actionUnavailable": "The action could not be confirmed. Refresh to check the connection before trying again.",
         "connected": "Connected",
         "failed": "Connection failed",
         "needsAuth": "Sign-in required",
         "pending": "Connecting",
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        "moreActions": "Actions for {{server}}",
+        "terminalRequired": "This server requires sign-in from the Claude terminal on its computer.",
+        "lastChecked": "Last checked: {{status}}"
       },
       "commands": {
         "runInChat": "Run in Chat",
@@ -21017,7 +21020,7 @@
         "back": "Back",
         "done": "Done",
         "inputNotConfirmed": "The terminal input is occupied, unavailable, or its delivery was not confirmed. Check the live menu or open the terminal before retrying.",
-        "returnToPrompt": "Use Back to leave the menu, then Done to return to your draft. ",
+        "returnToPrompt": "Select an item, or use Back to leave the menu. ",
         "browserConsent": "Complete any sign-in consent yourself in the browser opened by Claude.",
         "sessionSettings": "Session settings",
         "settingsScope": "These controls apply to this chat. Use Claude’s terminal for additional configuration or individual permission rules.",
@@ -21027,7 +21030,8 @@
         "permissions": "Open session permissions",
         "login": "Open Claude sign-in controls",
         "currentMenu": "Show current menu",
-        "panelLabel": "Claude /{{command}}"
+        "panelLabel": "Claude /{{command}}",
+        "navigation": "Menu navigation"
       }
     },
     "tab": {
