@@ -18,6 +18,7 @@ import { Switch } from '../../ui/switch'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { isSpeechModelDownloading } from './voice-speech-model-rows'
+import { VoiceAutoSendSetting } from './VoiceAutoSendSetting'
 
 type VoiceDictationSettingsProps = {
   voiceSettings: VoiceSettings
@@ -150,6 +151,10 @@ export function VoiceDictationSettings(props: VoiceDictationSettingsProps): Reac
             ]}
           />
         }
+      />
+      <VoiceAutoSendSetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
       />
     </SettingsGroup>
   )
