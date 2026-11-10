@@ -183,7 +183,8 @@ export const empty = defineFixture({
           missing: [],
           repoKey: 'github.com/acme/web',
           asleep: false,
-          sharing: null
+          sharing: null,
+          withoutPersonal: false
         }
       }}
     />
