@@ -85,6 +85,31 @@ describe('transcript slots', () => {
     ])
   })
 
+  it('keeps a steered reply visible once the turn settles', () => {
+    const messages = [
+      text('prompt', 'Do the task.', 'user'),
+      text('preamble', 'I will inspect the files.'),
+      toolRun('work-before'),
+      text('steer', 'What port is that?', 'user'),
+      text('steer-reply', 'The port is 8080.'),
+      toolRun('work-after'),
+      text('final', 'The task is done.')
+    ]
+    const slots = build(messages, {
+      turnKeys: messages.map(() => 'prompt'),
+      turnStatuses: {
+        active: null,
+        completedByTurn: { prompt: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+      }
+    })
+    expect(slots.map((slot) => [slot.message.id, slot.drawsMessage, slot.folded])).toEqual([
+      ['prompt', true, false],
+      ['steer', true, false],
+      ['steer-reply', true, false],
+      ['final', true, false]
+    ])
+  })
+
   it("marks a row as continuing its turn only when the agent's next step follows", () => {
     const continuing = (messages: NativeChatMessage[]) =>
       build(messages)

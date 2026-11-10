@@ -1,4 +1,4 @@
-// Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
+// Derive settled-turn answers from the last assistant prose or system failure, the first assistant prose after a steer, and the prose a Stop hook sent back; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
@@ -32,6 +32,8 @@ export type NativeChatTurnFoldRow = {
   explainsTurn: boolean
   /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
   sendsBack: boolean
+  /** A user message folded into this turn. The next assistant prose answers it and stays visible. */
+  steersTurn: boolean
 }
 
 const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
@@ -47,7 +49,13 @@ export function nativeChatTurnFoldRow(
     facts = deriveTurnFoldRow(message, undefined, false)
     rowFacts.set(message, facts)
   }
-  return { ...facts, turnKey, draws: hasReceipt || facts.draws }
+  return {
+    ...facts,
+    turnKey,
+    draws: hasReceipt || facts.draws,
+    // A steer keeps the opener's turn key, so its own id no longer names the turn.
+    steersTurn: message.role === 'user' && turnKey !== undefined && turnKey !== message.id
+  }
 }
 
 function deriveTurnFoldRow(
@@ -89,7 +97,8 @@ function deriveTurnFoldRow(
     sendsBack: message.blocks.some(
       (block) =>
         block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
-    )
+    ),
+    steersTurn: false
   }
 }
 
@@ -105,12 +114,13 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Last assistant prose/system failure per turn and before each send-back; no answer means fold all work. */
+/** Last assistant prose/system failure per turn, the first assistant prose after each steer, and the prose before each send-back; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlySet<number> {
   const answers = new Set<number>()
   const latest = new Map<string, number>()
+  const steerReply = new Set<string>()
   for (const [index, row] of rows.entries()) {
     if (row.turnKey === undefined) {
       continue
@@ -120,10 +130,16 @@ export function nativeChatTurnAnswerRows(
       answers.add(answer)
       latest.delete(row.turnKey)
     }
+    if (row.steersTurn) {
+      steerReply.add(row.turnKey)
+    }
     const isCandidate =
       row.rendersProse &&
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
     if (isCandidate) {
+      if (row.role === 'assistant' && steerReply.delete(row.turnKey)) {
+        answers.add(index)
+      }
       latest.set(row.turnKey, index)
     }
   }
