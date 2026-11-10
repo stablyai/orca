@@ -106,6 +106,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     }
     root.args = args
     root.inventory.begin(this.force || this.maintenance, args)
+    let watching = false
     if (this.maintenance) {
       root.fallback = await this.watchers.requiresPolling(args.rootDir)
     }
@@ -120,6 +121,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
           root.inventory.reconcile()
         }
       } else {
+        watching = !watch.failed
         if (
           (this.force || watch.reconcile || root.identity !== watch.identity) &&
           (root.identity !== undefined || !root.inventory.walking)
@@ -179,7 +181,9 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
       }
     }
     root.inventory.retryFailures()
-    await root.inventory.pollRecent(args, this.recentLimit)
+    if (root.fallback || !watching) {
+      await root.inventory.pollRecent(args, this.recentLimit)
+    }
     const delta = await root.inventory.drain(args, this.overdue, this.recentLimit)
     for (const change of delta.changes) {
       if (change.force) {

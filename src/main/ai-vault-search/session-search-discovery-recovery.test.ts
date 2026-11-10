@@ -19,7 +19,7 @@ import {
 } from './session-search-indexer-test-fixture'
 
 it.each([100, 1000])(
-  'reads appended bytes after a delivered update to a recent %s-turn transcript',
+  'reads only appended bytes after a late delivered update to a %s-turn transcript',
   async (population) => {
     const harness = await openSessionSearchIndexerHarness('ss-recent-append')
     const clock = new FakeSessionSearchClock()
@@ -42,6 +42,17 @@ it.each([100, 1000])(
         reads.mockClear()
         const append = `${claudeLines(['appendedneedle'], 'active', population * 2 + cycle * 2).join('\n')}\n`
         await appendFile(path, append)
+        clock.advance(20000)
+        await subject.settled()
+        expect(
+          harness.read((db) =>
+            db
+              .prepare(
+                "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'appendedneedle'"
+              )
+              .get()
+          )
+        ).toEqual({ n: cycle * 2 })
         notifySessionSearchFileChange(path)
         clock.advance(20000)
         await subject.settled()
