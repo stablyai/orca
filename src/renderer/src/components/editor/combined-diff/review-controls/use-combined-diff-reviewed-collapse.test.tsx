@@ -95,13 +95,14 @@ function useViewAll() {
 function mark(path: string, scope: string): void {
   const owner = getEditorFileReadContext(useAppStore.getState(), file, '/repo')
   setDiffReviewed(diffReviewKey(owner, path, scope), {
-    viewedAt: 1,
+    viewedAt: 1800000000000,
     modifiedTime: 123,
     contentSignature: 'reviewed bytes',
     entrySignature: '["modified",null,1,1]'
   })
 }
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(1800000000000)
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     activeWorktreeId: 'wt',
@@ -119,6 +120,7 @@ beforeEach(() => {
   combinedDiffViewPreferences.collapsed = null
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   cleanup()
   clearCombinedDiffViewMemory()
   useAppStore.setState(useAppStore.getInitialState(), true)
