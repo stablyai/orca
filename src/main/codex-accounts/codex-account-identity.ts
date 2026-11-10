@@ -3,18 +3,46 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { CodexSystemDefaultIdentity } from '../../shared/managed-account-types'
+import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
 import { readCodexAuthIdentity, type CodexAuthIdentity } from './codex-auth-identity'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 
 export type ResolvedCodexIdentity = CodexAuthIdentity
 
-/** API-key logins carry no OAuth identity even when a stale `tokens` blob is still present. */
-function declaresApiKeyCredential(parsed: unknown): boolean {
+const PROVIDERS_WITHOUT_OPENAI_AUTH = new Set([
+  'amazon-bedrock',
+  'amazon-bedrock-runtime',
+  'gcp',
+  'ollama',
+  'lmstudio'
+])
+const API_KEY_AUTH_MODES = new Set(['apikey', 'bedrockApiKey', 'bedrockAccessKeys'])
+
+function resolveStoredAuthMode(parsed: unknown): string | null {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return false
+    return null
   }
-  const apiKey = (parsed as Record<string, unknown>).OPENAI_API_KEY
-  return typeof apiKey === 'string' && apiKey.trim() !== ''
+  const auth = parsed as Record<string, unknown>
+  if (auth.auth_mode != null) {
+    return typeof auth.auth_mode === 'string' ? auth.auth_mode : null
+  }
+  if (auth.personal_access_token != null) {
+    return 'personalAccessToken'
+  }
+  if (auth.bedrock_api_key != null) {
+    return 'bedrockApiKey'
+  }
+  if (auth.bedrock_access_keys != null) {
+    return 'bedrockAccessKeys'
+  }
+  if (auth.OPENAI_API_KEY != null) {
+    return 'apikey'
+  }
+  return 'chatgpt'
+}
+
+function hasChatGptTokenIdentity(mode: string | null): boolean {
+  return mode === 'chatgpt' || mode === 'chatgptAuthTokens'
 }
 
 export class CodexAccountIdentity {
@@ -54,7 +82,7 @@ export class CodexAccountIdentity {
       // Raw SyntaxError messages may expose credential bytes.
       throw new Error('Codex auth.json is corrupt or not valid JSON')
     }
-    if (declaresApiKeyCredential(parsed)) {
+    if (!hasChatGptTokenIdentity(resolveStoredAuthMode(parsed))) {
       return {
         email: null,
         providerAccountId: null,
@@ -75,7 +103,9 @@ export class CodexAccountIdentity {
   }
 
   // Resolve the system default live from ~/.codex rather than stored managed-account identity.
-  resolveSystemDefault(): CodexSystemDefaultIdentity {
+  resolveSystemDefault(config: string | undefined): CodexSystemDefaultIdentity {
+    const provider = config ? readCodexTopLevelModelProvider(config) : null
+    const usesProviderAuth = provider !== null && PROVIDERS_WITHOUT_OPENAI_AUTH.has(provider)
     let contents: string
     try {
       contents = readFileSync(join(homedir(), '.codex', 'auth.json'), 'utf-8')
@@ -83,13 +113,20 @@ export class CodexAccountIdentity {
       const code = (error as NodeJS.ErrnoException | null)?.code
       if (code === 'ENOENT' || code === 'ENOTDIR') {
         // Environment API keys can authenticate without an auth.json file.
-        return this.systemDefaultIdentity(false, this.hasEnvApiKey() ? 'api-key' : 'none')
+        return this.systemDefaultIdentity(
+          false,
+          usesProviderAuth || this.hasEnvApiKey() ? 'api-key' : 'none'
+        )
       }
       console.warn(
         '[codex-accounts] Failed to read system-default Codex identity',
         code ?? 'unknown-error'
       )
-      return this.systemDefaultIdentity(true, 'none')
+      return this.systemDefaultIdentity(true, usesProviderAuth ? 'api-key' : 'none')
+    }
+
+    if (usesProviderAuth) {
+      return this.systemDefaultIdentity(true, 'api-key')
     }
 
     let parsed: unknown
@@ -104,11 +141,12 @@ export class CodexAccountIdentity {
       console.warn('[codex-accounts] System-default Codex auth has an unexpected format')
       return this.systemDefaultIdentity(true, 'none')
     }
-    if (declaresApiKeyCredential(parsed)) {
-      return this.systemDefaultIdentity(true, 'api-key')
+    const mode = resolveStoredAuthMode(parsed)
+    if (!mode || API_KEY_AUTH_MODES.has(mode)) {
+      return this.systemDefaultIdentity(true, mode ? 'api-key' : 'none')
     }
 
-    const identity = readCodexAuthIdentity(contents)
+    const identity = hasChatGptTokenIdentity(mode) ? readCodexAuthIdentity(contents) : null
     return {
       hasAuth: true,
       authKind: 'oauth',

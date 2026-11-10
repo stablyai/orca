@@ -146,7 +146,7 @@ export class CodexConfigMirror {
     )
   }
 
-  private readHostConfig(): CanonicalCodexConfig | null {
+  readHostConfig(): CanonicalCodexConfig | null {
     const sourceHomePath = join(homedir(), '.codex')
     const primaryConfigPath = join(sourceHomePath, 'config.toml')
     if (!existsSync(primaryConfigPath)) {

@@ -76,6 +76,95 @@ describe('CodexAccountService config sync', () => {
       })
     })
 
+    it.each(['amazon-bedrock-runtime', 'ollama'])(
+      'recognizes %s without an auth.json file',
+      async (provider) => {
+        writeFileSync(
+          join(systemCodexHomeDir(), 'config.toml'),
+          `model_provider = "${provider}"\n`,
+          'utf-8'
+        )
+        const service = await newService()
+
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+          hasAuth: false,
+          authKind: 'api-key',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        })
+      }
+    )
+
+    it('does not attribute Bedrock Mantle to a saved ChatGPT login', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'model_provider = "amazon-bedrock"\n',
+        'utf-8'
+      )
+      writeFileSync(systemAuthPath(), createCodexAuthJson('old@home.dev', 'old', 'refresh'))
+      const service = await newService()
+
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'api-key',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      })
+
+      writeFileSync(join(systemCodexHomeDir(), 'config.toml'), 'model_provider = "openai"\n')
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'oauth',
+        email: 'old@home.dev',
+        providerAccountId: 'old',
+        workspaceLabel: null
+      })
+    })
+
+    it.each(['bedrockApiKey', undefined])(
+      'recognizes a saved Bedrock API key with mode %s instead of reporting OAuth',
+      async (mode) => {
+        writeFileSync(
+          systemAuthPath(),
+          JSON.stringify({
+            ...JSON.parse(createCodexAuthJson('old@home.dev', 'old', 'refresh')),
+            auth_mode: mode,
+            bedrock_api_key: { api_key: 'bedrock-fixture-key', region: 'us-east-2' }
+          })
+        )
+        const service = await newService()
+
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+          hasAuth: true,
+          authKind: 'api-key',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        })
+      }
+    )
+
+    it('keeps backend auth status without attributing stale tokens to a personal access token', async () => {
+      writeFileSync(
+        systemAuthPath(),
+        JSON.stringify({
+          ...JSON.parse(createCodexAuthJson('old@home.dev', 'old', 'refresh')),
+          personal_access_token: 'fixture-personal-access-token'
+        })
+      )
+      const service = await newService()
+
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'oauth',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      })
+    })
+
     it('degrades safely when auth.json contains valid JSON with the wrong shape', async () => {
       writeFileSync(systemAuthPath(), 'null', 'utf-8')
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
