@@ -24,9 +24,6 @@ export type GitHubIssueLinkTitleFillStore = {
   getRepos: () => Repo[]
 }
 
-// Each publication refreshes the repo's whole workspace list in every client.
-const NOTIFY_WINDOW_MS = 30_000
-
 type Job = {
   worktreeId: string
   hostId: ExecutionHostId
@@ -48,35 +45,14 @@ function untitledGitHubIssues(meta: WorktreeMeta | undefined): WorkspaceAttachme
 export function installGitHubIssueLinkTitleFill(deps: {
   store: GitHubIssueLinkTitleFillStore
   readIssueTitle: (repo: Repo, link: WorkspaceAttachment) => Promise<string | null>
-  notifyChanged: (repoId: string) => void
+  // Addressed to the one workspace whose links changed; never a repo-wide refresh.
+  publish: (change: { worktreeId: string; hostId: ExecutionHostId; meta: WorktreeMeta }) => void
   schedule?: (run: () => void) => void
 }): () => void {
   const schedule = deps.schedule ?? ((run) => setImmediate(run))
   const queue = new Map<string, Job>()
   let draining = false
   let disposed = false
-
-  const pendingNotify = new Set<string>()
-  let lastNotifyAt = 0
-  let notifyTimer: ReturnType<typeof setTimeout> | null = null
-  const flushNotify = (): void => {
-    notifyTimer = null
-    lastNotifyAt = Date.now()
-    for (const repoId of pendingNotify) {
-      deps.notifyChanged(repoId)
-    }
-    pendingNotify.clear()
-  }
-  // A quiet host publishes a title at once; a burst publishes at most once per window, never per title.
-  const scheduleNotify = (repoId: string): void => {
-    pendingNotify.add(repoId)
-    if (!notifyTimer) {
-      notifyTimer = setTimeout(
-        flushNotify,
-        Math.max(0, lastNotifyAt + NOTIFY_WINDOW_MS - Date.now())
-      )
-    }
-  }
 
   // The job's link as it is now; null once removed, retitled or its workspace re-created.
   const currentTarget = (job: Job) => {
@@ -102,12 +78,15 @@ export function installGitHubIssueLinkTitleFill(deps: {
     const keepClearedSelection = reviewSlots.every(([slot]) => (meta[slot] ?? null) === null)
       ? Object.fromEntries(reviewSlots.map(([slot]) => [slot, null]))
       : {}
-    deps.store.setWorktreeMeta(hostWorktreeTarget({ id: job.worktreeId, hostId: job.hostId }), {
-      ...keepClearedSelection,
-      linkedItemsBase: items,
-      linkedItems: items.map((item, i) => (i === index ? { ...item, title } : item))
-    })
-    scheduleNotify(getRepoIdFromWorktreeId(job.worktreeId))
+    const updated = deps.store.setWorktreeMeta(
+      hostWorktreeTarget({ id: job.worktreeId, hostId: job.hostId }),
+      {
+        ...keepClearedSelection,
+        linkedItemsBase: items,
+        linkedItems: items.map((item, i) => (i === index ? { ...item, title } : item))
+      }
+    )
+    deps.publish({ worktreeId: job.worktreeId, hostId: job.hostId, meta: updated })
   }
 
   const drain = async (): Promise<void> => {
@@ -179,9 +158,6 @@ export function installGitHubIssueLinkTitleFill(deps: {
   })
   return () => {
     disposed = true
-    if (notifyTimer) {
-      clearTimeout(notifyTimer)
-    }
     queue.clear()
     unsubscribe()
   }

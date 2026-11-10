@@ -1,3 +1,4 @@
+import { applyEnvironmentWorktreeMetadataSet } from '../../../hooks/ipc-events/worktree-metadata-set-events'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -75,6 +76,10 @@ function handleRuntimeClientEventResponse(
     return
   }
   if (message.type === 'end') {
+    return
+  }
+  if (message.type === 'workspaceMetadataSet') {
+    applyEnvironmentWorktreeMetadataSet(environmentId, message)
     return
   }
   if (message.type === 'browserHostRequested') {

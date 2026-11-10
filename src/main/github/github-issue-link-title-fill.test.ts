@@ -26,11 +26,11 @@ async function setup(readIssueTitle: () => Promise<string | null>) {
   writeDataFile({ repos: [makeRepo({ id: 'repo', path: '/work' })] })
   const store = await createStore()
   const pending: (() => void)[] = []
-  const notifyChanged = vi.fn()
+  const publish = vi.fn()
   installGitHubIssueLinkTitleFill({
     store,
     readIssueTitle,
-    notifyChanged,
+    publish,
     schedule: (run) => pending.push(run)
   })
   const settle = async (): Promise<void> => {
@@ -40,7 +40,7 @@ async function setup(readIssueTitle: () => Promise<string | null>) {
     await vi.waitFor(() => expect(readIssueTitle).toHaveBeenCalled())
     await new Promise((resolve) => setImmediate(resolve))
   }
-  return { store, settle, notifyChanged }
+  return { store, settle, publish }
 }
 
 describe('GitHub issue link title fill', () => {
@@ -53,7 +53,7 @@ describe('GitHub issue link title fill', () => {
   })
 
   it('titles a bare linked issue without re-selecting a review the user had cleared', async () => {
-    const { store, settle, notifyChanged } = await setup(vi.fn(async () => 'Repair authentication'))
+    const { store, settle, publish } = await setup(vi.fn(async () => 'Repair authentication'))
     // A kept merge request with no review selected, as after the user clears the selection.
     store.setWorktreeMeta(target, {
       linkedItems: [{ provider: 'gitlab', type: 'mr', number: 5 }],
@@ -78,7 +78,9 @@ describe('GitHub issue link title fill', () => {
     )
     expect(meta?.linkedIssue).toBe(42)
     expect(meta?.linkedGitLabMR ?? null).toBeNull()
-    await vi.waitFor(() => expect(notifyChanged).toHaveBeenCalledWith('repo'))
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'repo::/work', hostId: 'local' })
+    )
   })
 
   it('keeps a hidden branch PR hidden when titling a link beside the selected PR', async () => {

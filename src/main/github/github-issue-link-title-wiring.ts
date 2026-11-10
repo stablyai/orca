@@ -1,4 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
+import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import {
+  workspaceMetadataSetRow,
+  type WorkspaceMetadataSet
+} from '../../shared/worktree/workspace-metadata-set'
 import type { WorkspaceAttachment } from '../../shared/worktree/types'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import type { Store } from '../persistence/loading-store/store'
@@ -61,9 +68,12 @@ export function wireGitHubIssueLinkTitleFill(
   store: Store,
   runtime: {
     invalidateResolvedWorktreeCache: () => void
-    notifyWorktreesChanged: (repoId: string, options: { invalidateGitScans: false }) => void
+    publishWorkspaceMetadataSet: (set: WorkspaceMetadataSet) => void
   }
 ): () => void {
+  // This host's workspaceMetadata domain: a new epoch per start, one seq per published record.
+  const epoch = randomUUID()
+  let seq = 0
   return installGitHubIssueLinkTitleFill({
     store,
     // Background reads never start a stopped WSL distro; the link just stays untitled.
@@ -76,10 +86,18 @@ export function wireGitHubIssueLinkTitleFill(
           wake: false
         }
       ),
-    notifyChanged: (repoId) => {
-      // Metadata-only change: refresh resolved rows for remote clients without forcing Git rescans.
+    publish: ({ worktreeId, hostId, meta }) => {
+      // Resolved rows embed metadata; refresh them so the next listing read agrees.
       runtime.invalidateResolvedWorktreeCache()
-      runtime.notifyWorktreesChanged(repoId, { invalidateGitScans: false })
+      runtime.publishWorkspaceMetadataSet({
+        hostId,
+        epoch,
+        seq: ++seq,
+        id: composeWorktreeHostIdentity(hostId, worktreeId),
+        repoId: getRepoIdFromWorktreeId(worktreeId),
+        worktreeId,
+        row: workspaceMetadataSetRow(meta)
+      })
     }
   })
 }

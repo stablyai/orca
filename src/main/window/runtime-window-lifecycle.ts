@@ -45,6 +45,7 @@ export function registerRuntimeWindowLifecycle(
       }
       send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
     },
+    workspaceMetadataSet: (set) => send('worktrees:metadataSet', set),
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
