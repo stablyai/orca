@@ -1,6 +1,6 @@
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
+import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
 
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog

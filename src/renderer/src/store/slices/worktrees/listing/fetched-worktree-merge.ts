@@ -194,6 +194,7 @@ export function mergeFetchedWorktrees(
       requestStarted: args.requestStartedWorktrees,
       current: s.worktreesByRepo[args.repoId],
       incoming,
+      refreshHostId: args.hostId,
       matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
       hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity

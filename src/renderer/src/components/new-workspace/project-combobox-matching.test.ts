@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { rankProjectOptions } from './project-combobox-matching'
 
 const project = (

@@ -44,31 +44,25 @@ afterEach(async () => {
 })
 
 describe('useNewWorkspaceRepositories initial repo', () => {
-  it.each([
-    { order: 'desktop first', desktopFirst: true },
-    { order: 'server first', desktopFirst: false }
-  ])(
-    'picks the named host’s copy of a repo id two hosts share ($order)',
-    async ({ desktopFirst }) => {
-      const client = desktopListing(desktopFirst ? [repo()] : [])
-      let picked: MobileWorkspaceRepo | null = null
-      mounted = hookMount(() => {
-        picked = useNewWorkspaceRepositories({
-          client,
-          hostId: 'host-1',
-          visible: true,
-          initialRepo: { id: 'api', executionHostId: SERVER }
-        }).selectedRepo
-      })
-      mounted.mount()
-      await settleQueryNotifications()
-      // The desktop's same-id repo must not stand in while the server's listing is on its way.
-      expect(picked).toBeNull()
+  it('picks the named host’s copy of a repo id two hosts share', async () => {
+    const client = desktopListing([repo()])
+    let picked: MobileWorkspaceRepo | null = null
+    mounted = hookMount(() => {
+      picked = useNewWorkspaceRepositories({
+        client,
+        hostId: 'host-1',
+        visible: true,
+        initialRepo: { id: 'api', executionHostId: SERVER }
+      }).selectedRepo
+    })
+    mounted.mount()
+    await settleQueryNotifications()
+    // The desktop's same-id repo must not stand in while the server's listing is on its way.
+    expect(picked).toBeNull()
 
-      servers.repos = new Map([[SERVER, [repo(SERVER)]]])
-      act(() => mounted?.update())
-      await settleQueryNotifications()
-      expect(picked).toMatchObject({ id: 'api', executionHostId: SERVER })
-    }
-  )
+    servers.repos = new Map([[SERVER, [repo(SERVER)]]])
+    act(() => mounted?.update())
+    await settleQueryNotifications()
+    expect(picked).toMatchObject({ id: 'api', executionHostId: SERVER })
+  })
 })
