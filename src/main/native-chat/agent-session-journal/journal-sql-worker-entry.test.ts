@@ -42,9 +42,9 @@ it('commits fork installation with FULL durability and restores NORMAL before ac
     }
   })
   const request = async (input: JournalSqlRequest) => {
-    const answer = new Promise<JournalSqlResponse>((resolve) => port.once('response', resolve))
+    const answer = once(port, 'response')
     port.emit('message', input)
-    return answer
+    return (await answer)[0] as JournalSqlResponse
   }
   try {
     const ready = once(port, 'response')

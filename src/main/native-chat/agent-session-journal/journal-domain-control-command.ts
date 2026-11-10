@@ -107,11 +107,6 @@ export function applyJournalDomainControlCommand(
         return result
       }
       break
-    case 'stop':
-    case 'stop-accept':
-    case 'queue-resume':
-    case 'queue-reopen':
-      break
   }
   assertJournalFence(operation.fence, Number(head.highest_fence))
   switch (operation.kind) {

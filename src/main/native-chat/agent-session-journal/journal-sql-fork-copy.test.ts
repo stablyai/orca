@@ -1,4 +1,5 @@
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,10 +8,7 @@ import Database from '../../sqlite/sync-database'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionForkBoundary } from '../agent-session-wire/acquisition/structured-agent-session-fork-boundary'
 import { prepareForkSnapshot } from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
 import { JournalForkPreparation } from './journal-fork-preparation'
@@ -21,6 +19,7 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { seedJournalForkSource } from './journal-fork-source.test-fixture'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 it('releases a WAL-pressured capture before staging and leaves no visible fork after a pre-install crash', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-sql-fork-'))
@@ -160,7 +159,7 @@ it('releases a WAL-pressured capture before staging and leaves no visible fork a
         "DELETE FROM journal_items WHERE session_id='source-chat' AND item_id='codex:source:T1:139'"
       )
       .run()
-    const blocked = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)').get()!
+    const blocked = (writer.pragma('wal_checkpoint(PASSIVE)') as SqliteRow[])[0]!
     expect(Number(blocked.checkpointed)).toBeLessThan(Number(blocked.log))
     for (;;) {
       const step = preparation.next()
@@ -170,7 +169,7 @@ it('releases a WAL-pressured capture before staging and leaves no visible fork a
       }
     }
     expect(reader.isTransaction).toBe(false)
-    const released = writer.prepare('PRAGMA wal_checkpoint(PASSIVE)').get()!
+    const released = (writer.pragma('wal_checkpoint(PASSIVE)') as SqliteRow[])[0]!
     expect(Number(released.checkpointed)).toBe(Number(released.log))
     const output: JournalReplacementItem[] = []
     for (;;) {
