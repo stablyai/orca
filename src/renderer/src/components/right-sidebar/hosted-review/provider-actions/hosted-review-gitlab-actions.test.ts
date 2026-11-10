@@ -7,7 +7,14 @@ const runtimeRpcMocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
   runtimeEnvironmentSupportsCapability: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => runtimeRpcMocks)
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  callRuntimeRpc: runtimeRpcMocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runtimeEnvironmentSupportsCapability: runtimeRpcMocks.runtimeEnvironmentSupportsCapability
+}))
 
 import { setGitLabHostedReviewApproval } from './hosted-review-gitlab-actions'
 
