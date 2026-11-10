@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
-import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
+import type {
+  AgentCompletionCoordinator,
+  AgentCompletionStatusSnapshot
+} from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
 import '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
