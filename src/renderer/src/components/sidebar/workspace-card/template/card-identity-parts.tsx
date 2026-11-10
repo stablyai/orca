@@ -22,7 +22,7 @@ import {
 import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
-import { CloudWorkspaceMarkSlot } from '@/components/orca-cloud/CloudWorkspaceMarkSlot'
+import { WorktreeCardHostMark, WorktreeCardHostStateWord } from '../host/WorktreeCardHostMark'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import { cardElement } from './card-template-compiler'
 
@@ -56,7 +56,11 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
   )
 }
 
-function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React.ReactNode {
+function sshControl(
+  props: Readonly<Record<string, unknown>>,
+  card: Card,
+  actionOnly = false
+): React.ReactNode {
   const { repo } = card
   if (!repo?.connectionId) {
     return null
@@ -69,6 +73,7 @@ function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React
       targetRemoved={card.sshTargetRemoved}
       sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
       iconOnly={props.iconOnly === true}
+      actionOnly={actionOnly}
       onPointerDown={card.stopQuickActionPointerPropagation}
     />
   )
@@ -95,26 +100,26 @@ export const CARD_IDENTITY_PARTS = {
   RepoChip: part([], (_props, _children, { repo }) =>
     repo ? <WorktreeCardRepoChip repo={repo} /> : null
   ),
-  SshControl: part(['iconOnly'], (props, _children, card) => sshControl(props, card)),
-  RuntimeHostMark: part([], (_props, _children, card) => (
-    <CloudWorkspaceMarkSlot
-      workspaceId={card.worktree.id}
+  // The one host mark (SSH, Orca server, recipe VM, Orca Cloud or this computer) in a 12px slot.
+  HostMark: part(['runtime'], (props, _children, card) => (
+    <WorktreeCardHostMark
+      worktreeId={card.worktree.id}
       onPointerDown={card.stopQuickActionPointerPropagation}
-      fallback={
-        <WorktreeCardRuntimeHostMark
-          disconnected={card.isRuntimeDisconnected}
-          hostLabel={card.runtimeHostLabel}
-        />
+      // Always icon-only in the 12px slot; classic cards show Connect on line 2 (SshConnect).
+      sshControl={sshControl({ iconOnly: true }, card)}
+      runtimeMark={
+        props.runtime === true ? (
+          <WorktreeCardRuntimeHostMark
+            disconnected={card.isRuntimeDisconnected}
+            hostLabel={card.runtimeHostLabel}
+          />
+        ) : undefined
       }
     />
   )),
-  // Cloud workspaces of local projects: the live cloud mark (renders nothing for other workspaces).
-  CloudMark: part([], (_props, _children, card) => (
-    <CloudWorkspaceMarkSlot
-      workspaceId={card.worktree.id}
-      onPointerDown={card.stopQuickActionPointerPropagation}
-      fallback={null}
-    />
+  SshConnect: part([], (_props, _children, card) => sshControl({ iconOnly: false }, card, true)),
+  HostStateWord: part([], (_props, _children, card) => (
+    <WorktreeCardHostStateWord worktreeId={card.worktree.id} />
   )),
   RenameError: part([], (_props, _children, card) => (
     <WorktreeCardRenameErrorButton

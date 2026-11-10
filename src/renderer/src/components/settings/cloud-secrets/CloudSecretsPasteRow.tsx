@@ -172,6 +172,13 @@ export function PasteRowEditor({
             onChange={(value) => onChange({ value, parseIssue: null, serverError: null })}
             invalid={blocking}
             describedBy={issue ? `${id}-issue` : undefined}
+            ariaLabel={
+              row.name
+                ? t('cloudSecrets.paste.valueLabel', 'Value for {{name}}', { name: row.name })
+                : t('cloudSecrets.paste.valueLabelLine', 'Value, line {{line}}', {
+                    line: String(row.line)
+                  })
+            }
           />
         </div>
         {row.name && cloudSecretKind(row.name) === 'agent_key' ? (

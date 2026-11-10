@@ -1,6 +1,7 @@
 import React from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { HostGlyph } from '@/components/host-row-icon'
 import { cn } from '@/lib/utils'
 import {
   getCreationProgressLabel,
@@ -65,6 +66,7 @@ export function PendingWorktreeRow({
   }
 
   const isError = entry.status === 'error'
+  const isOrcaCloud = entry.request.ephemeralVmRecipe?.provider === 'orca-cloud'
   return (
     <div
       className={cn(
@@ -86,7 +88,10 @@ export function PendingWorktreeRow({
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
       >
         <span className="flex size-4 shrink-0 items-center justify-center">
-          {isError ? (
+          {isOrcaCloud ? (
+            // The row becomes the cloud card: same glyph from the start, state on the badge.
+            <HostGlyph kind="orca-cloud" size={12} state={isError ? 'failed' : 'starting'} />
+          ) : isError ? (
             <AlertTriangle className="size-3.5 text-destructive" />
           ) : (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />

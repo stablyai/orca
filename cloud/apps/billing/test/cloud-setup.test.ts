@@ -249,3 +249,30 @@ describe('team-first checkout (O1/N4)', () => {
     expect(call.form.get('success_url')).toContain(`/cloud/setup/next?session=${id}`)
   })
 })
+
+describe('setup session with the real trial module', () => {
+  it('grants the one-time trial to the team setup creates, once', async () => {
+    const h = await createHarness({ MEMBERSHIP_SYNC_TOKEN: SYNC, CLOUD_SETUP_PAGES_URL: 'https://auth.test' })
+    const sync = { authorization: `Bearer ${SYNC}` }
+    const auth = { authorization: `Bearer ${await h.desktopToken({ sub: 'u1', email: 'neil@acme.dev' })}` }
+    const offers = await h.call('GET', '/v1/cloud-setup/offers')
+    expect(offers.body.trial).toEqual({ includedSeconds: 7200 })
+    const id = (await h.call('POST', '/v1/cloud-setup/sessions', { body: { needs: ['plan'] }, headers: auth })).body.id
+    const bound = await h.call('POST', `/v1/internal/cloud-setup/sessions/${id}/team`, {
+      body: { userId: 'u1', orgId: 'o_new', name: 'acme', created: true, email: 'neil@acme.dev' },
+      headers: sync
+    })
+    expect(bound.body).toEqual({ ok: true, trial: 'granted' })
+    const view = (await h.call('GET', `/v1/cloud-setup/sessions/${id}`, { headers: auth })).body
+    expect(view.plan).toBe('trial')
+    expect(view.trial).toEqual({ includedSeconds: 7200, usedSeconds: 0, exhausted: false })
+    expect(view.finished).toBe(true)
+    // Same user, second new team: the per-user abuse key refuses it.
+    const second = (await h.call('POST', '/v1/cloud-setup/sessions', { body: { needs: ['plan'] }, headers: auth })).body.id
+    const again = await h.call('POST', `/v1/internal/cloud-setup/sessions/${second}/team`, {
+      body: { userId: 'u1', orgId: 'o_other', name: 'acme-2', created: true, email: 'neil@acme.dev' },
+      headers: sync
+    })
+    expect(again.body).toEqual({ ok: true, trial: 'unavailable' })
+  })
+})

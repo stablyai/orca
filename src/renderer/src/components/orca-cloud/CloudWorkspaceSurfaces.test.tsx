@@ -46,7 +46,7 @@ describe('Orca Cloud surfaces', () => {
     rerender(<CloudWorkspaceMarkSlot workspaceId="ws" fallback={<span data-testid="server" />} />)
     expect(container.querySelector('[data-testid="server"]')).toBeNull()
     const mark = container.querySelector('[data-cloud-workspace-mark]')
-    expect(mark?.getAttribute('aria-label')).toBe('Sandbox: Checking…')
+    expect(mark?.getAttribute('aria-label')).toBe('Cloud workspace · Checking…')
   })
 
   it('the panel: Restart primary only when not responding, Wake when asleep, Unarchive when archived', () => {

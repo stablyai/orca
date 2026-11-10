@@ -32,7 +32,8 @@ export function CloudStateDot({
   className
 }: {
   state: CloudDotState
-  size?: 'sm' | 'md'
+  /** badge: the 7px corner dot on a 12px host glyph. */
+  size?: 'badge' | 'sm' | 'md'
   className?: string
 }): React.JSX.Element {
   return (
@@ -41,7 +42,7 @@ export function CloudStateDot({
       data-cloud-state={state}
       className={cn(
         'inline-block shrink-0',
-        size === 'md' ? 'size-2' : 'size-1.5',
+        size === 'md' ? 'size-2' : size === 'badge' ? 'size-[7px]' : 'size-1.5',
         CLOUD_DOT_CLASS[state],
         className
       )}

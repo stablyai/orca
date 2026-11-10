@@ -140,13 +140,13 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
   }
 }
 
-/** Section id on the overage controls in Settings › Orca account, where the switch and cap live. */
+/** Section id on the overage controls in Settings › Orca Cloud › Plan & billing (switch and cap). */
 export const ORCA_BILLING_OVERAGE_SECTION_ID = 'orca-billing-overage'
 
 function openOverageSettings(): void {
   const state = useAppStore.getState()
   state.openSettingsTarget({
-    pane: 'orca-account',
+    pane: 'cloud-billing',
     repoId: null,
     sectionId: ORCA_BILLING_OVERAGE_SECTION_ID
   })

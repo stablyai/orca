@@ -1,7 +1,7 @@
 // "Move to this computer" body: confirm what moves, the steps with elapsed time, then the result.
 // A plain view (fixtures render it inline); CloudMoveToComputerDialog wraps it in the app's Dialog.
 import React, { useRef } from 'react'
-import { AlertTriangle, Check, Circle, Laptop, Loader2 } from 'lucide-react'
+import { AlertTriangle, Check, Circle, Loader2, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InlineError } from '@/components/ui/inline-error'
@@ -154,7 +154,7 @@ export function CloudMoveToComputerView({
             {t('orcaCloudMove.cancel', 'Cancel')}
           </Button>
           <Button ref={primary} size="sm" onClick={onConfirm}>
-            <Laptop />
+            <Monitor />
             {t('orcaCloudMove.confirm.action', 'Move to this computer')}
           </Button>
         </div>
@@ -257,8 +257,8 @@ export function CloudMoveToComputerView({
                 )
               : localStarted
                 ? t(
-                    'orcaCloudMove.failedLocalNext',
-                    'Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
+                    'orcaCloudMove.failedLocalNextV2',
+                    'Use Move to this computer from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
                   )
                 : t(
                     'orcaCloudMove.failedDetail',

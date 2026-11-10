@@ -148,7 +148,7 @@ export const suspendedAdmin = defineFixture({
   )
 })
 
-/** First open of Settings › Orca account: the section holds its shape while billing answers. */
+/** First open of Settings › Orca Cloud › Plan & billing: the section holds its shape while billing answers. */
 export const loading = defineFixture({
   width: 600,
   render: () => <PlanBillingView {...handlers} loading result={null} />

@@ -88,6 +88,8 @@ export type CloudSecretsErrorCode =
   | 'not_found'
   /** Desktop only: a key the workspace would get in full (no egress stand-in), so not saved from here. */
   | 'not_swappable'
+  /** Desktop only: another saved key wrote this variable to the Orca account; replacing it takes a click. */
+  | 'desktop_key_conflict'
   | 'unavailable'
   | 'timeout'
   | 'not_configured'
@@ -126,3 +128,28 @@ export type CloudSecretsResult<T> =
 export type CloudSecretTarget = { scope: CloudSecretScope; repo?: string }
 
 export type CloudSecretsStatus = { available: boolean }
+
+/**
+ * GET /v1/agent-sources?workspaceId= (contract §2), read for who a workspace's values belong to. Loose:
+ * the panel needs only the owner and the shared flag (D13); the rest belongs to the Agents slice.
+ */
+export const CloudAgentSourcesResponseSchema = z.looseObject({
+  owner: z
+    .object({
+      userId: z.string().max(256),
+      displayName: z.string().max(256).nullable(),
+      isCaller: z.boolean()
+    })
+    .nullable()
+    .optional(),
+  /** D13: more than one member, so personal accounts aren't used there. */
+  sharedWorkspace: z.boolean().optional()
+})
+
+/** Whose workspace this is, as far as Cloud secrets go. */
+export type CloudWorkspaceSharing = {
+  shared: boolean
+  /** The owner's display name; null when it's the caller or unknown. */
+  ownerName: string | null
+  isOwner: boolean
+}

@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronDown, Cloud, Link2, Plus, TerminalSquare } from 'lucide-react'
+import { ArrowUpRight, Box, ChevronDown, Link2, Plus, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../LoadingSpinner'
@@ -129,7 +129,7 @@ export function RuntimeServersHeaderActions({
               />
             ) : null}
             <AddServerMenuItem
-              icon={<Cloud />}
+              icon={<Box />}
               label={t('auto.components.settings.serverList.cloudVm', 'Cloud VM')}
               trailing={<ArrowUpRight className="ml-auto" />}
               description={t(

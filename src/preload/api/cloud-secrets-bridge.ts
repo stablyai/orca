@@ -5,7 +5,8 @@ import type {
   CloudSecretView,
   CloudSecretsEffective,
   CloudSecretsResult,
-  CloudSecretsStatus
+  CloudSecretsStatus,
+  CloudWorkspaceSharing
 } from '../../shared/cloud-secrets/cloud-secrets-wire'
 
 /** Desktop only. Values go in; only names, scopes and last-4 hints come back. */
@@ -29,6 +30,10 @@ export type CloudSecretsApi = {
   effective: (request: { repo?: string }) => Promise<CloudSecretsResult<CloudSecretsEffective>>
   /** Best-effort nudge so a running workspace picks up new values now; the server also does it on write. */
   refreshEnv: (request: { runtimeEnvironmentId: string }) => Promise<CloudSecretsResult<boolean>>
+  /** Who owns an Orca Cloud workspace and whether teammates share it (control plane only). */
+  workspaceSharing: (request: {
+    runtimeEnvironmentId: string
+  }) => Promise<CloudSecretsResult<CloudWorkspaceSharing>>
   /** Saves one of this computer's Agent API Keys as a personal Cloud secret (the value never leaves main). */
   saveDesktopKey: (request: {
     agent: string
@@ -44,5 +49,6 @@ export const cloudSecretsApi: CloudSecretsApi = {
   batch: (request) => ipcRenderer.invoke('cloudSecrets:batch', request),
   effective: (request) => ipcRenderer.invoke('cloudSecrets:effective', request),
   refreshEnv: (request) => ipcRenderer.invoke('cloudSecrets:refreshEnv', request),
-  saveDesktopKey: (request) => ipcRenderer.invoke('cloudSecrets:saveDesktopKey', request)
+  saveDesktopKey: (request) => ipcRenderer.invoke('cloudSecrets:saveDesktopKey', request),
+  workspaceSharing: (request) => ipcRenderer.invoke('cloudSecrets:workspaceSharing', request)
 }

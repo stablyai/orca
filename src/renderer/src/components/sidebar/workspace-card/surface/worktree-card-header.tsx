@@ -12,7 +12,7 @@ import {
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
-import { CloudWorkspaceMarkSlot } from '@/components/orca-cloud/CloudWorkspaceMarkSlot'
+import { WorktreeCardHostMark } from '../host/WorktreeCardHostMark'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -67,33 +67,31 @@ export function WorktreeCardHeader({
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && <WorktreeCardRepoChip repo={repo!} />}
 
-        {repo?.connectionId && (
-          <WorktreeCardSshHostControl
-            targetId={repo.connectionId}
-            targetLabel={sshTargetLabel || repo.displayName}
-            status={sshStatus}
-            targetRemoved={sshTargetRemoved}
-            sshOwnerEnvironmentId={sshOwnerEnvironmentId}
-            iconOnly={compactCards || newCardStyle}
-            onPointerDown={stopQuickActionPointerPropagation}
-          />
-        )}
-
-        {!repo?.connectionId && (
-          // An Orca Cloud workspace shows its cloud mark (live state) in place of the server mark.
-          <CloudWorkspaceMarkSlot
-            workspaceId={worktree.id}
-            onPointerDown={stopQuickActionPointerPropagation}
-            fallback={
-              parsedRepoHost?.kind === 'runtime' ? (
-                <WorktreeCardRuntimeHostMark
-                  disconnected={isRuntimeDisconnected}
-                  hostLabel={runtimeHostLabel}
-                />
-              ) : null
-            }
-          />
-        )}
+        <WorktreeCardHostMark
+          worktreeId={worktree.id}
+          onPointerDown={stopQuickActionPointerPropagation}
+          sshControl={
+            repo?.connectionId ? (
+              <WorktreeCardSshHostControl
+                targetId={repo.connectionId}
+                targetLabel={sshTargetLabel || repo.displayName}
+                status={sshStatus}
+                targetRemoved={sshTargetRemoved}
+                sshOwnerEnvironmentId={sshOwnerEnvironmentId}
+                iconOnly
+                onPointerDown={stopQuickActionPointerPropagation}
+              />
+            ) : undefined
+          }
+          runtimeMark={
+            !repo?.connectionId && parsedRepoHost?.kind === 'runtime' ? (
+              <WorktreeCardRuntimeHostMark
+                disconnected={isRuntimeDisconnected}
+                hostLabel={runtimeHostLabel}
+              />
+            ) : undefined
+          }
+        />
 
         {showInlineRepoBadge && <WorktreeCardRepoChip repo={repo!} />}
 
