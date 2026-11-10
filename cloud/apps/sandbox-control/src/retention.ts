@@ -240,6 +240,10 @@ async function clearOrphan(db: D1Database, kind: string, id: string) {
   await db.prepare('DELETE FROM provider_orphans WHERE kind = ? AND provider_id = ? AND deleted_at IS NULL').bind(kind, id).run()
 }
 
+async function isPooledVm(db: D1Database, providerName: string): Promise<boolean> {
+  return (await db.prepare('SELECT 1 AS hit FROM sandbox_pool WHERE provider_name = ?').bind(providerName).first<{ hit: number }>()) !== null
+}
+
 async function sweepOrphans(deps: LifecycleDeps, summary: HousekeepingSummary): Promise<void> {
   const now = deps.now()
   const grace = retention(deps).orphanGraceMs
@@ -249,6 +253,11 @@ async function sweepOrphans(deps: LifecycleDeps, summary: HousekeepingSummary): 
   for (const box of listing.sandboxes) {
     // Only this environment's sandboxes; golden-image build boxes and other envs are not ours to judge.
     if (box.tags.orcaEnv !== env || !box.tags.orcaSandbox) {
+      continue
+    }
+    // A warm-pool VM has no sandboxes row until it is claimed; its record is the pool row.
+    if (box.tags.orcaPool && (await isPooledVm(deps.db, box.name))) {
+      await clearOrphan(deps.db, 'sandbox', box.name)
       continue
     }
     const row = await getSandboxByProviderName(deps.db, box.name)
