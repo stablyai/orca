@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import {
   selectAgentApiKeys,
@@ -9,10 +9,11 @@ import { AgentApiKeyStore } from './agent-api-key-store'
 import { mutate, stateOf } from './agent-api-key-state'
 import { installAgentApiKeyLaunchEnvResolver } from './agent-api-key-launch-env'
 import { AgentApiKeyCloudSync } from './agent-api-key-cloud-sync'
+import { agentApiKeyCloudLink, setAgentApiKeyCloudRecorder } from './agent-api-key-cloud-connection'
 import {
-  agentApiKeyCloudConnection,
-  setAgentApiKeyCloudRecorder
-} from './agent-api-key-cloud-connection'
+  createAgentApiKeyCloudRetry,
+  type AgentApiKeyCloudRetry
+} from './agent-api-key-cloud-retry'
 import { registerAgentApiKeyCloudHandlers, removeRequestOf } from './agent-api-key-cloud-ipc'
 
 /** A host id no host-scoped key names, as in desktopKeyValueForCloud. */
@@ -20,14 +21,18 @@ const ANY_CLOUD_HOST = toRuntimeExecutionHostId('orca-cloud')
 
 const CHANNELS = ['agentApiKeys:list', 'agentApiKeys:save', 'agentApiKeys:remove'] as const
 
+let retry: AgentApiKeyCloudRetry | null = null
+let wakeHooked = false
+
 /** Values only ever travel renderer → main here; nothing returns them. */
 export function registerAgentApiKeyHandlers(userDataPath: string): AgentApiKeyStore {
   const store = new AgentApiKeyStore(join(userDataPath, 'agent-api-keys.json'))
   const cloud = new AgentApiKeyCloudSync({
     ledgerPath: join(userDataPath, 'agent-api-keys-cloud-ledger.json'),
-    connection: agentApiKeyCloudConnection,
+    link: agentApiKeyCloudLink,
     valueOf: (id) => store.valueOf(id),
-    listKeys: () => store.list()
+    listKeys: () => store.list(),
+    onWaiting: () => retry?.kick()
   })
   // Saves, removals and imports touch the vault and the ledger; one at a time keeps them in step.
   let queue: Promise<unknown> = Promise.resolve()
@@ -74,5 +79,24 @@ export function registerAgentApiKeyHandlers(userDataPath: string): AgentApiKeySt
     })
   )
   registerAgentApiKeyCloudHandlers({ store, cloud, serial })
+  retry?.stop()
+  retry = createAgentApiKeyCloudRetry({
+    cloud,
+    serial,
+    notify: () => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('agentApiKeys:changed')
+        }
+      }
+    }
+  })
+  // At start (a save from last session may be waiting) and after sleep, when the network returns.
+  retry.kick({ soon: true })
+  if (!wakeHooked) {
+    wakeHooked = true
+    powerMonitor.on('resume', () => retry?.kick({ soon: true }))
+    powerMonitor.on('unlock-screen', () => retry?.kick({ soon: true }))
+  }
   return store
 }

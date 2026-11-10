@@ -104,7 +104,7 @@ export function RepoListEditor({
               <li key={repoKey(repo.url)} className="flex items-center gap-2 px-3 py-1.5">
                 <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{name}</span>
                 {index === 0 && repos.length > 1 ? (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     {t('cloudEnvironment.form.primaryRepo', 'install script runs here')}
                   </span>
                 ) : null}
@@ -304,14 +304,12 @@ export function InstallScriptEditor({
         />
       </div>
       {readOnly ? null : (
-        <span id={tabHintId} className="sr-only">
-          {t(
-            'cloudEnvironment.form.scriptTabHint',
-            'Tab inserts two spaces. Press Escape, then Tab, to leave the editor.'
-          )}
-        </span>
+        // Visible, not sr-only: sighted keyboard users also need the way out of a Tab trap.
+        <p id={tabHintId} className="text-2xs text-muted-foreground">
+          {t('cloudEnvironment.form.scriptTabHintVisible', 'Tab indents · Esc then Tab to leave')}
+        </p>
       )}
-      <div className="flex justify-between gap-2 text-[11px] text-muted-foreground">
+      <div className="flex justify-between gap-2 text-2xs text-muted-foreground">
         <span>
           {t(
             'cloudEnvironment.form.scriptRuntimeStops',

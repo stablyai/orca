@@ -5,6 +5,8 @@ import type {
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
+import { sandboxLimitBody } from './vm-build-limit-copy'
+import { localRecipeFailureCopy } from './vm-build-recipe-failure-copy'
 
 /** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
 export type SandboxLimit = { perSeat: number; team: number }
@@ -167,16 +169,7 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.teamLimitTitle',
           'You’re at your team’s limit of running sandboxes'
         ),
-        body: sandboxLimit
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.teamLimitBody',
-              'Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
-              { value0: String(sandboxLimit.team), value1: String(sandboxLimit.perSeat) }
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-            )
+        body: sandboxLimitBody(t, 'team', sandboxLimit)
       }
     case 'memberConcurrency':
       return {
@@ -184,16 +177,7 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.memberLimitTitle',
           'You’re at your limit of running sandboxes'
         ),
-        body: sandboxLimit
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.memberLimitBody2',
-              'You can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
-              { value0: String(sandboxLimit.perSeat) }
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-            )
+        body: sandboxLimitBody(t, 'member', sandboxLimit)
       }
     case 'githubNotConnected':
       return {
@@ -280,13 +264,7 @@ export function vmBuildFailureCopy(
                   'Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.'
                 )
           }
-        : {
-            title: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.provisionTitleVm',
-              'The VM recipe failed'
-            ),
-            body: failure.error
-          }
+        : localRecipeFailureCopy('provision', t)
     case 'create':
       return cloud
         ? {
@@ -299,12 +277,6 @@ export function vmBuildFailureCopy(
               'The sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details.'
             )
           }
-        : {
-            title: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.createTitleVm',
-              'Couldn’t create the workspace on the VM'
-            ),
-            body: failure.error
-          }
+        : localRecipeFailureCopy('create', t)
   }
 }

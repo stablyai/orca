@@ -26,7 +26,7 @@ export function openOrcaCloudAgentAccounts(): void {
     .openSettingsTarget({ pane: 'agent-accounts', repoId: null, sectionId: 'orca-cloud' })
 }
 
-function coveredLabel(
+export function orcaCloudAgentCoveredLabel(
   row: Extract<OrcaCloudAgentSetupRowModel, { kind: 'covered' }>,
   t: Translate
 ): string {
@@ -39,7 +39,8 @@ function coveredLabel(
       })
 }
 
-function rowCopy(
+/** The row's words and action, shared with the setup panel's Agent step. */
+export function orcaCloudAgentRowCopy(
   row: Exclude<OrcaCloudAgentSetupRowModel, { kind: 'hidden' | 'covered' | 'loading' }>,
   t: Translate
 ): { detail: string; status?: string; action?: { label: string; onClick: () => void } } {
@@ -126,7 +127,7 @@ export function OrcaCloudAgentSetupRowView({
   }
   if (row.kind === 'covered') {
     // Collapsed: one quiet line, like the returning-user composer (cloud-start E).
-    const text = coveredLabel(row, t)
+    const text = orcaCloudAgentCoveredLabel(row, t)
     return (
       <p
         data-orca-cloud-agent-row="covered"
@@ -155,7 +156,7 @@ export function OrcaCloudAgentSetupRowView({
       </div>
     )
   }
-  const copy = rowCopy(row, t)
+  const copy = orcaCloudAgentRowCopy(row, t)
   return (
     <div
       role="group"

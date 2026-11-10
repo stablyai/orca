@@ -1,0 +1,66 @@
+// Plugs the setup session (cloud-setup-session.ts) into the composer's seam (w2-lifecycle):
+// "Set up and start" opens the one browser tab, the setup panel reads each poll's snapshot, and a
+// draft restored after a restart resumes polling its session.
+import { useAppStore } from '@/store'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { parseRemoteRepo } from '@/components/right-sidebar/source-control/review/remote-repo'
+import type { CloudSetupNeed } from '../../../../shared/orca-cloud-setup'
+import {
+  getCloudSetupSnapshot,
+  startCloudSetupSession,
+  subscribeCloudSetupSessions,
+  watchCloudSetupSession
+} from './cloud-setup-session'
+import {
+  notifyCloudSetupSessionChanged,
+  setCloudSetupSessionSource,
+  setCloudSetupStarter
+} from './cloud-setup-session-seam'
+
+/** https://github.com/<owner>/<repo> for a project whose remote is on GitHub, else undefined. */
+export function githubRepoUrlFor(remoteUrl: string | null | undefined): string | undefined {
+  const parsed = remoteUrl ? parseRemoteRepo(remoteUrl) : null
+  if (!parsed || parsed.provider !== 'github' || !/^[^/]+\/[^/]+$/.test(parsed.path)) {
+    return undefined
+  }
+  return `https://github.com/${parsed.path}`
+}
+
+/** The session's steps: team, plan and github (account comes from signing in on the way). */
+export function setupNeedsFrom(needs: readonly string[]): CloudSetupNeed[] {
+  return needs.filter(
+    (need): need is CloudSetupNeed => need === 'team' || need === 'plan' || need === 'github'
+  )
+}
+
+export function installCloudSetupSession(): () => void {
+  setCloudSetupSessionSource((sessionId) => {
+    const snapshot = getCloudSetupSnapshot(sessionId)
+    if (!snapshot) {
+      // A draft restored after a restart names a session nobody polls yet: start now.
+      watchCloudSetupSession(sessionId)
+      return null
+    }
+    return {
+      steps: snapshot.steps,
+      finished: snapshot.finished,
+      ...(snapshot.error ? { error: snapshot.error } : {})
+    }
+  })
+  setCloudSetupStarter(async (request) => {
+    const repo = getIndexedRepoMap(useAppStore.getState().repos).get(request.repoId)
+    const repoUrl = githubRepoUrlFor(repo?.gitRemoteIdentity?.remoteUrl)
+    const needs = setupNeedsFrom(request.needs)
+    return startCloudSetupSession({
+      ...(repoUrl ? { repo: repoUrl } : {}),
+      // Without a GitHub remote there's nothing to install; D3 covers that case in the composer.
+      needs: repoUrl ? needs : needs.filter((need) => need !== 'github')
+    })
+  })
+  const unsubscribe = subscribeCloudSetupSessions(() => notifyCloudSetupSessionChanged())
+  return () => {
+    unsubscribe()
+    setCloudSetupStarter(null)
+    setCloudSetupSessionSource(null)
+  }
+}

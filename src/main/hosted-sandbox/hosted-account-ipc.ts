@@ -1,5 +1,6 @@
 // Account-level Orca Cloud calls for the window: product config (measured timings), GitHub connect,
 // repository access (cloud-start N2) and the repositories the account's GitHub installations reach.
+import { randomBytes } from 'node:crypto'
 import { ipcMain, shell } from 'electron'
 import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
@@ -14,7 +15,8 @@ export const HOSTED_ACCOUNT_CHANNELS = [
   CH.getConfig,
   CH.connectGitHub,
   CH.getRepoAccess,
-  CH.listGitHubRepositories
+  CH.listGitHubRepositories,
+  CH.createFromGitHub
 ] as const
 
 type RepoArgs = { repoUrl?: unknown; setupSessionId?: unknown } | undefined
@@ -35,7 +37,7 @@ function repoTarget(args: RepoArgs): { repo: string; setupSessionId?: string } |
 export function registerHostedAccountHandlers(
   client: Pick<
     HostedSandboxControlPlaneClient,
-    'config' | 'connectGitHub' | 'githubRepoAccess' | 'githubRepositories'
+    'config' | 'connectGitHub' | 'githubRepoAccess' | 'githubRepositories' | 'create'
   >,
   options: { repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null> } = {}
 ): void {
@@ -105,6 +107,28 @@ export function registerHostedAccountHandlers(
     try {
       const cursor = typeof args?.cursor === 'string' ? args.cursor : null
       return { ok: true, value: await client.githubRepositories(cursor) }
+    } catch (error) {
+      return failure(error)
+    }
+  })
+
+  // D4: a repository the account's GitHub installations reach, with no clone here. The sandbox
+  // clones it; nothing touches this computer's disk. The id reads like the phone's: <repo>-<hex>.
+  ipcMain.handle(CH.createFromGitHub, async (_event, args?: { repoUrl?: unknown }) => {
+    const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
+    if (!slug) {
+      return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+    }
+    const name = (slug.split('/').pop() ?? 'workspace')
+      .replace(/[^A-Za-z0-9_.-]/g, '-')
+      .slice(0, 48)
+    try {
+      const ready = await client.create({
+        workspaceId: `${name}-${randomBytes(4).toString('hex')}`,
+        machineSize: 'standard',
+        repo: { url: `https://github.com/${slug}.git` }
+      })
+      return { ok: true, value: { sandboxId: ready.sandbox.id } }
     } catch (error) {
       return failure(error)
     }

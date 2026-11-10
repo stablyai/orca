@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react'
+import { useCallback, useContext, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
@@ -12,6 +12,16 @@ import {
   runUnarchiveCloudWorkspace,
   wakeCloudWorkspace
 } from './cloud-workspace-actions'
+
+/** Restart that asks first while agents are working: the same confirm on every surface. */
+export function useConfirmedRestart(workspaceId: string): () => void {
+  const confirm = useContext(ConfirmationDialogContext)
+  const agentsRunning = useWorktreeActivityStatus(workspaceId) === 'working'
+  return useCallback(
+    () => void runRestartCloudWorkspace(workspaceId, { agentsRunning, confirm }),
+    [workspaceId, agentsRunning, confirm]
+  )
+}
 
 /**
  * The status panel's actions for one workspace. Restart asks first while agents are working;

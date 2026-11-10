@@ -58,6 +58,8 @@ export type SecretRequestCardActions = {
   onRestart: () => void
   onDismiss: () => void
   onToggleCollapsed: () => void
+  /** Fold to the one-line pill (the person scrolled or typed in the pane under it). */
+  onCollapse: () => void
   /** Opens the Agent accounts & secrets panel on this name; absent until the panel exists. */
   onDetails?: () => void
   /** Focus entered or left the card (the desktop keeps the request alive while it has focus). */
@@ -66,7 +68,8 @@ export type SecretRequestCardActions = {
 
 /**
  * S4-b: an agent in an Orca Cloud workspace asked for a secret. The value goes from this card to
- * Orca Cloud only; the agent is told it's ready and never gets it from Orca. Non-modal: it never takes
+ * Orca Cloud only (never through the agent); once saved it is a plain env var any command in the
+ * workspace can read, the agent included. The agent is told it's ready. Non-modal: it never takes
  * focus from the terminal (F6 moves focus in and back out).
  */
 export function SecretRequestCard({
@@ -204,7 +207,11 @@ export function SecretRequestCard({
             <div className="ps-6.5">
               <UntrustedReason
                 reason={model.reason}
-                from={t('secretRequest.from', 'from {{agent}}', { agent: agentName })}
+                from={
+                  model.agent
+                    ? t('secretRequest.from', 'from {{agent}}', { agent: model.agent })
+                    : null
+                }
               />
             </div>
           ) : null}

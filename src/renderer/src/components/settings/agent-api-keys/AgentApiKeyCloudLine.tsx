@@ -12,6 +12,7 @@ export function AgentApiKeyCloudLine({
   envName,
   state,
   canSave,
+  offline = false,
   failure,
   onSaveToAccount
 }: {
@@ -19,6 +20,8 @@ export function AgentApiKeyCloudLine({
   state: AgentApiKeyCloudRowState
   /** Every host and a variable the proxy swaps. */
   canSave: boolean
+  /** Orca can't be reached: show the last-known state, without actions that would fail. */
+  offline?: boolean
   failure: CloudSecretsErrorCode | undefined
   onSaveToAccount: () => Promise<CloudSecretsErrorCode | null>
 }): React.JSX.Element | null {
@@ -36,7 +39,7 @@ export function AgentApiKeyCloudLine({
     setSaving(false)
   }
   // A failed account write replaces the status line: one line says what happened and offers retry.
-  if (failure && canSave && (state === 'local' || state === 'stale')) {
+  if (failure && canSave && !offline && (state === 'local' || state === 'stale')) {
     const transport = failure === 'unavailable' || failure === 'timeout' || failure === 'unknown'
     return (
       <div className="pl-[22px]">
@@ -91,7 +94,7 @@ export function AgentApiKeyCloudLine({
                     )
                   : t('agentApiKeys.cloud.local', 'Only on this computer')}
             </span>
-            {canSave && (state === 'local' || state === 'stale') ? (
+            {canSave && !offline && (state === 'local' || state === 'stale') ? (
               <Button
                 type="button"
                 variant="outline"
@@ -168,12 +171,40 @@ export type AgentApiKeysNoticeState = { kind: 'kept' } | { kind: 'imported'; cou
 /** One line above the list: the last removal or import, or what failed. */
 export function AgentApiKeysNotice({
   failure,
-  notice
+  notice,
+  unreachable = false
 }: {
   failure: string | null
   notice: AgentApiKeysNoticeState
+  /** Signed in, but Orca can't be reached: the rows show the last-known state. */
+  unreachable?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const offline = unreachable ? (
+    <InlineError
+      tone="neutral"
+      density="compact"
+      title={t('agentApiKeys.cloud.unreachable', 'Can’t reach your Orca account right now')}
+      detail={t(
+        'agentApiKeys.cloud.unreachableDetail',
+        'Showing the last known state. Keys you save now go to your Orca account when Orca is back.'
+      )}
+    />
+  ) : null
+  const message = noticeMessage(failure, notice, t)
+  return offline || message ? (
+    <div className="space-y-2">
+      {offline}
+      {message}
+    </div>
+  ) : null
+}
+
+function noticeMessage(
+  failure: string | null,
+  notice: AgentApiKeysNoticeState,
+  t: ReturnType<typeof useTranslate>
+): React.JSX.Element | null {
   if (failure) {
     return <InlineError density="compact" title={failure} />
   }

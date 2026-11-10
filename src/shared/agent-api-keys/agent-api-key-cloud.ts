@@ -9,6 +9,10 @@ import type { AgentApiKeySummary, AgentApiKeysState } from './agent-api-key-cata
 export type AgentApiKeysCloudState = {
   /** Signed in to an Orca account that has Orca Cloud; otherwise keys stay on this computer only. */
   signedIn: boolean
+  /** Signed in, but Orca can't be reached now: `synced`/`managed` are the last-known state. */
+  unreachable?: boolean
+  /** Keys saved while signed in that haven't reached the account yet; Orca retries them. */
+  pending?: string[]
   /** Keys whose current value this computer saved to the Orca account. */
   synced: string[]
   /**
