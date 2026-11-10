@@ -48,16 +48,19 @@ export function TeamPlanCard({
       '{{value0}} sandbox hours per seat each month, pooled across your team',
       { value0: String(team.includedHoursPerSeat) }
     ),
+    // Same bullets as the marketing site's /cloud pricing card; overage below is in-app only.
+    t('auto.components.billing.plans.featureStandard', 'Standard (4 vCPU · 8 GB)'),
     t(
-      'auto.components.billing.plans.featureLarge3',
-      'Standard (4 vCPU · 8 GB) sandboxes; Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate',
-      {
-        value0: String(team.largeMachineWeight)
-      }
+      'auto.components.billing.plans.featureLarge4',
+      'Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate',
+      { value0: String(team.largeMachineWeight) }
     ),
-    t('auto.components.billing.plans.featureSleep2', 'Sleeps after {{value0}} minutes idle', {
-      value0: String(team.idleSleepMinutes)
-    }),
+    t(
+      'auto.components.billing.plans.featureSleep3',
+      'Sleeps after {{value0}} minutes idle, so quiet time is free',
+      { value0: String(team.idleSleepMinutes) }
+    ),
+    t('auto.components.billing.plans.featureReady', 'Ready in seconds, nothing to set up or host'),
     t(
       'auto.components.billing.plans.featureOverage3',
       'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)',
