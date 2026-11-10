@@ -32,7 +32,6 @@ import { PendingCredentialCleanupCard } from '../settings/PendingCredentialClean
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { recoverRelayPairings } from '../transport/RelayPairing';
 import { HomeStats, readHomeStats, totalHomeStats } from '../home/HomeStats';
-import { HomeQuotaOffer, HomeQuotaScope, readHomeQuotaOffer, consumeHomeQuotaReset } from '../home/HomeQuotaReset';
 import { ShellSurface, ShellSurfaceBack } from '../webshell/ShellSurface';
 
 // upstream src/theme/mobile-theme.ts: darkColors / lightColors（外壳用到的子集）
@@ -187,9 +186,6 @@ struct Home {
   @State usageErrors: Record<string, string> = {};
   @State automationErrors: Record<string, string> = {};
   @State automationRunsByHost: Record<string, HomeAutomationRun[]> = {};
-  @State quotaOffers: Record<string, HomeQuotaOffer> = {};
-  @State quotaAllowed: Record<string, boolean> = {};
-  @State quotaBusy: string[] = [];
   @State statsTotal: HomeStats | null = null;
   private statsByHost: Record<string, HomeStats> = {};
   @State automationBusy: string[] = [];
@@ -507,13 +503,11 @@ struct Home {
   private clearLiveDesktopData(hostId: string, removed: boolean = false): void {
     this.agentActivityWrites.forget(hostId);
     this.usageByHost = withoutDesktop(this.usageByHost, hostId);
-    this.quotaOffers = withoutDesktop(this.quotaOffers, hostId);
     if (removed) {
       this.desktopMachines = withoutDesktop(this.desktopMachines, hostId);
       this.automationsByHost = withoutDesktop(this.automationsByHost, hostId);
       this.automationRunsByHost = withoutDesktop(this.automationRunsByHost, hostId);
     }
-    this.quotaAllowed[hostId] = false;
     this.setHostError('usageErrors', hostId, ''); this.setHostError('automationErrors', hostId, '');
   }
 
@@ -583,12 +577,9 @@ struct Home {
     let paired = this.runtimes.get(hostId)?.lease.connection.getPairedMeta();
     client.request('status.get', null, 8000).then((response: RpcResponse): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
-      let allowed = false;
       if (paired && response instanceof RpcSuccess) {
         try {
           let value = JSON.parse(response.result) as Record<string, Object>;
-          let caps = value['capabilities'];
-          allowed = Array.isArray(caps) && (caps as Array<Object>).includes('accounts.codex-reset-credit.v1');
           let descriptor = readHostMachineDescriptor(value);
           let machines = withoutDesktop(this.desktopMachines, hostId);
           machines[hostId] = { pairedAt: paired.lastConnected, endpoint: paired.endpoint, descriptor: descriptor };
@@ -599,58 +590,7 @@ struct Home {
           }
         } catch (e) {}
       }
-      let next: Record<string, boolean> = {};
-      let keys = Object.keys(this.quotaAllowed);
-      for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.quotaAllowed[keys[i]]; }
-      next[hostId] = allowed; this.quotaAllowed = next;
     }).catch(() => {});
-  }
-
-  private applyQuotaOffer(hostId: string, json: string): void {
-    let value = readHomeQuotaOffer(json);
-    let next = withoutDesktop(this.quotaOffers, hostId);
-    if (value) { next[hostId] = value; }
-    this.quotaOffers = next;
-  }
-
-  quotaCount(hostId: string, card: HomeUsageCard): number {
-    let offer = this.quotaOffers[hostId];
-    return this.quotaAllowed[hostId] === true && offer && card.provider === 'codex'
-      && card.key === `codex:${offer.scope.accountId}` ? offer.availableCount : 0;
-  }
-
-  async resetQuota(host: HostMeta, card: HomeUsageCard): Promise<void> {
-    let offered = this.quotaOffers[host.id];
-    let rt = this.runtimes.get(host.id);
-    if (!offered || this.quotaCount(host.id, card) === 0 || !rt || !rt.client || !rt.online || this.quotaBusy.includes(host.id)) { return; }
-    let offer: HomeQuotaOffer = offered;
-    let client: SpikeRpcClient = rt.client;
-    let epoch = this.epoch;
-    let frozen: HomeQuotaScope = { target: { runtime: offer.scope.target.runtime, wslDistro: offer.scope.target.wslDistro },
-      accountId: offer.scope.accountId, accountRevision: offer.scope.accountRevision, offerRevision: offer.scope.offerRevision };
-    this.quotaBusy = this.quotaBusy.concat(host.id);
-    let attempted = false;
-    try {
-      let runtime = frozen.target.runtime === 'wsl' ? `WSL · ${frozen.target.wslDistro}` : '桌面主机';
-      let answer = await promptAction.showDialog({ title: uiText('使用额度重置次数？', this.uiLocale),
-        message: `${host.name} · ${runtime}\n${offer.accountLabel}\n将为此账户使用一次额度重置机会。`,
-        buttons: [{ text: uiText('取消', this.uiLocale), color: this.pal().textSecondary }, { text: uiText('使用一次', this.uiLocale), color: this.pal().accentBlue }] });
-      if (answer.index !== 1 || epoch !== this.epoch || this.runtimes.get(host.id)?.client !== client) { return; }
-      attempted = true;
-      let revision = ++rt.usageRevision;
-      let result = await consumeHomeQuotaReset(client, frozen);
-      if (epoch !== this.epoch || this.runtimes.get(host.id)?.client !== client) { return; }
-      if (rt.usageRevision === revision) { this.applyUsageSnapshot(host.id, rt, result.snapshot); }
-      let message = result.outcome === 'reset' ? '额度已重置'
-        : result.outcome === 'nothingToReset' ? '当前额度无需重置'
-        : result.outcome === 'noCredit' ? '已无可用重置次数'
-        : result.outcome === 'alreadyRedeemed' ? '这次重置机会已使用' : '账户或重置机会已变化，请核对后重试';
-      this.setHostError('usageErrors', host.id, message);
-    } catch (e) {
-      if (attempted && epoch === this.epoch) { this.setHostError('usageErrors', host.id, '重置结果未获确认，请刷新账户用量后核对；不会自动重试。'); }
-    } finally {
-      this.quotaBusy = this.quotaBusy.filter((id: string): boolean => id !== host.id);
-    }
   }
 
   private applyUsageSnapshot(hostId: string, runtime: HostRuntime, json: string): void {
@@ -659,8 +599,6 @@ struct Home {
     let next = withoutDesktop(this.usageByHost, hostId);
     if (rows !== null) { next[hostId] = rows; }
     this.usageByHost = next;
-    if (rows !== null) { this.applyQuotaOffer(hostId, json); }
-    else { this.quotaOffers = withoutDesktop(this.quotaOffers, hostId); }
     this.setHostError('usageErrors', hostId, rows !== null ? '' : '账户用量暂不可用，可打开账户页重试。');
   }
 
@@ -1624,12 +1562,6 @@ struct Home {
       }
     }.alignItems(HorizontalAlign.Start).width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
       .onClick(() => this.openHostRoute(host.id, '/accounts'))
-    if (this.quotaCount(host.id, card) > 0) {
-      Button(`使用额度重置（剩余 ${this.quotaCount(host.id, card)} 次）`).fontFamily('Geist').fontSize(14)
-        .fontColor(this.pal().accentBlue).backgroundColor(Color.Transparent)
-        .enabled(!this.quotaBusy.includes(host.id))
-        .onClick(() => { this.resetQuota(host, card).catch(() => {}); })
-    }
   }
 
   private displayDate(timestamp: number, timezone: string = ''): string {
