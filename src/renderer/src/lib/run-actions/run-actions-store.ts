@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { sameRunTab } from './run-action-tabs'
 
 /** `stopping` waits for the process to leave after an interrupt; `stopped` was the user's doing. */
 export type RunActionStatus = 'running' | 'stopping' | 'stopped' | 'exited' | 'failed'
@@ -112,7 +113,7 @@ export function listRunActionRuns(): RunActionRun[] {
 }
 
 export function findRunActionRunByTab(tabId: string): RunActionRun | null {
-  return listRunActionRuns().find((run) => run.tabId === tabId) ?? null
+  return listRunActionRuns().find((run) => sameRunTab(run.tabId, tabId)) ?? null
 }
 
 export function setRunActionRun(run: RunActionRun): void {

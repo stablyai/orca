@@ -20,10 +20,12 @@ import {
   type RunActionTarget,
   type WorktreeRunActions
 } from './run-action-config'
+import { findLiveRunTabId, sameRunTab } from './run-action-tabs'
 
 /** Conductor's grace period: an interrupted dev server gets this long before its shell is closed. */
 export const RUN_ACTION_STOP_GRACE_MS = 5_000
 const INTERRUPT = '\x03'
+const RELAUNCH_TAB_SETTLE_MS = 5_000
 
 function joinWorkspacePath(root: string, relative: string | undefined): string | undefined {
   if (!relative) {
@@ -34,21 +36,22 @@ function joinWorkspacePath(root: string, relative: string | undefined): string |
 }
 
 export function tabExists(state: AppState, worktreeId: string, tabId: string): boolean {
-  return (state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+  return findLiveRunTabId(state, worktreeId, tabId) !== null
 }
 
 function tabGroupId(state: AppState, worktreeId: string, tabId: string): string | undefined {
   return (
     state.unifiedTabsByWorktree[worktreeId]?.find(
-      (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
+      (tab) => sameRunTab(tab.entityId, tabId) && tab.contentType === 'terminal'
     )?.groupId ?? undefined
   )
 }
 
 function closeRunTab(run: RunActionRun): void {
   const state = useAppStore.getState()
-  if (tabExists(state, run.worktreeId, run.tabId)) {
-    state.closeTab(run.tabId, { recordInteraction: false, captureRecentlyClosed: false })
+  const liveTabId = findLiveRunTabId(state, run.worktreeId, run.tabId)
+  if (liveTabId) {
+    state.closeTab(liveTabId, { recordInteraction: false, captureRecentlyClosed: false })
   }
 }
 
@@ -97,8 +100,9 @@ async function stopRunActionOnce(worktreeId: string, actionId: string): Promise<
     return
   }
   const state = useAppStore.getState()
-  const ptyId = state.ptyIdsByTabId[run.tabId]?.[0]
-  if (!ptyId || !tabExists(state, worktreeId, run.tabId)) {
+  const liveTabId = findLiveRunTabId(state, worktreeId, run.tabId)
+  const ptyId = liveTabId ? state.ptyIdsByTabId[liveTabId]?.[0] : undefined
+  if (!ptyId) {
     deleteRunActionRun(worktreeId, actionId)
     return
   }
@@ -314,6 +318,13 @@ export async function relaunchInterruptedRunActions(worktreeId: string): Promise
     })
     if (ok) {
       started += 1
+      // The restarted host republishes its old tabs after a moment; retire the dead run tab then.
+      setTimeout(() => {
+        const current = getRunActionRun(worktreeId, run.actionId)
+        if (!current || !sameRunTab(current.tabId, run.tabId)) {
+          closeRunTab(run)
+        }
+      }, RELAUNCH_TAB_SETTLE_MS)
     }
   }
   return started

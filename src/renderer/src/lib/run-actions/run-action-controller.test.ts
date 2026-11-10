@@ -318,14 +318,42 @@ describe('run actions', () => {
     expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
   })
 
-  it('forgets a run when its terminal is closed', async () => {
+  it('forgets a run only when its terminal is still gone after the tab list settles', async () => {
     await startRunAction(WT_A, web, config([web]))
-    const previous = { tabsByWorktree: { ...state.tabsByWorktree } }
-    state.tabsByWorktree = { [WT_A]: [] }
-    for (const listener of mocks.subscribers) {
-      listener(state, previous)
+    const { tabId } = getRunActionRun(WT_A, 'web')!
+    const notify = (): void => {
+      const previous = { tabsByWorktree: {} }
+      for (const listener of mocks.subscribers) {
+        listener(state, previous)
+      }
     }
+    // A window reload briefly shows an empty list, then the tab comes back: keep the run.
+    const kept = state.tabsByWorktree[WT_A]
+    state.tabsByWorktree = { [WT_A]: [] }
+    notify()
+    state.tabsByWorktree = { [WT_A]: kept }
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(getRunActionRun(WT_A, 'web')?.tabId).toBe(tabId)
+    // Really closed: gone after the settle delay.
+    state.tabsByWorktree = { [WT_A]: [] }
+    notify()
+    await vi.advanceTimersByTimeAsync(3_500)
     expect(getRunActionRun(WT_A, 'web')).toBeNull()
+  })
+
+  it('follows a run whose tab a remote host adopted under a web-terminal- id', async () => {
+    await startRunAction(WT_A, web, config([web]))
+    const { tabId } = getRunActionRun(WT_A, 'web')!
+    const adopted = `web-terminal-${tabId}`
+    state.tabsByWorktree = { [WT_A]: [{ id: adopted }] }
+    state.ptyIdsByTabId[adopted] = ['pty-adopted']
+    for (const listener of mocks.subscribers) {
+      listener(state, { tabsByWorktree: {} })
+    }
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+    dispatchTerminalCommandFinishedEvent(WT_A, 2, adopted)
+    expect(getRunActionRun(WT_A, 'web')).toMatchObject({ status: 'failed', exitCode: 2 })
   })
 
   it('merges local actions over orca.yaml ones and filters by host', async () => {

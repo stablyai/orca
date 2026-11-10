@@ -34,7 +34,12 @@ export function resolveRunActionTarget(
   state: AppState,
   worktreeId: string
 ): RunActionTarget | null {
-  const worktree = findWorktreeById(state, worktreeId)
+  // The active-host hint can disagree for remote workspaces; fall back to the catalog row itself.
+  const worktree =
+    findWorktreeById(state, worktreeId) ??
+    Object.values(state.worktreesByRepo ?? {})
+      .flat()
+      .find((candidate) => candidate.id === worktreeId)
   if (!worktree) {
     return null
   }

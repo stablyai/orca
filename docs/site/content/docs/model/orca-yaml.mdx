@@ -133,7 +133,7 @@ scripts:
 - `autoRunAfterSetup` starts the action once the Setup terminal's script succeeds.
 - Shared `orca.yaml` actions go through the same approval prompt as setup scripts. Actions imported into local settings are treated as your own.
 
-Every terminal in a worktree gets a stable block of 10 ports: `ORCA_PORT` through `ORCA_PORT+9` (`ORCA_PORT_COUNT` is `10`). Two worktrees on the same host never share a block, so the same dev server can run in each without port collisions. `CONDUCTOR_PORT` is set to the same value, so imported Conductor scripts work unchanged. Ports a run opens appear in the Run menu and the **Ports** panel.
+Every terminal in a worktree gets a stable block of 10 ports: `ORCA_PORT` through `ORCA_PORT+9` (`ORCA_PORT_COUNT` is `10`). Two worktrees on the same host never share a block, so the same dev server can run in each without port collisions. `CONDUCTOR_PORT` is set to the same value, so imported Conductor scripts work unchanged. A host that runs a single workspace can pin the block by starting Orca with `ORCA_PORT` (and optionally `ORCA_PORT_COUNT`) set. Ports a run opens appear in the Run menu and the **Ports** panel.
 
 ### Terminal defaults and issue commands
 
