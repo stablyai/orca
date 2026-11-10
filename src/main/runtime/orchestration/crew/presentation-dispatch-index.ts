@@ -1,4 +1,5 @@
 import { DispatchPresentationDeadlines } from './dispatch-presentation-deadlines'
+import { DispatchPresentationPriority } from './dispatch-presentation-priority'
 import { dispatchCompletionEpoch } from '../db/dispatch-context/dispatch-completion-epoch'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -19,6 +20,8 @@ type Read = <T>(owner: string, key: string, dependencies: readonly string[], rea
 export class PresentationDispatchIndex {
   private readonly candidates = new Map<string, Candidate>()
   private readonly addresses = new Map<string, Set<string>>()
+  private readonly allWinners = new Map<string, DispatchPresentationPriority>()
+  private readonly activeWinners = new Map<string, DispatchPresentationPriority>()
   private readonly expiry = new DispatchPresentationDeadlines()
   constructor(
     private readonly db: OrchestrationDb,
@@ -68,6 +71,8 @@ export class PresentationDispatchIndex {
     this.expiry.clear()
     this.candidates.clear()
     this.addresses.clear()
+    this.allWinners.clear()
+    this.activeWinners.clear()
   }
   private keys(row: DispatchContextRow): string[] {
     return [
@@ -91,6 +96,10 @@ export class PresentationDispatchIndex {
       const bucket = this.addresses.get(key) ?? new Set()
       bucket.add(row.id)
       this.addresses.set(key, bucket)
+      this.order(this.allWinners, key, row)
+      if (active(row)) {
+        this.order(this.activeWinners, key, row)
+      }
     }
   }
 
@@ -99,6 +108,8 @@ export class PresentationDispatchIndex {
     if (row) {
       for (const key of this.keys(row)) {
         const bucket = this.addresses.get(key)
+        this.unorder(this.allWinners, key, id)
+        this.unorder(this.activeWinners, key, id)
         bucket?.delete(id)
         if (bucket?.size === 0) {
           this.addresses.delete(key)
@@ -110,19 +121,31 @@ export class PresentationDispatchIndex {
     this.release(id)
   }
 
-  private newest(key: string, onlyActive = true): Candidate | undefined {
-    let result: Candidate | undefined
-    for (const id of this.addresses.get(key) ?? []) {
-      const candidate = this.candidates.get(id)
-      if (
-        candidate &&
-        (!onlyActive || active(candidate)) &&
-        (!result || candidate.presentation_order > result.presentation_order)
-      ) {
-        result = candidate
-      }
+  private order(
+    buckets: Map<string, DispatchPresentationPriority>,
+    key: string,
+    row: Candidate
+  ): void {
+    const bucket = buckets.get(key) ?? new DispatchPresentationPriority()
+    bucket.set(row.id, -row.presentation_order)
+    buckets.set(key, bucket)
+  }
+
+  private unorder(
+    buckets: Map<string, DispatchPresentationPriority>,
+    key: string,
+    id: string
+  ): void {
+    const bucket = buckets.get(key)
+    bucket?.delete(id)
+    if (bucket?.size === 0) {
+      buckets.delete(key)
     }
-    return result
+  }
+
+  private newest(key: string, onlyActive = true): Candidate | undefined {
+    const id = (onlyActive ? this.activeWinners : this.allWinners).get(key)?.peek()?.id
+    return id === undefined ? undefined : this.candidates.get(id)
   }
 
   activeFor(handle: string, pane?: string): Candidate | undefined {
