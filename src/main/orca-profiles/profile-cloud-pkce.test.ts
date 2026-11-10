@@ -5,13 +5,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: vi.fn() } }))
 
+import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import { beginOrcaCloudPkceFlow } from './profile-cloud-pkce'
 
-const config = {
-  authorizeEndpoint: 'https://auth.test/v1/desktop/auth/authorize',
+const base = 'https://auth.test'
+const config: OrcaCloudAuthConfig = {
+  apiBaseUrl: base,
+  authorizeEndpoint: `${base}/v1/desktop/auth/authorize`,
+  sessionEndpoint: `${base}/s`,
+  refreshEndpoint: `${base}/r`,
+  capabilitiesEndpoint: `${base}/c`,
+  profileEndpoint: `${base}/p`,
+  orgEndpoint: `${base}/o`,
+  logoutEndpoint: `${base}/l`,
+  relayTokenEndpoint: `${base}/rt`,
+  connectorTokenEndpoint: `${base}/ct`,
+  relayDirectorUrl: base,
   clientId: 'orca-desktop',
   scope: 'openid'
-} as Parameters<typeof beginOrcaCloudPkceFlow>[0]
+}
 
 afterEach(() => {
   delete process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE

@@ -17,10 +17,10 @@ const ID = 'cs_AAAAAAAAAAAAAAAAAAAAAA'
 
 function fakeFetch(body: unknown, status = 200) {
   const calls: { url: string; init: RequestInit }[] = []
-  const impl = (async (url: string, init: RequestInit) => {
-    calls.push({ url: String(url), init })
+  const impl: typeof fetch = async (url, init) => {
+    calls.push({ url: String(url), init: init ?? {} })
     return new Response(JSON.stringify(body), { status })
-  }) as unknown as typeof fetch
+  }
   return { impl, calls }
 }
 
@@ -50,7 +50,7 @@ describe('cloud setup service', () => {
       device: 'MacBook Pro',
       useActiveTeam: true
     })
-    expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer tok')
+    expect(new Headers(calls[0]!.init.headers).get('authorization')).toBe('Bearer tok')
   })
 
   it('refuses a session URL that is not https', async () => {

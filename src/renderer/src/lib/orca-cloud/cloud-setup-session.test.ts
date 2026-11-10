@@ -48,9 +48,10 @@ beforeEach(() => {
   cloudSetupGet.mockReset()
   selectOrcaProfileOrg.mockClear()
   storeState.orcaProfileAuthStatus.cloud.activeOrgId = undefined
-  ;(globalThis as unknown as { window: unknown }).window = Object.assign(globalThis, {
-    api: { orcaProfiles: { cloudSetupStart, cloudSetupGet } }
-  })
+  vi.stubGlobal(
+    'window',
+    Object.assign(globalThis, { api: { orcaProfiles: { cloudSetupStart, cloudSetupGet } } })
+  )
 })
 
 afterEach(() => {
