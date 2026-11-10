@@ -24480,5 +24480,6 @@
     "stopped": "{{host}} stopped controlling browser tabs until Orca restarts.",
     "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
-  }
+  },
+  "stats.usage.breakdown.total": "Share of {{total}} selected tokens"
 }

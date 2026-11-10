@@ -1,3 +1,4 @@
+import { nativeChatContentMaxWidth } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
 import { SettingsContentScrollElementProvider } from './settings-content-scroll-element'
 import { SettingsSidebar } from '../navigation/SettingsSidebar'
@@ -83,6 +84,8 @@ export function renderSettingsPage(
   t: Translate = translate
 ): React.JSX.Element {
   const { model, interactions, navigation, actions, view } = context
+  const statsWidth = nativeChatContentMaxWidth(model.settings.nativeChatAppearance?.width)
+  const isStatsPage = model.activeSectionId === 'stats' && !model.settingsSearchQuery.trim()
   return (
     <div
       ref={interactions.setSettingsRootNode}
@@ -124,8 +127,15 @@ export function renderSettingsPage(
             className={cn(
               'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
               view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-4xl'
+              isStatsPage || view.isFocusedSetupGuidePane || view.isWidePluginsPane
+                ? 'max-w-6xl'
+                : 'max-w-4xl'
             )}
+            style={
+              isStatsPage
+                ? { maxWidth: statsWidth === 'none' ? 'none' : `calc(${statsWidth} + 4rem)` }
+                : undefined
+            }
           >
             {navigation.visibleNavSections.length === 0 ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">

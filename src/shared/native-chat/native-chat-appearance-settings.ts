@@ -7,12 +7,16 @@ export type NativeChatAppearanceSettings = {
   fontSize?: number
   /** Code text size in px, 10–18; absent = 12. */
   codeFontSize?: number
-  /** Transcript and composer width; absent = comfortable (46rem). */
+  /** Transcript, composer and usage-page width; absent = comfortable (46rem). */
   width?: 'comfortable' | 'wide' | 'full'
   /** Chat contrast, 50–150; absent = 100. */
   contrast?: number
   /** Follow the terminal interface font and theme; absent = false. */
   matchTerminalInterface?: boolean
+}
+
+export function nativeChatContentMaxWidth(width: NativeChatAppearanceSettings['width']): string {
+  return width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem'
 }
 
 export type AgentDefaultSurface = 'chat' | 'terminal'

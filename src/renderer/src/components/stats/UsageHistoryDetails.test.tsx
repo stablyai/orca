@@ -158,7 +158,12 @@ it('compares model and project shares from selected token totals', () => {
   const project = screen.getByRole('button', { name: /Large project/ })
   expect(project).toHaveTextContent('75%')
   expect(screen.getByRole('button', { name: /small-model/ })).toHaveTextContent('25%')
-  expect(project.querySelector('[data-usage-share]')).toHaveAttribute('data-usage-share', '75')
+  const projects = project.closest('section')
+  expect(projects).toHaveTextContent('Share of 400 selected tokens')
+  expect(projects?.querySelector('[data-usage-group="large"]')).toHaveAttribute(
+    'data-usage-share',
+    '75'
+  )
   fireEvent.click(project)
   expect(select).toHaveBeenCalledWith('large')
 })

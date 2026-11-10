@@ -11,10 +11,18 @@ import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { usageHistoryAccountLabel } from './usage-history-accounts'
-import { USAGE_PROVIDER_COLORS } from './usage-history-chart-model'
 import { getAgentLabel } from '@/lib/agent-catalog'
 
 export { UsageHistoryDailyChart } from './UsageHistoryDailyChart'
+
+const BREAKDOWN_COLORS = [
+  'var(--chart-2)',
+  'var(--chart-provider-opencode)',
+  'var(--chart-provider-muse)',
+  'var(--chart-provider-claude)',
+  'var(--chart-1)',
+  'var(--chart-5)'
+]
 
 function HistoryTotalsList({
   title,
@@ -28,70 +36,61 @@ function HistoryTotalsList({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const totalTokens = rows.reduce((sum, row) => sum + row.totalTokens, 0)
+  const entries = rows.map((row, index) => ({
+    row,
+    share: totalTokens > 0 ? (row.totalTokens / totalTokens) * 100 : 0,
+    color: BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length]
+  }))
   return (
     <section className="min-w-0 rounded-lg border border-border bg-card p-4">
       <h4 className="text-sm font-medium text-foreground">{title}</h4>
       <p className="mb-3 mt-1 text-xs text-muted-foreground">
-        {t('stats.usage.breakdown.share', 'Share of selected tokens')}
-      </p>
-      <div className="max-h-80 space-y-2 overflow-y-auto scrollbar-sleek">
-        {rows.map((row) => {
-          const share = totalTokens > 0 ? (row.totalTokens / totalTokens) * 100 : 0
-          const shareLabel = `${share.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%`
-          const providers = new Map<string, { tokens: number; color: string }>()
-          for (const entry of row.rows) {
-            const provider = providers.get(entry.provider) ?? {
-              tokens: 0,
-              color: USAGE_PROVIDER_COLORS[entry.provider].color
-            }
-            provider.tokens += entry.totalTokens
-            providers.set(entry.provider, provider)
-          }
-          return (
-            <Button
-              key={row.key}
-              variant="ghost"
-              size="sm"
-              onClick={() => onSelect(row.key)}
-              className="h-auto w-full flex-col items-stretch"
-            >
-              <span className="flex flex-col items-stretch gap-2 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4">
-                <span className="min-w-0 flex-1 break-words whitespace-normal text-left text-sm">
-                  {row.label}
-                </span>
-                <span className="grid shrink-0 grid-cols-3 gap-3 text-right text-xs tabular-nums @lg:w-72">
-                  <span>{formatUsageTokens(row.totalTokens, intlLocale)}</span>
-                  <span className="text-muted-foreground">{shareLabel}</span>
-                  <span className="text-muted-foreground">
-                    {formatUsageCost(row.apiEquivalentCostUsd, t, intlLocale)}
-                    {row.hasPartialCost ? ' *' : ''}
-                  </span>
-                </span>
-              </span>
-              <span
-                aria-hidden="true"
-                className="block h-1.5 overflow-hidden rounded-full bg-muted"
-              >
-                <span
-                  className="flex h-full overflow-hidden rounded-full"
-                  style={{ width: `${share}%` }}
-                  data-usage-share={share}
-                >
-                  {[...providers].map(([provider, entry]) => (
-                    <span
-                      key={provider}
-                      className="h-full"
-                      style={{
-                        width: `${row.totalTokens > 0 ? (entry.tokens / row.totalTokens) * 100 : 0}%`,
-                        backgroundColor: entry.color
-                      }}
-                    />
-                  ))}
-                </span>
-              </span>
-            </Button>
-          )
+        {t('stats.usage.breakdown.total', 'Share of {{total}} selected tokens', {
+          total: formatUsageTokens(totalTokens, intlLocale)
         })}
+      </p>
+      <div aria-hidden="true" className="mb-3 flex h-2 overflow-hidden rounded-full bg-muted">
+        {entries.map(({ row, share, color }) => (
+          <span
+            key={row.key}
+            className="h-full"
+            style={{ width: `${share}%`, backgroundColor: color }}
+            data-usage-share={share}
+            data-usage-group={row.key}
+          />
+        ))}
+      </div>
+      <div className="max-h-80 space-y-1 overflow-y-auto scrollbar-sleek">
+        {entries.map(({ row, share, color }) => (
+          <Button
+            key={row.key}
+            variant="ghost"
+            size="sm"
+            onClick={() => onSelect(row.key)}
+            className="h-auto w-full items-start gap-2 whitespace-normal text-left"
+          >
+            <span
+              aria-hidden="true"
+              className="mt-1 size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: color }}
+            />
+            <span className="min-w-0 flex-1 space-y-1">
+              <span className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="min-w-0 break-words">{row.label}</span>
+                <span className="shrink-0 tabular-nums">
+                  {share.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%
+                </span>
+              </span>
+              <span className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs tabular-nums text-muted-foreground">
+                <span>{formatUsageTokens(row.totalTokens, intlLocale)}</span>
+                <span>
+                  {formatUsageCost(row.apiEquivalentCostUsd, t, intlLocale)}
+                  {row.hasPartialCost ? ' *' : ''}
+                </span>
+              </span>
+            </span>
+          </Button>
+        ))}
       </div>
     </section>
   )
@@ -113,7 +112,7 @@ export function UsageHistoryBreakdowns({
   const t = useTranslate()
   const unknown = t('stats.usage.unknown', 'Unknown')
   return (
-    <div className="space-y-4">
+    <div className="grid gap-3 @4xl:grid-cols-3">
       <HistoryTotalsList
         title={t('stats.usage.accounts.title', 'By account · tokens / API estimate')}
         rows={groupUsageHistory(rows, 'account', unknown).map((group) => ({

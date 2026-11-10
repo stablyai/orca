@@ -111,3 +111,9 @@ export const chartNarrow = defineFixture({
   render: () => <Chart />,
   interact: hover
 })
+
+export const breakdownsWide = defineFixture({
+  width: 1024,
+  store: { settings },
+  render: () => <Breakdown />
+})
