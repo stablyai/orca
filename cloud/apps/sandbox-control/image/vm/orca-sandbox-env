@@ -227,6 +227,32 @@ if (isObject(oc) && !jsoncHasModel) {
     else fs.rmSync(ocLedger, { force: true })
   }
 }
+
+// OpenCode: two built-in providers cannot work in Orca Cloud, and with no other credential OpenCode
+// picks one and fails ("Authorization header is badly formatted" / opencode.ai unreachable) instead
+// of showing "Connect a provider". GitHub Copilot reads GITHUB_TOKEN, which here is the stand-in for the
+// GitHub App token of the workspace, never a Copilot token; OpenCode Zen needs opencode.ai, which is not on the
+// egress allowlist. Both stay off unless the user connected them in OpenCode itself (auth.json).
+const ocAuth = readStrict(path.join(process.env.XDG_DATA_HOME || path.join(home, ".local", "share"), "opencode", "auth.json"))
+const connected = new Set(isObject(ocAuth) ? Object.keys(ocAuth) : [])
+const ocDisabledLedger = path.join(ocDir, ".orca-managed-disabled-providers")
+const ocNow = readStrict(ocFile)
+if (isObject(ocNow) && !/"disabled_providers"\s*:/.test((() => { try { return fs.readFileSync(path.join(ocDir, "opencode.jsonc"), "utf8") } catch { return "" } })())) {
+  let ours = []
+  try { ours = fs.readFileSync(ocDisabledLedger, "utf8").split("\n").filter(Boolean) } catch {}
+  const userList = (Array.isArray(ocNow.disabled_providers) ? ocNow.disabled_providers : []).filter((id) => typeof id === "string" && !ours.includes(id))
+  const managed = ["github-copilot", "opencode"].filter((id) => !connected.has(id) && !userList.includes(id))
+  const next = [...userList, ...managed]
+  const before = JSON.stringify(ocNow.disabled_providers ?? [])
+  if (JSON.stringify(next) !== before) {
+    const updated = { $schema: "https://opencode.ai/config.json", ...ocNow }
+    if (next.length > 0) updated.disabled_providers = next
+    else delete updated.disabled_providers
+    write(ocFile, updated)
+  }
+  if (managed.length > 0) fs.writeFileSync(ocDisabledLedger, managed.join("\n") + "\n", { mode: 0o600 })
+  else fs.rmSync(ocDisabledLedger, { force: true })
+}
 ' || echo 'agent first-run state not seeded' >&2
 fi
 printf '{"names":%d}\n' "$count"
