@@ -1,6 +1,5 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { paneKeyMatchSuffix } from '../db/pane-key-match'
-import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   readWorkerAttentionInputs,
   projectWorkerAttentionInput
@@ -8,9 +7,9 @@ import {
 import {
   installProjectionInvalidations,
   projectionDirtyKeys,
-  clearProjectionDirtyKeys,
   trackProjectionKey
 } from './orchestration-projection-invalidations'
+import { projectionNeedsRebuild, acknowledgeProjectionDebt } from './orchestration-projection-debt'
 import { PresentationDispatchIndex } from './presentation-dispatch-index'
 type Fact = { value: unknown; dependencies: readonly string[]; owners: Set<string> }
 const sources = new WeakMap<OrchestrationDb, OrchestrationProjectionFacts>()
@@ -60,10 +59,8 @@ export class OrchestrationProjectionFacts {
       getRun: { value: (id: string) => this.memo(`run:${id}`, [`run:${id}`], () => db.getRun(id)) },
       runsBoundToPane: {
         value: (pane: string) =>
-          this.memo(
-            `bound:${pane}`,
-            [`bound:${parsePaneKey(pane) ? paneKeyMatchSuffix(pane) : pane}`],
-            () => db.runsBoundToPane(pane)
+          this.memo(`bound:${pane}`, [`bound:${paneKeyMatchSuffix(pane)}`], () =>
+            db.runsBoundToPane(pane)
           )
       },
       getActiveCoordinatorRun: {
@@ -108,28 +105,37 @@ export class OrchestrationProjectionFacts {
   }
 
   refresh(now: number): void {
-    const version = this.db.db.pragma('data_version', { simple: true })
-    if (version !== this.version || now < this.previousNow) {
-      this.reset()
-      this.version = version
-    }
-    this.previousNow = now
-    const dirty = this.transient ? [] : projectionDirtyKeys(this.db)
-    const affected = new Set<string>()
-    for (const key of dirty) {
-      for (const factKey of this.dependencies.get(key) ?? []) {
-        for (const owner of this.facts.get(factKey)?.owners ?? []) {
-          affected.add(owner)
+    try {
+      const version = this.db.db.pragma('data_version', { simple: true })
+      const overflow = !this.transient && projectionNeedsRebuild(this.db)
+      const cold = this.cold || version !== this.version || now < this.previousNow || overflow
+      if (cold) {
+        this.reset()
+      }
+      const previousSize = this.candidates.size
+      const dirty = this.transient || cold ? [] : projectionDirtyKeys(this.db)
+      const affected = new Set<string>()
+      for (const key of dirty) {
+        for (const factKey of this.dependencies.get(key) ?? []) {
+          for (const owner of this.facts.get(factKey)?.owners ?? []) {
+            affected.add(owner)
+          }
         }
       }
-    }
-    for (const owner of affected) {
-      this.release(owner)
-    }
-    this.candidates.refresh(now, dirty, this.cold)
-    this.cold = false
-    if (!this.transient && dirty.length > 0) {
-      clearProjectionDirtyKeys(this.db)
+      for (const owner of affected) {
+        this.release(owner)
+      }
+      this.candidates.refresh(now, dirty, cold)
+      if (!this.transient && (cold || dirty.length > 0 || this.candidates.size !== previousSize)) {
+        acknowledgeProjectionDebt(this.db, this.candidates.size)
+      }
+      this.cold = false
+      this.version = version
+      this.previousNow = now
+    } catch (error) {
+      // A retry discards partial indexes before consuming the still-unacknowledged obligation.
+      this.cold = true
+      throw error
     }
   }
 
@@ -159,12 +165,12 @@ export class OrchestrationProjectionFacts {
     return new Map(
       ids.flatMap((id) => {
         const fact = this.facts.get(`attention:${id}`)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attention entries are populated only from readWorkerAttentionInputs above.
         return fact
           ? [
               [
                 id,
                 projectWorkerAttentionInput(
+                  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attention entries are populated only from readWorkerAttentionInputs above.
                   fact.value as Parameters<typeof projectWorkerAttentionInput>[0],
                   now
                 )

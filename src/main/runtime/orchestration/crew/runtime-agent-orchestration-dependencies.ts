@@ -1,3 +1,5 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { captureOrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
 import {
   mintAgentStatusFleetEvidence,
   type ObservedAgentStatusPaneIdentity
@@ -18,6 +20,24 @@ export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends Orca
 
   protected agentOrchestrationDependencies(bound?: Partial<RuntimeAgentOrchestrationDependencies>) {
     return {
+      captureTerminalCandidates: () =>
+        captureOrchestrationTerminalCandidates({
+          leaves: this.leaves,
+          ptys: this.ptysById,
+          leafKey: (tab, leaf) => this.getLeafKey(tab, leaf),
+          leavesForId: (id) => this.terminalIdentity.paneCandidates.leavesForId(id),
+          capturePaneOf: () => this.captureTerminalPaneReader(),
+          ...(!ORCA_LAYOUT_OWNER_IS_MAIN
+            ? {
+                ptysForPane: (pane: string) =>
+                  this.terminalIdentity.paneCandidates.ptysForPane(pane),
+                paneOf: (pty: Parameters<typeof this.paneOfPty>[0]) => this.paneOfPty(pty)
+              }
+            : {}),
+          makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+          issueLeaf: (leaf) => this.issueHandle(leaf),
+          issuePty: (pty) => this.issuePtyHandle(pty)
+        }),
       getDb: () => this.getOrchestrationDbIfAvailable(),
       getLeaves: () => this.leaves.values(),
       getPtys: () => this.ptysById.values(),

@@ -1,9 +1,9 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
+import { projectionDebtSchema, markProjectionCandidate } from './orchestration-projection-debt'
 import { projectionMutationTriggers } from '../db/projection-mutation-triggers'
 
 const table = 'orchestration_projection'
-const pane = (value: string) =>
-  `CASE WHEN instr(${value}, ':') > 1 THEN substr(${value}, instr(${value}, ':') + 1) ELSE ${value} END`
+const pane = (value: string) => `substr(${value}, instr(${value}, ':') + 1)`
 const tracked = (key: string) => `INSERT OR IGNORE INTO ${table}_dirty(key)
  SELECT ${key} WHERE ${key} IS NOT NULL AND EXISTS (SELECT 1 FROM ${table}_tracked WHERE key = ${key});`
 
@@ -12,12 +12,11 @@ export function installProjectionInvalidations(db: OrchestrationDb): void {
     {
       table: 'dispatch_contexts',
       mark: (r: string) =>
-        `INSERT OR IGNORE INTO ${table}_dirty VALUES ('candidate:' || ${r}.id);${[
+        `${markProjectionCandidate(r)}${[
           `'dispatch:' || ${r}.id`,
           `'task:' || ${r}.task_id`,
           `'handle:' || ${r}.assignee_handle`,
-          `'session:' || ${r}.assignee_orca_session_id`,
-          `'pane:' || ${pane(`${r}.assignee_pane_key`)}`
+          `'session:' || ${r}.assignee_orca_session_id`
         ]
           .map(tracked)
           .join(' ')}`
@@ -32,7 +31,12 @@ export function installProjectionInvalidations(db: OrchestrationDb): void {
         ].join(' ')
     },
     { table: 'coordinator_runs', mark: () => tracked("'legacy'") },
-    { table: 'worker_dispatches', mark: (r: string) => tracked(`'dispatch:' || ${r}.dispatch_id`) },
+    {
+      table: 'worker_dispatches',
+      mark: (r: string) =>
+        tracked(`'dispatch:' || ${r}.dispatch_id`) +
+        tracked(`'task:' || (SELECT task_id FROM dispatch_contexts WHERE id = ${r}.dispatch_id)`)
+    },
     {
       table: 'attempt_observation_facts',
       mark: (r: string) => tracked(`'dispatch:' || ${r}.dispatch_id`)
@@ -59,6 +63,7 @@ export function installProjectionInvalidations(db: OrchestrationDb): void {
   ]
   db.db.exec(`CREATE TEMP TABLE IF NOT EXISTS ${table}_tracked(key TEXT PRIMARY KEY) WITHOUT ROWID;
     CREATE TEMP TABLE IF NOT EXISTS ${table}_dirty(key TEXT PRIMARY KEY) WITHOUT ROWID;
+    ${projectionDebtSchema}
     ${projectionMutationTriggers(table, specifications)}`)
 }
 
@@ -67,10 +72,6 @@ export function projectionDirtyKeys(db: OrchestrationDb): string[] {
     .prepare(`SELECT key FROM temp.${table}_dirty`)
     .all()
     .flatMap((row) => (typeof row.key === 'string' ? [row.key] : []))
-}
-
-export function clearProjectionDirtyKeys(db: OrchestrationDb): void {
-  db.db.prepare(`DELETE FROM temp.${table}_dirty`).run()
 }
 
 export function trackProjectionKey(db: OrchestrationDb, key: string, retained: boolean): void {

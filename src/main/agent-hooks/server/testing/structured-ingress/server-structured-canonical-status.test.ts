@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer } from '../../agent-hook-server'
 import { PANE } from '../server.test-fixtures'
+import { agentHookRuntimeDeps } from '../../../runtime/agent-hook-runtime-deps'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -51,6 +52,50 @@ function terminal(server: AgentHookServer, paneKey: string): void {
 afterEach(() => vi.restoreAllMocks())
 
 describe('structured canonical production slice', () => {
+  it('publishes the same public pane evidence while preserving resume-only provider identity', () => {
+    const server = new AgentHookServer()
+    const deps = agentHookRuntimeDeps(server, { read: () => ({ kind: 'unobserved' }) }, () => ({}))
+    server.recordLaunchResumeIdentity({
+      paneKey: PANE,
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: 'resume-only' },
+      launchedAt: Date.now()
+    })
+    expect(deps.getAgentStatusSnapshotForPane(PANE)).toEqual([])
+    expect(deps.getAgentProviderSessionRowsForPane(PANE)).toEqual([
+      expect.objectContaining({
+        providerSessionOnly: true,
+        providerSession: { key: 'session_id', id: 'resume-only' }
+      })
+    ])
+    terminal(server, PANE)
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    const second = makeStructuredAgentStatusSubject(
+      { ...SCOPE, executionHostId: 'ssh:other' },
+      SESSION
+    )
+    server.ingestStructuredStatus(
+      { ...summary(second), agent: 'claude', status: 'waiting' },
+      second
+    )
+    expect(deps.getAgentStatusSnapshotForPane(PANE).map(({ state }) => state)).toEqual(['working'])
+    expect(
+      deps
+        .getAgentStatusSnapshotForPane(PANE_KEY)
+        .map(({ agentType, state }) => ({ agentType, state }))
+    ).toEqual([
+      { agentType: 'codex', state: 'working' },
+      { agentType: 'claude', state: 'waiting' }
+    ])
+    expect(deps.getAgentStatusSnapshot().map(({ paneKey, state }) => ({ paneKey, state }))).toEqual(
+      [
+        { paneKey: PANE, state: 'working' },
+        { paneKey: PANE_KEY, state: 'working' },
+        { paneKey: PANE_KEY, state: 'waiting' }
+      ]
+    )
+  })
+
   it('isolates identical session identifiers across host, WSL and workspace kind scopes', () => {
     const server = new AgentHookServer()
     const scopes: AgentStatusExecutionScope[] = [

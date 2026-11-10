@@ -6,10 +6,10 @@ import type {
 import type { TerminalHandleRecord, PtyIncarnationHandleRecord } from './terminal-handle-records'
 
 import { OrderedTerminalCandidates } from './ordered-terminal-candidates'
+import { TerminalIncarnationBindings } from './terminal-incarnation-bindings'
 import { TerminalPaneCandidates } from './terminal-pane-candidates'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
-type MutableIncarnation = Mutable<PtyIncarnationHandleRecord>
 /** Canonical terminal facts; semantic operations retain selection, callbacks and failure policy. */
 export class TerminalIdentitySource {
   private readonly ptyRecords = new Map<string, Mutable<RuntimePtyWorktreeRecord>>()
@@ -18,14 +18,13 @@ export class TerminalIdentitySource {
   private readonly handleRecords = new Map<string, TerminalHandleRecord>()
   private readonly ptyBindings = new Map<string, string>()
   private readonly leafBindings = new Map<string, string>()
-  private readonly incarnationBindings = new Map<string, Mutable<PtyIncarnationHandleRecord>>()
-  private readonly incarnationCandidates = new OrderedTerminalCandidates()
+  private readonly reverseCandidates = new OrderedTerminalCandidates()
+  private readonly incarnationSource = new TerminalIncarnationBindings(() => this.changed())
   readonly paneCandidates = new TerminalPaneCandidates()
   private readonly syntheticHandles = new Set<string>()
   // Weak ownership links preserve detached canonical records without retaining their lifetime.
   private readonly ownedPtys = new WeakMap<object, Mutable<RuntimePtyWorktreeRecord>>()
   private readonly ownedLeaves = new WeakMap<RuntimeLeafRecord, Mutable<RuntimeLeafRecord>>()
-  private readonly ownedIncarnations = new WeakMap<PtyIncarnationHandleRecord, MutableIncarnation>()
   private sequence = 0
   private epoch = 0
 
@@ -41,7 +40,8 @@ export class TerminalIdentitySource {
   readonly handles: ReadonlyMap<string, TerminalHandleRecord> = this.handleRecords
   readonly reverse: ReadonlyMap<string, string> = this.ptyBindings
   readonly leafHandles: ReadonlyMap<string, string> = this.leafBindings
-  readonly incarnations: ReadonlyMap<string, PtyIncarnationHandleRecord> = this.incarnationBindings
+  readonly incarnations: ReadonlyMap<string, PtyIncarnationHandleRecord> =
+    this.incarnationSource.records
   readonly synthetic: ReadonlySet<string> = this.syntheticHandles
   get graphSequence(): number {
     return this.sequence
@@ -214,12 +214,18 @@ export class TerminalIdentitySource {
   }
 
   bindPty(id: string, handle: string): void {
+    this.reverseCandidates.set(id, handle)
     this.bind(this.ptyBindings, id, handle)
   }
+  firstReversePtyId(handle: string): string | undefined {
+    return this.reverseCandidates.first(handle)
+  }
   clearPtyBindings(): void {
+    this.reverseCandidates.clear()
     this.clear(this.ptyBindings)
   }
   unbindPty(id: string): boolean {
+    this.reverseCandidates.delete(id)
     return this.remove(this.ptyBindings, id)
   }
   bindLeaf(key: string, handle: string): void {
@@ -233,44 +239,22 @@ export class TerminalIdentitySource {
   }
 
   setIncarnation(id: string, input: PtyIncarnationHandleRecord): void {
-    const previous = this.incarnationBindings.get(id)
-    const owned = { ...input }
-    this.ownedIncarnations.set(owned, owned)
-    this.incarnationBindings.set(id, owned)
-    this.incarnationCandidates.set(id, owned.handle)
-    if (
-      !previous ||
-      previous.handle !== owned.handle ||
-      previous.incarnationId !== owned.incarnationId ||
-      previous.leafKey !== owned.leafKey
-    ) {
-      this.changed()
-    }
+    this.incarnationSource.setIncarnation(id, input)
   }
   setIncarnationLeaf(record: PtyIncarnationHandleRecord, leafKey: string): void {
-    const owned = this.ownedIncarnations.get(record)
-    if (owned && owned.leafKey !== leafKey) {
-      owned.leafKey = leafKey
-      this.changed()
-    }
+    this.incarnationSource.setIncarnationLeaf(record, leafKey)
   }
   setIncarnationProcess(record: PtyIncarnationHandleRecord, incarnationId: string | null): void {
-    const owned = this.ownedIncarnations.get(record)
-    if (owned && owned.incarnationId !== incarnationId) {
-      owned.incarnationId = incarnationId
-      this.changed()
-    }
+    this.incarnationSource.setIncarnationProcess(record, incarnationId)
   }
   removeIncarnation(id: string): boolean {
-    this.incarnationCandidates.delete(id)
-    return this.remove(this.incarnationBindings, id)
+    return this.incarnationSource.removeIncarnation(id)
   }
   clearIncarnations(): void {
-    this.incarnationCandidates.clear()
-    this.clear(this.incarnationBindings)
+    this.incarnationSource.clearIncarnations()
   }
   firstIncarnationPtyId(handle: string): string | undefined {
-    return this.incarnationCandidates.first(handle)
+    return this.incarnationSource.firstIncarnationPtyId(handle)
   }
 
   addSynthetic(handle: string): void {

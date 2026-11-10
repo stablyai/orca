@@ -54,6 +54,9 @@ export class PresentationDispatchIndex {
       this.remove(id)
     }
   }
+  get size(): number {
+    return this.candidates.size
+  }
   rows(): IterableIterator<Candidate> {
     return this.candidates.values()
   }

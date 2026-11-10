@@ -357,3 +357,64 @@ it('keeps a cleared chat worker under its coordinator in the keyed attention rea
     db.close()
   }
 })
+
+it('reveals an accepted failure after only its sibling worker settles, and retires read guidance', () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    const run = db.createRun({
+      objective: 'Attention changes',
+      coordinatorHandle: 'coordinator',
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({ runId: run.id, spec: 'Retrying work' })
+    const first = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: TERMINAL_WORKER_HANDLE,
+      assigneePaneKey: TERMINAL_WORKER_PANE,
+      creator: { kind: 'system' },
+      maxDepth: 99
+    })
+    // A retry shares the task; lifecycle writers can change only its worker row.
+    db.db
+      .prepare(
+        "INSERT INTO dispatch_contexts(id,run_id,task_id,assignee_handle,status) VALUES('retry',?,?,?,'dispatched')"
+      )
+      .run(run.id, task.id, 'retry-worker')
+    db.db.prepare("INSERT INTO worker_dispatches(dispatch_id,state) VALUES('retry','ready')").run()
+    db.recordAttemptObservation({
+      id: 'accepted-failure',
+      dispatchId: first.id,
+      sequence: 1,
+      authorityId: 'home',
+      authorityClock: 'home',
+      facet: 'worker_report',
+      payload: { status: 'accepted', outcome: 'failed' },
+      homeReceivedAt: Date.now()
+    })
+    const projection = terminalProjection(db)
+    expect(projection.getForPaneKey(TERMINAL_WORKER_PANE)?.attention?.categories).not.toContain(
+      'failure'
+    )
+    db.db.prepare("UPDATE worker_dispatches SET state='stopped' WHERE dispatch_id='retry'").run()
+    expect(projection.getForPaneKey(TERMINAL_WORKER_PANE)?.attention?.categories).toContain(
+      'failure'
+    )
+    db.db
+      .prepare(
+        "INSERT INTO messages(id,run_id,from_handle,to_handle,subject) VALUES('guidance',?,'coordinator',?,'Please check the output')"
+      )
+      .run(run.id, `dispatch:${first.id}`)
+    expect(projection.getForPaneKey(TERMINAL_WORKER_PANE)?.attention?.categories).toContain(
+      'guidance'
+    )
+    db.db.prepare("UPDATE messages SET read=1 WHERE id='guidance'").run()
+    expect(projection.getForPaneKey(TERMINAL_WORKER_PANE)?.attention?.categories).not.toContain(
+      'guidance'
+    )
+    expect(projection.buildByPaneKey()?.[TERMINAL_WORKER_PANE]?.attention?.categories).toContain(
+      'failure'
+    )
+  } finally {
+    db.close()
+  }
+})

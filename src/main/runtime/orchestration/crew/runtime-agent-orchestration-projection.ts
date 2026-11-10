@@ -1,3 +1,4 @@
+import type { OrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
 import { composeOrchestrationDispatch } from './orchestration-dispatch-context'
 import { orchestrationProjectionFacts } from './orchestration-projection-facts'
 import {
@@ -25,6 +26,7 @@ import {
 } from '../workers/lifecycle/session-worker-liveness'
 
 export type RuntimeAgentOrchestrationDependencies = {
+  captureTerminalCandidates?(): OrchestrationTerminalCandidates
   getDb(): OrchestrationDb | null
   getLeaves(): Iterable<RuntimeLeafRecord>
   getPtys(): Iterable<RuntimePtyWorktreeRecord>
@@ -67,7 +69,8 @@ export class RuntimeAgentOrchestrationProjection {
     }
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
-    const terminals = new Map<string, string>()
+    const terminals = new Map<string, readonly string[]>()
+    const terminalCandidates = this.deps.captureTerminalCandidates?.()
     for (const candidate of source?.rows() ?? []) {
       const handle =
         candidate.assignee_handle && this.deps.getWorktreeId(candidate.assignee_handle) !== null
@@ -76,8 +79,18 @@ export class RuntimeAgentOrchestrationProjection {
             ? this.deps.getHandleForPaneKey(candidate.assignee_pane_key)
             : null
       const paneKey = handle ? this.deps.getPaneKey(handle) : null
-      if (handle && paneKey && !terminals.has(paneKey)) {
-        terminals.set(paneKey, handle)
+      for (const address of new Set([paneKey, candidate.assignee_pane_key])) {
+        if (!address) {
+          continue
+        }
+        const groups =
+          terminalCandidates?.(address) ??
+          (handle && paneKey ? [{ paneKey, handles: [handle] }] : [])
+        for (const group of groups) {
+          if (!terminals.has(group.paneKey)) {
+            terminals.set(group.paneKey, group.handles)
+          }
+        }
       }
     }
     const statuses =
@@ -99,20 +112,23 @@ export class RuntimeAgentOrchestrationProjection {
     const sessions = createDispatchSessionLivenessReader(db, statuses, scope.records)
     const observeSession = sessions.observe
     const batchAttention = typeof db.getWorkerAttentionFactsForDispatches === 'function'
-    for (const [paneKey, handle] of terminals) {
-      const context = this.getForHandle(
-        handle,
-        db,
-        {
-          paneKey,
-          evidence: evidenceByPaneKey.get(paneKey),
-          observeSession,
-          deferAttention: batchAttention
-        },
-        scope
-      )
-      if (context) {
-        contexts[paneKey] = context
+    for (const [paneKey, handles] of terminals) {
+      for (const handle of handles) {
+        const context = this.getForHandle(
+          handle,
+          db,
+          {
+            paneKey,
+            evidence: evidenceByPaneKey.get(paneKey),
+            observeSession,
+            deferAttention: batchAttention
+          },
+          scope
+        )
+        if (context) {
+          contexts[paneKey] = context
+          break
+        }
       }
     }
     for (const [paneKey, { dispatch }] of scope.sessionDispatches()) {
@@ -177,13 +193,18 @@ export class RuntimeAgentOrchestrationProjection {
       ) ?? this.deps.getAgentStatusSnapshot().filter((entry) => entry.activity.paneKey === paneKey)
     const options = {
       paneKey,
-      evidence: statuses[0],
+      evidence: statuses.at(-1),
       observeSession: createDispatchSessionLivenessReader(db, statuses, scope.records).observe
     }
-    const handle = this.deps.getHandleForPaneKey(paneKey)
-    const terminal = handle ? this.getForHandle(handle, db, options, scope) : undefined
-    if (terminal) {
-      return terminal
+    const groups = this.deps.captureTerminalCandidates?.()(paneKey)
+    const fallback = this.deps.getHandleForPaneKey(paneKey)
+    const handles =
+      groups?.find((group) => group.paneKey === paneKey)?.handles ?? (fallback ? [fallback] : [])
+    for (const handle of handles) {
+      const terminal = this.getForHandle(handle, db, options, scope)
+      if (terminal) {
+        return terminal
+      }
     }
     const parsed = parsePaneKey(paneKey)
     const prefix = 'structured-agent-session-'
