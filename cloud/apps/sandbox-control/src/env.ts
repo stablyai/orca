@@ -49,6 +49,8 @@ export type Env = {
   ENTITLEMENTS_MODE?: string
   /** Dev only: route `dev:*` accounts through billing instead of bypassing it. */
   SANDBOX_DEV_BILLING_PASSTHROUGH?: string
+  /** Dev only: dev accounts with this prefix (e.g. `dev:billing-test-`) are not exempt from billing. */
+  SANDBOX_DEV_BILLING_ENFORCE_PREFIX?: string
 
   /** Public URL of this Worker's /v1/egress/proxy; Vercel forwardURL rules point here. */
   EGRESS_PROXY_URL?: string

@@ -89,17 +89,33 @@ export function withDevAccountBypass(env: Env, client: EntitlementClient): Entit
   if (env.SANDBOX_ENV === 'prod' || env.SANDBOX_DEV_BILLING_PASSTHROUGH === 'true') {
     return client
   }
+  const enforced = devBillingEnforcePrefix(env)
+  const bypassed = (accountId: string) =>
+    accountId.startsWith('dev:') && !(enforced !== null && accountId.startsWith(enforced))
   return {
     checkStart: (request) =>
-      request.accountId.startsWith('dev:')
+      bypassed(request.accountId)
         ? Promise.resolve({ allow: true, reason: null, suspendRunning: false })
         : client.checkStart(request),
     reportUsage: (segment) =>
-      segment.accountId.startsWith('dev:')
+      bypassed(segment.accountId)
         ? Promise.resolve({ canStartSandbox: true, reason: null, suspendRunning: false })
         : client.reportUsage(segment),
     listSuspensions: () => client.listSuspensions()
   }
+}
+
+/**
+ * Dev-only: dev accounts under this prefix go through the real billing gate (W9 tests no-plan, grace
+ * and at-cap with dev tokens). Honored only when SANDBOX_ENV is exactly 'dev', and only for a specific
+ * sub-prefix (`dev:<word>-` or `dev:<word>:`), never all dev accounts.
+ */
+export function devBillingEnforcePrefix(env: Pick<Env, 'SANDBOX_ENV' | 'SANDBOX_DEV_BILLING_ENFORCE_PREFIX'>): string | null {
+  const prefix = env.SANDBOX_DEV_BILLING_ENFORCE_PREFIX
+  if (env.SANDBOX_ENV !== 'dev' || !prefix || !/^dev:[a-z0-9][a-z0-9-]*[-:]$/.test(prefix)) {
+    return null
+  }
+  return prefix
 }
 
 export function createEntitlementClient(

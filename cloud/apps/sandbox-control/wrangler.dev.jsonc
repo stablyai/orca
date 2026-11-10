@@ -29,6 +29,8 @@
   "vars": {
     "SANDBOX_ENV": "dev",
     "SANDBOX_POOL_SIZE": "2",
+    // Dev only (ignored unless SANDBOX_ENV is dev): these dev accounts hit the real billing gate.
+    "SANDBOX_DEV_BILLING_ENFORCE_PREFIX": "dev:billing-test-",
     // The golden orcad tracks this branch (host RPCs ship there first); rebuilt when HEAD touches VM code.
     "GOLDEN_IMAGE_SOURCE": "git:https://github.com/nwparker/orca-private#cloud/integration",
     "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
