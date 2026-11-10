@@ -25,7 +25,7 @@ const repo: Repo = {
     remoteName: 'origin',
     remoteUrl: 'https://github.com/acme/app.git'
   },
-  upstream: { owner: 'original', repo: 'app' }
+  upstream: { owner: 'acme', repo: 'app' }
 }
 const repos: Repo[] = [
   repo,
@@ -39,9 +39,20 @@ const repos: Repo[] = [
   { id: 'handbook', displayName: 'Handbook', path: '/srv/handbook', badgeColor: '', addedAt: 0 }
 ]
 
-it.each(['host', 'folder'] as const)(
-  'keeps %s copies under one parent and routes each selection to its existing section',
-  (mode) => {
+it.each([
+  {
+    mode: 'host' as const,
+    localId: 'repo-project:github:acme/app::host:local::local::default',
+    remoteId: 'repo-project:github:acme/app::host:ssh:box::ssh:box::windows-host'
+  },
+  {
+    mode: 'folder' as const,
+    localId: 'repo-project:github:acme/app::host:local::local::default::setup:app-local',
+    remoteId: 'repo-project:github:acme/app::host:ssh:box::ssh:box::windows-host::setup:app-remote'
+  }
+])(
+  'keeps $mode copies under one parent and routes each selection to its existing section',
+  ({ mode, localId, remoteId }) => {
     const settings = { ...getDefaultSettings('/tmp'), projectGroupingMode: mode }
     useAppStore.setState({ repos, settings, sshTargetLabels: new Map([['box', 'Build machine']]) })
     const projection = projectHostSetupProjectionFromRepos(repos)
@@ -56,12 +67,6 @@ it.each(['host', 'folder'] as const)(
         settings
       }
     }).filter((section) => section.id.startsWith('repo-'))
-    const local = sections.find(
-      (section) => section.projectCopy?.path === '/Users/dev/projects/app'
-    )!
-    const remote = sections.find(
-      (section) => section.projectCopy?.path === 'C:\\Users\\dev\\src\\second-copy'
-    )!
     const onSelect = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -86,7 +91,7 @@ it.each(['host', 'folder'] as const)(
       )!
     }
     try {
-      show(remote.id)
+      show(remoteId)
       expect(
         [...container.querySelectorAll('button')].map((row) => row.textContent?.trim())
       ).toEqual(['App', 'app~/projects/app', 'second-copy~\\src\\second-copy', 'Handbook'])
@@ -95,26 +100,26 @@ it.each(['host', 'folder'] as const)(
         'second-copy~\\src\\second-copy'
       )
       expect(container.querySelector('[aria-label="Build machine"]')).not.toBeNull()
-      expect(container.querySelectorAll('[aria-label="Fork of original/app"]')).toHaveLength(1)
+      expect(container.querySelectorAll('[aria-label="Fork of acme/app"]')).toHaveLength(1)
       expect(container.textContent).not.toContain('SSH')
       act(() => button('App').click())
-      expect(onSelect).toHaveBeenLastCalledWith(remote.id)
+      expect(onSelect).toHaveBeenLastCalledWith(remoteId)
       act(() => button('app~/projects/app').click())
-      expect(onSelect).toHaveBeenLastCalledWith(local.id)
+      expect(onSelect).toHaveBeenLastCalledWith(localId)
       show('general')
       act(() => button('App').click())
-      expect(onSelect).toHaveBeenLastCalledWith(local.id)
+      expect(onSelect).toHaveBeenLastCalledWith(localId)
       const matches = rankSettingsSearchItems(
         'second-copy',
         sections,
         getSettingsSectionSearchEntries
       ).map(({ item }) => item)
-      expect(matches.map((section) => section.id)).toEqual([remote.id])
-      show(local.id, matches)
+      expect(matches.map((section) => section.id)).toEqual([remoteId])
+      show(localId, matches)
       act(() => button('App').click())
-      expect(onSelect).toHaveBeenLastCalledWith(local.id)
+      expect(onSelect).toHaveBeenLastCalledWith(localId)
       act(() => button('second-copy~\\src\\second-copy').click())
-      expect(onSelect).toHaveBeenLastCalledWith(remote.id)
+      expect(onSelect).toHaveBeenLastCalledWith(remoteId)
     } finally {
       act(() => root.unmount())
       container.remove()
@@ -144,7 +149,7 @@ it('keeps repository mode and a single checkout as ordinary project rows', () =>
       root.render(
         <TooltipProvider>
           <SettingsProjectTree
-            activeSectionId={sections[0].id}
+            activeSectionId="repo-project:github:acme/app"
             sections={sections}
             onSelectSection={() => {}}
             rowClassName={() => ''}
