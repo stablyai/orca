@@ -14,6 +14,7 @@ import {
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
 import { safeExtractTar } from './cloud-transfer-tar'
 import {
+  PersistedTransferSchema,
   TRANSFER_STATE_FILE,
   applyTransferToWorktree,
   loadPersistedTransfer,
@@ -277,8 +278,10 @@ async function appliedAttemptWithin(dir: string, now: number): Promise<boolean> 
     return false
   }
   try {
-    const state = JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8')) as { worktreePath?: unknown }
-    return typeof state.worktreePath === 'string'
+    const parsed = PersistedTransferSchema.safeParse(
+      JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8'))
+    )
+    return parsed.success && parsed.data.worktreePath !== undefined
   } catch {
     return false
   }

@@ -1,7 +1,7 @@
 // "Move to this computer" body: confirm what moves, the steps with elapsed time, then the result.
 // A plain view (fixtures render it inline); CloudMoveToComputerDialog wraps it in the app's Dialog.
 import React, { useRef } from 'react'
-import { AlertTriangle, Check, Circle, FolderOpen, Laptop, Loader2 } from 'lucide-react'
+import { AlertTriangle, Check, Circle, Laptop, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InlineError } from '@/components/ui/inline-error'
@@ -14,7 +14,7 @@ import {
   type CloudMoveState
 } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { cloudMoveFailureCause, cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
-import { BulletList, useFocusOnStage } from './cloud-move-parts'
+import { BulletList, CloudMovePartialResult, useFocusOnStage } from './cloud-move-parts'
 
 export { cloudMoveStepLabel, cloudMoveTitle } from './cloud-move-copy'
 
@@ -355,40 +355,13 @@ export function CloudMoveToComputerView({
         ))}
       </ul>
       {partial ? (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-          <p className="text-sm">
-            {t(
-              'orcaCloudMove.partialDetail',
-              'Some changes didn’t apply cleanly. They were saved here, so nothing is lost:'
-            )}
-          </p>
-          <Button
-            ref={primary}
-            size="xs"
-            variant="outline"
-            className="max-w-full justify-start self-start"
-            onClick={() => onOpenFolder(partial)}
-          >
-            <FolderOpen />
-            {t('orcaCloudMove.openFolder', 'Open folder')}
-          </Button>
-          {onReapply ? (
-            <Button size="xs" variant="ghost" className="self-start" onClick={onReapply}>
-              {t('orcaCloudMove.reapply', 'Apply changes again')}
-            </Button>
-          ) : null}
-          {finished.conflicts && finished.conflicts.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {t('orcaCloudMove.conflicts', 'Changed here since: {{files}}', {
-                files: finished.conflicts.slice(0, 5).join(', '),
-                count: finished.conflicts.length
-              })}
-            </p>
-          ) : null}
-          <p className="break-all font-mono text-xs text-muted-foreground" title={partial}>
-            {partial}
-          </p>
-        </div>
+        <CloudMovePartialResult
+          folder={partial}
+          conflicts={finished.conflicts ?? []}
+          primary={primary}
+          onOpenFolder={onOpenFolder}
+          onReapply={onReapply}
+        />
       ) : null}
       <p className="text-xs text-muted-foreground">
         {state.archivedAfter

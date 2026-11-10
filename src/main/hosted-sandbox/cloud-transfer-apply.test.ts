@@ -36,7 +36,19 @@ function setup() {
   writeFileSync(join(dir, 'unstaged.patch'), git(repo, 'diff', '--binary'))
   writeFileSync(join(dir, 'staged.patch'), '')
   git(repo, 'checkout', '--', '.')
-  const manifest = { root: '/vercel/sandbox/project', untrackedFiles: 0 } as unknown as CloudTransferManifest
+  const manifest: CloudTransferManifest = {
+    version: 1,
+    root: '/vercel/sandbox/project',
+    branch: 'main',
+    head: null,
+    upstream: null,
+    hasBundle: true,
+    stagedBytes: 0,
+    unstagedBytes: 1,
+    untrackedFiles: 0,
+    claudeSessions: 0,
+    codexSessions: 0
+  }
   const entry = { dir, manifest, repoPath: repo, workspaceId: 'ws-1' }
   const homes = { claudeHome: join(root, 'claude'), codexHome: join(root, 'codex') }
   return { root, repo, dir, entry, homes }

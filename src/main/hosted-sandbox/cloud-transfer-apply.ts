@@ -5,10 +5,11 @@
 // reported), untracked files never overwrite what is there, and sessions never replace local files.
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { z } from 'zod'
 import {
   CLOUD_TRANSFER_MAX_BYTES,
-  claudeProjectDirName,
-  type CloudTransferManifest
+  CloudTransferManifestSchema,
+  claudeProjectDirName
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
 import type { CloudTransferFinished } from '../../shared/hosted-sandbox/cloud-transfer-api'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
@@ -18,13 +19,14 @@ import { fileSize, installSessions, listFiles, type Prepared } from './cloud-tra
 /** Written into the transfer folder so a retry works after the app restarted. */
 export const TRANSFER_STATE_FILE = 'transfer.json'
 
-type PersistedTransfer = {
-  manifest: CloudTransferManifest
-  repoPath: string
-  workspaceId: string
+export const PersistedTransferSchema = z.object({
+  manifest: CloudTransferManifestSchema,
+  repoPath: z.string().min(1),
+  workspaceId: z.string().min(1),
   /** Set once an apply was attempted: the sweep keeps such folders for a retry. */
-  worktreePath?: string
-}
+  worktreePath: z.string().min(1).optional()
+})
+type PersistedTransfer = z.infer<typeof PersistedTransferSchema>
 
 export async function persistTransfer(entry: Prepared, worktreePath?: string): Promise<void> {
   const state: PersistedTransfer = {
@@ -38,11 +40,12 @@ export async function persistTransfer(entry: Prepared, worktreePath?: string): P
 
 export async function loadPersistedTransfer(dir: string): Promise<Prepared | null> {
   try {
-    const state = JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8')) as PersistedTransfer
-    if (!state?.manifest || typeof state.repoPath !== 'string' || typeof state.workspaceId !== 'string') {
-      return null
-    }
-    return { dir, manifest: state.manifest, repoPath: state.repoPath, workspaceId: state.workspaceId }
+    const parsed = PersistedTransferSchema.safeParse(
+      JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8'))
+    )
+    return parsed.success
+      ? { dir, manifest: parsed.data.manifest, repoPath: parsed.data.repoPath, workspaceId: parsed.data.workspaceId }
+      : null
   } catch {
     return null
   }
@@ -55,7 +58,7 @@ async function gitOk(cwd: string, args: string[]): Promise<{ ok: boolean; stderr
     await gitExecFileAsync(args, { cwd, maxBuffer: 16 * 1024 * 1024, timeout: 120_000 })
     return { ok: true, stderr: '' }
   } catch (error) {
-    const stderr = (error as { stderr?: unknown }).stderr
+    const stderr = error instanceof Error && 'stderr' in error ? error.stderr : undefined
     return { ok: false, stderr: typeof stderr === 'string' ? stderr : String(error) }
   }
 }
