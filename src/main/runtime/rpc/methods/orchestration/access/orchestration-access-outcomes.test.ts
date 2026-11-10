@@ -256,6 +256,10 @@ const CASES = {
     method: 'orchestration.sessionAddress',
     params: () => ({ sessionId: 'not-a-session' })
   },
+  sessionChildren: {
+    method: 'orchestration.sessionChildren',
+    params: () => ({ sessionId: 'not-a-session' })
+  },
   taskCreate: {
     method: 'orchestration.taskCreate',
     params: (callerTerminalHandle) => ({ spec: 's', callerTerminalHandle })
@@ -392,6 +396,8 @@ const EXPECTED: Record<string, string> & Record<keyof typeof CASES, string> = {
   runUse: 'ok ok ok worker_cannot_coordinate_own_run',
   send: 'ok ok ok ok',
   sessionAddress: 'ok ok ok ok',
+  sessionChildren:
+    'runtime_unavailable runtime_unavailable runtime_unavailable runtime_unavailable',
   taskCreate: 'ok ok run_required run_required',
   taskCreateBadDeps: 'runtime_error runtime_error runtime_error runtime_error',
   taskCreateOtherRun: 'consumer_fenced ok consumer_fenced consumer_fenced',
