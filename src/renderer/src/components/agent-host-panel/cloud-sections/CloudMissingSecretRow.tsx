@@ -20,11 +20,7 @@ import type {
   CloudSecretsErrorCode
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { parseScope, writableScopes } from '../../cloud-secrets-ask/cloud-secrets-ask-model'
-import {
-  isGuestInSharedWorkspace,
-  type CloudPanelAddSecret,
-  type CloudPanelSectionsData
-} from './use-cloud-panel-sections'
+import type { CloudPanelAddSecret, CloudPanelSectionsData } from './use-cloud-panel-sections'
 
 /** A declared name nobody provides: Missing chip, then Add (members: Add mine) opens an inline field. */
 export function CloudMissingSecretRow({
@@ -47,8 +43,8 @@ export function CloudMissingSecretRow({
   const t = useTranslate()
   const id = React.useId()
   const admin = data.effective.caller.canWrite.org
-  // A teammate's Personal values don't reach someone else's shared workspace.
-  const guest = isGuestInSharedWorkspace(data)
+  // A teammate's Personal values don't reach someone else's shared workspace (or one we can't tell).
+  const guest = data.withoutPersonal
   const scopes = writableScopes(data.effective.caller, {
     repo: data.repoKey !== null,
     shared: true
