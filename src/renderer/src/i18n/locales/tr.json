@@ -1,7 +1,7 @@
 {
   "agentLaunch": {
     "connectSsh": "Bu çalışma alanının SSH ana bilgisayarına bağlanıp tekrar deneyin.",
-    "sshUnavailable": "Bu SSH ana bilgisayarında terminal başlatılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
+    "sshUnavailable": "Bu SSH ana bilgisayarında aracıyı terminalde başlatma seçeneği kullanılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
     "reconnectServer": "Bu çalışma alanının Orca sunucusuna yeniden bağlanıp tekrar deneyin.",
     "updateServer": "Bu çalışma alanının sunucusunda Orca’yı güncelleyip tekrar deneyin.",
     "checkSettings": "Aracının başlatma ayarlarını kontrol edip tekrar deneyin.",
