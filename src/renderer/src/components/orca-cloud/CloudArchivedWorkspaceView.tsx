@@ -309,12 +309,13 @@ export function CloudArchivedWorkspaceView({
                   <div className="max-h-96 overflow-y-auto p-1.5 scrollbar-sleek [mask-image:linear-gradient(to_bottom,black_calc(100%-2rem),transparent)]">
                     <TreeList nodes={tree} depth={0} />
                     {hiddenFiles > 0 ? (
-                      <p className="px-1 pt-1 pb-4 text-[11px] text-muted-foreground">
+                      <p className="px-1 pt-1 pb-4 text-2xs text-muted-foreground">
                         {t(
                           'orcaCloudWorkspace.archived.moreFiles',
                           '{{count}} more files not shown',
                           {
-                            count: hiddenFiles
+                            count: hiddenFiles,
+                            defaultValue_one: '{{count}} more file not shown'
                           }
                         )}
                       </p>

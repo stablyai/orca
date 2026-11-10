@@ -2273,7 +2273,8 @@
         "checkingVmEnvironment": "Checking VM environment…",
         "vmChecksFailed": "Environment checks failed",
         "preparingCloudEnvironment": "Preparing environment…",
-        "startingSandbox": "Starting sandbox…"
+        "startingSandbox": "Starting sandbox…",
+        "cloningRepository": "Cloning the repository…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -16340,7 +16341,6 @@
             "open": "Open link",
             "portHint": "The port your dev server listens on.",
             "portHintDetected": "Or pick a port that’s listening.",
-            "portInvalid": "Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.",
             "portLabel": "Port",
             "publicNote": "Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.",
             "revokeFailed": "Couldn’t turn it off. Try again.",
@@ -16359,7 +16359,8 @@
             "wakeHint": "Otherwise the link works only while the workspace is awake. Wake time counts toward your usage.",
             "wakeLabel": "Let visitors wake the workspace",
             "tryAgain": "Try again",
-            "sharePortLabel": "Share port {{port}}…"
+            "sharePortLabel": "Share port {{port}}…",
+            "portInvalidReserved": "Enter a port from 1 to 65535. Ports {{ports}} are used by Orca."
           }
         }
       },
@@ -20848,7 +20849,6 @@
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
         "copyWorkspaceLink": "Copy workspace link",
-        "daysAgo": "{{value0}}d ago",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
@@ -20858,10 +20858,7 @@
         "emptyTeamTitle": "No team workspaces yet",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
-        "errorConcurrencyLimitCount2": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
-        "errorSeatLimitSelf": "You already have {{value0}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
-        "errorSeatLimitOwner": "{{value0}} already has {{value1}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "errorSeatLimitOwnerNoCount": "{{value0}} is at their limit of running sandboxes. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "seatOwnerFallback": "The workspace owner",
         "errorConflict": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
@@ -20879,7 +20876,6 @@
         "goToChat": "Go to {{value0}}'s chat",
         "goToTeammateChat": "Go to a teammate's chat",
         "heading": "Cloud workspaces",
-        "hoursAgo": "{{value0}}h ago",
         "inAnyRepo": "In any repo",
         "inRepo": "In {{value0}}",
         "justNow": "just now",
@@ -20897,7 +20893,6 @@
         "memberTyping": "{{value0}} is typing",
         "memberViewing": "{{value0}} is viewing",
         "memberYou": "{{value0}} (you)",
-        "minutesAgo": "{{value0}}m ago",
         "moreMembers": "{{count}} more",
         "move": "Move",
         "moveToSection": "Move to section",
@@ -20965,7 +20960,13 @@
         "sleep": "Sleep",
         "deleteWorkspace": "Delete…",
         "showRunningOnly": "Show running only",
-        "running": "Running"
+        "running": "Running",
+        "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26640,7 +26641,7 @@
       "noEnvVars": "None",
       "envVarPlaceholder": "NPM_TOKEN, DATABASE_URL…",
       "envVarInvalid": "Skipped {{names}}: names use A–Z, 0–9 and _, and cannot start with a digit.",
-      "scriptTabHint": "Tab inserts two spaces. Press Escape, then Tab, to leave the editor."
+      "scriptTabHintVisible": "Tab indents · Esc then Tab to leave"
     },
     "import": {
       "failed": "Couldn’t read that project’s setup.",
@@ -26740,7 +26741,6 @@
       "pullRequests": "Pull requests",
       "lastChanges": "Last changes",
       "filesTitle": "Files",
-      "moreFiles": "{{count}} more files not shown",
       "detached": "Detached HEAD",
       "ahead": "{{count}} ahead",
       "behind": "{{count}} behind",
@@ -26750,7 +26750,9 @@
       "noCommits": "No commits on this branch yet.",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
-      "loadFailedDetail": "Your files are safe in the archive."
+      "loadFailedDetail": "Your files are safe in the archive.",
+      "moreFiles_one": "{{count}} more file not shown",
+      "moreFiles_other": "{{count}} more files not shown"
     },
     "state": {
       "archived": "Archived",
@@ -26777,7 +26779,6 @@
     "thisWorkspaceTitle": "This workspace",
     "overlay": {
       "restarting": "Restarting…",
-      "unarchiving": "Restoring from archive…",
       "waking": "Waking…",
       "connecting": "Connecting…",
       "terminalStalledTitle": "Couldn’t reconnect the terminal",
@@ -26790,14 +26791,15 @@
       "stalled": "Orca Cloud stopped responding while waking.",
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
-      "clearPendingKeys": "Discard waiting keys"
+      "clearPendingKeys": "Discard waiting keys",
+      "unarchivingNow": "Unarchiving…"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
-      "unarchiving": "Restoring {{name}} from archive.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
-      "asleep": "{{name}} is asleep."
+      "asleep": "{{name}} is asleep.",
+      "unarchivingNamed": "Unarchiving {{name}}."
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
@@ -26816,16 +26818,16 @@
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
       "waking": "Waking…",
       "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
-      "starting": "Starting the sandbox…",
       "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
       "startFailed": "The sandbox couldn’t start. Nothing was lost.",
-      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
+      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe.",
+      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
+      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
     },
     "restarting": "Restarting…",
     "restart": "Restart",
     "sandboxTitle": "Sandbox",
     "statusUnavailable": "Status unavailable",
-    "statusUnavailableDetail": "Orca Cloud didn’t answer.",
     "loading": "Loading status",
     "cpu": "CPU",
     "cpuValue": "{{percent}}% of {{cpus}} vCPU",
@@ -26903,7 +26905,8 @@
     "deletedNamed": "Deleted {{name}}",
     "deleteFailedNamed": "Couldn’t delete {{name}}",
     "productName": "Orca Cloud",
-    "cloudMarkLabel": "Cloud workspace · {{state}}"
+    "cloudMarkLabel": "Cloud workspace · {{state}}",
+    "statusUnavailableTitle": "Couldn’t get the sandbox status."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -27213,18 +27216,18 @@
       "intro": "This creates a local workspace from {{name}}:",
       "branch": "The branch and its commits",
       "changes": "Uncommitted changes and untracked files",
-      "chats": "Claude and Codex chats, so agents can resume here",
       "branchTaken": "{{branch}} is already checked out on this computer",
       "branchTakenDetail": "It will be {{newName}}. Chats already on this computer are kept.",
       "action": "Move to this computer",
       "branchNamed": "Branch {{branch}} and its commits",
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
-      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
-      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
       "archiveAfter": "Archive the cloud workspace afterwards",
       "stopsAgents_one": "Stops {{count}} running agent",
-      "stopsAgents_other": "Stops {{count}} running agents"
+      "stopsAgents_other": "Stops {{count}} running agents",
+      "chatsContinue_one": "{{count}} agent chat, so you can continue it here",
+      "chatsContinue_other": "{{count}} agent chats, so you can continue them here",
+      "chatsContinueAny": "Claude and Codex chats, so you can continue them here"
     },
     "cancel": "Cancel",
     "steps": "Steps",

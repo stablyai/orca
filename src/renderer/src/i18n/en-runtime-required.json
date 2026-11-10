@@ -261,6 +261,12 @@
         }
       },
       "cloudWorkspaces": {
+        "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
+        "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "listMeta2_one": "{{count}} workspace · {{usage}}",
         "listMeta2_other": "{{count}} workspaces · {{usage}}",
         "listSandboxHours_one": "{{hours}} sandbox hour used",
@@ -2306,8 +2312,8 @@
     "confirm": {
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
-      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
-      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
+      "chatsContinue_one": "{{count}} agent chat, so you can continue it here",
+      "chatsContinue_other": "{{count}} agent chats, so you can continue them here",
       "stopsAgents_one": "Stops {{count}} running agent",
       "stopsAgents_other": "Stops {{count}} running agents"
     },
@@ -2322,7 +2328,13 @@
     "archived": {
       "files": "{{count}} files",
       "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "files_other": "{{count}} files",
+      "moreFiles_one": "{{count}} more file not shown",
+      "moreFiles_other": "{{count}} more files not shown"
+    },
+    "detail": {
+      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
+      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
     },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",

@@ -288,4 +288,38 @@ describe('Orca Cloud surfaces', () => {
     expect(container.textContent).toContain('Modified:')
     expect(container.textContent).toContain('Untracked:')
   })
+
+  it('the panel names the idle timer when running and shows a placeholder, not "Checking…", before the first read', () => {
+    const status = {
+      state: 'ready' as const,
+      metrics: null,
+      uptimeMs: 60_000,
+      usage: { totalMs: 0, centsPerHour: 100, costCents: 0 },
+      archive: null,
+      idleSleepMinutes: 20,
+      checkedAt: T0
+    }
+    const panel = (state: 'running' | 'unknown', idle?: number) => (
+      <CloudWorkspaceStatusPanel
+        workspaceId="ws"
+        state={state}
+        entry={{
+          status: state === 'running' ? { ...status, idleSleepMinutes: idle } : null,
+          loading: state === 'unknown',
+          error: null,
+          fetchedAt: null
+        }}
+        pending={undefined}
+        actions={actions()}
+      />
+    )
+    const { container, rerender } = render(panel('running', 20))
+    expect(container.textContent).toContain('Sleeps in 20 minutes if idle')
+    // Older control planes omit the setting; their idle timer is 15 minutes.
+    rerender(panel('running'))
+    expect(container.textContent).toContain('Sleeps in 15 minutes if idle')
+    rerender(panel('unknown'))
+    expect(container.querySelector('.sr-only')?.textContent).toBe('Checking…')
+    expect(container.textContent?.replace('Checking…', '')).not.toContain('Checking')
+  })
 })

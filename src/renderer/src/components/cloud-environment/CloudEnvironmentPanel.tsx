@@ -31,7 +31,7 @@ function SubsectionTitle({
 }) {
   return (
     <div className="flex min-h-7 items-center justify-between gap-3">
-      <h4 className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+      <h4 className="text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
         {children}
       </h4>
       {action}
