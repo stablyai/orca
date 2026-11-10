@@ -111,7 +111,7 @@ describe('runEnvironmentDoctor', () => {
       makeDeps({
         git: gitRepo({
           'ls-remote': failed(
-            "fatal: unable to access 'https://example-user:YOUR_API_KEY_HERE@example.invalid/o/r.git/': 403"
+            "fatal: unable to access 'https://x-access-token:ghp_secret123@github.com/o/r.git/': 403"
           )
         })
       })
@@ -119,7 +119,7 @@ describe('runEnvironmentDoctor', () => {
 
     expect(statuses(result)['git.fetch']).toBe('fail')
     expect(statuses(result)['git.push']).toBeUndefined()
-    expect(JSON.stringify(result)).not.toContain('YOUR_API_KEY_HERE')
+    expect(JSON.stringify(result)).not.toContain('ghp_secret123')
   })
 
   it('probes push with a dry run that skips hooks and targets a probe ref', async () => {
