@@ -33,7 +33,7 @@ import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 
 export function VaultSessionRow({
   compact = false,

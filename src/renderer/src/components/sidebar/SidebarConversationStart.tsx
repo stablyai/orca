@@ -12,10 +12,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
@@ -32,6 +33,7 @@ export function SidebarConversationStart({
   executionHostId: ExecutionHostId
   projectName: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   useTranslation()
   const [open, setOpen] = useState(false)
   const resolvedHost = useAppStore((state) =>
@@ -47,7 +49,7 @@ export function SidebarConversationStart({
     ownsTarget ? target : undefined
   )
   const rows = model.state === 'settled' ? model.rows.filter((row) => row.kind === 'chat') : []
-  const label = translate('projectConversations.newChatInProject', 'New chat in {{project}}', {
+  const label = t('projectConversations.newChatInProject', 'New chat in {{project}}', {
     project: projectName
   })
   const launch = (row: NewTabAgentMenuRow): void => {
@@ -103,11 +105,8 @@ export function SidebarConversationStart({
         {rows.length === 0 ? (
           <DropdownMenuItem disabled>
             {model.state === 'loading'
-              ? translate('dashboard.sidebar.loadingChatAgents', 'Loading chat agents…')
-              : translate(
-                  'dashboard.sidebar.noChatAgents',
-                  'No chat agents available on this host'
-                )}
+              ? t('dashboard.sidebar.loadingChatAgents', 'Loading chat agents…')
+              : t('dashboard.sidebar.noChatAgents', 'No chat agents available on this host')}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

@@ -3,8 +3,8 @@ import { Archive, ArchiveRestore, Pin, PinOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { useTranslate } from '@/i18n/use-translate'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { ConversationPreference } from '../../../../shared/conversation-navigation-preferences'
@@ -26,19 +26,20 @@ export function ProjectConversationRow({
   onOpen: () => void
   onPreference: (patch: ConversationPreference) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const savedTitle = useAiVaultSessionDisplayTitle(session)
   const title =
     projectConversationTitle(session, savedTitle) ||
-    translate('projectConversations.untitled', 'Untitled chat')
+    t('projectConversations.untitled', 'Untitled chat')
   const [busy, setBusy] = useState(false)
   const pinned = preference?.pinned === true
   const archived = preference?.archived === true
   const pinLabel = pinned
-    ? translate('projectConversations.unpin', 'Unpin chat')
-    : translate('projectConversations.pin', 'Pin chat')
+    ? t('projectConversations.unpin', 'Unpin chat')
+    : t('projectConversations.pin', 'Pin chat')
   const archiveLabel = archived
-    ? translate('projectConversations.restore', 'Restore chat')
-    : translate('projectConversations.archive', 'Archive chat')
+    ? t('projectConversations.restore', 'Restore chat')
+    : t('projectConversations.archive', 'Archive chat')
   const change = async (patch: ConversationPreference) => {
     if (busy) {
       return
@@ -77,14 +78,14 @@ export function ProjectConversationRow({
             <span className="min-w-0 flex-1 truncate">{title}</span>
             {liveState === 'working' ? (
               <Loader2
-                aria-label={translate('projectConversations.working', 'Working')}
+                aria-label={t('projectConversations.working', 'Working')}
                 className="size-3 shrink-0 animate-spin text-muted-foreground"
               />
             ) : null}
             {liveState === 'blocked' ? (
               <span
                 className="size-1.5 shrink-0 rounded-full bg-(--status-warning)"
-                aria-label={translate('projectConversations.needsYou', 'Needs you')}
+                aria-label={t('projectConversations.needsYou', 'Needs you')}
               />
             ) : null}
             {pinned ? (
