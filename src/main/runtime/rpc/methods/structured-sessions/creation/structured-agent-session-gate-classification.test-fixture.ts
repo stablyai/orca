@@ -97,6 +97,7 @@ export const WORK_METHODS = [
   },
   { method: 'agentSession.handoffStatus', params: { sessionId: SESSION } },
   { method: 'agentSession.options', params: { sessionId: SESSION } },
+  { method: 'agentSession.mcp', params: { sessionId: SESSION, operation: { action: 'status' } } },
   { method: 'agentSession.modelCatalog', params: { agent: 'codex', sessionId: SESSION } },
   { method: 'agentSession.history', params: { sessionId: SESSION, direction: 'tail' } },
   { method: 'agentSession.conversationOutline', params: { sessionId: SESSION } },

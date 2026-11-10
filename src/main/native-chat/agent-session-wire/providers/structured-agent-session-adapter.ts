@@ -1,4 +1,8 @@
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
+import type {
+  AgentSessionMcpAction,
+  AgentSessionMcpResult
+} from '../../../../shared/agent-session/agent-session-mcp'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
@@ -289,6 +293,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   retireStartup?(sessionId: string, acquisitionGeneration: string): void
   /** Undefined preserves the client catalog when the provider reports none. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
+  manageMcp?(sessionId: string, input: AgentSessionMcpAction): Promise<AgentSessionMcpResult>
   atRestCommands?: StructuredAgentSessionAtRestCommands
   /** Claim the live callback, build reply, commit journal CAS, then answer; reject unbuildable replies before commit. */
   answerPrompt(input: {

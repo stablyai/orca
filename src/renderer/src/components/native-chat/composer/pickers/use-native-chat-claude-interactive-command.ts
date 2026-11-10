@@ -7,12 +7,13 @@ import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatCliHandoff } from '../../pane/actions/use-native-chat-cli-handoff'
 import { nativeChatMcpHandoffNotice } from '../controls/native-chat-mcp-handoff-notice'
 
-export function useNativeChatMcpCommand(args: {
+export function useNativeChatClaudeInteractiveCommand(args: {
   enabled: boolean
   agent: AgentType
   terminalTabId: string
   draft: string
   remote: boolean
+  inlineTerminal?: boolean
   structuredTransport?: NativeChatStructuredComposerTransport
   onSwitchToTerminal?: () => void
   picker: NativeChatPickerState
@@ -28,11 +29,25 @@ export function useNativeChatMcpCommand(args: {
     onSwitchToTerminal
   } = args
   const { isPickedSkill, completeItem, autocomplete } = picker
-  const matchesDraft = useCallback(
-    (text: string) =>
-      enabled && agent === 'claude' && text.trim() === '/mcp' && !isPickedSkill(text),
-    [agent, enabled, isPickedSkill]
+  const commandFor = useCallback(
+    (text: string, honorSkill = true): string | null => {
+      if (!enabled || agent !== 'claude' || (honorSkill && isPickedSkill(text))) {
+        return null
+      }
+      const name = text.trim().slice(1)
+      if (!text.trim().startsWith('/')) {
+        return null
+      }
+      const names = args.inlineTerminal
+        ? ['mcp', 'login', 'config', 'permissions']
+        : structuredTransport
+          ? ['mcp', 'config', 'permissions']
+          : ['mcp']
+      return names.includes(name) ? name : null
+    },
+    [agent, args.inlineTerminal, enabled, structuredTransport, isPickedSkill]
   )
+  const matchesDraft = useCallback((text: string) => commandFor(text) !== null, [commandFor])
   const handoff = useNativeChatCliHandoff(
     matchesDraft(draft) && structuredTransport?.worktreeId
       ? {
@@ -51,7 +66,7 @@ export function useNativeChatMcpCommand(args: {
           autocomplete.mode === 'slash' &&
           autocomplete.dispatchable &&
           item.kind === 'command' &&
-          item.name === 'mcp'
+          commandFor(`/${item.name}`, false) !== null
         ) {
           // Complete instead of dispatching into a hidden TUI; retain any text after the token.
           completeItem(item)
@@ -59,17 +74,17 @@ export function useNativeChatMcpCommand(args: {
         }
         pick(item)
       },
-    [agent, autocomplete, completeItem, enabled]
+    [agent, autocomplete, commandFor, completeItem, enabled]
   )
   const structured = structuredTransport !== undefined
   const open = structured ? handoff?.run : onSwitchToTerminal
   const pending = handoff?.pending === true
   const notice = useMemo<NativeChatComposerNotice | null>(
     () =>
-      matchesDraft(draft)
+      commandFor(draft) === 'mcp'
         ? nativeChatMcpHandoffNotice({ structured, remote, open, pending })
         : null,
-    [draft, matchesDraft, open, pending, remote, structured]
+    [draft, commandFor, open, pending, remote, structured]
   )
-  return { matchesDraft, consume: matchesDraft, interceptPick, notice }
+  return { matchesDraft, consume: matchesDraft, interceptPick, notice, command: commandFor(draft) }
 }

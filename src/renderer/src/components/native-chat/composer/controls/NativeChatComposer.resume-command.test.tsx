@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// @vitest-environment happy-dom
-
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useLayoutEffect, type RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +17,7 @@ import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import { useAppStore } from '@/store'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 type CommandItem = Extract<NativeChatPickerItem, { kind: 'command' }>
 
@@ -49,6 +48,7 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, {
     sendNativeChatTypedCommand: vi.fn(),
     sendNativeChatMessage: vi.fn(),
+    sendNativeChatObservedWrites: vi.fn(),
     cliFork: vi.fn()
   })
 })
@@ -87,6 +87,9 @@ vi.mock('../../../right-sidebar/ai-vault/panel/agent-session-history-modal', () 
 vi.mock('../../session/terminal/send/native-chat-runtime-send', () => ({
   sendNativeChatMessage: mocks.sendNativeChatMessage,
   sendNativeChatTypedCommand: mocks.sendNativeChatTypedCommand
+}))
+vi.mock('../../session/terminal/send/native-chat-observed-send', () => ({
+  sendNativeChatObservedWrites: mocks.sendNativeChatObservedWrites
 }))
 vi.mock('../../../tab-bar/native-chat-cli-fork-run', () => ({
   runNativeChatCliFork: mocks.cliFork,
@@ -160,15 +163,17 @@ function renderStructuredChat(
     runtimeEnvironmentId: null
   }
   const chat = () => (
-    <NativeChatComposer
-      terminalTabId="tab-1"
-      editSession={editSession}
-      draftScopeKey={editSession?.draftScopeKey}
-      paneKey="tab-1:structured"
-      targetPtyId={null}
-      agent={agent}
-      structuredTransport={transport}
-    />
+    <TooltipProvider>
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        editSession={editSession}
+        draftScopeKey={editSession?.draftScopeKey}
+        paneKey="tab-1:structured"
+        targetPtyId={null}
+        agent={agent}
+        structuredTransport={{ ...transport }}
+      />
+    </TooltipProvider>
   )
   const view = render(chat())
   return { transport, rerender: () => view.rerender(chat()) }
@@ -215,6 +220,77 @@ describe('structured composer control picks', () => {
   })
   afterEach(() => cleanup())
 
+  it.each(['config', 'permissions'])(
+    'routes /%s choices through the existing session option surface',
+    async (command) => {
+      mocks.draft = `/${command}`
+      const { transport, rerender } = renderStructuredChat()
+      transport.optionSnapshot = [
+        {
+          id: 'permissionMode',
+          label: 'Permissions',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'ask',
+            choices: [
+              { value: 'ask', label: 'Ask' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'reported',
+          transport: 'agent-session',
+          settable: true
+        }
+      ]
+      rerender()
+      await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Plan' })))
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledWith('permissionMode', 'plan')
+      expect(transport.dispatchCommand).not.toHaveBeenCalled()
+      expect(transport.send).not.toHaveBeenCalled()
+      expect(mocks.setDraft).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['mcp', 'login', 'config', 'permissions'])(
+    'offers inline /%s controls without switching views or consuming the chat draft',
+    async (command) => {
+      mocks.draft = `/${command}`
+      mocks.imageAttachments = [{ id: 'kept-image', path: '/tmp/kept.png' }]
+      const openTerminal = vi.fn()
+      mocks.sendNativeChatObservedWrites.mockReturnValue({ cancel: vi.fn(), settleAfterMs: 0 })
+      render(
+        <NativeChatComposer
+          terminalTabId="tab-1"
+          paneKey="tab-1:claude"
+          targetPtyId="remote:windows@@pty-1"
+          agent="claude"
+          readTerminalScreen={() => 'Manage MCP servers\n❯ figma · needs authentication'}
+          launchSeed={{
+            launchDraft: null,
+            launchDraftResolved: true,
+            ownsTabWideLaunchDraft: false,
+            readTerminalDraft: () => ''
+          }}
+          onSwitchToTerminal={openTerminal}
+        />
+      )
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Run in Chat' })))
+      expect(mocks.sendNativeChatObservedWrites).toHaveBeenCalledWith(
+        'remote:windows@@pty-1',
+        [
+          { data: `/${command}`, delayBeforeMs: 0 },
+          { data: '\r', delayBeforeMs: expect.any(Number) }
+        ],
+        expect.objectContaining({ clearInput: '' })
+      )
+      expect(mocks.fieldProps?.sendButtonDisabled).toBe(true)
+      expect(openTerminal).not.toHaveBeenCalled()
+      expect(mocks.setDraft).not.toHaveBeenCalled()
+      expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+    }
+  )
+
   it('keeps /mcp in chat and offers the owning terminal instead of sending a hidden interactive command', async () => {
     mocks.draft = '/mcp'
     const openTerminal = vi.fn()
@@ -222,7 +298,7 @@ describe('structured composer control picks', () => {
       <NativeChatComposer
         terminalTabId="tab-1"
         paneKey="tab-1:claude"
-        targetPtyId="remote:windows:pty-1"
+        targetPtyId="remote:windows@@pty-1"
         agent="claude"
         onSwitchToTerminal={openTerminal}
       />

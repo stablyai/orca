@@ -98,36 +98,33 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     )
 
     // Why inputOwnedByCard: the hidden field can still hold keyboard focus for a frame.
-    const [hasPty, disabled] = structuredTransport
+    const [hasPty, transportDisabled] = structuredTransport
       ? [true, !canSend || unavailableHint !== undefined]
       : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
+    const { picker, orcaCommands, mcpNotice, commandPanel, disabled } =
+      useNativeChatComposerCommandPicker({
+        mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
+        agent,
+        terminalTabId,
+        draftScopeKey: paneKey,
+        draft,
+        caret,
+        recalledFromHistory: recall.active,
+        disabled: transportDisabled,
+        isComposing: imeEnterGesture.isComposing,
+        structuredTransport,
+        onSwitchToTerminal,
+        targetPtyId,
+        readTerminalScreen,
+        readTerminalDraft: launchSeed?.readTerminalDraft,
+        isWorking: isWorking || isStopping,
+        editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
+        setNotice
+      })
     const attachDisabled =
       disabled ||
       (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
-
-    const { picker, orcaCommands, mcpNotice } = useNativeChatComposerCommandPicker({
-      mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
-      agent,
-      terminalTabId,
-      draftScopeKey: paneKey,
-      draft,
-      caret,
-      recalledFromHistory: recall.active,
-      disabled,
-      isComposing: imeEnterGesture.isComposing,
-      structuredTransport,
-      onSwitchToTerminal,
-      targetPtyId,
-      editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
-      setNotice
-    })
-    const {
-      autocomplete,
-      clearSkillOrigin,
-      completeItem,
-      completeMention,
-      handleDraftOrCaretChange
-    } = picker
+    const { autocomplete, completeItem, completeMention } = picker
     const mentionFiles = useNativeChatMentionFiles({
       query: autocomplete.mode === 'mention' ? autocomplete.query : null,
       terminalTabId,
@@ -225,7 +222,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       imageAttachments,
       structuredTransport,
       isComposing: imeEnterGesture.isComposing,
-      clearSkillOrigin,
+      clearSkillOrigin: picker.clearSkillOrigin,
       setDraft,
       setCaret
     })
@@ -242,7 +239,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       trackPendingSend,
       setDraft,
       setCaret,
-      clearSkillOrigin,
+      clearSkillOrigin: picker.clearSkillOrigin,
       clearImageAttachments,
       setNotice
     }
@@ -350,13 +347,14 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
-      handleDraftOrCaretChange,
+      handleDraftOrCaretChange: picker.handleDraftOrCaretChange,
       flushDraftAppends,
       flushPendingAttachments: attachments.flushPendingAttachments
     })
 
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
+        {commandPanel}
         <NativeChatComposerField
           draftScopeKey={draftScopeKey}
           positionTarget={editSession ? undefined : terminalTabId}

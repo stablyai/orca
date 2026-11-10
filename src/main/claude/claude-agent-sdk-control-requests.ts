@@ -115,6 +115,9 @@ export type ClaudeControlSurface = {
   /** Names `sessionId` as the user's rename; refused once the CLI has moved to another session. */
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
   generateSessionTitle?: (description: string) => Promise<unknown>
+  mcpServerStatus?: Query['mcpServerStatus']
+  reconnectMcpServer?: Query['reconnectMcpServer']
+  toggleMcpServer?: Query['toggleMcpServer']
 }
 
 type InterruptingQuery = {
@@ -126,6 +129,11 @@ type InterruptingQuery = {
 export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
   const title = 'generateSessionTitle' in query ? query.generateSessionTitle : null
   return {
+    mcpServerStatus: () => runClaudeControl('mcp_status', () => query.mcpServerStatus()),
+    reconnectMcpServer: (server) =>
+      runClaudeControl('mcp_reconnect', () => query.reconnectMcpServer(server)),
+    toggleMcpServer: (server, enabled) =>
+      runClaudeControl('mcp_toggle', () => query.toggleMcpServer(server, enabled)),
     ...(typeof title === 'function'
       ? {
           generateSessionTitle: (description: string) =>

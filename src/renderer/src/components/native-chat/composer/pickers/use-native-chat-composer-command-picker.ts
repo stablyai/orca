@@ -11,9 +11,11 @@ import {
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
-import { useNativeChatMcpCommand } from './use-native-chat-mcp-command'
+import { useNativeChatClaudeInteractiveCommand } from './use-native-chat-claude-interactive-command'
 import type { NativeChatComposerNotice } from '../controls/native-chat-composer-notice'
 import { nativeChatComposerTargetIsRemote } from '../submit/native-chat-composer-target'
+import { useTranslate } from '@/i18n/use-translate'
+import { useNativeChatClaudeCommandPanel } from '../controls/use-native-chat-claude-command-panel'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
@@ -36,11 +38,16 @@ export function useNativeChatComposerCommandPicker(
       mode?: 'edit' | 'launch'
       onSwitchToTerminal?: () => void
       targetPtyId: string | null
+      readTerminalScreen?: () => string | null
+      readTerminalDraft?: () => string | null
+      isWorking?: boolean
     }
 ): {
   picker: NativeChatPickerState
   orcaCommands: NativeChatResumeCommand
   mcpNotice: NativeChatComposerNotice | null
+  commandPanel: React.ReactNode
+  disabled: boolean
 } {
   const {
     structuredTransport,
@@ -49,10 +56,68 @@ export function useNativeChatComposerCommandPicker(
     mode,
     onSwitchToTerminal,
     targetPtyId,
+    readTerminalScreen,
+    readTerminalDraft,
+    isWorking,
     ...pickerArgs
   } = args
   const { agent, terminalTabId } = pickerArgs
+  const panel = useNativeChatClaudeCommandPanel({
+    structuredTransport,
+    targetPtyId,
+    readTerminalScreen,
+    readTerminalDraft,
+    onSwitchToTerminal,
+    disabled: pickerArgs.disabled,
+    isWorking
+  })
+  const { inlineTerminal } = panel
+  const translate = useTranslate()
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
+  const commands = useMemo(() => {
+    if (mode !== undefined || agent !== 'claude' || (!structuredTransport && !inlineTerminal)) {
+      return agentCommands
+    }
+    const nativeCommands = [
+      {
+        name: 'mcp',
+        description: translate(
+          'components.native-chat.commands.mcp',
+          'Manage MCP connections in Chat'
+        ),
+        orcaOwned: true as const
+      },
+      {
+        name: 'config',
+        description: translate('components.native-chat.commands.config', 'Open session settings'),
+        orcaOwned: true as const
+      },
+      {
+        name: 'permissions',
+        description: translate(
+          'components.native-chat.commands.permissions',
+          'Open session permissions'
+        ),
+        orcaOwned: true as const
+      },
+      ...(!structuredTransport
+        ? [
+            {
+              name: 'login',
+              description: translate(
+                'components.native-chat.commands.login',
+                'Open Claude sign-in controls'
+              ),
+              orcaOwned: true as const
+            }
+          ]
+        : [])
+    ]
+    return [
+      ...nativeCommands,
+      ...agentCommands.filter((entry) => !nativeCommands.some(({ name }) => name === entry.name))
+    ]
+  }, [agent, agentCommands, inlineTerminal, mode, structuredTransport, translate])
   const reported = structuredTransport?.sessionCommands
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
@@ -67,9 +132,10 @@ export function useNativeChatComposerCommandPicker(
   )
   const picker = useNativeChatPickerState({
     ...pickerArgs,
+    disabled: panel.disabled,
     ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
-    agentCommands,
+    agentCommands: commands,
     commandAvailable,
     sessionSkills,
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,
@@ -87,8 +153,9 @@ export function useNativeChatComposerCommandPicker(
     setNotice
   })
   const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
-  const mcp = useNativeChatMcpCommand({
+  const mcp = useNativeChatClaudeInteractiveCommand({
     enabled: mode === undefined,
+    inlineTerminal,
     agent,
     terminalTabId,
     draft: pickerArgs.draft,
@@ -124,5 +191,11 @@ export function useNativeChatComposerCommandPicker(
       sideMatches
     ]
   )
-  return { picker, orcaCommands, mcpNotice: mcp.notice }
+  return {
+    picker,
+    orcaCommands,
+    mcpNotice: !structuredTransport && !inlineTerminal ? mcp.notice : null,
+    commandPanel: panel.panelFor(mcp.command, mcp.notice),
+    disabled: panel.disabled
+  }
 }

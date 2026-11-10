@@ -1,6 +1,7 @@
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../shared/agent-session/agent-session-conversation-command'
 
 export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
+  ['agentSession.mcp', 300_000],
   ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
   // The host may start an agent at rest before rewinding it, as it does for a command.
   ['agentSession.rewind', 195_000],
