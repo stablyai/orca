@@ -8,6 +8,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../../../shared/runtime-rpc-envelope'
+import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import type { RpcResponse } from '../../../rpc/core'
@@ -253,6 +254,50 @@ describe('commands about a worker a paired server owns', () => {
 
     expect(retry.ok).toBe(false)
     expect(sent.filter((s) => s.method === 'orchestration.workerStart')).toHaveLength(1)
+  })
+
+  it("retries a failed remote worker with --on as the server's ordinary retry of its Task", async () => {
+    const receipt = await startOnB()
+    const link = record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
+    importRemoteOwnedItem(db, remoteServerPin(server), {
+      conversationId: String(link.conversation_id),
+      sequence: 1,
+      messageId: 'state_1',
+      kind: 'worker_state',
+      payload: JSON.stringify({
+        v: 1,
+        id: 'state_1',
+        homeRunId: receipt.runId,
+        peerRunId: 'run_on_b',
+        dispatch: {
+          id: 'ctx_b1',
+          taskId: receipt.taskId,
+          status: 'failed',
+          workerState: 'failed',
+          lastFailure: null,
+          agent: 'claude'
+        },
+        task: { status: 'failed', result: null },
+        correctedUnobservedPrompt: false,
+        removed: null
+      })
+    })
+    answers['orchestration.workerStart'] = [started('ctx_b2')]
+
+    const retry = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      task: receipt.taskId,
+      retryOf: 'ctx_b1',
+      worktree: 'new-top-level'
+    })
+
+    expect(retry.ok ? null : retry.error).toBeNull()
+    const forwarded = sent.findLast((s) => s.method === 'orchestration.workerStart')!
+    // The server binds --from to the pairing's address at admission.
+    const onServer = WorkerStartParams.safeParse({ ...forwarded.params, from: 'peer' })
+    expect(onServer.error?.issues).toBeUndefined()
+    expect(forwarded.params).toMatchObject({ task: receipt.taskId, retryOf: 'ctx_b1' })
   })
 
   it('frees the Task when the pairing is re-made while its start waits', async () => {

@@ -128,8 +128,10 @@ export async function startRemoteOwnedWorker(
       method: 'orchestration.workerStart',
       params: {
         ...options,
-        spec: task.spec,
-        ...(task.task_title ? { taskTitle: task.task_title } : {}),
+        // A retry names the server's existing Task, whose ordinary retry checks refuse a spec.
+        ...(params.retryOf
+          ? { task: task.id }
+          : { spec: task.spec, ...(task.task_title ? { taskTitle: task.task_title } : {}) }),
         adoptTaskId: task.id
       },
       timeoutMs: budgets.attachDeadlineMs,
