@@ -311,6 +311,96 @@ it('pauses conversion while a direct attach has not indexed its child', async ()
   expect(await live.profileState.history()).toMatchObject({ ok: true })
 })
 
+it('pauses conversion while a registered client start waits for its provider to open', async () => {
+  const live = await liveProfile()
+  expect(await live.host.create({ callerKey: 'client' }, hostTestAttachParams(null))).toMatchObject(
+    { ok: true }
+  )
+  live.host.deps.adapter.dispatch = async () => ({ state: 'accepted' })
+  const sent = await live.host.send({ callerKey: 'client' }, hostTestSendParams('hello'))
+  if (!sent.ok) {
+    throw new Error('the send was refused')
+  }
+  await live.acquired.promise
+  live.acquire.resolve()
+  await live.opening.promise
+  const { runtimeState, conversationDelivery } = live.host.collaboratorsForTests()
+  const start = runtimeState.startFlights.get(HOST_TEST_SESSION)!
+  live.profileState.discovery.resolve()
+  await live.profileState.atIdleGate.promise
+  live.profileState.order.push('owner ended')
+  live.ready.resolve()
+  expect(await start.outcome).toEqual({ ok: true })
+  await live.host.waitForSendSettlement(HOST_TEST_SESSION, sent.value.clientMessageId)
+  await conversationDelivery.loop.wake(HOST_TEST_SESSION)
+  await live.profileState.converted.promise
+  expect(live.profileState.order).toEqual(['waiting', 'owner ended', 'idle', 'sessions'])
+  expect(await live.profileState.history()).toMatchObject({ ok: true })
+})
+
+it('keeps provider work active when its obsolete registered start finishes', async () => {
+  const live = await liveProfile()
+  const { profileState } = live
+  expect(await live.host.create({ callerKey: 'client' }, hostTestAttachParams(null))).toMatchObject(
+    { ok: true }
+  )
+  live.host.deps.adapter.dispatch = async () => ({ state: 'accepted' })
+  const sent = await live.host.send({ callerKey: 'client' }, hostTestSendParams('hello'))
+  if (!sent.ok) {
+    throw new Error('the send was refused')
+  }
+  await live.acquired.promise
+  live.acquire.resolve()
+  await live.opening.promise
+  const { sessions, runtimeState, conversationDelivery } = live.host.collaboratorsForTests()
+  const child = sessions.get(HOST_TEST_SESSION)!.child!
+  const readiness = runtimeState.startupAttempts.readiness(HOST_TEST_SESSION, child)!
+  const start = runtimeState.startFlights.get(HOST_TEST_SESSION)!
+  const identity = {
+    provider: 'codex' as const,
+    threadId: HOST_TEST_THREAD,
+    turnId: 'provider-turn',
+    ordinal: 50
+  }
+  live
+    .events()
+    .appendItem(
+      identity,
+      { kind: 'turn', turnId: 'provider-turn', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await live.host.flushStreamedEvents(HOST_TEST_SESSION)
+  profileState.discovery.resolve()
+  await profileState.atIdleGate.promise
+  start.abort()
+  expect(await start.outcome).toMatchObject({ ok: false, aborted: true })
+  profileState.order.push('obsolete start ended')
+  live.ready.resolve()
+  expect(await readiness.wait()).toBe('ready')
+  await conversationDelivery.loop.wake(HOST_TEST_SESSION)
+  await live.activityReadsSettled()
+  profileState.order.push('owner ended')
+  live
+    .events()
+    .appendItem(
+      identity,
+      { kind: 'turn', turnId: 'provider-turn', state: 'completed', completedAt: 1_800_000_000_100 },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await live.host.flushStreamedEvents(HOST_TEST_SESSION)
+  await live.host.waitForSendSettlement(HOST_TEST_SESSION, sent.value.clientMessageId)
+  await conversationDelivery.loop.wake(HOST_TEST_SESSION)
+  await profileState.converted.promise
+  expect(profileState.order).toEqual([
+    'waiting',
+    'obsolete start ended',
+    'owner ended',
+    'idle',
+    'sessions'
+  ])
+  expect(await profileState.history()).toMatchObject({ ok: true })
+})
+
 it('keeps a real client start and provider turn active across stale exits, then converts with the same ready Never child', async () => {
   const live = await liveProfile()
   const { profileState } = live
