@@ -37,6 +37,7 @@ import {
   type RoutineRecord,
   type TriggerConfig
 } from './store'
+import { MachineSizeInput } from '../machine-size'
 
 export const MAX_PROMPT_CHARS = 20_000
 const MANUAL_RUNS_PER_MINUTE = 10
@@ -71,7 +72,7 @@ const RoutineFields = {
   prompt: z.string().trim().min(1).max(MAX_PROMPT_CHARS),
   postResults: z.enum(['none', 'comment', 'pr']),
   enabled: z.boolean().optional(),
-  machineSize: z.enum(['standard', 'large']).optional(),
+  machineSize: MachineSizeInput.optional(),
   maxRuntimeMinutes: z.number().int().min(5).max(120).optional()
 }
 const CreateBody = z.object(RoutineFields).strict()

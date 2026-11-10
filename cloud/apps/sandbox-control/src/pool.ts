@@ -7,6 +7,7 @@ import type { MachineSize } from './entitlements'
 import { killSwitchOn, type GuardrailConfig } from './guardrails'
 import type { SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, SHARE_PROXY_PORT } from './sandbox-vm-commands'
+import { SANDBOX_VCPUS } from './machine-size'
 
 export type PoolConfig = {
   /** Ready VMs kept per (machine size, region); only `standard` in the default region is pooled. */
@@ -28,7 +29,6 @@ const MAX_HOT_BUILDS = 20
 const MAX_HOT_BUILDS_PER_ACCOUNT = 3
 /** VMs booted per maintainer pass; the cron finishes the rest (a waitUntil pass has ~30 s). */
 const MAX_BOOTS_PER_TICK = 5
-const VCPUS: Record<MachineSize, number> = { standard: 4, large: 8 }
 
 export type PoolDeps = {
   db: D1Database
@@ -36,7 +36,10 @@ export type PoolDeps = {
   now: () => number
   config: {
     environment: string
+    /** The default region's golden image: the pool warms VMs in the default region only. */
     goldenSnapshotId: string
+    /** Every region's golden image; never deleted with a pooled VM. */
+    goldenSnapshots?: Record<string, string>
     defaultRegion: string
     guardrails?: GuardrailConfig
     snapshotExpirationMs?: number
@@ -154,10 +157,11 @@ async function poolTargets(deps: PoolDeps, size: number): Promise<Map<string, nu
          FROM environments e JOIN environment_builds b ON b.id = e.active_build_id
         WHERE e.deleted_at IS NULL AND b.status = 'succeeded' AND b.snapshot_id IS NOT NULL
           AND b.snapshot_deleted_at IS NULL AND json_extract(b.config, '$.machineSize') = ?
-          AND used_at > ?
+          AND b.region = ? AND used_at > ?
         ORDER BY used_at DESC LIMIT ?`
     )
-    .bind(POOLED_SIZE, since, MAX_HOT_BUILDS * 4)
+    // Pooled VMs boot in the default region; a build snapshot from another region cannot boot there.
+    .bind(POOLED_SIZE, deps.config.defaultRegion, since, MAX_HOT_BUILDS * 4)
     .all<{ snapshot_id: string; account_id: string }>()
     .catch(() => ({ results: [] as { snapshot_id: string; account_id: string }[] }))
   const perAccount = new Map<string, number>()
@@ -258,7 +262,7 @@ async function bootPooledVm(deps: PoolDeps, snapshotId: string): Promise<void> {
     const state = await deps.provider.createSandbox({
       name: row.provider_name,
       snapshotId: row.snapshot_id,
-      vcpus: VCPUS[POOLED_SIZE],
+      vcpus: SANDBOX_VCPUS,
       region: row.region,
       timeoutMs: POOL_VM_TIMEOUT_MS,
       ports: [ORCAD_PORT, SHARE_PROXY_PORT],
@@ -290,8 +294,9 @@ export async function deletePooledVm(
   sourceSnapshotId?: string
 ): Promise<void> {
   await deps.provider.deleteSandbox(name)
+  const goldens = new Set([deps.config.goldenSnapshotId, ...Object.values(deps.config.goldenSnapshots ?? {})])
   for (const snapshot of await deps.provider.listSnapshots(name)) {
-    if (snapshot.status !== 'deleted' && snapshot.id !== deps.config.goldenSnapshotId && snapshot.id !== sourceSnapshotId) {
+    if (snapshot.status !== 'deleted' && !goldens.has(snapshot.id) && snapshot.id !== sourceSnapshotId) {
       await deps.provider.deleteSnapshot(snapshot.id)
     }
   }

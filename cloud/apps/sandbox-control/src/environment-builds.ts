@@ -25,6 +25,7 @@ import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } fro
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
 import type { Keyring } from './secrets-crypto'
+import { SANDBOX_VCPUS } from './machine-size'
 
 export const BUILD_DEADLINE_MS = 45 * 60_000
 const STARTING_STUCK_MS = 5 * 60_000
@@ -41,7 +42,6 @@ export const KEPT_BUILDS = 5
 const MAX_LOG_BYTES = 2 * 1024 * 1024
 const LOG_HEAD_BYTES = 256 * 1024
 const LOG_CHUNK = 256 * 1024
-const VCPUS: Record<MachineSize, number> = { standard: 4, large: 8 }
 const RESULT_PATH = '/tmp/orca-build/result.json'
 const ORCAD_ENTRY = '/opt/orca/runtime/orcad/orcad-server.js'
 
@@ -78,6 +78,8 @@ export type BuildRow = {
   finished_at: number | null
   updated_at: number
   generation: number
+  /** Where the build ran; its snapshot only boots there (migration 0040 backfilled iad1). */
+  region: string
   snapshot_deleted_at: number | null
   /** When billing accepted this build's VM time (null: not yet). */
   usage_reported_at: number | null
@@ -114,7 +116,16 @@ export type BuildDeps = {
    * advances whether or not anyone is watching. Absent in tests that tick builds by hand.
    */
   schedule?: (build: { id: string; environmentId: string }) => Promise<void>
-  config: { environment: string; goldenSnapshotId: string; region: string; guardrails?: GuardrailConfig }
+  config: {
+    environment: string
+    /** The default region's golden image: what a new build starts from. */
+    goldenSnapshotId: string
+    /** Every region's golden image (staleness compares a build with its own region's). */
+    goldenSnapshots?: Record<string, string>
+    /** The default region: new builds run here. */
+    region: string
+    guardrails?: GuardrailConfig
+  }
 }
 
 const log = (event: string, fields: Record<string, unknown>) => console.log(JSON.stringify({ event, ...fields }))
@@ -249,12 +260,12 @@ export async function startBuild(
     deps.db
       .prepare(
         `INSERT INTO environment_builds (id, environment_id, account_id, number, status, config, base_snapshot_id,
-           provider_name, created_by, created_at, updated_at)
-         SELECT ?, ?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?
+           region, provider_name, created_by, created_at, updated_at)
+         SELECT ?, ?, ?, ?, 'starting', ?, ?, ?, ?, ?, ?, ?
          WHERE changes() = 1`
       )
       .bind(id, environment.id, environment.account_id, environment.next_build_number, JSON.stringify(config),
-        deps.config.goldenSnapshotId, `orca-${deps.config.environment}-envbuild-${id}`, caller.userId, now, now)
+        deps.config.goldenSnapshotId, deps.config.region, `orca-${deps.config.environment}-envbuild-${id}`, caller.userId, now, now)
   ])
   }
   if (bumped[0]?.meta.changes !== 1) {
@@ -310,8 +321,8 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
   const box = await deps.provider.createSandbox({
     name: row.provider_name,
     snapshotId: row.base_snapshot_id,
-    vcpus: VCPUS[config.machineSize],
-    region: deps.config.region,
+    vcpus: SANDBOX_VCPUS,
+    region: row.region,
     timeoutMs: BUILD_DEADLINE_MS,
     ports: [],
     // Installs reach any registry; repo tokens are claimed per repo, anonymous clones still work.
@@ -455,7 +466,7 @@ async function smokeBoot(deps: BuildDeps, row: BuildRow, snapshotId: string): Pr
       name,
       snapshotId,
       vcpus: 2,
-      region: deps.config.region,
+      region: row.region,
       timeoutMs: 5 * 60_000,
       ports: [ORCAD_PORT],
       networkPolicy: compileNetworkPolicy({ mode: 'allowlist' }),

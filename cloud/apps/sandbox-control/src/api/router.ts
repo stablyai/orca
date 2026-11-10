@@ -53,7 +53,7 @@ const MESSAGES_PER_MINUTE = 30
 const Name = z.string().trim().min(1).max(100)
 const RepoUrl = z.url({ protocol: /^https$/ }).max(2048)
 const Ref = z.string().min(1).max(255)
-const Size = z.enum(['standard', 'large'])
+const Size = MachineSizeInput
 const Region = z.string().regex(/^[a-z]{3}[0-9]$/)
 
 const CreateKeyBody = z
@@ -149,6 +149,7 @@ function messageBucket(caller: ApiCaller): string {
 
 import { wakeSandbox } from '../workspace-lifecycle'
 import { parseWakeWait } from '../wire'
+import { MachineSizeInput } from '../machine-size'
 
 export function isApiPath(pathname: string): boolean {
   return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)

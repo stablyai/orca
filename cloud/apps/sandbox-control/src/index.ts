@@ -52,7 +52,8 @@ import { removeMember } from './member-removal'
 import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
-import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
+import { activeGoldenSnapshots, advanceGoldenImages } from './golden-images'
+import { sandboxRegions, seedRegion } from './regions'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
   BillingUnavailableError,
@@ -493,11 +494,8 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
   if (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID)) {
     return null
   }
-  // The Worker rotates golden images itself (golden-images.ts); the var only seeds the first one.
-  // Preview versions in dev may pin an image under test (shared D1's active image is the live one).
-  const override = env.SANDBOX_ENV !== 'prod' ? env.GOLDEN_SNAPSHOT_OVERRIDE : undefined
-  const goldenSnapshotId = override || (await currentGoldenSnapshotId(env.SANDBOX_DB, env.GOLDEN_SNAPSHOT_ID))
-  if (!goldenSnapshotId) {
+  const regions = await goldenRegions(env)
+  if (!regions) {
     return null
   }
   const provider =
@@ -534,13 +532,41 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
           ? Math.floor(Number(env.SNAPSHOT_EXPIRATION_DAYS)) * 86_400_000
           : undefined,
       environment: env.SANDBOX_ENV,
-      goldenSnapshotId,
-      defaultRegion: env.VERCEL_REGION ?? 'iad1',
+      ...regions,
       egressProxyUrl: env.EGRESS_PROXY_URL,
       sessionDeadlineMs:
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
+}
+
+/**
+ * Each region's golden image (golden-images.ts rotates one per region; the GOLDEN_SNAPSHOT_ID var only
+ * seeds its own region) and the regions new sandboxes may use. The default region is the first of
+ * VERCEL_REGION and its fallbacks that has an image: a freshly added default region serves nothing
+ * until its first image passes smoke, and creates keep landing in the fallback meanwhile.
+ */
+async function goldenRegions(
+  env: Env
+): Promise<Pick<LifecycleDeps['config'], 'goldenSnapshotId' | 'goldenSnapshots' | 'defaultRegion' | 'fallbackRegions'> | null> {
+  const wanted = sandboxRegions(env)
+  const goldens = await activeGoldenSnapshots(env.SANDBOX_DB)
+  const seeded = seedRegion(env)
+  if (env.GOLDEN_SNAPSHOT_ID && !goldens[seeded]) {
+    goldens[seeded] = env.GOLDEN_SNAPSHOT_ID
+  }
+  const usable = wanted.filter((region) => goldens[region])
+  const defaultRegion = usable[0]
+  if (!defaultRegion) {
+    return null
+  }
+  // Preview versions in dev may pin an image under test (shared D1's active image is the live one);
+  // the pin replaces the default region's image, so it must be a snapshot taken in that region.
+  const override = env.SANDBOX_ENV !== 'prod' ? env.GOLDEN_SNAPSHOT_OVERRIDE : undefined
+  if (override) {
+    goldens[defaultRegion] = override
+  }
+  return { goldenSnapshotId: goldens[defaultRegion]!, goldenSnapshots: goldens, defaultRegion, fallbackRegions: usable.slice(1) }
 }
 
 /** Arms the build's runner (one Durable Object per build); a no-op where the binding is absent. */
@@ -571,6 +597,7 @@ function buildDeps(life: LifecycleDeps, deps: Deps, env?: Env): BuildDeps {
     config: {
       environment: life.config.environment,
       goldenSnapshotId: life.config.goldenSnapshotId,
+      goldenSnapshots: life.config.goldenSnapshots,
       region: life.config.defaultRegion,
       guardrails: life.config.guardrails
     }
@@ -598,34 +625,49 @@ async function githubRepoIsPublic(repoUrl: string): Promise<boolean> {
   }
 }
 
-/** Keeps a smoke-tested golden image current: refresh before expiry, rebuild on a new release. */
+/**
+ * Keeps a smoke-tested golden image current in every sandbox region (default and fallbacks): refresh
+ * before expiry, rebuild on a new release or VM-touching commit. Regions advance independently.
+ */
 async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
   if (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
     return
   }
   const days = Number(env.GOLDEN_SNAPSHOT_EXPIRATION_DAYS ?? '0')
-  const tick = await advanceGoldenImages({
-    db: env.SANDBOX_DB,
-    provider: createVercelSandboxApi({
-      token: env.VERCEL_TOKEN,
-      teamId: env.VERCEL_TEAM_ID,
-      projectId: env.VERCEL_PROJECT_ID,
-      baseUrl: env.VERCEL_API_BASE
-    }),
-    now: Date.now,
-    config: {
-      environment: env.SANDBOX_ENV,
-      region: env.VERCEL_REGION ?? 'iad1',
-      expirationMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : 0,
-      source: env.GOLDEN_IMAGE_SOURCE,
-      github: githubMinter(env)?.sourceRequest,
-      seedSnapshotId: env.GOLDEN_SNAPSHOT_ID,
-      refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
-    }
+  const provider = createVercelSandboxApi({
+    token: env.VERCEL_TOKEN,
+    teamId: env.VERCEL_TEAM_ID,
+    projectId: env.VERCEL_PROJECT_ID,
+    baseUrl: env.VERCEL_API_BASE
   })
-  if (tick !== 'idle') {
-    console.log(JSON.stringify({ event: 'golden_image_tick', tick }))
-  }
+  const github = githubMinter(env)?.sourceRequest
+  const seeded = seedRegion(env)
+  await Promise.all(
+    sandboxRegions(env).map(async (region) => {
+      try {
+        const tick = await advanceGoldenImages({
+          db: env.SANDBOX_DB,
+          provider,
+          now: Date.now,
+          config: {
+            environment: env.SANDBOX_ENV,
+            region,
+            expirationMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : 0,
+            source: env.GOLDEN_IMAGE_SOURCE,
+            github,
+            seedSnapshotId: region === seeded ? env.GOLDEN_SNAPSHOT_ID : undefined,
+            refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
+          }
+        })
+        if (tick !== 'idle') {
+          console.log(JSON.stringify({ event: 'golden_image_tick', region, tick }))
+        }
+      } catch (error) {
+        // One region's trouble must not stall another's rotation.
+        console.log(JSON.stringify({ event: 'golden_image_tick_failed', region, error: String(error).slice(0, 200) }))
+      }
+    })
+  )
 }
 
 /** `on` = every account; `accounts:<id>,<id>` = staged rollout to those accounts; else off. */

@@ -24,7 +24,8 @@
   "vars": {
     "SANDBOX_ENV": "local",
     "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
-    "VERCEL_REGION": "iad1",
+    "VERCEL_REGION": "pdx1",
+    "VERCEL_FALLBACK_REGIONS": "iad1",
     // Local dev never calls billing; deployed configs set BILLING_URL and drop this.
     "ENTITLEMENTS_MODE": "stub"
   }

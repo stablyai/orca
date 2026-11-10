@@ -25,7 +25,7 @@ describe('sandbox control plane lifecycle', () => {
     expect(box!.params).toMatchObject({
       name: `orca-test-${ready.sandbox.id}`,
       snapshotId: GOLDEN,
-      vcpus: 4,
+      vcpus: 8,
       ports: [6768, 6769],
       tags: { orcaSandbox: ready.sandbox.id, orcaEnv: 'test' }
     })

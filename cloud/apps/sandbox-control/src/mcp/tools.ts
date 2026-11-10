@@ -136,7 +136,7 @@ export const TOOLS = [
         projectId: Id('project').optional().describe('Project to start from (see list_projects). Supplies the repo and sandbox defaults.'),
         repoUrl: z.url({ protocol: /^https$/ }).max(2048).optional().describe('https Git URL to clone when not using a project, e.g. https://github.com/acme/app.'),
         ref: z.string().min(1).max(255).optional().describe('Branch, tag or commit to check out (default: the repo default branch).'),
-        machineSize: z.enum(['standard', 'large']).optional().describe('Sandbox size: standard (4 vCPU · 8 GB) or large (8 vCPU · 16 GB, uses sandbox hours at 2× the rate).'),
+        machineSize: z.enum(['standard', 'large']).optional().describe('Deprecated: every sandbox is Standard (8 vCPU · 16 GB); `large` is accepted and means the same.'),
         message: z.string().min(1).max(32_000).optional().describe('First task for the agent in the new workspace.'),
         agent: Agent.optional()
       })

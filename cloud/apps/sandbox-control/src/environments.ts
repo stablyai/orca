@@ -6,6 +6,7 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { parseGitHubRepo } from './github-app'
 import { normalizeRepo } from './secrets'
+import { MachineSizeInput } from './machine-size'
 
 export const MAX_REPOS = 50
 export const MAX_INSTALL_SCRIPT_CHARS = 20_000
@@ -60,7 +61,7 @@ const ConfigFields = {
   repos: z.array(RepoInput).max(MAX_REPOS),
   installScript: z.string().max(MAX_INSTALL_SCRIPT_CHARS),
   envVarNames: z.array(EnvVarName).max(MAX_ENV_VAR_NAMES),
-  machineSize: z.enum(['standard', 'large'])
+  machineSize: MachineSizeInput
 }
 
 export const CreateEnvironmentSchema = z
@@ -243,11 +244,14 @@ export type BootSource = {
   /** Directory under /vercel/sandbox/repos holding this workspace's repo, if the build has it. */
   repoDir: string | null
   machineSize: MachineSize
+  /** The build's snapshot only boots here, so the workspace is created here too. */
+  region: string
 }
 
 type BootBuildRow = {
   id: string
   environment_id: string
+  region: string
   status: string
   snapshot_id: string | null
   snapshot_deleted_at: number | null
@@ -273,7 +277,7 @@ function bootFrom(build: BootBuildRow, repoUrl: string | null | undefined): Boot
   } catch {
     // Default size.
   }
-  return { snapshotId: build.snapshot_id, environmentId: build.environment_id, buildId: build.id, repoDir: dir, machineSize }
+  return { snapshotId: build.snapshot_id, environmentId: build.environment_id, buildId: build.id, repoDir: dir, machineSize, region: build.region }
 }
 
 /**
