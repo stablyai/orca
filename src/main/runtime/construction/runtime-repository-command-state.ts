@@ -1,4 +1,3 @@
-import type { RuntimeGitTarget } from '../integrations/git/runtime-git-command-target'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
@@ -24,11 +23,8 @@ import {
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
-  protected abstract resolveRuntimeModelDiscoveryTarget(selector: string): Promise<RuntimeGitTarget>
   protected readonly gitCommands = new RuntimeGitCommands({
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    resolveRuntimeModelDiscoveryTarget: (selector) =>
-      this.resolveRuntimeModelDiscoveryTarget(selector),
     getRuntimeSettings: () => this.requireStore().getSettings(),
     getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment(),
     // Override the resolver's one-second linked-issue cache so template generation sees link/unlink immediately.

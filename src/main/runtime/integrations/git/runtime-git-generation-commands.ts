@@ -1,4 +1,3 @@
-import { isProjectRuntimeRepairRefusal } from '../../../../shared/project-runtime-repair-message'
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
@@ -238,16 +237,7 @@ export class RuntimeGitGenerationCommands {
     agentId: string,
     settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
   ): Promise<DiscoverCommitMessageModelsResult> {
-    let target: Awaited<ReturnType<RuntimeGitCommandHost['resolveRuntimeGitTarget']>>
-    try {
-      target = await (this.host.resolveRuntimeModelDiscoveryTarget?.(worktreeSelector) ??
-        this.host.resolveRuntimeGitTarget(worktreeSelector))
-    } catch (error) {
-      if (isProjectRuntimeRepairRefusal(error)) {
-        return { success: false, error: error.message }
-      }
-      throw error
-    }
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const typedAgentId = agentId as TuiAgent
     const agentCommandOverride =
       settingsOverride?.agentCmdOverrides?.[typedAgentId] ??

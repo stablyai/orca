@@ -1,4 +1,3 @@
-import { AgentPickerCatalogDemand } from './agent-picker-catalog-demand'
 import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
@@ -34,7 +33,6 @@ export function AgentLaunchPickerMenu({
   mode,
   value,
   draftForEntry,
-  catalogDemand,
   runLaunch,
   entries,
   hideSearch,
@@ -54,7 +52,6 @@ export function AgentLaunchPickerMenu({
   mode?: 'launch' | 'select'
   value?: AgentPickerDraft
   draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
-  catalogDemand?: AgentPickerInventorySource['observeSurface']
   runLaunch: AgentPickerMenuLaunch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
@@ -97,19 +94,6 @@ export function AgentLaunchPickerMenu({
       mode
     )
   }, [entries, draftScope, mode, setupDisabled])
-  useEffect(() => {
-    if (setupDisabled) {
-      return
-    }
-    const stops = entries.map((entry) =>
-      catalogDemand?.(
-        entry.agent,
-        (value?.agent === entry.agent ? value.surface : draftForEntry?.(entry)?.surface) ??
-          entry.defaultSurface
-      )
-    )
-    return () => stops.forEach((stop) => stop?.())
-  }, [entries, value, draftForEntry, catalogDemand, setupDisabled])
   const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
   const [searchFocused, setSearchFocused] = useState(false)
@@ -121,16 +105,7 @@ export function AgentLaunchPickerMenu({
   } | null>(null)
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
-  const setups = setupDisabled
-    ? []
-    : searchAgentPickerSetups(
-        entries,
-        query,
-        8,
-        (entry) =>
-          (value?.agent === entry.agent ? value.surface : draftForEntry?.(entry)?.surface) ??
-          entry.defaultSurface
-      )
+  const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
     words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
@@ -150,9 +125,6 @@ export function AgentLaunchPickerMenu({
     ) {
       setups.push({
         entry,
-        surface:
-          (value?.agent === entry.agent ? value.surface : draftForEntry?.(entry)?.surface) ??
-          entry.defaultSurface,
         model: {
           id: activeSetup.preset.model,
           label: activeSetup.label,
@@ -178,133 +150,127 @@ export function AgentLaunchPickerMenu({
     showBlankTerminal || firstEntry ? undefined : setups.find((setup) => enabled(setup.entry))
   const showSearchDefault = searchFocused && query.trim().length > 0
   return (
-    <AgentPickerCatalogDemand.Provider value={catalogDemand}>
-      <div ref={root} data-agent-launch-picker="true">
-        {!hideSearch ? (
-          <div className="px-1 pt-0.5 pb-1.5">
-            <Input
-              ref={searchInputRef}
-              value={query}
-              autoFocus={!searchInputRef}
-              onBlur={() => setSearchFocused(false)}
-              onFocus={(event) => {
-                setSearchFocused(true)
-                // Why: a seeded query must keep the caret after the typed key.
-                const end = event.currentTarget.value.length
-                event.currentTarget.setSelectionRange(end, end)
-              }}
-              placeholder={
-                setupDisabled
-                  ? t('agentPicker.searchAgents', 'Search agents…')
-                  : t('agentPicker.search', 'Search, e.g. Opus 5.5…')
+    <div ref={root} data-agent-launch-picker="true">
+      {!hideSearch ? (
+        <div className="px-1 pt-0.5 pb-1.5">
+          <Input
+            ref={searchInputRef}
+            value={query}
+            autoFocus={!searchInputRef}
+            onBlur={() => setSearchFocused(false)}
+            onFocus={(event) => {
+              setSearchFocused(true)
+              // Why: a seeded query must keep the caret after the typed key.
+              const end = event.currentTarget.value.length
+              event.currentTarget.setSelectionRange(end, end)
+            }}
+            placeholder={
+              setupDisabled
+                ? t('agentPicker.searchAgents', 'Search agents…')
+                : t('agentPicker.search', 'Search, e.g. Opus 5.5…')
+            }
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                return
               }
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  return
+              event.stopPropagation()
+              if (event.key === 'Enter' || event.key === 'ArrowDown') {
+                event.preventDefault()
+                const results =
+                  event.key === 'Enter'
+                    ? '[data-agent-picker-agent-results]'
+                    : '[data-agent-picker-results]'
+                const first = root.current?.querySelector<HTMLElement>(
+                  `${results} [role="menuitem"]:not([data-disabled])`
+                )
+                if (event.key === 'Enter') {
+                  first?.click()
+                } else {
+                  first?.focus()
                 }
-                event.stopPropagation()
-                if (event.key === 'Enter' || event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  const results =
-                    event.key === 'Enter'
-                      ? '[data-agent-picker-agent-results]'
-                      : '[data-agent-picker-results]'
-                  const first = root.current?.querySelector<HTMLElement>(
-                    `${results} [role="menuitem"]:not([data-disabled])`
-                  )
-                  if (event.key === 'Enter') {
-                    first?.click()
-                  } else {
-                    first?.focus()
-                  }
-                }
-              }}
-            />
-          </div>
-        ) : null}
-        <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
-          {leadingItems}
-          <div data-agent-picker-agent-results>
-            {showBlankTerminal ? (
-              <AgentDefaultContextMenu
-                isDefault={defaultAgent === 'blank'}
-                onSetDefault={onSetDefault ? () => onSetDefault('blank') : undefined}
+              }
+            }}
+          />
+        </div>
+      ) : null}
+      <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
+        {leadingItems}
+        <div data-agent-picker-agent-results>
+          {showBlankTerminal ? (
+            <AgentDefaultContextMenu
+              isDefault={defaultAgent === 'blank'}
+              onSetDefault={onSetDefault ? () => onSetDefault('blank') : undefined}
+            >
+              <DropdownMenuItem
+                variant="launch"
+                className="h-9"
+                disabled={disabled}
+                data-search-default={showSearchDefault || undefined}
+                onSelect={onSelectBlankTerminal}
               >
-                <DropdownMenuItem
-                  variant="launch"
-                  className="h-9"
-                  disabled={disabled}
-                  data-search-default={showSearchDefault || undefined}
-                  onSelect={onSelectBlankTerminal}
-                >
-                  <Terminal className="size-4" />
-                  {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
-                </DropdownMenuItem>
-              </AgentDefaultContextMenu>
-            ) : null}
-            {visible.map((entry) => {
-              const source = draftForEntry?.(entry)
-              return (
-                <AgentPickerMenuRow
-                  key={entry.agent}
-                  draftScope={draftScope}
-                  entry={entry}
-                  mode={mode}
-                  searchDefault={showSearchDefault && entry === firstEntry}
-                  source={source}
-                  selected={value?.agent === entry.agent ? value : undefined}
-                  setupDisabled={setupDisabled}
-                  openSetup={openSetup}
-                  onSetupOpenChange={setActiveSetup}
-                  disabled={disabled}
-                  terminalBlocked={terminalBlocked}
-                  runLaunch={runLaunch}
-                  onSelectAgent={onSelectAgent}
-                  isDefault={defaultAgent === entry.agent}
-                  onSetDefault={onSetDefault}
-                  shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
-                />
-              )
-            })}
-            {setups.map((setup) => {
-              const source = draftForEntry?.(setup.entry)
-              return (
-                <AgentPickerMenuRow
-                  key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-                  draftScope={draftScope}
-                  draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-                  initialSurface={setup.surface}
-                  initialModel={setup.model.id}
-                  initialEffort={setup.choices.options?.effort}
-                  entry={setup.entry}
-                  mode={mode}
-                  setupDisabled={setupDisabled}
-                  openSetup={openSetup}
-                  onSetupOpenChange={setActiveSetup}
-                  label={setup.label}
-                  searchDefault={showSearchDefault && setup === firstSetup}
-                  source={source}
-                  selected={value?.agent === setup.entry.agent ? value : undefined}
-                  onSelectAgent={onSelectAgent}
-                  disabled={disabled}
-                  terminalBlocked={terminalBlocked}
-                  runLaunch={runLaunch}
-                />
-              )
-            })}
-            {!showBlankTerminal && !visible.length && !setups.length ? (
-              <DropdownMenuItem disabled>
-                {t(
-                  'auto.components.agent.AgentCombobox.579c768bde',
-                  'No agents match your search.'
-                )}
+                <Terminal className="size-4" />
+                {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
               </DropdownMenuItem>
-            ) : null}
-          </div>
+            </AgentDefaultContextMenu>
+          ) : null}
+          {visible.map((entry) => {
+            const source = draftForEntry?.(entry)
+            return (
+              <AgentPickerMenuRow
+                key={entry.agent}
+                draftScope={draftScope}
+                entry={entry}
+                mode={mode}
+                searchDefault={showSearchDefault && entry === firstEntry}
+                source={source}
+                selected={value?.agent === entry.agent ? value : undefined}
+                setupDisabled={setupDisabled}
+                openSetup={openSetup}
+                onSetupOpenChange={setActiveSetup}
+                disabled={disabled}
+                terminalBlocked={terminalBlocked}
+                runLaunch={runLaunch}
+                onSelectAgent={onSelectAgent}
+                isDefault={defaultAgent === entry.agent}
+                onSetDefault={onSetDefault}
+                shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+              />
+            )
+          })}
+          {setups.map((setup) => {
+            const source = draftForEntry?.(setup.entry)
+            return (
+              <AgentPickerMenuRow
+                key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                draftScope={draftScope}
+                draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                initialModel={setup.model.id}
+                initialEffort={setup.choices.options?.effort}
+                entry={setup.entry}
+                mode={mode}
+                setupDisabled={setupDisabled}
+                openSetup={openSetup}
+                onSetupOpenChange={setActiveSetup}
+                label={setup.label}
+                searchDefault={showSearchDefault && setup === firstSetup}
+                source={source}
+                selected={value?.agent === setup.entry.agent ? value : undefined}
+                onSelectAgent={onSelectAgent}
+                disabled={disabled}
+                terminalBlocked={terminalBlocked}
+                runLaunch={runLaunch}
+              />
+            )
+          })}
+          {!showBlankTerminal && !visible.length && !setups.length ? (
+            <DropdownMenuItem disabled>
+              {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
+            </DropdownMenuItem>
+          ) : null}
         </div>
       </div>
-    </AgentPickerCatalogDemand.Provider>
+    </div>
   )
 }
 
@@ -316,7 +282,5 @@ export function SubscribedAgentLaunchPickerMenu({
   inventory: AgentPickerInventorySource
 }) {
   const entries = useAgentPickerInventoryEntries(inventory)
-  return (
-    <AgentLaunchPickerMenu {...props} entries={entries} catalogDemand={inventory.observeSurface} />
-  )
+  return <AgentLaunchPickerMenu {...props} entries={entries} />
 }

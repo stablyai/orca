@@ -104,7 +104,7 @@ export function AgentLaunchChoiceEditor({
       <div className="space-y-2">
         <AgentChoiceFields
           agent={agent}
-          modelMenu={modelMenu}
+          modelMenu={agent === 'antigravity' ? undefined : modelMenu}
           value={choices}
           disabled={pending}
           layout="rows"

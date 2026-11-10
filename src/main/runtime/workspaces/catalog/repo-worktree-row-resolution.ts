@@ -109,7 +109,7 @@ export function listStoredWorktreeRowsForRepo(
 export type RepoWorktreeRowsScan = { ok: boolean; worktrees: GitWorktreeInfo[] }
 
 /** The scan half of `resolveRepoWorktreeRows`: slow, and the only part that awaits. */
-export async function readRepoWorktreeRowsScan(
+export async function scanRepoWorktreeRows(
   deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo' | 'getCachedSuccessfulScan'>,
   repo: Repo,
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
@@ -130,21 +130,10 @@ export async function readRepoWorktreeRowsScan(
       listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount)
   }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
-  return { ok: scan.ok, worktrees: gitWorktrees }
-}
-
-/** Catalog maintenance belongs to launch/listing owners, not read-only inventory. */
-export async function scanRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo' | 'getCachedSuccessfulScan'>,
-  repo: Repo,
-  projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
-  repoOwnerCount?: number
-): Promise<RepoWorktreeRowsScan> {
-  const scan = await readRepoWorktreeRowsScan(deps, repo, projectRuntimeByRepoId, repoOwnerCount)
   if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(deps.store, repo, scan.worktrees)
+    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
   }
-  return scan
+  return { ok: scan.ok, worktrees: gitWorktrees }
 }
 
 /** The join half: a repo's rows from a scan and the metadata as it is now. Synchronous. */

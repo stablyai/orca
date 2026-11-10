@@ -1,6 +1,7 @@
-import { agentPickerCatalogAuthoritative } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
-import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
-import { agentPickerModelMenu } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
+import {
+  agentPickerModelMenu,
+  agentPickerUsesComposerModelMenu
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import {
   TEXT_ACTION_DEFAULT_MODEL,
   textActionArgumentsOwnEffort
@@ -93,12 +94,11 @@ export function agentLaunchSetupOptionRows(
       argumentsOwnedRow('effort', options[0]?.label ?? 'Reasoning effort', 'thought_level', t)
     ]
   }
-  const view = agentPickerCatalogView(entry, draft.surface)
   const effort = agentPickerModelMenu(entry, draft.surface, {
     ...(currentModel ? { model: currentModel } : {}),
     ...argumentsView.choices.options
   }).descriptors.find((row) => row.id === 'effort')
-  const sharedEffort = !entry.textGeneration ? effort : undefined
+  const sharedEffort = agentPickerUsesComposerModelMenu(entry, draft.surface) ? effort : undefined
   const rows: SessionOptionDescriptor[] = options
     .filter((option) => !sharedEffort || option.id !== 'effort')
     .map((option) => {
@@ -123,7 +123,7 @@ export function agentLaunchSetupOptionRows(
       const valueKnown =
         current !== undefined ||
         (option.id === 'serviceTier' &&
-          view.catalog.origin !== 'unknown' &&
+          entry.catalog.origin !== 'unknown' &&
           Boolean(liveModel?.serviceTiers?.length))
       return {
         id: option.id,
@@ -265,8 +265,7 @@ export function agentLaunchSetupCatalogState(
                         agent: entry.label
                       })
                     : null
-  const canSearch = hasModels && agentPickerCatalogAuthoritative(entry)
-  return { hasModels, catalogPending, catalogMessage, canSearch }
+  return { hasModels, catalogPending, catalogMessage }
 }
 
 /** Visible model rows, plus the model the list starts on. */

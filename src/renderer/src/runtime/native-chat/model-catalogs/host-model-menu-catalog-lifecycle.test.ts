@@ -79,7 +79,7 @@ it('preserves scoped retirement across owner handoff and rejected reopen without
       expect(successor).not.toBe(a)
       expect(successor.snapshot.answer).toEqual(retired)
       mocks.call.mockRejectedValueOnce(new Error('reopen offline'))
-      await successor.read(false, undefined, new AbortController().signal)
+      await successor.read(undefined, new AbortController().signal)
       expect(successor.snapshot.answer).toEqual(retired)
       recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other-new'))
       expect(successor.snapshot.answer).toEqual(retired)
@@ -114,7 +114,7 @@ it.each([
     const owner = hostModelMenuCatalog(scope)
     const stop = owner.subscribe(() => {})
     mocks.call.mockResolvedValueOnce(answer)
-    expect(await owner.read(false, undefined, new AbortController().signal)).toEqual(answer)
+    expect(await owner.read(undefined, new AbortController().signal)).toEqual(answer)
     expect(owner.snapshot.answer).toEqual(answer)
     const read = () =>
       readHostModelCatalogSnapshot(target, 'codex', {
@@ -132,7 +132,7 @@ it.each([
     const detach = successor.subscribe(() => {})
     expect(successor).not.toBe(owner)
     mocks.call.mockRejectedValueOnce(new Error('reopen offline'))
-    expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(answer)
+    expect(await successor.read(undefined, new AbortController().signal)).toEqual(answer)
     recordHostModelCatalogSnapshot(target, 'codex', 'id:sibling', catalog('sibling'))
     expect(successor.snapshot.answer).toEqual(answer)
     expect(
@@ -145,10 +145,10 @@ it.each([
     mocks.call
       .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
       .mockRejectedValueOnce(new Error('refresh offline'))
-    expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(answer)
+    expect(await successor.read(undefined, new AbortController().signal)).toEqual(answer)
     expect(read()).toEqual(answer)
     mocks.call.mockResolvedValueOnce(catalog('replacement'))
-    await successor.read(false, undefined, new AbortController().signal)
+    await successor.read(undefined, new AbortController().signal)
     expect(successor.snapshot.answer).toMatchObject({ models: [{ id: 'replacement' }] })
     forgetHostModelCatalogSnapshots(target)
     expect(successor.snapshot.answer).toBeUndefined()

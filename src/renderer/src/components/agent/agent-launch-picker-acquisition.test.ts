@@ -1,6 +1,5 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import {
-  createAgentPickerInventorySource,
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
 } from './agent-launch-picker-acquisition'
@@ -110,50 +109,6 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
     ])
   stopReopened()
   expect(currentAgentPickerAcquisition('closed-catalog')).toBeUndefined()
-})
-
-it('admits independent protocol jobs into the existing bounded queue and preserves both views', async () => {
-  const entry: AgentPickerEntry = {
-    ...codex,
-    agent: 'antigravity',
-    surfaces: ['chat', 'terminal'],
-    defaultSurface: 'chat'
-  }
-  const acp = Promise.withResolvers<AgentPickerEntry['catalog']>()
-  const cli = Promise.withResolvers<AgentPickerEntry['catalog']>()
-  const sources: string[] = []
-  let entries: AgentPickerEntry[] = []
-  const reads = {
-    catalog: (_entry: AgentPickerEntry, _wait: boolean, source = 'structured') => {
-      sources.push(source)
-      return source === 'cli' ? cli.promise : acp.promise
-    },
-    support: async () => undefined
-  }
-  const inventory = createAgentPickerInventorySource([entry])
-  const observer = {
-    usesSource: inventory.usesSource,
-    subscribeDemand: inventory.subscribeDemand,
-    selected: () => entry.agent,
-    publish: (next: AgentPickerEntry[]) => {
-      entries = next
-    }
-  }
-  const stop = observeAgentPickerAcquisition('two-protocols', [entry], reads, observer)
-  expect(sources).toEqual(['structured'])
-  stop()
-  const reopen = observeAgentPickerAcquisition('two-protocols', [entry], reads, observer)
-  expect(sources).toEqual(['structured'])
-  const stopTerminal = inventory.observeSurface?.(entry.agent, 'terminal')
-  expect(sources).toEqual(['structured', 'cli'])
-  cli.resolve({ origin: 'probe', fetchedAt: 1, models: [model('variant-low')] })
-  await expect.poll(() => entries[0].sourceCatalogs?.cli?.catalogRead).toBe('settled')
-  expect(entries[0].catalogRead).toBe('pending')
-  acp.resolve({ origin: 'probe', fetchedAt: 1, models: [model('base')] })
-  await expect.poll(() => entries[0].catalogRead).toBe('settled')
-  expect(entries[0].sourceCatalogs?.cli?.catalog).toMatchObject({ models: [{ id: 'variant-low' }] })
-  stopTerminal?.()
-  reopen()
 })
 
 it('waits again only when a wait outlasted its budget, then stops once the listing has ended', async () => {

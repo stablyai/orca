@@ -1,5 +1,3 @@
-import { modelCatalogSource } from '../../../../../../shared/agent-session/options/model-catalog-source'
-import { cliModelMenuScope } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
 import { recomputeOn } from '@/lib/recompute-on'
 import type { ComponentProps } from 'react'
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
@@ -41,16 +39,14 @@ export function HostAgentLaunchChoiceEditor({
       detectionTarget.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null
     )
   )
-  const source = modelCatalogSource(props.agent, 'terminal')
   const registered = agents ? agents.some(({ agent }) => agent === props.agent) : true
   const capabilities =
     detectionTarget.kind === 'runtime'
       ? lastVerifiedRuntimeStatus(status)?.capabilities
       : readLocalRuntimeCapabilitiesOrUnknown()
   const eligible = modelMenuUsesHostCatalog({
-    nativeRuntime:
-      detectionTarget.kind !== 'ssh' && !(source === 'cli' && detectionTarget.kind === 'runtime'),
-    registered: source === 'cli' || registered,
+    nativeRuntime: detectionTarget.kind !== 'ssh',
+    registered,
     commandOverride,
     serverCommandOverride: commandOverride,
     paired: detectionTarget.kind === 'runtime',
@@ -67,19 +63,10 @@ export function HostAgentLaunchChoiceEditor({
     <AgentLaunchChoiceEditor
       {...props}
       catalogSource={
-        eligible
+        eligible && props.agent !== 'antigravity'
           ? {
-              source,
-              scope:
-                source === 'cli'
-                  ? cliModelMenuScope(
-                      { target, worktreeId: undefined, worktreePath: '' },
-                      props.agent,
-                      commandOverride ?? ''
-                    )
-                  : { target, agent: props.agent },
+              scope: { target, agent: props.agent },
               coherentCatalog:
-                source === 'cli' ||
                 capabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
             }
           : undefined

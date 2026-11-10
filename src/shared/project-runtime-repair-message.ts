@@ -42,12 +42,3 @@ export function agentLaunchRepairRefusal(repair: ProjectExecutionRuntimeRepair):
       : ''
   return `No agent was started. ${projectRuntimeRepairSentence(repair, english)}${byDefault}`
 }
-
-/** Legacy Git refuses with text; terminal launch also supplies the typed refusal code. */
-export function isProjectRuntimeRepairRefusal(error: unknown): error is Error {
-  return (
-    error instanceof Error &&
-    (('code' in error && error.code === PROJECT_RUNTIME_REPAIR_REQUIRED_CODE) ||
-      error.message.startsWith('Project runtime requires repair before git execution:'))
-  )
-}

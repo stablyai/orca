@@ -2,10 +2,7 @@ import { useCallback, useMemo, useState, type ComponentProps } from 'react'
 import { useAppStore } from '@/store/index'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/agent-launch-picker-drafts'
-import {
-  useAgentLaunchPickerInventorySource,
-  useAgentPickerInventoryEntries
-} from '@/components/agent/use-agent-launch-picker-inventory'
+import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import {
   buildAgentLaunchRouteInput,
@@ -133,13 +130,12 @@ export function AutomationAgentLaunchPicker({
     ]
   )
 
-  const inventory = useAgentLaunchPickerInventorySource(
+  const observed = useAgentLaunchPickerInventory(
     workspace.worktreeId,
     model,
     modern && menuOpen,
     catalogAgent ?? draft.agentId
   )
-  const observed = useAgentPickerInventoryEntries(inventory)
   const { entries, draftForEntry } = useAutomationAgentPickerEntries(
     observed,
     state,
@@ -161,7 +157,6 @@ export function AutomationAgentLaunchPicker({
       <AgentLaunchPicker
         model={model}
         entries={entries}
-        catalogDemand={inventory.observeSurface}
         agent={draft.agentId}
         draftScope={scope}
         triggerLabel={

@@ -1,4 +1,3 @@
-import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
 import {
   agentPickerCatalogAuthoritative,
   type AgentPickerRetainedSetup
@@ -20,31 +19,30 @@ export function retireAgentPickerSetups(
           entry.rows[0]?.executionHostId ?? 'local',
           entry.agent
         ])
-  const entriesByKey = new Map(entries.map((entry) => [entryKey(entry), entry]))
-  const memberships = new Map<AgentPickerEntry['catalog'], Map<string, Set<string> | undefined>>()
+  const membership = new Map(
+    entries.map((entry) => [
+      entryKey(entry),
+      agentPickerCatalogAuthoritative(entry)
+        ? new Map(
+            entry.catalog.models.map((model) => [
+              model.id,
+              model.effortsKnown === false
+                ? undefined
+                : new Set(model.efforts.map((effort) => effort.value))
+            ])
+          )
+        : undefined
+    ])
+  )
   const retire = (
     drafts: Map<string, AgentPickerRetainedSetup>,
     currentKey?: string,
     currentOwner?: { workspaceId: string; executionHostId: string }
   ) => {
     for (const [key, retained] of drafts) {
-      const entry = entriesByKey.get(
+      const models = membership.get(
         currentKey ?? JSON.stringify([retained.target?.key, retained.agent])
       )
-      const view = entry && agentPickerCatalogView(entry, retained.draft.surface)
-      const catalog = view && agentPickerCatalogAuthoritative(view) ? view.catalog : undefined
-      let models = catalog && memberships.get(catalog)
-      if (!models && catalog) {
-        models = new Map(
-          catalog.models.map((model) => [
-            model.id,
-            model.effortsKnown === false
-              ? undefined
-              : new Set(model.efforts.map((effort) => effort.value))
-          ])
-        )
-        memberships.set(catalog, models)
-      }
       // Accepted relocation owns the slot now; an obsolete address cannot retire its options.
       const target =
         retained.target && currentOwner

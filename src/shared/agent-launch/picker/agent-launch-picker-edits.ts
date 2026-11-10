@@ -1,6 +1,3 @@
-import { modelCatalogChoiceEdit } from '../../agent-session/options/model-catalog-source'
-import { agentPickerModels } from './agent-launch-picker-catalog'
-import { agentPickerCatalogSource } from './agent-launch-picker-source'
 import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
 import { reconcileAgentChoiceArgsDetailed } from '../choices/agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from '../choices/agent-launch-profile'
@@ -176,12 +173,7 @@ export function applyAgentPickerEdit(
   }
   const patch: AgentChoicePatch =
     edit.kind === 'choice'
-      ? modelCatalogChoiceEdit(
-          agentPickerCatalogSource(entry, draft.surface),
-          agentPickerModels(entry, draft.surface),
-          agentPickerEffectiveChoices(entry, draft).model,
-          edit.patch
-        )
+      ? edit.patch
       : edit.kind === 'permission'
         ? { permissionMode: edit.value }
         : edit.kind === 'speed'

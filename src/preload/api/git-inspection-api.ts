@@ -124,10 +124,6 @@ export type GitInspectionApi = {
     connectionId?: string
     wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
-  discoverTerminalModels: (args: {
-    agentId: string
-    worktree?: string
-  }) => ReturnType<GitInspectionApi['discoverCommitMessageModels']>
   discoverCommitMessageModels: (args: {
     agentId: string
     worktreePath?: string

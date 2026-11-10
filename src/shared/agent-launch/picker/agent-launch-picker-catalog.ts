@@ -1,4 +1,3 @@
-import { agentPickerCatalogView } from './agent-launch-picker-source'
 import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
 import { listedModelDescribing } from '../../agent-session/options/structured-agent-session-listed-model'
 import {
@@ -45,16 +44,18 @@ export function agentPickerEntryOptions(
         ]
       : []
   }
-  const view = agentPickerCatalogView(entry, surface)
   let options = agentPickerOptions(entry.agent, model, surface)
-  const rows = agentPickerModelMenu(entry, surface).rows
-  const live = model
-    ? listedModelDescribing(rows, undefined, model)
-    : rows.find((row) => row.isDefault)
-  if (!live && model) {
+  const rows = agentPickerModels(entry, surface)
+  const composer = agentPickerUsesComposerModelMenu(entry, surface)
+  const live = composer
+    ? model
+      ? listedModelDescribing(rows, undefined, model)
+      : rows.find((row) => row.isDefault)
+    : rows.find((row) => row.id === model || (model === undefined && row.isDefault))
+  if (composer && !live && model) {
     return []
   }
-  if (view.catalog.origin === 'unknown' || !live) {
+  if (entry.catalog.origin === 'unknown' || !live) {
     return options.filter(
       (option) => option.kind.type !== 'select' || option.kind.choices.length > 0
     )
@@ -63,13 +64,13 @@ export function agentPickerEntryOptions(
     options = createClaudeCatalogOptions({
       effortLevelIds: live.efforts.map((choice) => choice.value),
       supportsFastMode:
-        live.supportsFastMode === true && view.catalog.fastModeSupport?.supported !== false
+        live.supportsFastMode === true && entry.catalog.fastModeSupport?.supported !== false
     })
   }
   if (surface === 'chat' || entry.agent === 'codex') {
     const dynamic = discoveredModel(
       live,
-      view.catalog.fastModeSupport?.supported !== false,
+      entry.catalog.fastModeSupport?.supported !== false,
       entry.agent
     ).options
     if (entry.agent === 'codex') {
@@ -89,7 +90,7 @@ export function agentPickerEntryOptions(
       return [option]
     }
     if (!live.efforts.length) {
-      return []
+      return !composer && live.effortsKnown === false ? [option] : []
     }
     return [
       {
@@ -115,13 +116,12 @@ export function agentPickerModelMenu(
   surface: AgentPickerSurface = entry.defaultSurface,
   saved?: Readonly<Record<string, string>>
 ) {
-  const view = agentPickerCatalogView(entry, surface)
-  return modelMenuOptions(view.catalog, {
+  return modelMenuOptions(entry.catalog, {
     agent: entry.agent,
     surface: entry.textGeneration ? 'textGeneration' : surface,
     seed: getAgentSessionOptionLaunchCatalog(entry.agent) ?? { models: [], modelApply: {} },
-    pending: view.catalogRead === 'pending',
-    coherentCatalog: view.coherentCatalog,
+    pending: entry.catalogRead === 'pending',
+    coherentCatalog: entry.coherentCatalog,
     newLaunch: true,
     seedsModel: true,
     saved
@@ -132,20 +132,27 @@ export function agentPickerModels(
   entry: AgentPickerEntry,
   surface: AgentPickerSurface = entry.defaultSurface
 ): AgentPickerModel[] {
-  if (entry.textGeneration && entry.catalog.origin !== 'unknown') {
-    return entry.catalog.models
+  if (!agentPickerUsesComposerModelMenu(entry, surface)) {
+    if (entry.catalog.origin !== 'unknown') {
+      return entry.catalog.models
+    }
+    return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map((model) => ({
+      id: model.id,
+      label: model.label,
+      description: model.description,
+      isDefault: model.isDefault === true,
+      efforts: model.options.flatMap((option) =>
+        option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
+      )
+    }))
   }
   return agentPickerModelMenu(entry, surface).rows
 }
 
-export function agentPickerNamesConfiguredModel(
+/** Terminal discovery is a separate change; these menus keep their existing catalog policy. */
+export function agentPickerUsesComposerModelMenu(
   entry: AgentPickerEntry,
   surface: AgentPickerSurface
 ) {
-  const { catalog } = agentPickerCatalogView(entry, surface)
-  return (
-    catalog.origin !== 'unknown' &&
-    (catalog.listingNamesConfiguredModel ??
-      getAgentSessionOptionLaunchCatalog(entry.agent)?.hostListingNamesConfiguredModel === true)
-  )
+  return !entry.textGeneration && !(entry.agent === 'antigravity' && surface === 'terminal')
 }

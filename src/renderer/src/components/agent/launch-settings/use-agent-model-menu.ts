@@ -1,4 +1,3 @@
-import type { ModelCatalogSource } from '../../../../../shared/agent-session/options/model-catalog-source'
 import { useCallback, useEffect } from 'react'
 import {
   useAppStateViewActive,
@@ -17,7 +16,6 @@ import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/c
 export type AgentModelMenuSource = {
   scope: HostModelMenuScope
   coherentCatalog: boolean
-  source?: ModelCatalogSource
 }
 const absent: HostModelMenuSnapshot = { pending: false, generation: 0 }
 const subscribeAbsent = () => () => {}
@@ -39,11 +37,11 @@ export function useAgentModelMenu(
   useEffect(() => {
     if (catalog && open && active) {
       const controller = new AbortController()
-      void catalog.read(source?.source === 'cli', undefined, controller.signal)
+      void catalog.read(undefined, controller.signal)
       return () => controller.abort()
     }
     return undefined
-  }, [catalog, open, active, snapshot.generation, source?.source])
+  }, [catalog, open, active, snapshot.generation])
   const menu = modelMenuOptions(snapshot.answer, {
     agent,
     surface: 'terminal',
@@ -58,7 +56,6 @@ export function useAgentModelMenu(
   })
   return {
     ...menu,
-    source: source?.source ?? 'structured',
     fallbackAfterFailure:
       !!source && snapshot.attempted === true && !snapshot.pending && menu.status === 'builtin'
   }

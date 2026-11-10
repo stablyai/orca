@@ -1,7 +1,3 @@
-import {
-  modelCatalogChoiceEdit,
-  type ModelCatalogSource
-} from '../../../../../shared/agent-session/options/model-catalog-source'
 import type { modelMenuOptions } from '../../../../../shared/agent-session/options/model-menu-options'
 import type {
   AgentChoicePatch,
@@ -29,7 +25,6 @@ export type AgentChoiceControlsProps = {
   value: AgentDedicatedChoices | undefined
   modelMenu?: ReturnType<typeof modelMenuOptions> & {
     fallbackAfterFailure?: boolean
-    source?: ModelCatalogSource
   }
   disabled?: boolean
   onOpenChange?: (open: boolean) => void
@@ -139,17 +134,7 @@ export function AgentChoiceFields({
             })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
           ]}
-          onChange={(model) => {
-            const patch = { model: model === AGENT_DEFAULT_VALUE ? null : model }
-            onSelect(
-              modelCatalogChoiceEdit(
-                modelMenu?.source ?? 'structured',
-                modelMenu?.rows ?? [],
-                selected?.model,
-                patch
-              )
-            )
-          }}
+          onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
         />
       ) : null}
       {modelMenu?.fallbackAfterFailure ? (

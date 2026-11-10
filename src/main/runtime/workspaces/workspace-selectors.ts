@@ -43,18 +43,9 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     ...args: Parameters<RuntimeWorkspaceCatalog['resolveExplicitWorktreeIdScoped']>
   ): ReturnType<RuntimeWorkspaceCatalog['resolveExplicitWorktreeIdScoped']>
 
-  protected abstract listResolvedWorktrees(): Promise<ResolvedWorktree[]>
-
-  protected abstract listReadOnlyResolvedWorktrees(worktreeId?: string): Promise<ResolvedWorktree[]>
-
-  protected async resolveGitWorktreeReadSelector(selector: string): Promise<ResolvedWorktree> {
-    const explicit = this.getValidatedExplicitWorktreeIdSelector(selector)
-    return this.matchWorktreeSelector(
-      selector,
-      await this.listReadOnlyResolvedWorktrees(explicit ?? undefined),
-      explicit
-    )
-  }
+  protected abstract listResolvedWorktrees(
+    ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
+  ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
 
   /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
   protected async resolveGitWorktreeSelector(

@@ -5,7 +5,6 @@ import { structuredAgentSessionHostKey } from '../host-capabilities/structured-a
 import { callStructuredAgentSession } from '../requests/structured-agent-session-call'
 import {
   hostModelCatalogGeneration,
-  hostModelCatalogCompletedAttempt,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   subscribeHostModelCatalogSnapshot
@@ -15,8 +14,6 @@ export type HostModelMenuScope = {
   target: RuntimeClientTarget
   agent: string
   worktree?: string
-  sourceKey?: string
-  request?: Reader
 }
 export type HostModelMenuSnapshot = {
   answer?: AgentSessionModelCatalogResult
@@ -24,7 +21,6 @@ export type HostModelMenuSnapshot = {
   attempted?: boolean
   generation: number
 }
-type Reader = (waitForListing: boolean) => Promise<AgentSessionModelCatalogResult | undefined>
 const owners = new Map<string, HostModelMenuCatalog>()
 function withoutWaitExpiry(answer: AgentSessionModelCatalogResult) {
   if (!answer.waitExpired) {
@@ -51,16 +47,8 @@ function withListingStatus(
 }
 
 function keyOf(scope: HostModelMenuScope) {
-  return JSON.stringify([
-    structuredAgentSessionHostKey(scope.target),
-    scope.agent,
-    scope.worktree,
-    scope.sourceKey ?? 'structured'
-  ])
+  return JSON.stringify([structuredAgentSessionHostKey(scope.target), scope.agent, scope.worktree])
 }
-
-export class ModelMenuContextUnresolvedError extends Error {}
-const CLI_REUSE_INTERVAL_MS = 10 * 60 * 1000
 
 class HostModelMenuCatalog {
   listeners = new Set<() => void>()
@@ -71,7 +59,6 @@ class HostModelMenuCatalog {
       ...withoutWaitExpiry(this.snapshot.answer ?? { origin: 'unknown' }),
       listingInProgress: true
     }),
-    () => this.reuseHeld(),
     () => this.syncPhases()
   )
   private unsubscribe?: () => void
@@ -79,29 +66,20 @@ class HostModelMenuCatalog {
     this.snapshot = {
       answer: this.held(),
       pending: false,
-      generation: hostModelCatalogGeneration(scope.target, scope.agent, scope.sourceKey)
+      generation: hostModelCatalogGeneration(scope.target, scope.agent)
     }
   }
   private held() {
-    return readHostModelCatalogSnapshot(
-      this.scope.target,
-      this.scope.agent,
-      {
-        newLaunch: true,
-        seedsModel: true,
-        worktree: this.scope.worktree ?? null
-      },
-      this.scope.sourceKey
-    )
+    return readHostModelCatalogSnapshot(this.scope.target, this.scope.agent, {
+      newLaunch: true,
+      seedsModel: true,
+      worktree: this.scope.worktree ?? null
+    })
   }
   publish(value: Omit<HostModelMenuSnapshot, 'generation'>) {
     const next = {
       ...value,
-      generation: hostModelCatalogGeneration(
-        this.scope.target,
-        this.scope.agent,
-        this.scope.sourceKey
-      )
+      generation: hostModelCatalogGeneration(this.scope.target, this.scope.agent)
     }
     if (
       this.snapshot.generation === next.generation &&
@@ -134,81 +112,39 @@ class HostModelMenuCatalog {
         } else {
           this.publish({ ...this.snapshot, answer: this.held() })
         }
-      },
-      this.scope.sourceKey
+      }
     )
   }
   private syncPhases() {
-    const generation = hostModelCatalogGeneration(
-      this.scope.target,
-      this.scope.agent,
-      this.scope.sourceKey
-    )
+    const generation = hostModelCatalogGeneration(this.scope.target, this.scope.agent)
     this.publish({
       ...(this.snapshot.generation === generation ? this.snapshot : {}),
       pending: this.phases.pending
     })
     this.retire()
   }
-  read(reuseHeld: boolean, waitForListing: boolean | undefined, signal: AbortSignal) {
+  read(waitForListing: boolean | undefined, signal: AbortSignal) {
     if (signal.aborted) {
       return Promise.resolve(undefined)
     }
     this.watch()
-    return this.phases.read(reuseHeld, waitForListing, signal)
-  }
-  private reuseHeld() {
-    const completedAt = this.scope.sourceKey
-      ? hostModelCatalogCompletedAttempt(
-          this.scope.target,
-          this.scope.agent,
-          this.scope.worktree ?? null,
-          this.scope.sourceKey
-        )
-      : undefined
-    if (completedAt !== undefined && Date.now() - completedAt < CLI_REUSE_INTERVAL_MS) {
-      this.publish({ ...this.snapshot, pending: false, attempted: true })
-      return { answer: retained(this.held() ?? this.snapshot.answer) }
-    }
-    return undefined
+    return this.phases.read(waitForListing, signal)
   }
   private async requestPhase(waitForListing: boolean, current: () => boolean) {
     const { target, agent, worktree } = this.scope
-    const request: Reader =
-      this.scope.request ??
-      ((waitForListing) =>
-        callStructuredAgentSession(target, 'agentSession.modelCatalog', {
-          agent,
-          ...(worktree ? { worktree } : {}),
-          ...(waitForListing ? { waitForListing: true } : {})
-        }))
-    let contextUnresolved = false
     let answer: AgentSessionModelCatalogResult | undefined
     try {
-      answer = await request(waitForListing)
-    } catch (error) {
-      contextUnresolved = error instanceof ModelMenuContextUnresolvedError
-    }
+      answer = await callStructuredAgentSession(target, 'agentSession.modelCatalog', {
+        agent,
+        ...(worktree ? { worktree } : {}),
+        ...(waitForListing ? { waitForListing: true } : {})
+      })
+    } catch {}
     if (!current()) {
       return {}
     }
-    if (this.scope.sourceKey && !contextUnresolved && !answer?.listingInProgress) {
-      hostModelCatalogCompletedAttempt(
-        target,
-        agent,
-        worktree ?? null,
-        this.scope.sourceKey,
-        Date.now()
-      )
-    }
     if (answer) {
-      recordHostModelCatalogSnapshot(
-        target,
-        agent,
-        worktree ?? null,
-        withoutWaitExpiry(answer),
-        this.scope.sourceKey
-      )
+      recordHostModelCatalogSnapshot(target, agent, worktree ?? null, withoutWaitExpiry(answer))
     }
     const shown = answer?.listingInProgress
       ? withListingStatus(this.held() ?? answer, {

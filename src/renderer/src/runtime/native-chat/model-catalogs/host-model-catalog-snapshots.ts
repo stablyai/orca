@@ -10,11 +10,7 @@ import { callStructuredAgentSession } from '../requests/structured-agent-session
 import { structuredAgentSessionHostKey } from '../host-capabilities/structured-agent-session-host-capability'
 
 // Per host and agent; absence or an account-setting change drops them.
-type SnapshotEntry = {
-  catalog?: HostModelCatalogSnapshot
-  completedAttempts: Map<string | null, number>
-}
-const snapshots = new Map<string, SnapshotEntry>()
+const snapshots = new Map<string, HostModelCatalogSnapshot>()
 // Bumped when a host's answers are dropped, so a preload sent before then records nothing.
 const generations = new Map<string, number>()
 const catalogGenerations = new Map<string, number>()
@@ -30,10 +26,9 @@ const listeners = new Map<string, Set<CatalogListener>>()
 export function subscribeHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
-  listener: CatalogListener,
-  sourceKey = 'structured'
+  listener: CatalogListener
 ): () => void {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
   const scoped = listeners.get(key) ?? new Set<CatalogListener>()
   listeners.set(key, scoped)
   scoped.add(listener)
@@ -45,12 +40,8 @@ export function subscribeHostModelCatalogSnapshot(
   }
 }
 
-export function hostModelCatalogGeneration(
-  target: RuntimeClientTarget,
-  agent: string,
-  _sourceKey = 'structured'
-): number {
-  // Invalidation is per host/agent, independent of retired invocation identities.
+export function hostModelCatalogGeneration(target: RuntimeClientTarget, agent: string): number {
+  // Invalidation is per host/agent.
   const key = `${structuredAgentSessionHostKey(target)}\u0000${agent}`
   if (!catalogGenerations.has(key)) {
     catalogGenerations.set(key, 0)
@@ -58,19 +49,18 @@ export function hostModelCatalogGeneration(
   return catalogGenerations.get(key)!
 }
 
-function snapshotKey(hostKey: string, agent: string, sourceKey = 'structured'): string {
-  return `${hostKey}\u0000${agent}\u0000${sourceKey}`
+function snapshotKey(hostKey: string, agent: string): string {
+  return `${hostKey}\u0000${agent}`
 }
 
 /** Undefined until host answers for this frame. */
 export function readHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
-  launch: HostModelCatalogLaunch,
-  sourceKey = 'structured'
+  launch: HostModelCatalogLaunch
 ): AgentSessionModelCatalogResult | undefined {
   return selectHostModelCatalogSnapshot(
-    snapshots.get(snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey))?.catalog,
+    snapshots.get(snapshotKey(structuredAgentSessionHostKey(target), agent)),
     launch
   )
 }
@@ -80,19 +70,12 @@ export function recordHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
   worktree: string | null,
-  catalog: AgentSessionModelCatalogResult,
-  sourceKey = 'structured'
+  catalog: AgentSessionModelCatalogResult
 ): void {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
-  const entry = snapshots.get(key)
-  const previous = entry?.catalog
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+  const previous = snapshots.get(key)
   const next = withHostModelCatalogAnswer(previous, worktree, catalog)
-  if (
-    sourceKey === 'structured' &&
-    worktree !== null &&
-    next !== previous &&
-    next?.byWorktree.has(worktree)
-  ) {
+  if (worktree !== null && next !== previous && next?.byWorktree.has(worktree)) {
     chatAnswers.set(key, (chatAnswers.get(key) ?? 0) + 1)
   }
   const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b)
@@ -106,31 +89,11 @@ export function recordHostModelCatalogSnapshot(
     return
   }
   if (next) {
-    snapshots.set(key, { catalog: next, completedAttempts: entry?.completedAttempts ?? new Map() })
+    snapshots.set(key, next)
   } else {
     snapshots.delete(key)
   }
   listeners.get(key)?.forEach((listener) => listener({ forgotten: false, worktree, catalog }))
-}
-
-/** Acquisition metadata shares the answer lifetime; it is never catalog equality or persisted data. */
-export function hostModelCatalogCompletedAttempt(
-  target: RuntimeClientTarget,
-  agent: string,
-  worktree: string | null,
-  sourceKey: string,
-  completedAt?: number
-): number | undefined {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
-  let entry = snapshots.get(key)
-  if (completedAt !== undefined) {
-    if (!entry) {
-      entry = { completedAttempts: new Map() }
-      snapshots.set(key, entry)
-    }
-    entry.completedAttempts.set(worktree, completedAt)
-  }
-  return entry?.completedAttempts.get(worktree)
 }
 
 /** Drop all or selected agents’ host answers when the account a new chat pins may change. */
@@ -170,7 +133,7 @@ export function forgetHostModelCatalogSnapshots(
 export function hostModelCatalogSnapshotAgents(target: RuntimeClientTarget): string[] {
   const prefix = `${structuredAgentSessionHostKey(target)}\u0000`
   return [...snapshots.keys()]
-    .filter((key) => key.startsWith(prefix) && key.split('\u0000')[2] === 'structured')
+    .filter((key) => key.startsWith(prefix))
     .map((key) => key.split('\u0000')[1]!)
 }
 
@@ -209,12 +172,4 @@ export function resetHostModelCatalogSnapshotsForTests(): void {
   generations.clear()
   catalogGenerations.clear()
   chatAnswers.clear()
-}
-
-export function hostModelCatalogSnapshotDiagnostics() {
-  return {
-    epochs: catalogGenerations.size,
-    chatAnswers: chatAnswers.size,
-    snapshots: snapshots.size
-  }
 }

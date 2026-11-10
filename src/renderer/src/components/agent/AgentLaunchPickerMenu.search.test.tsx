@@ -1,15 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useState, type ComponentProps } from 'react'
 import userEvent from '@testing-library/user-event'
 import type * as LaunchSetup from './AgentLaunchSetupButton'
 import type { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
-import { AgentLaunchPickerMenu, SubscribedAgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import {
-  createAgentPickerInventorySource,
-  observeAgentPickerAcquisition
-} from './agent-launch-picker-acquisition'
+import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,66 +137,4 @@ it('lists an agent named by the query before other agents’ model setups', () =
   expect(highlighted[0].textContent).not.toContain('OpenCode')
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
   expect(launch).toHaveBeenCalledWith({ agent: 'codex', kind: 'cli' }, undefined)
-})
-
-it('requests the CLI catalog when the subscribed new-tab menu opens on a terminal default', async () => {
-  const entry: AgentPickerEntry = {
-    agent: 'antigravity',
-    label: 'Antigravity',
-    rows: [{ agent: 'antigravity', kind: 'cli' }],
-    surfaces: ['chat', 'terminal'],
-    defaultSurface: 'terminal',
-    terminal: {},
-    structured: {},
-    catalog: { origin: 'unknown' },
-    catalogRead: 'unsupported',
-    sourceCatalogs: {
-      cli: { catalog: { origin: 'unknown' }, catalogRead: 'pending' }
-    }
-  }
-  const inventory = createAgentPickerInventorySource([entry])
-  const read = vi.fn(async () => ({
-    origin: 'probe' as const,
-    fetchedAt: 1,
-    models: [
-      { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)', isDefault: false, efforts: [] }
-    ]
-  }))
-  const stop = observeAgentPickerAcquisition(
-    'subscribed-new-tab-terminal-demand',
-    [entry],
-    { catalog: read, support: async () => undefined },
-    {
-      publish: inventory.publish,
-      selected: () => undefined,
-      usesSource: inventory.usesSource,
-      subscribeDemand: inventory.subscribeDemand
-    }
-  )
-  try {
-    render(
-      <DropdownMenu defaultOpen modal={false}>
-        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <SubscribedAgentLaunchPickerMenu
-            inventory={inventory}
-            initialQuery="Flash Low"
-            runLaunch={vi.fn()}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
-    )
-    await waitFor(() =>
-      expect(read).toHaveBeenCalledWith(
-        expect.objectContaining({ agent: 'antigravity' }),
-        false,
-        'cli',
-        expect.any(AbortSignal)
-      )
-    )
-    expect(await screen.findByRole('menuitem', { name: /Gemini 3.8 Flash \(Low\)/ })).toBeTruthy()
-  } finally {
-    cleanup()
-    stop()
-  }
 })

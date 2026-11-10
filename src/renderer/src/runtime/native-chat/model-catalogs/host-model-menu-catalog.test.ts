@@ -37,8 +37,8 @@ it('never restores a catalog retired or invalidated during a failed refresh', as
     const worktree = `id:${invalidate}`
     const owner = hostModelMenuCatalog({ target, agent: 'codex', worktree })
     const stop = owner.subscribe(() => {})
-    await owner.read(false, undefined, new AbortController().signal)
-    const refresh = owner.read(false, undefined, new AbortController().signal)
+    await owner.read(undefined, new AbortController().signal)
+    const refresh = owner.read(undefined, new AbortController().signal)
     await vi.waitFor(() => expect(mocks.call.mock.calls.at(-1)?.[2].waitForListing).toBe(true))
     if (invalidate !== 'account') {
       recordHostModelCatalogSnapshot(
@@ -65,7 +65,7 @@ it('never restores a catalog retired or invalidated during a failed refresh', as
       mocks.call
         .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
         .mockRejectedValueOnce(new Error('still offline'))
-      await owner.read(false, undefined, new AbortController().signal)
+      await owner.read(undefined, new AbortController().signal)
       recordHostModelCatalogSnapshot(target, 'codex', 'id:unrelated', catalog('other'))
       expect(owner.snapshot.answer).toEqual({ origin: 'unknown' })
     }
@@ -108,7 +108,6 @@ it('keeps native-only answers out of guest and differing paired-command routes',
     const answer = await agentPickerModelCatalogReads(input).catalog(
       entry,
       false,
-      undefined,
       new AbortController().signal
     )
     const menu = modelMenuOptions(answer, {
