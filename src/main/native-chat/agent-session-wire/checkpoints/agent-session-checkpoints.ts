@@ -68,7 +68,8 @@ function refuse(reason: Parameters<typeof agentSessionCheckpointRefusalMessage>[
 }
 
 /** Something else in the workspace that may write files: a terminal agent, say. */
-export type AgentSessionWorkspaceBusy = () => Promise<boolean>
+/** Gets the worktree root the restore would write. */
+export type AgentSessionWorkspaceBusy = (root: string) => Promise<boolean>
 
 export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps) {
   const open = deps.openRepo ?? ((directory: string) => openCheckpointRepo(directory))
@@ -161,7 +162,7 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
         busy:
           deps.isBusy(sessionId) ||
           (startingTurns.get(found.repo.root) ?? 0) > 0 ||
-          ((await workspaceBusy?.().catch(() => false)) ?? false)
+          ((await workspaceBusy?.(found.repo.root).catch(() => false)) ?? false)
       }
     } catch (error) {
       if (error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo') {
@@ -200,7 +201,7 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
         if (
           deps.isBusy(sessionId) ||
           (startingTurns.get(repo.root) ?? 0) > 0 ||
-          (await workspaceBusy?.())
+          (await workspaceBusy?.(repo.root))
         ) {
           refuse('busy')
         }

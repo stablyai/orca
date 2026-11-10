@@ -114,11 +114,15 @@ describe('ConfirmationDialogProvider', () => {
         uncheckedDetail: 'Files on disk stay as they are.',
         defaultChecked: true,
         onConfirmed
-      }
+      },
+      initialFocus: 'cancel'
     })
 
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
     const box = await screen.findByRole('checkbox', { name: 'Also restore 3 changed files' })
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+    )
     expect(box.getAttribute('aria-checked')).toBe('true')
     expect(box.getAttribute('aria-describedby')).toBe('confirmation-dialog-option-detail')
     expect(screen.getByText('Later changes are discarded.')).toBeTruthy()

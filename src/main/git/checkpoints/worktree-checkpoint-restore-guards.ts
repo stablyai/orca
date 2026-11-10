@@ -152,7 +152,10 @@ export async function assertWritable(repo: CheckpointRepo, changes: TreeChange[]
   }
 }
 
-/** Every path the restore writes or deletes that exists on disk must be in the undo tree, or the
+/** Known gap: a tracked file that is unreadable now and that the restore deletes is covered by its
+ *  stale index blob, so the undo point holds its last staged content, not what is on disk.
+ *
+ *  Every path the restore writes or deletes that exists on disk must be in the undo tree, or the
  *  restore could destroy work nothing saved. `git add` can skip a path without failing (a nested
  *  repo with no commits, a file it couldn't read), so this checks the tree itself. */
 export async function assertUndoCovers(
@@ -169,11 +172,15 @@ export async function assertUndoCovers(
   if (present.length === 0) {
     return
   }
+  const lined = present.filter((path) => !path.includes('\n'))
   const out = await repo.git(['cat-file', '--batch-check=%(objecttype)'], {
-    stdin: present.map((path) => `${undoTree}:${path}\n`).join('')
+    stdin: lined.map((path) => `${undoTree}:${path}\n`).join('')
   })
   const answers = out.split('\n')
-  const missing = present.filter((_, index) => !answers[index]?.endsWith('blob'))
+  // batch-check is line-based: a path with a newline would shift every answer after it, so such a
+  // path is never asked about and counts as unsaved.
+  const saved = new Set(lined.filter((_, index) => answers[index]?.endsWith('blob')))
+  const missing = present.filter((path) => !saved.has(path))
   if (missing.length > 0) {
     throw new WorktreeCheckpointError(
       'blocked-path',

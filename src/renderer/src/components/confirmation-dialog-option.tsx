@@ -17,7 +17,10 @@ export function ConfirmationDialogOption({
   const detail =
     checked || option.uncheckedDetail === undefined ? option.detail : option.uncheckedDetail
   return (
-    <div className="flex items-start gap-2">
+    <div
+      className="group flex items-start gap-2 data-[disabled=true]:cursor-not-allowed"
+      data-disabled={option.disabled === true}
+    >
       <Checkbox
         id="confirmation-dialog-option"
         className="mt-0.5"

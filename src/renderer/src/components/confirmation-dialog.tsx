@@ -36,6 +36,7 @@ export function ConfirmationDialogProvider({
   const t = useTranslate()
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
   // null until the user touches the option, so each prompt starts from its own default.
@@ -159,6 +160,9 @@ export function ConfirmationDialogProvider({
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
               confirmButtonRef.current?.focus()
+            } else if (activeRequest?.options.initialFocus === 'cancel') {
+              event.preventDefault()
+              cancelButtonRef.current?.focus()
             }
           }}
         >
@@ -244,6 +248,7 @@ export function ConfirmationDialogProvider({
             {displayedRequest?.options.acknowledgeOnly ? null : (
               <Button
                 type="button"
+                ref={cancelButtonRef}
                 variant={displayedRequest?.options.cancelVariant ?? 'outline'}
                 size={buttonSize}
                 onKeyDown={ignoreRepeatedKey}

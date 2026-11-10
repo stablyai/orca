@@ -342,6 +342,17 @@ describe('worktree checkpoints', () => {
     await expect(
       assertUndoCovers(repo, empty, [{ status: 'A', path: 'absent.txt' }])
     ).resolves.toBeUndefined()
+    // A saved file next to an unsaved one whose name holds a newline: answers must not shift.
+    await put('x', 'saved\n')
+    await put('x\ny', 'not saved\n')
+    await git('add', 'x')
+    const tree = await git('write-tree')
+    await expect(
+      assertUndoCovers(repo, tree, [
+        { status: 'M', path: 'x\ny' },
+        { status: 'M', path: 'x' }
+      ])
+    ).rejects.toMatchObject({ reason: 'blocked-path', paths: ['x\ny'] })
   })
 
   it('works on an unborn branch', async () => {

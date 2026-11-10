@@ -1,4 +1,6 @@
-// Per-worktree ordering shared by every chat's checkpoint work in this process.
+// Per-worktree ordering shared by every chat's checkpoint work in this process. Process-local by
+// design: the host that captures a chat's turns is the one that restores them (one main process
+// or orcad per machine owns a chat).
 
 // One git writer per worktree at a time across every chat in this process: a capture never
 // interleaves with a restore, so a send after a rewind snapshots the restored files.

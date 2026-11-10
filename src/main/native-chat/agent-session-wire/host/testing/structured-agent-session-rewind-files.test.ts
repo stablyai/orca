@@ -237,9 +237,9 @@ describe('restore admission', () => {
     )
     expect(await checkpoints.preview('s', 'orca:one')).toMatchObject({ busy: true })
     release()
-    await expect(checkpoints.restore('s', 'orca:one', async () => true)).rejects.toThrow(
-      'agent_session_checkpoint_busy'
-    )
+    await expect(
+      checkpoints.restore('s', 'orca:one', async (root) => root.length > 0)
+    ).rejects.toThrow('agent_session_checkpoint_busy')
     expect(await read('app.ts')).toBe('agent\n')
     await checkpoints.restore('s', 'orca:one', async () => false)
     expect(await read('app.ts')).toBe('v0\n')

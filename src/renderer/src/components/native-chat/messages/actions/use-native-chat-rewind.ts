@@ -91,7 +91,9 @@ export function useNativeChatRewind(input: RewindInput) {
           confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
           cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
           confirmVariant: 'destructive',
-          cancelVariant: 'ghost'
+          cancelVariant: 'ghost',
+          // Destructive: Enter or Space on open must never rewind or flip the files choice.
+          initialFocus: 'cancel'
         })
       }),
     [checkpoints, sharedRequest]

@@ -14,7 +14,8 @@ function OpenRewindPrompt({ preview }: { preview: AgentSessionCheckpointPreview 
       confirmLabel: 'Rewind',
       cancelLabel: 'Cancel',
       confirmVariant: 'destructive',
-      cancelVariant: 'ghost'
+      cancelVariant: 'ghost',
+      initialFocus: 'cancel'
     })
   }, [confirm, preview])
   return null

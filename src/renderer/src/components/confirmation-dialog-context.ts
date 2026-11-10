@@ -23,7 +23,7 @@ export type ConfirmationDialogOptions = {
   cancelVariant?: 'outline' | 'ghost'
   /** A notice, not a question: only the confirm button shows, and it settles true. */
   acknowledgeOnly?: boolean
-  initialFocus?: 'confirm'
+  initialFocus?: 'confirm' | 'cancel'
   /** The short close-prompt look: small title, text and buttons. */
   compact?: boolean
   /** Ignore repeated Enter and the opening double-click’s second click; fresh presses and Escape still settle the prompt. */
