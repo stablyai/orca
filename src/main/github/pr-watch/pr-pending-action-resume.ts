@@ -62,17 +62,17 @@ export class PRPendingActionResume {
   private async process(row: PRPendingActionRow): Promise<void> {
     try {
       if (!this.deps.chatExists(row.chatId) || this.expired(row)) {
-        return this.settle(row, openPRPendingObligations(row), [])
+        return await this.settle(row, openPRPendingObligations(row), [])
       }
       const workspace = await this.deps.chatWorkspace(row.chatId)
       if (this.stopped) {
         return
       }
       if (workspace === 'not-git' || workspace?.connectionId) {
-        return this.settle(row, openPRPendingObligations(row), [])
+        return await this.settle(row, openPRPendingObligations(row), [])
       }
       if (!workspace) {
-        return this.retryOrExpire(row)
+        return await this.retryOrExpire(row)
       }
       const results = await Promise.all(
         openPRPendingObligations(row).map((index) =>

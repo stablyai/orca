@@ -1,8 +1,10 @@
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'

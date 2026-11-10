@@ -1,13 +1,15 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
-import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
+import type {
+  SubscriberFieldHooks,
+  SubscriberFieldState
+} from './agent-session-subscriber-frame-fields'
 import type { CurrentRequestsSubscriber } from '../../observations/agent-session-current-requests'
 import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
-import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
 
 export type AgentSessionSubscribeInput = {
   commandsOnRequest?: boolean

@@ -70,8 +70,10 @@ export class StructuredAgentSessionSubagentRows {
 
   async drain(sessionId?: string): Promise<void> {
     for (;;) {
-      const pending = sessionId ? [this.changes.get(sessionId)] : [...this.changes.values()]
-      if (!pending.some(Boolean)) {
+      const pending = sessionId
+        ? [this.changes.get(sessionId)].filter((change) => change !== undefined)
+        : [...this.changes.values()]
+      if (pending.length === 0) {
         return
       }
       await Promise.all(pending)

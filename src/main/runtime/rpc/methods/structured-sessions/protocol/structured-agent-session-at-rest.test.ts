@@ -8,7 +8,6 @@ import {
 } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 vi.mock('node:fs/promises', { spy: true })
-import '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/agent-session-optional-model-capability'

@@ -5,7 +5,8 @@ import { providerTimelineExecutionItems } from '../../agent-session-timeline/pro
 import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem
+  type AgentJournalRenderItem,
+  type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -16,7 +17,6 @@ import type { ResolveDispatchInput } from '../../agent-session-journal/journal-s
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { UnopenedSendJournal } from '../delivery/structured-agent-session-unopened-send-withdrawal'
 import type { TurnVerdictJournal } from './structured-agent-session-stale-turn-verdict'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { lostLiveWorkJournalBody } from '../../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   endedUnseenMessageBody,
