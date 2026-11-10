@@ -19,16 +19,20 @@ export const CLONE_STATUS_SCRIPT = [
   'D="$HOME/.orca-sandbox/clone"',
   '[ -f "$D/state" ] || { echo none; exit 0; }',
   'head -n 1 "$D/state"',
-  `tr '\\r' '\\n' <"$D/progress.log" 2>/dev/null | grep -oE '(Receiving objects|Resolving deltas|Updating files): +[0-9]+%' |`,
+  `tr '\\r' '\\n' <"$D/progress.log" 2>/dev/null | grep -oE '(Enumerating|Counting|Compressing|Receiving) objects: +[0-9]+%|(Resolving deltas|Updating files): +[0-9]+%' |`,
   `  awk '{ s=$0; sub(/: +[0-9]+%$/, "", s); p=$0; sub(/^.*: +/, "", p); sub(/%$/, "", p);`,
   `    if (s != last) { if (last != "") print last "\\t" lp; last = s } lp = p } END { if (last != "") print last "\\t" lp }'`
 ].join('\n')
 
 const STATUS_TIMEOUT_MS = 15_000
 
+const REMOTE_STAGES = new Set(['Enumerating objects', 'Counting objects', 'Compressing objects'])
+
 /**
- * One overall percent from git's stages. A blobless clone downloads commits and trees (Receiving,
- * Resolving), then fetches the checkout's file contents (Receiving again) and writes them (Updating).
+ * One overall percent from git's stages (measured on stablyai/orca, 2.7 GB: ~13 s remote counting,
+ * ~6 s receiving commits and trees, ~9 s resolving, ~20 s fetching the checkout's file contents,
+ * ~3 s writing them). A blobless clone fetches the file contents in a second fetch that prints no
+ * progress: that stretch reads as `checkout` at a held percent, never a made-up one.
  */
 export function parseCloneStatus(stdout: string): CloneStatus {
   const [stateLine = '', ...runLines] = stdout.trim().split('\n')
@@ -51,19 +55,20 @@ export function parseCloneStatus(stdout: string): CloneStatus {
   if (!last) {
     return { state: 'running', percent: 0, stage: 'download' }
   }
-  const resolvedAt = runs.findIndex((run) => run.stage === 'Resolving deltas')
   const scale = (from: number, to: number) => Math.floor(from + ((to - from) * last.percent) / 100)
-  if (runs.some((run) => run.stage === 'Updating files')) {
-    return { state: 'running', percent: last.stage === 'Updating files' ? scale(90, 100) : 90, stage: 'checkout' }
+  const running = (percent: number, stage: 'download' | 'checkout') => ({ state: 'running' as const, percent, stage })
+  if (last.stage === 'Updating files') {
+    return running(scale(90, 100), 'checkout')
   }
-  const blobFetch = resolvedAt >= 0 && runs.slice(resolvedAt + 1).some((run) => run.stage === 'Receiving objects')
-  if (blobFetch) {
-    return { state: 'running', percent: last.stage === 'Receiving objects' ? scale(65, 90) : 90, stage: 'checkout' }
+  const resolvedAt = runs.findIndex((run) => run.stage === 'Resolving deltas')
+  if (resolvedAt === -1) {
+    return REMOTE_STAGES.has(last.stage) ? running(scale(0, 10), 'download') : running(scale(10, 50), 'download')
   }
-  if (last.stage === 'Resolving deltas') {
-    return { state: 'running', percent: scale(55, 65), stage: 'download' }
+  if (resolvedAt === runs.length - 1 && last.percent < 100) {
+    return running(scale(50, 60), 'download')
   }
-  return { state: 'running', percent: scale(0, 55), stage: 'download' }
+  // Commits and trees are in: the checkout fetches file contents, then writes them.
+  return last.stage === 'Receiving objects' && resolvedAt < runs.length - 1 ? running(scale(60, 90), 'checkout') : running(60, 'checkout')
 }
 
 /** Reads the clone's progress in the VM; a failure is recorded on the row so it says why. */

@@ -17,21 +17,24 @@ function startEnv(h: Awaited<ReturnType<typeof createHarness>>) {
 
 describe('parseCloneStatus', () => {
   it('maps git stages onto one percent', () => {
+    const at = (runs: string) => parseCloneStatus(`running\n${runs}`)
     expect(parseCloneStatus('none\n')).toEqual({ state: 'none' })
-    expect(parseCloneStatus('running\n')).toEqual({ state: 'running', percent: 0, stage: 'download' })
-    expect(parseCloneStatus('running\nReceiving objects\t50\n')).toEqual({ state: 'running', percent: 27, stage: 'download' })
-    expect(parseCloneStatus('running\nReceiving objects\t100\nResolving deltas\t50\n')).toEqual({
+    expect(at('')).toEqual({ state: 'running', percent: 0, stage: 'download' })
+    expect(at('Counting objects\t50\n')).toEqual({ state: 'running', percent: 5, stage: 'download' })
+    expect(at('Counting objects\t100\nReceiving objects\t50\n')).toEqual({ state: 'running', percent: 30, stage: 'download' })
+    expect(at('Receiving objects\t100\nResolving deltas\t50\n')).toEqual({ state: 'running', percent: 55, stage: 'download' })
+    // The blobless checkout's own fetch of file contents prints nothing: held, never invented.
+    expect(at('Receiving objects\t100\nResolving deltas\t100\n')).toEqual({ state: 'running', percent: 60, stage: 'checkout' })
+    expect(at('Receiving objects\t100\nResolving deltas\t100\nReceiving objects\t40\n')).toEqual({
       state: 'running',
-      percent: 60,
-      stage: 'download'
+      percent: 72,
+      stage: 'checkout'
     })
-    // The blobless checkout's own fetch of file contents.
-    expect(
-      parseCloneStatus('running\nReceiving objects\t100\nResolving deltas\t100\nReceiving objects\t40\n')
-    ).toEqual({ state: 'running', percent: 75, stage: 'checkout' })
-    expect(
-      parseCloneStatus('running\nReceiving objects\t100\nResolving deltas\t100\nReceiving objects\t100\nUpdating files\t50\n')
-    ).toEqual({ state: 'running', percent: 95, stage: 'checkout' })
+    expect(at('Receiving objects\t100\nResolving deltas\t100\nUpdating files\t50\n')).toEqual({
+      state: 'running',
+      percent: 95,
+      stage: 'checkout'
+    })
     expect(parseCloneStatus('done\nUpdating files\t100\n')).toEqual({ state: 'done' })
   })
 
@@ -71,7 +74,7 @@ describe('repo-backed create', () => {
     h.vercel.commandHandler = (params) =>
       params.command === 'bash' && params.args?.[1] === CLONE_STATUS_SCRIPT ? { exitCode: 0, stdout: vm, stderr: '' } : undefined
     const running = await h.call('GET', `/v1/sandboxes/${body.sandbox.id}/clone`)
-    expect(running.body).toEqual({ clone: { state: 'running', percent: 57, stage: 'download' } })
+    expect(running.body).toEqual({ clone: { state: 'running', percent: 52, stage: 'download' } })
 
     vm = 'failed repo_unreachable\n'
     const failed = await h.call('GET', `/v1/sandboxes/${body.sandbox.id}/clone`)
