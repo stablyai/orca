@@ -23,6 +23,10 @@ import {
 } from '../agent-hooks/installation/commands/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
+import {
+  claudeManagedHookForms,
+  withClaudeAsyncPermissionRequest
+} from './claude-async-permission-request'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
@@ -201,7 +205,7 @@ export function findManagedEventHookForms(
     const hooks = Array.isArray(definitions)
       ? definitions.flatMap((definition) => definition.hooks ?? [])
       : []
-    const form = formsFor(eventName).findIndex((expected) =>
+    const form = claudeManagedHookForms(eventName, formsFor(eventName)).findIndex((expected) =>
       hooks.some((hook) => hasSameManagedHookInvocation(hook, expected))
     )
     if (form === -1) {
@@ -221,7 +225,8 @@ export function applyManagedHooks(
   config: HooksConfig,
   hookForEvent: (eventName: string) => HookCommandConfig,
   scriptFileName: string,
-  plan: ClaudeManagedHookPlan
+  plan: ClaudeManagedHookPlan,
+  posixCommands: boolean
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
@@ -229,7 +234,11 @@ export function applyManagedHooks(
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
     const previous = Array.isArray(current) ? current : []
-    const hook = withPreviousManagedAsync(hookForEvent(event.eventName), previous, isManagedCommand)
+    const hook = withClaudeAsyncPermissionRequest(
+      event.eventName,
+      withPreviousManagedAsync(hookForEvent(event.eventName), previous, isManagedCommand),
+      posixCommands
+    )
     const cleaned = removeManagedCommands(previous, isManagedCommand)
     nextHooks[event.eventName] = [...cleaned, { ...event.definition, hooks: [hook] }]
   }

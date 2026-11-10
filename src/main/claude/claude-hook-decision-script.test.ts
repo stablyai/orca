@@ -127,6 +127,15 @@ describe.skipIf(process.platform === 'win32')(
       expect(await runHook(ASK, { ORCA_AGENT_HOOK_PORT: String(wrong.port) })).toBe('{}\n')
     })
 
+    it('answers {} first and asks for no decision when the user made PermissionRequest async', async () => {
+      const { port, seen } = await hookServer(() => PERMISSION_DENY)
+      expect(await runHook(ASK, { ORCA_AGENT_HOOK_PORT: String(port), ORCA_HOOK_ASYNC: '1' })).toBe(
+        '{}\n'
+      )
+      expect(seen).toHaveLength(1)
+      expect(seen[0]?.headers['x-orca-hook-decision']).toBeUndefined()
+    })
+
     it('keeps print-then-post for CLIs reusing Claude’s script, such as OpenClaude', async () => {
       const { port, seen } = await hookServer(() => DENY)
       expect(await runHook(PRE, { ORCA_AGENT_HOOK_PORT: String(port) }, false)).toBe('{}\n')

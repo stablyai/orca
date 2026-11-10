@@ -16,7 +16,6 @@ import {
   TerminalWorkerTurnStops
 } from '../orchestration/workers/turn-stops/terminal-worker-turn-stops'
 import { TerminalWorkerApprovalHolds } from '../orchestration/workers/approvals/terminal-worker-approval-holds'
-import { showsClaudeDialog } from '../terminal/wait/claude-open-dialog-hold'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { resolveStructuredWorkerIdentity } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
@@ -83,9 +82,10 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       // Windows hooks print `{}` before they post; WSL and SSH relays answer for Claude.
       return process.platform !== 'win32' && pty !== null && pty.connectionId === null && !pty.isWsl
     },
-    showsDialog: (paneKey) => {
-      const lines = this.readLiveTerminalScreenLines(this.getPtyRecordForPaneKey(paneKey)?.ptyId)
-      return lines ? showsClaudeDialog(lines) : null
+    processIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+    readScreen: (paneKey) => {
+      const ptyId = this.getPtyRecordForPaneKey(paneKey)?.ptyId
+      return ptyId ? (this.readCaughtUpRuledScreen(ptyId)?.lines ?? null) : null
     },
     setTimer: unrefTimer
   })

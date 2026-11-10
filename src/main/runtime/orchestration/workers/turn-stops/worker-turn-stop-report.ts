@@ -221,6 +221,8 @@ const CLOSED_BY: Record<NonNullable<WorkerApprovalPayload['outcome']>['by'], str
   coordinator: 'by the coordinator',
   'worker-chat': "in the worker's own chat",
   'worker-terminal': "in the worker's terminal",
+  auto: "by the worker's agent on its own (its 2:00 timeout)",
+  'terminal-only': "for Orca; a person must answer it in the worker's terminal",
   unknown: 'without an answer Orca can name'
 }
 
@@ -240,7 +242,7 @@ function describeApprovalClosed(approval: WorkerApprovalPayload): string {
               ])
         ]
       : []),
-    'Nothing to do unless the worker stays stuck.'
+    ...(outcome?.by === 'terminal-only' ? [] : ['Nothing to do unless the worker stays stuck.'])
   ].join('\n')
 }
 
