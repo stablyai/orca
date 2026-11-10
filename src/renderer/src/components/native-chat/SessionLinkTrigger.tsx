@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/session-link-wait'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { sessionLinkPauseReason } from './session-link-presentation'
 import './session-link-trigger.css'
 
@@ -20,6 +20,8 @@ export function SessionLinkTrigger({
   sessionId: string
   onOpen: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+
   const link = snapshot?.link
   const partner = link?.participants.find((p) => p.sessionId !== sessionId)
   const question = link?.state === 'paused' && snapshot && sessionLinkOwnerRequest(snapshot.events)
@@ -31,7 +33,7 @@ export function SessionLinkTrigger({
     link?.state === 'paused'
       ? question
         ? t('components.sessionLink.ownerQuestion', 'Question for you')
-        : sessionLinkPauseReason(link)
+        : sessionLinkPauseReason(link, t)
       : link?.state === 'ended'
         ? t('components.sessionLink.endedShort', 'Ended')
         : waiting

@@ -93,7 +93,7 @@ export function SessionLinkOwnerQuestion({
         <div className="max-h-80 space-y-2 overflow-y-auto px-3 pb-3 scrollbar-sleek">
           <p className="text-xs text-muted-foreground">{snapshot.link.story}</p>
           <p role="status" className="text-sm">
-            {sessionLinkStatus(snapshot)}
+            {sessionLinkStatus(snapshot, t)}
           </p>
           <p className="text-xs text-muted-foreground">
             {snapshot.link.participants.map((p) => `${p.agent} · ${p.name}`).join(' ↔ ')}

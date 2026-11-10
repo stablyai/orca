@@ -1,6 +1,6 @@
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { SessionLinkParticipant } from '../../../../shared/session-link'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SessionLinkParticipantCard({
   participant,
@@ -9,6 +9,8 @@ export function SessionLinkParticipantCard({
   participant: SessionLinkParticipant
   role: 'reviewer' | 'implementer'
 }): React.JSX.Element {
+  const t = useTranslate()
+
   return (
     <div className="min-w-0 space-y-2 rounded-md border p-3">
       <p className="text-xs font-medium text-muted-foreground">

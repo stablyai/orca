@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import type { SessionLinkParticipant } from '../../../../shared/session-link'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '@/components/ui/label'
 import {
   Command,
@@ -22,6 +22,8 @@ export function SessionLinkParticipantPicker({
   disabled: boolean
   onSelect: (sessionId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+
   return (
     <div className="space-y-1">
       <Label>{t('components.sessionLink.participants', 'Participants')}</Label>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { SessionLinkParticipant } from '../../../../shared/session-link'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { SessionLinkParticipantPicker } from './SessionLinkParticipantPicker'
 
@@ -15,6 +15,8 @@ export function SessionLinkAddParticipants({
   initialSessionId?: string
   onAdd: (sessionIds: string[]) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
+
   const [open, setOpen] = useState(Boolean(initialSessionId))
   const [selected, setSelected] = useState<string[]>(initialSessionId ? [initialSessionId] : [])
   return (

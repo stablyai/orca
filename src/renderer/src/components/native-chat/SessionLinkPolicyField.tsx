@@ -3,7 +3,7 @@ import {
   SESSION_LINK_DEFAULT_TURN_LIMIT,
   type SessionLinkPolicy
 } from '../../../../shared/session-link'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +24,8 @@ export function SessionLinkPolicyField({
   onChange: (value: SessionLinkPolicy) => void
   disabled: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
+
   const id = useId()
   return (
     <SecuritySurface>

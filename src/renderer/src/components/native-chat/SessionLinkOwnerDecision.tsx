@@ -3,7 +3,7 @@ import type { SessionLink, SessionLinkEvent } from '../../../../shared/session-l
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { formatAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { NativeChatQuestionCard } from './prompts/NativeChatQuestionCard'
 import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
@@ -23,6 +23,8 @@ export function SessionLinkOwnerDecision({
   shouldFocus?: boolean
   onAnswer: (body: string) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
+
   const [collapsed, setCollapsed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const asker = link.participants.find((participant) => participant.sessionId === request.actor)

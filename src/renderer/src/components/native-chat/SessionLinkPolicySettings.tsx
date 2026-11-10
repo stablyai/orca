@@ -4,7 +4,7 @@ import {
   SessionLinkPolicy,
   type SessionLink
 } from '../../../../shared/session-link'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { SessionLinkPolicyField } from './SessionLinkPolicyField'
 
@@ -17,6 +17,8 @@ export function SessionLinkPolicySettings({
   disabled: boolean
   onSave: (policy: SessionLinkPolicy, resume: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+
   const [policy, setPolicy] = useState<SessionLinkPolicy>(
     link.policy ?? { turnLimit: SESSION_LINK_TURN_LIMIT }
   )

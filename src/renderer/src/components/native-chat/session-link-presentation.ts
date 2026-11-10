@@ -5,9 +5,10 @@ import {
   type SessionLinkSnapshot
 } from '../../../../shared/session-link'
 import { sessionLinkWaitingFor } from '../../../../shared/session-link-wait'
-import { translate as t } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-export function sessionLinkReason(reason: string): string {
+export function sessionLinkReason(reason: string, t: Translate = translate): string {
   const labels: Record<string, string> = {
     'participants-added': t(
       'components.sessionLink.participantsAdded',
@@ -68,15 +69,18 @@ export function sessionLinkReason(reason: string): string {
   return labels[reason] ?? reason
 }
 
-export function sessionLinkPauseReason(link: SessionLink): string {
+export function sessionLinkPauseReason(link: SessionLink, t: Translate = translate): string {
   return link.reason === 'turn-limit'
     ? t('components.sessionLink.turnLimitReached', 'Turn limit reached ({{count}})', {
         count: link.policy?.turnLimit ?? SESSION_LINK_TURN_LIMIT
       })
-    : sessionLinkReason(link.reason)
+    : sessionLinkReason(link.reason, t)
 }
 
-export function sessionLinkEventKind(kind: SessionLinkEvent['kind']): string {
+export function sessionLinkEventKind(
+  kind: SessionLinkEvent['kind'],
+  t: Translate = translate
+): string {
   return {
     control: t('components.sessionLink.control', 'Link control'),
     introduction: t('components.sessionLink.introduction', 'Introduction'),
@@ -89,7 +93,10 @@ export function sessionLinkEventKind(kind: SessionLinkEvent['kind']): string {
   }[kind]
 }
 
-export function sessionLinkDeliveryState(state: SessionLinkEvent['state']): string {
+export function sessionLinkDeliveryState(
+  state: SessionLinkEvent['state'],
+  t: Translate = translate
+): string {
   return {
     recorded: t('components.sessionLink.recorded', 'Recorded'),
     queued: t('components.sessionLink.queued', 'Queued'),
@@ -100,12 +107,12 @@ export function sessionLinkDeliveryState(state: SessionLinkEvent['state']): stri
   }[state]
 }
 
-export function sessionLinkStatus(snapshot: SessionLinkSnapshot): string {
+export function sessionLinkStatus(snapshot: SessionLinkSnapshot, t: Translate = translate): string {
   if (snapshot.link.state === 'ended') {
     return t('components.sessionLink.ended', 'Link ended. The journal is retained.')
   }
   if (snapshot.link.state === 'paused') {
-    return `${t('components.sessionLink.paused', 'Paused')} · ${sessionLinkPauseReason(snapshot.link)}`
+    return `${t('components.sessionLink.paused', 'Paused')} · ${sessionLinkPauseReason(snapshot.link, t)}`
   }
   const waiting = snapshot.link.participants
     .filter((p) => sessionLinkWaitingFor(snapshot.events, p.sessionId))

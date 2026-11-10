@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 export function NativeChatQuestionHeader({
@@ -20,6 +20,8 @@ export function NativeChatQuestionHeader({
   onCancel?: () => void
   onCollapse?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+
   return (
     <>
       <div className="flex items-start gap-2 px-3.5 py-2.5">
@@ -40,7 +42,7 @@ export function NativeChatQuestionHeader({
             type="button"
             onClick={onCancel}
             disabled={isCancelling}
-            aria-label={translate('components.native-chat.question.cancel', 'Cancel')}
+            aria-label={t('components.native-chat.question.cancel', 'Cancel')}
             className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="size-4" />
