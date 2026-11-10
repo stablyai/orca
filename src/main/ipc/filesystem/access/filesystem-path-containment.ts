@@ -12,7 +12,8 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
   return ancestor !== null && isSameFilesystemObject(ancestor, resolvedBase)
 }
 
-function isDescendantOrEqualExact(resolvedTarget: string, resolvedBase: string): boolean {
+/** Containment as spelled, with no filesystem I/O. */
+export function isDescendantOrEqualExact(resolvedTarget: string, resolvedBase: string): boolean {
   if (resolvedTarget === resolvedBase) {
     return true
   }

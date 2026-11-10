@@ -4,6 +4,7 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { buildAgentList, type AgentListSection } from './agent-list-model'
 import {
+  selectActiveAgents,
   selectAgentsNeedingYou,
   type AgentListInput,
   type AgentListRow,
@@ -55,7 +56,7 @@ function input(
     worktreeInfo: Object.fromEntries(
       Object.entries(hosts).map(([id, host]) => [
         id,
-        { hostId: id, totalWorktrees: 1, activeCount: 0, lastActiveWorktree: null, ...host.info }
+        { hostId: id, totalWorktrees: 1, activeCount: 0, ...host.info }
       ])
     ),
     now: NOW
@@ -79,24 +80,22 @@ const statusView = (showWorkers: boolean, unreadOnly = false) => ({
 
 describe('buildAgentList by status', () => {
   it('buckets agents by what they ask of the user, newest first, and folds idle ones', () => {
-    const list = buildAgentList(
-      input({
-        mac: {
-          state: 'connected',
-          info: {
-            agents: entries([
-              agent('asking', 'waiting'),
-              agent('older-run', 'working', { stateStartedAt: NOW - 5 * MINUTE }),
-              agent('newer-run', 'working', { stateStartedAt: NOW - 2 * MINUTE }),
-              agent('finished', 'done'),
-              // Silent past the 30-minute freshness window.
-              agent('quiet', 'working', { updatedAt: NOW - 31 * MINUTE })
-            ])
-          }
+    const host = input({
+      mac: {
+        state: 'connected',
+        info: {
+          agents: entries([
+            agent('asking', 'waiting'),
+            agent('older-run', 'working', { stateStartedAt: NOW - 5 * MINUTE }),
+            agent('newer-run', 'working', { stateStartedAt: NOW - 2 * MINUTE }),
+            agent('finished', 'done'),
+            // Silent past the 30-minute freshness window.
+            agent('quiet', 'working', { updatedAt: NOW - 31 * MINUTE })
+          ])
         }
-      }),
-      statusView(true)
-    )
+      }
+    })
+    const list = buildAgentList(host, statusView(true))
     expect(shape(list.sections)).toEqual([
       { kind: 'needs-you', rows: ['asking'], workers: [[]], idle: undefined },
       {
@@ -107,6 +106,7 @@ describe('buildAgentList by status', () => {
       },
       { kind: 'done', rows: ['finished'], workers: [[]], idle: ['quiet'] }
     ])
+    expect(panes(selectActiveAgents(host))).toEqual(['asking', 'newer-run', 'older-run'])
   })
 
   it('nests workers under their coordinator and still lists the one that needs the user', () => {

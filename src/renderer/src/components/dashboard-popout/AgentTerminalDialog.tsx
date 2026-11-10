@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -11,9 +11,10 @@ import {
   type DashboardRevealAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 /** Routing payload for focusing an agent's pane in the main window. */
 export type AgentRevealArgs = DashboardRevealAgentArgs
@@ -101,8 +102,13 @@ function AgentTerminalFrame({
           onRequestClose={() => onOpenChange(false)}
         />
       ) : (
-        <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ hostKind: card.hostKind }, t)}
+        <div className="scrollbar-sleek max-h-[calc(100vh-140px)] min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+          <div className="text-[11px] text-muted-foreground">
+            {terminalPreviewUnavailableMessage({ hostKind: card.hostKind }, t)}
+          </div>
+          {hasAgentCardLastMessages(card) ? (
+            <AgentCardLastMessages card={card} clamp={false} className="mt-2 gap-1.5" />
+          ) : null}
         </div>
       )}
       <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">

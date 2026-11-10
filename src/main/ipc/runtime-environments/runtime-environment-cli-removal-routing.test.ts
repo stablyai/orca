@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import {
   addEnvironmentFromPairingCode,
   removeEnvironment
@@ -33,10 +33,13 @@ const { subscribeMock, supportsMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOriginal) => ({
-  ...(await importOriginal()),
-  subscribeRemoteRuntimeRequest: subscribeMock
-}))
+vi.mock(
+  '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport',
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    subscribeRemoteRuntimeTransport: subscribeMock
+  })
+)
 vi.mock('./runtime-environment-shared-control-support', async (importOriginal) => ({
   ...(await importOriginal()),
   supportsSharedControl: supportsMock
@@ -102,7 +105,7 @@ async function subscribed(method: string) {
   subscribeMock.mockImplementation(
     async (_pairing, _method, _params, _timeoutMs, received: ResponseCallbacks) => {
       callbacks = received
-      return { close: () => {} } satisfies Partial<RemoteRuntimeSubscription>
+      return { close: () => {} } satisfies Partial<RemoteRuntimeTransportSubscription>
     }
   )
   const onEvent = vi.fn()

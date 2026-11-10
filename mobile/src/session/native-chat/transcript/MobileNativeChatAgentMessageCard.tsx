@@ -11,7 +11,7 @@ import {
   type AgentMessageHeading
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
-import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
 import { AgentStateDot } from '../../../components/AgentStateDot'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'

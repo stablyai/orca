@@ -1,11 +1,12 @@
 import type { MutableRefObject } from 'react'
 import type {
   BrowserGrabPayload,
-  BrowserGrabScreenshot
-} from '../../../../../shared/browser-grab-types'
+  BrowserGrabScreenshot,
+  GrabIntent
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
-import type { BrowserPageGrabToastState, GrabIntent } from '../describe-page/browser-page-types'
+import type { BrowserPageGrabToastState } from '../describe-page/browser-page-types'
 
 export function runBrowserGrabActionShortcut({
   key,

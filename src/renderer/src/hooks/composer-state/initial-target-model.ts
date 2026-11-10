@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
-import type { WorkspaceCreationTargetResolution } from '@/lib/project-host-workspace-target'
+import type { WorkspaceCreationTargetResolution } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerInitialTargetModel = {
   draftRepoId: string | null

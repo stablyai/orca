@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { SettingsHostScope } from '../settings/host-scope/settings-host-scope'
 import { SettingsHostScopeUnavailableNotice } from '../settings/host-scope/SettingsHostScopePicker'
 import { resolveAccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   getUsageOwnerHostScope,
   useOwnerUsageRateLimits

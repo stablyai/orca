@@ -22,9 +22,11 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
-  subscribeRemoteRuntimeRequest: vi.fn()
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: sendRemoteRuntimeRequestMock
+}))
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: vi.fn()
 }))
 
 vi.mock('./runtime-environment-request-connections', async () => {

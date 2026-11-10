@@ -3,7 +3,7 @@ import {
   isManagedBrowserProfileOf,
   managedBrowserProfileOwnerKey,
   type ManagedBrowserProfileOwner
-} from '../../../../shared/browser-profile-scope'
+} from '../../../../shared/browser/profiles/browser-profile-scope'
 import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
 import { browserSessionRegistry } from './browser-session-registry'
 

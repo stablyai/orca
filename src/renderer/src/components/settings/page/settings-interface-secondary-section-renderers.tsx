@@ -88,7 +88,7 @@ export function renderInputSettingsSection(
   return (
     <SettingsSection
       id="input"
-      title={t('auto.components.settings.Settings.d7a3e635b6', 'Input & Editing')}
+      title={t('auto.components.settings.Settings.f1fddf7764', 'Input & editing')}
       description={t(
         'auto.components.settings.Settings.d0b7021d64',
         'Selection and editing behavior.'
@@ -154,7 +154,7 @@ export function renderStatsSettingsSection(
   return (
     <SettingsSection
       id="stats"
-      title={t('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
+      title={t('auto.components.settings.Settings.084f34826d', 'Stats & usage')}
       description={t(
         'auto.components.settings.Settings.8acf3f22e0',
         'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'

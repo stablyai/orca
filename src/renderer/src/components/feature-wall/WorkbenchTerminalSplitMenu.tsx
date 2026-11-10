@@ -1,6 +1,6 @@
 import type { JSX, RefObject } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 function SplitRightIcon(): JSX.Element {
   return (

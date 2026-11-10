@@ -1,6 +1,6 @@
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { formatPRDelta } from '../task-page-pr-delta-summary'
@@ -20,7 +20,7 @@ import {
   ExternalLink,
   EllipsisVertical
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,

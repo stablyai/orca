@@ -2,7 +2,7 @@ import { Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom-editors'
 
 function detail(title: string, t: Translate = translate): string {

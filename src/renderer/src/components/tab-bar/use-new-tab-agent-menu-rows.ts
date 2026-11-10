@@ -19,7 +19,7 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
-import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   readHostStructuredAgents,
@@ -30,16 +30,16 @@ import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
+import { hostChatAnswer } from '@/lib/agent-session/launch/routing/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { readChatProgram } from '@/lib/host-chat-program'
-import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -51,11 +51,15 @@ export function useNewTabAgentMenuRows(
   detectionTarget: AgentDetectionTarget | undefined,
   options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
-  return useAgentMenuObservation(target, open, detectionTarget, options).model
+  // Only the new-tab menu opens setup chats; pickers that save an agent need one that runs.
+  return useAgentMenuObservation(target, open, detectionTarget, {
+    ...options,
+    offerAgentSetup: true
+  }).model
 }
 
 /** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
-export type AgentMenuObservationOptions = { wakeOnOpen?: boolean }
+export type AgentMenuObservationOptions = { wakeOnOpen?: boolean; offerAgentSetup?: boolean }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
@@ -233,7 +237,9 @@ export function useAgentMenuObservation(
     chatAgents,
     chatProgram: (agent) =>
       unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
-    hostChatAnswer: answerFor
+    hostChatAnswer: answerFor,
+    offerAgentSetup: options?.offerAgentSetup,
+    hostPlatform: facts.hostPlatform
   }).map((row) => ({ ...row, executionHostId }))
   const model: NewTabAgentMenuModel = loading
     ? {

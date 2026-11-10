@@ -11,8 +11,9 @@ export function useMobileDictationHaptics(dictation: UseMobileDictationResult): 
     }
   }, [dictation.isRecording])
 
+  const { stop } = dictation
   return useCallback(() => {
     triggerSelection()
-    void dictation.stop()
-  }, [dictation])
+    void stop()
+  }, [stop])
 }

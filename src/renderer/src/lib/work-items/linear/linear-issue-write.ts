@@ -1,8 +1,8 @@
 import { useAppStore } from '@/store/index'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
 import {
   runLinearIssueWrite,
   knownLinearOrganization
