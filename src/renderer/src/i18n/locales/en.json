@@ -20529,7 +20529,6 @@
           "savePercent": "Save {{value0}}%",
           "seatsPeriod": "{{value0}} · {{value1}}",
           "was": "Was",
-          "featureConcurrency2": "{{value0}} sandboxes running at once per seat",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
           "featureLarge3": "Standard (4 vCPU · 8 GB) sandboxes; Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate",
           "featureOverage3": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)",

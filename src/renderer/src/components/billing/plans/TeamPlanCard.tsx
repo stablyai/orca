@@ -55,13 +55,6 @@ export function TeamPlanCard({
         value0: String(team.largeMachineWeight)
       }
     ),
-    t(
-      'auto.components.billing.plans.featureConcurrency2',
-      '{{value0}} sandboxes running at once per seat',
-      {
-        value0: String(team.concurrentSandboxesPerSeat)
-      }
-    ),
     t('auto.components.billing.plans.featureSleep2', 'Sleeps after {{value0}} minutes idle', {
       value0: String(team.idleSleepMinutes)
     }),
