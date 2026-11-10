@@ -250,7 +250,7 @@ export function RepositoryHookCommandSourceSetting({
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {t('auto.components.settings.RepositoryHooksSection.32fec28f5b', 'Command Source')}
+              {t('auto.components.settings.RepositoryHooksSection.88c6d1e54a', 'Command source')}
             </p>
             <p className="text-[11px] text-muted-foreground">
               <Trans

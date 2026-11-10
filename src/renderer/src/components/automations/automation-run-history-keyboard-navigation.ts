@@ -1,5 +1,5 @@
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 
 export type AutomationRunHistoryArrowKey = 'ArrowUp' | 'ArrowDown'
 

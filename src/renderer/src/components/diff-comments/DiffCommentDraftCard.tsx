@@ -1,7 +1,7 @@
 import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
 import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'

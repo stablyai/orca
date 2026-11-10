@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { brotliCompressSync } from 'node:zlib'
 import { installFakeAppEnvironment } from '../../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
@@ -8,6 +9,7 @@ import { MOBILE_WEB_BUNDLE_METHODS } from './mobile-web-bundle'
 import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
+  mobileWebBundleBrotliPath,
   type MobileWebBundleAsset
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 
@@ -22,7 +24,8 @@ export function mobileWebBundleFiller(byteLength: number, seed: number): Buffer 
   return bytes
 }
 
-export type SyntheticAsset = { path: string; bytes: Buffer; contentType: string }
+/** `brotli` writes the asset's brotli copy and lists its length, as the shipped build does. */
+export type SyntheticAsset = { path: string; bytes: Buffer; contentType: string; brotli?: boolean }
 
 /** Use synthetic multi-chunk assets because the current builder emits smaller files and CI unit jobs do not build the bundle. */
 function syntheticAssets(seed: number): SyntheticAsset[] {
@@ -58,15 +61,22 @@ export function writeSyntheticMobileWebBundle(
 ): SyntheticMobileWebBundle {
   mkdirSync(join(root, 'assets'), { recursive: true })
   const written = [...syntheticAssets(seed), ...extraAssets]
+  const copies = new Map<string, Buffer>()
   for (const asset of written) {
     writeFileSync(join(root, asset.path), asset.bytes)
+    if (asset.brotli === true) {
+      const copy = brotliCompressSync(asset.bytes)
+      writeFileSync(join(root, mobileWebBundleBrotliPath(asset.path)), copy)
+      copies.set(asset.path, copy)
+    }
   }
   const assets = written
     .map((asset) => ({
       path: asset.path,
       sha256: sha256Hex(asset.bytes),
       byteLength: asset.bytes.byteLength,
-      contentType: asset.contentType
+      contentType: asset.contentType,
+      ...(copies.has(asset.path) ? { brotliByteLength: copies.get(asset.path)?.byteLength } : {})
     }))
     .sort((left, right) => (left.path < right.path ? -1 : 1))
   const buildId = computeMobileWebBundleId(assets)

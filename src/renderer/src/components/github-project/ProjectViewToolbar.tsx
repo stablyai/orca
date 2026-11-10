@@ -7,7 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {

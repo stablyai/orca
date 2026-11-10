@@ -16,7 +16,7 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mock.state) => unknown) => selector(mock.state)
 }))
-vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => mock.platform }))
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => mock.platform }))
 
 function Menu({
   isFocused,

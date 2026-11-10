@@ -67,7 +67,8 @@ export function remapHostAgentStatus(
     ...entry,
     worktreeId: entry.worktreeId || frameWorktreeId,
     paneKey,
-    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
+    tabId: toWebTerminalSurfaceTabId(surface.parentTabId),
+    ...(surface.launchAttested !== undefined ? { launchAttested: surface.launchAttested } : {})
   }
 }
 
