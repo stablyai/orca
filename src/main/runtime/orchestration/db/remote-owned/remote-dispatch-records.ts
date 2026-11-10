@@ -132,9 +132,7 @@ export function recordRemoteDispatchReport(
   report: string
 ): void {
   db.db
-    .prepare(
-      `UPDATE remote_dispatches SET last_report = ?, updated_at = datetime('now') WHERE dispatch_id = ?`
-    )
+    .prepare(`UPDATE remote_dispatches SET last_report = ? WHERE dispatch_id = ?`)
     .run(report, dispatchId)
 }
 

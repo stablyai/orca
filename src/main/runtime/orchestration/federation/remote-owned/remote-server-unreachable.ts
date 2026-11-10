@@ -31,7 +31,8 @@ export function explainRemoteServerFailure(
   const { server, dispatchId } = call
   const show = `worker-show${dispatchId ? ` --dispatch ${dispatchId}` : ''}`
   const message = isOrchestrationMutation(call.method, call.params)
-    ? `${server} did not answer (${error.message}), so this Orca cannot tell whether the command reached it. Make sure Orca is running on ${server}, then check with ${show} before running the command again.`
+    ? `${server} did not answer (${error.message}), so this Orca cannot tell whether the command reached it. Make sure Orca is running on ${server} and check with ${show}. Retry only with the same request ID (--retry-request); a new command could apply it twice.`
     : `${server} could not be reached (${error.message}). Make sure Orca is running on ${server}, then try again.${dispatchId ? ` Meanwhile ${show} gives this Orca's last record of the worker; its output is kept only on ${server}.` : ''}`
-  return new OrchestrationError(code, message, { server, reachable: false })
+  const data = 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
+  return new OrchestrationError(code, message, { ...data, server, reachable: false })
 }
