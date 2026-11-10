@@ -37,6 +37,13 @@ export type Env = {
   SANDBOX_JWT_AUDIENCE: string
   /** Dev-only operator key set (issuer `orca-sandbox-dev-test`); ignored when SANDBOX_ENV=prod. */
   SANDBOX_DEV_JWKS?: string
+  /**
+   * Dev only (ignored when SANDBOX_ENV=prod): also trust Orca Cloud auth STAGING sandbox tokens, as
+   * billing dev does, so a staging sign-in works end to end. URL in deployments, inline set in tests.
+   */
+  SANDBOX_STAGING_JWKS_URL?: string
+  SANDBOX_STAGING_JWKS?: string
+  SANDBOX_STAGING_AUTH_ISSUER?: string
 
   // Billing Worker (entitlement checks + usage). CONTROL_PLANE_TOKEN is shared with it.
   BILLING_URL?: string

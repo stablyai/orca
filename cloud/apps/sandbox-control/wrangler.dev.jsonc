@@ -36,6 +36,9 @@
     "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
     "SANDBOX_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
     "SANDBOX_AUTH_ISSUER": "https://login.onorca.dev",
+    // Dev only: also trust Orca Cloud auth STAGING sandbox tokens (billing dev trusts staging too).
+    "SANDBOX_STAGING_JWKS_URL": "https://auth-staging.onorca.dev/.well-known/jwks.json",
+    "SANDBOX_STAGING_AUTH_ISSUER": "https://auth-staging.onorca.dev",
     "VERCEL_TEAM_ID": "team_c5IO9DfEYAxKEUgMxrbEtO0a",
     "VERCEL_PROJECT_ID": "prj_SkVtv6zJurF9dUHpfTRy4v9avwPq",
     "VERCEL_REGION": "iad1",
