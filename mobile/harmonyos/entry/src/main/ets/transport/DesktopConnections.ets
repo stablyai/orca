@@ -41,17 +41,18 @@ export function closeIdleDesktopConnections(): void {
   });
 }
 
-export function retainDesktopConnection(context: common.UIAbilityContext, hostId: string): DesktopConnectionLease {
+export function retainDesktopConnection(context: common.UIAbilityContext, hostId: string,
+  connectWhileHeld: boolean = false): DesktopConnectionLease {
   cancelIdle(hostId);
   let existing = desktops.get(hostId);
   let connection = existing ?? new DesktopConnection(context, hostId);
   if (!existing) { desktops.set(hostId, connection); }
-  connection.retain();
+  connection.retain(connectWhileHeld);
   let held = true;
   return { connection: connection, release: (keepForNavigation: boolean = false): void => {
     if (!held) { return; }
     held = false;
-    if (!connection.release() || desktops.get(hostId) !== connection) { return; }
+    if (!connection.release(connectWhileHeld) || desktops.get(hostId) !== connection) { return; }
     // A shell can pop before Home finishes reading a newly paired desktop.
     if (keepForNavigation) {
       idleTimers.set(hostId, setTimeout((): void => closeIdle(hostId, connection), 2000));
@@ -106,6 +107,7 @@ export class DesktopConnection {
   private connectedAt: number | null = null;
   private activePath: string = 'lan';
   private holders: number = 0;
+  private scopedConnectionHolders: number = 0;
   private generation: number = 0;
   private profileRevision: number = 0;
   private credentialProbeRevision: number = 0;
@@ -120,9 +122,22 @@ export class DesktopConnection {
     this.notifications = new DesktopNotifications(context);
   }
 
-  retain(): void { this.holders++; }
+  retain(connectWhileHeld: boolean): void {
+    this.holders++;
+    if (connectWhileHeld) {
+      this.scopedConnectionHolders++;
+      this.startConnection(false);
+    }
+  }
 
-  release(): boolean { return --this.holders === 0; }
+  release(connectWhileHeld: boolean): boolean {
+    this.holders--;
+    if (connectWhileHeld) {
+      this.scopedConnectionHolders--;
+      if (this.holders > 0) { this.stopIfUnused(); }
+    }
+    return this.holders === 0;
+  }
   dispose(): void { this.closeTransport(); }
 
   observe(listener: DesktopListener): () => void {
@@ -168,7 +183,15 @@ export class DesktopConnection {
     let previous = this.homeAutoConnect;
     this.homeAutoConnect = selected;
     if (selected) { this.startConnection(false); }
-    else if (previous && !this.wanted && !this.paused) {
+    else if (previous) { this.stopIfUnused(); }
+  }
+
+  private hasDemand(): boolean {
+    return this.wanted || this.homeAutoConnect || this.scopedConnectionHolders > 0;
+  }
+
+  private stopIfUnused(): void {
+    if (!this.hasDemand() && !this.paused) {
       this.closeTransport(); this.publish('stopped', '已断开');
     }
   }
@@ -294,12 +317,12 @@ export class DesktopConnection {
 
   private replaceTransport(): void {
     this.closeTransport(); this.meta = null;
-    if ((this.wanted || this.homeAutoConnect) && !this.paused) { this.startConnection(true); }
+    if (this.hasDemand() && !this.paused) { this.startConnection(true); }
     else { this.publish('stopped', '已断开'); }
   }
 
   revive(reason?: RevivalReason): void {
-    if (this.removed || this.paused || (!this.wanted && !this.homeAutoConnect)) { return; }
+    if (this.removed || this.paused || !this.hasDemand()) { return; }
     if (reason) {
       let network = reason === 'network-change';
       appendLog(this.context, LOG_LEVEL_INFO, network ? 'Network changed' : 'App resumed', '', this.hostId,

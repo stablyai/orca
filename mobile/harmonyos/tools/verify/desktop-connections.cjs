@@ -194,3 +194,49 @@ test('Home fills automatic slots with readable pairings and keeps a manual disco
     leases.forEach((lease) => lease.release())
   }
 })
+
+test('releasing a settings connection leaves only desktops that still have connection demand', async () => {
+  const hosts = ['recent', 'older', 'manual'].map((id) => ({
+    id,
+    endpoint: `ws://${id}.invalid:6768`
+  }))
+  const { retainDesktopConnection } = loadDesktopConnections(hosts)
+  const recent = retainDesktopConnection({}, 'recent')
+  const older = retainDesktopConnection({}, 'older')
+  const manual = retainDesktopConnection({}, 'manual')
+  recent.connection.setHomeAutoConnect(true)
+  older.connection.setHomeAutoConnect(true)
+  manual.connection.connect(true)
+  const recentSettings = retainDesktopConnection({}, 'recent', true)
+  const manualSettings = retainDesktopConnection({}, 'manual', true)
+  const firstSettings = retainDesktopConnection({}, 'older', true)
+  const secondSettings = retainDesktopConnection({}, 'older', true)
+  try {
+    const [recentClient, olderClient, manualClient] = await Promise.all(
+      [recent, older, manual].map(({ connection }) => waitForPhase(connection, 'connected'))
+    )
+    older.connection.setHomeAutoConnect(false)
+    assert.equal(older.connection.getClient(), olderClient)
+    firstSettings.release()
+    assert.equal(older.connection.getClient(), olderClient)
+    secondSettings.release()
+    assert.equal(older.connection.getClient(), null)
+    assert.equal(olderClient.closed, true)
+    recentSettings.release()
+    manualSettings.release()
+    assert.equal(recent.connection.getClient(), recentClient)
+    assert.equal(manual.connection.getClient(), manualClient)
+  } finally {
+    for (const lease of [
+      recentSettings,
+      manualSettings,
+      firstSettings,
+      secondSettings,
+      recent,
+      older,
+      manual
+    ]) {
+      lease.release()
+    }
+  }
+})

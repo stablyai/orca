@@ -72,10 +72,9 @@ struct VoiceSettings {
     listHosts(context).then((hosts: HostMeta[]): void => {
       if (epoch !== this.pageEpoch) { return; }
       this.desktops = hosts.map((host: HostMeta): VoiceDesktop =>
-        ({ id: host.id, lease: retainDesktopConnection(context, host.id), unobserve: (): void => {} }));
+        ({ id: host.id, lease: retainDesktopConnection(context, host.id, true), unobserve: (): void => {} }));
       this.desktops.forEach((desktop: VoiceDesktop): void => {
         desktop.unobserve = desktop.lease.connection.observe((): void => this.selectDesktop());
-        desktop.lease.connection.connect();
       });
       this.selectDesktop();
     }).catch((): void => {

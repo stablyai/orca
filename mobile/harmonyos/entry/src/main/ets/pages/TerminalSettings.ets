@@ -75,7 +75,7 @@ struct TerminalSettings {
       this.fits = hosts.map((host: HostMeta): HostFit =>
         ({ id: host.id, name: host.name, connected: false, ms: null, loaded: false, saving: false }));
       hosts.forEach((host: HostMeta): void => {
-        let lease = retainDesktopConnection(context, host.id);
+        let lease = retainDesktopConnection(context, host.id, true);
         let connection = lease.connection;
         const session: FitConnection = { lease: lease, unobserve: null, revision: 0 };
         this.sessions.set(host.id, session);
@@ -93,7 +93,6 @@ struct TerminalSettings {
             this.loadFit(host.id, client, epoch, revision).catch(() => {});
           }
         });
-        connection.connect();
       });
     }).catch((): void => { if (epoch === this.epoch) { this.error = this.t('hostsLoadFailed'); } });
   }
