@@ -70,11 +70,10 @@ export function listRemoteDispatches(
 
 export function countRemoteDispatches(db: OrchestrationDb, runId: string | undefined): number {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) returns one number.
-  return (
-    db.db
-      .prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE (? IS NULL OR run_id = ?)')
-      .get(runId ?? null, runId ?? null) as { count: number }
-  ).count
+  const row = db.db
+    .prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE (? IS NULL OR run_id = ?)')
+    .get(runId ?? null, runId ?? null) as { count: number }
+  return row.count
 }
 
 /** Identity only: which server runs the Dispatch and for which Task. State comes from the server's queue. */
