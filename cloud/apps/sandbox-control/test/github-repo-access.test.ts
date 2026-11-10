@@ -4,6 +4,10 @@ import { createGitHubAppMinter } from '../src/github-app'
 import { installUrl, isInstallationBound } from '../src/github-connect'
 import type { SetupNotice } from '../src/github-repo-access'
 import { createHarness } from './harness'
+import {
+  HostedGithubRepoAccessResponseSchema,
+  HostedGithubRepositoriesResponseSchema
+} from '../../../../src/shared/hosted-sandbox/hosted-github-wire'
 
 const STATE_SECRET = 's'.repeat(40)
 const HOOK_SECRET = 'w'.repeat(40)
@@ -159,6 +163,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     })
     const missing = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(`${REPO}.git`)}&session=${SESSION}`)
     expect(missing.body).toMatchObject({ access: 'missing', owner: 'acme', repo: REPO })
+    expect(HostedGithubRepoAccessResponseSchema.parse(missing.body)).toEqual(missing.body)
     // No repository id: the plain page, so GitHub never defaults to "All repositories".
     expect(missing.body.installUrl).toMatch(/^https:\/\/github\.com\/apps\/orca-cloud-test\/installations\/new\?state=/)
 
@@ -299,6 +304,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
       installationId: 900
     })
     expect(first.body.nextCursor).toBe('0.2')
+    expect(HostedGithubRepositoriesResponseSchema.parse(first.body)).toEqual(first.body)
     const second = await h.call('GET', `/v1/github/repositories?cursor=${first.body.nextCursor}`)
     expect(second.body.repositories).toHaveLength(31)
     expect(second.body.nextCursor).toBeNull()

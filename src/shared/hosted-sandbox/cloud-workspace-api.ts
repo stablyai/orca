@@ -7,6 +7,10 @@ import type {
   HostedSandboxConfigResponse,
   HostedWorkspaceStatus
 } from './hosted-sandbox-wire'
+import type {
+  HostedGithubRepoAccessResponse,
+  HostedGithubRepositoriesResponse
+} from './hosted-github-wire'
 
 export type CloudWorkspaceErrorCode =
   | 'not_cloud'
@@ -69,8 +73,23 @@ export type OrcaCloudWorkspaceApi = {
   listCloudWorkspaceIds: () => Promise<string[]>
   /** Product constants and measured timings; null when the control plane can't be reached. */
   getConfig: () => Promise<HostedSandboxConfigResponse | null>
-  /** Opens GitHub in the browser to give Orca Cloud access to the account's repositories. */
-  connectGitHub: () => Promise<CloudWorkspaceResult<null>>
+  /**
+   * Opens GitHub in the browser to give Orca Cloud access to the account's repositories. With a
+   * repository, GitHub's page preselects it, and a setup session gets the browser back afterwards.
+   */
+  connectGitHub: (args?: {
+    repoUrl?: string
+    setupSessionId?: string
+  }) => Promise<CloudWorkspaceResult<null>>
+  /** Can Orca Cloud clone this https GitHub repository for the signed-in account (cloud-start N2)? */
+  getRepoAccess: (args: {
+    repoUrl: string
+    setupSessionId?: string
+  }) => Promise<CloudWorkspaceResult<HostedGithubRepoAccessResponse>>
+  /** One page of the repositories the account's GitHub installations reach (cloud-start N12). */
+  listGitHubRepositories: (args: {
+    cursor?: string | null
+  }) => Promise<CloudWorkspaceResult<HostedGithubRepositoriesResponse>>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void
 }
@@ -84,6 +103,8 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   listCloudWorkspaceIds: 'orcaCloudWorkspace:listIds',
   getConfig: 'orcaCloudWorkspace:getConfig',
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',
+  getRepoAccess: 'orcaCloudWorkspace:getRepoAccess',
+  listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',
   oom: 'orcaCloudWorkspace:oom'
 } as const
