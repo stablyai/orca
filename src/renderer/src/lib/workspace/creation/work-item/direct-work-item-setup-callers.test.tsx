@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { hostMocks, mocks } from './launch-work-item-direct-test-fixture'
 import { useAppStore } from '@/store/index'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import type { DirectWorkItemSetupRequest } from './direct-work-item-setup'
 import type { GitHubProjectTable } from '../../../../../../shared/github/project-types'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
@@ -14,7 +14,7 @@ import {
 } from '@/components/pull-request-page/checks/fix-launch'
 import * as preflight from './launch-work-item-direct-preflight'
 import * as preparation from './launch-work-item-direct-route-preparation'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { buildAgentDraftLaunchPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 
@@ -252,9 +252,21 @@ it('retains an edited Fix checks request through the PR-page Start handoff', asy
   expect(mocks.createWorktree.mock.calls[0].at(-1)).toEqual({ executionHostId: 'runtime:env-b' })
   expect(mocks.createWorktree).toHaveBeenCalledOnce()
   expect(mocks.createWorktree.mock.calls[0][3]).toBe('run')
-  expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-    expect.objectContaining({ content: 'My edited prompt', agent: 'claude', submit: true })
+  expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+    'repo-1::/repo/worktree',
+    expect.objectContaining({
+      startup: expect.objectContaining({
+        launchAgent: 'claude',
+        freshAgentLaunch: expect.objectContaining({
+          agentArgs: '--model opus',
+          sessionOptions: { model: 'claude-opus-5-5[1m]' },
+          prompt: 'My edited prompt',
+          promptDelivery: 'submit-after-ready'
+        })
+      })
+    })
   )
+  expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
 })
 
 it.each(['Start work', 'Use item'])(

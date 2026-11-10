@@ -70,11 +70,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftToAgentPtyWhenReady: mockPasteDraftToAgentPtyWhenReady
 }))
 
@@ -92,7 +92,7 @@ vi.mock('@/lib/agent-session/launch/background/agent-background-session-timeout-
 }))
 
 import { ensureAgentStartupInTerminal } from './new-workspace'
-import { resetAgentStartupDelayedDeliveryForTests } from './agent-startup-delayed-delivery'
+import { resetAgentStartupDelayedDeliveryForTests } from './agent-session/launch/startup/agent-startup-delayed-delivery'
 
 describe('ensureAgentStartupInTerminal prompt delivery', () => {
   beforeEach(() => {

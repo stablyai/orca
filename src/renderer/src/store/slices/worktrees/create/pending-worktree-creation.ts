@@ -1,15 +1,17 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { AppState } from '../../../types'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { endWindowCreation } from '@/lib/sidebar-ended-creations'
+import { settleVmCreateCheckoutAfterCleanup } from '@/lib/vm-create-hidden-checkouts'
+import { cancelVmEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check-decision'
 import {
   pendingCreationChatDraftScopeKey,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import { deleteNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
-import { clearNativeChatPendingAttachments } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { releaseNativeChatStagedFiles } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { deleteNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
@@ -109,6 +111,8 @@ export function createRemovePendingWorktreeCreation(
       }
     })
     if (removedEntry) {
+      // A VM build checking or paused on failed checks stops at once; its create then cleans up the VM.
+      cancelVmEnvironmentCheck(creationId)
       endWindowCreation(creationId)
       const scope = pendingCreationChatDraftScopeKey(creationId)
       releaseNativeChatStagedFiles(scope)
@@ -134,7 +138,7 @@ export function createRemovePendingWorktreeCreation(
         console.error('Failed to remove cancelled provisioned-root project setup:', error),
       reportRuntimeError: (error) =>
         console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
-    })
+    }).then((cleanedUp) => settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp))
   }
 }
 

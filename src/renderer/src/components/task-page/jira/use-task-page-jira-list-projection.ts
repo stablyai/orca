@@ -6,12 +6,12 @@ import {
   getTaskPageJiraStatusOrderScopeKey,
   getTaskPageJiraStatusOrderRuntimeScopeKey
 } from '@/components/task-page/jira/task-page-jira-status-order'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,
   collectLinkedJiraIssueRefs,
   findJiraIssueWorkspaceAttachmentsInIndex
-} from '@/lib/jira-issue-workspace-attachment'
+} from '@/lib/work-items/jira/jira-issue-workspace-attachment'
 import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { sortJiraIssues } from '../../jira-issue-sorter'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {

@@ -198,6 +198,25 @@ describe('codex journal translation', () => {
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
   })
 
+  it('journals no row for app-server notifications that carry provider text', () => {
+    const { translator, tap, window } = translatorWith()
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('thread/prediction/updated', { threadId: THREAD_ID, text: 'Predicted reply' })
+    )
+    translator.handle(
+      notification('modelProvider/authRecoveryStarted', { message: 'Reconnecting to provider' })
+    )
+    translator.handle(
+      notification('modelProvider/authRecoveryCompleted', { message: 'Reconnected' })
+    )
+    translator.handle(notification('account/gatewayOAuth/changed', { error: 'Sign-in expired' }))
+    window.fire()
+
+    expect(tap.rows.filter((row) => row.body.kind === 'status')).toEqual([])
+  })
+
   it('writes nothing more after dispose', () => {
     const { translator, tap, window } = translatorWith()
 

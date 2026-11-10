@@ -1,8 +1,8 @@
 import type { PasteTerminalTextDetail } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
@@ -12,20 +12,22 @@ type HandleTerminalProgrammaticTextPasteArgs = {
   tabId: string
   getManager: () => PaneManager | null
   getPaneTransports: () => Map<number, PtyTransport>
+  focusAfterPaste?: () => boolean
 }
 
-export function handleTerminalProgrammaticTextPaste({
+export async function handleTerminalProgrammaticTextPaste({
   detail,
   tabId,
   getManager,
-  getPaneTransports
-}: HandleTerminalProgrammaticTextPasteArgs): void {
+  getPaneTransports,
+  focusAfterPaste = () => true
+}: HandleTerminalProgrammaticTextPasteArgs): Promise<boolean> {
   if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
-    return
+    return false
   }
   const manager = getManager()
   if (!manager) {
-    return
+    return false
   }
   const panes = manager.getPanes()
   const pane =
@@ -33,7 +35,7 @@ export function handleTerminalProgrammaticTextPaste({
       ? (panes.find((candidate) => candidate.id === detail.paneId) ?? null)
       : (manager.getActivePane() ?? panes[0])
   if (!pane) {
-    return
+    return false
   }
   const paneTransports = getPaneTransports()
   const transport = paneTransports.get(pane.id)
@@ -47,7 +49,7 @@ export function handleTerminalProgrammaticTextPaste({
       transport,
       ptyId
     })
-  void pasteTextIntoTerminalPane({
+  const result = await pasteTextIntoTerminalPane({
     pane,
     text: detail.text,
     source: 'programmatic',
@@ -61,11 +63,13 @@ export function handleTerminalProgrammaticTextPaste({
     inputKind: 'driving',
     isTargetCurrent,
     canContinue: isTargetCurrent
-  }).then((result) => {
-    if (result.status !== 'pasted') {
-      return
-    }
-    recordTerminalUserInputForLeaf(tabId, pane.leafId)
-    pane.terminal.focus()
   })
+  if (result.status !== 'pasted') {
+    return false
+  }
+  recordTerminalUserInputForLeaf(tabId, pane.leafId)
+  if (focusAfterPaste()) {
+    pane.terminal.focus()
+  }
+  return true
 }

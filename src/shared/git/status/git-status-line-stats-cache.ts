@@ -305,6 +305,12 @@ export function clearGitStatusLineStatsCache(): void {
   resetGitStatusLineStatsWriteGenerations()
 }
 
+export function clearGitStatusLineStatsCacheKeysWhere(matches: (key: string) => boolean): void {
+  Array.from(lineStatsByWorktree.keys())
+    .filter(matches)
+    .forEach((key) => clearGitStatusLineStatsCacheKey(key))
+}
+
 export function clearGitStatusLineStatsCacheKey(
   cacheKey: string,
   writeToken?: GitStatusLineStatsWriteToken

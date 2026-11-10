@@ -1,6 +1,7 @@
 import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store/index'
+import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import {
   awaitStructuredRouteHostAnswer,
   planAgentSessionLaunch,
@@ -40,7 +41,11 @@ export type LaunchAgentInNewTabResult = {
 
 export type AgentTabLaunchOutcome =
   | LaunchAgentInNewTabResult
-  | { refused: StructuredPromptDeliveryResult }
+  | {
+      refused: StructuredPromptDeliveryResult
+      /** What to do instead, when the caller's visible surface presents the refusal itself. */
+      recovery?: string
+    }
 
 export function shouldQueueTerminalFocusAfterMenuClose(
   result: NonNullable<LaunchAgentInNewTabResult>
@@ -95,7 +100,11 @@ export function routeNewTabLaunch(
   return awaited
     ? {
         awaited,
-        replan: () => planAgentSessionLaunch(useAppStore.getState(), { requestId, ...request })
+        replan: () =>
+          planAgentSessionLaunch(agentTabLaunchStore(useAppStore.getState(), args), {
+            requestId,
+            ...request
+          })
       }
     : { plan: planAgentSessionLaunch(store, { requestId, ...request }) }
 }
@@ -104,16 +113,12 @@ export function routeNewTabLaunch(
 export function launchOnceHostAnswered(
   route: AwaitingHostAnswer,
   args: LaunchAgentInNewTabArgs,
-  relaunch: (args: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome
+  relaunch: (args: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome,
+  onFailure?: () => void
 ): LaunchAgentInNewTabResult {
-  if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
-    args.focusIntent?.cancel()
-    return null
-  }
   const opened = route.awaited.then(() =>
     relaunch({
       ...args,
-      beforeSurfaceOpen: undefined,
       requestId: undefined,
       agentSessionLaunchPlan: route.replan()
     })
@@ -122,7 +127,8 @@ export function launchOnceHostAnswered(
     .then(settleAgentTabLaunch)
     .catch((error: unknown): StructuredAgentLaunchSettlement => {
       args.focusIntent?.cancel()
-      return { kind: 'failed', error }
+      onFailure?.()
+      return { kind: 'failed', error, ...(onFailure ? { notified: true as const } : {}) }
     })
   const deliversPrompt = Boolean(args.prompt?.trim())
   return {

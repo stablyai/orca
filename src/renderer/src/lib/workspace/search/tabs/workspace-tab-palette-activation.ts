@@ -1,7 +1,7 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -15,7 +15,7 @@ import {
   hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
-} from '../../../unified-tab-host-ownership'
+} from '../../ownership/unified-tab-host-ownership'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-results'
 
 export type WorkspaceTabPaletteActivationFailure =

@@ -1,6 +1,6 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
-import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
-import { RipgrepSearchDiagnostics } from '../../shared/ripgrep-search-diagnostics'
+import type { ChildProcess } from 'node:child_process'
+import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
+import { RipgrepSearchDiagnostics } from '../../shared/ripgrep/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import { throwIfSignalAborted, abortSignalReason } from '../../shared/abort-signal-reason'
 import {
@@ -10,7 +10,7 @@ import {
   finalize,
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS
-} from '../../shared/text-search'
+} from '../../shared/file-search/text-search'
 import {
   absorbPendingRipgrepSpawnError,
   classifySynchronousRipgrepSpawnFailure,
@@ -19,7 +19,7 @@ import {
   isRipgrepUnavailableExit,
   isTransientRipgrepSpawnError,
   ripgrepMissingCwdError
-} from '../../shared/ripgrep-process-availability'
+} from '../../shared/ripgrep/ripgrep-process-availability'
 import { toWindowsWslPath } from '../../shared/wsl-paths'
 import { bundledRipgrepUnavailableError } from './bundled-ripgrep-path'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'
@@ -45,7 +45,7 @@ export function runBundledRipgrepTextSearch({
   wslDistro?: string
   wslDistroForOutput?: string
   signal?: AbortSignal
-  onSpawn: (child: ChildProcessHandle) => () => void
+  onSpawn: (child: ChildProcess) => () => void
 }): Promise<SearchResult> {
   throwIfSignalAborted(signal)
   const maxResults = Math.max(
@@ -65,7 +65,7 @@ export function runBundledRipgrepTextSearch({
     let resolved = false
     let processErrorObserved = false
     let unavailableExitObserved = false
-    let child: ChildProcessHandle | null = null
+    let child: ChildProcess | null = null
     let killTimeout: ReturnType<typeof setTimeout> | undefined
     let releaseChild: (() => void) | undefined
 

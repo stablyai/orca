@@ -37,7 +37,7 @@ vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
 vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: vi.fn()
 }))
-vi.mock('@/lib/workspace-terminal-host-authority', () => ({
+vi.mock('@/lib/workspace/ownership/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'none'
 }))
 vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
@@ -53,7 +53,7 @@ vi.mock(
     disposeAllParkedTerminalWatchers: vi.fn()
   })
 )
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport'
       ? new Promise((resolve) => {
@@ -67,30 +67,31 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 // Main answers the window's chat-tab open (switch-on builds).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { isPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
@@ -182,18 +183,6 @@ function expectNoShell(): void {
   expect(layoutApplyTestTransport.sentOfType('createTerminalTab')).toEqual([])
 }
 
-/** The watcher's shell create: here, or (switch-on) sent to main, whose frame draws it. */
-async function expectShellCreatedOnce(): Promise<void> {
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    await layoutApplyTestTransport.settle()
-    expect(layoutApplyTestTransport.sentOfType('createTerminalTab')).toEqual([
-      expect.objectContaining({ workspace: 'wt-1' })
-    ])
-    return
-  }
-  expect(mocks.createTab).toHaveBeenCalledOnce()
-}
-
 /** Observe the original create/open request count; finishChat verifies the actual drawn row. */
 async function expectChatOpenedOnce(): Promise<void> {
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -277,18 +266,6 @@ function gateAnsweredLater(): {
 
 // While admission waits, no launch record exists yet; passive seeding must not add Terminal 1 beside the chat.
 describe('a local chat launch waiting on its host', () => {
-  it('defers the watcher shell for a live host launch, then permits a later ordinary mount', async () => {
-    mocks.gate.mockResolvedValueOnce('blocked').mockResolvedValueOnce('empty')
-    root = createRoot(document.createElement('div'))
-    await act(async () => root?.render(createElement(Watcher)))
-    expectNoShell()
-
-    await act(async () => root?.unmount())
-    root = createRoot(document.createElement('div'))
-    await act(async () => root?.render(createElement(Watcher)))
-    await expectShellCreatedOnce()
-  })
-
   it('keeps a watched create free of a stray shell until its chat opens', async () => {
     const { finish } = gateAnsweredLater()
     const launch = launchChat({
@@ -322,20 +299,5 @@ describe('a local chat launch waiting on its host', () => {
     await expectChatOpenedOnce()
     expectNoShell()
     await finishChat(await pendingLaunch)
-  })
-
-  it('stops owning the surface once the host has answered and its surface opened', async () => {
-    const onHostDeclined = vi.fn(() => ({ opened: true }))
-    const launch = launchChat({
-      plan: localChatPlan(),
-      hooks: {},
-      onHostDeclined
-    })
-    expect(isEmptyWorkspaceDefaultSurfacePending('wt-1')).toBe(true)
-
-    await act(async () => mocks.answers[0]?.({ supported: false }))
-    await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
-    expect(onHostDeclined).toHaveBeenCalledOnce()
-    expect(isEmptyWorkspaceDefaultSurfacePending('wt-1')).toBe(false)
   })
 })

@@ -8,7 +8,7 @@ import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orch
 import type {
   HelperStopOutcome,
   WorkerStopReceipt
-} from '../../../../../../shared/orchestration-worker-stop-receipt'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './single-worker-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [

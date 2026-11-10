@@ -11,8 +11,8 @@ import {
   type WorktreePointerDrag
 } from './row-state'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
-import { createTestStore } from '../../../../store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../../../../store/testing/app-store-test-fixture'
+import { makeFolderWorkspace } from '../../../../store/folder-workspaces/folder-workspace.test-fixture'
 import { getWorktreeDragUnitGroups } from './worktree-drag-units'
 import { buildManualOrderUpdatesForVisibleGroups } from './worktree-manual-order'
 import type { WorktreeManualOrderUpdate } from './worktree-manual-order-ranks'

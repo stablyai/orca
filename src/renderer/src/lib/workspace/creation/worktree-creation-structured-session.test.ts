@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 
 type PendingCreationState = { pendingWorktreeCreations: Record<string, unknown> }
 type PendingCreationListener = (state: PendingCreationState) => void
@@ -85,7 +85,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
-vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', () => ({
   nativeChatComposerSelection: () => undefined,
   waitForNativeChatComposerHandoff: mocks.waitForComposerMount
 }))
@@ -178,12 +178,22 @@ describe('launchStructuredWorktreeSession', () => {
       surface: { kind: 'local-terminal', tabId: 'recovered-terminal' }
     })
 
-    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+    await expect(
+      launchStructuredWorktreeSession({
+        ...baseArgs,
+        request: {
+          ...request,
+          launchInputs: { agentArgs: '', sessionOptions: { model: 'gpt-picked', effort: 'high' } }
+        }
+      })
+    ).resolves.toMatchObject({
       primaryTabId: 'recovered-terminal'
     })
     expect(mocks.launchAgentInNewTabWithOutcome).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: 'Add a test',
+        agentArgs: '',
+        sessionOptions: { model: 'gpt-picked', effort: 'high' },
         promptDelivery: 'auto-submit',
         activate: visible,
         agentSessionLaunchPlan: expect.objectContaining({ route: 'terminal-tui' })

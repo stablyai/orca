@@ -1,5 +1,5 @@
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { applyWorktreeUpdates } from '../worktree-helpers'
+import { applyWorktreeUpdates } from '../worktrees/metadata/worktree-meta-update-application'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById

@@ -1,5 +1,9 @@
+import {
+  pickApprovedSetupHashes,
+  type ApprovedSetupHashes
+} from '../../../../../../shared/worktree/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import './launch-work-item-direct-preflight'
 import { inspectRequiredWorkspaceSetup as resolveDirectSetupDecision } from '../setup/workspace-setup-preparation'
 import type { WorkspaceSetupInspection as DirectSetupInspection } from '../setup/workspace-setup-preparation'
@@ -69,7 +73,9 @@ export async function prepareDirectWorkItemSetup(
   ownerHostId: ExecutionHostId,
   signal?: AbortSignal,
   onSetupRequired?: () => void
-): Promise<SetupDecision | 'cancelled' | 'review-request'> {
+): Promise<
+  ({ setupDecision: SetupDecision } & ApprovedSetupHashes) | 'cancelled' | 'review-request'
+> {
   const inspection = await resolveDirectSetupDecision(repo.id, repo, ownerHostId)
   if (signal?.aborted) {
     return 'cancelled'
@@ -98,5 +104,8 @@ export async function prepareDirectWorkItemSetup(
     () => signal?.aborted === true,
     signal
   )
-  return confirmed === 'cancelled' ? 'cancelled' : confirmed.setupDecision
+  if (confirmed === 'cancelled') {
+    return 'cancelled'
+  }
+  return { setupDecision: confirmed.setupDecision, ...pickApprovedSetupHashes(confirmed) }
 }

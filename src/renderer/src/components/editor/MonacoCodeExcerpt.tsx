@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { monaco } from '@/lib/monaco-setup'
-import { EDITOR_TYPOGRAPHY_SURFACE_CLASS, editorTypographyTextStyle } from '@/lib/editor-typography'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
+import {
+  EDITOR_TYPOGRAPHY_SURFACE_CLASS,
+  editorTypographyTextStyle
+} from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { cn } from '@/lib/utils'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'

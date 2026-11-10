@@ -19,12 +19,17 @@ import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-works
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeVirtualRowTransform } from '../viewport/virtual-rows'
-import { getFolderWorkspaceRowGeometry } from './indentation'
+import {
+  getFolderWorkspaceRowGeometry,
+  getLineageChildrenInlineStyle,
+  LINEAGE_CHILDREN_INLINE_OFFSET
+} from './indentation'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
+import type { WorktreeItemRowContext } from './item-row'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
-import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type FolderWorkspaceRowContext = {
   groupBy: WorktreeGroupBy
@@ -32,7 +37,6 @@ export type FolderWorkspaceRowContext = {
   settings: AppState['settings']
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
-  worktreeDragState: WorktreeRowDragState
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId']
   currentWorktreeId: string | null
@@ -41,6 +45,7 @@ export type FolderWorkspaceRowContext = {
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
   prCache: AppState['prCache'] | null
   hostedReviewCache: AppState['hostedReviewCache'] | null
   getCachedFolderWorkspacePathStatus: (request: {
@@ -59,6 +64,13 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree,
     rowKey: string
   ) => void
+} & Pick<WorktreeItemRowContext, 'worktreeDragState' | 'nativeLineageDropTargetIdentity'>
+
+/** The folder's own nested workspaces: its disclosure, and their cards when shown inline. */
+export type FolderRowLineage = {
+  onToggle: LineageToggleHandler | undefined
+  children?: React.ReactNode
+  childIsActive?: boolean
 }
 
 export function renderFolderWorkspaceVirtualRow(args: {
@@ -66,8 +78,20 @@ export function renderFolderWorkspaceVirtualRow(args: {
   row: FolderWorkspaceItemRow
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  lineage?: FolderRowLineage
 }): React.JSX.Element {
-  const { ctx, row, vItem } = args
+  return renderFolderWorkspaceOption(args)
+}
+
+/** Without `vItem`, the option sits inside a lineage group's frame instead of owning one. */
+export function renderFolderWorkspaceOption(args: {
+  ctx: FolderWorkspaceRowContext
+  row: FolderWorkspaceItemRow
+  vItem?: VirtualItem
+  measureVirtualRowElement?: (element: HTMLDivElement | null) => void
+  lineage?: FolderRowLineage
+}): React.JSX.Element {
+  const { ctx, row, vItem, lineage } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
   const isActiveWorktree = isActiveSidebarWorkspace(folderWorktree, {
@@ -84,6 +108,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
     folderWorkspaceId: row.folderWorkspace.id,
     workspaceLineageByChildKey: ctx.workspaceLineageByChildKey,
+    crossStoreChildren: ctx.crossStoreChildrenByFolderId.get(row.folderWorkspace.id) ?? [],
     worktreeLineageById: ctx.worktreeLineageById,
     worktreeMap: ctx.worktreeMap,
     repoMap: ctx.repoMap,
@@ -102,6 +127,69 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const dragGroupKey = ctx.groupKeyByRowKey.get(folderWorktreeIdentity)
   const { draggingWorktreeId, previewOffsetsByWorktreeId } = ctx.worktreeDragState
   const isDragging = draggingWorktreeId === folderWorktreeIdentity
+  const option = (
+    <div
+      key={row.key}
+      id={getWorktreeOptionId(folderWorktreeIdentity)}
+      role="option"
+      aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
+      aria-current={isActiveWorktree ? 'page' : undefined}
+      data-worktree-id={folderWorktree.id}
+      data-worktree-host-identity={folderWorktreeIdentity}
+      data-worktree-row-key={folderWorktreeIdentity}
+      data-worktree-lineage-drop-row=""
+      data-worktree-drag-id={dragGroupKey ? folderWorktree.id : undefined}
+      data-worktree-drag-group-key={dragGroupKey}
+      data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(folderWorktreeIdentity)}
+      className={cn(
+        'relative transition-[opacity,filter] duration-150 ease-out',
+        isDragging && 'pointer-events-none opacity-0'
+      )}
+      style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
+      onClick={forwardOptionPressToCardSurface}
+      onClickCapture={ctx.onRowClickCapture}
+      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
+    >
+      <WorktreeCard
+        worktree={folderWorktree}
+        repo={undefined}
+        isActive={isActiveWorktree}
+        // A child-active folder looks active without the active card's side effects.
+        isActiveSurface={lineage?.childIsActive === true || isActiveWorktree}
+        isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
+        contentIndent={cardContentIndent}
+        flushSurface
+        nativeDragEnabled={false}
+        onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
+        activationRowKey={folderWorktreeIdentity}
+        onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
+        onContextMenuSelect={ctx.onContextMenuSelect}
+        statusPrDisplay={folderPrDisplay}
+        hostContextLabel={row.hostContextLabel}
+        lineageChildCount={row.lineageChildCount}
+        lineageChildWorktreeIds={row.lineageChildWorktreeIds}
+        lineageCollapsed={row.lineageCollapsed}
+        lineageChildren={lineage?.children}
+        lineageChildrenStyle={
+          lineage?.children
+            ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
+            : undefined
+        }
+        onLineageToggle={lineage?.onToggle}
+        isLineageDropTarget={Boolean(
+          ctx.worktreeDragState.draggingWorktreeId &&
+          (ctx.worktreeDragState.lineageDropTargetIdentity === folderWorktreeIdentity ||
+            ctx.nativeLineageDropTargetIdentity === folderWorktreeIdentity)
+        )}
+      />
+      <div className="pointer-events-auto absolute right-3 top-1.5">
+        <FolderPathStatusIndicator status={pathStatus} />
+      </div>
+    </div>
+  )
+  if (!vItem) {
+    return option
+  }
   // Why: the option row is the drag source; cloning the outer frame would carry its virtual offset into the drag preview.
   return (
     <div
@@ -125,46 +213,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
         )
       }}
     >
-      <div
-        id={getWorktreeOptionId(folderWorktreeIdentity)}
-        role="option"
-        aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
-        aria-current={isActiveWorktree ? 'page' : undefined}
-        data-worktree-id={folderWorktree.id}
-        data-worktree-host-identity={folderWorktreeIdentity}
-        data-worktree-row-key={folderWorktreeIdentity}
-        data-worktree-drag-id={dragGroupKey ? folderWorktree.id : undefined}
-        data-worktree-drag-group-key={dragGroupKey}
-        data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(folderWorktreeIdentity)}
-        className={cn(
-          'relative transition-[opacity,filter] duration-150 ease-out',
-          isDragging && 'pointer-events-none opacity-0'
-        )}
-        style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
-        onClick={forwardOptionPressToCardSurface}
-        onClickCapture={ctx.onRowClickCapture}
-        onPointerDown={(event) =>
-          ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)
-        }
-      >
-        <WorktreeCard
-          worktree={folderWorktree}
-          repo={undefined}
-          isActive={isActiveWorktree}
-          isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
-          contentIndent={cardContentIndent}
-          flushSurface
-          nativeDragEnabled={false}
-          onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          activationRowKey={folderWorktreeIdentity}
-          onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
-          onContextMenuSelect={ctx.onContextMenuSelect}
-          statusPrDisplay={folderPrDisplay}
-        />
-        <div className="pointer-events-auto absolute right-3 top-1.5">
-          <FolderPathStatusIndicator status={pathStatus} />
-        </div>
-      </div>
+      {option}
     </div>
   )
 }

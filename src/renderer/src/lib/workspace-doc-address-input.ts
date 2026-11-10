@@ -2,13 +2,13 @@ import { isAbsoluteFilesystemPathInput } from '../../../shared/browser-url'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { BrowserPageDocLocation } from '../../../shared/browser-workspace-types'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
-import { getWorkspaceFilePreviewPlan } from '@/lib/file-preview'
+import { getWorkspaceFilePreviewPlan } from '@/lib/browser/documents/file-preview'
 import type { AppState } from '@/store/types'
-import { htmlFilePathFromUrl } from '../../../shared/html-file-url'
+import { htmlFilePathFromUrl } from '../../../shared/file-links/html-file-url'
 import { authorityKey } from '../../../shared/host-authority'
-import { resolveOwner } from './resolve-owner'
+import { resolveOwner } from './workspace/ownership/resolve-owner'
 import { translate } from '@/i18n/i18n'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function workspaceHostKey(state: AppState, workspaceId: string): string | null {
   const match = resolveOwner(state, { workspaceId })

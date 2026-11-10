@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
-import { makeFolderWorkspace } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '../../../../store/folder-workspaces/folder-workspace.test-fixture'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { useWorktreeStatusMutations } from './use-status-mutations'
 import {

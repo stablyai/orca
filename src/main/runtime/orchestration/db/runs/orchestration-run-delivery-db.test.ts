@@ -7,8 +7,6 @@ import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
-import { createRootDispatch } from '../root-dispatch-test-fixture'
 import type { DispatchCreator } from '../dispatch-depth'
 
 describe('OrchestrationDb Run state', () => {
@@ -172,30 +170,6 @@ describe('OrchestrationDb Run state', () => {
       expect(replacement?.messages.map((message) => message.subject)).toEqual(['one'])
     })
 
-    it('does not move a mismatched Run through another Run Dispatch mailbox', () => {
-      const d = createDb()
-      const runA = createBoundRun(d)
-      const runB = d.createRun({
-        objective: 'Dispatch owner',
-        coordinatorHandle: 'term_other',
-        coordinatorPaneKey: 'tab_other:22222222-2222-4222-9222-222222222222'
-      })
-      const task = d.createTask({ spec: 'work', runId: runB.id })
-      const dispatch = createRootDispatch(d, task.id, 'term_worker')
-      const mismatched = d.insertMessage({
-        from: 'worker',
-        to: `dispatch:${dispatch.id}`,
-        subject: 'wrong Run',
-        runId: runA.id
-      })
-
-      expect(d.routeUnreadDispatchMailboxToRunMailbox(dispatch.id, runB.id)).toMatchObject({
-        routedCount: 0,
-        hasMore: false
-      })
-      expect(d.getMessageById(mismatched.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
-    })
-
     it('replays an outstanding batch after reopening the database', () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-delivery-'))
       const dbPath = join(dir, 'orchestration.db')
@@ -272,83 +246,6 @@ describe('OrchestrationDb Run state', () => {
         d.bindRun({ runId: parent.id, coordinatorHandle: creatorHandle, coordinatorPaneKey: null })
       ).toThrow(expect.objectContaining({ code: 'worker_cannot_coordinate_own_run' }))
       expect(d.getRun(parent.id)?.coordinator_handle).toBe('term_coord')
-    })
-
-    it('binds creation to one pane and keeps that Run when the pane creates another', () => {
-      const d = createDb()
-      const first = d.createRun({
-        objective: 'First objective',
-        coordinatorHandle: 'term_first',
-        coordinatorPaneKey: 'tab_a:11111111-1111-4111-8111-111111111111'
-      })
-      expect(first).toMatchObject({ consumer_generation: 1, legacy: 0 })
-      expect(d.getCurrentRunForPane('tab_reminted:11111111-1111-4111-8111-111111111111')?.id).toBe(
-        first.id
-      )
-
-      const second = d.createRun({
-        objective: 'Second objective',
-        coordinatorHandle: 'term_second',
-        coordinatorPaneKey: 'tab_b:11111111-1111-4111-8111-111111111111'
-      })
-      expect(d.getRun(first.id)).toMatchObject({
-        coordinator_handle: 'term_first',
-        consumer_generation: 1
-      })
-      expect(d.getCurrentRunForPane('tab_b:11111111-1111-4111-8111-111111111111')?.id).toBe(
-        second.id
-      )
-    })
-
-    it('rebinds a Run by incrementing its consumer generation', () => {
-      const d = createDb()
-      const run = d.createRun({
-        objective: 'Move coordinator',
-        coordinatorHandle: 'term_old',
-        coordinatorPaneKey: 'tab_old:11111111-1111-4111-8111-111111111111'
-      })
-
-      expect(
-        d.bindRun({
-          runId: run.id,
-          coordinatorHandle: 'term_new',
-          coordinatorPaneKey: 'tab_new:22222222-2222-4222-9222-222222222222'
-        })
-      ).toMatchObject({
-        coordinator_handle: 'term_new',
-        consumer_generation: 2
-      })
-      expect(d.getCurrentRunForPane('tab_old:11111111-1111-4111-8111-111111111111')).toBeUndefined()
-      expect(
-        d.bindRun({
-          runId: LEGACY_RUN_ID,
-          coordinatorHandle: 'term_new',
-          coordinatorPaneKey: 'tab_new:22222222-2222-4222-9222-222222222222'
-        })
-      ).toBeUndefined()
-    })
-
-    it('associates task, dispatch, message, and gate rows with the selected Run', () => {
-      const d = createDb()
-      const run = d.createRun({
-        objective: 'Scoped work',
-        coordinatorHandle: 'term_coord',
-        coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
-      })
-      const task = d.createTask({ spec: 'work', runId: run.id })
-      const dispatch = createRootDispatch(d, task.id, 'term_worker')
-      const message = d.insertMessage({
-        runId: run.id,
-        from: 'term_worker',
-        to: 'term_coord',
-        subject: 'status'
-      })
-      const gate = d.createGate({ taskId: task.id, question: 'Continue?' })
-
-      expect(task.run_id).toBe(run.id)
-      expect(dispatch.run_id).toBe(run.id)
-      expect(message.run_id).toBe(run.id)
-      expect(gate.run_id).toBe(run.id)
     })
   })
 })

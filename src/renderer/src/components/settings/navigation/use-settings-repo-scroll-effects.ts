@@ -1,8 +1,9 @@
+import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect, useRef, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { SettingsStoreModel } from '../page/use-settings-store-model'
 import type { SettingsInteractionController } from '../page/use-settings-interaction-controller'
@@ -48,6 +49,9 @@ export function useSettingsRepoScrollEffects(
 ): void {
   const {
     activeSectionId,
+    generalSubPage,
+    setGeneralSubPage,
+    setHighlightedSettingsTarget,
     pendingNavRequestTick,
     repos,
     setActiveSectionId,
@@ -181,7 +185,14 @@ export function useSettingsRepoScrollEffects(
 
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
       // Inactive panes have no DOM; activate before locating the subsection next render.
-      if (activeSectionId !== pendingNavSectionId) {
+      const requestedGeneralSubPage = resolveGeneralSubPage(scrollTargetId)
+      if (
+        activeSectionId !== pendingNavSectionId ||
+        (pendingNavSectionId === 'general' && generalSubPage !== requestedGeneralSubPage)
+      ) {
+        if (pendingNavSectionId === 'general') {
+          setGeneralSubPage(requestedGeneralSubPage)
+        }
         setActiveSectionId(pendingNavSectionId)
         return
       }
@@ -200,6 +211,9 @@ export function useSettingsRepoScrollEffects(
             onTargetPresent: () => setPendingNavRequestTick((tick) => tick + 1)
           })
           return
+        }
+        if (pendingNavSectionId === 'general') {
+          setHighlightedSettingsTarget({ id: scrollTargetId })
         }
         const scrollToSubsection = (): void => {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
@@ -230,6 +244,9 @@ export function useSettingsRepoScrollEffects(
     }
   }, [
     activeSectionId,
+    generalSubPage,
+    setGeneralSubPage,
+    setHighlightedSettingsTarget,
     contentScrollRef,
     pendingNavRequestTick,
     pendingNavSectionRef,

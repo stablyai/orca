@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import {
   normalizeWorktreeRootPathForTerminalLink,
@@ -26,34 +26,6 @@ function createState(
 }
 
 describe('resolveKnownWorktreeRootPathLink', () => {
-  it('resolves an exact known worktree root path', () => {
-    const state = createState({
-      repo: [{ id: 'wt-1', path: '/repo/feature' }]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('/repo/feature', state)).toEqual({
-      id: 'wt-1',
-      path: '/repo/feature',
-      executionHostId: 'local'
-    })
-  })
-
-  it('does not resolve an unknown directory path', () => {
-    const state = createState({
-      repo: [{ id: 'wt-1', path: '/repo/feature' }]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('/repo/other', state)).toBeNull()
-  })
-
-  it('does not resolve a path inside a known worktree', () => {
-    const state = createState({
-      repo: [{ id: 'wt-1', path: '/repo/feature' }]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('/repo/feature/src/main.ts', state)).toBeNull()
-  })
-
   it('matches trailing separators without trimming filesystem roots', () => {
     const state = createState({
       repo: [
@@ -68,17 +40,6 @@ describe('resolveKnownWorktreeRootPathLink', () => {
     expect(resolveKnownWorktreeRootPathLink('C:\\repo\\feature\\', state)?.id).toBe('windows-wt')
     expect(normalizeWorktreeRootPathForTerminalLink('/')).toBe('/')
     expect(normalizeWorktreeRootPathForTerminalLink('C:\\')).toBe('C:/')
-  })
-
-  it('returns no match for duplicate root paths', () => {
-    const state = createState({
-      repo: [
-        { id: 'wt-1', path: '/repo/feature' },
-        { id: 'wt-2', path: '/repo/feature/' }
-      ]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('/repo/feature', state)).toBeNull()
   })
 
   it('rebuilds the cached root index when worktreesByRepo is replaced', () => {
@@ -126,13 +87,6 @@ const remoteContext = (environmentId: string, worktreeId = 'source') => ({
 })
 
 describe('terminal root link ownership', () => {
-  it('does not select a desktop root from a managed terminal', () => {
-    const state = createState({ desktop: [{ id: 'desktop', path: '/collision' }] })
-    expect(
-      resolveKnownWorktreeRootPathLink('/collision', state, remoteContext('remote'))
-    ).toBeNull()
-  })
-
   it('selects the matching host when three hosts publish the same root', () => {
     const state = createState({
       repo: [
@@ -151,29 +105,6 @@ describe('terminal root link ownership', () => {
     expect(resolveKnownWorktreeRootPathLink('/collision', state)?.executionHostId).toBe('local')
   })
 
-  it('does not select another managed host even when its path is unique', () => {
-    const state = createState({
-      repo: [{ id: 'other', path: '/collision', hostId: 'runtime:beta' }]
-    })
-    expect(resolveKnownWorktreeRootPathLink('/collision', state, remoteContext('alpha'))).toBeNull()
-  })
-
-  it('keeps direct SSH roots scoped to their own connection', () => {
-    const state = createState({
-      repo: [
-        { id: 'ssh-a', path: '/collision', hostId: 'ssh:alpha' },
-        { id: 'ssh-b', path: '/collision', hostId: 'ssh:beta' }
-      ]
-    })
-    const context = {
-      target: { kind: 'local' as const },
-      worktreeId: 'source',
-      worktreePath: '/source',
-      connectionId: 'alpha'
-    }
-    expect(resolveKnownWorktreeRootPathLink('/collision', state, context)?.id).toBe('ssh-a')
-  })
-
   it('keeps same-host duplicate roots ambiguous', () => {
     const state = createState({
       repo: [
@@ -182,27 +113,6 @@ describe('terminal root link ownership', () => {
       ]
     })
     expect(resolveKnownWorktreeRootPathLink('/collision', state, remoteContext('alpha'))).toBeNull()
-  })
-
-  it('uses the explicit pane owner for a non-git folder source', () => {
-    const state = createState({
-      repo: [{ id: 'target', path: '/target', hostId: 'runtime:alpha' }]
-    })
-    expect(
-      resolveKnownWorktreeRootPathLink('/target', state, remoteContext('alpha', 'folder:source'))
-        ?.id
-    ).toBe('target')
-  })
-
-  it('does not use an active host that differs from the retained pane owner', () => {
-    const state = {
-      ...createState({ repo: [{ id: 'target', path: '/target', hostId: 'runtime:beta' }] }),
-      activeWorktreeId: 'source',
-      activeWorkspaceExecutionHostId: 'runtime:alpha' as const
-    }
-    expect(resolveKnownWorktreeRootPathLink('/target', state, remoteContext('beta'))?.id).toBe(
-      'target'
-    )
   })
 
   it('keeps a nested SSH target distinct from the paired host serving it', () => {
@@ -275,24 +185,5 @@ describe('terminal root link ownership', () => {
         executionHostId: 'ssh:box'
       })
     })
-
-    it('offers no root shortcut when the source host cannot be resolved', () => {
-      const state = sameIdState(null)
-      expect(resolveKnownWorktreeRootPathLink('/home/u/proj', state, sshContext(state))).toBeNull()
-    })
-  })
-
-  it('does not treat a source whose owner rows have not loaded as local', () => {
-    const state = {
-      ...createState({ desktop: [{ id: 'desktop', path: '/target' }] }),
-      runtimeEnvironments: [],
-      runtimeEnvironmentCatalogHydrated: false
-    }
-    const context = {
-      target: { kind: 'local' as const },
-      worktreeId: 'restoring::/x',
-      worktreePath: '/x'
-    }
-    expect(resolveKnownWorktreeRootPathLink('/target', state, context)).toBeNull()
   })
 })

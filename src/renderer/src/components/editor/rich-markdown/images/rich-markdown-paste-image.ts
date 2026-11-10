@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store/index'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'

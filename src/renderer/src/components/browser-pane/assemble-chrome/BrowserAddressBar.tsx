@@ -3,9 +3,9 @@ import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
@@ -24,13 +24,7 @@ import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 import { BrowserLoadProgress } from './browser-load-progress'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 import BrowserHistoryDialog from '../history/BrowserHistoryDialog'
-
-function clearTimerRef(timerRef: { current: number | null }): void {
-  if (timerRef.current !== null) {
-    window.clearTimeout(timerRef.current)
-    timerRef.current = null
-  }
-}
+import { clearTimerRef, useClearTimersOnFormUnmount } from './use-browser-address-bar-close-timers'
 
 type BrowserAddressBarProps = {
   /** The page this bar edits; its worktree's other open pages are offered as "Switch to tab". */
@@ -51,6 +45,8 @@ type BrowserAddressBarProps = {
   editSession?: BrowserAddressBarEditSessionBinding | null
   /** Replaces the leading globe (e.g. the SSH egress indicator). */
   leadingIcon?: React.ReactNode
+  /** Page-state chips at the field's end; hidden while suggestions are open so typing gets the room. */
+  trailing?: React.ReactNode
   loading?: boolean
   loadFailed?: boolean
 }
@@ -68,9 +64,11 @@ export default function BrowserAddressBar({
   dismissSuggestionsRef,
   editSession,
   leadingIcon,
+  trailing,
   loading = false,
   loadFailed = false
 }: BrowserAddressBarProps): React.ReactElement {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const prePreviewValueRef = useRef<string | null>(null)
@@ -88,22 +86,9 @@ export default function BrowserAddressBar({
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
+  const setAddressBarFormRef = useClearTimersOnFormUnmount(blurCloseTimerRef, closingResetTimerRef)
   const slotRef = useRef<HTMLDivElement | null>(null)
   const overlay = useBrowserAddressBarOverlay(slotRef, open)
-
-  const clearAddressBarTimers = useCallback((): void => {
-    clearTimerRef(blurCloseTimerRef)
-    clearTimerRef(closingResetTimerRef)
-  }, [])
-
-  const setAddressBarFormRef = useCallback(
-    (node: HTMLFormElement | null) => {
-      if (node === null) {
-        clearAddressBarTimers()
-      }
-    },
-    [clearAddressBarTimers]
-  )
 
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
@@ -360,10 +345,10 @@ export default function BrowserAddressBar({
             ref={setAddressBarFormRef}
             data-orca-browser-address-bar-overlay={overlay ? 'true' : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm',
+              'flex items-center gap-2 rounded-lg bg-muted px-2.5 transition-colors focus-within:bg-background focus-within:ring-[3px] focus-within:ring-ring/50',
               // Position against the toolbar row so the overlay spans it, not the squeezed slot.
               overlay
-                ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
+                ? 'absolute inset-x-2 top-1/2 z-30 h-8 -translate-y-1/2 bg-background shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
                 : 'relative min-w-0 flex-1'
             )}
             // Forward padding clicks when the squeezed input has zero width.
@@ -377,7 +362,7 @@ export default function BrowserAddressBar({
             <Input
               ref={inputRef}
               value={value}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.browser.pane.browser.address.bar.placeholder',
                 'Search or enter URL'
               )}
@@ -388,7 +373,7 @@ export default function BrowserAddressBar({
               onKeyDown={handleKeyDown}
               onSelect={acceptOnCaretMove}
               data-orca-browser-address-bar="true"
-              className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              surface="embedded"
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
@@ -412,6 +397,15 @@ export default function BrowserAddressBar({
               aria-controls="browser-history-listbox"
               aria-autocomplete="list"
             />
+            {trailing && !open ? (
+              // Why: the form focuses its input (and toggles suggestions) on any click inside it.
+              <span
+                className="flex shrink-0 items-center gap-0.5"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {trailing}
+              </span>
+            ) : null}
             <BrowserLoadProgress loading={loading} failed={loadFailed} />
           </form>
         </PopoverTrigger>

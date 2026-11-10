@@ -1,11 +1,11 @@
 import { translate } from '../i18n/mobile-i18n'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import {
   gitCancelGenerateCommitMessageRun,
   gitGenerateCommitMessageRun,
   type MobileGenerateCommitMessageResult
 } from './mobile-git-mutation-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 export type { MobileGenerateCommitMessageResult }
 

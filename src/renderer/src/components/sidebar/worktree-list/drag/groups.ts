@@ -7,6 +7,7 @@ import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { WorktreeDragGroup } from './worktree-manual-order'
+import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folder-workspace-occurrences'
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 const FOLDER_WORKSPACE_DRAG_GROUP_PREFIX = 'folder-workspaces:'
@@ -32,11 +33,14 @@ export function isFolderWorkspaceDragGroupKey(groupKey: string): boolean {
   return groupKey.startsWith(FOLDER_WORKSPACE_DRAG_GROUP_PREFIX)
 }
 
-/** Group members are host identities: same-id copies on two machines are separate cards to reorder. */
+/** Group members are host identities: same-id copies on two machines are separate cards to reorder.
+ * Rows nested under a folder workspace group by their folder's lane, as getWorktreeDragIndexes keys
+ * them; every other row groups under the header above it. */
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
   let current: { key: string; ids: string[] } | null = null
   let currentFolders: { key: string; ids: string[] } | null = null
+  const folderLaneIds = new Map<string, string[]>()
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
   for (const row of rows) {
@@ -71,6 +75,16 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     }
     const worktreeKey = getWorktreeHostIdentity(row.worktree)
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
+      continue
+    }
+    if (isFolderLaneSectionKey(row.sectionKey)) {
+      let ids = folderLaneIds.get(row.sectionKey)
+      if (!ids) {
+        ids = []
+        folderLaneIds.set(row.sectionKey, ids)
+        groups.push({ key: row.sectionKey, worktreeIds: ids })
+      }
+      ids.push(worktreeKey)
       continue
     }
     if (!current) {

@@ -1,4 +1,6 @@
+import { observeNativeChatPromptSubmissions } from '../../../telemetry/native-chat-prompt-submissions'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { StructuredAgentSessionConversationDelivery } from '../delivery/structured-agent-session-host-delivery'
 import {
@@ -13,9 +15,14 @@ export function createStructuredAgentSessionPublicationWiring(input: {
   opened: (id: string) => void
   logger: () => StructuredAgentSessionLogger
   now: () => number
+  observeRows: () => StructuredAgentSessionHostDeps['observeCommittedRows']
 }): StructuredAgentSessionConversations {
   return new StructuredAgentSessionConversations({
-    observe: (id, journal, rows) => input.client().requestFailures.observe(id, journal, rows),
+    observe: (id, journal, rows) => {
+      input.client().requestFailures.observe(id, journal, rows)
+      input.observeRows()?.(id, journal, rows)
+      observeNativeChatPromptSubmissions(journal, rows)
+    },
     forget: (id) => input.client().requestFailures.forget(id),
     deliver: (id, journal, inputChanged) => {
       input.client().subscribers.deliverFrames(id, journal)

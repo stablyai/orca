@@ -6,5 +6,4 @@ export type CommandMenuRendererFixtureModule = {
     setOpen: (open: boolean) => void
     unmount: () => void
   }
-  resetReadOwners: () => void
 }

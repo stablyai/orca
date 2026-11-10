@@ -1,6 +1,6 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
-import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automations/ownership/automation-workspace-provenance'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import {
@@ -14,7 +14,7 @@ import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 
@@ -107,6 +107,17 @@ export const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+/** Opt-in: path: and name: also match folder workspaces. Absent keeps older clients' repo-only meaning. */
+export const MatchFolderWorkspaces = z.literal(true).optional()
+
+export const WorktreeShow = WorktreeSelector.extend({
+  matchFolderWorkspaces: MatchFolderWorkspaces
+})
+
+export const WorktreeRunApprovedSetup = WorktreeSelector.extend({
+  approvedSetupHash: z.string().min(1).max(128)
+})
+
 // Why optional: an older host strips the unknown field and marks its chats asleep as before.
 export const WorktreeSleepParams = WorktreeSelector.extend({
   markChatsAsleep: z.boolean().optional()
@@ -142,7 +153,9 @@ export const WorktreeResolveCallerParent = z.object({
   envParentWorkspace: OptionalString,
   callerTerminalHandle: OptionalString,
   cwdParentWorktree: OptionalString,
-  cwdParentAmbiguous: z.literal(true).optional()
+  cwdParentAmbiguous: z.literal(true).optional(),
+  /** The workspace note; a task id in it names its parent as on a same-machine create. */
+  comment: OptionalString
 })
 
 export const WorktreeSet = WorktreeSelector.extend({
@@ -195,6 +208,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
+  matchFolderWorkspaces: MatchFolderWorkspaces,
   /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
   crossStoreParent: CrossStoreParentRefSchema.optional(),
   noParent: OptionalBoolean
@@ -222,7 +236,20 @@ export const WorktreeRemove = WorktreeSelector.extend({
   // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
   allowFailedArchiveHook: OptionalBoolean,
   // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).
-  waitForBackgroundRemoval: OptionalBoolean
+  waitForBackgroundRemoval: OptionalBoolean,
+  // The reviewed nested-delete plan; the host re-lists and refuses if it no longer matches.
+  approvedNestedWorktrees: z
+    .array(z.object({ path: z.string().min(1), head: z.string(), branch: z.string() }))
+    .min(1)
+    .max(1_000)
+    .optional(),
+  // The caller showed that this also destroys the recipe environment Orca created for the workspace.
+  // Absent: today's removal, which leaves that environment running. Older hosts strip it.
+  destroyHost: z.literal(true).optional()
+})
+
+export const WorktreePreviewNestedRemoval = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({

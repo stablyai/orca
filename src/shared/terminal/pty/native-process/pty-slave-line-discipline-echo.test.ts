@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const execFileMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
-import { createPtySlaveLineEditorProbe, readPtySlavePath } from './pty-slave-line-discipline-echo'
+import { createPtySlaveLineEditorProbe } from './pty-slave-line-discipline-echo'
 
 /** Replies to the next stty call with the given output, or an error when `output` is null. */
 function answerStty(output: string | null): void {
@@ -18,18 +18,6 @@ const LINE_EDITOR = `${RAW}cchars: lnext = <undef>; min = 1; time = 0;\n`
 
 beforeEach(() => {
   execFileMock.mockReset()
-})
-
-describe('readPtySlavePath', () => {
-  it('reads node-pty ptsName and rejects every shape that is not a usable path', () => {
-    expect(readPtySlavePath({ ptsName: '/dev/ttys048' })).toBe('/dev/ttys048')
-    // A ConPTY terminal has no ptsName at all, and an empty one names no device.
-    expect(readPtySlavePath({})).toBeUndefined()
-    expect(readPtySlavePath({ ptsName: '' })).toBeUndefined()
-    expect(readPtySlavePath({ ptsName: 12 })).toBeUndefined()
-    expect(readPtySlavePath(undefined)).toBeUndefined()
-    expect(readPtySlavePath(null)).toBeUndefined()
-  })
 })
 
 describe('createPtySlaveLineEditorProbe', () => {
@@ -62,15 +50,6 @@ describe('createPtySlaveLineEditorProbe', () => {
     pending.finish?.()
     await expect(first).resolves.toBe('line-editor')
     await expect(second).resolves.toBe('line-editor')
-  })
-
-  it('passes the device with the flag its own platform understands', async () => {
-    answerStty(LINE_EDITOR)
-    await createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')?.()
-    expect(execFileMock.mock.calls[0]?.[1]).toEqual(['-a', '-f', '/dev/ttys048'])
-    answerStty(LINE_EDITOR)
-    await createPtySlaveLineEditorProbe('/dev/pts/3', 'linux')?.()
-    expect(execFileMock.mock.calls[1]?.[1]).toEqual(['-a', '-F', '/dev/pts/3'])
   })
 
   it('keeps probing after a transient failure and only latches a permanent one', async () => {

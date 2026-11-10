@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { buildExecutionHostRegistry } from '../execution-host-registry'
+import { buildExecutionHostRegistry } from '../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
@@ -28,7 +28,10 @@ import {
 import { sortWorktreesByStamps, type SortBy } from './smart-sort'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import type { WorkspaceRow } from './workspace-rows'
-import { resolveFeedLineageParentIdentities } from './sidebar-feed-lineage-parents'
+import {
+  resolveFeedLineageParentIdentities,
+  type FeedLineagePolicy
+} from './sidebar-feed-lineage-parents'
 import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 
 // By row object: a feed snapshot keeps an unchanged row's object, so only a changed row is read again.
@@ -155,7 +158,8 @@ export function createHostScopedRepoOf(
 
 export function indexSidebarFeed(
   domains: SidebarFeedDomains,
-  repos: readonly Repo[]
+  repos: readonly Repo[],
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedIndex {
   const workspaces = readFeedWorkspaces(domains)
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
@@ -165,7 +169,7 @@ export function indexSidebarFeed(
     folderWorkspaces: workspaces.flatMap((entry) => entry.folderWorkspace ?? []),
     repoMap,
     repoOf: createHostScopedRepoOf(repos, repoMap),
-    lineageParentIdentities: resolveFeedLineageParentIdentities(domains, workspaces)
+    lineageParentIdentities: resolveFeedLineageParentIdentities(domains, workspaces, lineagePolicy)
   }
 }
 

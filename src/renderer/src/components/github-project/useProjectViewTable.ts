@@ -5,7 +5,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache-identity'
+import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache/cache-identity'
 import type {
   GitHubProjectSettings,
   GitHubProjectTable,

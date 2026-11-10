@@ -7,17 +7,17 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome
-} from '../mobile-native-chat-send'
-import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-input'
+} from '../composer/mobile-native-chat-send'
+import { healMobileNativeChatStaleInput } from '../composer/mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from '../composer/mobile-native-chat-terminal-write-lock'
 import {
   nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,

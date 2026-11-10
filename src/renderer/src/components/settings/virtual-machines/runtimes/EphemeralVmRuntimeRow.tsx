@@ -1,7 +1,7 @@
-import { AlertTriangle, Copy, Loader2, Square, Trash2 } from 'lucide-react'
+import { AlertTriangle, Copy, Loader2, Square, Trash2, X } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../../../shared/ephemeral-vm-recipes'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { cn } from '@/lib/utils'
 import { Button } from '../../../ui/button'
@@ -16,6 +16,7 @@ type EphemeralVmRuntimeRowProps = {
   onCleanup: () => void
   onStopCleanup: () => void
   onCopyCleanupCommand: () => void
+  onForget: () => void
 }
 
 export function EphemeralVmRuntimeRow({
@@ -27,10 +28,15 @@ export function EphemeralVmRuntimeRow({
   disabled,
   onCleanup,
   onStopCleanup,
-  onCopyCleanupCommand
+  onCopyCleanupCommand,
+  onForget
 }: EphemeralVmRuntimeRowProps): React.JSX.Element {
+  const t = useTranslate()
   const hasError = cleanupFailed || runtime.status === 'failed'
   const cleanupError = ephemeralVmCleanupErrorText(runtime)
+  const isProvisioning = runtime.status === 'provisioning'
+  // Write-ahead rows never got a recipe result, so destroy only knows the instance id.
+  const isUntracked = !runtime.recipeResult && !isProvisioning
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div
@@ -48,13 +54,41 @@ export function EphemeralVmRuntimeRow({
           {hasError ? <AlertTriangle className="size-3.5 shrink-0 text-destructive" /> : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {runtime.recipeId} · {getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)}
+          {runtime.recipeId} ·{' '}
+          {runtime.recipeResult
+            ? getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)
+            : runtime.id}
         </p>
         {cleanupError ? (
           <p className="mt-0.5 truncate text-xs text-destructive">{cleanupError}</p>
         ) : null}
+        {isUntracked ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.EphemeralVmRuntimesSection.untrackedRuntimeHint',
+              'Orca never received this VM’s details. Cleanup runs destroy with only instance ID {{instanceId}}; if it fails, delete the VM in your provider, then remove it from this list.',
+              { instanceId: runtime.id }
+            )}
+          </p>
+        ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className={cn('flex shrink-0 items-center gap-1', isProvisioning && 'hidden')}>
+        {isUntracked && !cleanupRunning ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
+            onClick={onForget}
+            disabled={disabled}
+          >
+            <X className="size-3" />
+            {t(
+              'auto.components.settings.EphemeralVmRuntimesSection.removeFromList',
+              'Remove from list'
+            )}
+          </Button>
+        ) : null}
         {runtime.cleanupStatus === 'failed' ? (
           <Button
             type="button"
@@ -65,10 +99,7 @@ export function EphemeralVmRuntimeRow({
             disabled={disabled}
           >
             <Copy className="size-3" />
-            {translate(
-              'auto.components.settings.EphemeralVmRuntimesSection.copyCleanup',
-              'Copy command'
-            )}
+            {t('auto.components.settings.EphemeralVmRuntimesSection.copyCleanup', 'Copy command')}
           </Button>
         ) : null}
         {cleanupRunning ? (
@@ -86,11 +117,11 @@ export function EphemeralVmRuntimeRow({
               <Square className="size-3" />
             )}
             {isStopping
-              ? translate(
+              ? t(
                   'auto.components.settings.EphemeralVmRuntimesSection.stoppingCleanup',
                   'Stopping…'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.EphemeralVmRuntimesSection.stopCleanup',
                   'Stop cleanup'
                 )}
@@ -106,11 +137,8 @@ export function EphemeralVmRuntimeRow({
           >
             <Trash2 className="size-3" />
             {cleanupFailed
-              ? translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.retry',
-                  'Retry cleanup'
-                )
-              : translate('auto.components.settings.EphemeralVmRuntimesSection.cleanup', 'Cleanup')}
+              ? t('auto.components.settings.EphemeralVmRuntimesSection.retry', 'Retry cleanup')
+              : t('auto.components.settings.EphemeralVmRuntimesSection.cleanup', 'Cleanup')}
           </Button>
         )}
       </div>

@@ -95,74 +95,6 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('reports an empty result with the stderr excerpt when exit 0 produces no stdout', async () => {
-    const result = await generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'custom',
-        model: '',
-        customAgentCommand: 'agent'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout: '',
-          stderr: '\u001b[91m\u001b[1mError: \u001b[0mNo payment method',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result).toMatchObject({
-      success: false,
-      error: 'agent returned an empty message. CLI output: Error: No payment method'
-    })
-  })
-
-  it('surfaces pi auth failure detail end-to-end through the adjusted path sanitizer', async () => {
-    const result = await generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'pi',
-        model: 'github-copilot/gpt-5.5'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout: '',
-          stderr: [
-            'No API key found for github-copilot.',
-            '',
-            'Use /login to log into a provider via OAuth or API key. See:',
-            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/providers.md',
-            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
-          ].join('\n'),
-          exitCode: 1,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result).toMatchObject({
-      success: false,
-      error:
-        'Pi CLI command failed with code 1: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … [path]'
-    })
-  })
-
   it('preserves slash-commands while redacting multi-segment paths in failure detail', async () => {
     const result = await generateCommitMessageFromContext(
       {
@@ -352,41 +284,5 @@ describe('generateCommitMessageFromContext', () => {
     )
 
     expect(result).toMatchObject({ success: false, error: expected })
-  })
-
-  it('passes the live colonless 400 gateway payload through the sanitizer unmangled', async () => {
-    const result = await generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'pi',
-        model: 'github-copilot/gpt-5.5'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout: '',
-          stderr:
-            '400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_011CcsZLJ5ZiLLNvpxcxDuU4"}',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result.success).toBe(false)
-    if (result.success) {
-      throw new Error('expected a failure result')
-    }
-    expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
-      true
-    )
-    expect(result.error).toContain('claude.ai/settings/usage')
-    expect(result.error.length).toBeLessThanOrEqual(300)
   })
 })

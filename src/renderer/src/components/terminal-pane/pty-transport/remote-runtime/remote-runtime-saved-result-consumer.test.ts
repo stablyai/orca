@@ -2,17 +2,20 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { TerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
 import type { AgentLaunchConfigRegistryEntry } from '@/store/slices/agent-status/agent-status-contract'
-import { bindCaptureTransportOutputCallbacks } from '../../pty-connection/transport-output-callbacks'
-import { bindReplacedProcessInputModes } from '../../pty-connection/replaced-process-input-modes'
-import { bindSettlePaneSerializer } from '../../pty-connection/pane-serializer-settle'
-import { applyTerminalLaunchResult } from '../../pty-connection/terminal-launch-result-policy'
+import { bindCaptureTransportOutputCallbacks } from '../../pty-connection/lifecycle/transport-output-callbacks'
+import { initializeHiddenOutputRestoreState } from '../../pty-connection/output-restore/hidden-output-restore-state'
+import { bindReplacedProcessInputModes } from '../../pty-connection/output/replaced-process-input-modes'
+import { bindPaneSerializerReadiness } from '../../pty-connection/serialization/pane-serializer-readiness'
+import { bindStartupDraftPaste } from '../../pty-connection/startup/startup-draft-paste'
+import { bindSessionRestoredBannerAdmission } from '../../pty-connection/notifications/session-restored-banner-admission'
+import { applyTerminalLaunchResult } from '../../pty-connection/startup/terminal-launch-result-policy'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { installSavedResumeStartupCancellation } from '../../pty-connection/saved-resume-startup-cancellation'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { installSavedResumeStartupCancellation } from '../../pty-connection/startup/saved-resume-startup-cancellation'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const fixture = vi.hoisted(() => ({ state: {} }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => fixture.state } }))
@@ -135,10 +138,13 @@ it.each([
       dataCallback: vi.fn()
     } as unknown as ConnectPanePtySession
     installSavedResumeStartupCancellation(session)
-    bindSettlePaneSerializer(session)
+    bindPaneSerializerReadiness(session)
+    bindStartupDraftPaste(session)
+    bindSessionRestoredBannerAdmission(session)
     bindReplacedProcessInputModes(session)
     session.reportRemoteRendererSerializerReady = callbacksReady
     bindCaptureTransportOutputCallbacks(session)
+    initializeHiddenOutputRestoreState(session)
     const output = session.captureTransportOutputCallbacks(vi.fn(), null)
     const actualConfig = { agentCommand: 'codex', agentArgs: '--model actual', agentEnv: {} }
     const launchResult: TerminalAttachmentLaunchResult = {

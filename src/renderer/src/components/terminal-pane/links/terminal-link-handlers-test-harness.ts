@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { TerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 
 export function setPlatform(userAgent: string): void {

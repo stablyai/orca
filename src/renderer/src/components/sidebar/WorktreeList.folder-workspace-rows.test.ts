@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -36,6 +37,18 @@ vi.mock('./workspace-actions/context-menu/WorktreeContextMenu', () =>
 )
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
 vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
+// Why: the list's external stores pass no server snapshot, which the static render requires.
+vi.mock('react', async (importOriginal) => {
+  const react = await importOriginal<typeof ReactModule>()
+  return {
+    ...react,
+    useSyncExternalStore: <T>(
+      subscribe: (onChange: () => void) => () => void,
+      read: () => T,
+      readOnServer: () => T = read
+    ) => react.useSyncExternalStore(subscribe, read, readOnServer)
+  }
+})
 
 function makeFolderWorkspace(
   groupId: string,

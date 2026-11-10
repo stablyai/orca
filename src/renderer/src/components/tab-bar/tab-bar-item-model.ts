@@ -1,22 +1,21 @@
 import {
-  readStructuredChatTabSavedName,
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
-import type { AppState } from '@/store/types'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
-import type { OpenFile } from '../../store/slices/editor'
-import { normalizeRelativePath } from '@/lib/path'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
+import { normalizeRelativePath } from '../../../../shared/cross-platform-path'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { tabItemLabel } from './tab-bar-item-label'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
+import type { Translate } from '@/i18n/use-translate'
 
 export type TabBarItem =
   | {
@@ -38,7 +37,7 @@ export type TabBarItem =
       id: string
       unifiedTabId: string
       isPinned: boolean
-      data: BrowserTabState & { tabId?: string }
+      data: BrowserWorkspace & { tabId?: string }
     }
   | {
       type: 'simulator'
@@ -74,15 +73,18 @@ export function resolveEditorTabGitStatus(
   return statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null
 }
 
+/** `conversationName` is the chat's reactive host name; null when unnamed or not a chat tab. */
 export function getTabDragLabel(
   item: TabBarItem,
   generatedTitlesEnabled: boolean,
-  state: AppState
+  conversationName: string | null,
+  t?: Translate
 ): string {
   return tabItemLabel(
     item,
     generatedTitlesEnabled,
-    item.type === 'agent-session' ? readStructuredChatTabSavedName(item.data, state) : null
+    item.type === 'agent-session' ? item.data.customLabel?.trim() || conversationName : null,
+    t
   )
 }
 
@@ -98,12 +100,16 @@ export function getTabLayoutSignature(
     isExpanded: boolean
     status?: string | null
     chatNames: StructuredChatTabNames
-  }
+  },
+  t?: Translate
 ): string {
   const label = tabItemLabel(
     item,
     generatedTitlesEnabled,
-    item.type === 'agent-session' ? projectedStructuredChatTabSavedName(item.data, chatNames) : null
+    item.type === 'agent-session'
+      ? projectedStructuredChatTabSavedName(item.data, chatNames)
+      : null,
+    t
   )
   if (item.type === 'terminal') {
     return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
@@ -152,7 +158,7 @@ export function buildOrderedTabItems({
   agentSessionTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
-  browserMap: Map<string, BrowserTabState & { tabId?: string }>
+  browserMap: Map<string, BrowserWorkspace & { tabId?: string }>
   agentSessionMap: Map<string, Tab & { contentType: 'agent-session' }>
   unifiedTabByVisibleId: Map<string, Tab>
 }): TabBarItem[] {
@@ -281,19 +287,24 @@ export function buildTabStripLayoutKey(
   generatedTitlesEnabled: boolean,
   expandedPaneByTabId: Record<string, boolean>,
   statusByRelativePath: Map<string, string>,
-  chatNames: StructuredChatTabNames
+  chatNames: StructuredChatTabNames,
+  t?: Translate
 ): string {
   return items
     .map((item) =>
-      getTabLayoutSignature(item, {
-        generatedTitlesEnabled,
-        chatNames,
-        isExpanded: expandedPaneByTabId[item.id] === true,
-        status:
-          item.type === 'editor'
-            ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
-            : null
-      })
+      getTabLayoutSignature(
+        item,
+        {
+          generatedTitlesEnabled,
+          chatNames,
+          isExpanded: expandedPaneByTabId[item.id] === true,
+          status:
+            item.type === 'editor'
+              ? (statusByRelativePath.get(normalizeRelativePath(item.data.relativePath)) ?? null)
+              : null
+        },
+        t
+      )
     )
     .join('\u001f')
 }

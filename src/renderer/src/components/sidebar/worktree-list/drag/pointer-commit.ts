@@ -1,3 +1,4 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import {
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
@@ -70,7 +71,9 @@ function commitReorderDrop(args: PointerDropCommitArgs): boolean {
   })
   ctx.clearReorderedWorktreeParents({
     draggedIds: drag.draggedIds,
-    sourceGroupKey: drag.sourceGroupKey
+    sourceGroupKey: drag.sourceGroupKey,
+    pickedCopies: drag.pickedCopies,
+    dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
   })
   return true
 }
