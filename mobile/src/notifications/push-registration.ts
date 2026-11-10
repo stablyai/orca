@@ -13,14 +13,10 @@ import {
   saveNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
 } from './notification-delivery-preferences'
-import type {
-  MobilePushFilter,
-  MobilePushRegisterInput
-} from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
-import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
+import { sendRegister, sendUnregister } from './mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
@@ -96,37 +92,6 @@ async function currentToken(): Promise<MobilePushToken | null> {
     tokenPromise = pending
   }
   return tokenPromise
-}
-
-async function sendRegister(
-  client: UnvalidatedRpcRequestPort,
-  token: MobilePushToken,
-  filter: MobilePushFilter
-): Promise<boolean> {
-  const params: Omit<MobilePushRegisterInput, 'deviceId'> = {
-    platform: token.platform,
-    token: token.token,
-    ...(token.apnsEnvironment ? { apnsEnvironment: token.apnsEnvironment } : {}),
-    filter
-  }
-  const reply = await pushRouteRegister
-    .request(client, params, { timeoutMs: REQUEST_TIMEOUT_MS, failWhenDisconnected: true })
-    .catch(() => null)
-  const registration = reply && pushRouteRegister.interpret(reply)
-  if (!registration?.accepted) {
-    return false
-  }
-  return registration.value?.registered === true
-}
-
-async function sendUnregister(
-  client: UnvalidatedRpcRequestPort,
-  timeoutMs: number
-): Promise<boolean> {
-  const reply = await pushRouteUnregister
-    .request(client, null, { timeoutMs, failWhenDisconnected: true })
-    .catch(() => null)
-  return reply !== null && pushRouteUnregister.interpret(reply).accepted
 }
 
 async function reconcileHost(hostId: string): Promise<void> {
