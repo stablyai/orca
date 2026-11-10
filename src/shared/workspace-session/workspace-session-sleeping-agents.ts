@@ -22,7 +22,8 @@ const agentProviderSessionSchema = z.preprocess(
     // Pi resume requires its persisted authoritative transcript path.
     transcriptPath: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
-    effort: z.string().regex(AGENT_EFFORT_LEVEL).optional()
+    effort: z.string().regex(AGENT_EFFORT_LEVEL).optional(),
+    permissionMode: z.string().optional()
   })
 )
 
