@@ -47,6 +47,20 @@ describe('local POSIX pwsh launch plan', () => {
     expect(resolvePosixPaneShellPath).toHaveBeenCalledWith('pwsh', '/bin')
   })
 
+  it('resolves without the legacy shim dirs that finalization strips from PATH', async () => {
+    resolvePosixPaneShellPath.mockResolvedValue('/bin/pwsh')
+    const env = {
+      PATH: '/workspace/orca-terminal-attribution/posix:/shim:/bin',
+      ORCA_ATTRIBUTION_SHIM_DIR: '/shim'
+    }
+    const spawn = { cwd: '/tmp', cols: 80, rows: 24, shellOverride: 'pwsh', env }
+
+    const plan = createLocalPtyLaunchPlan(spawn, () => ({}))
+
+    expect(plan).toBeInstanceOf(DeferredLocalPtyLaunchPlan)
+    expect(resolvePosixPaneShellPath).toHaveBeenCalledWith('pwsh', '/bin')
+  })
+
   it('plans other shells synchronously without resolving', () => {
     const spawn = { cwd: '/tmp', cols: 80, rows: 24, shellOverride: '/bin/zsh' }
 
