@@ -1,7 +1,7 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubIssueUpdate } from '../../../../../shared/issue-mutation-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useCallback } from 'react'
 import {
   createTaskPageGitHubStatusStateDraft,
@@ -10,8 +10,8 @@ import {
 } from '@/components/task-page/github/task-page-github-status-state'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import {
   getTaskPageGitHubDuplicateCandidates,
   validateTaskPageGitHubDuplicateTarget,

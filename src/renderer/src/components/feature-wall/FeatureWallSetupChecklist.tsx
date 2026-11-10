@@ -32,7 +32,7 @@ import { applyAllAgentsPermission } from '../../../../shared/agent-launch/permis
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useTranslate } from '@/i18n/use-translate'
 
 import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'

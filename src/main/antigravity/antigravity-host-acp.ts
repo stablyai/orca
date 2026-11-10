@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import { AcpConnectionClosedError } from '../acp/acp-errors'
+import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome

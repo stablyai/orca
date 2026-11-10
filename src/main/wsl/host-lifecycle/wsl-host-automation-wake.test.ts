@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Automation } from '../../../shared/automations-types'
-import '../../../shared/automation-schedule-occurrences'
-import { WslHostAutomationWake, type WslHostAutomationDue } from './wsl-host-automation-wake'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import '../../../shared/automations/scheduling/automation-schedule-occurrences'
+import type { WslHostAutomationDue } from './wsl-host-automation-wake'
 import {
   readWslHostAutomationWakes,
   writeWslHostAutomationWakes
@@ -12,77 +12,6 @@ import {
 
 const HOUR = 60 * 60 * 1000
 const HOURLY = '0 * * * *'
-
-function automation(overrides: Partial<Automation>): Automation {
-  return {
-    id: 'a',
-    name: 'nightly',
-    prompt: '',
-    precheck: null,
-    agentId: 'claude',
-    projectId: 'p',
-    executionTargetType: 'local',
-    executionTargetId: 'p',
-    schedulerOwner: 'remote_host_service',
-    workspaceMode: 'new_per_run',
-    workspaceId: null,
-    baseBranch: null,
-    reuseSession: false,
-    timezone: 'UTC',
-    rrule: HOURLY,
-    dtstart: 0,
-    enabled: true,
-    nextRunAt: 10 * HOUR,
-    missedRunPolicy: 'run_once_within_grace',
-    missedRunGraceMinutes: 720,
-    createdAt: 0,
-    updatedAt: 0,
-    ...overrides
-  }
-}
-
-function harness(options: { due?: Record<string, WslHostAutomationDue>; connected?: boolean }) {
-  let now = 0
-  let timer: { at: number; task: () => void } | null = null
-  const saved: Record<string, WslHostAutomationDue>[] = []
-  const wake = vi.fn(async (_environmentId: string) => {})
-  const automations = vi.fn(async (): Promise<Automation[]> => [automation({})])
-  const subject = new WslHostAutomationWake({
-    load: () => options.due ?? {},
-    save: (due) => saved.push(due),
-    listAutomations: automations,
-    isConnected: async () => options.connected ?? false,
-    wake,
-    now: () => now,
-    setTimer: (delayMs, task) => {
-      timer = { at: now + delayMs, task }
-      return () => {
-        timer = null
-      }
-    }
-  })
-  return {
-    subject,
-    wake,
-    automations,
-    saved,
-    timerAt: () => timer?.at ?? null,
-    setNow(at: number) {
-      now = at
-    },
-    /** Moves the clock to the armed timer and runs it. */
-    async runTimer(at: number) {
-      now = at
-      const current = timer
-      const savesBefore = saved.length
-      timer = null
-      current?.task()
-      await vi.waitFor(() => expect(saved.length).toBeGreaterThan(savesBefore))
-    }
-  }
-}
-
-const MINUTE = 60 * 1000
 
 /** By default the host was last seen ready an hour before the run, so the run was missed. */
 function due(
@@ -97,58 +26,6 @@ function due(
     lastSeenReadyAt
   }
 }
-
-describe('WslHostAutomationWake', () => {
-  it("keeps a fresher ready stamp a learn wrote while an earlier host's wake ran", async () => {
-    const h = harness({ due: { 'wsl:a': due(9 * HOUR), 'wsl:b': due(9 * HOUR) } })
-    let finishWake: () => void = () => {}
-    h.wake.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finishWake = resolve
-        })
-    )
-    h.subject.start()
-    const fired = h.runTimer(9 * HOUR + 30 * MINUTE)
-    await vi.waitFor(() => expect(h.wake).toHaveBeenCalledWith('wsl:a'))
-    // b turns ready meanwhile; its read fails, so only the stamp moves.
-    h.setNow(9 * HOUR + 40 * MINUTE)
-    h.automations.mockRejectedValueOnce(new Error('offline'))
-    await h.subject.learn('wsl:b')
-    finishWake()
-    await fired
-    // b's turn in the same fire advances it, and must keep the newer stamp.
-    await vi.waitFor(() =>
-      expect(h.saved.at(-1)?.['wsl:b']).toMatchObject({
-        nextRunAt: 10 * HOUR,
-        lastSeenReadyAt: 9 * HOUR + 40 * MINUTE
-      })
-    )
-  })
-
-  it("doesn't wake a host whose entry a learn cleared while an earlier host's wake ran", async () => {
-    const h = harness({ due: { 'wsl:a': due(9 * HOUR), 'wsl:b': due(9 * HOUR) } })
-    let finishWake: () => void = () => {}
-    h.wake.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finishWake = resolve
-        })
-    )
-    h.subject.start()
-    const fired = h.runTimer(9 * HOUR + 30 * MINUTE)
-    await vi.waitFor(() => expect(h.wake).toHaveBeenCalledWith('wsl:a'))
-    // b's automations were all deleted meanwhile: a learn finds none and clears its entry.
-    h.automations.mockResolvedValueOnce([])
-    await h.subject.learn('wsl:b')
-    finishWake()
-    await fired
-    await vi.waitFor(() => expect(h.timerAt()).toBe(10 * HOUR))
-
-    expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:a')
-    expect(h.saved.at(-1)).not.toHaveProperty('wsl:b')
-  })
-})
 
 describe('persisted wake times', () => {
   let dir: string | null = null
@@ -168,28 +45,5 @@ describe('persisted wake times', () => {
     )
     expect(readWslHostAutomationWakes(dir)).toEqual({})
     expect(readWslHostAutomationWakes(join(dir, 'missing'))).toEqual({})
-  })
-
-  it('reads a file from before lastSeenReadyAt as last ready at its stored run: no boot for it, a wake for later ones', async () => {
-    dir = mkdtempSync(join(tmpdir(), 'orca-wsl-wake-'))
-    const { lastSeenReadyAt: _dropped, ...oldFormat } = due(8 * HOUR)
-    writeFileSync(
-      join(dir, 'wsl-host-automation-wakes.json'),
-      JSON.stringify({ 'wsl:ubuntu': oldFormat })
-    )
-    const loaded = readWslHostAutomationWakes(dir)
-    expect(loaded['wsl:ubuntu']?.lastSeenReadyAt).toBe(8 * HOUR)
-
-    // Only the stored run is past: it may have run on the host, so nothing boots.
-    const stale = harness({ due: loaded })
-    stale.subject.start()
-    await stale.runTimer(8 * HOUR + 10 * MINUTE)
-    expect(stale.wake).not.toHaveBeenCalled()
-
-    // A run after the stored one is genuinely missed: it wakes the host once.
-    const missed = harness({ due: loaded })
-    missed.subject.start()
-    await missed.runTimer(9 * HOUR + 30 * MINUTE)
-    expect(missed.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
   })
 })

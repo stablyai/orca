@@ -1,8 +1,9 @@
 import { BridgeReplyRefusedError } from '../mobile-web-shell/bridge/bridge-client-errors'
-import { isLogicalClientSuspendedError } from '../transport/logical-client-suspended-error'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { GITHUB_CONNECTION_CHANGED } from '../transport/github-target-invocation'
+import { isLogicalClientSuspendedError } from '../transport/connection/logical-client-suspended-error'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
+import { GITHUB_CONNECTION_CHANGED } from '../source-control/review/github-target-invocation'
 
 export const CUTOVER_RETRY_DELAY_MS = 250
 

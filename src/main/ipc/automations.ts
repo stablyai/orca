@@ -9,8 +9,8 @@ import {
   type ExternalAutomationManagerCacheEntry
 } from '../automations/external-automation-manager-cache'
 import { ExternalAutomationProbeScheduler } from '../automations/external-automation-probe-scheduler'
-import { ownerKey } from '../../shared/automation-owner-key'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
+import { ownerKey } from '../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest

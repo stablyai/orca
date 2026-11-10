@@ -1,12 +1,12 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getPullRequestMergeConfirmationTitle,

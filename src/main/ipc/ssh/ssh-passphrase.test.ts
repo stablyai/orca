@@ -1,7 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerCredentialHandler, requestCredential } from './ssh-passphrase'
-import { resetSshCredentialDeclinesForTests } from '../../ssh/ssh-credential-decline'
+import { resetSshCredentialDeclinesForTests } from '../../ssh/authentication/ssh-credential-decline'
 
 vi.mock('electron', () => ({
   ipcMain: {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
-import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { scheduleNextFrame } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'

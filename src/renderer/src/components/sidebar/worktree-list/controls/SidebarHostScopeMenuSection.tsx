@@ -10,7 +10,7 @@ import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
 } from '../../../../../../shared/ui-chrome-types'
-import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   getCheckedHostRows,
   toggleAllVisibleHosts,
@@ -33,7 +33,7 @@ type SidebarHostScopeMenuSectionProps = {
 }
 
 function getHostMetadata(host: SidebarHostOption, t: Translate = translate): string {
-  const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason, t)
+  const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason, t, host.vmState)
   if (host.kind === 'local') {
     return host.detail
   }

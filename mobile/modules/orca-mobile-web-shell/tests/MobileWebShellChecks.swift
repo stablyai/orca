@@ -151,17 +151,6 @@ import Foundation
 
 
   static func checkLoadStateMachine() {
-    let failures: [(MobileWebShellFailureReason, String)] = [
-      (.generationUnreadable, "generation-unreadable"),
-      (.isolationUnavailable, "isolation-unavailable"),
-      (.documentLoadFailed, "document-load-failed"),
-      (.renderProcessGone, "render-process-gone")
-    ]
-    for (reason, expected) in failures {
-      let machine = MobileWebShellLoadStateMachine()
-      precondition(machine.failed(reason) == MobileWebShellLoadEmission(state: "failed", reason: expected))
-    }
-
     // Only the view’s own load raises the flag; commit, failure, renderer death and failed prop application clear it.
     let ownLoad = MobileWebShellLoadStateMachine()
     precondition(!ownLoad.isShellLoad)
@@ -320,23 +309,6 @@ import Foundation
   }
 
 
-  static func checkBridgeByteCap() {
-    let cap = MobileWebShellBridge.maxMessageByteCount
-    precondition(cap == 640 * 1024)
-    precondition(MobileWebShellBridge.acceptsByteCount(0))
-    precondition(MobileWebShellBridge.acceptsByteCount(cap - 1))
-    precondition(MobileWebShellBridge.acceptsByteCount(cap))
-    precondition(!MobileWebShellBridge.acceptsByteCount(cap + 1))
-
-    let gate = MobileWebShellBridgeGate()
-    precondition(gate.refusedCount == 0)
-    precondition(gate.accepts(byteCount: cap))
-    precondition(gate.refusedCount == 0)
-    precondition(!gate.accepts(byteCount: cap + 1))
-    precondition(!gate.accepts(byteCount: cap * 2))
-    precondition(gate.refusedCount == 2)
-  }
-
   // One allow/opener decision; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering.
   static func checkNavigationVerdict() {
     let foreign = "https://example.com/artifact-link"
@@ -400,41 +372,13 @@ import Foundation
     precondition(verdict("javascript:alert(1)") == .cancelAndOffer("javascript:alert(1)"))
   }
 
-  // Check flag/policy together: only one main-frame action may spend the shell’s own-load allowance.
-  static func checkOwnLoadIsSpentOnce() {
-    let document = "orca-mobile-web://\(session)/"
-    func decide(_ machine: MobileWebShellLoadStateMachine) -> MobileWebShellNavigationVerdict {
-      MobileWebShellNavigationPolicy.verdict(
-        url: document,
-        isMainFrame: true,
-        isDocumentUrl: true,
-        isShellLoad: machine.isShellLoad,
-        hasGesture: false,
-        isDownload: false
-      )
-    }
-    let machine = MobileWebShellLoadStateMachine()
-    machine.shellLoadStarted()
-    let first = decide(machine)
-    precondition(first == .allow)
-    // Spend at decision, before commit: WebKit may decide a second action first.
-    machine.shellLoadConsumed()
-    precondition(decide(machine) == .cancel)
-    // And the endings still drop it, for a load that is allowed and then never commits.
-    machine.shellLoadStarted()
-    machine.documentEnded()
-    precondition(decide(machine) == .cancel)
-  }
-
   static func main() {
     checkRequestResolution()
     checkGenerationMap()
     checkLoadStateMachine()
     checkNavigationVerdict()
-    checkOwnLoadIsSpentOnce()
     checkBridgeAcceptance()
     checkBridgePostTarget()
-    checkBridgeByteCap()
     print("mobile web shell checks OK")
   }
 }

@@ -1,8 +1,8 @@
 import {
   readBrowserAttachmentFile,
   releaseBrowserAttachmentFiles
-} from '@/lib/browser-attachment-files'
-import { userNamedFileAccess } from '@/lib/local-file-access'
+} from '@/lib/files/drop/browser-attachment-files'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import {
   nativeChatAttachmentOwnerChangedNotice,
   nativeChatAttachmentUnreadableNotice
@@ -10,7 +10,7 @@ import {
 import type { NativeChatAttachmentOwner } from '../uploads/native-chat-attachment-owner'
 import { stageNativeChatDraftFile } from '../../drafts/native-chat-draft-attachment-staging'
 import { isImageDropPath } from '../../../../../../shared/image-path-paste'
-import { nativeChatPendingAttachmentScope } from '../chips/native-chat-pending-attachment-cache'
+import { nativeChatPendingAttachmentScope } from '../chips/native-chat-pending-attachment-scopes'
 import type {
   NativeChatAttachmentFocusOptions,
   NativeChatResolvedPathOptions

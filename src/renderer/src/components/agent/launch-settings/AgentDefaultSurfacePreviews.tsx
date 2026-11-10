@@ -16,8 +16,8 @@ import {
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 

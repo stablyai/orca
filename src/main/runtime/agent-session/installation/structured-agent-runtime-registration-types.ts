@@ -7,7 +7,7 @@ import type {
   StructuredAgentSessionLifecycleEvent
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
-import type { AcpHostBackendSettings } from '../../../acp/acp-launch-specs'
+import type { AcpHostBackendSettings } from '../../../acp/launch/acp-launch-contract'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'

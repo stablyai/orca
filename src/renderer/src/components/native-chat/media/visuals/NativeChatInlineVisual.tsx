@@ -10,8 +10,8 @@ import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { fileArtifactSourceKey } from '@/lib/file-artifact-source-key'
-import { openFileInBrowserTab } from '@/lib/file-preview'
+import { fileArtifactSourceKey } from '@/lib/files/artifacts/file-artifact-source-key'
+import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { basename } from '@/lib/path'
 import {
   getRuntimeTargetHostId,

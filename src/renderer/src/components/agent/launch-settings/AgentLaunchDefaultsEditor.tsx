@@ -9,7 +9,8 @@ import {
   type AgentDefaultEnvDraftInvalidReason
 } from './agent-default-env-draft'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
-import { AgentArgsChoiceChips, type AgentArgsChoice } from './AgentPermissionChoiceControls'
+import { AgentArgsChoiceChips } from './AgentArgsChoiceChips'
+import type { AgentArgsChoice } from './agent-args-choice'
 
 export function AgentCommandOverrideInput({
   defaultCmd,

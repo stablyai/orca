@@ -4,7 +4,7 @@ import {
   BrowserClientFileChannelWriteParams
 } from '../../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import '../../../../../shared/protocol-version'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserClientDownloadTransferStore } from '../../../browser/downloads/browser-client-download-transfer-store'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'

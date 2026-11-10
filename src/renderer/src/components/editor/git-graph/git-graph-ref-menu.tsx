@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import type { gitGraphScope } from '@/lib/git-graph-tab'
+import type { gitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
 import { gitGraphWorkspaceCatalog } from './git-graph-workspace-navigation'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-history-types'

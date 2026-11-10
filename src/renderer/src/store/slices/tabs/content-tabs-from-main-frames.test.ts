@@ -1,6 +1,6 @@
 // Layout-owner browser/chat/simulator commands draw only from main’s answers; refusals preserve tabs. With switch off, window draws without sending main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -30,14 +30,14 @@ vi.mock('@/store/index', () => ({
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 createStoreCascadesMockApi()
 
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'

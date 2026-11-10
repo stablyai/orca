@@ -3,7 +3,7 @@ import type {
   AutomationChatLaunchRequest,
   AutomationChatAgentLaunch
 } from './automation-chat-agent-launch'
-import { automationRunRecency } from '../../shared/automation-session-reuse'
+import { automationRunRecency } from '../../shared/automations/history/automation-session-reuse'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
 import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
@@ -12,6 +12,7 @@ import {
   structuredAgentSessionSendBody
 } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { automationRunAcceptedTarget } from './automation-agent-run-result'
+import { publishChatTabInBackground } from '../runtime/session-tabs/background-chat-tab-publication'
 
 export async function reuseAutomationChat(
   runtime: OrcaRuntimeService,
@@ -86,6 +87,7 @@ export async function reuseAutomationChat(
         })
       )
       if (sent.ok) {
+        await openReusedAutomationChat(runtime, host, id)
         return target
       }
       if (
@@ -99,16 +101,33 @@ export async function reuseAutomationChat(
       ) {
         return null
       }
-      return automationRunAcceptedTarget(
+      throw new Error('send refused')
+    } catch (error) {
+      const accepted = await automationRunAcceptedTarget(
         runtime,
         run,
         target,
-        new Error('send refused'),
+        error,
         automation.agentId
       )
-    } catch (error) {
-      return automationRunAcceptedTarget(runtime, run, target, error, automation.agentId)
+      if (host && accepted.chatSessionId) {
+        await openReusedAutomationChat(runtime, host, accepted.chatSessionId)
+      }
+      return accepted
     }
   }
   return null
+}
+
+/** A closed chat still receives the queued prompt, so publish that tab without taking focus. */
+async function openReusedAutomationChat(
+  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab'>,
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): Promise<void> {
+  try {
+    await publishChatTabInBackground(runtime, host, sessionId)
+  } catch (error) {
+    console.error('[automations] reused chat tab was not opened:', error)
+  }
 }

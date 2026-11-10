@@ -10,14 +10,14 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/fol
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { LinearIssueActivity } from './linear-issue-activity'
 import { LinearIssueSubIssues } from './linear-issue-sub-issues'
 import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-state'
 import { LinearIssueWorkspaceHeader } from './linear-issue-workspace-header'
 import { LinearIssueWorkspaceSidebar } from './linear-issue-workspace-sidebar'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type LinearIssueWorkspaceProps = {

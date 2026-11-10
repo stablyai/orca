@@ -1,17 +1,23 @@
+import { traceSessionSearch } from './session-search-trace'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../sqlite/sync-database'
 import { deleteSearchMessages } from './session-search-message-rows'
+import { readIndexGeneration, recordIndexMaintenance } from './session-search-index-generation'
 
 export const RETENTION_DELETE_ROWS_PER_STEP = 256
 // Reclaim freed pages incrementally to avoid a long vacuum after the purge.
 const RECLAIM_PAGES_PER_STEP = 2000
+// FTS merges free pages constantly and later writes reuse them; moving them each drain only churns the file.
+const RECLAIM_FREE_PAGE_SHARE = 0.25
 
 /** Hide expired sessions atomically, then reclaim their unreachable messages in bounded transactions. */
 export async function deleteExpiredSearchFiles(
   db: SyncDatabase,
   cutoffMs: number | null,
   closed: () => boolean,
-  yieldStep: () => Promise<void> = yieldToEventLoop
+  yieldStep: () => Promise<void> = yieldToEventLoop,
+  onMessagesChanged: (delta: number) => void = () => undefined,
+  reclaim = true
 ): Promise<void> {
   if (cutoffMs !== null) {
     const expired = db
@@ -39,14 +45,17 @@ export async function deleteExpiredSearchFiles(
       await yieldStep()
     }
   }
-  await drainOrphanedMessages(db, closed, yieldStep)
+  if (reclaim) {
+    await drainOrphanedMessages(db, closed, yieldStep, onMessagesChanged)
+  }
 }
 
 /** Drain orphaned rows left by retention, replacement, or interruption; the rows record unfinished work. */
 export async function drainOrphanedMessages(
   db: SyncDatabase,
   closed: () => boolean,
-  yieldStep: () => Promise<void> = yieldToEventLoop
+  yieldStep: () => Promise<void> = yieldToEventLoop,
+  onMessagesChanged: (delta: number) => void = () => undefined
 ): Promise<void> {
   // Finish one session before scanning for the next orphan to avoid repeating that scan per batch.
   const nextOrphan = db.prepare(
@@ -58,18 +67,30 @@ export async function drainOrphanedMessages(
     db.exec('BEGIN IMMEDIATE')
     let deleted = 0
     try {
-      deleted = deleteSearchMessages(db, orphan, RETENTION_DELETE_ROWS_PER_STEP)
+      const before = readIndexGeneration(db)
+      deleted = traceSessionSearch('drain', () =>
+        deleteSearchMessages(db, orphan!, RETENTION_DELETE_ROWS_PER_STEP)
+      )
+      recordIndexMaintenance(db, before)
       db.exec('COMMIT')
+      onMessagesChanged(-deleted)
     } catch (error) {
       db.exec('ROLLBACK')
       throw error
     }
-    db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+    reclaimFreePages(db)
     if (deleted < RETENTION_DELETE_ROWS_PER_STEP) {
       orphan = (nextOrphan.get() as { session_row_id: number } | undefined)?.session_row_id
     }
     await yieldStep()
   }
   // removeFile may free pages even when this drain has no orphaned messages.
-  db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+  reclaimFreePages(db)
+}
+
+function reclaimFreePages(db: SyncDatabase): void {
+  const free = Number(db.pragma('freelist_count', { simple: true }))
+  if (free > Number(db.pragma('page_count', { simple: true })) * RECLAIM_FREE_PAGE_SHARE) {
+    traceSessionSearch('vacuum', () => db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`))
+  }
 }

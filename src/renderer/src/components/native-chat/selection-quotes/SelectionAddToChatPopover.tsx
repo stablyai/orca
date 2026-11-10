@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } from 'react'
+import { flushSync } from 'react-dom'
 import { Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -149,9 +150,11 @@ export function SelectionAddToChatPopover({
               variant="ghost"
               size="xs"
               onClick={(event) => {
+                const button = event.currentTarget.getBoundingClientRect()
+                // Why: the composer refuses focus while an overlay, including this one, is open.
                 // Taken or not (the composer may have locked since), the offer is spent.
-                onAdd(request.text, event.currentTarget.getBoundingClientRect())
-                setRequest(null)
+                flushSync(() => setRequest(null))
+                onAdd(request.text, button)
               }}
             >
               <Quote />

@@ -7,7 +7,8 @@ import type {
 } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
-import { collectLeafIdsInOrder } from '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/notifications/agent-task-complete-policy'
@@ -20,20 +21,14 @@ import {
   discardHookLaneCompletionRequests,
   submitHookLaneCompletion
 } from './agent-hook-completion-revision-hold'
-
-type CoordinatorEntry = {
-  worktreeId: string
-  coordinator: AgentCompletionCoordinator
-}
-
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
-// Index paneKey → tab once per prune instead of flattening all tabs per coordinator.
-type TabIndex = ReadonlyMap<string, WorktreeTab>
-type PaneCoordinatorLivenessSnapshot = Pick<
+import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
+import type {
+  CoordinatorEntry,
   StoreSnapshot,
-  'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
->
+  WorktreeTab,
+  TabIndex,
+  PaneCoordinatorLivenessSnapshot
+} from './agent-hook-completion-notification-types'
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
@@ -84,8 +79,9 @@ function pruneClosedPaneCoordinators(): void {
   }
   lastPrunedLivenessSnapshot = livenessSnapshot
   const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
-  for (const paneKey of coordinatorsByPaneKey.keys()) {
+  for (const [paneKey, entry] of coordinatorsByPaneKey) {
     if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+      finishDrops.recordPrunedPendingFinish(entry.worktreeId, paneKey, entry.coordinator)
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
@@ -175,7 +171,7 @@ function paneKeyHasUnsuppressedPtyHint(
     return false
   }
   const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
-  if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
+  if (layout?.root && !collectLayoutLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
     return false
   }
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
@@ -211,6 +207,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
     dispatchHookLifecycle: (payload) => dispatchAgentHookTerminalLifecycle(paneKey, payload),
     dispatchCompletion: (title, meta) => {
       if (!hookLaneDispatchEnabled(paneKey)) {
+        finishDrops.recordHookLaneDisabled(worktreeId, paneKey)
         return
       }
       const snapshot = meta?.agentStatus
@@ -261,6 +258,7 @@ export function observeAgentHookCompletionForNotification({
   if (seedOnly !== true) {
     pruneClosedPaneCoordinators()
     if (!paneCanReceiveHookCompletion(paneKey)) {
+      finishDrops.recordFinishOnPaneNotLive(worktreeId, paneKey, payload.state)
       return
     }
   }

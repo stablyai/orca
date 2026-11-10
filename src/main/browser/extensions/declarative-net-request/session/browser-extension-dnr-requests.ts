@@ -1,15 +1,18 @@
 import type { BrowserSessionRequestDecider } from '../../../sessions/requests/browser-session-request-decisions'
 import { createDnrRequestState, type DnrRequestState } from '../request-state'
 import type { DnrEvaluateOptions } from '../engine'
-import { applyDnrRequestHeaderActions, applyDnrResponseHeaderActions } from '../header-modification'
+import {
+  applyDnrRequestHeaderActions,
+  applyDnrResponseHeaderActions
+} from '../header-actions/header-modification'
 import type { DnrRequestInfo, DnrResponseHeaders } from '../request-context'
-import type { DnrRequestAction } from '../ruleset-matcher'
+import type { DnrRequestAction } from '../matching/ruleset-matcher'
 import { getDnrSessionRuntime, type DnrSessionRuntime } from './browser-extension-dnr-session'
 import { extensionHasPermission } from '../../api-runtime/browser-extension-namespace-registry'
 import {
   chromeResourceType,
   isRequestHiddenFromExtensions
-} from '../../browser-extension-web-request'
+} from '../../requests/browser-extension-request-classification'
 
 type RequestDetails = {
   id: number

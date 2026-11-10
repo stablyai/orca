@@ -1,6 +1,6 @@
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
+import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
@@ -19,9 +19,10 @@ import {
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
+import '@/lib/workspace/creation/new-workspace-project-options'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
-import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
+import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -29,7 +30,7 @@ import {
 } from './folder-workspace-agent-startup'
 
 import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 
 export async function submitFolderWorkspaceCreate({
@@ -91,7 +92,7 @@ export async function submitFolderWorkspaceCreate({
       ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
           kind: 'folder',
           runtimeEnvironmentId,
-          executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
+          executionHostId: getRepoExecutionHostId(projectGroup)
         })
       : undefined
   const effectiveSettings = settings
@@ -145,7 +146,7 @@ export async function submitFolderWorkspaceCreate({
         workspace: {
           kind: 'folder' as const,
           runtimeEnvironmentId,
-          executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
+          executionHostId: getRepoExecutionHostId(projectGroup)
         },
         prompt: launchDraftPrompt ?? note,
         promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)

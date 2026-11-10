@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import { classifyTransitionRequirements } from '../../../../../shared/jira/jira-transition-fields'
@@ -10,7 +10,7 @@ import type {
   JiraProjectStatusOrder,
   JiraTransition
 } from '../../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { TaskPageJiraBoard, jiraBoardIssueRefKey } from './task-page-jira-board'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'

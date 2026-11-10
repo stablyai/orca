@@ -1,7 +1,7 @@
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 
 type RootTerminationInput = {
-  child: Pick<SpawnedProcess, 'kill'>
+  child: Pick<ChildProcess, 'kill'>
   exited: () => boolean
 }
 
