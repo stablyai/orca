@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
 import type { HostedGithubRepoAccessResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import type { Repo } from '../../../../shared/repo-types'
+import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
 
 export type OrcaCloudRepoAccessState =
   | 'ok'
@@ -103,7 +104,11 @@ export async function fetchOrcaCloudRepoAccess(
   if (pending) {
     return pending
   }
-  const request = window.api.orcaCloudWorkspace
+  const api = cloudWorkspaceApi()
+  if (!api) {
+    return null
+  }
+  const request = api
     .getRepoAccess({
       repoUrl,
       ...(options.setupSessionId ? { setupSessionId: options.setupSessionId } : {})
@@ -195,8 +200,8 @@ export function useOrcaCloudRepoAccess(
       return false
     }
     // A fresh single-use link each time (the cached one may be past its 10 minutes).
-    const result = await window.api.orcaCloudWorkspace
-      .connectGitHub({ repoUrl, ...(setupSessionId ? { setupSessionId } : {}) })
+    const result = await cloudWorkspaceApi()
+      ?.connectGitHub({ repoUrl, ...(setupSessionId ? { setupSessionId } : {}) })
       .catch(() => null)
     return Boolean(result?.ok)
   }, [repoUrl, setupSessionId])
