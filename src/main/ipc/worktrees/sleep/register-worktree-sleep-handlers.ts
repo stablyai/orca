@@ -1,7 +1,7 @@
 import {
   captureCloudWorkspacesBeforeSleep,
   failQueuedCloudPrompts
-} from '../../../hosted-sandbox/cloud-offline-service'
+} from '../../../hosted-sandbox/cloud-offline-seam'
 import { ipcMain } from 'electron'
 import type { WorkspaceSleepRequest } from '../../../../shared/workspace-sleep'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'

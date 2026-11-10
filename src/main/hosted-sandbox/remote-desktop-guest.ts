@@ -274,8 +274,13 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
   guest.on('before-input-event', onInput)
   guest.on('focus', publish)
   guest.on('blur', publish)
-  if (!guest.isLoading() && guest.getURL()) {
-    onLoad()
+  try {
+    // Attached after the page already loaded (reattach): read it now.
+    if (!guest.isLoading() && guest.getURL()) {
+      onLoad()
+    }
+  } catch {
+    // A destroyed (or partial test) guest has nothing loaded to read.
   }
   return () => {
     disposed = true

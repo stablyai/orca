@@ -53,8 +53,11 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
       if (!canLoad || !args.repoId) {
         return
       }
-      void window.api.ephemeralVm
-        .listRecipes({ repoId: args.repoId })
+      const repoId = args.repoId
+      // Orca Cloud loads recipes even with VM recipes off, so a window without the VM bridge
+      // (detached roots, tests) must land in .catch, not throw from render.
+      void Promise.resolve()
+        .then(() => window.api.ephemeralVm.listRecipes({ repoId }))
         .then((result) => {
           if (generation !== requestGeneration.current) {
             return
