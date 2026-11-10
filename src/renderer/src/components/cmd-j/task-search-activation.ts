@@ -5,12 +5,12 @@ import {
   getProvenWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
 } from '../../../../shared/workspace-attachments/workspace-reference-identity'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
-import '@/lib/workspace/creation/new-workspace'
 import {
+  getLinearIssueWorkspaceName,
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
 } from '../../../../shared/workspace-name'
+import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import type { Worktree } from '../../../../shared/worktree/types'
