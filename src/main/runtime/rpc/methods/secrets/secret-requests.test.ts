@@ -5,22 +5,31 @@ import type { RpcContext, RpcMethod } from '../../core'
 import { eraseRpcMethods } from '../../core'
 import { createSecretRequestMethods } from './secret-requests'
 
-function setup(sessionEnv: string[] = []) {
+/** `verified` stands in for the terminal orcad attests from launch evidence. */
+function setup(
+  options: { sessionEnv?: string[]; enabled?: boolean; verified?: string | null } = {}
+) {
   let seq = 0
   const store = new SecretRequestStore(Date.now, () => `sr_rpc${String(++seq).padStart(5, '0')}`)
   const methods = new Map<string, RpcMethod>(
     eraseRpcMethods(
       createSecretRequestMethods({
         store: () => store,
-        sessionEnvNames: async () => new Set(sessionEnv)
+        sessionEnvNames: async () => new Set(options.sessionEnv ?? []),
+        enabled: () => options.enabled ?? true,
+        callerTerminal: (ctx) =>
+          ctx.caller?.kind === 'local-cli' ? (options.verified ?? null) : null
       })
     ).map((method) => [method.name, method])
   )
   const terminals: Record<string, { agent: string | null; worktreeId: string }> = {
     'term-codex': { agent: 'codex', worktreeId: 'wt-real' }
   }
-  const fake = { getTerminalHandleAgent: (handle: string) => terminals[handle] ?? null }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only getTerminalHandleAgent.
+  const fake = {
+    getTerminalHandleAgent: (handle: string) => terminals[handle] ?? null,
+    isKnownWorktree: async (id: string) => id === 'wt-known'
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only these members.
   const runtime = fake as unknown as OrcaRuntimeService
   const call = async (name: string, params: unknown, ctx: Partial<RpcContext> = {}) => {
     const method = methods.get(name)
@@ -39,17 +48,12 @@ const desktop: Partial<RpcContext> = { caller: { kind: 'paired-device', deviceId
 const agentCli: Partial<RpcContext> = { caller: { kind: 'local-cli' } }
 
 describe('secrets.* RPC', () => {
-  it('derives the agent and worktree from the calling terminal, not from params', async () => {
-    const { call, events } = setup()
+  it('derives the agent and worktree from the verified calling terminal', async () => {
+    const { call, events } = setup({ verified: 'term-codex' })
     await expect(
       call(
         'secrets.request',
-        {
-          name: 'STRIPE_KEY',
-          reason: 'tests',
-          terminalHandle: 'term-codex',
-          worktreeId: 'wt-hint'
-        },
+        { name: 'STRIPE_KEY', reason: 'tests', worktreeId: 'wt-known' },
         agentCli
       )
     ).resolves.toEqual({ requestId: 'sr_rpc00001', status: 'pending' })
@@ -60,22 +64,36 @@ describe('secrets.* RPC', () => {
     })
   })
 
-  it('leaves the agent unknown for an unrecognized terminal and refuses a caller-named agent', async () => {
-    const { call, events } = setup()
-    await call(
-      'secrets.request',
-      { name: 'A', reason: 'r', terminalHandle: 'forged', worktreeId: 'wt-hint' },
-      agentCli
-    )
-    expect(events[0]).toMatchObject({ agent: null, worktreeId: 'wt-hint' })
+  it('takes no terminal or agent from params', async () => {
+    const { call } = setup()
+    for (const extra of [{ terminalHandle: 'term-codex' }, { agent: 'claude' }]) {
+      await expect(
+        call('secrets.request', { name: 'A', reason: 'r', ...extra }, agentCli)
+      ).rejects.toThrow()
+    }
+  })
+
+  it('without a verified terminal: agent unknown, worktree hint kept only if this host knows it', async () => {
+    const { call, events } = setup({ verified: null })
+    await call('secrets.request', { name: 'A', reason: 'r', worktreeId: 'wt-known' }, agentCli)
+    await call('secrets.request', { name: 'B', reason: 'r', worktreeId: 'wt-made-up' }, agentCli)
+    expect(events[0]).toMatchObject({ agent: null, worktreeId: 'wt-known' })
     expect(events[0]).not.toHaveProperty('terminalHandle')
+    expect(events[1]).toMatchObject({ agent: null, worktreeId: null })
+  })
+
+  it('refuses every method outside a cloud workspace orcad', async () => {
+    const { call } = setup({ enabled: false })
+    await expect(call('secrets.request', { name: 'A', reason: 'r' })).rejects.toThrow(
+      'secret_requests_unavailable'
+    )
     await expect(
-      call('secrets.request', { name: 'B', reason: 'r', agent: 'claude' }, agentCli)
-    ).rejects.toThrow()
+      call('secrets.requestStatus', { requestId: 'sr_rpc00001' }, desktop)
+    ).rejects.toThrow('secret_requests_unavailable')
   })
 
   it('answers already-set from the session env and refuses agent credentials', async () => {
-    const { call } = setup(['SENTRY_DSN'])
+    const { call } = setup({ sessionEnv: ['SENTRY_DSN'] })
     await expect(call('secrets.request', { name: 'SENTRY_DSN', reason: 'r' })).resolves.toEqual({
       requestId: null,
       status: 'already-set'
@@ -85,9 +103,15 @@ describe('secrets.* RPC', () => {
     ).rejects.toThrow('use_sign_in_or_cloud_secrets')
   })
 
-  it('rejects a reason over 200 characters', async () => {
-    const { call } = setup()
-    await expect(call('secrets.request', { name: 'A', reason: 'x'.repeat(201) })).rejects.toThrow()
+  it('strips control and bidi characters from the reason, and caps it at 200 characters', async () => {
+    const { call, events } = setup()
+    await call('secrets.request', {
+      name: 'A',
+      reason: 'Run‮ the\ntests\u0007 ⁦now⁩\u001b[31m'
+    })
+    expect(events[0]).toMatchObject({ reason: 'Run the tests now [31m' })
+    await expect(call('secrets.request', { name: 'B', reason: 'x'.repeat(201) })).rejects.toThrow()
+    await expect(call('secrets.request', { name: 'C', reason: '‮\n\u0000' })).rejects.toThrow()
   })
 
   it('lets a person, never the agent CLI, touch and resolve; anyone reads status', async () => {

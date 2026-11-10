@@ -9,6 +9,7 @@ export const SECRETS_RESOLVE_REQUEST_METHOD = 'secrets.resolveRequest'
 
 /** Client event types (runtime.clientEvents.subscribe). */
 export const SECRETS_REQUESTED_EVENT = 'secrets.requested'
+export const SECRETS_REQUEST_UPDATED_EVENT = 'secrets.requestUpdated'
 export const SECRETS_REQUEST_SETTLED_EVENT = 'secrets.requestSettled'
 
 export const SECRET_REQUEST_REASON_MAX = 200
@@ -23,16 +24,31 @@ export type SecretRequestScope = z.infer<typeof SecretRequestScopeSchema>
 
 const RequestId = z.string().regex(/^sr_[A-Za-z0-9_-]{8,64}$/)
 
+// C0/C1 controls (newlines, escapes) become spaces; bidi overrides and isolates are dropped, so the
+// agent's text can't reorder or restyle what the person reads.
+// oxlint-disable-next-line no-control-regex -- SAFETY: matching control characters is the point.
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g
+const BIDI_CHARS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
+
+export function sanitizeSecretRequestReason(reason: string): string {
+  return reason.replace(BIDI_CHARS, '').replace(CONTROL_CHARS, ' ').replace(/ {2,}/g, ' ').trim()
+}
+
 export const SecretsRequestParamsSchema = z
   .object({
     // Shape only; the name rules (reserved names, agent credentials) are checked by the handler so the
     // agent gets a specific error code back.
     name: z.string().min(1).max(128),
-    reason: z.string().trim().min(1).max(SECRET_REQUEST_REASON_MAX),
+    reason: z
+      .string()
+      .max(SECRET_REQUEST_REASON_MAX * 4)
+      .transform(sanitizeSecretRequestReason)
+      .pipe(z.string().min(1).max(SECRET_REQUEST_REASON_MAX)),
     /** A hint only: the card always preselects Personal (D2). */
     scope: SecretRequestScopeSchema.optional(),
-    worktreeId: z.string().min(1).max(512).optional(),
-    terminalHandle: z.string().min(1).max(512).optional()
+    /** A hint, kept only when this orcad knows the worktree. The agent and its terminal come from the
+     *  caller identity orcad verifies (launch evidence), never from params. */
+    worktreeId: z.string().min(1).max(512).optional()
   })
   .strict()
 export type SecretsRequestParams = z.infer<typeof SecretsRequestParamsSchema>
@@ -77,7 +93,14 @@ export type SecretRequestedEvent = {
   expiresAt: number
 }
 
-/** A request was provided or declined, so other clients can drop their card. */
+/** touchRequest moved the expiry, so every client keeps the card as long. */
+export type SecretRequestUpdatedEvent = {
+  type: typeof SECRETS_REQUEST_UPDATED_EVENT
+  requestId: string
+  expiresAt: number
+}
+
+/** A request was provided, declined or expired, so other clients can drop their card. */
 export type SecretRequestSettledEvent = {
   type: typeof SECRETS_REQUEST_SETTLED_EVENT
   requestId: string
@@ -94,7 +117,9 @@ export const SECRET_REQUEST_ERRORS = {
   rateLimited: 'secret_request_rate_limited',
   notFound: 'secret_request_not_found',
   notPending: 'secret_request_not_pending',
-  forbidden: 'secret_request_forbidden'
+  forbidden: 'secret_request_forbidden',
+  /** Only a cloud workspace's orcad takes secret requests. */
+  unavailable: 'secret_requests_unavailable'
 } as const
 
 /** D4: printed by the CLI once a request is provided. */

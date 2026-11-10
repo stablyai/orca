@@ -13,13 +13,33 @@ const MIN = 60_000
 function makeStore() {
   const clock = { now: 1_000_000 }
   let seq = 0
+  const timers: { at: number; run: () => void; cancelled: boolean }[] = []
   const store = new SecretRequestStore(
     () => clock.now,
-    () => `sr_test${String(++seq).padStart(4, '0')}`
+    () => `sr_test${String(++seq).padStart(4, '0')}`,
+    (run, ms) => {
+      const timer = { at: clock.now + ms, run, cancelled: false }
+      timers.push(timer)
+      return { cancel: () => (timer.cancelled = true) }
+    }
   )
   const events: SecretRequestStoreEvent[] = []
   store.subscribe((event) => events.push(event))
-  return { store, clock, events }
+  /** Moves the clock and fires due timers. */
+  const advance = (ms: number): void => {
+    clock.now += ms
+    for (const timer of timers.splice(0)) {
+      if (timer.cancelled) {
+        continue
+      }
+      if (timer.at <= clock.now) {
+        timer.run()
+      } else {
+        timers.push(timer)
+      }
+    }
+  }
+  return { store, clock, events, advance }
 }
 
 function input(name: string, extra: Partial<SecretRequestInput> = {}): SecretRequestInput {
@@ -194,5 +214,36 @@ describe('SecretRequestStore', () => {
     expect(phone).not.toHaveProperty('reason')
     expect(phone).not.toHaveProperty('terminalHandle')
     expect(phone).toMatchObject({ name: 'A', agent: 'claude', requestId: event.requestId })
+  })
+
+  it('announces a touch, and a natural expiry (at the touched time), to every client', () => {
+    const { store, events, advance } = makeStore()
+    store.request(input('TOKEN'))
+    advance(10 * MIN)
+    store.touch('sr_test0001')
+    expect(events.at(-1)).toEqual({
+      type: 'secrets.requestUpdated',
+      requestId: 'sr_test0001',
+      expiresAt: 1_000_000 + 25 * MIN
+    })
+    // The original 15-minute expiry no longer fires.
+    advance(6 * MIN)
+    expect(events.filter((e) => e.type === 'secrets.requestSettled')).toEqual([])
+    advance(9 * MIN)
+    expect(events.at(-1)).toEqual({
+      type: 'secrets.requestSettled',
+      requestId: 'sr_test0001',
+      status: 'expired'
+    })
+  })
+
+  it('announces no expiry for an answered request', () => {
+    const { store, events, advance } = makeStore()
+    store.request(input('TOKEN'))
+    store.resolve('sr_test0001', 'provided')
+    advance(20 * MIN)
+    expect(events.filter((e) => e.type === 'secrets.requestSettled')).toEqual([
+      { type: 'secrets.requestSettled', requestId: 'sr_test0001', status: 'provided' }
+    ])
   })
 })

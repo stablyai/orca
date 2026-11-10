@@ -2,7 +2,7 @@
 // env file. Values must survive quoting exactly (quotes, newlines, $, backslashes) in POSIX shells
 // and fish, and names that were removed must be unset.
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -113,6 +113,19 @@ describe('orca-env', () => {
   it('skips names the shell hook skips and globs nothing', () => {
     writeSessionEnv({ GOOD: 'x' }, ['PATH=L3RtcA==', 'ORCA_X=eA==', 'LD_PRELOAD=eA==', 'lower=eA==', 'not a line'])
     const out = orcaEnv([], '* ORCA_TOKEN')
+    expect(out).toBe("export GOOD='x'\nexport ORCA_SESSION_ENV_NAMES='GOOD'\n")
+  })
+
+  it("never sets or unsets the control plane's reserved names and prefixes (kept in sync with secrets.ts)", () => {
+    const source = readFileSync(fileURLToPath(new URL('../src/secrets.ts', import.meta.url).href), 'utf8')
+    const quoted = (text: string | undefined): string[] => [...(text ?? '').matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1])
+    const names = quoted(source.match(/const RESERVED_NAMES[^=]*= new Set\(\[([\s\S]*?)\]\)/)?.[1])
+    const prefixes = quoted(source.match(/const RESERVED_PREFIXES = \[([^\]]*)\]/)?.[1])
+    expect(names.length).toBeGreaterThan(30)
+    expect(prefixes.length).toBeGreaterThan(3)
+    const blocked = [...names, ...prefixes.map((prefix) => `${prefix}X`)]
+    writeSessionEnv({ GOOD: 'x', ...Object.fromEntries(blocked.map((name) => [name, 'evil'])) })
+    const out = orcaEnv([], blocked.join(' '))
     expect(out).toBe("export GOOD='x'\nexport ORCA_SESSION_ENV_NAMES='GOOD'\n")
   })
 

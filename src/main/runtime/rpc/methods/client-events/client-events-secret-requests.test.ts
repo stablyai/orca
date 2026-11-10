@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { getSecretRequestStore } from '../../../secrets/secret-request-store'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../core'
@@ -24,6 +24,15 @@ function makeRuntime(): { runtime: OrcaRuntimeService; cleanups: (() => void)[] 
   return { runtime: fake as unknown as OrcaRuntimeService, cleanups }
 }
 
+beforeEach(() => {
+  vi.stubEnv('ORCA_IS_CLOUD', '1')
+  vi.stubEnv('ORCA_SANDBOX_ID', 'sbx_test')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 const secretEvents = (events: unknown[]): Record<string, unknown>[] =>
   events.filter(
     (event): event is Record<string, unknown> =>
@@ -33,6 +42,32 @@ const secretEvents = (events: unknown[]): Record<string, unknown>[] =>
       typeof event.type === 'string' &&
       event.type.startsWith('secrets.')
   )
+
+it('sends no secret requests from a desktop runtime', async () => {
+  vi.stubEnv('ORCA_IS_CLOUD', '')
+  if (!subscribeMethod) {
+    throw new Error('runtime.clientEvents.subscribe is not a streaming method')
+  }
+  getSecretRequestStore().request({
+    name: 'LOCAL_ONLY',
+    reason: 'r',
+    agent: null,
+    worktreeId: null,
+    terminalHandle: null,
+    sessionEnvNames: new Set()
+  })
+  const { runtime, cleanups } = makeRuntime()
+  const seen: unknown[] = []
+  const done = subscribeMethod.handler(
+    {},
+    { runtime, connectionId: 'conn-0', clientKind: 'runtime' },
+    (event) => seen.push(event)
+  )
+  expect(secretEvents(seen)).toEqual([])
+  cleanups.forEach((cleanup) => cleanup())
+  await done
+  getSecretRequestStore().resolve(getSecretRequestStore().pendingEvents()[0].requestId, 'declined')
+})
 
 it('registers the secrets.* methods', () => {
   const names = methods.map((method) => method.name)

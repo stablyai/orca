@@ -21,6 +21,7 @@ import {
   phoneSecretRequestEvent,
   type SecretRequestStoreEvent
 } from '../../../secrets/secret-request-store'
+import { isCloudWorkspaceOrcad } from '../../../secrets/session-env-names'
 
 let clientEventSubscriptionSeq = 0
 
@@ -68,8 +69,9 @@ export const CLIENT_EVENT_METHODS = [
         // Agent secret requests (secrets.requested): phones get status only.
         const emitSecretRequest = (event: SecretRequestStoreEvent): void =>
           emit(clientKind === 'mobile' ? phoneSecretRequestEvent(event) : event)
-        const secretRequests = getSecretRequestStore()
-        const unsubscribeSecretRequests = secretRequests.subscribe(emitSecretRequest)
+        // Only a cloud workspace's orcad takes secret requests.
+        const secretRequests = isCloudWorkspaceOrcad() ? getSecretRequestStore() : null
+        const unsubscribeSecretRequests = secretRequests?.subscribe(emitSecretRequest)
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
@@ -79,7 +81,7 @@ export const CLIENT_EVENT_METHODS = [
             unsubscribe()
             unregisterHostVolunteer?.()
             unsubscribeTelemetry?.()
-            unsubscribeSecretRequests()
+            unsubscribeSecretRequests?.()
             emit({ type: 'end' })
             resolve()
           },
@@ -88,7 +90,7 @@ export const CLIENT_EVENT_METHODS = [
 
         // Listen before snapshotting to close the subscribe race and replay sleep state missed during disconnect.
         // Requests made while no client was attached wait here until they expire.
-        for (const event of secretRequests.pendingEvents()) {
+        for (const event of secretRequests?.pendingEvents() ?? []) {
           emitSecretRequest(event)
         }
         for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {

@@ -33,7 +33,6 @@ export type SecretRequestCliInput = {
   scope?: SecretRequestScope
   waitSec: number | null
   json: boolean
-  terminalHandle?: string
   worktreeId?: string
 }
 
@@ -46,8 +45,8 @@ export async function runSecretRequest(
     name: input.name,
     reason: input.reason,
     ...(input.scope ? { scope: input.scope } : {}),
-    ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
-    ...(input.terminalHandle ? { terminalHandle: input.terminalHandle } : {})
+    // The calling terminal (and so the agent) travels as launch evidence that orcad verifies.
+    ...(input.worktreeId ? { worktreeId: input.worktreeId } : {})
   }
   let created: SecretsRequestResult
   try {
@@ -136,7 +135,9 @@ const ERROR_MESSAGES: Record<string, (name: string) => string> = {
   [SECRET_REQUEST_ERRORS.tooManyPending]: () =>
     'This workspace already has 3 secret requests waiting. Wait for one to be answered.',
   [SECRET_REQUEST_ERRORS.rateLimited]: () =>
-    'This workspace asked for 10 secrets in the last hour. Try again later.'
+    'This workspace asked for 10 secrets in the last hour. Try again later.',
+  [SECRET_REQUEST_ERRORS.unavailable]: () =>
+    'Secret requests work only inside an Orca Cloud workspace.'
 }
 
 function explainRequestError(error: unknown, name: string): unknown {
@@ -185,7 +186,6 @@ export const SECRET_HANDLERS: Record<string, CommandHandler> = {
         scope: parseScope(getOptionalStringFlag(flags, 'scope')),
         waitSec: parseSecretRequestWait(flags.get('wait')),
         json,
-        terminalHandle: process.env.ORCA_TERMINAL_HANDLE || undefined,
         worktreeId: process.env.ORCA_WORKTREE_ID || undefined
       },
       {

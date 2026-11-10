@@ -6,10 +6,12 @@ import {
   SECRET_REQUEST_MAX_PER_HOUR,
   SECRET_REQUEST_TTL_MS,
   SECRETS_REQUEST_SETTLED_EVENT,
+  SECRETS_REQUEST_UPDATED_EVENT,
   SECRETS_REQUESTED_EVENT,
   type SecretRequestedEvent,
   type SecretRequestScope,
   type SecretRequestSettledEvent,
+  type SecretRequestUpdatedEvent,
   type SecretRequestStatus,
   type SecretsRequestResult,
   type SecretsRequestStatusResult,
@@ -52,17 +54,32 @@ export type SecretRequestInput = {
   sessionEnvNames: ReadonlySet<string>
 }
 
-export type SecretRequestStoreEvent = SecretRequestedEvent | SecretRequestSettledEvent
+export type SecretRequestStoreEvent =
+  | SecretRequestedEvent
+  | SecretRequestUpdatedEvent
+  | SecretRequestSettledEvent
+
+/** Schedules `run` after `ms`; the result cancels it. */
+export type SecretRequestTimer = (run: () => void, ms: number) => { cancel: () => void }
+
+const realTimer: SecretRequestTimer = (run, ms) => {
+  const handle = setTimeout(run, ms)
+  // A pending request must never keep orcad alive.
+  handle.unref?.()
+  return { cancel: () => clearTimeout(handle) }
+}
 
 /** In-memory only (never on disk): one orcad serves one cloud workspace, so limits and dedupe are
  *  per store. Records outlive their request by an hour so `--wait` can read the outcome. */
 export class SecretRequestStore {
   private readonly records = new Map<string, SecretRequestRecord>()
   private readonly listeners = new Set<(event: SecretRequestStoreEvent) => void>()
+  private readonly expiryTimers = new Map<string, { cancel: () => void }>()
 
   constructor(
     private readonly now: () => number = Date.now,
-    private readonly newId: () => string = () => `sr_${randomBytes(12).toString('base64url')}`
+    private readonly newId: () => string = () => `sr_${randomBytes(12).toString('base64url')}`,
+    private readonly timer: SecretRequestTimer = realTimer
   ) {}
 
   request(input: SecretRequestInput): SecretsRequestResult {
@@ -100,6 +117,7 @@ export class SecretRequestStore {
       outcome: null
     }
     this.records.set(record.requestId, record)
+    this.scheduleExpiry(record)
     this.emit(toRequestedEvent(record))
     return { requestId: record.requestId, status: 'pending' }
   }
@@ -125,6 +143,8 @@ export class SecretRequestStore {
       now + SECRET_REQUEST_TTL_MS,
       record.requestedAt + SECRET_REQUEST_MAX_LIFETIME_MS
     )
+    this.scheduleExpiry(record)
+    this.emit({ type: SECRETS_REQUEST_UPDATED_EVENT, requestId, expiresAt: record.expiresAt })
     return { expiresAt: record.expiresAt }
   }
 
@@ -136,6 +156,7 @@ export class SecretRequestStore {
       return { outcome: status }
     }
     record.outcome = outcome
+    this.clearExpiry(requestId)
     this.emit({ type: SECRETS_REQUEST_SETTLED_EVENT, requestId, status: outcome })
     return { outcome }
   }
@@ -153,6 +174,35 @@ export class SecretRequestStore {
     return () => {
       this.listeners.delete(listener)
     }
+  }
+
+  /** Natural expiry is announced too, so every client drops the card at the same moment. */
+  private scheduleExpiry(record: SecretRequestRecord): void {
+    this.clearExpiry(record.requestId)
+    const handle = this.timer(
+      () => {
+        this.expiryTimers.delete(record.requestId)
+        const now = this.now()
+        if (record.outcome || now < record.expiresAt) {
+          if (!record.outcome) {
+            this.scheduleExpiry(record)
+          }
+          return
+        }
+        this.emit({
+          type: SECRETS_REQUEST_SETTLED_EVENT,
+          requestId: record.requestId,
+          status: 'expired'
+        })
+      },
+      Math.max(0, record.expiresAt - this.now())
+    )
+    this.expiryTimers.set(record.requestId, handle)
+  }
+
+  private clearExpiry(requestId: string): void {
+    this.expiryTimers.get(requestId)?.cancel()
+    this.expiryTimers.delete(requestId)
   }
 
   private statusOf(record: SecretRequestRecord, now: number): SecretRequestStatus {

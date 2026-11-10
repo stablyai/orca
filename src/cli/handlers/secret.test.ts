@@ -41,12 +41,11 @@ const base: SecretRequestCliInput = {
   reason: 'Run the checkout tests',
   waitSec: null,
   json: false,
-  terminalHandle: 'term-1',
   worktreeId: 'wt-1'
 }
 
 describe('orca secret request', () => {
-  it('sends the terminal handle so orcad can name the agent, and never an agent name', async () => {
+  it('names no terminal or agent: orcad derives them from verified launch evidence', async () => {
     const h = harness({ request: { requestId: 'sr_abcdefgh', status: 'pending' } })
     await runSecretRequest({ ...base, scope: 'repo' }, h.deps)
     expect(h.calls[0]).toEqual({
@@ -55,8 +54,7 @@ describe('orca secret request', () => {
         name: 'STRIPE_KEY',
         reason: 'Run the checkout tests',
         scope: 'repo',
-        worktreeId: 'wt-1',
-        terminalHandle: 'term-1'
+        worktreeId: 'wt-1'
       }
     })
   })

@@ -327,6 +327,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     }
   }
 
+  /** Whether this host knows a worktree by id (a caller's hint is kept only when it does). */
+  async isKnownWorktree(worktreeId: string): Promise<boolean> {
+    return (await this.getResolvedWorktreeMap()).has(worktreeId)
+  }
+
   /** Return the already-open record store without waiting. */
   openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
     return peekOpenedAgentSessionRecordStore()
