@@ -30,6 +30,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children?: ReactNode }) => <div data-tooltip>{children}</div>
 }))
 
+const writeClipboardText = vi.hoisted(() => vi.fn(async () => {}))
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
 
@@ -140,7 +141,11 @@ describe('AgentUpdateStatusSegment', () => {
     agentUpdates.refresh.mockResolvedValue(EMPTY)
     agentUpdates.update.mockClear()
     toastError.mockClear()
-    Object.defineProperty(window, 'api', { configurable: true, value: { agentUpdates } })
+    writeClipboardText.mockClear()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { agentUpdates, ui: { writeClipboardText } }
+    })
   })
 
   afterEach(async () => {
@@ -188,6 +193,23 @@ describe('AgentUpdateStatusSegment', () => {
     })
 
     expect(agentUpdates.update).toHaveBeenCalledWith({ agents: ['codex'] })
+  })
+
+  it('shows why an update failed and lets the user copy the details', async () => {
+    const failureMessage = 'EACCES: permission denied, mkdir /usr/local/lib/node_modules'
+    await render()
+    await push({
+      ...TWO_UPDATES,
+      rows: [{ ...TWO_UPDATES.rows[0], run: { state: 'failed', message: failureMessage } }]
+    })
+
+    const failedRow = rowOf('0.166.0 → 0.167.0')
+    expect(failedRow?.textContent).toContain(failureMessage)
+    await act(async () => {
+      failedRow?.querySelectorAll('button')[1]?.click()
+    })
+
+    expect(writeClipboardText).toHaveBeenCalledWith(failureMessage)
   })
 
   it('tells the user when the update request is refused', async () => {
