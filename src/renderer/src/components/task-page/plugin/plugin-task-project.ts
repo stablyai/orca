@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { findGitProjectForSource } from '@/lib/git-remote-project-match'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace-dialog-repo'
 import type { ProjectSourceMatcher } from '@/lib/project-source-match'
 import type { PluginTaskStartRecipe } from '../../../../../shared/plugins/tasks/plugin-task-source'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -42,7 +42,7 @@ export async function resolvePluginTaskProject(
   repos: readonly Repo[],
   activeRepoId: string | null
 ): Promise<PluginTaskProject> {
-  const eligible = getComposerEligibleRepos(repos)
+  const eligible = getNewWorkspaceDialogEligibleRepos(repos)
   if (recipe.projectPath) {
     const repoId = findRepoIdForProjectPath(eligible, recipe.projectPath)
     return repoId

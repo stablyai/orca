@@ -1,4 +1,4 @@
-import { attachEphemeralVmRuntimeToWorkspace } from '@/lib/ephemeral-vm-worktree-creation'
+import { attachEphemeralVmRuntimeToWorkspace } from '@/lib/workspace/creation/ephemeral-vm-worktree-creation'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { persistCreatedWorkspacePluginTaskLink } from '@/lib/plugin-task-workspace-link'
 
