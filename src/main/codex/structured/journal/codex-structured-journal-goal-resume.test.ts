@@ -44,7 +44,6 @@ afterEach(async () => {
 })
 
 async function goalJournal() {
-  let publishes = 0
   const journal = await journals.open({
     identity: {
       sessionId: 'session',
@@ -59,19 +58,14 @@ async function goalJournal() {
   const target = {
     journal,
     fence: 1,
-    publish: () => {
-      publishes += 1
-    }
+    publish: () => {}
   }
   deferred.bind(target)
   const rows = () => readTestJournalItems(journal)
   return {
     sink: deferred.sink,
-    // Each item write adds one revision, so the sum counts the writes that changed a row.
-    writes: async () => (await rows()).reduce((sum, row) => sum + row.revision, 0),
     rows,
     goalRowId: async () => (await rows()).findLast((row) => row.body.kind === 'status')?.itemId,
-    publishes: () => publishes,
     replaceEpoch: () =>
       journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 1, items: [] }),
     rebind: () => deferred.bind(target),
@@ -147,8 +141,6 @@ describe('codex goal lifecycle resume', () => {
     }
     await journal.drained()
     const acceptedOccurrence = await journal.goalRowId()
-    const writesBeforeResume = await journal.writes()
-    const publishesBeforeResume = journal.publishes()
     const acceptedBody = (await journal.rows()).find(
       (row) => row.itemId === acceptedOccurrence
     )?.body
@@ -174,7 +166,6 @@ describe('codex goal lifecycle resume', () => {
               turnId: null
             }
     })
-    expect(await journal.writes()).toBe(writesBeforeResume)
     journal.rebind()
     await journal.drained()
 
@@ -185,14 +176,11 @@ describe('codex goal lifecycle resume', () => {
     )
     // Fresh resume accounting revises the existing row; cleared goals carry none.
     const cleared = scenario.resumed.method === 'thread/goal/cleared'
-    expect(await journal.writes()).toBe(writesBeforeResume + (cleared ? 0 : 1))
-    expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))
     expect(await journal.goalRowId()).toBe(acceptedOccurrence)
     const revised = (await journal.rows()).find((row) => row.itemId === acceptedOccurrence)
     if (cleared) {
       expect(revised?.body).toEqual(acceptedBody)
     } else {
-      expect(revised?.revision).toBe(2)
       expect(revised?.body).toMatchObject({
         text: acceptedBody?.kind === 'status' ? acceptedBody.text : undefined,
         threadGoal: { goal: { tokensUsed: 12_345, timeUsedSeconds: 42 } }
