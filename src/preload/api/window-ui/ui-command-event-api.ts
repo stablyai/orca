@@ -1,6 +1,6 @@
 import type {
-  RuntimeEditorTabReveal,
-  RuntimeFileOpenPosition
+  RuntimeEditorFileOpen,
+  RuntimeEditorTabReveal
 } from '../../../shared/file-access/runtime-editor-file-open'
 import type { JiraQuickFilterState } from '../../../shared/jira/jira-quick-filters'
 import type {
@@ -277,17 +277,7 @@ export type UiCommandEventApi = {
     callback: (request: TerminalPaneMoveToNewTabRequest) => void
   ) => () => void
   replyTerminalPaneMoveToNewTab?: (reply: TerminalPaneMoveToNewTabReply) => void
-  onOpenFileFromMobile: (
-    callback: (data: {
-      worktreeId: string
-      filePath: string
-      relativePath: string
-      runtimeEnvironmentId?: string | null
-      navigation?: RuntimeNavigationTarget
-      position?: RuntimeFileOpenPosition
-      preview?: boolean
-    }) => void
-  ) => () => void
+  onOpenFileFromMobile: (callback: (data: RuntimeEditorFileOpen) => void) => () => void
   onRevealEditorTabFromRuntime: (callback: (data: RuntimeEditorTabReveal) => void) => () => void
   onOpenDiffFromMobile: (
     callback: (data: {
