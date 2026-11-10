@@ -8013,7 +8013,7 @@
       "tests/e2e/host-agent-launch-preferences-work.unit.test.ts": 3882,
       "tests/e2e/host-agent-launch-settings-hook-bookkeeping.unit.test.ts": 21972,
       "tests/e2e/host-cold-park-remote-subscriber.unit.test.ts": 5314,
-      "tests/e2e/journal-restored-consumers.unit.test.ts": 33933,
+
       "tests/e2e/launch-agent-background-session-remote.unit.test.ts": 1016,
       "tests/e2e/launch-agent-in-new-tab-web-runtime.unit.test.ts": 14288,
       "tests/e2e/linear-cli-recovery.unit.test.ts": 7592,
@@ -8025,7 +8025,7 @@
       "tests/e2e/native-chat-rewind-boundary.unit.test.ts": 2977,
       "tests/e2e/native-chat-ssh-transcript.unit.test.ts": 1166,
       "tests/e2e/native-chat-startup-option-pickers.unit.test.ts": 9377,
-      "tests/e2e/native-chat-transcript-file-order.unit.test.ts": 1066,
+
       "tests/e2e/native-chat-transcript-reasoning.unit.test.ts": 3341,
       "tests/e2e/nested-agent-idle-owner.unit.test.ts": 2469,
       "tests/e2e/omp-child-session-recovery.unit.test.ts": 2205,
