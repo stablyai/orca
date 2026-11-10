@@ -1,5 +1,9 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
+import {
+  isTerminalLinkFloatingWorkspaceActivation,
+  isTerminalOwnedLinkGesture
+} from './terminal-link-activation'
+import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 
@@ -38,17 +42,46 @@ function primeTerminalLinkifier(terminal: Terminal, event: MouseEvent): void {
 
 export function installTerminalLinkifierClickPriming(terminal: Terminal): IDisposable {
   const terminalElement = terminal.element
+  const ownerWindow = terminalElement?.ownerDocument?.defaultView
+  let restoreAltClickMovesCursor: (() => void) | null = null
+  const restoreAltClick = (): void => {
+    restoreAltClickMovesCursor?.()
+    restoreAltClickMovesCursor = null
+  }
+  const queueRestoreAltClick = (): void => {
+    ownerWindow?.setTimeout(restoreAltClick, 0)
+  }
   const handleMouseDown = (event: MouseEvent): void => {
-    if (!isTerminalOwnedLinkGesture(event)) {
+    restoreAltClick()
+    const floatingActivation = isTerminalLinkFloatingWorkspaceActivation(event)
+    if (!floatingActivation && !isTerminalOwnedLinkGesture(event)) {
       return
     }
     // Prime on mousedown: xterm normally resolves on mousemove, missing first clicks on output painted under a still pointer.
     primeTerminalLinkifier(terminal, event)
+    if (
+      floatingActivation &&
+      terminal.options.altClickMovesCursor !== false &&
+      isTerminalLinkifierHoverActive(terminal)
+    ) {
+      // Why: xterm's Alt+click would also send cursor-move arrow keys to the shell or agent.
+      const previous = terminal.options.altClickMovesCursor
+      terminal.options.altClickMovesCursor = false
+      // Why after a tick: xterm reads the option in its own document mouseup listener.
+      ownerWindow?.addEventListener('mouseup', queueRestoreAltClick)
+      ownerWindow?.addEventListener('blur', restoreAltClick)
+      restoreAltClickMovesCursor = () => {
+        terminal.options.altClickMovesCursor = previous
+        ownerWindow?.removeEventListener('mouseup', queueRestoreAltClick)
+        ownerWindow?.removeEventListener('blur', restoreAltClick)
+      }
+    }
   }
 
   terminalElement?.addEventListener('mousedown', handleMouseDown, CAPTURE_LISTENER_OPTIONS)
   return {
     dispose: () => {
+      restoreAltClick()
       terminalElement?.removeEventListener('mousedown', handleMouseDown, CAPTURE_LISTENER_OPTIONS)
     }
   }

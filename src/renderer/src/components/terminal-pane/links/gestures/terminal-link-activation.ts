@@ -18,6 +18,19 @@ export function isTerminalLinkDirectActivation(event: TerminalLinkMouseEvent | u
   )
 }
 
+/** Cmd+Alt+click (Ctrl+Alt+click off macOS) opens the link in the Floating Workspace. */
+export function isTerminalLinkFloatingWorkspaceActivation(
+  event: TerminalLinkMouseEvent | undefined
+): boolean {
+  return Boolean(
+    event &&
+    (event.button === undefined || event.button === 0) &&
+    event.altKey &&
+    !event.shiftKey &&
+    isTerminalLinkActivation(event)
+  )
+}
+
 export function isTerminalLinkActionActivation(event: TerminalLinkMouseEvent | undefined): boolean {
   return Boolean(
     event &&

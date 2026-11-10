@@ -10,7 +10,11 @@ import {
   terminalLinkWslDistro
 } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
+import {
+  isTerminalLinkDirectActivation,
+  isTerminalLinkFloatingWorkspaceActivation
+} from '../gestures/terminal-link-activation'
+import { openDetectedFileInFloatingWorkspace } from './terminal-file-link-floating-open'
 import {
   requestTerminalLinkAction,
   type TerminalLinkActionContext
@@ -60,6 +64,11 @@ export function handleTerminalFileLink(
       ...deps,
       openWithSystemDefault: Boolean(event?.shiftKey)
     })
+    return true
+  }
+  if (isTerminalLinkFloatingWorkspaceActivation(event)) {
+    event?.preventDefault?.()
+    openDetectedFileInFloatingWorkspace(filePath, line, column, deps)
     return true
   }
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
