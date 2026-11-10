@@ -19508,7 +19508,7 @@
       "agent": {
         "AgentCombobox": {
           "19522e25ee": "Manage agents",
-          "986f946354": "Blank Terminal",
+          "986f946354": "Blank terminal",
           "579c768bde": "No agents match your search.",
           "48c6a5a9b4": "Search agents...",
           "9c6b59fe58": "Set as default",
@@ -23014,7 +23014,7 @@
       "startInTerminal": "Start {{value0}} in a terminal"
     },
     "newWorkspace": {
-      "agentOptional": "Agent [Optional]",
+      "agentOptional": "Agent (optional)",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
       "setupCheckFailed": "Could not check setup configuration. Try again.",
       "directSetup": {

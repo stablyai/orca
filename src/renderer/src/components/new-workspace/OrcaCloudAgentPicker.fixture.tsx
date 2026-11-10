@@ -20,12 +20,12 @@ function Picker(props: {
   return (
     <div className="h-[460px] bg-background p-4">
       <div className="w-[420px] space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">Agent [Optional]</label>
+        <label className="text-xs font-medium text-muted-foreground">Agent (optional)</label>
         <AgentLaunchPicker
           model={model}
           agent={props.agent}
           matchTriggerWidth
-          emptyLabel="Blank Terminal"
+          emptyLabel="Blank terminal"
           defaultAgent="claude"
           onSetDefault={noop}
           onSelectBlankTerminal={noop}

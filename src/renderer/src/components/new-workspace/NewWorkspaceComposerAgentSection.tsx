@@ -59,7 +59,7 @@ export function NewWorkspaceComposerAgentSection({
       <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-medium text-muted-foreground">
-            {t('components.newWorkspace.agentOptional', 'Agent [Optional]')}
+            {t('components.newWorkspace.agentOptional', 'Agent (optional)')}
           </label>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -96,7 +96,7 @@ export function NewWorkspaceComposerAgentSection({
           }
           onOpenAgentSettings={onOpenAgentSettings}
           onTriggerEnter={createDisabled ? undefined : onCreate}
-          emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+          emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')}
           defaultAgent={defaultTuiAgent}
           onSetDefault={handleSetDefaultAgent}
           onSelectBlankTerminal={() => onQuickAgentChange(null)}
