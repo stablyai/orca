@@ -1333,6 +1333,14 @@
       },
       "worktree": {
         "creation": {
+          "VmBuildFailureCard": {
+            "checksBodyCloud2_one": "Open it anyway and fix it inside the workspace, or run the checks again after changing your project.",
+            "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
+            "checksCountTitleCloud_one": "The sandbox is up, but {{count}} environment check failed",
+            "checksCountTitleCloud_other": "The sandbox is up, but {{count}} environment checks failed",
+            "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
+            "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed"
+          },
           "VmBuildLog": {
             "hiddenTechnicalLines_one": "{{count}} technical line hidden. Copy log includes it.",
             "hiddenTechnicalLines_other": "{{count}} technical lines hidden. Copy log includes them."

@@ -27,6 +27,11 @@ const badgeVariants = cva(
         /** Small uppercase success chip marking the live item in a list (e.g. the active build). */
         statusActive:
           'h-4 border-status-success-border bg-status-success-background px-1.5 text-[10px] font-semibold tracking-wide text-status-success uppercase',
+        /** Tinted status pills for a check's result inside an error card. */
+        statusFailed:
+          'border-destructive/20 bg-destructive/10 px-1.5 py-0 text-2xs text-destructive-text dark:border-destructive/30',
+        statusWarning:
+          'border-status-warning-border bg-status-warning-background px-1.5 py-0 text-2xs text-status-warning-text',
         referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:

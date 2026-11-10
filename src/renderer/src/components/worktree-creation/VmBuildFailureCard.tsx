@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate } from '@/i18n/use-translate'
 import { VmBuildReveal } from './VmBuildReveal'
 import { isAccountGate, type VmBuildFailure } from './vm-build-failure'
@@ -61,7 +61,8 @@ export function VmBuildFailureCard({
           cloud,
           canManageBilling,
           repoName,
-          sandboxLimit: sandboxLimitFromBilling(getLastBillingStatus())
+          sandboxLimit: sandboxLimitFromBilling(getLastBillingStatus()),
+          sandboxKept: vmKept
         },
         t
       )
@@ -94,61 +95,54 @@ export function VmBuildFailureCard({
   return (
     <VmBuildReveal open={failure !== null} className="pt-4">
       {visible && copy ? (
-        <div
-          key={run}
-          ref={cardRef}
-          className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3"
-        >
-          {/* Only the cause is announced; the actions and check rows are read on demand. */}
-          <div role={failure ? 'alert' : undefined} className="flex flex-col gap-1">
-            <h3
-              ref={headingRef}
-              tabIndex={-1}
-              className={cn(
-                'text-sm font-medium outline-none',
-                isAccountGate(visible) ? 'text-foreground' : 'text-destructive'
-              )}
-            >
-              {copy.title}
-            </h3>
-            {copy.body ? (
-              <p className="break-words text-xs text-muted-foreground">{copy.body}</p>
-            ) : null}
+        <div key={run} ref={cardRef}>
+          {/* InlineError announces only the cause; the check rows and actions are read on demand.
+              An account limit isn't a broken build, so it reads as a neutral notice. */}
+          <InlineError
+            tone={isAccountGate(visible) ? 'neutral' : 'error'}
+            className="break-words"
+            title={
+              <h3 ref={headingRef} tabIndex={-1} className="outline-none">
+                {copy.title}
+              </h3>
+            }
+            detail={copy.body}
+          >
             {detail ? (
-              <p className="break-words font-mono text-[11px] text-destructive">{detail}</p>
+              <p className="break-words font-mono text-xs text-muted-foreground">{detail}</p>
             ) : null}
-          </div>
-          {visible.kind === 'checks' ? (
-            <ul key={run} className="flex flex-col gap-2">
-              {visible.problems.map((check, index) => (
-                <CheckRow key={check.id} check={check} index={index} cloud={cloud} t={t} />
-              ))}
-            </ul>
-          ) : null}
-          <FailureActionRow
-            failure={visible}
-            cloud={cloud}
-            vmKept={vmKept}
-            canFixWithAgent={canFixWithAgent}
-            canManageBilling={canManageBilling}
-            signingIn={signingIn}
-            connectingGitHub={connectingGitHub}
-            actions={actions}
-            t={t}
-          />
-          {visible.kind === 'checks' ? (
-            <p className="text-xs text-muted-foreground">
-              {cloud
-                ? t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.stillRunningCloud',
-                    'The sandbox is running and using sandbox hours until you choose.'
-                  )
-                : t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.stillRunningLocal',
-                    'The VM is running and using hours until you choose.'
-                  )}
-            </p>
-          ) : null}
+            {visible.kind === 'checks' ? (
+              <ul className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2">
+                {visible.problems.map((check, index) => (
+                  <CheckRow key={check.id} check={check} index={index} cloud={cloud} t={t} />
+                ))}
+              </ul>
+            ) : null}
+            <FailureActionRow
+              failure={visible}
+              cloud={cloud}
+              vmKept={vmKept}
+              canFixWithAgent={canFixWithAgent}
+              canManageBilling={canManageBilling}
+              signingIn={signingIn}
+              connectingGitHub={connectingGitHub}
+              actions={actions}
+              t={t}
+            />
+            {visible.kind === 'checks' ? (
+              <p className="text-xs text-muted-foreground">
+                {cloud
+                  ? t(
+                      'auto.components.worktree.creation.VmBuildFailureCard.stillRunningCloud',
+                      'The sandbox is running and using sandbox hours until you choose.'
+                    )
+                  : t(
+                      'auto.components.worktree.creation.VmBuildFailureCard.stillRunningLocal',
+                      'The VM is running and using hours until you choose.'
+                    )}
+              </p>
+            ) : null}
+          </InlineError>
         </div>
       ) : null}
     </VmBuildReveal>

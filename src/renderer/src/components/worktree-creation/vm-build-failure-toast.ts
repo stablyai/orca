@@ -30,7 +30,18 @@ export function vmBuildFailureSummary(
   const sandboxLimit = sandboxLimitFromBilling(getLastBillingStatus())
   return {
     failure,
-    ...vmBuildFailureCopy(failure, { cloud, canManageBilling: true, repoName, sandboxLimit }, t)
+    ...vmBuildFailureCopy(
+      failure,
+      {
+        cloud,
+        canManageBilling: true,
+        repoName,
+        sandboxLimit,
+        // Same rule as the sheet: failed checks or a recorded runtime mean a sandbox is still up.
+        sandboxKept: failure.kind === 'checks' || Boolean(entry.request.ephemeralVmRuntimeId)
+      },
+      t
+    )
   }
 }
 
