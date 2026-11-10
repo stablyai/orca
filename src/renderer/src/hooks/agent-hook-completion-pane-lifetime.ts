@@ -1,16 +1,14 @@
 import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '@/components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
-// Index paneKey → tab once per prune instead of flattening all tabs per coordinator.
-export type TabIndex = ReadonlyMap<string, WorktreeTab>
-export type PaneCoordinatorLivenessSnapshot = Pick<
+import type {
   StoreSnapshot,
-  'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
->
+  WorktreeTab,
+  TabIndex
+} from './agent-hook-completion-notification-types'
 
 export function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
   const index = new Map<string, WorktreeTab>()
@@ -53,7 +51,7 @@ export function paneIsPlaced(paneKey: string, tabIndex?: TabIndex): boolean {
     return false
   }
   const root = state.terminalLayoutsByTabId?.[pane.tabId]?.root
-  return !root || collectLeafIdsInOrder(root).includes(pane.leafId)
+  return !root || collectLayoutLeafIdsInOrder(root).includes(pane.leafId)
 }
 
 function paneKeyHasUnsuppressedPtyHint(
@@ -70,7 +68,7 @@ function paneKeyHasUnsuppressedPtyHint(
     return false
   }
   const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
-  if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
+  if (layout?.root && !collectLayoutLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
     return false
   }
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]

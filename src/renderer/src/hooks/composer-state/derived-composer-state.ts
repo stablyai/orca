@@ -1,7 +1,10 @@
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
 import { useMemo } from 'react'
-import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
+import {
+  normalizeSparseDirectoryLines,
+  sparseDirectoriesMatch
+} from '@/lib/directory-input/sparse-paths'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink

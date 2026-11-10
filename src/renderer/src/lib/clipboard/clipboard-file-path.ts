@@ -1,5 +1,8 @@
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { isLocalPathOpenBlocked, type LocalPathOpenOwner } from '../local-path-open-guard'
+import {
+  isLocalPathOpenBlocked,
+  type LocalPathOpenOwner
+} from '../files/os-open/local-path-open-guard'
 import { getRendererAppPlatform } from '../renderer-app-platform'
 import { isWebClientLocation } from '../web-client-location'
 

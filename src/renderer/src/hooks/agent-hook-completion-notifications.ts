@@ -1,8 +1,7 @@
 import {
   buildTabIndex,
   paneIsPlaced,
-  paneCanReceiveHookCompletion,
-  type PaneCoordinatorLivenessSnapshot
+  paneCanReceiveHookCompletion
 } from './agent-hook-completion-pane-lifetime'
 import { useAppStore } from '@/store'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
@@ -26,11 +25,10 @@ import {
 } from './agent-hook-completion-revision-hold'
 import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
 
-type CoordinatorEntry = {
-  worktreeId: string
-  ptyId: string | null
-  coordinator: AgentCompletionCoordinator
-}
+import type {
+  CoordinatorEntry,
+  PaneCoordinatorLivenessSnapshot
+} from './agent-hook-completion-notification-types'
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
