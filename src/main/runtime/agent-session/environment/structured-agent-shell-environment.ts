@@ -100,7 +100,9 @@ export async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.P
 }
 
 /** Moves whenever the capture `hostShellEnvironment` serves is replaced; synchronous, starts nothing. */
-export const hostShellEnvironmentRevision = loginShellEnvironmentRevision
+export function hostShellEnvironmentRevision(): number {
+  return loginShellEnvironmentRevision()
+}
 
 /** After a missing-program lookup, await a capture (Windows: saved PATH read) started no earlier than askedAt; the shell timeout bounds it. */
 export async function refreshHostAgentBaseEnvironmentAfterMiss(askedAt: number): Promise<void> {
