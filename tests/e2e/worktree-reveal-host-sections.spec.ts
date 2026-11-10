@@ -64,6 +64,7 @@ async function expectRevealsWithinHost(
   for (const section of sections) {
     for (const collapsedHost of [false, true]) {
       const scenario = `${section.key}-collapsed-${collapsedHost}`
+      const screenshotName = scenario.replaceAll(':', '-')
       await test.step(scenario, async () => {
         await setRemotePinned(section.pinned)
         await pinWorkspace(page, local, section.pinned, 'local')
@@ -126,14 +127,14 @@ async function expectRevealsWithinHost(
         await expect(localRow).toHaveCount(0)
         await expect(remoteRow).toHaveCount(0)
         await page.screenshot({
-          path: testInfo.outputPath(`${scenario}-before-reveal.png`),
+          path: testInfo.outputPath(`${screenshotName}-before-reveal.png`),
           clip: { x: 0, y: 170, width: 280, height: 500 }
         })
         await page.getByRole('button', { name: 'Reveal active workspace' }).click()
         await expect(remoteRow).toBeVisible()
         await expect(remoteRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
         await page.screenshot({
-          path: testInfo.outputPath(`${scenario}-after-reveal.png`),
+          path: testInfo.outputPath(`${screenshotName}-after-reveal.png`),
           clip: { x: 0, y: 170, width: 280, height: 500 }
         })
         await expect(headers).toHaveCount(2)
