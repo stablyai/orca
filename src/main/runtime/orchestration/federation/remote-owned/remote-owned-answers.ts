@@ -29,10 +29,13 @@ export type ServerTerms = {
  * it came from so recovery (`request-show --on`) asks there.
  */
 export function inServerTerms<T>(value: T, { server, forward, link }: ServerTerms): T {
-  const pairs: [string, string][] = [
-    ...(forward ? [[forward.key, forward.requestId] as [string, string]] : []),
-    ...(link?.peer_run_id ? [[link.peer_run_id, link.run_id] as [string, string]] : [])
-  ]
+  const pairs: [string, string][] = []
+  if (forward) {
+    pairs.push([forward.key, forward.requestId])
+  }
+  if (link?.peer_run_id) {
+    pairs.push([link.peer_run_id, link.run_id])
+  }
   const swap = (item: unknown): unknown => {
     if (typeof item === 'string') {
       return pairs.reduce((text, [from, to]) => text.split(from).join(to), item)
@@ -47,12 +50,16 @@ export function inServerTerms<T>(value: T, { server, forward, link }: ServerTerm
   }
   if (value instanceof Error) {
     const code = 'code' in value && typeof value.code === 'string' ? value.code : 'runtime_error'
-    const data = swap(errorData(value) ?? {})
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an error stays an error with the same code.
-    return new OrchestrationError(code, String(swap(value.message)), {
-      ...(data as Record<string, unknown>),
+    const data = Object.entries(errorData(value) ?? {}).map(([field, inner]) => [
+      field,
+      swap(inner)
+    ])
+    const error = new OrchestrationError(code, String(swap(value.message)), {
+      ...Object.fromEntries(data),
       server
-    }) as T
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an error answer stays an error, with the same code.
+    return error as T
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only string contents change; every shape is kept.
   return swap(value) as T

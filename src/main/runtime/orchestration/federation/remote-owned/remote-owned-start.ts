@@ -38,8 +38,8 @@ export async function serverOwnsPlacedWorkers(
     peerFingerprint: server.peerFingerprint,
     expectedRuntimeEpoch: null,
     capability: ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: status.get answers RuntimeStatus; the cache reads only its capabilities and runtime ID.
     probe: async () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: status.get answers RuntimeStatus; the cache reads only its capabilities and runtime ID.
       (await runtime.callOrchestrationWorkerServer(
         server.environmentId,
         'status.get',

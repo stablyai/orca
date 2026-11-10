@@ -33,6 +33,10 @@ type Sent = {
 }
 type Answer = { result: unknown } | { error: string; data?: unknown } | 'unreachable'
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? { ...value } : {}
+}
+
 describe('commands about a worker a paired server owns', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -69,7 +73,7 @@ describe('commands about a worker a paired server owns', () => {
       const prepared = send?.prepareRequest?.({ params, envelope, measure: () => 0 })
       sent.push({
         method,
-        params: (prepared?.params ?? params) as Record<string, unknown>,
+        params: record(prepared?.params ?? params),
         envelope: prepared?.envelope ?? envelope
       })
       await whileSending()
@@ -148,7 +152,12 @@ describe('commands about a worker a paired server owns', () => {
     if (!response.ok) {
       throw new Error(response.error.message)
     }
-    return response.result as { taskId: string; runId: string; dispatchId: string }
+    const receipt = record(response.result)
+    return {
+      taskId: String(receipt.taskId),
+      runId: String(receipt.runId),
+      dispatchId: String(receipt.dispatchId)
+    }
   }
 
   it("starts the worker on a server that owns its workers, then records it under this Orca's Task", async () => {
@@ -187,7 +196,7 @@ describe('commands about a worker a paired server owns', () => {
       { from: 'term_coord', on: 'devB', spec: 'refused', worktree: 'current' },
       { requestId: REQUEST }
     )
-    const refusedTask = String((sent[0].params as { adoptTaskId: string }).adoptTaskId)
+    const refusedTask = String(sent[0].params.adoptTaskId)
     expect(getRemotePlacement(db, refusedTask)).toBeUndefined()
     // As a refused local start creates no Task, a refused start there leaves none here.
     expect(db.getTask(refusedTask)).toBeUndefined()
@@ -198,7 +207,7 @@ describe('commands about a worker a paired server owns', () => {
       { requestId: 'a3f1e9d2-5b6c-4d7e-8f90-1a2b3c4d5e6f' }
     )
     expect(lost.ok ? undefined : lost.error.code).toBe('remote_runtime_unavailable')
-    const lostTask = String((sent[1].params as { adoptTaskId: string }).adoptTaskId)
+    const lostTask = String(sent[1].params.adoptTaskId)
     expect(getRemotePlacement(db, lostTask)).toMatchObject({
       state: 'reserved',
       outcome_unknown: 1
@@ -295,11 +304,9 @@ describe('commands about a worker a paired server owns', () => {
 
   it("answers a remote worker's question only from its Run's coordinator, as a local one is", async () => {
     const receipt = await startOnB()
-    const link = db.db.prepare('SELECT * FROM remote_run_links').get() as {
-      conversation_id: string
-    }
+    const link = record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
     importRemoteOwnedItem(db, remoteServerPin(server), {
-      conversationId: link.conversation_id,
+      conversationId: String(link.conversation_id),
       sequence: 1,
       messageId: 'msg_q1',
       kind: 'worker_mail',
