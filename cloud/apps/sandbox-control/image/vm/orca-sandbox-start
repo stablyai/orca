@@ -7,6 +7,8 @@
 # Never prints anything else on stdout's last line.
 # With ORCA_READY_VIA=file it prints {"schemaVersion":1,"readyFile":"<path>"} instead and the control
 # plane reads the offer with the files API: the provider keeps command stdout as logs, not files.
+# With ORCA_READY_KEY too (64 hex chars, this call's key; env is not kept) the pointer also carries
+# "sealedOffer": "<iv hex>.<base64 AES-256-CTR of the offer line>", which saves that round trip.
 # Managed env for every process orcad starts: ORCA_IS_CLOUD=1, ORCA_SANDBOX_ID, ORCA_ROOT_PATH,
 # ORCA_WORKTREE_PATH, ORCA_WORKSPACE_PATH, ORCA_WORKSPACE_NAME, ORCA_DEFAULT_BRANCH, ORCA_PORT and the
 # CONDUCTOR_* names imported Conductor scripts read.
@@ -16,6 +18,10 @@ ORCA_HOME=/opt/orca
 STATE="$HOME/.orca-sandbox"
 PROJECT=/vercel/sandbox/project
 mkdir -p "$STATE"
+# Only print_ready uses the key; nothing this script starts inherits it.
+ready_key="${ORCA_READY_KEY:-}"
+unset ORCA_READY_KEY
+[[ "$ready_key" =~ ^[0-9a-f]{64}$ ]] || ready_key=''
 exec 9>"$STATE/start.lock"
 flock -w 60 9
 # Background children close fd 9 (`9>&-`): an orcad that inherited it would hold the lock for its whole
@@ -41,7 +47,14 @@ register_project() {
 
 print_ready() {
   if [ "${ORCA_READY_VIA:-}" = file ]; then
-    printf '{"schemaVersion":1,"readyFile":"%s"}\n' "$STATE/ready.json"
+    local sealed='' iv
+    if [ -n "$ready_key" ] && command -v openssl >/dev/null; then
+      iv="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+      # Best effort: without it the control plane reads the file, as before.
+      sealed="$(tail -n 1 "$STATE/ready.json" | openssl enc -aes-256-ctr -K "$ready_key" -iv "$iv" -nosalt | base64 -w0)" &&
+        sealed="$iv.$sealed" || sealed=''
+    fi
+    printf '{"schemaVersion":1,"readyFile":"%s"%s}\n' "$STATE/ready.json" "${sealed:+,\"sealedOffer\":\"$sealed\"}"
   else
     tail -n 1 "$STATE/ready.json"
   fi
@@ -171,7 +184,8 @@ echo $! >"$STATE/orcad.pid"
 # sshd for `orca ssh` (loopback only). Best effort: a workspace without it still serves orcad.
 "$ORCA_HOME/bin/orca-sshd" >/dev/null 2>"$STATE/sshd-start.err" || true
 
-for _ in $(seq 1 1200); do
+# Polled every 10 ms (at least 60 s in all): ready is on the wake path, so detect it promptly.
+for _ in $(seq 1 6000); do
   if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then
     if [ -n "$clone_pid" ] && ! wait "$clone_pid"; then
       echo 'repository clone failed' >&2
@@ -187,7 +201,7 @@ for _ in $(seq 1 1200); do
     tail -n 40 "$STATE/orcad.log" | redact_log >&2
     exit 1
   fi
-  sleep 0.05
+  sleep 0.01
 done
 echo 'orcad start timed out' >&2
 exit 1

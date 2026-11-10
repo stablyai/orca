@@ -1,7 +1,7 @@
 // Commands the golden image installs in /opt/orca/bin (see image/provision-golden.sh). The control
 // plane only ever runs these fixed entry points in a VM, never user-supplied command lines.
 import { z } from 'zod'
-import { READY_VIA_FILE_ENV, resolveOrcadReadyLine } from './orcad-ready'
+import { createReadyKey, READY_VIA_FILE_ENV, resolveOrcadReadyLine } from './orcad-ready'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 
 export const ORCAD_PORT = 6768
@@ -74,8 +74,10 @@ export async function startOrcad(
   if (!route) {
     throw new VmCommandError('route_missing')
   }
+  const readyKey = createReadyKey()
   const env: Record<string, string> = {
     ...READY_VIA_FILE_ENV,
+    ...readyKey.env,
     ORCA_SANDBOX_ID: inputs.sandboxId,
     ORCA_ENV_GENERATION: String(Date.now()),
     ORCA_PUBLIC_WSS: route.url.replace(/^https:/, 'wss:')
@@ -105,8 +107,8 @@ export async function startOrcad(
     inputs.prelude
       ? {
           command: 'bash',
-          // The prelude never sees the share-proxy key; only the start script gets it.
-          args: ['-c', `env -u ORCA_SHARE_PROXY_KEY bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
+          // The prelude never sees the share-proxy or ready keys; only the start script gets them.
+          args: ['-c', `env -u ORCA_SHARE_PROXY_KEY -u ORCA_READY_KEY bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
           env: { ...env, ...inputs.prelude.env, ORCA_PRELUDE: inputs.prelude.script },
           timeoutMs: START_TIMEOUT_MS
         }
@@ -117,7 +119,7 @@ export async function startOrcad(
   }
   const lastLine = result.stdout.trim().split('\n').at(-1) ?? ''
   try {
-    return ReadySchema.parse(await resolveOrcadReadyLine(provider, state.session.id, lastLine))
+    return ReadySchema.parse(await resolveOrcadReadyLine(provider, state.session.id, lastLine, readyKey.key))
   } catch {
     throw new VmCommandError('orcad_ready_invalid')
   }

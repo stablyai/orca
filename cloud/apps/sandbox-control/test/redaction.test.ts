@@ -2,6 +2,7 @@
 // metadata: Vercel keeps a command's args and stdout/stderr as logs (GET .../cmd/:id, .../logs) but
 // not its env (verified live) and not files read back through the files API.
 import { execFileSync } from 'node:child_process'
+import { createCipheriv, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,6 +17,14 @@ const PAIRING = 'orca://pair?code=eyJ2IjoxLCJrZXkiOiJwYWlyaW5nLXNlY3JldCJ9'
 const SECRET = 'sk-ant-api03-' + 'k'.repeat(60)
 const CUSTOM = 'my-unshaped-gateway-credential-0099'
 const OFFER = { schemaVersion: 1, pairingCode: PAIRING, projectRoot: '/vercel/sandbox/project' }
+
+/** What orca-sandbox-start prints: `tail -n 1 ready.json | openssl enc -aes-256-ctr -K key -iv iv -nosalt`. */
+function pointerLine(keyHex: string, offerLine: string): { schemaVersion: 1; readyFile: string; sealedOffer: string } {
+  const iv = randomBytes(16)
+  const cipher = createCipheriv('aes-256-ctr', Buffer.from(keyHex, 'hex'), iv)
+  const sealed = Buffer.concat([cipher.update(`${offerLine}\n`), cipher.final()])
+  return { schemaVersion: 1, readyFile: READY_PATH, sealedOffer: `${iv.toString('hex')}.${sealed.toString('base64')}` }
+}
 
 function stateFor(sessionId: string): ProviderSandboxState {
   return {
@@ -43,6 +52,44 @@ describe('orcad pairing offer transport', () => {
     // Secrets ride env (not retained) and never args (retained and listable).
     expect(call.command).toBe(START_COMMAND)
     expect(JSON.stringify(call.args ?? [])).not.toContain(SECRET)
+  })
+
+  it('opens the offer sealed with this call key without the files API, keeping the key out of args', async () => {
+    let seenArgs = ''
+    const provider = {
+      runCommand: vi.fn(async (_id: string, params: { args?: string[]; env?: Record<string, string> }) => {
+        seenArgs = JSON.stringify(params.args ?? [])
+        const key = params.env?.ORCA_READY_KEY ?? ''
+        expect(key).toMatch(/^[0-9a-f]{64}$/)
+        return { exitCode: 0, stdout: `boot\n${JSON.stringify(pointerLine(key, JSON.stringify(OFFER)))}\n`, stderr: '' }
+      }),
+      readFile: vi.fn()
+    } as unknown as SandboxProviderApi
+    const ready = await startOrcad(provider, stateFor('sess_1'), {
+      sandboxId: 'sbx_1',
+      prelude: { script: 'echo prelude', env: {} }
+    })
+    expect(ready).toEqual(OFFER)
+    expect(provider.readFile).not.toHaveBeenCalled()
+    // Only the start script may hold the key: the prelude runs with it unset.
+    expect(seenArgs).toContain('-u ORCA_READY_KEY')
+    expect(seenArgs).not.toMatch(/[0-9a-f]{64}/)
+  })
+
+  it('reads the file when the sealed offer does not open with the key', async () => {
+    const otherKey = 'ab'.repeat(32)
+    const provider = {
+      runCommand: vi.fn(async () => ({
+        exitCode: 0,
+        stdout: `${JSON.stringify(pointerLine(otherKey, JSON.stringify(OFFER)))}\n`,
+        stderr: ''
+      })),
+      readFile: vi.fn(async () => `${JSON.stringify(OFFER)}\n`)
+    } as unknown as SandboxProviderApi
+    expect(await startOrcad(provider, stateFor('sess_1'), { sandboxId: 'sbx_1' })).toEqual(OFFER)
+    expect(provider.readFile).toHaveBeenCalledWith('sess_1', READY_PATH)
+    // Garbage in place of the sealed offer is no different.
+    expect(await resolveOrcadReadyLine(provider, 's', JSON.stringify({ readyFile: READY_PATH, sealedOffer: 'x.y' }), new Uint8Array(32))).toEqual(OFFER)
   })
 
   it('still accepts the offer line from images that predate the pointer', async () => {
