@@ -6220,7 +6220,8 @@
           "updateSkipped": "Update skipped: {{value0}}",
           "updateAvailable": "Update available",
           "repairAvailable": "Repair available",
-          "installAvailable": "Install available"
+          "installAvailable": "Install available",
+          "otherBuild": "Installed by another Orca version"
         },
         "installResult": {
           "installed": "Installed and verified.",
@@ -13449,7 +13450,8 @@
           "attentionOther": "Needs attention · A different skill already uses this name",
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}",
+          "attentionOtherBuild": "Needs attention · Another Orca version installed this copy"
         },
         "recoverServer": {
           "title": "Recover Orca’s server",

@@ -47,6 +47,11 @@ export function leaveReasonText(
   switch (reason) {
     case 'edited':
       return t('auto.components.skills.skillPlanOpCopy.edited', 'Skill edited outside Orca')
+    case 'other-build':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.otherBuild',
+        'Installed by another Orca version'
+      )
     case 'other':
       return t('auto.components.skills.skillPlanOpCopy.other', 'A different skill uses this name')
     case 'unwritable':

@@ -20,6 +20,8 @@ export function isBundledSkillOpKind(value: string): value is BundledSkillOpKind
 
 export const BUNDLED_SKILL_LEAVE_REASONS = Object.freeze([
   'edited',
+  /** A copy another Orca build (newer, or a dev build) installed; its bytes are unknown here. */
+  'other-build',
   'other',
   'unwritable',
   'unreadable',

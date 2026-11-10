@@ -37,6 +37,7 @@ const OP_PLAN_STATE: Readonly<Record<BundledSkillOpKind, BundledSkillPlanState>>
 
 export const BUNDLED_SKILL_LEAVE_REASON_TEXT: Readonly<Record<BundledSkillLeaveReason, string>> = {
   edited: 'Skill edited outside Orca',
+  'other-build': 'Installed by another Orca version',
   other: 'A different skill uses this name',
   unwritable: "Orca can't write to this folder",
   unreadable: "Orca can't read every file",
@@ -60,8 +61,8 @@ export const BUNDLED_SKILL_PLAN_OP_TEXT: Readonly<
 function opPlanState(
   op: Pick<BundledSkillOp, 'kind' | 'reason' | 'previous'>
 ): BundledSkillPlanState {
-  // Other owners’ same-named skills are listed without flagging them.
-  if (op.kind === 'leave' && op.reason === 'other') {
+  // Other owners’ same-named skills, and another Orca build's copy, are listed without flagging them.
+  if (op.kind === 'leave' && (op.reason === 'other' || op.reason === 'other-build')) {
     return 'current'
   }
   return op.previous?.length

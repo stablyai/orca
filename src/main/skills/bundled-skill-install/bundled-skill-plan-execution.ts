@@ -25,6 +25,7 @@ import {
 } from './bundled-skill-folder-swap'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
 import { withBundledSkillTargetLocks } from './bundled-skill-target-locks'
+import { recordBundledSkillDigestWritten } from './bundled-skill-written-digests'
 
 export type BundledSkillExecuteInput = BundledSkillPlanInput & {
   /** Per-lock wait; the shared 5s default applies when unset. */
@@ -210,6 +211,15 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
     // A stranded old copy still means the new copy is in place for dependent links.
     statuses.set(op.path, outcome.strandedPath ? 'done' : outcome.status)
     ops.push(outcome)
+  }
+  if (run.entry.ops.some((op) => op.content === 'files' && statuses.get(op.path) === 'done')) {
+    // Lets other Orca builds on this host recognise these bytes as Orca's, not a user edit.
+    await recordBundledSkillDigestWritten(
+      run.input.filesystem,
+      run.input.destination.homeDirectory,
+      run.entry.name,
+      run.entry.digest
+    )
   }
   return { name: run.entry.name, status: 'ran', ops }
 }

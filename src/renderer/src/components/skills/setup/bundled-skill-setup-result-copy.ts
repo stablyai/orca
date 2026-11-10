@@ -57,6 +57,11 @@ export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): strin
         'auto.components.settings.bundledSkillSetupCopy.attentionEdited',
         'Needs attention · You edited this copy'
       )
+    case 'other-build':
+      return translate(
+        'auto.components.settings.bundledSkillSetupCopy.attentionOtherBuild',
+        'Needs attention · Another Orca version installed this copy'
+      )
     case 'other':
       return translate(
         'auto.components.settings.bundledSkillSetupCopy.attentionOther',
