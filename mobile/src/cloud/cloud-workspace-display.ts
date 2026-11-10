@@ -19,6 +19,10 @@ export function cloudStatusLabel(status: CloudWorkspaceStatus, t: Translate): st
       return t('cloud.status.archived', 'Archived')
     case 'failed':
       return t('cloud.status.failed', 'Couldn’t start')
+    case 'unresponsive':
+      return t('cloud.status.unresponsive', 'Not responding')
+    case 'deleting':
+      return t('cloud.status.deleting', 'Deleting')
   }
 }
 
@@ -33,6 +37,11 @@ export function cloudStatusColor(status: CloudWorkspaceStatus): string {
       return colors.textSecondary
     case 'failed':
       return colors.statusRed
+    case 'unresponsive':
+      // Glossary: "Not responding" uses the status-warning ink.
+      return colors.statusAmber
+    case 'deleting':
+      return colors.textMuted
     case 'sleeping':
     case 'archived':
       return colors.textMuted
@@ -40,7 +49,9 @@ export function cloudStatusColor(status: CloudWorkspaceStatus): string {
 }
 
 export function isCloudStatusTransitional(status: CloudWorkspaceStatus): boolean {
-  return status === 'creating' || status === 'waking' || status === 'stopping'
+  return (
+    status === 'creating' || status === 'waking' || status === 'stopping' || status === 'deleting'
+  )
 }
 
 const hourFormatters = new Map<string, Intl.NumberFormat>()

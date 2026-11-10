@@ -123,6 +123,12 @@ export async function cloudWorkspaceHostId(sandboxId: string): Promise<string | 
   return host.id
 }
 
+/** Which cloud workspace a paired host is, if it is one. */
+export async function cloudWorkspaceIdForHost(hostId: string): Promise<string | null> {
+  const entry = Object.entries(await readLinks()).find(([, link]) => link.hostId === hostId)
+  return entry?.[0] ?? null
+}
+
 export async function cloudWorkspaceHostIds(): Promise<ReadonlySet<string>> {
   const ids = Object.values(await readLinks()).flatMap((link) => (link.hostId ? [link.hostId] : []))
   return new Set(ids)

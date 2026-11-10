@@ -5001,13 +5001,15 @@
     },
     "status": {
       "waking": "Waking",
-      "cantConnect": "Can’t connect",
       "archived": "Archived",
       "creating": "Starting",
       "running": "Running",
       "stopping": "Going to sleep",
       "sleeping": "Asleep",
-      "failed": "Couldn’t start"
+      "failed": "Couldn’t start",
+      "deleting": "Deleting",
+      "restarting": "Restarting",
+      "unresponsive": "Not responding"
     },
     "actions": {
       "sleep": "Sleep",
@@ -5039,18 +5041,23 @@
       "createUnknown": "Lost the connection while starting it. It may still appear in your list. Try again to pick it up.",
       "rateLimited": "Too many new workspaces at once. Wait a minute, then try again.",
       "create": "Couldn’t start your cloud workspace. Nothing was created, and you weren’t charged.",
-      "deliver": "The workspace is running, but a prompt didn’t start. Your files are safe."
+      "deliver": "The workspace is running, but a prompt didn’t start. Your files are safe.",
+      "restartOwner": "Only the workspace’s owner can restart it. Your files are safe."
     },
     "workspace": {
       "title": "Cloud workspace",
-      "missing": "This workspace is gone or you no longer have access."
+      "missing": "This workspace is gone or you no longer have access.",
+      "signIn": "Sign in to Orca Cloud on this phone",
+      "signInAction": "Sign in",
+      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again."
     },
     "action": {
       "openSession": "Open session",
       "settingUp": "Starting…",
       "open": "Open workspace",
       "wakeOpen": "Wake and open workspace",
-      "wakeToContinue": "Wake to continue"
+      "wakeToContinue": "Wake to continue",
+      "restart": "Restart sandbox"
     },
     "phase": {
       "delivering": "Starting your agent",
@@ -5091,7 +5098,9 @@
       "waking": "Starting up. This usually takes about 5 seconds.",
       "stopping": "Files are kept.",
       "archived": "Unarchive it on your computer to work in it again.",
-      "failed": "The sandbox couldn’t start. Your files are safe."
+      "failed": "The sandbox couldn’t start. Your files are safe.",
+      "unresponsive": "The sandbox isn’t responding. Your files are safe.",
+      "deleting": "This workspace is being deleted."
     },
     "home": {
       "heading": "Cloud",
@@ -5200,6 +5209,11 @@
       "asleep_other": "{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.",
       "running_one": "{{hours}} sandbox hour so far. Uses sandbox hours while running.",
       "running_other": "{{hours}} sandbox hours so far. Uses sandbox hours while running."
+    },
+    "host": {
+      "asleep": "{{name}} is asleep",
+      "asleepDetail": "Files are kept. Wake it to keep working.",
+      "wake": "Wake"
     }
   }
 }

@@ -27,6 +27,9 @@ export type CloudWorkspaceStatus =
   | 'sleeping'
   | 'archived'
   | 'failed'
+  /** Up but not answering (glossary "Not responding"); a restart usually fixes it. */
+  | 'unresponsive'
+  | 'deleting'
 
 export type CloudWorkspace = {
   /** The sandbox row id: stable across sleep, wake and rollover. */
@@ -57,8 +60,8 @@ const SANDBOX_STATUS: Record<string, CloudWorkspaceStatus> = {
   sleeping: 'sleeping',
   archived: 'archived',
   failed: 'failed',
-  unresponsive: 'failed',
-  destroying: 'stopping'
+  unresponsive: 'unresponsive',
+  destroying: 'deleting'
 }
 
 const SandboxViewSchema = z.object({
@@ -197,6 +200,20 @@ export async function sleepCloudWorkspace(
     `/v1/sandboxes/${encodeURIComponent(sandboxId)}/suspend`,
     z.unknown(),
     { timeoutMs: 60_000 }
+  )
+}
+
+/** "Not responding": restart the sandbox (files kept). Owner route; a teammate gets not_found. */
+export async function restartCloudWorkspace(
+  plane: CloudControlPlane,
+  sandboxId: string
+): Promise<void> {
+  await request(
+    plane,
+    'POST',
+    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/restart`,
+    z.unknown(),
+    { body: {}, timeoutMs: 120_000 }
   )
 }
 

@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router'
 import { ChevronRight, Cloud, Plus, RotateCw } from 'lucide-react-native'
 import { Fragment, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
@@ -5,6 +6,7 @@ import { CloudStatusDot } from '../cloud/CloudStatusDot'
 import { formatReadSnapshotAsOf } from '../cloud/CloudReadSnapshotSection'
 import type { CloudWorkspace } from '../cloud/cloud-control-plane-client'
 import { CloudEnrollmentError, enrollCloudDevice } from '../cloud/cloud-device-enrollment'
+import { takeCloudReturnTo } from '../cloud/cloud-return-to'
 import type { CloudEnrollment } from '../cloud/cloud-device-identity'
 import { cloudRepoLine, cloudStatusLabel } from '../cloud/cloud-workspace-display'
 import { useCloudWorkspaces } from '../cloud/use-cloud-workspaces'
@@ -212,6 +214,7 @@ function CloudConnectRow({
   deviceLabel: string
 }) {
   const t = useMobileTranslation()
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const connect = async () => {
@@ -222,6 +225,11 @@ function CloudConnectRow({
     setError(null)
     try {
       await enrollCloudDevice({ desktop: desktop.client, desktopName: desktop.name, deviceLabel })
+      // Arrived here from a team link opened before connecting: go back to that workspace.
+      const next = takeCloudReturnTo()
+      if (next) {
+        router.push(next)
+      }
     } catch (failure) {
       const kind = failure instanceof CloudEnrollmentError ? failure.failure : 'unreachable'
       setError(
