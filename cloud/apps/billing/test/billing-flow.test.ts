@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { checkoutCompleted, invoiceEvent, stripeEvent } from './stripe-fake'
-import { createHarness } from './harness'
+import { CONTROL_TOKEN, createHarness } from './harness'
 
 const HOUR = 3600
 const PERIOD_START = Math.floor(Date.now() / 1000) - 5 * 24 * HOUR
@@ -148,7 +148,7 @@ describe('webhooks', () => {
   it('tracks seat and interval changes made in the portal', async () => {
     const { h, auth, subscription } = await subscribedTeam()
     subscription.items.data[0]!.quantity = 5
-    subscription.items.data[0]!.price = { id: 'price_team_year' }
+    subscription.items.data[0]!.price = { id: 'price_team_year', recurring: { usage_type: 'licensed' } }
     subscription.items.data[0]!.current_period_end = PERIOD_START + 365 * 24 * HOUR
     await h.webhook(stripeEvent('customer.subscription.updated', subscription))
     const entitlement = await h.call('GET', '/v1/billing/entitlements', { headers: auth })
@@ -224,10 +224,24 @@ describe('entitlements, overage and usage', () => {
     expect(entitlement.body.offers.team).toMatchObject({ monthlyPriceLabel: '$50 per seat per month', annualPriceLabel: '$480 per seat, billed yearly' })
     expect(entitlement.body.offers.enterprise).toMatchObject({ label: 'Enterprise', priceLabel: 'Custom' })
 
-    for (let i = 0; i < 4; i++) {
-      await h.controlPlane('/v1/internal/usage', usage(`w-${i}`, 22))
+    // Alerts at 75%, 90% and 100% of the 120 pooled hours (the highest level reached). Segments
+    // are at most a day, so the hours arrive in pieces: 10 so far.
+    const warning = async () => (await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.usageWarningPercent
+    const add = async (id: string, hours: number[]) => {
+      for (const [i, value] of hours.entries()) {
+        await h.controlPlane('/v1/internal/usage', usage(`${id}-${i}`, value))
+      }
     }
-    expect((await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.usageWarningPercent).toBe(80)
+    await add('a', [20, 20, 20, 19]) // 89 h
+    expect(await warning()).toBe(null)
+    await add('b', [1]) // 90 h = 75%
+    expect(await warning()).toBe(75)
+    await add('c', [17]) // 107 h
+    expect(await warning()).toBe(75)
+    await add('d', [1]) // 108 h = 90%
+    expect(await warning()).toBe(90)
+    await add('e', [12]) // 120 h
+    expect(await warning()).toBe(100)
   })
 
   it('is idempotent per usageId and counts every size 1x (legacy large is the same 8 vCPU / 16 GB box)', async () => {
@@ -291,6 +305,109 @@ describe('entitlements, overage and usage', () => {
     })
     await h.call('POST', '/v1/billing/overage', { body: { enabled: true, spendCapCents: 2500 }, headers: auth })
     expect((await check()).body).toMatchObject({ allow: true })
+  })
+
+  it('puts running sandboxes to sleep (suspendRunning) when out of hours with overage off', async () => {
+    const { h, auth } = await subscribedTeam()
+    const check = () => h.controlPlane('/v1/internal/entitlements/check', { accountId: 'org:o1', machineSize: 'standard', runningSandboxes: 0 })
+    for (let i = 0; i < 4; i++) {
+      expect((await h.controlPlane('/v1/internal/usage', usage(`u-${i}`, 24))).body).toMatchObject({ suspendRunning: false })
+    }
+    expect((await check()).body).toMatchObject({ allow: true, suspendRunning: false })
+    // The report that uses the last included hour tells the control plane to put the rest to sleep.
+    expect((await h.controlPlane('/v1/internal/usage', usage('u-4', 24))).body).toMatchObject({
+      canStartSandbox: false,
+      reason: 'included_hours_exhausted',
+      suspendRunning: true
+    })
+    expect((await check()).body).toMatchObject({ allow: false, reason: 'included_hours_exhausted', suspendRunning: true })
+    const entitlement = (await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body
+    // Not a payment problem: the payment fields (and the desktop's payment notice) stay clear.
+    expect(entitlement).toMatchObject({ suspendRunning: true, payment: { pastDueSince: null, suspendRunning: false } })
+    // A cap is not a cancellation: no payment suspension, so no data-retention clock.
+    expect((await h.call('GET', '/v1/internal/suspensions', { headers: { authorization: `Bearer ${CONTROL_TOKEN}` } })).body).toEqual({ accounts: [] })
+
+    // Turning overage on lifts it.
+    await h.call('POST', '/v1/billing/overage', { body: { enabled: true }, headers: auth })
+    expect((await check()).body).toMatchObject({ allow: true, suspendRunning: false })
+  })
+
+  it('puts running sandboxes to sleep at the spend cap, and lifts it when the cap is raised', async () => {
+    const { h, auth } = await subscribedTeam({ overage: true, spendCapCents: 300 })
+    const check = () => h.controlPlane('/v1/internal/entitlements/check', { accountId: 'org:o1', machineSize: 'standard', runningSandboxes: 0 })
+    for (let i = 0; i < 5; i++) {
+      await h.controlPlane('/v1/internal/usage', usage(`u-${i}`, 24))
+    }
+    expect((await h.controlPlane('/v1/internal/usage', usage('o-1', 2))).body).toMatchObject({ suspendRunning: false })
+    expect((await check()).body).toMatchObject({ allow: true, suspendRunning: false })
+    expect((await h.controlPlane('/v1/internal/usage', usage('o-2', 1))).body).toMatchObject({
+      reason: 'overage_cap_reached',
+      suspendRunning: true
+    })
+    expect((await check()).body).toMatchObject({ allow: false, reason: 'overage_cap_reached', suspendRunning: true })
+    const entitlement = (await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body
+    expect(entitlement).toMatchObject({ suspendRunning: true, payment: { suspendRunning: false }, overage: { spentCents: 300 } })
+    await h.call('POST', '/v1/billing/overage', { body: { enabled: true, spendCapCents: 2500 }, headers: auth })
+    expect((await check()).body).toMatchObject({ allow: true, suspendRunning: false })
+  })
+
+  it('on opt-in, moves an item on an older overage price to the current price instead of adding a second', async () => {
+    const h = await createHarness()
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    const auth = { authorization: `Bearer ${token}` }
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 2 }, headers: auth })
+    const customer = [...h.stripe.customers.keys()][0]!
+    // Opted in back when overage was $0.75 an hour, then opted out (the item stays).
+    const subscription = h.stripe.putSubscription({
+      customer,
+      accountId: 'org:o1',
+      basePrice: 'price_team_month',
+      overagePrice: 'price_overage_075_hourly',
+      quantity: 2,
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END
+    })
+    await h.webhook(checkoutCompleted({ customer, subscription: subscription.id, accountId: 'org:o1' }))
+    const oldItem = subscription.items.data[1]!.id
+    // Off by default: no overage, and the old item is not treated as the current one.
+    expect((await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.overage).toMatchObject({ optedIn: false, active: false })
+
+    expect((await h.call('POST', '/v1/billing/overage', { body: { enabled: true }, headers: auth })).status).toBe(200)
+    expect(subscription.items.data.map((item) => [item.id, item.price.id])).toEqual([
+      [subscription.items.data[0]!.id, 'price_team_month'],
+      [oldItem, 'price_overage']
+    ])
+    expect(h.stripe.calls.some((call) => call.path === '/v1/subscription_items')).toBe(false)
+    const swap = h.stripe.calls.find((call) => call.path === `/v1/subscription_items/${oldItem}`)!
+    expect(swap.form.get('price')).toBe('price_overage')
+    expect(swap.form.get('proration_behavior')).toBe('none')
+    expect((await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.overage).toMatchObject({ optedIn: true, active: true })
+    // The item's webhook keeps the id, and a second opt-in changes nothing.
+    await h.webhook(stripeEvent('customer.subscription.updated', subscription))
+    await h.call('POST', '/v1/billing/overage', { body: { enabled: true, spendCapCents: 5000 }, headers: auth })
+    expect(subscription.items.data).toHaveLength(2)
+    expect(h.raw.prepare('SELECT overage_item_id FROM subscriptions').get()).toEqual({ overage_item_id: oldItem })
+  })
+
+  it('on opt-in, removes a stale overage item that sits next to the current one', async () => {
+    const h = await createHarness()
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    const auth = { authorization: `Bearer ${token}` }
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 2 }, headers: auth })
+    const customer = [...h.stripe.customers.keys()][0]!
+    const subscription = h.stripe.putSubscription({
+      customer,
+      accountId: 'org:o1',
+      basePrice: 'price_team_month',
+      overagePrice: ['price_overage_075_hourly', 'price_overage'],
+      quantity: 2,
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END
+    })
+    await h.webhook(checkoutCompleted({ customer, subscription: subscription.id, accountId: 'org:o1' }))
+    await h.call('POST', '/v1/billing/overage', { body: { enabled: true }, headers: auth })
+    expect(subscription.items.data.map((item) => item.price.id)).toEqual(['price_team_month', 'price_overage'])
+    expect(h.stripe.calls.filter((call) => call.method === 'DELETE')).toHaveLength(1)
   })
 
   it('opting out stops metering immediately and blocks starts past included hours', async () => {

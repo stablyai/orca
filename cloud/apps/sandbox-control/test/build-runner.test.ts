@@ -125,9 +125,10 @@ describe('environment build runner Worker', () => {
   it('dev configs: the control plane implements no Durable Object (preview URLs) and binds the runner Worker', () => {
     const control = wranglerConfig('wrangler.dev.jsonc')
     const runner = wranglerConfig('wrangler.build-runner.dev.jsonc')
-    expect(control.durable_objects.bindings).toEqual([
-      { name: 'ENV_BUILD_RUNNER', class_name: 'EnvironmentBuildRunner', script_name: runner.name }
-    ])
+    // A binding, when present, always points at the runner Worker. During the two-step rollout (error 10061:
+    // no binding may name a class in the deploy that deletes it) the control plane has none for one deploy.
+    const bindings: any[] = control.durable_objects?.bindings ?? []
+    expect(bindings.every((b) => b.class_name === 'EnvironmentBuildRunner' && b.script_name === runner.name)).toBe(true)
     // Every class the control plane ever created is deleted again by a later migration.
     const created = control.migrations.flatMap((m: any) => m.new_sqlite_classes ?? [])
     const deleted = control.migrations.flatMap((m: any) => m.deleted_classes ?? [])

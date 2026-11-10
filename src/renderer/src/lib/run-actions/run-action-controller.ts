@@ -21,7 +21,7 @@ import {
   type RunActionTarget,
   type WorktreeRunActions
 } from './run-action-config'
-import { findLiveRunTabId, sameRunTab } from './run-action-tabs'
+import { findLiveRunTabId, runPanePtyId, sameRunTab } from './run-action-tabs'
 
 /** Conductor's grace period: an interrupted dev server gets this long before its shell is closed. */
 export const RUN_ACTION_STOP_GRACE_MS = 5_000
@@ -101,8 +101,7 @@ async function stopRunActionOnce(worktreeId: string, actionId: string): Promise<
     return
   }
   const state = useAppStore.getState()
-  const liveTabId = findLiveRunTabId(state, worktreeId, run.tabId)
-  const ptyId = liveTabId ? state.ptyIdsByTabId[liveTabId]?.[0] : undefined
+  const ptyId = runPanePtyId(state, worktreeId, run.tabId, run.leafId)
   if (!ptyId) {
     deleteRunActionRun(worktreeId, actionId)
     return
