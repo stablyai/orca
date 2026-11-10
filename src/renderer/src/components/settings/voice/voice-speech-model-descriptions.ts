@@ -15,9 +15,14 @@ export function speechModelDescription(
       'Sends your audio to the service you set up.'
     )
   }
+  const languages = manifest.languages.length
   switch (manifest.id) {
     case 'parakeet-tdt-0.6b-v3-int8':
-      return t('components.settings.voice.models.about.parakeetV3', 'Fast. 25 European languages.')
+      return t(
+        'components.settings.voice.models.about.parakeetV3',
+        'Fast. {{languages}} European languages.',
+        { languages }
+      )
     case 'parakeet-tdt-0.6b-v2-int8':
       return t(
         'components.settings.voice.models.about.parakeetV2',
@@ -41,7 +46,8 @@ export function speechModelDescription(
     case 'nemotron-3.5-asr-streaming-0.6b':
       return t(
         'components.settings.voice.models.about.nemotron',
-        '27 languages, including Arabic, Hindi and Japanese.'
+        '{{languages}} languages, including Arabic, Hindi and Japanese.',
+        { languages }
       )
     default:
       return undefined

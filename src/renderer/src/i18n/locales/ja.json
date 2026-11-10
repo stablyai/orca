@@ -19987,12 +19987,12 @@
           "columnQuality": "品質",
           "columnSize": "サイズ",
           "about": {
-            "parakeetV3": "高速。ヨーロッパの 25 言語。",
+            "parakeetV3": "高速。ヨーロッパの {{languages}} 言語。",
             "parakeetV2": "高速。英語専用で、英語では最も正確です。",
             "whisperTiny": "最小のダウンロード。音声入力のお試しに。",
             "whisperTurbo": "最多の約 100 言語。GPU がないと低速です。",
             "senseVoice": "高速。中国語、日本語、韓国語向け。",
-            "nemotron": "アラビア語、ヒンディー語、日本語を含む 27 言語。"
+            "nemotron": "アラビア語、ヒンディー語、日本語を含む {{languages}} 言語。"
           }
         },
         "vocabulary": {

@@ -21525,12 +21525,12 @@
           "columnQuality": "Quality",
           "columnSize": "Size",
           "about": {
-            "parakeetV3": "Fast. 25 European languages.",
+            "parakeetV3": "Fast. {{languages}} European languages.",
             "parakeetV2": "Fast. English only, and the most accurate at it.",
             "whisperTiny": "Smallest download. Good for trying dictation out.",
             "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
             "senseVoice": "Fast. For Chinese, Japanese and Korean.",
-            "nemotron": "27 languages, including Arabic, Hindi and Japanese."
+            "nemotron": "{{languages}} languages, including Arabic, Hindi and Japanese."
           }
         },
         "vocabulary": {

@@ -1,11 +1,14 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import {
+  NEMOTRON_DICTATION_LANGUAGES,
+  PARAKEET_V3_LANGUAGES
+} from '../../../../../shared/dictation-language'
 import type {
   SpeechModelErrorRate,
   SpeechModelManifest,
   SpeechModelState
 } from '../../../../../shared/speech-types'
-import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 
 const rates = (entries: Record<string, number>): SpeechModelErrorRate[] =>
@@ -46,7 +49,7 @@ const catalog: SpeechModelManifest[] = [
     'parakeet-tdt-0.6b-v3-int8',
     'Parakeet TDT v3',
     739_508_576,
-    ['en', 'de'],
+    [...PARAKEET_V3_LANGUAGES],
     rates({ en: 3.7, de: 2.2 })
   ),
   local('parakeet-tdt-0.6b-v2-int8', 'Parakeet TDT v2', 729_574_912, ['en'], rates({ en: 2.8 })),
@@ -69,7 +72,7 @@ const catalog: SpeechModelManifest[] = [
     'nemotron-3.5-asr-streaming-0.6b',
     'Nemotron 3.5',
     751_094_240,
-    ['en', 'ko'],
+    [...NEMOTRON_DICTATION_LANGUAGES],
     rates({ en: 5.3, ko: 11.8 })
   ),
   local('whisper-tiny', 'Whisper Tiny', 45_981_088, ['en', 'ko'], rates({ en: 13, ko: 24.9 })),
@@ -104,14 +107,6 @@ function render(
       onUpdateVoiceSettings={() => {}}
       onOpenCloudSetup={() => {}}
       onRefreshModelStates={() => {}}
-      languageSetting={
-        <VoiceDictationLanguageSetting
-          className="px-5"
-          voiceSettings={voiceSettings}
-          selectedModel={catalog.find((m) => m.id === sttModel)}
-          onUpdateVoiceSettings={() => {}}
-        />
-      }
       cloudSettings={null}
     />
   )

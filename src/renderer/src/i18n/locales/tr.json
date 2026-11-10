@@ -20688,12 +20688,12 @@
           "columnQuality": "Kalite",
           "columnSize": "Boyut",
           "about": {
-            "parakeetV3": "Hızlı. 25 Avrupa dili.",
+            "parakeetV3": "Hızlı. {{languages}} Avrupa dili.",
             "parakeetV2": "Hızlı. Yalnızca İngilizce, bunda en doğrusu.",
             "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
             "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
             "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",
-            "nemotron": "Arapça, Hintçe ve Japonca dahil 27 dil."
+            "nemotron": "Arapça, Hintçe ve Japonca dahil {{languages}} dil."
           }
         },
         "vocabulary": {

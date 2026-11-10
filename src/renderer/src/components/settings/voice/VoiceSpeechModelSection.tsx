@@ -19,6 +19,7 @@ import {
   SPEECH_MODEL_WIDE_ONLY,
   VoiceSpeechModelRow
 } from './VoiceSpeechModelRow'
+import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 import { cancelSpeechModelDownload, startSpeechModelDownload } from './speech-model-download'
 
 type VoiceSpeechModelSectionProps = {
@@ -34,8 +35,6 @@ type VoiceSpeechModelSectionProps = {
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
   onOpenCloudSetup: (modelId: string) => void
   onRefreshModelStates: () => void
-  /** The Language row, which closes the card. */
-  languageSetting: React.ReactNode
   /** Provider rows (API keys, base URL) shown under the cloud models. */
   cloudSettings: React.ReactNode
 }
@@ -51,7 +50,6 @@ export function VoiceSpeechModelSection({
   onUpdateVoiceSettings,
   onOpenCloudSetup,
   onRefreshModelStates,
-  languageSetting,
   cloudSettings
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const t = useTranslate()
@@ -147,7 +145,12 @@ export function VoiceSpeechModelSection({
         </div>
       </div>
       {tab === 'cloud' ? cloudSettings : null}
-      {languageSetting}
+      <VoiceDictationLanguageSetting
+        className="px-5"
+        voiceSettings={voiceSettings}
+        selectedModel={selectedModel}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
+      />
     </SettingsGroup>
   )
 }

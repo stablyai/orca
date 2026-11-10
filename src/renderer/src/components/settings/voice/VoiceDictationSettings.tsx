@@ -16,6 +16,7 @@ import { Button } from '../../ui/button'
 import { Switch } from '../../ui/switch'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { isSpeechModelDownloading } from './voice-speech-model-rows'
 
 type VoiceDictationSettingsProps = {
   voiceSettings: VoiceSettings
@@ -44,7 +45,7 @@ function dictationStatus(
       }
     )
   }
-  if (selectedState?.status === 'downloading' || selectedState?.status === 'extracting') {
+  if (isSpeechModelDownloading(selectedState)) {
     return t(
       'components.settings.voice.dictation.downloading',
       'Works once {{model}} finishes downloading.',

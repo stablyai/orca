@@ -13,9 +13,9 @@ import {
   handleVoiceDictationToggle,
   voiceDictationPermissionToasts
 } from './voice-dictation-toggle'
-import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 import { VoiceWordsSettings } from './VoiceWordsSettings'
 import { VoiceInputSettings } from './VoiceInputSettings'
+import { isSpeechModelDownloading } from './voice-speech-model-rows'
 import { VoiceDictationSettings } from './VoiceDictationSettings'
 import { startSpeechModelDownload } from './speech-model-download'
 import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
@@ -257,11 +257,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     }
   }
 
-  const selectedDownloading =
-    selectedState?.status === 'downloading' || selectedState?.status === 'extracting'
   // Recommend a model only while dictation has none to use or already on its way.
   const setUpModelId =
-    selectedState?.status === 'ready' || selectedState?.needsUpdate || selectedDownloading
+    selectedState?.status === 'ready' ||
+    selectedState?.needsUpdate ||
+    isSpeechModelDownloading(selectedState)
       ? undefined
       : suggestedModel?.id
 
@@ -289,14 +289,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
           onUpdateVoiceSettings={updateVoiceSettings}
           onOpenCloudSetup={openCloudSetup}
           onRefreshModelStates={refreshModelStates}
-          languageSetting={
-            <VoiceDictationLanguageSetting
-              className="px-5"
-              voiceSettings={voiceSettings}
-              selectedModel={selectedModel}
-              onUpdateVoiceSettings={updateVoiceSettings}
-            />
-          }
           cloudSettings={
             <>
               {voiceSettings.openAiApiKeyConfigured ? (

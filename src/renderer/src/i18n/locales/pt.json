@@ -21676,12 +21676,12 @@
           "columnQuality": "Qualidade",
           "columnSize": "Tamanho",
           "about": {
-            "parakeetV3": "Rápido. 25 idiomas europeus.",
+            "parakeetV3": "Rápido. {{languages}} idiomas europeus.",
             "parakeetV2": "Rápido. Só inglês, e o mais preciso nele.",
             "whisperTiny": "O menor download. Bom para experimentar o ditado.",
             "whisperTurbo": "Mais idiomas, cerca de 100. Lento sem GPU.",
             "senseVoice": "Rápido. Para chinês, japonês e coreano.",
-            "nemotron": "27 idiomas, incluindo árabe, hindi e japonês."
+            "nemotron": "{{languages}} idiomas, incluindo árabe, hindi e japonês."
           }
         },
         "vocabulary": {

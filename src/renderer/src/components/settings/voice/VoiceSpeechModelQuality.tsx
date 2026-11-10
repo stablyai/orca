@@ -7,17 +7,12 @@ export function VoiceSpeechModelQuality({
   quality: SpeechModelQuality
 }): React.JSX.Element {
   const t = useTranslate()
-  if (quality.kind === 'unsupported') {
+  if (quality.kind !== 'rated') {
     return (
       <span className="block leading-snug text-muted-foreground">
-        {t('components.settings.voice.quality.unsupported', 'Doesn’t support your language')}
-      </span>
-    )
-  }
-  if (quality.kind === 'unmeasured') {
-    return (
-      <span className="block leading-snug text-muted-foreground">
-        {t('components.settings.voice.quality.unmeasured', 'Not measured')}
+        {quality.kind === 'unsupported'
+          ? t('components.settings.voice.quality.unsupported', 'Doesn’t support your language')
+          : t('components.settings.voice.quality.unmeasured', 'Not measured')}
       </span>
     )
   }

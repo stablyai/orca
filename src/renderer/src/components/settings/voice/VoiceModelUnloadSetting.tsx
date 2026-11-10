@@ -12,11 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 
 const NEVER_VALUE = 'never'
-// Shortest to longest keep, so Always comes last.
-const KEEP_LOADED_CHOICES = [
-  ...UNLOAD_MODEL_AFTER_MINUTES_CHOICES.filter((minutes) => minutes !== null),
-  null
-]
 
 function choiceValue(minutes: UnloadModelAfterMinutes): string {
   return minutes === null ? NEVER_VALUE : String(minutes)
@@ -84,7 +79,7 @@ export function VoiceModelUnloadSetting({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {KEEP_LOADED_CHOICES.map((minutes) => (
+            {UNLOAD_MODEL_AFTER_MINUTES_CHOICES.map((minutes) => (
               <SelectItem key={choiceValue(minutes)} value={choiceValue(minutes)}>
                 {choiceLabel(minutes, t, intlLocale)}
               </SelectItem>

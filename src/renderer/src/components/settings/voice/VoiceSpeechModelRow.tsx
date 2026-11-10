@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Button } from '../../ui/button'
 import { SettingsBadge } from '../form-controls/SettingsFormControls'
-import type { VoiceSpeechModelRowData } from './voice-speech-model-rows'
+import { isSpeechModelDownloading, type VoiceSpeechModelRowData } from './voice-speech-model-rows'
 import { speechModelDescription } from './voice-speech-model-descriptions'
 import { VoiceSpeechModelQuality } from './VoiceSpeechModelQuality'
 
@@ -47,7 +47,7 @@ export function VoiceSpeechModelRow({
   const isCloud = manifest.provider !== 'local'
   const retired = quality === null
   const ready = state?.status === 'ready'
-  const downloading = state?.status === 'downloading' || state?.status === 'extracting'
+  const downloading = isSpeechModelDownloading(state)
   const needsUpdate = state?.needsUpdate === true && !downloading
   const totalMb = Math.round((manifest.sizeBytes ?? 0) / 1_000_000)
 
