@@ -62,7 +62,7 @@ vi.mock('expo-file-system', () => ({
       return device.files.get(this.uri)?.byteLength ?? 0
     }
     create(): void {}
-    write(): void {}
+    writeSync(): void {}
     delete(): void {
       device.deleted.push(this.uri)
       device.files.delete(this.uri)

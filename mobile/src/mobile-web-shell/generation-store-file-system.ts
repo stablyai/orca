@@ -69,12 +69,12 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
     async writeBytes(uri, bytes) {
       const file = new File(uri)
       file.create({ intermediates: true, overwrite: true })
-      file.write(bytes)
+      file.writeSync(bytes)
     },
     async writeText(uri, text) {
       const file = new File(uri)
       file.create({ intermediates: true, overwrite: true })
-      file.write(text)
+      file.writeSync(text)
     },
     async readText(uri) {
       const file = new File(uri)
@@ -113,7 +113,7 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
       const target = new File(toUri)
       // iOS copies only into an existing directory.
       target.parentDirectory.create({ intermediates: true, idempotent: true })
-      new File(fromUri).copy(target)
+      new File(fromUri).copySync(target)
     },
     async delete(uri) {
       const directory = new Directory(uri)
@@ -127,10 +127,10 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
       }
     },
     async moveDirectory(fromUri, toUri) {
-      new Directory(fromUri).move(new Directory(toUri))
+      new Directory(fromUri).moveSync(new Directory(toUri))
     },
     async moveFile(fromUri, toUri) {
-      new File(fromUri).move(new File(toUri))
+      new File(fromUri).moveSync(new File(toUri))
     }
   }
 }
