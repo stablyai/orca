@@ -46,6 +46,7 @@ describe('commands about a worker a paired server owns', () => {
   let answers: Record<string, Answer[]>
   let capabilities: string[]
   let whileSending: () => Promise<void>
+  let sleeping: boolean
   let sequence = 0
   let server: OrchestrationWorkerServer = {
     environmentId: 'env_b',
@@ -58,13 +59,27 @@ describe('commands about a worker a paired server owns', () => {
   const transport = (): OrchestrationEnvironmentTransport => ({
     resolve: () => server,
     hasEnvironment: () => true,
-    call: async (_selector, method, params, _timeout, envelope, _revision, send) => {
+    call: async (_selector, method, params, timeoutMs, envelope, _revision, send) => {
       const ok = (result: unknown): RuntimeRpcResponse<unknown> => ({
         id: method,
         ok: true,
         result,
         _meta: { runtimeId: 'runtime_b' }
       })
+      if (sleeping) {
+        // A sleeping laptop keeps its socket open, so only each call's own timeout ends the wait.
+        return new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                Object.assign(new Error('The remote Orca runtime timed out.'), {
+                  code: 'runtime_timeout'
+                })
+              ),
+            timeoutMs
+          )
+        )
+      }
       if (method === 'status.get') {
         return ok({ runtimeId: 'runtime_b', capabilities })
       }
@@ -99,6 +114,7 @@ describe('commands about a worker a paired server owns', () => {
     sent = []
     answers = {}
     whileSending = async () => undefined
+    sleeping = false
     capabilities = [
       ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
       ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
@@ -118,6 +134,7 @@ describe('commands about a worker a paired server owns', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     runtime.stopOrchestrationFederationRelay()
     db.close()
     vi.restoreAllMocks()
@@ -335,6 +352,20 @@ describe('commands about a worker a paired server owns', () => {
     const show = await call('orchestration.workerShow', { dispatch: 'ctx_b1' })
 
     expect(show.ok ? record(show.result).server : undefined).toMatchObject({ name: 'devB' })
+  })
+
+  it("answers worker-show from this Orca's record within seconds when the server sleeps", async () => {
+    await startOnB()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    sleeping = true
+    let show: RpcResponse | undefined
+    void call('orchestration.workerShow', { dispatch: 'ctx_b1' }).then((answer) => {
+      show = answer
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    vi.useRealTimers()
+
+    expect(show?.ok ? record(show.result).server : show).toMatchObject({ name: 'devB' })
   })
 
   it('scopes the retry key to the caller: two terminals reusing an ID never collide, one retrying gets its own key', async () => {
