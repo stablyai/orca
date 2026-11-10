@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import './agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
@@ -87,5 +87,45 @@ describe('agent session option catalog', () => {
       model: 'sonnet'
     })
     expect(persisted.claude?.valuesByModel?.opus).toEqual({ effort: 'xhigh' })
+  })
+
+  it('composes Cursor 5.5 and 5.6 model identifiers with extended effort and fast mode', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('cursor', {
+        model: 'claude-opus-5-5',
+        effort: 'xhigh',
+        fastMode: true
+      }).args
+    ).toEqual(['--model', 'claude-opus-5-5-xhigh-fast'])
+
+    expect(
+      resolveAgentSessionOptionLaunch('cursor', {
+        model: 'claude-sonnet-5-5',
+        effort: 'max'
+      }).args
+    ).toEqual(['--model', 'claude-sonnet-5-5-max'])
+
+    expect(
+      resolveAgentSessionOptionLaunch('cursor', {
+        model: 'claude-opus-4-8'
+      }).args
+    ).toEqual(['--model', 'claude-opus-4-8-thinking-high'])
+  })
+
+  it('parses cursor-agent models rows with display labels and status markers', () => {
+    const stdout = [
+      'Available models',
+      '',
+      'auto - Auto',
+      'claude-opus-5-5-high - Claude 5.5 Opus (Thinking)  (current, default)',
+      'gpt-5.3-codex (default)',
+      'Tip: use --model <id> to switch.'
+    ].join('\n')
+    const parsed = getAgentSessionOptionCatalog('cursor')!.listModels!.parse(stdout)
+    expect(parsed).toEqual([
+      { id: 'auto', label: 'Auto', options: [] },
+      { id: 'claude-opus-5-5-high', label: 'Claude 5.5 Opus (Thinking)', options: [] },
+      { id: 'gpt-5.3-codex', label: 'gpt-5.3-codex', options: [] }
+    ])
   })
 })
