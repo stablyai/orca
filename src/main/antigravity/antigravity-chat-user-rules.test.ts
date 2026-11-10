@@ -133,20 +133,45 @@ describe('antigravity user rules', () => {
     )
   })
 
-  it('deduplicates symlinked workspace rule files', async () => {
-    const agentsPath = join(workspaceDir, 'AGENTS.md')
-    const geminiPath = join(workspaceDir, 'GEMINI.md')
-    await writeFile(agentsPath, 'Shared rules content', 'utf8')
-    await symlink(agentsPath, geminiPath)
+  it.skipIf(process.platform === 'win32')(
+    'deduplicates symlinked workspace rule files',
+    async () => {
+      const agentsPath = join(workspaceDir, 'AGENTS.md')
+      const geminiPath = join(workspaceDir, 'GEMINI.md')
+      await writeFile(agentsPath, 'Shared rules content', 'utf8')
+      await symlink(agentsPath, geminiPath)
+
+      const rules = await loadAntigravityUserRules({
+        cwd: workspaceDir,
+        env: { HOME: homeDir }
+      })
+
+      // Should only appear once
+      const matches = rules?.match(/Shared rules content/g)
+      expect(matches).toHaveLength(1)
+    }
+  )
+
+  it('bounds rule file reading to MAX_RULE_FILE_BYTES', async () => {
+    const largeContent = 'x'.repeat(300 * 1024)
+    await writeFile(join(workspaceDir, 'AGENTS.md'), largeContent, 'utf8')
 
     const rules = await loadAntigravityUserRules({
       cwd: workspaceDir,
       env: { HOME: homeDir }
     })
 
-    // Should only appear once
-    const matches = rules?.match(/Shared rules content/g)
-    expect(matches).toHaveLength(1)
+    expect(rules).toBeDefined()
+    expect(rules!.length).toBeLessThan(300 * 1024)
+    expect(rules).toContain('xxxx')
+  })
+
+  it('handles unexpected filesystem or home errors without throwing', async () => {
+    const rules = await loadAntigravityUserRules({
+      cwd: '\0invalid-cwd-path',
+      env: { HOME: homeDir }
+    })
+    expect(rules).toBeUndefined()
   })
 
   it('ignores empty or whitespace-only rule files', async () => {

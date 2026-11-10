@@ -1,6 +1,6 @@
 // Discovers and formats user rule files (GEMINI.md, AGENTS.md) for Antigravity ACP sessions.
 
-import { readFile, realpath, stat } from 'node:fs/promises'
+import { open, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { antigravityUserHome } from './antigravity-chat-user-skills'
 
@@ -18,6 +18,9 @@ export type AntigravityUserRulesMeta = {
   }
 }
 
+/** Maximum bytes read per rule file to avoid line overflow or excessive memory usage. */
+export const MAX_RULE_FILE_BYTES = 256 * 1024
+
 const GLOBAL_RULE_FILENAMES = ['GEMINI.md', 'AGENTS.md'] as const
 const WORKSPACE_RULE_FILENAMES = ['AGENTS.md', 'GEMINI.md'] as const
 
@@ -34,7 +37,15 @@ async function readRuleEntry(
     if (!fileStat.isFile()) {
       return null
     }
-    const content = await readFile(filePath, 'utf8')
+    const file = await open(filePath, 'r')
+    let content = ''
+    try {
+      const buffer = Buffer.alloc(Math.min(fileStat.size, MAX_RULE_FILE_BYTES))
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+      content = buffer.toString('utf8', 0, bytesRead)
+    } finally {
+      await file.close()
+    }
     const trimmed = content.trim()
     if (!trimmed) {
       return null
@@ -50,37 +61,41 @@ async function readRuleEntry(
 export async function loadAntigravityUserRules(
   input: AntigravityUserRulesInput
 ): Promise<string | undefined> {
-  const home = antigravityUserHome(input.env, input.platform)
-  const seenCanonical = new Set<string>()
-  const ruleBlocks: string[] = []
+  try {
+    const home = antigravityUserHome(input.env, input.platform)
+    const seenCanonical = new Set<string>()
+    const ruleBlocks: string[] = []
 
-  for (const filename of GLOBAL_RULE_FILENAMES) {
-    const candidate = join(home, '.gemini', filename)
-    const entry = await readRuleEntry(candidate)
-    if (!entry || seenCanonical.has(entry.canonicalPath)) {
-      continue
+    for (const filename of GLOBAL_RULE_FILENAMES) {
+      const candidate = join(home, '.gemini', filename)
+      const entry = await readRuleEntry(candidate)
+      if (!entry || seenCanonical.has(entry.canonicalPath)) {
+        continue
+      }
+      seenCanonical.add(entry.canonicalPath)
+      ruleBlocks.push(`<RULE[user_global]>\n${entry.content}\n</RULE[user_global]>`)
+      break
     }
-    seenCanonical.add(entry.canonicalPath)
-    ruleBlocks.push(`<RULE[user_global]>\n${entry.content}\n</RULE[user_global]>`)
-    break
-  }
 
-  for (const filename of WORKSPACE_RULE_FILENAMES) {
-    const candidate = join(input.cwd, filename)
-    const entry = await readRuleEntry(candidate)
-    if (!entry || seenCanonical.has(entry.canonicalPath)) {
-      continue
+    for (const filename of WORKSPACE_RULE_FILENAMES) {
+      const candidate = join(input.cwd, filename)
+      const entry = await readRuleEntry(candidate)
+      if (!entry || seenCanonical.has(entry.canonicalPath)) {
+        continue
+      }
+      seenCanonical.add(entry.canonicalPath)
+      ruleBlocks.push(`<RULE[${entry.path}]>\n${entry.content}\n</RULE[${entry.path}]>`)
+      break
     }
-    seenCanonical.add(entry.canonicalPath)
-    ruleBlocks.push(`<RULE[${entry.path}]>\n${entry.content}\n</RULE[${entry.path}]>`)
-    break
-  }
 
-  if (ruleBlocks.length === 0) {
+    if (ruleBlocks.length === 0) {
+      return undefined
+    }
+
+    return `${USER_RULES_HEADER}\n${ruleBlocks.join('\n')}\n</user_rules>`
+  } catch {
     return undefined
   }
-
-  return `${USER_RULES_HEADER}\n${ruleBlocks.join('\n')}\n</user_rules>`
 }
 
 /** Resolves session start metadata with client system prompt instructions for user rules. */
