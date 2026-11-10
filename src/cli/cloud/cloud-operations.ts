@@ -152,6 +152,8 @@ export type CloudWorkspaceCreateInput = {
   name?: string
   projectId?: string
   repo?: { url: string; ref?: string }
+  /** Team environment: `env_…` (its active build) or a build `bld_…`. */
+  environment?: string
   machineSize?: 'standard' | 'large'
   region?: string
   message?: { text: string; agent?: (typeof CLOUD_AGENTS)[number] }

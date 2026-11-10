@@ -131,6 +131,49 @@ export function cloudApiError(
       data([])
     )
   }
+  if (
+    code === 'entitlement_denied' &&
+    (reason === 'concurrency_limit' || reason === 'member_concurrency_limit')
+  ) {
+    return new RuntimeClientError(
+      'cloud_at_capacity',
+      reason === 'member_concurrency_limit'
+        ? "You're at your limit of running sandboxes. Nothing was created."
+        : "You're at your team's limit of running sandboxes. Nothing was created.",
+      data([
+        'Put one to sleep or delete it, then try again: `orca cloud workspace list`, then `orca cloud workspace sleep <id>`.'
+      ])
+    )
+  }
+  if (code === 'entitlement_denied' || code === 'billing_required' || status === 402) {
+    const outOfHours = reason === 'included_hours_exhausted' || reason === 'overage_cap_reached'
+    const payment = reason === 'payment_past_due' || reason === 'payment_grace_expired'
+    if (payment) {
+      return new RuntimeClientError(
+        'cloud_payment_failed',
+        "Payment failed, so new sandboxes can't start. Nothing was created.",
+        data(['Ask an owner or admin to update the payment method.'])
+      )
+    }
+    if (reason === 'machine_size_not_in_plan') {
+      return new RuntimeClientError(
+        'cloud_plan_required',
+        "That sandbox size isn't in your team's plan. Nothing was created.",
+        data(['Use --size standard.'])
+      )
+    }
+    return new RuntimeClientError(
+      outOfHours ? 'cloud_out_of_hours' : 'cloud_plan_required',
+      outOfHours
+        ? 'Your team is out of sandbox hours (or at its monthly spend cap). Nothing was created, and your files are safe.'
+        : 'Orca Cloud needs a Team plan. Nothing was created, and you weren’t charged.',
+      data([
+        outOfHours
+          ? 'Ask an owner or admin to turn on overage or raise the spend cap.'
+          : 'Ask an owner or admin to start a Team plan in Orca → Settings → Plan & billing.'
+      ])
+    )
+  }
   if (status === 403 && code === 'insufficient_scope') {
     return new RuntimeClientError(
       'cloud_forbidden',

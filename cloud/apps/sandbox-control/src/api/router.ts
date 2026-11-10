@@ -79,6 +79,8 @@ const CreateWorkspaceBody = z
     repo: z.object({ url: RepoUrl, ref: Ref.optional() }).strict().optional(),
     machineSize: Size.optional(),
     region: Region.optional(),
+    /** Team environment to boot from: `env_…` (its active build) or a specific build `bld_…`. */
+    environment: z.string().regex(/^(env|bld)_[A-Za-z0-9_-]{4,64}$/).optional(),
     /** Optional first message: queued and delivered as soon as the VM is up. */
     message: z.object({ text: z.string().min(1).max(MAX_MESSAGE_CHARS), agent: z.enum(AGENTS).optional() }).strict().optional()
   })
@@ -121,6 +123,24 @@ function originFor(caller: ApiCaller): { origin: WorkspaceOrigin; originRef: str
     return { origin: 'mcp', originRef: caller.keyId ?? null }
   }
   return { origin: 'api', originRef: caller.via === 'user' ? (caller.keyId ?? null) : null }
+}
+
+/** `env_…` → that team environment's active build; `bld_…` passes through (lifecycle checks it). */
+async function resolveEnvironmentBuild(db: D1Database, accountId: string, id: string): Promise<string> {
+  if (id.startsWith('bld_')) {
+    return id
+  }
+  const row = await db
+    .prepare('SELECT active_build_id FROM environments WHERE id = ? AND account_id = ? AND deleted_at IS NULL')
+    .bind(id, accountId)
+    .first<{ active_build_id: string | null }>()
+  if (!row) {
+    throw new ApiError(404, 'not_found', 'environment')
+  }
+  if (!row.active_build_id) {
+    throw new ApiError(409, 'conflict', 'environment_not_built')
+  }
+  return row.active_build_id
 }
 
 function messageBucket(caller: ApiCaller): string {
@@ -383,6 +403,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
       }
       const project = body.projectId ? await getProject(ctx.db, caller.accountId, body.projectId) : null
+      const environmentBuildId = body.environment ? await resolveEnvironmentBuild(ctx.db, caller.accountId, body.environment) : undefined
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, now)
       const { origin, originRef } = originFor(caller)
       const started = performance.now()
@@ -392,6 +413,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         repo: body.repo,
         machineSize: body.machineSize,
         region: body.region,
+        ...(environmentBuildId ? { environmentBuildId } : {}),
         origin,
         originRef
       })
