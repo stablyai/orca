@@ -127,16 +127,28 @@ export function reserveRemotePlacement(
   }
 }
 
-/** The server said the start applied nothing, so the Task goes back to where it was and is free to start again. */
+/**
+ * The server said the start applied nothing, so the Task goes back to where it was and is free to
+ * start again. A Task the start itself created goes away, as a refused local start creates none.
+ */
 export function releaseRemotePlacement(
   db: OrchestrationDb,
   taskId: string,
-  requestKey: string
+  requestKey: string,
+  { createdByStart = false }: { createdByStart?: boolean } = {}
 ): void {
   const transaction = beginLifecycleWriteTransaction(db.db, 'release_remote_placement')
   try {
     const placement = getRemotePlacement(db, taskId)
-    if (placement?.state === 'reserved' && placement.request_key === requestKey) {
+    if (
+      createdByStart &&
+      placement?.state === 'reserved' &&
+      placement.request_key === requestKey &&
+      !placement.dispatch_id
+    ) {
+      db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
+      db.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId)
+    } else if (placement?.state === 'reserved' && placement.request_key === requestKey) {
       // A refused retry leaves the attempt it retried as the Task's current one.
       if (placement.dispatch_id) {
         db.db

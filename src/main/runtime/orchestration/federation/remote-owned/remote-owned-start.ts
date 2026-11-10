@@ -141,7 +141,8 @@ export async function startRemoteOwnedWorker(
       conversationId: link.conversation_id,
       taskId,
       error,
-      key: forward.key
+      key: forward.key,
+      createdByStart: !existingTask
     })
     throw inServerTerms(error, { server: server.name, forward })
   }
@@ -190,11 +191,19 @@ export async function startRemoteOwnedWorker(
 /** What a start's failure says about its reservation: adopt the Dispatch it names, keep it for the orphan lookup, or free it. */
 function settleUnansweredStart(
   runtime: OrcaRuntimeService,
-  start: { conversationId: string; taskId: string; key: string; error: unknown }
+  start: {
+    conversationId: string
+    taskId: string
+    key: string
+    error: unknown
+    createdByStart: boolean
+  }
 ): void {
   const db = runtime.getOrchestrationDb()
   const data = errorData(start.error)
   const named = typeof data?.dispatchId === 'string' ? data.dispatchId : undefined
+  const outcomeUnknown =
+    start.error instanceof OrchestrationError && start.error.code === 'operation_unknown'
   if (named) {
     recordRemoteStart(db, {
       conversationId: start.conversationId,
@@ -202,12 +211,13 @@ function settleUnansweredStart(
       dispatchId: named,
       requestKey: start.key
     })
-  } else if (serverNeverAnswered(start.error) && data?.effectsApplied !== false) {
-    markRemoteStartOutcomeUnknown(db, start.taskId, start.key)
   } else if (
-    !(start.error instanceof OrchestrationError && start.error.code === 'operation_unknown')
+    outcomeUnknown ||
+    (serverNeverAnswered(start.error) && data?.effectsApplied !== false)
   ) {
+    markRemoteStartOutcomeUnknown(db, start.taskId, start.key)
+  } else {
     // The server's ordinary start refused it, which a start that had launched answers with a receipt.
-    releaseRemotePlacement(db, start.taskId, start.key)
+    releaseRemotePlacement(db, start.taskId, start.key, { createdByStart: start.createdByStart })
   }
 }

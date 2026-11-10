@@ -65,13 +65,12 @@ export async function routeRemoteOwnedCall(
   }
   const values: Values = params && typeof params === 'object' ? { ...params } : {}
   const db = runtime.getOrchestrationDb()
-  const on = access.server && stringField(values, access.server)
-  if (on !== undefined) {
-    return routeServerCall(runtime, request, access, values, ctx, on)
-  }
-  const subject = remoteSubject(db, access, values)
+  // A start goes to a server only by --on; a remote Dispatch it names (--retry-of) stays this Orca's claim to check.
+  const subject =
+    request.method === 'orchestration.workerStart' ? undefined : remoteSubject(db, access, values)
   if (!subject) {
-    return LOCAL
+    const on = access.server && stringField(values, access.server)
+    return on === undefined ? LOCAL : routeServerCall(runtime, request, access, values, ctx, on)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
   const forward = remoteForwardKey(
@@ -89,7 +88,7 @@ export async function routeRemoteOwnedCall(
   }
 }
 
-/** `--on <server>`: a start, a list, or a receipt lookup there. */
+/** `--on <server>`: a start, a list, or a receipt lookup there; send and reply --on to anything else stay peer mail. */
 async function routeServerCall(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
@@ -106,7 +105,10 @@ async function routeServerCall(
   const server = runtime.resolveOrchestrationWorkerServer(on)
   const db = runtime.getOrchestrationDb()
   if (request.method === 'orchestration.workerStart') {
-    if (!(await serverOwnsPlacedWorkers(runtime, server))) {
+    if (
+      holdsLocalReceipt(db, ctx, request.orchestrationRequestId) ||
+      !(await serverOwnsPlacedWorkers(runtime, server))
+    ) {
       // An older server: today's remote attachment, the one legacy branch for new work.
       return LOCAL
     }
@@ -307,6 +309,17 @@ function openLinkFor(
       `SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ? AND state = 'open'`
     )
     .get(runId, environmentId) as RemoteRunLinkRow | undefined
+}
+
+/** A retry of a start this Orca already took on today's path stays there, whatever the server runs now. */
+function holdsLocalReceipt(
+  db: OrchestrationDb,
+  ctx: RpcContext,
+  requestId: string | undefined
+): boolean {
+  const caller =
+    ctx.authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint()
+  return requestId !== undefined && db.getMutationReceipt(caller, requestId) !== undefined
 }
 
 function isSessionAddress(value: unknown): boolean {
