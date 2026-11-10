@@ -36,6 +36,12 @@ import { applyManagedDataAccountEnvironment } from '../../../managed-data-accoun
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
+function defaultUnsetEnv(env: Record<string, string>, key: string, value: string): void {
+  if (env[key] === undefined && process.env[key] === undefined) {
+    env[key] = value
+  }
+}
+
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
 export function buildPtyHostEnv(
   id: string,
@@ -45,14 +51,15 @@ export function buildPtyHostEnv(
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
-  // Claude currently recognizes image support only in a short terminal allowlist.
-  if (
-    opts.launchAgent === 'claude' &&
-    resolveTerminalInlineImagesEnabled(opts.terminalInlineImages) &&
-    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined &&
-    process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined
-  ) {
-    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1'
+  if (opts.launchAgent === 'claude') {
+    // Claude currently recognizes image support only in a short terminal allowlist.
+    if (resolveTerminalInlineImagesEnabled(opts.terminalInlineImages)) {
+      defaultUnsetEnv(baseEnv, 'CLAUDE_CODE_FORCE_TERMINAL_IMAGES', '1')
+    }
+    // Claude gates scroll regions before its DEC 2026 probe answers, so fullscreen repaints each wheel step (#16137).
+    if (opts.claudeCodeScrollRegions !== false) {
+      defaultUnsetEnv(baseEnv, 'CLAUDE_CODE_FORCE_SYNC_OUTPUT', '1')
+    }
   }
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)

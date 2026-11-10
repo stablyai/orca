@@ -12938,7 +12938,9 @@
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.",
-          "08db7947d8": "Inline images"
+          "08db7947d8": "Inline images",
+          "6df64a8e5d": "Smooth Claude Code scrolling",
+          "e06a7c261a": "Scroll Claude Code’s fullscreen mode with scroll regions instead of redrawing the screen on every step. Applies to new Claude panes."
         },
         "CursorAccountsSection": {
           "source": {
