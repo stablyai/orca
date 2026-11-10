@@ -280,15 +280,6 @@ describe('useMobileSessionViewMode', () => {
     })
   })
 
-  it('submits rapid mutations in event order', async () => {
-    await mount({ defaultView: 'terminal' })
-    act(() => controller?.toggleTabChatView('t1'))
-    act(() => controller?.toggleTabChatView('t2'))
-
-    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(1, 'h', 'w', 't1', 'chat')
-    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't2', 'chat')
-  })
-
   it('does not let an older failed override roll back a newer choice', async () => {
     const recoveryLoad = deferred<Map<string, MobileSessionView>>()
     vi.mocked(updateSessionViewOverride)

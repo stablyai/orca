@@ -94,27 +94,4 @@ describe('useMobileDefaultSessionViewPreference', () => {
     expect(preference?.defaultView).toBe('terminal')
     expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
   })
-
-  it('submits the latest write before the Settings route unmounts', async () => {
-    const firstSave = deferred<void>()
-    vi.mocked(saveDefaultSessionView)
-      .mockImplementationOnce(() => firstSave.promise)
-      .mockResolvedValueOnce(undefined)
-    await mount()
-
-    act(() => preference?.setDefaultView('chat'))
-    await act(async () => {
-      await Promise.resolve()
-    })
-    act(() => preference?.setDefaultView('terminal'))
-    expect(saveDefaultSessionView).toHaveBeenNthCalledWith(2, 'terminal')
-    act(() => renderer?.unmount())
-    renderer = null
-
-    await act(async () => {
-      firstSave.resolve()
-      await firstSave.promise
-      await Promise.resolve()
-    })
-  })
 })

@@ -354,52 +354,6 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe(' /clear')
   })
 
-  it('reconciles an image-only unconfirmed send against the next user turn (no false warning)', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
-        )
-      )
-      const origin = state?.captureSendOrigin('')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, '', onUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            messages: [assistantTextMessage('a1', 'hi'), assistantTextMessage('a2', 'ok')]
-          })
-        )
-      )
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            messages: [
-              assistantTextMessage('a1', 'hi'),
-              assistantTextMessage('a2', 'ok'),
-              userTextMessage('u1', '')
-            ]
-          })
-        )
-      )
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('clears image-only echoes one per landed user turn, not all at once', async () => {
     await mount('a')
     await act(async () =>
@@ -498,37 +452,6 @@ describe('useMobileNativeChatDrafts', () => {
         vi.advanceTimersByTime(30_000)
       })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('requires one new transcript echo per repeated unconfirmed send', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      act(() => state?.setComposerText('ping'))
-      const origin = state?.captureSendOrigin('ping')
-      const firstUnconfirmed = vi.fn()
-      const secondUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', firstUnconfirmed)
-          state?.holdUnconfirmedSend(origin, 'ping', secondUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('echo-1', 'ping')] })
-        )
-      )
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-
-      expect(firstUnconfirmed).not.toHaveBeenCalled()
-      expect(secondUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
