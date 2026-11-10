@@ -5438,6 +5438,24 @@
             "left": "Left",
             "reset": "Reset"
           },
+          "AgentUpdateStatusSegment": {
+            "commandCopied": "Command copied",
+            "commandCopyFailed": "Could not copy the command",
+            "updating": "Updating…",
+            "upToDate": "Up to date",
+            "copyCommand": "Copy command",
+            "update": "Update",
+            "retry": "Retry",
+            "runningTooltip": "Updating agents…",
+            "failedTooltip": "Some agent updates failed",
+            "availableTooltip_one": "{{count}} agent update available",
+            "availableTooltip_other": "{{count}} agent updates available",
+            "doneTooltip": "Agents updated",
+            "triggerAria": "{{status}}. Click to open agent updates.",
+            "title": "Agent updates · {{count}}",
+            "updateAll": "Update all",
+            "restartHint": "Restart running sessions to use the new version"
+          },
           "InlineUsageBars": {
             "now": "now",
             "resetsNow": "resets now",

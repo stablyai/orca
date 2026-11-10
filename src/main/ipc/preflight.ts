@@ -21,6 +21,7 @@ import { getPreflightWslTarget } from './preflight-runtime-target'
 import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
 import { agentCommandOverrideDetectionOptions } from '../preflight/installed-agent-detection'
+import { registerAgentUpdatesHandlers } from './agent-updates'
 
 type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }
 /** Set by a user act (window focus, a click, opening a picker): it may start its WSL distro. */
@@ -37,6 +38,10 @@ function runPreflightAct<T>(
 }
 
 export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): void {
+  // Why: agent updates read detection settings, so they register only when a store exists.
+  if (store) {
+    registerAgentUpdatesHandlers(store)
+  }
   const detectionOptions = (args?: AgentDetectionRequest) => {
     if (!args?.enabledOnly) {
       // Overrides still apply: a configured CLI outside PATH must be listed in every inventory.

@@ -1090,6 +1090,10 @@
       },
       "status": {
         "bar": {
+          "AgentUpdateStatusSegment": {
+            "availableTooltip_one": "{{count}} agent update available",
+            "availableTooltip_other": "{{count}} agent updates available"
+          },
           "NativeChatResumeStatusSegment": {
             "ariaLabelCount_one": "{{count}} chat available to resume",
             "ariaLabelCount_other": "{{count}} chats available to resume",
