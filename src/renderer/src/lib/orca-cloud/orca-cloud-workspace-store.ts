@@ -2,7 +2,6 @@
 // status from the control plane, in-flight wakes and OOM notices. The one source of cloud ids and
 // wake state for every cloud surface. A tiny external store (not an app-store slice) so the
 // hundreds of sidebar rows that are not cloud workspaces subscribe to nothing.
-import { syncRunActionsWithWake } from './cloud-run-action-relaunch'
 import {
   armInterruptedTurnsForHostRestart,
   continueInterruptedTurns,
@@ -270,7 +269,6 @@ export function noteCloudWakeProgress(reported: CloudWakeProgressEvent): void {
   if (event.phase === 'failed' && isSilentPredictiveWake(event.workspaceId)) {
     dropWake(event.workspaceId)
     endWorkspaceWake(event.workspaceId, 'failed')
-    syncRunActionsWithWake(event)
     void refreshCloudWorkspaceStatus(event.workspaceId)
     return
   }
@@ -290,8 +288,6 @@ export function noteCloudWakeProgress(reported: CloudWakeProgressEvent): void {
   } else {
     endWorkspaceWake(event.workspaceId, event.phase === 'ready' ? 'ready' : 'failed')
   }
-  // The woken VM has fresh shells: dev servers (run actions) that were up start again.
-  syncRunActionsWithWake(event)
   // Restart reboots the host under any working agent: carry its interrupted turn on afterwards.
   if (next.source === 'restart') {
     if (event.phase === 'waking' && (!started || started.startedAt !== event.startedAt)) {

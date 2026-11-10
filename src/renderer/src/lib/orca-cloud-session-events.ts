@@ -1,4 +1,5 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
+import { syncRunActionsWithWake } from '@/lib/orca-cloud/cloud-run-action-relaunch'
 import {
   armRunActionRelaunch,
   disarmRunActionRelaunch,
@@ -98,6 +99,9 @@ export function installOrcaCloudSessionEvents(): () => void {
       }
     })
   })
+  // Woken VMs have fresh shells: run actions (dev servers) that were up start again.
+  const disposeRunActionWake =
+    window.api?.orcaCloudWorkspace?.onWakeProgress?.(syncRunActionsWithWake) ?? (() => {})
   const disposeStore = installOrcaCloudWorkspaceStore()
   const disposePredictive = installCloudPredictiveWake()
   return () => {
@@ -105,6 +109,7 @@ export function installOrcaCloudSessionEvents(): () => void {
     disposeState()
     disposeIdle()
     disposeStore()
+    disposeRunActionWake()
     disposePredictive()
   }
 }
