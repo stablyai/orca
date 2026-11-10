@@ -192,7 +192,7 @@ export function CloudMoveToComputerDialogHost({
         }}
       >
         <DialogHeader>
-          <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">
+          <DialogTitle ref={titleRef} tabIndex={-1}>
             {cloudMoveTitle(state, t)}
           </DialogTitle>
           <DialogDescription className="sr-only">
