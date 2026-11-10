@@ -40,7 +40,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
     const page = await listLocalWorkerPage(runtime, params)
     const paged =
       params.paginate === true || params.limit !== undefined || params.cursor !== undefined
-    // Remote rows share the page's limit, and an unpaged list's cap for older clients.
+    // Remote rows get their own page limit, since later pages hold only local rows; an unpaged list keeps its cap.
     const remoteRows = paged
       ? (params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX)
       : ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS - page.workers.length
