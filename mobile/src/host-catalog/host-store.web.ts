@@ -1,5 +1,5 @@
-import { readPageHostProfile } from '../../mobile-web-shell/bridge/page-host-profile'
-import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
+import { readPageHostProfile } from '../mobile-web-shell/bridge/page-host-profile'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { HostCatalogEntry, HostProfile } from './host-profile'
 
 // The page gets no device credential or public key; RPC uses the shell’s paired client.
@@ -25,9 +25,6 @@ export const setRelayRouting = (_hostId: string, _relay: MobileRelayEndpoint): P
   Promise.resolve()
 
 export const removeHost = (_hostId: string): Promise<void> => Promise.resolve()
-
-// Recency belongs to the native host list, which this page does not show.
-export const updateLastConnected = (_hostId: string): Promise<void> => Promise.resolve()
 
 export function updateHostNameAndEndpoint(
   _hostId: string,

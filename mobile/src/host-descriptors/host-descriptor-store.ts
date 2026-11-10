@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { sameHostMachine, type HostMachine } from '../../../../src/shared/host-machine-line'
+import { sameHostMachine, type HostMachine } from '../../../src/shared/host-machine-line'
 
 export type HostMachineDescriptor = {
   machineName: string | null

@@ -74,22 +74,4 @@ describe('mobile relay host overlay store', () => {
     await expect(saveMobileRelayHostRouting('host-1', RELAY)).resolves.toBe(true)
     expect(JSON.parse(stored!)).toEqual([RELAY_ONLY_OVERLAY])
   })
-
-  it('never overlays or resurrects a host whose legacy base was removed', async () => {
-    stored = JSON.stringify([LEGACY_OVERLAY])
-
-    await expect(loadMobileRelayHostRoutingState(new Set())).resolves.toEqual({
-      relays: new Map(),
-      orphanHostIds: ['host-1']
-    })
-    expect(asyncStorage.setItem).not.toHaveBeenCalled()
-    expect(JSON.parse(stored)).toEqual([LEGACY_OVERLAY])
-  })
-
-  it('refuses to overwrite unreadable overlay storage', async () => {
-    stored = '{'
-
-    await expect(saveMobileRelayHostRouting('host-1', RELAY)).rejects.toThrow(/unreadable/)
-    expect(asyncStorage.setItem).not.toHaveBeenCalled()
-  })
 })

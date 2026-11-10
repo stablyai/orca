@@ -2,8 +2,8 @@ import { z } from 'zod'
 import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
-} from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { relayConnectWebSocketUrl } from '../relay/mobile-relay-connect-url'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
+import { relayConnectWebSocketUrl } from '../transport/relay/mobile-relay-connect-url'
 
 const MobileAccessEndpointSchema = z
   .object({
