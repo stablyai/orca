@@ -188,7 +188,7 @@ export const lifecycleChecks: Record<string, Check> = {
   'acc.download': async (ctx) => {
     const b = await refresh(ctx)
     let expected = ''
-    await ctx.exec(b.sessionId, `cd ${b.root} && mkdir -p dl/sub && head -c 5242880 /dev/urandom > dl/big.bin && echo hi > dl/sub/a.txt && sha256sum dl/big.bin | cut -d' ' -f1`).then((r) => (expected = r.stdout.trim()))
+    await ctx.exec(b.sessionId, `cd ${b.root} && mkdir -p dl/sub && head -c 52428800 /dev/urandom > dl/big.bin && echo hi > dl/sub/a.txt && sha256sum dl/big.bin | cut -d' ' -f1`).then((r) => (expected = r.stdout.trim()))
     const t = await openTerminal(b.code, b.root)
     const worktree: string | undefined = t.term.json?.result?.terminal?.worktreeId
     if (!worktree) {
@@ -214,13 +214,13 @@ export const lifecycleChecks: Record<string, Check> = {
     if (j.error) {
       return { status: 'fail', detail: `download over the pairing failed: ${j.error}` }
     }
-    const fileOk = j.file.bytes === 5242880 && j.file.sha256 === expected
+    const fileOk = j.file.bytes === 52428800 && j.file.sha256 === expected
     const ok = fileOk && j.folder.zipOk
-    const mbps = (5242880 / 1048576 / (j.file.ms / 1000)).toFixed(1)
+    const mbps = (52428800 / 1048576 / (j.file.ms / 1000)).toFixed(1)
     return {
       status: ok ? 'pass' : fileOk ? 'partial' : 'fail',
-      detail: `5 MiB file via files.readChunk in ${j.file.ms} ms (${mbps} MiB/s Mac<-iad1, sha256 match=${j.file.sha256 === expected}); folder as zip: ${j.folder.error ? `failed (${j.folder.error}; the VM's orcad predates #115)` : `${j.folder.bytes} bytes in ${j.folder.ms} ms, complete=${j.folder.zipOk}`}. Uses the desktop's download transfer code headlessly; toasts/Save dialog are UI.`,
-      timingsMs: { file5MiB: j.file.ms, folderZip: j.folder.ms }
+      detail: `50 MiB file via files.readChunk (one persistent paired connection, desktop lane) in ${j.file.ms} ms (${mbps} MiB/s Mac<-iad1, sha256 match=${j.file.sha256 === expected}); folder as zip: ${j.folder.error ? `failed (${j.folder.error}; the VM's orcad predates #115)` : `${j.folder.bytes} bytes in ${j.folder.ms} ms, complete=${j.folder.zipOk}`}. Uses the desktop's download transfer code headlessly; toasts/Save dialog are UI.`,
+      timingsMs: { file50MiB: j.file.ms, folderZip: j.folder.ms }
     }
   },
 
