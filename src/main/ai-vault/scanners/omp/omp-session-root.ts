@@ -83,9 +83,9 @@ export function resolveOmpSessionsDir(
 }
 
 /**
- * Every existing profile session dir under the config home, so history from
- * OMP_PROFILE/PI_PROFILE runs is discovered even when this process has no
- * profile env of its own.
+ * Every existing profile session dir under the config home (and the XDG data
+ * home on POSIX), so history from OMP_PROFILE/PI_PROFILE runs is discovered
+ * even when this process has no profile env of its own.
  */
 export function ompProfileSessionsDirs(
   options: {
@@ -102,16 +102,19 @@ export function ompProfileSessionsDirs(
     return []
   }
   const profilesDir = join(home, env.PI_CONFIG_DIR || '.omp', 'profiles')
-  let entries
-  try {
-    entries = readdirSync(profilesDir, { withFileTypes: true })
-  } catch {
-    return []
-  }
   const xdgProfilesDir =
     (platform === 'linux' || platform === 'darwin') && env.XDG_DATA_HOME
       ? join(env.XDG_DATA_HOME, 'omp', 'profiles')
       : undefined
+  // A profile can exist only in the XDG data home, e.g. when OMP used a
+  // different PI_CONFIG_DIR than this process.
+  const entries = [profilesDir, ...(xdgProfilesDir ? [xdgProfilesDir] : [])].flatMap((dir) => {
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return []
+    }
+  })
   const dirs: string[] = []
   for (const entry of entries) {
     if (entry.name === 'default' || !entry.isDirectory() || !isSafeProfileName(entry.name)) {

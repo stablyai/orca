@@ -93,6 +93,18 @@ describe('ompProfileSessionsDirs', () => {
     ).toEqual([local])
   })
 
+  it('discovers profiles that exist only in the XDG data home', () => {
+    const { home, xdg } = fixture()
+    const xdgOnly = join(xdg, 'omp', 'profiles', 'fast', 'sessions')
+    mkdirSync(xdgOnly, { recursive: true })
+    expect(
+      ompProfileSessionsDirs({ env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'linux' })
+    ).toEqual([xdgOnly])
+    expect(
+      ompProfileSessionsDirs({ env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'win32' })
+    ).toEqual([])
+  })
+
   it('stays empty under the legacy OMP_CODING_AGENT_DIR override', () => {
     const { home } = fixture()
     mkdirSync(join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions'), { recursive: true })
