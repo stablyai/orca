@@ -16,6 +16,7 @@ export function anteSessionIdFromMetadataPath(filePath: string): string {
   return basename(dirname(filePath))
 }
 
+/** Expand a leading `~` the way a shell would; Ante's own paths assume `$HOME` expansion. */
 function expandLeadingUserHome(rawPath: string): string {
   return rawPath === '~' ? homedir() : rawPath.replace(/^~(?=[\\/])/, homedir())
 }

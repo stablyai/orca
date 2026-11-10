@@ -20,9 +20,10 @@ import { extractString, numberValue, parseJsonObject } from '../../session-scann
 import { normalizeTitleText } from '../../session-scanner-text-normalization'
 import { anteSessionIdFromMetadataPath } from './session-scanner-ante-paths'
 
-// Listing reads a bounded window of the transcript for previews; totals come from `meta.json`.
-const ANTE_PREVIEW_SCAN_LIMIT = 4096
-const ANTE_TITLE_TEXT_LIMIT = 4_000
+// `events.jsonl` is append-only and one turn emits several records, so the fold reads every line:
+// a bounded prefix would drop later messages from the search sink and hide the newest timeline
+// entry. Only the preview text is bounded, as in the other line-oriented scanners.
+const ANTE_PREVIEW_TEXT_LIMIT = 4_000
 const ANTE_INJECTED_PROMPT_MARKER = '<folder-structure>'
 
 type AnteMetadata = {
@@ -68,6 +69,7 @@ export function anteMetadataCwd(content: string): string | null {
   return anteMetadata(content).cwd
 }
 
+/** Read the row's identity and totals from `meta.json`; a missing id falls back to the folder name. */
 function anteMetadata(content: string): AnteMetadata {
   const record = asRecord(JSON.parse(content) as unknown) ?? {}
   const usage = asRecord(record.usage)
@@ -83,6 +85,7 @@ function anteMetadata(content: string): AnteMetadata {
   }
 }
 
+/** Ante writes `meta.json` at turn end, so a live session may have no metadata to list yet. */
 async function readAnteMetadata(
   metadataPath: string,
   signal?: AbortSignal
@@ -110,9 +113,10 @@ async function readAnteMetadata(
 function antePromptText(text: string): string {
   const injected = text.indexOf(ANTE_INJECTED_PROMPT_MARKER)
   const request = injected === -1 ? text : text.slice(0, injected)
-  return request.trim().slice(0, ANTE_TITLE_TEXT_LIMIT)
+  return request.trim()
 }
 
+/** Fold every record: skips only bound the preview text, never the messages or the timeline. */
 async function consumeAnteEvents(
   accumulator: SessionAccumulator,
   transcriptPath: string,
@@ -121,11 +125,7 @@ async function consumeAnteEvents(
   const input = openTranscriptReadStream(transcriptPath, { encoding: 'utf-8' }, 'scan', signal)
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    let scanned = 0
     for await (const line of lines) {
-      if (++scanned > ANTE_PREVIEW_SCAN_LIMIT) {
-        break
-      }
       await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
       consumeAnteEventLine(accumulator, line)
     }
@@ -145,6 +145,7 @@ async function consumeAnteEvents(
   }
 }
 
+/** Only `UserInput` and `AgentMessage` carry turn text; tool and usage records feed the timeline. */
 function consumeAnteEventLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
   if (!record) {
@@ -161,10 +162,15 @@ function consumeAnteEventLine(accumulator: SessionAccumulator, line: string): vo
     return
   }
   const text = role === 'user' ? antePromptText(raw) : raw
-  // `meta.json` is the row's message total; this window only feeds previews, so folding must not
-  // count turns again (real stores report ~4x more turns in `meta.json` than the two variants here).
+  // `meta.json` is the row's message total, so folding must not count turns a second time (real
+  // stores report ~4x more turns there than the two variants folded here).
   if (role === 'user') {
     accumulator.title ??= normalizeTitleText(text)
   }
-  addSessionText(accumulator, { role, text, timestamp: record.timestamp })
+  addSessionText(accumulator, {
+    role,
+    text,
+    timestamp: record.timestamp,
+    previewScanLimit: ANTE_PREVIEW_TEXT_LIMIT
+  })
 }

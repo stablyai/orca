@@ -1,9 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
 import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import type { TranscriptMessage } from '../../transcripts/session-transcript-consumers'
+import { parseAnteSessionFile } from './session-scanner-ante-parser'
 import { writeAnteScannerFixture } from './session-scanner-ante-fixture'
 
 let tempRoots: string[] = []
@@ -67,5 +69,49 @@ describe('scanAiVaultSessions ante', () => {
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]?.title).toBe('Ante vault title')
     expect(result.sessions[0]?.totalTokens).toBe(10)
+  })
+
+  it('publishes turns past the old preview window and dates the row from the transcript tail', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ante-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const metadataFile = await writeAnteScannerFixture(roots.anteSessionsDir)
+    // Ante emits several records per turn, so a long session outgrows a fixed line window.
+    const toolRecords = Array.from({ length: 4100 }, (_, index) =>
+      JSON.stringify({
+        timestamp: '2026-05-01T11:00:00.000000Z',
+        id: `evt_tool_${index}`,
+        event: { ToolStart: { id: `call_${index}`, name: 'Bash', args: { command: 'ls' } } }
+      })
+    )
+    await writeFile(
+      join(roots.anteSessionsDir, 'ante-session', 'events.jsonl'),
+      `${[
+        JSON.stringify({
+          timestamp: '2026-05-01T11:00:00.000000Z',
+          id: 'evt_open',
+          event: { UserInput: 'first question' }
+        }),
+        ...toolRecords,
+        JSON.stringify({
+          timestamp: '2026-05-01T12:30:00.000000Z',
+          id: 'evt_last',
+          event: { AgentMessage: 'late answer' }
+        })
+      ].join('\n')}\n`
+    )
+
+    const messages: TranscriptMessage[] = []
+    const session = await parseAnteSessionFile(
+      { path: metadataFile, mtimeMs: 1, modifiedAt: '2026-05-01T10:11:00.000Z' },
+      'darwin',
+      { active: true, push: (message) => messages.push(message) }
+    )
+
+    // Search indexes what the sink receives, so the last turn cannot depend on arriving early.
+    expect(messages.map((message) => message.text)).toContain('late answer')
+    expect(session?.updatedAt).toBe('2026-05-01T12:30:00.000Z')
+    // The row itself still reports `meta.json`'s totals.
+    expect(session?.messageCount).toBe(4)
   })
 })

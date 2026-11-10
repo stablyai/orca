@@ -17,6 +17,7 @@ export function rovoTranscriptPathForMetadata(filePath: string): string {
   return replaceSessionFileName(filePath, 'session_context.json')
 }
 
+/** Ante stores `events.jsonl` beside the `meta.json` that discovery scans. */
 export function anteTranscriptPathForMetadata(filePath: string): string {
   return replaceSessionFileName(filePath, 'events.jsonl')
 }
