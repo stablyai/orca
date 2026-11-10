@@ -56,7 +56,7 @@ describe('entitlementDeniedMessage', () => {
     expect(
       entitlementDeniedMessage(denied('member_concurrency_limit'), 'member', 'existing', t)
     ).toBe(
-      'The workspace owner is at their limit of running sandboxes, and this workspace runs on their seat. Your files are safe. Ask them to put one to sleep (or put one to sleep yourself if it’s your workspace), then try again.'
+      'This workspace’s owner is at their limit of running sandboxes. Your files are safe. Ask the owner to put one to sleep, or if it’s your workspace, put one to sleep or delete it, then try again.'
     )
     expect(
       entitlementDeniedMessage(denied('member_concurrency_limit'), 'member', 'create', t)
@@ -84,8 +84,8 @@ describe('per-seat limit on an existing workspace', () => {
     ).toBe(
       'You’re at your limit of running sandboxes. Your files are safe. Put one to sleep or delete it, then try again.'
     )
-    expect(entitlementDeniedMessage(error, 'member', 'existing', t, null)).toContain(
-      'if it’s your workspace'
+    expect(entitlementDeniedMessage(error, 'member', 'existing', t, null)).toBe(
+      'This workspace’s owner is at their limit of running sandboxes. Your files are safe. Ask the owner to put one to sleep, or if it’s your workspace, put one to sleep or delete it, then try again.'
     )
   })
 })

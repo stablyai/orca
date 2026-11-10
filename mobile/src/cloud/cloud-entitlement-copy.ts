@@ -99,8 +99,8 @@ function problem(
         )
       }
       return t(
-        'cloud.denied.ownerSeatLimit',
-        'The workspace owner is at their limit of running sandboxes, and this workspace runs on their seat.'
+        'cloud.denied.ownerSeatLimit2',
+        'This workspace’s owner is at their limit of running sandboxes.'
       )
     case 'other':
       return t('cloud.denied.other', 'Your team’s plan doesn’t allow this right now.')
@@ -124,8 +124,8 @@ function nextStep(
       }
       if (when === 'existing' && !owner) {
         return t(
-          'cloud.denied.next.ownerSeatLimit',
-          'Ask them to put one to sleep (or put one to sleep yourself if it’s your workspace), then try again.'
+          'cloud.denied.next.ownerSeatLimit2',
+          'Ask the owner to put one to sleep, or if it’s your workspace, put one to sleep or delete it, then try again.'
         )
       }
       return t('cloud.denied.next.limit', 'Put one to sleep or delete it, then try again.')
