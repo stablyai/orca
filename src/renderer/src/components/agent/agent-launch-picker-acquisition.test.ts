@@ -86,8 +86,16 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
     models: [model('saved')]
   })
   await expect
-    .poll(() => currentAgentPickerAcquisition('closed-catalog')?.map((entry) => entry.catalogRead))
-    .toEqual(['deferred', 'deferred'])
+    .poll(() => currentAgentPickerAcquisition('closed-catalog')?.map((entry) => entry.catalog))
+    .toEqual([
+      { origin: 'unknown', listingInProgress: true },
+      {
+        origin: 'probe',
+        fetchedAt: 1,
+        listingInProgress: true,
+        models: [{ id: 'saved', label: 'saved', isDefault: false, efforts: [] }]
+      }
+    ])
 
   const stopReopened = observeAgentPickerAcquisition('closed-catalog', entries, reads, observer)
   expect(published.map((entry) => entry.catalogRead)).toEqual(['pending', 'pending'])

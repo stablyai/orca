@@ -66,8 +66,7 @@ class AgentPickerAcquisition {
           this.initial[i].catalogRead !== 'unsupported' &&
           entry.surfaces.length &&
           entry.catalogRead !== 'pending' &&
-          (entry.catalogRead === 'deferred' ||
-            entry.catalog.origin === 'unknown' ||
+          (entry.catalog.origin === 'unknown' ||
             entry.catalogRead === 'failed' ||
             entry.catalogRead === 'unsupported' ||
             entry.catalog.unavailable !== undefined ||
@@ -163,13 +162,7 @@ class AgentPickerAcquisition {
         ? {
             ...e,
             ...(catalog ? { catalog } : {}),
-            catalogRead: !catalog
-              ? 'failed'
-              : refresh
-                ? 'pending'
-                : catalog.listingInProgress || catalog.waitExpired
-                  ? 'deferred'
-                  : 'settled'
+            catalogRead: !catalog ? 'failed' : refresh ? 'pending' : 'settled'
           }
         : e
     )

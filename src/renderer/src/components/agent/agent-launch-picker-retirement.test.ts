@@ -53,7 +53,7 @@ it('preserves edited presets until a completed catalog confirms their model or e
       }
     ]
   ])
-  for (const catalogRead of ['pending', 'deferred', 'failed', 'unsupported'] as const) {
+  for (const catalogRead of ['pending', 'failed', 'unsupported'] as const) {
     retireAgentPickerSetups([{ ...entry, catalogRead }], setups, undefined, 'select')
     expect([...setups.values()].map(({ draft }) => draft.arguments)).toEqual([
       '--add-dir model-edits',
