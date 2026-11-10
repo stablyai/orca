@@ -145,7 +145,15 @@ export class StructuredAgentSessionStatusOwnership {
     this.observeChildWork(sessionId, evidence)
     const apply = () => {
       if (deps.sessions.get(sessionId) === session && !deps.rowRetired?.(sessionId)) {
-        this.establish(sessionId, session.params.location, session.params.provider, deps.now())
+        try {
+          this.establish(sessionId, session.params.location, session.params.provider, deps.now())
+        } catch (error) {
+          deps.logger.warn('status sink publish failed', {
+            scope: 'status-sink-publish',
+            sessionId,
+            error
+          })
+        }
         publish(session)
       }
     }
