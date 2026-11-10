@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router'
-import { Moon } from 'lucide-react-native'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -8,6 +7,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNavBar } from '../settings/settings-screen-frame'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { CloudStateGlyph } from './CloudStateGlyph'
 import { cloudHostGate } from './cloud-screen-states'
 import { cloudWorkspaceIdForHost } from './cloud-workspace-links'
 import { useCloudEnrollment, useCloudWorkspace } from './use-cloud-workspaces'
@@ -61,7 +61,7 @@ export function CloudHostAsleepGate(props: { hostId: string; children: ReactNode
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bgBase }} edges={['top']}>
       <SettingsNavBar title={sleeping?.title ?? ''} onBack={() => router.back()} />
       <MobileStateView
-        icon={Moon}
+        iconElement={<CloudStateGlyph status="sleeping" />}
         title={t('cloud.host.asleep', '{{name}} is asleep', { name: sleeping?.title ?? '' })}
         message={t('cloud.host.asleepDetail', 'Files are kept. Wake it to keep working.')}
         action={{

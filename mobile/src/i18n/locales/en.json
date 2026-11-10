@@ -5054,7 +5054,8 @@
       "missing": "This workspace is gone or you no longer have access.",
       "signIn": "Sign in to Orca Cloud on this phone",
       "signInAction": "Sign in",
-      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again."
+      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+      "signInDetail": "This link opens a cloud workspace your team shared. Sign in to see it."
     },
     "action": {
       "openSession": "Open session",

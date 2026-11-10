@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ListRow } from '../components/list/ListGroup'
+import { MobileStateView } from '../components/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { structuredSessionOperationId } from '../session/structured-session-operation-id'
 import { SettingsNavBar } from '../settings/settings-screen-frame'
@@ -22,6 +23,7 @@ import { CloudErrorBanner } from './CloudErrorBanner'
 import { CloudPromptComposer } from './CloudPromptComposer'
 import { CloudPromptQueueSection } from './CloudPromptQueueSection'
 import { CloudReadSnapshotSection } from './CloudReadSnapshotSection'
+import { CloudStateGlyph } from './CloudStateGlyph'
 import { CloudStatusCard } from './CloudStatusCard'
 import { CloudWorkspaceActions } from './CloudWorkspaceActions'
 import {
@@ -187,22 +189,23 @@ export function CloudWorkspaceScreen({
         <View style={styles.centered}>
           {missing === 'signin' ? (
             // A share link opened on a phone that isn't connected yet: the list query never runs.
-            <>
-              <Text style={styles.emptyText}>
-                {t('cloud.workspace.signIn', 'Sign in to Orca Cloud on this phone')}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
+            // Same layout as the asleep host (DS-27 polish): glyph, title, one sentence, one button.
+            <MobileStateView
+              iconElement={<CloudStateGlyph />}
+              title={t('cloud.workspace.signIn', 'Sign in to Orca Cloud on this phone')}
+              message={t(
+                'cloud.workspace.signInDetail',
+                'This link opens a cloud workspace your team shared. Sign in to see it.'
+              )}
+              action={{
+                label: t('cloud.workspace.signInAction', 'Sign in'),
+                onPress: () => {
                   // Connect on Home, then come straight back to this workspace.
                   setCloudReturnTo(`/cloud/${sandboxId}`)
                   router.replace('/')
-                }}
-                style={styles.linkButton}
-              >
-                <Text style={styles.link}>{t('cloud.workspace.signInAction', 'Sign in')}</Text>
-              </Pressable>
-            </>
+                }
+              }}
+            />
           ) : missing === 'loading' ? (
             <ActivityIndicator color={colors.textMuted} />
           ) : (
