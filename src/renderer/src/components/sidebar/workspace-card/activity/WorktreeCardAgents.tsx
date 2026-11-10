@@ -182,7 +182,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
     return (
-      <div key={agent.paneKey} className="min-w-0">
+      <div key={agent.paneKey} className={cn('min-w-0', ancestorPaneKeys.size === 0 && 'ms-2')}>
         <CompactAgentRow
           agent={agent}
           showModel={showAgentModels}

@@ -1,5 +1,7 @@
 import { buildWorktreeOccurrencePlan } from '../../../../shared/worktree-occurrence-plan'
-import { buildWorktreeLineageRanges } from '../../../../shared/sidebar-list/worktree-lineage-range'
+import { appendWorktreeRows } from '../../../../shared/sidebar-list/row-builders'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
+import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/group-keys'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -12,7 +14,11 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { collectLineageSlotTargets, selectCollapsedLineageSlot } from './worktree-card-slot-rollup'
+import {
+  collectLineageSlotTargets,
+  selectCollapsedLineageSlot,
+  selectLineageLatestAt
+} from './worktree-card-slot-rollup'
 import { slotTargetsOfKind, workspaceUnreadTarget } from './worktree-card-slot-targets'
 
 const original = useAppStore.getState()
@@ -134,23 +140,46 @@ it('expires hidden working evidence on the same freshness tick as agent rows', (
 it('updates hidden subtree attention after status changes, acknowledgement, and freshness expiry', () => {
   const parent = makeWorktree({ id: 'parent', repoId: 'repo1', hostId: 'local', lastActivityAt: 0 })
   const child = makeWorktree({ id: 'child', repoId: 'repo1', hostId: 'local', lastActivityAt: 0 })
+  const grandchild = makeWorktree({
+    id: 'grandchild',
+    repoId: 'repo1',
+    hostId: 'local',
+    lastActivityAt: 1_950_000
+  })
   const plan = buildWorktreeOccurrencePlan({
-    rows: [parent, child],
+    rows: [parent, child, grandchild],
     identityOf: (row) => composeWorktreeHostIdentity(row.hostId, row.id),
-    childrenByParentIdentity: new Map([[composeWorktreeHostIdentity('local', 'parent'), [child]]]),
+    childrenByParentIdentity: new Map([
+      [composeWorktreeHostIdentity('local', 'parent'), [child]],
+      [composeWorktreeHostIdentity('local', 'child'), [grandchild]]
+    ]),
     isPinned: () => false,
     duplicatePinned: false,
     sectionsOf: ({ natural }) => [{ key: 'all', items: natural }]
   })
-  const source = [...buildWorktreeLineageRanges(plan).values()][0]!
-  useAppStore.setState({
-    worktreesByRepo: { repo1: [parent, child] },
-    tabsByWorktree: { child: [makeTab({ id: 'agent', worktreeId: 'child', title: '' })] },
-    agentStatusByPaneKey: { [pane('agent')]: entry('agent') }
+  const rows: Row[] = []
+  appendWorktreeRows(rows, () => undefined, plan, {
+    collapsedGroups: new Set([getWorktreeLineageGroupKey(parent)]),
+    groupDepth: 0,
+    sectionKey: 'all'
   })
+  expect(rows).toHaveLength(1)
+  const parentRow = rows[0]!
+  if (parentRow.type !== 'item' || !parentRow.lineageDescendantIdentities) {
+    throw new Error('Collapsed parent must carry its descendants')
+  }
+  const source = parentRow.lineageDescendantIdentities
+  useAppStore.setState({
+    worktreesByRepo: { repo1: [parent, child, grandchild] },
+    tabsByWorktree: { grandchild: [makeTab({ id: 'agent', worktreeId: 'grandchild', title: '' })] },
+    agentStatusByPaneKey: { [pane('agent')]: entry('agent', { worktreeId: 'grandchild' }) }
+  })
+  expect(selectLineageLatestAt(useAppStore.getState(), source)).toBe(1_950_000)
   expect(selectCollapsedLineageSlot(useAppStore.getState(), source)?.kind).toBe('working')
   useAppStore.setState({
-    agentStatusByPaneKey: { [pane('agent')]: entry('agent', { state: 'blocked' }) },
+    agentStatusByPaneKey: {
+      [pane('agent')]: entry('agent', { worktreeId: 'grandchild', state: 'blocked' })
+    },
     agentStatusEpoch: 2
   })
   expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toEqual({
@@ -158,7 +187,9 @@ it('updates hidden subtree attention after status changes, acknowledgement, and 
     count: 1
   })
   useAppStore.setState({
-    agentStatusByPaneKey: { [pane('agent')]: entry('agent', { state: 'done' }) },
+    agentStatusByPaneKey: {
+      [pane('agent')]: entry('agent', { worktreeId: 'grandchild', state: 'done' })
+    },
     agentStatusEpoch: 3
   })
   expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toEqual({
@@ -169,7 +200,7 @@ it('updates hidden subtree attention after status changes, acknowledgement, and 
   useAppStore.setState({ acknowledgedAgentsByPaneKey: { [pane('agent')]: 1_900_000 } })
   expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toBeNull()
   useAppStore.setState({
-    agentStatusByPaneKey: { [pane('agent')]: entry('agent') },
+    agentStatusByPaneKey: { [pane('agent')]: entry('agent', { worktreeId: 'grandchild' }) },
     agentStatusEpoch: 4
   })
   expect(selectCollapsedLineageSlot(useAppStore.getState(), source)?.kind).toBe('working')

@@ -15,7 +15,7 @@ export const LINEAGE_IMMEDIATE_PARENT_STEP =
   SIDEBAR_TREE_INDENT + PROJECT_WORKTREE_CARD_EXTRA_INDENT
 export const LINEAGE_NESTED_ROW_SURFACE_INSET = 0
 export const LINEAGE_CHILDREN_INLINE_OFFSET =
-  LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
+  LINEAGE_IMMEDIATE_PARENT_STEP - FLUSH_CARD_MIN_CONTENT_INSET
 // 2.0 children start on the parent's title column after its leading icon and gap.
 export const SLOT_LINEAGE_TITLE_COLUMN_SHIFT = 7
 // Why: header icon+gap (22) vs. card margin+border+legacy lane+gap (23) minus pullback lands the title on the header label.

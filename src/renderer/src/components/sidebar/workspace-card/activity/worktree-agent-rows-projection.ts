@@ -61,6 +61,8 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
     const representedTabs = getStructuredAgentSessionTabsByPaneKey(
       state.unifiedTabsByWorktree[worktreeId]
     )
+    const needsWorkspaceOwner =
+      hostId && [...representedTabs.values()].some((tab) => !tab.executionHostId)
     const inputs = [
       tabs,
       liveEntries,
@@ -73,9 +75,12 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       paneForegroundAgentByPaneKey,
       selectFreshness(state),
       representedTabs,
-      ...(hostId ? structuredAgentSessionOwnerInputs(state) : [])
+      ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : [])
     ]
-    if (inputs.every((value, index) => Object.is(value, previous[index]))) {
+    if (
+      inputs.length === previous.length &&
+      inputs.every((value, index) => Object.is(value, previous[index]))
+    ) {
       return result
     }
     previous = inputs

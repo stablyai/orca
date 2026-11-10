@@ -37,10 +37,19 @@ export function* lineageIdentities(source: WorktreeLineageSource): Iterable<Host
   }
 }
 
+const rangesByPlan = new WeakMap<
+  WorktreeOccurrencePlan<Worktree>,
+  Map<string, WorktreeLineageRange>
+>()
+
 /** One preorder table per section; ranges share it instead of copying every ancestor's subtree. */
 export function buildWorktreeLineageRanges(
   plan: WorktreeOccurrencePlan<Worktree>
 ): Map<string, WorktreeLineageRange> {
+  const cached = rangesByPlan.get(plan)
+  if (cached) {
+    return cached
+  }
   const result = new Map<string, WorktreeLineageRange>()
   for (const occurrences of plan.bySection.values()) {
     const tree: WorktreeLineageTree = {
@@ -74,5 +83,6 @@ export function buildWorktreeLineageRanges(
       result.set(occurrence.key, { tree, index, length: tree.ends[index]! - index - 1 })
     })
   }
+  rangesByPlan.set(plan, result)
   return result
 }

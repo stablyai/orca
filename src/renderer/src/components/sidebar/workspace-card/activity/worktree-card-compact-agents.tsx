@@ -102,7 +102,7 @@ export function CompactAgentSummaryButton({
       type="button"
       draggable={false}
       className={cn(
-        'compact-agent-summary-button group/agent-summary flex h-6 w-full min-w-0 items-center gap-1 rounded-sm',
+        'compact-agent-summary-button group/agent-summary ms-0.5 flex h-6 w-[calc(100%-0.125rem)] min-w-0 items-center gap-1 rounded-sm',
         'px-1 text-left text-[11px] leading-none text-muted-foreground',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         // The sidebar accent reverses brightness across themes; use the matching hover token mix.
@@ -110,7 +110,7 @@ export function CompactAgentSummaryButton({
         // Only the collapsed pill needs a resting surface; expanded summaries are tree headers.
         expanded
           ? 'compact-agent-summary-button-expanded'
-          : 'border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
+          : 'translate-y-0.5 border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
       )}
       aria-label={
         expanded

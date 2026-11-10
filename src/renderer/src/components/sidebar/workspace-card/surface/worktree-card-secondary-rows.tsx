@@ -27,8 +27,7 @@ export function WorktreeCardSecondaryRows({
     onLineageToggle,
     remoteBranchConflict,
     showInlineAgentList,
-    agentActivityDisplayMode,
-    compactInlineAgentRows,
+    inlineAgentRows,
     showLineageChildChip,
     lineageChildAriaLabel,
     childWorkspaceShortLabel,
@@ -63,7 +62,7 @@ export function WorktreeCardSecondaryRows({
       {showInlineAgentList && (
         <WorktreeCardAgents
           worktreeId={worktree.id}
-          agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
+          agents={inlineAgentRows}
           className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
         />
       )}

@@ -8,7 +8,6 @@ import type { HostScopedWorktreeKey } from '../../../../../../shared/worktree/ho
 import { selectAgentRowsUnread } from '../activity/worktree-card-agent-ack-inputs'
 import { selectSendTargetControlInputs } from '../activity/worktree-card-send-target-inputs'
 import { useWorktreeAgentExpansionState } from '../activity/worktree-card-agents-expansion-state'
-import { useWorktreeAgentRows } from '../activity/useWorktreeAgentRows'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { getWorktreeCardHost } from '../../worktree-card-host-name'
 import {
@@ -66,7 +65,7 @@ export function WorktreeCardTitleStatusProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const { worktree, showInlineAgentList, lineageCollapsed, lineageDescendantIdentities } = card
-  const agents = useWorktreeAgentRows(worktree.id, true, worktree.hostId)
+  const agents = card.inlineAgentRows
   const signals = useSlotAgentSignals(agents)
   const now = useNow(30_000)
   const host = getWorktreeCardHost(card)
