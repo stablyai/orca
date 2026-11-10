@@ -389,6 +389,13 @@ describe('a chat tab over records a newer Orca wrote', () => {
       ok: true,
       result: { ok: true, readable: false }
     })
+    expect(await host.revealSession(HOST_TEST_SESSION)).toMatchObject({
+      readable: false,
+      openRefusal: {
+        code: 'agent_session_journal_unreadable',
+        details: { reason: 'journalWrittenByNewerOrca' }
+      }
+    })
 
     expect((await snapshot()).activeTabId).toBe(`agent-session:${HOST_TEST_SESSION}`)
     expect(warn).toHaveBeenCalledWith(

@@ -8,7 +8,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isSqliteCorruption } from '../../../sqlite/sqlite-read-failure'
 import type { JournalLoad } from './journal-open'
-import { AgentSessionJournalError } from '../writing/journal-write-guards'
+import { AgentSessionJournalError, assertJournalWritable } from '../writing/journal-write-guards'
 import type { StructuredAgentSessionLogger } from '../../agent-session-wire/host/structured-agent-session-logger'
 
 type JournalRefusalReason = AgentSessionRefusalReason<'agent_session_journal_unreadable'>
@@ -72,6 +72,14 @@ const JOURNAL_OPEN_MESSAGE: Record<JournalRefusalReason, string> = {
 }
 
 export const JOURNAL_NEWER_SCHEMA_MESSAGE = JOURNAL_OPEN_MESSAGE.journalWrittenByNewerOrca
+
+export function assertJournalChatReadable(readOnly: boolean): void {
+  try {
+    assertJournalWritable(readOnly, 'database')
+  } catch (error) {
+    throw journalOpenRefusalError(error)
+  }
+}
 
 export function isJournalWrittenByNewerOrca(error: unknown): boolean {
   return error instanceof AgentSessionJournalError && error.code === 'journal_read_only'

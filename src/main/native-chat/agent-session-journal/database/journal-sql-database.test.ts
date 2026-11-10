@@ -5,6 +5,7 @@ import { afterEach, expect, it } from 'vitest'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { openJournalDatabase } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
+import { JOURNAL_DOMAIN_SCHEMA_VERSION } from './journal-domain-migrations'
 import { JournalSqlDatabase } from './journal-sql-database'
 import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
@@ -166,6 +167,53 @@ it('keeps saved history readable after startup rollback and retries before the n
     conversationName: 'after recovery',
     lease: { unreconciled: true, runtimeFence: 7 }
   })
+})
+
+it('refuses newer-schema chat access while retaining the catalog and saved chat rows', async () => {
+  const record = storedTestAgentSessionRecord(agentSessionRecordFixture())
+  const sessionId = record.sessionId
+  const { root, database, errors } = await fixture([sessionId])
+  await database.openSession(identity(sessionId))
+  await withTestAgentSessionDatabase(root, (db) => {
+    db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
+      sessionId,
+      JSON.stringify(record)
+    )
+  })
+  await database.close()
+  const saved = await withTestAgentSessionDatabase(root, (db) => {
+    db.pragma(`user_version = ${JOURNAL_DOMAIN_SCHEMA_VERSION + 1}`)
+    return {
+      version: db.pragma('user_version', { simple: true }),
+      chats: db.prepare('SELECT * FROM journal_chat_state ORDER BY session_id').all(),
+      items: db.prepare('SELECT * FROM journal_items ORDER BY session_id,item_id').all(),
+      records: db.prepare('SELECT * FROM agent_session_records ORDER BY session_id').all()
+    }
+  })
+  const newer = await open(root, errors)
+  const refusal = {
+    refusal: {
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalWrittenByNewerOrca' }
+    }
+  }
+  await expect(newer.openSession(identity(sessionId))).rejects.toMatchObject(refusal)
+  expect(await newer.ensureSessionEpoch(sessionId)).toBeNull()
+  await expect(newer.readers.domainHistory(history(sessionId))).rejects.toMatchObject(refusal)
+  await expect(
+    newer.readers.point({ sessionId, operation: { kind: 'saved-content' } })
+  ).rejects.toMatchObject(refusal)
+  expect((await newer.loadRecords()).records.get(sessionId)).toMatchObject({ sessionId })
+  await newer.close()
+  expect(
+    await withTestAgentSessionDatabase(root, (db) => ({
+      version: db.pragma('user_version', { simple: true }),
+      chats: db.prepare('SELECT * FROM journal_chat_state ORDER BY session_id').all(),
+      items: db.prepare('SELECT * FROM journal_items ORDER BY session_id,item_id').all(),
+      records: db.prepare('SELECT * FROM agent_session_records ORDER BY session_id').all()
+    }))
+  ).toEqual(saved)
+  expect(errors).toEqual([])
 })
 
 it('opens an unconverted chat while background work waits for live activity, then converts the rest', async () => {

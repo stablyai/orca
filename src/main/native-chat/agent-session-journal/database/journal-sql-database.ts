@@ -14,6 +14,7 @@ import type { JournalWriterCommit } from '../journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-writer-effects'
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
+import { assertJournalChatReadable } from '../replay/journal-open-failure'
 import { journalDatabasePath } from './journal-host-database'
 import { journalDomainDatabasePath } from './journal-domain-database'
 import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
@@ -49,7 +50,8 @@ export class JournalSqlDatabase {
             }
           })
         }
-      }
+      },
+      () => assertJournalChatReadable(this.readOnly)
     )
     this.conversions = new JournalSqlConversions(writer, this.readers, this.activity.waitForIdle)
     this.maintenance = new JournalSqlBackgroundMaintenance(
@@ -193,7 +195,9 @@ export class JournalSqlDatabase {
   }
 
   ensureSessionEpoch(sessionId: string): Promise<string | null> {
-    return this.serialize(sessionId, () => this.conversions.ensure(sessionId))
+    return this.readOnly
+      ? Promise.resolve(null)
+      : this.serialize(sessionId, () => this.conversions.ensure(sessionId))
   }
 
   openSession(
@@ -202,6 +206,7 @@ export class JournalSqlDatabase {
     recover?: { fence: number }
   ) {
     return this.serialize(identity.sessionId, async () => {
+      assertJournalChatReadable(this.readOnly)
       let epoch = await this.conversions.ensure(identity.sessionId)
       if (epoch === null) {
         const founded = await this.writer.maintain({
@@ -229,18 +234,16 @@ export class JournalSqlDatabase {
         this.conversions.rememberReady(identity.sessionId, epoch)
       }
       const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
-      if (!this.readOnly) {
-        try {
-          const commit = await this.writer.write({
-            target,
-            operation: { kind: 'open', recover },
-            savedAt
-          })
-          return { target, commit }
-        } catch (error) {
-          if (!this.writer.recordsPending) {
-            throw error
-          }
+      try {
+        const commit = await this.writer.write({
+          target,
+          operation: { kind: 'open', recover },
+          savedAt
+        })
+        return { target, commit }
+      } catch (error) {
+        if (!this.writer.recordsPending) {
+          throw error
         }
       }
       const head = await this.readers.point({

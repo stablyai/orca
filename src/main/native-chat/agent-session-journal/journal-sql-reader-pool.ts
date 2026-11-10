@@ -32,7 +32,8 @@ export class JournalSqlReaderPool {
       currentWorkerEntryLayout(__dirname),
       'journal-sql-reader-entry.js'
     ),
-    private readonly cacheOutline?: (cache: JournalOutlineCache) => void
+    private readonly cacheOutline?: (cache: JournalOutlineCache) => void,
+    private readonly assertReadable?: () => void
   ) {}
 
   async prepareFork(
@@ -113,7 +114,7 @@ export class JournalSqlReaderPool {
   }
 
   async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {
-    const response = await this.slot().request({ kind: 'database', operation })
+    const response = await this.slot(false, operation).request({ kind: 'database', operation })
     if (response.type !== 'database') {
       throw new Error('journal reader returned no database result')
     }
@@ -133,9 +134,12 @@ export class JournalSqlReaderPool {
     return response.result
   }
 
-  private slot(forFork = false): ReaderSlot {
+  private slot(forFork = false, databaseRead?: JournalSqlDatabaseRead): ReaderSlot {
     if (this.closed) {
       throw new Error('journal SQL reader pool is closed')
+    }
+    if (databaseRead?.kind !== 'records') {
+      this.assertReadable?.()
     }
     for (let index = this.slots.length - 1; index >= 0; index--) {
       if (this.slots[index]!.failed) {
