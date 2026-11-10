@@ -63,7 +63,7 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
-  readonly wakeGate = new AutomationWakeGate()
+  readonly wakeGate = new AutomationWakeGate(() => this.store)
 
   constructor(
     store: Store,
