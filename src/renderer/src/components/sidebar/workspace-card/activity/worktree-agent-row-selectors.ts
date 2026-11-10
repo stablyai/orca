@@ -204,15 +204,7 @@ function getMigrationUnsupportedByWorktree(
     }
   }
   for (const [worktreeId, entries] of entriesByWorktree) {
-    const old = previous?.get(worktreeId)
-    entriesByWorktree.set(
-      worktreeId,
-      old &&
-        old.length === entries.length &&
-        entries.every((entry, i) => agentRowEntriesEqual(old[i], entry))
-        ? old
-        : entries
-    )
+    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
   migrationUnsupportedByWorktreeCache = {
     tabsByWorktree,
