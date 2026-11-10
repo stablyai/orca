@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { rmSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { getSecretStore } from '../../shared/secret-store'
@@ -18,6 +18,7 @@ import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime/remote-
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 type EdgeAuth = NonNullable<PairedRuntimeConnection['edgeAuth']>
+const pendingClears = new Map<string, Promise<void>>()
 const connectionCredentials = new Map<string, { identity: string; edgeAuth: EdgeAuth | null }>()
 const EnvelopeSchema = z
   .object({ v: z.literal(1), ciphertext: z.string().min(1).max(32768) })
@@ -118,6 +119,9 @@ export function writeRuntimeEdgeAuth(
   headers: EndpointAuthHeaders
 ): void {
   try {
+    if (pendingClears.has(credentialPath(userDataPath, environment.id))) {
+      throw new Error('Credential deletion is still pending')
+    }
     // Refuse replacement of an existing envelope we cannot safely read.
     readRuntimeEdgeAuth(userDataPath, environment)
     const connection = getPreferredPairedRuntimeConnection(environment)
@@ -154,13 +158,20 @@ export function writeRuntimeEdgeAuth(
   }
 }
 
-export function clearRuntimeEdgeAuth(userDataPath: string, environmentId: string): void {
-  try {
-    rmSync(credentialPath(userDataPath, environmentId), { force: true })
-    forgetRuntimeEdgeAuth(environmentId)
-  } catch {
-    throw new Error('Could not clear edge authentication.')
+export function clearRuntimeEdgeAuth(userDataPath: string, environmentId: string): Promise<void> {
+  const path = credentialPath(userDataPath, environmentId)
+  const pending = pendingClears.get(path)
+  if (pending) {
+    return pending
   }
+  const clearing = rm(path, { force: true })
+    .then(() => forgetRuntimeEdgeAuth(environmentId))
+    .catch(() => {
+      throw new Error('Could not clear edge authentication.')
+    })
+    .finally(() => pendingClears.delete(path))
+  pendingClears.set(path, clearing)
+  return clearing
 }
 
 export function getRuntimeEdgeAuthStatus(

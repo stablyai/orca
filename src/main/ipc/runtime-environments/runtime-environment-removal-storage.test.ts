@@ -45,7 +45,7 @@ function removeHandler(): (event: unknown, args: { selector: string }) => unknow
 beforeEach(() => {
   handleMock.mockReset()
   clearStorageMock.mockReset()
-  clearCredentialsMock.mockReset()
+  clearCredentialsMock.mockReset().mockResolvedValue(undefined)
   removeEnvironmentMock.mockReset().mockReturnValue(environment)
   resolveEnvironmentMock.mockReset().mockReturnValue(environment)
 })
@@ -58,9 +58,7 @@ describe('runtime environment removal storage clearing', () => {
     async (fails) => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       if (fails) {
-        clearCredentialsMock.mockImplementation(() => {
-          throw new Error('locked synthetic-secret credential file')
-        })
+        clearCredentialsMock.mockRejectedValue(new Error('locked synthetic-secret credential file'))
       }
       let finishTeardown = (): void => {}
       const teardown = new Promise<void>((resolve) => {
@@ -87,7 +85,9 @@ describe('runtime environment removal storage clearing', () => {
         'environment-a'
       )
       if (fails) {
-        expect(warn).toHaveBeenCalledWith('[runtime-environments] edge credential cleanup failed')
+        await vi.waitFor(() =>
+          expect(warn).toHaveBeenCalledWith('[runtime-environments] edge credential cleanup failed')
+        )
         expect(JSON.stringify(warn.mock.calls)).not.toContain('synthetic-secret')
       }
       await Promise.resolve()

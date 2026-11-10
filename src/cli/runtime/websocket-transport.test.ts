@@ -27,7 +27,6 @@ import '../../shared/remote-runtime/requests/remote-runtime-prepared-request-adm
 import { RuntimeClient } from './client'
 import '../handlers/worktree-removal-request'
 import { launchOrcaApp } from './launch'
-import './environments'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

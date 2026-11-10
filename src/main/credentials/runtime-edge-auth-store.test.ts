@@ -80,7 +80,7 @@ describe('encrypted runtime edge credential store', () => {
     expect(decryptions).toBe(1)
   })
 
-  it('invalidates cached credentials after replacement, clear and explicit transport reset', () => {
+  it('invalidates cached credentials after replacement, clear and explicit transport reset', async () => {
     writeRuntimeEdgeAuth(directory, environment, headers)
     resolveRuntimeEnvironmentConnection(directory, environment)
     writeRuntimeEdgeAuth(directory, environment, { 'X-Token': 'replacement' })
@@ -93,7 +93,7 @@ describe('encrypted runtime edge credential store', () => {
       'Could not read edge authentication'
     )
     available = true
-    clearRuntimeEdgeAuth(directory, environment.id)
+    await clearRuntimeEdgeAuth(directory, environment.id)
     expect(resolveRuntimeEnvironmentConnection(directory, environment).edgeAuth).toBeUndefined()
     writeRuntimeEdgeAuth(directory, environment, headers)
     expect(resolveRuntimeEnvironmentConnection(directory, environment).edgeAuth?.headers).toEqual(
@@ -175,7 +175,7 @@ describe('encrypted runtime edge credential store', () => {
     ).toBeUndefined()
   })
 
-  it('encrypts and reloads origin-bound headers in an id-safe path', () => {
+  it('encrypts and reloads origin-bound headers in an id-safe path', async () => {
     expect(readRuntimeEdgeAuth(directory, environment)).toBeNull()
     writeRuntimeEdgeAuth(directory, environment, headers)
     expect(readFileSync(file(), 'utf8')).not.toContain('synthetic-secret')
@@ -189,7 +189,7 @@ describe('encrypted runtime edge credential store', () => {
       configured: true,
       unreadable: false
     })
-    clearRuntimeEdgeAuth(directory, environment.id)
+    await clearRuntimeEdgeAuth(directory, environment.id)
     expect(getRuntimeEdgeAuthStatus(directory, environment)).toEqual({
       configured: false,
       unreadable: false
@@ -254,4 +254,15 @@ describe('encrypted runtime edge credential store', () => {
     )
     expect(readRuntimeEdgeAuth(directory, environment)).toBeNull()
   })
+})
+
+it('refuses replacement while asynchronous credential deletion is pending', async () => {
+  writeRuntimeEdgeAuth(directory, environment, headers)
+  const clearing = clearRuntimeEdgeAuth(directory, environment.id)
+  expect(() => writeRuntimeEdgeAuth(directory, environment, { 'X-Token': 'replacement' })).toThrow(
+    'Could not save edge authentication'
+  )
+  await clearing
+  writeRuntimeEdgeAuth(directory, environment, { 'X-Token': 'replacement' })
+  expect(readRuntimeEdgeAuth(directory, environment)?.headers).toEqual({ 'X-Token': 'replacement' })
 })

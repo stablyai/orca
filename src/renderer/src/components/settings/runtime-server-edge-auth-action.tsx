@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeEdgeAuthStatus } from '../../../../shared/runtime-edge-auth-types'
 import { normalizeEndpointAuthHeaders } from '../../../../shared/network/endpoint-auth-headers'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -23,6 +23,7 @@ export function RuntimeServerEdgeAuthAction({
   onClose: () => void
   onChanged?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [rows, setRows] = useState(() => [newRuntimeEdgeAuthRow()])
   const [status, setStatus] = useState<RuntimeEdgeAuthStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -44,10 +45,7 @@ export function RuntimeServerEdgeAuthAction({
         () => {
           if (current) {
             setError(
-              translate(
-                'settings.edgeAuth.readFailed',
-                'Could not read edge authentication status.'
-              )
+              t('settings.edgeAuth.readFailed', 'Could not read edge authentication status.')
             )
           }
         }
@@ -57,9 +55,9 @@ export function RuntimeServerEdgeAuthAction({
       current = false
       mounted.current = false
     }
-  }, [environment.id])
+  }, [environment.id, t])
 
-  async function mutate(clear: boolean) {
+  function mutate(clear: boolean): void {
     if (
       saving.current ||
       !status ||
@@ -70,45 +68,42 @@ export function RuntimeServerEdgeAuthAction({
     saving.current = true
     setBusy(true)
     setError(null)
-    try {
-      const api = window.api.runtimeEnvironments
-      const args = {
-        environmentId: environment.id,
-        expectedPairingRevision: environment.pairingRevision ?? environment.createdAt
-      }
-      if (clear) {
-        if (!api.clearEdgeAuth) {
-          throw new Error('Unavailable')
-        }
-        await api.clearEdgeAuth(args)
-      } else {
-        if (!api.saveEdgeAuth) {
-          throw new Error('Unavailable')
-        }
-        await api.saveEdgeAuth({
-          ...args,
-          headers: rows.map(({ name, value }) => ({ name, value }))
-        })
-      }
-      if (mounted.current) {
-        onChanged?.()
-        onClose()
-      }
-    } catch {
-      if (mounted.current) {
-        setError(
-          translate(
-            'settings.edgeAuth.saveFailed',
-            'Could not change edge authentication. Check protected storage and reopen this form if the server pairing changed.'
-          )
-        )
-      }
-    } finally {
-      saving.current = false
-      if (mounted.current) {
-        setBusy(false)
-      }
+    const api = window.api.runtimeEnvironments
+    const args = {
+      environmentId: environment.id,
+      expectedPairingRevision: environment.pairingRevision ?? environment.createdAt
     }
+    void Promise.resolve()
+      .then(() =>
+        clear
+          ? (api.clearEdgeAuth?.(args) ?? Promise.reject(new Error('Unavailable')))
+          : (api.saveEdgeAuth?.({
+              ...args,
+              headers: rows.map(({ name, value }) => ({ name, value }))
+            }) ?? Promise.reject(new Error('Unavailable')))
+      )
+      .then(() => {
+        if (mounted.current) {
+          onChanged?.()
+          onClose()
+        }
+      })
+      .catch(() => {
+        if (mounted.current) {
+          setError(
+            t(
+              'settings.edgeAuth.saveFailed',
+              'Could not change edge authentication. Check protected storage and reopen this form if the server pairing changed.'
+            )
+          )
+        }
+      })
+      .finally(() => {
+        saving.current = false
+        if (mounted.current) {
+          setBusy(false)
+        }
+      })
   }
   return (
     <Dialog
@@ -121,24 +116,22 @@ export function RuntimeServerEdgeAuthAction({
     >
       <DialogContent scrollable>
         <DialogHeader>
-          <DialogTitle>
-            {translate('settings.edgeAuth.dialogTitle', 'Edge authentication')}
-          </DialogTitle>
+          <DialogTitle>{t('settings.edgeAuth.dialogTitle', 'Edge authentication')}</DialogTitle>
           <DialogDescription>{environment.name}</DialogDescription>
         </DialogHeader>
         {status ? (
           <p className="text-sm text-muted-foreground">
             {status.unreadable
-              ? translate(
+              ? t(
                   'settings.edgeAuth.unreadable',
                   'Saved credentials are unreadable. Unlock protected storage, or clear them before entering new values.'
                 )
               : status.configured
-                ? translate(
+                ? t(
                     'settings.edgeAuth.configured',
                     'Credentials are saved. Enter new values to replace them.'
                   )
-                : translate('settings.edgeAuth.empty', 'No edge credentials are saved.')}
+                : t('settings.edgeAuth.empty', 'No edge credentials are saved.')}
           </p>
         ) : null}
         <RuntimeEdgeAuthFields rows={rows} onChange={setRows} disabled={busy || !status} />
@@ -155,11 +148,11 @@ export function RuntimeServerEdgeAuthAction({
               disabled={busy}
               onClick={() => void mutate(true)}
             >
-              {translate('settings.edgeAuth.clear', 'Clear credentials')}
+              {t('settings.edgeAuth.clear', 'Clear credentials')}
             </Button>
           ) : null}
           <Button type="button" variant="ghost" onClick={onClose}>
-            {translate('settings.edgeAuth.cancel', 'Cancel')}
+            {t('settings.edgeAuth.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -172,7 +165,7 @@ export function RuntimeServerEdgeAuthAction({
             }
             onClick={() => void mutate(false)}
           >
-            {translate('settings.edgeAuth.save', 'Save credentials')}
+            {t('settings.edgeAuth.save', 'Save credentials')}
           </Button>
         </DialogFooter>
       </DialogContent>

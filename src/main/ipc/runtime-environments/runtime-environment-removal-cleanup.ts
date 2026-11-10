@@ -25,11 +25,9 @@ export function retireRemovedRuntimeEnvironment(
   userDataPath?: string
 ): Promise<void> {
   if (userDataPath) {
-    try {
-      clearRuntimeEdgeAuth(userDataPath, environmentId)
-    } catch {
+    void clearRuntimeEdgeAuth(userDataPath, environmentId).catch(() => {
       console.warn('[runtime-environments] edge credential cleanup failed')
-    }
+    })
     void desktopChatCreationHistory(userDataPath).removeEnvironment(environmentId)
   }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)

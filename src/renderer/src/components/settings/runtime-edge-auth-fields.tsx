@@ -3,7 +3,7 @@ import { createNonSecureContextUuid } from '../../../../shared/non-secure-contex
 import { Plus, X } from 'lucide-react'
 import type { RuntimeEdgeAuthHeader } from '../../../../shared/runtime-edge-auth-types'
 import { normalizeEndpointAuthHeaders } from '../../../../shared/network/endpoint-auth-headers'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -21,15 +21,16 @@ export function RuntimeEdgeAuthFields({
   onChange: (rows: RuntimeEdgeAuthDraftRow[]) => void
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const prefix = useId()
   const normalized = normalizeEndpointAuthHeaders(rows)
   return (
     <fieldset disabled={disabled} className="space-y-3">
       <legend className="text-sm font-medium">
-        {translate('settings.edgeAuth.title', 'Edge authentication (optional)')}
+        {t('settings.edgeAuth.title', 'Edge authentication (optional)')}
       </legend>
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'settings.edgeAuth.hint',
           'For a protected secure tunnel, enter its HTTP handshake headers. Values stay in protected storage and never enter pairing links. Redirects are refused.'
         )}
@@ -38,14 +39,14 @@ export function RuntimeEdgeAuthFields({
         <div key={row.id} className="flex items-end gap-2">
           <div className="min-w-0 flex-1 space-y-2">
             <Label htmlFor={`${prefix}-${row.id}-name`}>
-              {translate('settings.edgeAuth.name', 'Header {{number}} name', { number: index + 1 })}
+              {t('settings.edgeAuth.name', 'Header {{number}} name', { number: index + 1 })}
             </Label>
             <Input
               id={`${prefix}-${row.id}-name`}
               value={row.name}
               autoComplete="off"
               spellCheck={false}
-              placeholder={translate('settings.edgeAuth.namePlaceholder', 'CF-Access-Client-Id')}
+              placeholder={t('settings.edgeAuth.namePlaceholder', 'CF-Access-Client-Id')}
               onChange={(event) =>
                 onChange(
                   rows.map((current) =>
@@ -57,7 +58,7 @@ export function RuntimeEdgeAuthFields({
           </div>
           <div className="min-w-0 flex-1 space-y-2">
             <Label htmlFor={`${prefix}-${row.id}-value`}>
-              {translate('settings.edgeAuth.value', 'Header {{number}} value', {
+              {t('settings.edgeAuth.value', 'Header {{number}} value', {
                 number: index + 1
               })}
             </Label>
@@ -80,7 +81,7 @@ export function RuntimeEdgeAuthFields({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={translate('settings.edgeAuth.remove', 'Remove header {{number}}', {
+            aria-label={t('settings.edgeAuth.remove', 'Remove header {{number}}', {
               number: index + 1
             })}
             onClick={() =>
@@ -103,14 +104,11 @@ export function RuntimeEdgeAuthFields({
         onClick={() => onChange([...rows, newRuntimeEdgeAuthRow()])}
       >
         <Plus />
-        {translate('settings.edgeAuth.add', 'Add header')}
+        {t('settings.edgeAuth.add', 'Add header')}
       </Button>
       {!normalized.ok ? (
         <p role="alert" className="text-xs text-destructive">
-          {translate(
-            'settings.edgeAuth.invalid',
-            'Enter valid header names and printable ASCII values.'
-          )}
+          {t('settings.edgeAuth.invalid', 'Enter valid header names and printable ASCII values.')}
         </p>
       ) : null}
     </fieldset>

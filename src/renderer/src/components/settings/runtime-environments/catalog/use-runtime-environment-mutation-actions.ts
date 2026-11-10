@@ -94,7 +94,8 @@ export function useRuntimeEnvironmentMutationActions({
       if (pendingCredentials) {
         const save = window.api.runtimeEnvironments.saveEdgeAuth
         if (!save || !headers) {
-          throw new Error('Could not save edge authentication.')
+          await Promise.reject(new Error('Could not save edge authentication.'))
+          return
         }
         await save({ ...pendingCredentials, headers })
         if (submission !== revision.current || !mountedRef.current) {

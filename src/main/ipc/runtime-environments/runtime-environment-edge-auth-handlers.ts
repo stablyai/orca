@@ -74,7 +74,7 @@ export function registerRuntimeEnvironmentEdgeAuthHandlers({
       throw new Error('Invalid server selection')
     }
     const environment = currentEnvironment(getUserDataPath(), parsed.data)
-    clearRuntimeEdgeAuth(getUserDataPath(), environment.id)
+    await clearRuntimeEdgeAuth(getUserDataPath(), environment.id)
     await invalidateTransport(environment.id)
     return getRuntimeEdgeAuthStatus(getUserDataPath(), environment)
   })
