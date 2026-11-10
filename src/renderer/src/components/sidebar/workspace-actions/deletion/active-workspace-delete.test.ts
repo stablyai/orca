@@ -30,11 +30,18 @@ const other = makeWorktree({ id: 'other', repoId: 'repo1', hostId: 'local', inst
 let ipcDelete: () => void
 
 function runRenderer(): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delete uses store state; unrelated shortcut actions are never invoked.
-  const state = {
+  const state: AppShortcutState = {
     activeView: 'terminal',
     activeWorktreeId: 'active',
-    actions: {},
+    actions: {
+      toggleSidebar: vi.fn(),
+      toggleRightSidebar: vi.fn(),
+      setRightSidebarOpen: vi.fn(),
+      setRightSidebarTab: vi.fn(),
+      showRightSidebarFiles: vi.fn(),
+      showRightSidebarSearch: vi.fn(),
+      openDiffNotesSendMenuForActiveWorktree: vi.fn()
+    },
     creationLayoutActive: false,
     floatingTerminalEnabled: false,
     floatingTerminalOpen: false,
@@ -45,7 +52,7 @@ function runRenderer(): void {
     setFloatingTerminalOpen: vi.fn(),
     terminalShortcutPolicy: 'orca-first',
     workspaceChromeActive: true
-  } as AppShortcutState
+  }
   createAppCommandHandlers(state, undefined, 'app', true).get('workspace.delete')?.()
 }
 
