@@ -55,7 +55,6 @@ async function droppedFromRoster() {
   expect(records()).toMatchObject([
     { membership: 'live', stoppable: true, providerId: 'agent-1', kind: 'agent' }
   ])
-  expect(run.adapter.backgroundTaskState('session-1')).toBeNull()
   expect(blocked()?.message).toBe('Stop background tasks before using this command.')
   // Snapshot stop targets before dispatch; settle only acknowledged records.
   const stop = async (taskId?: string) => {

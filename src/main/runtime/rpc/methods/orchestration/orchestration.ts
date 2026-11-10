@@ -5,6 +5,7 @@ import { ORCHESTRATION_WORKER_METHODS } from './worker/worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './federation/federation-methods'
 import { ORCHESTRATION_MUTATION_REQUEST_METHODS } from './runs/mutation-request-show'
 import { ORCHESTRATION_SEND_METHODS } from './messaging/send-methods'
+import { withPeerMailSend } from './messaging/peer-mail-send'
 import { ORCHESTRATION_CHECK_METHODS } from './messaging/check-methods'
 import { ORCHESTRATION_MESSAGE_METHODS } from './messaging/message-methods'
 import { ORCHESTRATION_DISPATCH_METHODS } from './runs/dispatch-methods'
@@ -20,7 +21,7 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_WORKER_METHODS,
   ...ORCHESTRATION_FEDERATION_METHODS,
   ...ORCHESTRATION_MUTATION_REQUEST_METHODS,
-  ...ORCHESTRATION_SEND_METHODS,
+  ...withPeerMailSend(ORCHESTRATION_SEND_METHODS),
   ...ORCHESTRATION_CHECK_METHODS,
   ...ORCHESTRATION_MESSAGE_METHODS,
   ...ORCHESTRATION_DISPATCH_METHODS,

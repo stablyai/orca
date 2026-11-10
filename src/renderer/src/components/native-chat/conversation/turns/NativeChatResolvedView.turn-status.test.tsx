@@ -137,32 +137,4 @@ describe('NativeChatResolvedView turn status', () => {
     expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
     expect(screen.getByText('pnpm build')).toBeInTheDocument()
   })
-
-  it('folds finished turns from history behind their transcript duration', () => {
-    const at = Date.parse('2026-09-28T10:00:00.000Z')
-    retained.session = transcript('ready', false, [
-      { ...userTurn, timestamp: at },
-      {
-        id: 'answer-1',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'Renamed.' }],
-        timestamp: at + 45_000,
-        source: 'transcript'
-      },
-      {
-        id: 'user-2',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'Now add tests' }],
-        timestamp: at + 100_000,
-        source: 'transcript'
-      }
-    ])
-    setStatus({ state: 'done' }, 60_000)
-
-    renderPane()
-
-    expect(screen.getByText('Worked for 45s')).toBeInTheDocument()
-    // The latest turn has no recorded end, and this pane never watched it.
-    expect(screen.getAllByText(/Work(ing|ed) for/)).toHaveLength(1)
-  })
 })

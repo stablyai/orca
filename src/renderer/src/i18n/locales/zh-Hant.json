@@ -11120,7 +11120,10 @@
               "modelMemoryKeyword": "記憶體",
               "fillerWordsTitle": "移除語氣詞",
               "fillerWordsDescription": "從聽寫文字中移除「嗯」「呃」之類的語氣詞。",
-              "fillerWordsKeyword": "語氣詞"
+              "fillerWordsKeyword": "語氣詞",
+              "vocabularyTitle": "詞彙",
+              "vocabularyDescription": "聽寫依你的寫法拼寫的名稱和程式碼術語，可用於個人或某個儲存庫。",
+              "vocabularyKeyword": "詞典"
             }
           }
         },
@@ -16926,10 +16929,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "為代理程式擷取網頁上下文",
-                      "body": "使用擷取工具複製網頁元素的上下文，供代理程式使用。"
-                    },
                     "annotate": {
                       "title": "直接標註設計回饋",
                       "body": "為元素加上註解，並將備註傳送給代理程式。"
@@ -17062,7 +17061,6 @@
             "244266c122": "匯入…",
             "e52a955e6f": "您始終可以在「設定」>「瀏覽器」中找到它。",
             "4f5ffaa6a1": "匯入瀏覽器資料",
-            "b24fef25be": "匯入",
             "02e89014c5": "從 {{value1}}{{value2}} 匯入 {{value0}} 個 Cookie。",
             "d40d584769": "已從檔案匯入 {{value0}} 個 Cookie。"
           },
@@ -17124,7 +17122,6 @@
             "4328a0a062": "擷取失敗：{{value0}}",
             "759f32af29": "正在下載",
             "4300f38145": "從 {{value0}}{{value1}} 下載",
-            "acbe79fd01": "擷取頁面元素 ({{value0}})",
             "cc4a071d3a": "註解頁面元素 ({{value0}})",
             "572046436a": "遠端瀏覽器",
             "b313a7275b": "開啟遠端瀏覽器",
@@ -18960,7 +18957,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…"
+        "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
+        "cliInstall": "安裝",
+        "cliRecheck": "再次檢查"
       },
       "reasoning": "推理",
       "failureWords": {
@@ -19472,6 +19471,8 @@
         "showAgent": "在對話中顯示 {{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
+      "newRowsAnnouncement": "你離開期間有新訊息",
+      "newRowsMarker": "新訊息",
       "find": {
         "label": "在聊天中查詢",
         "noResults": "沒有結果",
@@ -20323,6 +20324,9 @@
         "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
+        "markNewMessagesTitle": "返回聊天時標記新訊息",
+        "markNewMessagesCopy": "返回聊天時，在你離開期間收到的內容上方顯示「新訊息」分隔線；如果你之前在看最新訊息，會捲動到該處。",
+        "markNewMessagesSearchUnread": "未讀",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
@@ -20397,7 +20401,10 @@
           "onCloud": "在任何面板中按 {{shortcut}}。{{model}} 在雲端執行。",
           "offTitle": "聽寫已關閉",
           "offDescription": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
-          "savedMicrophone": "你的麥克風"
+          "savedMicrophone": "你的麥克風",
+          "description": "在任何面板中用說話取代打字。語音在這台電腦上辨識，你的音訊不會離開這裡。",
+          "setUp": "設定",
+          "asksForMicrophone": "Orca 會要求麥克風權限。"
         },
         "quality": {
           "unsupported": "不支援你的語言",
@@ -20429,6 +20436,24 @@
           "local": "這台電腦",
           "cloudDescription": "雲端模型會把你的音訊傳送給服務商。本機模型會把音訊留在這台電腦上。",
           "sendsToCompatible": "會把你的音訊傳送到你設定的服務。"
+        },
+        "vocabulary": {
+          "title": "詞彙",
+          "description": "依你的寫法拼寫的名稱和程式碼術語。如果模型總是聽錯，可以加上它聽成的說法。",
+          "repoScope": "僅在 {{repo}} 中聽寫時使用。",
+          "personalScope": "在所有儲存庫中使用。",
+          "scope": "術語範圍",
+          "personal": "個人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "移除 {{term}}",
+          "term": "詞語或片語",
+          "heardAs": "聽成（選填）",
+          "heardAsLabel": "聽成",
+          "add": "新增",
+          "repoNameHint": "將儲存庫名稱用作提示",
+          "repoNameHintDescription": "幫助辨識儲存庫名稱。",
+          "repoSaveFailed": "無法儲存儲存庫的術語。執行此儲存庫的主機可能需要更新 Orca。"
         }
       },
       "repositoryHooks": {

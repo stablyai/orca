@@ -13,7 +13,7 @@ import { createAcpModelCatalogProbe } from '../acp/discovery/acp-model-catalog-p
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { readGeminiAcpSignInLine } from './gemini-acp-dialect'
 
 const GEMINI = acpLaunchSpecFor('gemini')!
@@ -163,7 +163,7 @@ describe('original Gemini CLI ACP launch', () => {
   })
 
   it('directs sign-in to the original CLI and detects manual OAuth before it consumes the protocol', () => {
-    expect(agentSessionSignInFor('gemini')).toMatchObject({
+    expect(agentSessionSetupFor('gemini')).toMatchObject({
       loginCommand: ['gemini'],
       slashCommand: '/auth'
     })

@@ -6597,7 +6597,10 @@
               "modelMemoryKeyword": "memória",
               "fillerWordsTitle": "Remover hesitações",
               "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
-              "fillerWordsKeyword": "hesitações"
+              "fillerWordsKeyword": "hesitações",
+              "vocabularyTitle": "Vocabulário",
+              "vocabularyDescription": "Nomes e termos de código que o ditado escreve do seu jeito, para você ou para um repositório.",
+              "vocabularyKeyword": "dicionário"
             }
           }
         },
@@ -17350,7 +17353,6 @@
             "4328a0a062": "Falha na captura: {{value0}}",
             "759f32af29": "Baixando",
             "4300f38145": "Baixando de {{value0}}{{value1}}",
-            "acbe79fd01": "Capturar elemento da página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrindo navegador remoto",
             "ea6af700da": "{{value0}} anotação",
@@ -17447,7 +17449,6 @@
             "244266c122": "Importar…",
             "e52a955e6f": "Você sempre pode encontrar isso em Configurações > Navegador.",
             "4f5ffaa6a1": "Importar dados do navegador",
-            "b24fef25be": "Importar",
             "02e89014c5": "{{value0}} cookies importados de {{value1}}{{value2}}.",
             "d40d584769": "{{value0}} cookies importados do arquivo."
           },
@@ -19154,10 +19155,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Capture o contexto da página para os agentes",
-                      "body": "Use a ferramenta de captura para copiar o contexto de um elemento da página para os agentes."
-                    },
                     "annotate": {
                       "title": "Marque o feedback de design no lugar",
                       "body": "Anote elementos e envie essas notas para um agente."
@@ -20630,7 +20627,9 @@
       },
       "copyCode": "Copiar código",
       "install": {
-        "checking": "Verificando se {{agent}} está pronto neste host…"
+        "checking": "Verificando se {{agent}} está pronto neste host…",
+        "cliInstall": "Instalar",
+        "cliRecheck": "Verificar novamente"
       },
       "reasoning": "Raciocínio",
       "failureWords": {
@@ -20831,6 +20830,8 @@
         "pendingWork": "Aguarde a conclusão do trabalho e das mensagens pendentes antes de usar este comando.",
         "notDoneGoalChangeIncomplete": "Não foi possível concluir a alteração do objetivo. Verifique o chat."
       },
+      "newRowsAnnouncement": "Novas mensagens chegaram enquanto você estava ausente",
+      "newRowsMarker": "Novas",
       "find": {
         "label": "Localizar no chat",
         "noResults": "Nenhum resultado",
@@ -21610,6 +21611,9 @@
         "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
         "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
         "scrollToLatestOnSendSearchPosition": "posição",
+        "markNewMessagesTitle": "Marcar mensagens novas ao voltar para um chat",
+        "markNewMessagesCopy": "Ao voltar para um chat, uma linha Novas aparece acima do que chegou enquanto você estava fora, e o chat rola até ela se você estava lendo as mais recentes.",
+        "markNewMessagesSearchUnread": "não lida",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
@@ -21684,7 +21688,10 @@
           "onCloud": "Pressione {{shortcut}} em qualquer painel. {{model}} roda na nuvem.",
           "offTitle": "O ditado está desativado",
           "offDescription": "Ative para ditar com {{shortcut}} em qualquer painel.",
-          "savedMicrophone": "Seu microfone"
+          "savedMicrophone": "Seu microfone",
+          "description": "Fale em vez de digitar em qualquer painel. A fala é reconhecida neste computador, então seu áudio fica aqui.",
+          "setUp": "Configurar",
+          "asksForMicrophone": "O Orca vai pedir acesso ao microfone."
         },
         "quality": {
           "unsupported": "Não suporta seu idioma",
@@ -21716,6 +21723,24 @@
           "local": "Neste computador",
           "cloudDescription": "Modelos na nuvem enviam seu áudio ao provedor. Os deste computador o mantêm aqui.",
           "sendsToCompatible": "Envia seu áudio para o serviço que você configurou."
+        },
+        "vocabulary": {
+          "title": "Vocabulário",
+          "description": "Nomes e termos de código escritos do seu jeito. Adicione como o modelo os ouve errado, se ele continuar errando.",
+          "repoScope": "Usado só ao ditar em {{repo}}.",
+          "personalScope": "Usado em todos os repositórios.",
+          "scope": "Termos para",
+          "personal": "Pessoal · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Remover {{term}}",
+          "term": "Palavra ou frase",
+          "heardAs": "Ouvido como (opcional)",
+          "heardAsLabel": "Ouvido como",
+          "add": "Adicionar",
+          "repoNameHint": "Usar o nome do repositório como dica",
+          "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório.",
+          "repoSaveFailed": "Não foi possível salvar os termos do repositório. O host deste repositório pode precisar de uma atualização do Orca."
         }
       },
       "repositoryHooks": {

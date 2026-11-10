@@ -351,3 +351,42 @@ it('keeps existing new-launch default authority when its live catalog refresh ca
       .currentValue
   ).toBe('gpt-hosted')
 })
+
+it('offers only the speeds the model lists while a configured Flex keeps running', () => {
+  const models = [
+    {
+      id: 'gpt-fast',
+      label: 'GPT Fast',
+      isDefault: true,
+      efforts: [{ value: 'low', label: 'Low' }],
+      serviceTiers: [{ value: 'priority', label: 'Fast' }]
+    }
+  ]
+  const host: AgentSessionModelCatalogResult = { origin: 'probe', models, fetchedAt: 1 }
+  const seed = structuredAgentSessionSeedCatalog('codex')!
+  const state = applyStructuredAgentSessionOptions(
+    applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', seed),
+      seed,
+      host,
+      LAUNCH
+    ),
+    seed,
+    {
+      models,
+      listedModelIds: ['gpt-fast'],
+      current: { model: 'gpt-fast', effort: 'low', serviceTier: 'flex', defaulted: [] }
+    },
+    LAUNCH
+  )
+  const speed = structuredAgentSessionOptionSnapshot(state).find(({ id }) => id === 'serviceTier')
+  expect(speed?.kind).toEqual({
+    type: 'select',
+    currentValue: 'flex',
+    choices: [
+      { value: 'default', label: 'Standard' },
+      { value: 'priority', label: 'Fast' }
+    ]
+  })
+  expect(structuredAgentSessionMessageSelection(state).serviceTier).toBe('flex')
+})

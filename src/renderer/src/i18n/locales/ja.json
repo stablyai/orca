@@ -10626,7 +10626,10 @@
               "modelMemoryKeyword": "メモリ",
               "fillerWordsTitle": "フィラーを削除",
               "fillerWordsDescription": "「えーと」「うーん」などのつなぎ言葉を音声入力のテキストから取り除きます。",
-              "fillerWordsKeyword": "フィラー"
+              "fillerWordsKeyword": "フィラー",
+              "vocabularyTitle": "語彙",
+              "vocabularyDescription": "音声入力が自分の書き方で表記する名前やコード用語。個人用またはリポジトリ用。",
+              "vocabularyKeyword": "辞書"
             }
           }
         },
@@ -16459,10 +16462,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Agent 向けにページのコンテキストを取得する",
-                      "body": "grab ツールでページ要素のコンテキストをコピーして Agent に渡します。"
-                    },
                     "annotate": {
                       "title": "デザインのフィードバックをその場で残す",
                       "body": "要素に注釈を付けて、そのメモを Agent に送ります。"
@@ -16595,7 +16594,6 @@
             "244266c122": "インポート…",
             "e52a955e6f": "これは、[設定] > [ブラウザ] でいつでも見つけることができます。",
             "4f5ffaa6a1": "ブラウザデータをインポートする",
-            "b24fef25be": "インポート",
             "02e89014c5": "{{value1}}{{value2}} から {{value0}} Cookie をインポートしました。",
             "d40d584769": "ファイルから {{value0}} 個の Cookie をインポートしました。"
           },
@@ -16656,7 +16654,6 @@
             "4328a0a062": "取得に失敗しました: {{value0}}",
             "759f32af29": "ダウンロード中",
             "4300f38145": "{{value0}}{{value1}} からダウンロードしています",
-            "acbe79fd01": "ページ要素の取得 ({{value0}})",
             "cc4a071d3a": "ページ要素に注釈を付ける ({{value0}})",
             "572046436a": "リモートブラウザ",
             "b313a7275b": "リモートブラウザを開く",
@@ -18531,7 +18528,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "このホストで {{agent}} の準備ができているか確認しています…"
+        "checking": "このホストで {{agent}} の準備ができているか確認しています…",
+        "cliInstall": "インストール",
+        "cliRecheck": "再確認"
       },
       "reasoning": "推論",
       "contextMenu": {
@@ -18947,6 +18946,8 @@
         "toggleDetails": "ターンの詳細を切り替えます"
       },
       "jumpToLatest": "最新にジャンプ",
+      "newRowsAnnouncement": "離れている間に新しいメッセージが届きました",
+      "newRowsMarker": "新着",
       "find": {
         "label": "チャット内を検索",
         "noResults": "結果はありません",
@@ -19915,6 +19916,9 @@
         "scrollToLatestOnSendTitle": "送信時に最新までスクロール",
         "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",
         "scrollToLatestOnSendSearchPosition": "位置",
+        "markNewMessagesTitle": "チャットに戻ったときに新着メッセージを示す",
+        "markNewMessagesCopy": "チャットに戻ると、離れている間に届いたメッセージの上に「新着」の線を表示します。最新のメッセージを読んでいた場合は、そこまでスクロールします。",
+        "markNewMessagesSearchUnread": "未読",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られず、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になり、何も入力されていない場合は最初の待機カードを実行中のターンに送ります。画像付きメッセージもカードとして待機します。",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",
@@ -19995,7 +19999,10 @@
           "onCloud": "どのペインでも {{shortcut}} を押します。{{model}} はクラウドで動作します。",
           "offTitle": "音声入力はオフです",
           "offDescription": "オンにすると、どのペインでも {{shortcut}} で音声入力できます。",
-          "savedMicrophone": "選択したマイク"
+          "savedMicrophone": "選択したマイク",
+          "description": "どのペインでも、入力の代わりに話せます。音声はこのコンピューター上で認識されるため、外に出ません。",
+          "setUp": "設定する",
+          "asksForMicrophone": "Orca がマイクへのアクセスを求めます。"
         },
         "quality": {
           "unsupported": "お使いの言語に非対応",
@@ -20027,6 +20034,24 @@
           "local": "このコンピューター",
           "cloudDescription": "クラウドモデルは音声をプロバイダーに送信します。このコンピューター上のモデルなら音声は外に出ません。",
           "sendsToCompatible": "音声を設定したサービスに送信します。"
+        },
+        "vocabulary": {
+          "title": "語彙",
+          "description": "名前やコード用語を自分の書き方で入力します。モデルが繰り返し聞き間違える場合は、聞き取られる言い方も追加してください。",
+          "repoScope": "{{repo}} で音声入力するときだけ使います。",
+          "personalScope": "すべてのリポジトリで使います。",
+          "scope": "用語の対象",
+          "personal": "個人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} を削除",
+          "term": "単語またはフレーズ",
+          "heardAs": "聞き取られ方（任意）",
+          "heardAsLabel": "聞き取られ方",
+          "add": "追加",
+          "repoNameHint": "リポジトリ名をヒントとして使う",
+          "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
+          "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
         }
       },
       "repositoryHooks": {

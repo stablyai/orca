@@ -23,6 +23,8 @@ import { normalizeSourceControlAiSettings } from '../../../../shared/source-cont
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../../../text-generation/commit-message-text-generation'
+import * as shellEnvironment from '../environment/structured-agent-shell-environment'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../launch/structured-agent-launch-support'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   createQueuedMessageTestRig,
@@ -83,6 +85,7 @@ vi.mock('../../../managed-data-accounts/service', () => ({
 }))
 const roots: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   installClaudeProfileRouter(undefined)
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -134,6 +137,29 @@ function rig() {
 }
 
 describe('structured chat naming runtime', () => {
+  it('resolves Claude naming inheritance before the deliberate agent launch environment', async () => {
+    const inherited = {
+      CLAUDE_CODE_MESSAGING_SOCKET: 'parent-socket',
+      CLAUDE_CODE_ENTRYPOINT: 'parent-client',
+      CLAUDE_EFFORT: 'parent-effort',
+      CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+    }
+    vi.spyOn(shellEnvironment, 'resolveHostAgentBaseEnvironment').mockResolvedValue(inherited)
+    const settings = getDefaultSettings('/isolated')
+    settings.agentDefaultEnv = { claude: { CLAUDE_EFFORT: 'chosen-effort' } }
+    const env = await resolveHostStructuredAgentLaunchEnvironment('claude', settings)
+    expect(env).toMatchObject({
+      CLAUDE_EFFORT: 'chosen-effort',
+      CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+    })
+    expect(env.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined()
+    expect(
+      (await resolveHostStructuredAgentLaunchEnvironment('codex', settings)).CLAUDE_EFFORT
+    ).toBe('parent-effort')
+    expect(inherited.CLAUDE_CODE_MESSAGING_SOCKET).toBe('parent-socket')
+  })
+
   it('uses the CLI title only for automatic default naming and honors changed settings', async () => {
     const state = rig()
     const record = agentSessionRecordFixture()

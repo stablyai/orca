@@ -11299,7 +11299,10 @@
               "modelMemoryKeyword": "speicher",
               "fillerWordsTitle": "Füllwörter entfernen",
               "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
-              "fillerWordsKeyword": "füllwörter"
+              "fillerWordsKeyword": "füllwörter",
+              "vocabularyTitle": "Wortschatz",
+              "vocabularyDescription": "Namen und Code-Begriffe, die das Diktat auf deine Weise schreibt, für dich oder ein Repo.",
+              "vocabularyKeyword": "wörterbuch"
             }
           }
         },
@@ -17156,10 +17159,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Seitenkontext für Agenten erfassen",
-                      "body": "Mit dem Erfassungswerkzeug den Kontext eines Seitenelements für Agenten kopieren."
-                    },
                     "annotate": {
                       "title": "Design-Feedback direkt auf der Seite markieren",
                       "body": "Elemente mit Anmerkungen versehen und diese Notizen an einen Agenten senden."
@@ -17292,7 +17291,6 @@
             "244266c122": "Importieren…",
             "e52a955e6f": "Diese Funktion ist jederzeit unter Einstellungen > Browser verfügbar.",
             "4f5ffaa6a1": "Browserdaten importieren",
-            "b24fef25be": "Importieren",
             "02e89014c5": "{{value0}} Cookies aus {{value1}}{{value2}} importiert.",
             "d40d584769": "{{value0}} Cookies aus Datei importiert."
           },
@@ -17354,7 +17352,6 @@
             "4328a0a062": "Erfassung fehlgeschlagen: {{value0}}",
             "759f32af29": "Wird heruntergeladen",
             "4300f38145": "Wird von {{value0}}{{value1}} heruntergeladen",
-            "acbe79fd01": "Seitenelement erfassen ({{value0}})",
             "cc4a071d3a": "Seitenelement mit Anmerkung versehen ({{value0}})",
             "572046436a": "Entfernter Browser",
             "b313a7275b": "Entfernter Browser wird geöffnet",
@@ -19221,7 +19218,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…"
+        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
+        "cliInstall": "Installieren",
+        "cliRecheck": "Erneut prüfen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {
@@ -19771,6 +19770,8 @@
         "showAgent": "{{value0}} im Gespräch anzeigen"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
+      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
+      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",
@@ -20640,6 +20641,9 @@
         "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
         "scrollToLatestOnSendSearchPosition": "Position",
+        "markNewMessagesTitle": "Neue Nachrichten bei der Rückkehr in einen Chat markieren",
+        "markNewMessagesCopy": "Bei der Rückkehr in einen Chat erscheint eine Neu-Linie über dem, was in deiner Abwesenheit eingegangen ist. Warst du bei der neuesten Nachricht, scrollt der Chat dorthin.",
+        "markNewMessagesSearchUnread": "ungelesen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20714,7 +20718,10 @@
           "onCloud": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft in der Cloud.",
           "offTitle": "Diktieren ist aus",
           "offDescription": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
-          "savedMicrophone": "Dein Mikrofon"
+          "savedMicrophone": "Dein Mikrofon",
+          "description": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, deine Audiodaten bleiben also hier.",
+          "setUp": "Einrichten",
+          "asksForMicrophone": "Orca fragt nach Zugriff auf das Mikrofon."
         },
         "quality": {
           "unsupported": "Unterstützt deine Sprache nicht",
@@ -20746,6 +20753,24 @@
           "local": "Auf diesem Computer",
           "cloudDescription": "Cloud-Modelle senden deine Audiodaten an den Anbieter. Modelle auf diesem Computer behalten sie hier.",
           "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast."
+        },
+        "vocabulary": {
+          "title": "Wortschatz",
+          "description": "Namen und Code-Begriffe, die du auf deine Weise geschrieben haben willst. Gib an, wie das Modell sie falsch hört, wenn es sie immer wieder verwechselt.",
+          "repoScope": "Nur beim Diktieren in {{repo}}.",
+          "personalScope": "In jedem Repo.",
+          "scope": "Begriffe für",
+          "personal": "Persönlich · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} entfernen",
+          "term": "Wort oder Wendung",
+          "heardAs": "Gehört als (optional)",
+          "heardAsLabel": "Gehört als",
+          "add": "Hinzufügen",
+          "repoNameHint": "Repo-Namen als Hinweis verwenden",
+          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
+          "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
         }
       },
       "repositoryHooks": {

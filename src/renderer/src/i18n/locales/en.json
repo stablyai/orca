@@ -484,13 +484,27 @@
         "never": "Never for this site",
         "notNow": "Not now",
         "update": "Update",
-        "save": "Save"
+        "save": "Save",
+        "saveChip": "Save password",
+        "updateChip": "Update password"
       },
       "fill": {
         "noUsername": "(no username)",
         "title": "Saved logins",
         "otherLogins": "Other logins on this site"
       }
+    },
+    "toolbar": {
+      "annotate": "Annotate",
+      "grab": "Grab",
+      "draw": "Draw",
+      "annotateOptions": "More annotate tools",
+      "copyAllNotes": "Copy all notes",
+      "clearNotes": "Clear notes",
+      "resetZoom": "Reset zoom",
+      "resetViewport": "Reset viewport size",
+      "findOnPage": "Find on page",
+      "profile": "Profile"
     }
   },
   "editor": {
@@ -11635,7 +11649,10 @@
               "modelMemoryKeyword": "memory",
               "fillerWordsTitle": "Remove Filler Words",
               "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
-              "fillerWordsKeyword": "filler words"
+              "fillerWordsKeyword": "filler words",
+              "vocabularyTitle": "Vocabulary",
+              "vocabularyDescription": "Names and code terms dictation spells your way, for you or for one repo.",
+              "vocabularyKeyword": "dictionary"
             }
           }
         },
@@ -17599,10 +17616,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Grab page context for agents",
-                      "body": "Use the grab tool to copy a page element's context for agents."
-                    },
                     "annotate": {
                       "title": "Mark design feedback in place",
                       "body": "Annotate elements and send those notes to an agent."
@@ -17740,7 +17753,6 @@
             "244266c122": "Import…",
             "e52a955e6f": "You can always find this in Settings > Browser.",
             "4f5ffaa6a1": "Import browser data",
-            "b24fef25be": "Import",
             "02e89014c5": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
             "d40d584769": "Imported {{value0}} cookies from file."
           },
@@ -17802,7 +17814,6 @@
             "4328a0a062": "Grab failed: {{value0}}",
             "759f32af29": "Downloading",
             "4300f38145": "Downloading from {{value0}}{{value1}}",
-            "acbe79fd01": "Grab page element ({{value0}})",
             "cc4a071d3a": "Annotate page element ({{value0}})",
             "572046436a": "Remote browser",
             "b313a7275b": "Opening remote browser",
@@ -19791,7 +19802,10 @@
         "readFailed": "Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed."
       },
       "install": {
-        "checking": "Checking whether {{agent}} is ready on this host…"
+        "checking": "Checking whether {{agent}} is ready on this host…",
+        "cliInstall": "Install",
+        "cliRecheck": "Check again",
+        "cliRecheckFailed": "Could not check installed agents on this host. Try again."
       },
       "reasoning": "Reasoning",
       "failureWords": {
@@ -20356,6 +20370,8 @@
         "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",
+      "newRowsAnnouncement": "New messages arrived while you were away",
+      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",
@@ -21307,6 +21323,9 @@
         "scrollToLatestOnSendTitle": "Scroll to latest when sending",
         "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
         "scrollToLatestOnSendSearchPosition": "position",
+        "markNewMessagesTitle": "Mark new messages when returning to a chat",
+        "markNewMessagesCopy": "Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.",
+        "markNewMessagesSearchUnread": "unread",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
@@ -21414,7 +21433,10 @@
           "onCloud": "Press {{shortcut}} in any pane. {{model}} runs in the cloud.",
           "offTitle": "Dictation is off",
           "offDescription": "Turn it on to dictate with {{shortcut}} in any pane.",
-          "savedMicrophone": "Your microphone"
+          "savedMicrophone": "Your microphone",
+          "description": "Talk instead of typing in any pane. Speech is recognized on this computer, so your audio stays here.",
+          "setUp": "Set up",
+          "asksForMicrophone": "Orca will ask for microphone access."
         },
         "quality": {
           "unsupported": "Doesn’t support your language",
@@ -21446,6 +21468,24 @@
           "where": "Where models run",
           "local": "On this computer",
           "cloudDescription": "Cloud models send your audio to the provider. Models on this computer keep it here."
+        },
+        "vocabulary": {
+          "title": "Vocabulary",
+          "description": "Names and code terms to spell your way. Add what the model mishears it as, if it keeps getting it wrong.",
+          "repoScope": "Only used while you dictate in {{repo}}.",
+          "personalScope": "Used in every repo.",
+          "scope": "Terms for",
+          "personal": "Personal · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Remove {{term}}",
+          "term": "Word or phrase",
+          "heardAs": "Heard as (optional)",
+          "heardAsLabel": "Heard as",
+          "add": "Add",
+          "repoNameHint": "Use the repo name as a hint",
+          "repoNameHintDescription": "Helps recognize the repo's name.",
+          "repoSaveFailed": "Couldn't save the repo's terms. The host running this repo may need an Orca update."
         }
       },
       "repositoryHooks": {

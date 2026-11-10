@@ -1,7 +1,7 @@
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { GEMINI_ACP_DIALECT, readGeminiAcpSignInLine } from './gemini-acp-dialect'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { resumeInvocationFromOptions } from '../native-chat/structured-agent-cli-conversations'
 
 export const GEMINI_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
@@ -11,7 +11,7 @@ export const GEMINI_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
   args: () => ['--acp', '--approval-mode', 'default'],
   env: { NO_BROWSER: 'true' },
   dialect: GEMINI_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('gemini')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('gemini')?.loginCommand ?? [],
   signIn: { read: readGeminiAcpSignInLine },
   // GEMINI_CLI_HOME is a home root: the CLI appends .gemini itself.
   account: directoryAccountBinding('GEMINI_CLI_HOME', (homePath) => homePath),
