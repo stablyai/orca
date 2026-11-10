@@ -4,7 +4,8 @@ let generationSequence = 0
 let evictedGeneration = 0
 const retirementListeners = new Set<(environmentId: string) => void>()
 
-/** Owners of generation-fenced streams end the ones an advance (or eviction) left behind. */
+/** Streams opened under an earlier generation can no longer deliver (their frames are discarded),
+ *  so whoever owns them must close them when the generation moves on. */
 export function onRuntimeEnvironmentTransportGenerationRetired(
   listener: (environmentId: string) => void
 ): () => void {
@@ -14,12 +15,6 @@ export function onRuntimeEnvironmentTransportGenerationRetired(
 
 export function getRuntimeEnvironmentTransportGeneration(environmentId: string): number {
   return generationByEnvironment.get(environmentId) ?? evictedGeneration
-}
-
-/** True while the environment's transport is the one that was current when this was called. */
-export function captureRuntimeEnvironmentTransportGeneration(environmentId: string): () => boolean {
-  const generation = getRuntimeEnvironmentTransportGeneration(environmentId)
-  return () => getRuntimeEnvironmentTransportGeneration(environmentId) === generation
 }
 
 export function advanceRuntimeEnvironmentTransportGeneration(environmentId: string): void {
@@ -33,13 +28,8 @@ export function advanceRuntimeEnvironmentTransportGeneration(environmentId: stri
     evictedGeneration = Math.max(evictedGeneration, generationByEnvironment.get(oldest.value) ?? 0)
     generationByEnvironment.delete(oldest.value)
   }
-  // A fenced stream drops every later frame, so it must end rather than wait silently.
   for (const listener of retirementListeners) {
-    try {
-      listener(environmentId)
-    } catch (error) {
-      console.warn('[runtime-environments] retiring stale-generation streams failed:', error)
-    }
+    listener(environmentId)
   }
 }
 

@@ -1,4 +1,5 @@
 import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
+import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,7 +72,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
   })
 })
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
-import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
 
 const handler = channelHandlerLookup(handleMock)
@@ -188,22 +188,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(close).toHaveBeenCalled()
   })
 
-  it('closes a live stream when its environment moves to a new transport generation', async () => {
+  // #39926: a rebuilt control connection advances the transport generation, after which every
+  // frame of an existing stream was discarded without a close, so a chat view sat on a silent stream.
+  it('closes and reports a stream whose transport generation was retired', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
-    let deliver: (response: unknown) => void = () => {}
-    subscribeRemoteRuntimeRequestMock.mockImplementation(
-      async (
-        _connection: unknown,
-        _method: string,
-        _params: unknown,
-        _timeoutMs: number,
-        callbacks: { onResponse: (response: unknown) => void }
-      ) => {
-        deliver = callbacks.onResponse
-        return { requestId: 'stream-1', close, sendBinary: vi.fn() }
-      }
-    )
+    subscribeRemoteRuntimeRequestMock.mockResolvedValue({
+      requestId: 'stream-1',
+      close,
+      sendBinary: vi.fn()
+    })
     const add = handler<
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
@@ -211,33 +205,27 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const { environment } = await add(null, { name: 'desk', pairingCode: pairingCode() })
     const send = vi.fn()
     const subscribe = handler<
-      { selector: string; method: string; params?: unknown },
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
-    const { subscriptionId } = await subscribe(
+    await subscribe(
       {
         sender: { id: 1, isDestroyed: () => false, send, on: vi.fn(), removeListener: vi.fn() }
       },
-      { selector: 'desk', method: 'agentSession.subscribe', params: { sessionId: 's1' } }
+      {
+        selector: 'desk',
+        method: 'agentSession.subscribe',
+        params: { sessionId: 'chat-1' },
+        subscriptionId: 'chat-sub'
+      }
     )
 
-    // Re-creating the shared control socket advances the generation without an invalidate.
     advanceRuntimeEnvironmentTransportGeneration(environment.id)
 
     expect(close).toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
-      subscriptionId,
+      subscriptionId: 'chat-sub',
       type: 'close'
     })
-    deliver({
-      id: 'stream-1',
-      ok: true,
-      result: { type: 'batch' },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    expect(send).not.toHaveBeenCalledWith(
-      'runtimeEnvironments:subscriptionEvent',
-      expect.objectContaining({ type: 'response' })
-    )
   })
 })
