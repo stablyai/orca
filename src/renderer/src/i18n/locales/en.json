@@ -1118,7 +1118,10 @@
         "unknownPlatform": "Unknown platform \"{{platform}}\" was ignored.",
         "conflictingOverrides": "Conflicting custom shortcuts were ignored: {{actions}}.",
         "readFailed": "Could not read keybindings file: {{reason}}"
-      }
+      },
+      "copyAllJsonSuccess": "Copied all shortcuts as JSON.",
+      "copyAllJsonFailed": "Failed to copy shortcuts.",
+      "copyAllJson": "Copy All Shortcuts as JSON"
     },
     "mcp": {
       "inspectFailed": "Unable to inspect {{directory}}.",
