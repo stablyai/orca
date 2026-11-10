@@ -50,7 +50,8 @@ export abstract class WorktreePreparationDisposal {
   protected abstract retire(): Promise<void>
   protected abstract physicalDiscard(
     eligible: () => boolean,
-    before: () => Promise<boolean>
+    before: () => Promise<boolean>,
+    leaseRetirement: AbortSignal
   ): Promise<SettledPreparationDiscard>
   protected abstract complete(): void
 
@@ -188,15 +189,18 @@ export abstract class WorktreePreparationDisposal {
       }
     }
     let eligible = true
+    const leaseRetirement = new AbortController()
     const settled = this.physicalDiscard(
       () => eligible && this.current(),
-      () => this.disposalOwner?.before() ?? Promise.resolve(true)
+      () => this.disposalOwner?.before() ?? Promise.resolve(true),
+      leaseRetirement.signal
     )
     const result = await sharedPromiseSettlementWaiters(settled)
       .wait({
         timeoutMs: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
         onAbandon: () => {
           eligible = false
+          leaseRetirement.abort()
         }
       })
       .catch(() => ({ status: 'pending' as const, settled }))

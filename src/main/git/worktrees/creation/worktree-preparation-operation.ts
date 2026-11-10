@@ -5,24 +5,14 @@ import {
 import type { PreparationRemovalOutcome } from './worktree-preparation-discard'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { GIT_READ_TIMEOUT_MS } from '../../../../shared/git/commands/git-command-timeout'
 import { getLocalRepoRefMaintenance } from '../../refs/maintenance/local-repo-ref-maintenance'
 import {
-  resolveWorktreeAddTimeoutMs,
+  WORKTREE_CREATE_PREPARATION_TTL_MS,
+  preparationWorkBudget,
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
 
-export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
-
-export function preparationWorkBudget(options: GitWorktreeExecOptions, refresh: boolean): number {
-  const checkout = resolveWorktreeAddTimeoutMs()
-  const read = options.timeout ?? GIT_READ_TIMEOUT_MS
-  // Include old-Git registration and direct-WSL read fallbacks, each with its own child budget.
-  return (
-    WORKTREE_CREATE_PREPARATION_TTL_MS +
-    (refresh ? 9 * (options.timeout ?? checkout) : 6 * read + 7 * checkout)
-  )
-}
+export { WORKTREE_CREATE_PREPARATION_TTL_MS } from '../worktree-operation-options'
 
 export class WorktreePreparationOperation extends WorktreePreparationDisposal {
   readonly controller = new AbortController()
@@ -115,9 +105,13 @@ export class WorktreePreparationOperation extends WorktreePreparationDisposal {
     this.releaseMaintenanceIfSafe()
   }
 
-  private releaseMaintenanceIfSafe(): void {
-    const held = this.maintenance
-    if (held && (held.finished || held.signal.aborted) && this.writers.size === 0) {
+  private releaseMaintenanceIfSafe(held = this.maintenance): void {
+    if (
+      held &&
+      this.maintenance === held &&
+      (held.finished || held.signal.aborted) &&
+      this.writers.size === 0
+    ) {
       held.release()
       this.maintenance = undefined
     }
@@ -135,20 +129,28 @@ export class WorktreePreparationOperation extends WorktreePreparationDisposal {
       )
       throw error
     })
+    return this.runWithMaintenanceLease(run, release, signal)
+  }
+
+  private async runWithMaintenanceLease<T>(
+    run: () => Promise<T>,
+    release: () => void,
+    signal: AbortSignal
+  ): Promise<T> {
     if (signal.aborted) {
       release()
       signal.throwIfAborted()
     }
     const held = { release, signal, finished: false }
     this.maintenance = held
-    const onAbort = (): void => this.releaseMaintenanceIfSafe()
+    const onAbort = (): void => this.releaseMaintenanceIfSafe(held)
     signal.addEventListener('abort', onAbort, { once: true })
     try {
       return await run()
     } finally {
       held.finished = true
       signal.removeEventListener('abort', onAbort)
-      this.releaseMaintenanceIfSafe()
+      this.releaseMaintenanceIfSafe(held)
     }
   }
 
@@ -265,30 +267,39 @@ export class WorktreePreparationOperation extends WorktreePreparationDisposal {
 
   protected async physicalDiscard(
     eligible: () => boolean,
-    before: () => Promise<boolean>
+    before: () => Promise<boolean>,
+    leaseRetirement: AbortSignal
   ): Promise<SettledPreparationDiscard> {
     const discard = this.discardCheckout
     if (!discard) {
       return { status: this.revoked, attempted: false }
     }
     let attempted = false
-    const cleanup = this.withMaintenancePaused(async () => {
-      if (!eligible() || !(await before()) || !eligible()) {
-        return 'skipped' as const
-      }
-      return discard({
-        ...this.options,
-        admissionTier: 'background',
-        signal: undefined,
-        canStart: eligible,
-        observeChildTermination: (terminated, writes) => {
-          if (writes) {
-            attempted = true
+    // Lease retirement cannot replace the original acquisition's physical settlement.
+    const acquiring = getLocalRepoRefMaintenance().pause('worktree-prepare')
+    const cleanup = acquiring.then((release) =>
+      this.runWithMaintenanceLease(
+        async () => {
+          if (!eligible() || !(await before()) || !eligible()) {
+            return 'skipped' as const
           }
-          this.observeChildTermination(terminated, writes)
-        }
-      })
-    }, new AbortController().signal)
+          return discard({
+            ...this.options,
+            admissionTier: 'background',
+            signal: undefined,
+            canStart: eligible,
+            observeChildTermination: (terminated, writes) => {
+              if (writes) {
+                attempted = true
+              }
+              this.observeChildTermination(terminated, writes)
+            }
+          })
+        },
+        release,
+        leaseRetirement
+      )
+    )
     const result = await cleanup.then(
       (status): SettledPreparationDiscard => ({ status, attempted }),
       (error: unknown): SettledPreparationDiscard => ({
