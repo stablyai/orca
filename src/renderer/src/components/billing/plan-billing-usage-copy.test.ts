@@ -167,7 +167,7 @@ describe('trial copy (spec T1, glossary "Trial")', () => {
     expect(accountMenuTrialRow({ status: 'ok', entitlement: sampleTeam }, t)).toBeNull()
     expect(accountMenuTrialRow({ status: 'failed', error: 'x' }, t)).toBeNull()
     // The plan's hours line stays off during a trial.
-    expect(accountMenuUsageLines({ status: 'ok', entitlement: sampleTrial }, t)).toBeNull()
+    expect(accountMenuUsageLines({ status: 'ok', entitlement: sampleTrial }, t, 'en-US')).toBeNull()
   })
 
   it('labels the trial "Trial" and says what to do when it is used up or unavailable', () => {
