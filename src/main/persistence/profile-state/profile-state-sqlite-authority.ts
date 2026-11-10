@@ -1,8 +1,10 @@
+import { createProfileStateStartupSnapshotReader } from './profile-state-startup-snapshot'
 import { existsSync } from 'node:fs'
 import type {
   ProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateDomainReplacement,
+  ProfileStateDomainPartsUpdate,
   ProfileStateMaintenance
 } from '../loading-store/profile-state-authority'
 import {
@@ -143,7 +145,8 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedDomains(
     replacements: readonly ProfileStateDomainReplacement[],
-    automationRunsAfter?: readonly unknown[]
+    automationRunsAfter?: readonly unknown[],
+    partsUpdate?: ProfileStateDomainPartsUpdate
   ): void {
     this.assertActive()
     if (this.observedRevision === undefined) {
@@ -155,7 +158,8 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
       replacements,
-      automationRunsAfter
+      automationRunsAfter,
+      partsUpdate
     }).revision
     this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
@@ -167,11 +171,14 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     }
   }
 
-  writeSerializedAutomationRuns(
+  readonly writeSerializedAutomationRuns = this.writeSerializedDomains.bind(this)
+
+  writeSerializedDomainParts(
     replacements: readonly ProfileStateDomainReplacement[],
-    runs: readonly unknown[]
+    update: ProfileStateDomainPartsUpdate,
+    runs?: readonly unknown[]
   ): void {
-    this.writeSerializedDomains(replacements, runs)
+    this.writeSerializedDomains(replacements, runs, update)
   }
 
   writeSerializedState(payload: Buffer): void {
@@ -285,23 +292,16 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     revision: number,
     value: Record<string, unknown> | undefined
   ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> {
-    let pending: { revision: number; value: Record<string, unknown> | undefined } | undefined = {
-      revision,
-      value
-    }
     this.observedRevision = revision
     return {
       authority: this,
-      takeParsedState: () => {
-        this.assertActive()
-        const snapshot = pending
-        if (snapshot === undefined) {
-          throw new Error('Profile state startup snapshot has already been consumed')
+      takeParsedState: createProfileStateStartupSnapshotReader(
+        value,
+        () => this.assertActive(),
+        () => {
+          this.observedRevision = revision
         }
-        pending = undefined
-        this.observedRevision = snapshot.revision
-        return snapshot.value
-      }
+      )
     }
   }
 

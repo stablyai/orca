@@ -12,7 +12,8 @@ export type RemoteLayoutSnapshotStore = {
   setRemoteLayoutSnapshot(
     environmentId: string,
     snapshot: RemoteLayoutSnapshot | null,
-    save: 'now' | 'later'
+    save: 'now' | 'later',
+    changedWorkspaces?: readonly string[]
   ): void
 }
 
@@ -80,14 +81,15 @@ export function recordRemoteLayoutFrame(
   const { [frame.worktree]: previous, ...others } =
     store.getRemoteLayoutSnapshot(environmentId)?.workspaces ?? {}
   if (removed) {
-    store.setRemoteLayoutSnapshot(environmentId, { workspaces: others }, 'now')
+    store.setRemoteLayoutSnapshot(environmentId, { workspaces: others }, 'now', [frame.worktree])
     return
   }
   const workspace = displayed(result)
   store.setRemoteLayoutSnapshot(
     environmentId,
     { workspaces: { ...others, [frame.worktree]: workspace } },
-    structure(previous) === structure(workspace) ? 'later' : 'now'
+    structure(previous) === structure(workspace) ? 'later' : 'now',
+    [frame.worktree]
   )
 }
 

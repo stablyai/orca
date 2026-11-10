@@ -17,6 +17,12 @@ export type ProfileStateAuthority = {
   /** Without selective domain writes, callers replace the full document. */
   writeSerializedDomains?: (replacements: readonly ProfileStateDomainReplacement[]) => void
 
+  writeSerializedDomainParts?: (
+    replacements: readonly ProfileStateDomainReplacement[],
+    update: ProfileStateDomainPartsUpdate,
+    runs?: readonly AutomationRun[]
+  ) => void
+
   /** Commit definitions and run projections atomically without serializing unrelated domains. */
   writeSerializedAutomationRuns?: (
     replacements: readonly ProfileStateDomainReplacement[],
@@ -48,6 +54,7 @@ export type AsyncProfileStateAuthority = Omit<
   | 'asynchronous'
   | 'assertCurrentRevision'
   | 'writeSerializedDomains'
+  | 'writeSerializedDomainParts'
   | 'writeSerializedAutomationRuns'
   | 'writeSerializedState'
   | 'writeCompleteSerializedDomains'
@@ -60,6 +67,11 @@ export type AsyncProfileStateAuthority = Omit<
   abort(): Promise<void>
   assertCurrentRevision(): Promise<void>
   writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void>
+  writeSerializedDomainParts?: (
+    replacements: readonly ProfileStateDomainReplacement[],
+    update: ProfileStateDomainPartsUpdate,
+    runs?: readonly AutomationRun[]
+  ) => Promise<void>
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly AutomationRun[]
@@ -83,6 +95,12 @@ export type ProfileStateDomainReplacement = {
   domain: string
   /** Null removes this domain. */
   payload: string | null
+}
+
+export type ProfileStateDomainPartsUpdate = {
+  domain: 'remoteLayoutSnapshots'
+  order: readonly string[]
+  parts: readonly { key: string; payload: string }[]
 }
 
 export type ProfileStateStartupPaneAlias = Omit<LegacyPaneKeyAliasEntry, 'ptyId'>

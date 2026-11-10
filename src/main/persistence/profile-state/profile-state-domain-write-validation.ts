@@ -2,6 +2,7 @@ import { PROFILE_STATE_DOCUMENT_VERSION } from './profile-state-database-schema'
 import { isProfileStateSplitDomain } from './profile-state-document-parts'
 import { hashProfileStateJson } from './profile-state-documents'
 import type { AutomationRunsWritePreparation } from './profile-state-automation-runs'
+import type { ProfileStateDocumentPart } from './profile-state-document-parts'
 import type {
   ProfileStateDomainMutation,
   ProfileStateDomainTransaction
@@ -15,6 +16,8 @@ export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   /** Parsed payload of a split domain, so storing its parts does not parse it again. */
   splitDomainValue?: unknown
   automationRuns?: AutomationRunsWritePreparation
+  serializedParts?: readonly ProfileStateDocumentPart[]
+  changedPartKeys?: ReadonlySet<string>
 }
 
 export function validateProfileStateDomainTransaction(
@@ -25,7 +28,9 @@ export function validateProfileStateDomainTransaction(
   }
   if (
     !Array.isArray(transaction.replacements) ||
-    (transaction.replacements.length === 0 && transaction.automationRunsAfter === undefined)
+    (transaction.replacements.length === 0 &&
+      transaction.automationRunsAfter === undefined &&
+      transaction.partsUpdate === undefined)
   ) {
     throw new Error('Profile state domain transaction requires at least one replacement')
   }
@@ -39,6 +44,13 @@ export function validateProfileStateDomainTransaction(
   }
   if (transaction.automationRunsAfter !== undefined && domains.has('automationRuns')) {
     throw new Error('Profile state automationRuns delta repeats domain: automationRuns')
+  }
+  if (
+    transaction.partsUpdate &&
+    (transaction.partsUpdate.domain !== 'remoteLayoutSnapshots' ||
+      domains.has(transaction.partsUpdate.domain))
+  ) {
+    throw new Error('Profile state parts update repeats or names an unsupported domain')
   }
 }
 

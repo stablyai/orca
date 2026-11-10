@@ -83,6 +83,36 @@ function script(root: string, source: string): string {
 }
 
 describe('persistent profile state write worker', () => {
+  it('delivers captured snapshot parts with other domains and automation history in one commit', async () => {
+    const f = fixture()
+    const client = clientFor(f.initialization)
+    await client.ready
+    const update = {
+      domain: 'remoteLayoutSnapshots' as const,
+      order: ['["env","workspaces","a"]'],
+      parts: [{ key: '["env","workspaces","a"]', payload: '{"tabs":[]}' }]
+    }
+    const write = client.writeSerializedDomainParts(
+      [{ domain: 'settings', payload: '{"theme":"light"}' }],
+      update,
+      [{ id: 'run-1' }]
+    )
+    update.parts[0]!.payload = '{"tabs":["edited after capture"]}'
+    await write
+    const exported = join(f.root, 'parts.json')
+    await client.writeJsonExport(exported)
+    expect(JSON.parse(readFileSync(exported, 'utf8'))).toEqual({
+      settings: { theme: 'light' },
+      remoteLayoutSnapshots: { env: { workspaces: { a: { tabs: [] } } } },
+      automationRuns: [{ id: 'run-1' }]
+    })
+    await client.close()
+    expect(readState(f.path, f.profileId)).toEqual({
+      settings: { theme: 'light' },
+      remoteLayoutSnapshots: { env: { workspaces: { a: { tabs: [] } } } },
+      automationRuns: [{ id: 'run-1' }]
+    })
+  })
   it('commits full, selective, automation and byte payloads, exports and releases the database', async () => {
     const f = fixture()
     const client = clientFor(f.initialization)

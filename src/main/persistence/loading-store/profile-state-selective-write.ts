@@ -2,10 +2,12 @@ import type { ProtectedSecretRetentionUpdate } from '../../credentials/protected
 import type {
   ProfileStateAuthority,
   ProfileStateDomainReplacement,
+  ProfileStateDomainPartsUpdate,
   ProfileStatePersistenceAuthority
 } from './profile-state-authority'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
+import type { PendingRemoteLayoutWorkspaces } from './remote-layout-snapshot-serialization'
 
 export type SelectiveProfileStateWriteResult = {
   handled: boolean
@@ -19,6 +21,7 @@ export type PreparedSelectiveProfileStateWrite = {
   automationRuns: readonly AutomationRun[] | undefined
   consumedAutomationRuns: boolean
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+  partsUpdate?: ProfileStateDomainPartsUpdate
 }
 
 export function writeSelectiveProfileState(
@@ -68,7 +71,8 @@ export function prepareSelectiveProfileStateWrite(
   authority: ProfileStatePersistenceAuthority | undefined,
   serialization: StateSerializationSecretHandlingOperations,
   dirtyDomains: ReadonlySet<string> | null,
-  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
+  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined,
+  pendingRemoteLayoutWorkspaces?: PendingRemoteLayoutWorkspaces
 ): PreparedSelectiveProfileStateWrite | undefined {
   if (
     !authority ||
@@ -81,9 +85,19 @@ export function prepareSelectiveProfileStateWrite(
   const useAutomationDelta =
     pendingAutomationRunsAfter !== undefined &&
     authority.writeSerializedAutomationRuns !== undefined
-  const serializableDomains = useAutomationDelta
-    ? new Set([...dirtyDomains].filter((domain) => domain !== 'automationRuns'))
-    : dirtyDomains
+  const partsUpdate =
+    dirtyDomains.has('remoteLayoutSnapshots') &&
+    authority.writeSerializedDomainParts &&
+    pendingRemoteLayoutWorkspaces
+      ? serialization.buildRemoteLayoutSnapshotParts(pendingRemoteLayoutWorkspaces)
+      : undefined
+  const serializableDomains = new Set(
+    [...dirtyDomains].filter(
+      (domain) =>
+        !(useAutomationDelta && domain === 'automationRuns') &&
+        !(partsUpdate && domain === 'remoteLayoutSnapshots')
+    )
+  )
   const built = serialization.buildStateDomainsToSave(serializableDomains)
   if (built === undefined) {
     return undefined
@@ -93,6 +107,7 @@ export function prepareSelectiveProfileStateWrite(
     replacements,
     automationRuns: useAutomationDelta ? pendingAutomationRunsAfter : undefined,
     consumedAutomationRuns: pendingAutomationRunsAfter !== undefined,
+    partsUpdate,
     protectedSecretUpdates
   }
 }

@@ -22,6 +22,10 @@ import {
   type SecretSentinelSubstitution
 } from './secret-sentinel-substitution'
 import type { StoreRuntimeState } from './store-runtime-state'
+import {
+  serializeRemoteLayoutSnapshotParts,
+  type PendingRemoteLayoutWorkspaces
+} from './remote-layout-snapshot-serialization'
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -30,6 +34,10 @@ type StateSerializationSecretHandlingOperationsRuntime = Pick<
 
 export class StateSerializationSecretHandlingOperations {
   constructor(private readonly runtime: StateSerializationSecretHandlingOperationsRuntime) {}
+
+  buildRemoteLayoutSnapshotParts(pending: PendingRemoteLayoutWorkspaces) {
+    return serializeRemoteLayoutSnapshotParts(this.runtime.state.remoteLayoutSnapshots, pending)
+  }
 
   getDurableState(): Omit<PersistedState, 'githubCache'> {
     const { githubCache: _memoryOnly, ...durable } = this.runtime.state

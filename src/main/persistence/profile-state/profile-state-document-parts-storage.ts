@@ -198,6 +198,8 @@ export function writeProfileStateDomainParts(
     payload: string
     /** Already-parsed payload, when the caller has it. */
     value?: unknown
+    parts?: readonly ProfileStateDocumentPart[]
+    changedPartKeys?: ReadonlySet<string>
     payloadHash: string
     domainVersion: number
     revision: number
@@ -215,10 +217,12 @@ export function writeProfileStateDomainParts(
   if (depth === undefined) {
     return false
   }
-  const parts = splitProfileStateDomainValue(
-    args.value === undefined ? JSON.parse(args.payload) : args.value,
-    depth
-  )
+  const parts =
+    args.parts ??
+    splitProfileStateDomainValue(
+      args.value === undefined ? JSON.parse(args.payload) : args.value,
+      depth
+    )
   // Non-canonical JSON (whitespace, escapes) would not round-trip byte-for-byte.
   if (assembleProfileStateDomainPayload(parts) !== args.payload) {
     deleteProfileStateDomainParts(db, args.domain)
@@ -267,7 +271,10 @@ export function writeProfileStateDomainParts(
     seen.add(part.key)
     const ordinal = ordinals[index]!
     const previous = existing.get(part.key)
-    const contentHash = hashProfileStatePart(part.payload)
+    const contentHash =
+      previous && args.changedPartKeys && !args.changedPartKeys.has(part.key)
+        ? previous.contentHash
+        : hashProfileStatePart(part.payload)
     if (!previous) {
       insert.run(args.domain, part.key, ordinal, part.payload, contentHash)
     } else if (previous.contentHash !== contentHash) {
