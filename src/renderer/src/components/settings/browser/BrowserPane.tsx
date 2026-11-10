@@ -39,7 +39,7 @@ import {
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateExecutionHostLabel } from '../../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
@@ -155,7 +155,7 @@ export function BrowserPane({
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
         .map((host) => ({
           id: host.id,
-          label: translateExecutionHostLabel(host.label),
+          label: translateHostDisplayLabel(host, t),
           detail:
             host.kind === 'local'
               ? t('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')

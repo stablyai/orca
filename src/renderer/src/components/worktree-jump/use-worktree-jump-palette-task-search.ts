@@ -14,7 +14,7 @@ import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { translateExecutionHostLabel } from '../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
 const TASK_SEARCH_DEBOUNCE_MS = 600
 
 type Input = Pick<WorktreeJumpPaletteStoreState, 'visible' | 'repos' | 'settings'> &
@@ -50,7 +50,7 @@ export function useWorktreeJumpPaletteTaskSearch({
   const [snapshot, setSnapshot] = useState<SearchSnapshot | null>(null)
   const [retryNonce, setRetryNonce] = useState(0)
   const hostLabels = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, translateExecutionHostLabel(host.label)])),
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host)])),
     [hostOptions]
   )
   const session = useMemo(() => ({ visible }), [visible])

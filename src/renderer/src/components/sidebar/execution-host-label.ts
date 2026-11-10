@@ -1,4 +1,6 @@
 import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  LOCAL_EXECUTION_HOST_ID,
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
   type ExecutionHostScope
@@ -33,13 +35,29 @@ export function translateExecutionHostLabel(label: string, t: Translate = transl
   return translateLocalExecutionHostLabel(label, t)
 }
 
+export function translateHostDisplayLabel(
+  host: { label: string; isDefaultLocalLabel?: boolean },
+  t: Translate = translate
+): string {
+  return host.isDefaultLocalLabel ? translateExecutionHostLabel(host.label, t) : host.label
+}
+
 export function translateExecutionHostDetail(detail: string): string {
   if (detail === 'Host') {
     return translate('auto.components.sidebar.hostSection.host', 'Host')
   }
-  return translateExecutionHostLabel(detail)
+  if (detail === 'This computer') {
+    return translate('auto.components.sidebar.hostSection.thisComputer', 'This computer')
+  }
+  return detail
 }
 
-export function getTranslatedExecutionHostLabel(id: ExecutionHostScope): string {
-  return translateExecutionHostLabel(getExecutionHostLabel(id))
+export function getTranslatedExecutionHostLabel(
+  id: ExecutionHostScope | null | undefined,
+  t: Translate = translate
+): string {
+  const label = getExecutionHostLabel(id)
+  return id === LOCAL_EXECUTION_HOST_ID || id === ALL_EXECUTION_HOSTS_SCOPE
+    ? translateExecutionHostLabel(label, t)
+    : label
 }

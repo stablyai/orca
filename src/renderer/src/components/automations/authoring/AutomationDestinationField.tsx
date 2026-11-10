@@ -1,7 +1,6 @@
 import React from 'react'
 import { HostCombobox } from '@/components/host-picker/HostCombobox'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { AutomationHostLabel, AutomationHostStatusBadges } from '../hosts/AutomationHostBadges'
 import { Field } from '../automation-page-parts'
 import {
@@ -45,8 +44,8 @@ export function AutomationDestinationField({
         options={groups.flatMap((group) =>
           group.entries.map((entry) => ({
             id: entry.stableKey,
-            label: translateExecutionHostLabel(entry.label),
-            group: translateExecutionHostLabel(group.authorityLabel),
+            label: entry.label,
+            group: group.authorityLabel,
             disabled: !automationCreateHostEligible(entry),
             content: (
               <span
@@ -66,7 +65,7 @@ export function AutomationDestinationField({
           {t(
             'auto.components.automations.createDestination.noProjects',
             'No projects are set up on {host}. Add one there, or choose another host.'
-          ).replace('{host}', translateExecutionHostLabel(selected.label))}
+          ).replace('{host}', selected.label)}
         </p>
       ) : control.moveWarning ? (
         // Prefer the consequential move warning over a duplicate stored-on host label.
@@ -79,7 +78,7 @@ export function AutomationDestinationField({
             ? t(
                 'auto.components.automations.createDestination.storedOn',
                 'Stored and scheduled by {authority}.'
-              ).replace('{authority}', translateExecutionHostLabel(selected.authorityLabel))
+              ).replace('{authority}', selected.authorityLabel)
             : t(
                 'auto.components.automations.createDestination.unselected',
                 'Choose the host that stores and schedules this automation.'

@@ -16,7 +16,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 import {
@@ -163,7 +162,7 @@ export function AutomationRunsDashboard({
                       onCheckedChange={() => toggleHost(host.key)}
                       onSelect={(event) => event.preventDefault()}
                     >
-                      {translateExecutionHostLabel(host.label)}
+                      {host.label}
                     </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuSubContent>

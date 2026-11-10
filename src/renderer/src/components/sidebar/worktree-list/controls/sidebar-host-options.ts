@@ -21,7 +21,7 @@ import { pickerExecutionHosts } from '../../../../../../shared/execution-host/ma
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
-import { translateExecutionHostLabel } from '../../execution-host-label'
+import { translateHostDisplayLabel } from '../../execution-host-label'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -132,7 +132,7 @@ export function buildSidebarHostOptions(
     if (host.kind === 'local') {
       return {
         ...host,
-        isDefaultLocalLabel: !args.hostLabelOverrides?.has(host.id),
+        isDefaultLocalLabel: host.isDefaultLocalLabel,
         presence: 'local'
       }
     }
@@ -183,7 +183,7 @@ export function buildSidebarHostOptions(
 }
 
 export function sidebarHostDisplayLabel(host: SidebarHostOption, t: Translate = translate): string {
-  return host.isDefaultLocalLabel ? translateExecutionHostLabel(host.label, t) : host.label
+  return translateHostDisplayLabel(host, t)
 }
 
 export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[]): boolean {
@@ -199,12 +199,12 @@ export function buildSidebarHostScopeOptions(
     {
       id: ALL_EXECUTION_HOSTS_SCOPE,
       label: t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
-      detail: hosts.map((host) => translateExecutionHostLabel(host.label)).join(', '),
+      detail: hosts.map((host) => translateHostDisplayLabel(host, t)).join(', '),
       health: 'mixed'
     },
     ...hosts.map((host) => ({
       id: host.id,
-      label: translateExecutionHostLabel(host.label),
+      label: translateHostDisplayLabel(host, t),
       detail: host.detail,
       health: host.health,
       ...(host.vmState ? { vmState: host.vmState } : {})
@@ -223,7 +223,7 @@ export function getSidebarHostVisibilityLabel(
     return t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
   if (checkedRows.length === 1) {
-    return translateExecutionHostLabel(checkedRows[0].label)
+    return translateHostDisplayLabel(checkedRows[0], t)
   }
   if (checkedRows.length === 0) {
     return t('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
@@ -262,7 +262,7 @@ export function sidebarHostSemantics(host: SidebarHostOption & ExecutionHostRegi
 export function createSidebarHostLabelsSelector() {
   let result = new Map<ExecutionHostId, string>()
   return (hosts: readonly SidebarHostOption[]): ReadonlyMap<ExecutionHostId, string> => {
-    const next = new Map(hosts.map((host) => [host.id, translateExecutionHostLabel(host.label)]))
+    const next = new Map(hosts.map((host) => [host.id, translateHostDisplayLabel(host)]))
     if (!shallow(result, next)) {
       result = next
     }

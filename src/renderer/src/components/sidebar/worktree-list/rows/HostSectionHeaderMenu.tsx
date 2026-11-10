@@ -44,7 +44,7 @@ import { HostRenameDialog } from '../../HostRenameDialog'
 import { HostRemoveDialog } from '../../HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-rename-remove'
-import { translateExecutionHostLabel } from '../../execution-host-label'
+import { translateHostDisplayLabel } from '../../execution-host-label'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -273,7 +273,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
           </>
         )}
         <DropdownMenuLabel className="truncate text-[11px] font-medium text-muted-foreground">
-          {translateExecutionHostLabel(row.label)}
+          {translateHostDisplayLabel(row)}
         </DropdownMenuLabel>
         {model.actions.includes('rename') && (
           <DropdownMenuItem onSelect={() => setRenameOpen(true)}>

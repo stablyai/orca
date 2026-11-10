@@ -36,12 +36,13 @@ type HarnessProps = {
   enabled: boolean
   authority?: AutomationAuthorityRef
   target?: AutomationHostTarget | null
+  currentRows?: typeof rows
 }
 
-function Harness({ enabled, authority, target }: HarnessProps): null {
+function Harness({ enabled, authority, target, currentRows = rows }: HarnessProps): null {
   latest = useAutomationRunsDashboard({
     enabled,
-    rows,
+    rows: currentRows,
     context,
     legacyTarget: useCallback(() => target ?? null, [target]),
     authorityForRow: useCallback(() => authority ?? { kind: 'desktop' }, [authority]),
@@ -118,5 +119,13 @@ describe('useAutomationRunsDashboard', () => {
 
     expect(historySpy.mock.calls.at(-1)?.[2].cursor).toBeUndefined()
     expect(latest?.entries.map((entry) => entry.run.id)).toEqual(['run-2'])
+  })
+  it('updates the host label on existing run history when the host row changes', async () => {
+    await render(true, { currentRows: [{ ...row, hostLabel: 'previous name' }] })
+    expect(latest?.entries[0]?.run.id).toBe('run-2')
+    await render(true, { currentRows: [{ ...row, hostLabel: 'new name' }] })
+    expect(latest?.entries[0]?.run.id).toBe('run-2')
+    expect(latest?.entries[0]?.row.hostLabel).toBe('new name')
+    expect(latest?.entries[0]?.searchText).toContain('new name')
   })
 })

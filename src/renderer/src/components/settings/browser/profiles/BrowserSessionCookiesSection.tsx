@@ -8,7 +8,6 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateExecutionHostLabel } from '../../../sidebar/execution-host-label'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
 type BrowserSessionHostOption = {
@@ -132,7 +131,7 @@ export function BrowserSessionCookiesSection({
             <SelectContent align="end">
               {hostOptions.map((host) => (
                 <SelectItem key={host.id} value={host.id}>
-                  {translateExecutionHostLabel(host.label)}
+                  {host.label}
                 </SelectItem>
               ))}
             </SelectContent>

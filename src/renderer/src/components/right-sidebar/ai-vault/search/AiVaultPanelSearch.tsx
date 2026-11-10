@@ -5,11 +5,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { AiVaultSearchHostOutcome } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
-import {
-  getExecutionHostLabel,
-  parseExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { translateExecutionHostLabel } from '../../../sidebar/execution-host-label'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { getTranslatedExecutionHostLabel } from '../../../sidebar/execution-host-label'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
 // Keep reasons short to match adjacent host labels; null means the host answered.
@@ -54,8 +51,8 @@ function describeSkippedHosts(
       return []
     }
     const reason = hostSkipReason(entry.outcome, t)
-    const label = translateExecutionHostLabel(
-      getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
+    const label = getTranslatedExecutionHostLabel(
+      parseExecutionHostId(entry.executionHostId)?.id ?? null
     )
     return reason ? [`${label} (${reason})`] : []
   })

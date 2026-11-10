@@ -21,7 +21,6 @@ import {
 import { AddHostSubmenuRow } from './RunTargetSubmenus'
 import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
-import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
 
 type RunTargetComboboxProps = {
@@ -205,7 +204,7 @@ export default function RunTargetCombobox({
 
   const fieldLabel = selectedRecipe
     ? `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`
-    : translateExecutionHostLabel(selectedHost?.label ?? '')
+    : (selectedHost?.label ?? '')
   const fieldDetail = selectedRecipe
     ? getRecipeDetail(selectedRecipe, t)
     : (selectedHost?.path ?? '')

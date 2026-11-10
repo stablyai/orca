@@ -20,7 +20,6 @@ import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { searchAgentPickerEntries } from '@/lib/agent-catalog/agent-picker-search'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { useBoundedHostRows } from '@/components/host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '@/components/host-picker/HostListSearchField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
@@ -156,7 +155,7 @@ function AutomationHostFilterRows({
   const rows = useBoundedHostRows(
     entries.map((entry) => ({
       id: entry.stableKey,
-      label: translateExecutionHostLabel(entry.label)
+      label: entry.label
     })),
     selected
   )

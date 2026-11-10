@@ -3,7 +3,6 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import { hostScopeDescriptor } from './automation-host-scope-descriptors'
 import {
@@ -40,8 +39,8 @@ export function AutomationHostLabel({
   showAuthority = false,
   className
 }: AutomationHostLabelProps): React.JSX.Element {
-  const label = translateExecutionHostLabel(entry.label)
-  const authorityLabel = translateExecutionHostLabel(entry.authorityLabel)
+  const label = entry.label
+  const authorityLabel = entry.authorityLabel
   const accessibleName = showAuthority ? `${authorityLabel} · ${label}` : label
 
   return (
