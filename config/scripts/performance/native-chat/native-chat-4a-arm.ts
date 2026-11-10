@@ -21,6 +21,11 @@ import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electr
 import { closeElectronAppForE2E } from '../../../../tests/e2e/helpers/electron-process-shutdown'
 import { getE2ECompletedOnboardingProfile } from '../../../../tests/e2e/helpers/e2e-completed-onboarding-profile'
 import { buildFakeAgentCommandOverride } from '../../../../tests/e2e/helpers/fake-agent-command-override'
+import {
+  verifyArmProvenance,
+  type ArmProvenance,
+  type ArmSpec
+} from './native-chat-4a-arm-provenance'
 import { installVisibilityProbe } from './native-chat-4a-probes'
 
 const HARNESS_ROOT = path.resolve(import.meta.dirname, '../../../..')
@@ -59,6 +64,7 @@ export type Arm = {
   name: string
   root: string
   sha: string
+  provenance: ArmProvenance
   electronPath: string
   protocol: ArmProtocol
 }
@@ -75,14 +81,11 @@ export type Launch = {
   readyEpochMs: number
 }
 
-const git = (root: string, ...args: string[]): string =>
-  execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-
-export async function resolveArm(name: string, root: string, scratch: string): Promise<Arm> {
-  const absolute = path.resolve(root)
-  if (!existsSync(path.join(absolute, 'out', 'main', 'index.js'))) {
-    throw new Error(`${name}: ${absolute} has no out/main/index.js; build that checkout first`)
-  }
+/** A pinned, clean checkout whose build output names its HEAD; anything else is refused before any launch. */
+export async function resolveArm(spec: ArmSpec, scratch: string): Promise<Arm> {
+  const { name } = spec
+  const absolute = path.resolve(spec.root)
+  const provenance = verifyArmProvenance({ ...spec, root: absolute })
   const electronPath: unknown = createRequire(path.join(absolute, 'package.json'))('electron')
   if (typeof electronPath !== 'string') {
     throw new Error(`${name}: the electron package in ${absolute} names no executable`)
@@ -99,7 +102,7 @@ export async function resolveArm(name: string, root: string, scratch: string): P
       ]
     ]
   )
-  return { name, root: absolute, sha: git(absolute, 'rev-parse', 'HEAD'), electronPath, protocol }
+  return { name, root: absolute, sha: provenance.sha, provenance, electronPath, protocol }
 }
 
 /** Compile `exports` ([names, checkout-relative file]) from a checkout's own source and load them. */

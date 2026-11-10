@@ -204,7 +204,10 @@ export async function hostWorkMark(app: ElectronApplication): Promise<() => Prom
 }
 
 /** All SQLite/journal files under the profile, so WAL growth and file growth read the same on both storage designs. */
-export function storageBytes(userDataDir: string): { db: number; wal: number; total: number } {
+export function storageBytes(
+  userDataDir: string,
+  includeHome = false
+): { db: number; wal: number; total: number } {
   let db = 0
   let wal = 0
   let total = 0
@@ -212,7 +215,7 @@ export function storageBytes(userDataDir: string): { db: number; wal: number; to
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const file = path.join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (entry.name !== 'home') {
+        if (includeHome || entry.name !== 'home') {
           visit(file)
         }
         continue

@@ -32,19 +32,42 @@ export type Manifest = {
   largeItems: number
   mediumItems: number
   storageBytes: number
+  /** Logical file bytes including the isolated provider home; absent in older cached seeds. */
+  profileBytes?: number
   seedMs: number
 }
 
 const SLEEP_FILLERS_EVERY = 20
 
 /** Count the large chat's rows by paging back from the tail; refuses a fixture that seeded fewer rows than its recipe. */
-async function countItems(page: Page, sessionId: string): Promise<number> {
+async function countItems(
+  page: Page,
+  sessionId: string,
+  expectedTools?: { count: number; bytes: number }
+): Promise<number> {
   let count = 0
+  let tools = 0
   let cursor: unknown
   for (;;) {
     const read = await history(page, sessionId, cursor ? 'before' : 'tail', 200, cursor)
     count += read.page.items.length
+    if (expectedTools) {
+      for (const { body } of read.page.items) {
+        if (body?.kind !== 'tool-call') {
+          continue
+        }
+        if (body.state !== 'completed' || body.output?.byteLength !== expectedTools.bytes) {
+          throw new Error(`seed: ${sessionId} has an incomplete tool or wrong output size`)
+        }
+        tools += 1
+      }
+    }
     if (!read.page.hasOlder) {
+      if (expectedTools && tools !== expectedTools.count) {
+        throw new Error(
+          `seed: ${sessionId} has ${tools} completed tools, expected ${expectedTools.count}`
+        )
+      }
       return count
     }
     cursor = read.page.window.nextCursor
@@ -92,7 +115,16 @@ async function seedRecipeChat(
   }
   await waitForDurable(page, created.sessionId, `4A-TAIL-${chat}-${turn - 1}`, 600_000)
   await waitForIdle(page, created.sessionId, 600_000)
-  const items = await countItems(page, created.sessionId)
+  const items = await countItems(
+    page,
+    created.sessionId,
+    workload.history.fillerTools === undefined
+      ? undefined
+      : {
+          count: turns * workload.history.tools,
+          bytes: workload.history.toolOutputBytes
+        }
+  )
   // Hosts may group a call with its result; fewer than prompt+reply per turn means turns were lost.
   if (items < turns * 2) {
     throw new Error(`seed: ${chat} chat holds ${items} rows for ${turns} turns`)
@@ -175,6 +207,13 @@ export async function seedProfile(input: {
         await waitForDurable(page, filler.sessionId, `4A-TAIL-filler-${chat}-${fillerTurnIndex}`)
       }
       fillerSessionIds.push(filler.sessionId)
+      if (input.workload.history.fillerTools !== undefined) {
+        await waitForIdle(page, filler.sessionId, 600_000)
+        await countItems(page, filler.sessionId, {
+          count: input.workload.history.fillerTurns * input.workload.history.fillerTools,
+          bytes: input.workload.history.fillerToolOutputBytes ?? 500
+        })
+      }
       // Bound live provider processes: retained chats stay, their stubs stop.
       if ((chat + 1) % SLEEP_FILLERS_EVERY === 0) {
         await rpc(page, 'agentSession.sleepWorkspace', { workspaceId })
@@ -210,6 +249,7 @@ export async function seedProfile(input: {
       largeItems: large.items,
       mediumItems: medium?.items ?? 0,
       storageBytes: storageBytes(input.profileDir).total,
+      profileBytes: storageBytes(input.profileDir, true).total,
       seedMs: Date.now() - started
     }
     renameSync(input.profileDir, seedDir)
