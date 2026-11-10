@@ -108,12 +108,11 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
-          {props.failure ? (
+          <p className="mt-1 text-xs text-muted-foreground">{props.status}</p>
+          {props.failure && (
             <p role="alert" className="mt-1 text-xs text-destructive">
               {props.failure}
             </p>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground">{props.status}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">

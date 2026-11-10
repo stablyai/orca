@@ -34,7 +34,7 @@ function setup(kind: 'unknown' | 'disabled' | 'empty' | 'cached') {
               enabled: kind !== 'disabled',
               isScanning: false,
               lastScanCompletedAt: kind === 'empty' ? null : 1,
-              lastScanError: null,
+              lastScanError: kind === 'cached' ? 'source scan failed' : null,
               [`hasAny${name}Data`]: false
             },
       [`${prefix}UsageSummary`]: null,
@@ -64,6 +64,9 @@ it.each(providers)(
       expect(screen.getByRole('alert').textContent).toBe(
         'The previous Refresh could not be completed. Try Refresh again.'
       )
+      if (kind === 'cached') {
+        expect(screen.getByText(/Updated/).textContent).toContain('source scan failed')
+      }
       const retry = screen.getByRole('button', { name: /Refresh/ })
       expect(retry.hasAttribute('disabled')).toBe(false)
       fireEvent.click(retry)
