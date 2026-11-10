@@ -32,8 +32,7 @@ export const AGENT_UPDATE_METHODS = [
     permission: 'host-admin',
     params: AgentUpdateRequestSchema,
     handler: (params, { runtime }): AgentUpdatesState => {
-      void startAgentUpdates(
-        params.agents,
+      void startAgentUpdates(params.agents, () =>
         pickAgentUpdateSettings(runtime.requireStore().getSettings())
       )
       return getAgentUpdatesState()

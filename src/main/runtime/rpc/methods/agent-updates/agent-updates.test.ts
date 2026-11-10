@@ -75,7 +75,9 @@ describe('agent update RPC methods', () => {
     await expect(
       call(dispatcher, 'agentUpdates.update', { agents: ['codex'] })
     ).resolves.toMatchObject({ ok: true, result: { rows: [running] } })
-    expect(service.startAgentUpdates).toHaveBeenCalledWith(['codex'], {
+    expect(service.startAgentUpdates).toHaveBeenCalledWith(['codex'], expect.any(Function))
+    const [, readSettings] = service.startAgentUpdates.mock.calls[0]
+    expect(readSettings()).toEqual({
       disabledTuiAgents: [],
       agentCmdOverrides: { codex: '/opt/codex' }
     })

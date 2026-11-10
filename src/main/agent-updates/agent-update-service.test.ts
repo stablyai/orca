@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentUpdateRow } from '../../shared/agent-updates/agent-update-types'
+import type { AgentUpdateSettings } from './check-agent-updates'
 
 const { checkAgentUpdates, runAgentUpdate } = vi.hoisted(() => ({
   checkAgentUpdates: vi.fn(),
@@ -8,7 +9,8 @@ const { checkAgentUpdates, runAgentUpdate } = vi.hoisted(() => ({
 vi.mock('./check-agent-updates', () => ({ checkAgentUpdates }))
 vi.mock('./run-agent-update', () => ({ runAgentUpdate }))
 
-const SETTINGS = { disabledTuiAgents: [], agentCmdOverrides: {} }
+const SETTINGS: AgentUpdateSettings = { disabledTuiAgents: [], agentCmdOverrides: {} }
+const readSettings = () => SETTINGS
 const START = new Date('2026-11-09T09:00:00Z')
 
 function row(agent: 'claude' | 'codex', current: string, latest: string): AgentUpdateRow {
@@ -46,7 +48,7 @@ describe('agent-update-service', () => {
     const seen: string[] = []
     service.onAgentUpdatesChanged((state) => seen.push(String(state.rows[0].run?.state)))
 
-    await service.startAgentUpdates(['claude'], SETTINGS)
+    await service.startAgentUpdates(['claude'], readSettings)
 
     expect(seen).toEqual(['running', 'done'])
     expect(runAgentUpdate).toHaveBeenCalledWith('claude', '2.1.319', SETTINGS)
@@ -73,7 +75,7 @@ describe('agent-update-service', () => {
         : { status: 'failed', message: 'EACCES' }
     )
     await service.refreshAgentUpdates(SETTINGS)
-    await service.startAgentUpdates(['claude', 'codex'], SETTINGS)
+    await service.startAgentUpdates(['claude', 'codex'], readSettings)
 
     vi.setSystemTime(new Date('2026-11-09T10:00:00Z'))
     const cached = await service.refreshAgentUpdates(SETTINGS)
@@ -105,7 +107,7 @@ describe('agent-update-service', () => {
     )
 
     const overlappingCheck = service.refreshAgentUpdates(SETTINGS)
-    await service.startAgentUpdates(['claude'], SETTINGS)
+    await service.startAgentUpdates(['claude'], readSettings)
     finishCheck(checked([row('claude', '2.1.319', '2.1.320')]))
     await overlappingCheck
 
@@ -131,7 +133,7 @@ describe('agent-update-service', () => {
     })
 
     const state = await service.refreshAgentUpdates(SETTINGS)
-    await service.startAgentUpdates(['claude'], SETTINGS)
+    await service.startAgentUpdates(['claude'], readSettings)
 
     expect(state.checking).toBe(false)
     expect(service.getAgentUpdatesState().rows[0].run).toEqual({ state: 'done' })
@@ -151,6 +153,76 @@ describe('agent-update-service', () => {
 
     expect(offline.checkedAt).toBeNull()
     expect(checkAgentUpdates).toHaveBeenCalledTimes(2)
+  })
+
+  it('checks again when an agent is disabled inside the cache window', async () => {
+    const service = await loadService()
+    checkAgentUpdates.mockResolvedValueOnce(
+      checked([row('claude', '2.1.319', '2.1.320'), row('codex', '0.165.0', '0.166.0')])
+    )
+    await service.refreshAgentUpdates(SETTINGS)
+    const disabledCodex: AgentUpdateSettings = { ...SETTINGS, disabledTuiAgents: ['codex'] }
+    checkAgentUpdates.mockResolvedValueOnce(checked([row('claude', '2.1.319', '2.1.320')]))
+
+    vi.setSystemTime(new Date('2026-11-09T09:05:00Z'))
+    const state = await service.refreshAgentUpdates(disabledCodex)
+
+    expect(checkAgentUpdates).toHaveBeenCalledTimes(2)
+    expect(checkAgentUpdates).toHaveBeenLastCalledWith(disabledCodex)
+    expect(state.rows.map((entry) => entry.agent)).toEqual(['claude'])
+  })
+
+  it('checks again after a running check that read the old settings', async () => {
+    const service = await loadService()
+    let finishFirst: (result: ReturnType<typeof checked>) => void = () => {}
+    checkAgentUpdates.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishFirst = resolve
+      })
+    )
+    const disabledCodex: AgentUpdateSettings = { ...SETTINGS, disabledTuiAgents: ['codex'] }
+    const first = service.refreshAgentUpdates(SETTINGS)
+    checkAgentUpdates.mockResolvedValueOnce(checked([row('claude', '2.1.319', '2.1.320')]))
+
+    const second = service.refreshAgentUpdates(disabledCodex)
+    finishFirst(checked([row('claude', '2.1.319', '2.1.320'), row('codex', '0.165.0', '0.166.0')]))
+    await first
+    const state = await second
+
+    expect(checkAgentUpdates).toHaveBeenCalledTimes(2)
+    expect(state.rows.map((entry) => entry.agent)).toEqual(['claude'])
+  })
+
+  it('does not update an agent that was disabled after its row appeared', async () => {
+    const service = await loadService()
+    checkAgentUpdates.mockResolvedValue(checked([row('claude', '2.1.319', '2.1.320')]))
+    await service.refreshAgentUpdates(SETTINGS)
+
+    await service.startAgentUpdates(['claude'], () => ({
+      ...SETTINGS,
+      disabledTuiAgents: ['claude']
+    }))
+
+    expect(runAgentUpdate).not.toHaveBeenCalled()
+    expect(service.getAgentUpdatesState().rows).toEqual([])
+  })
+
+  it('skips a queued update when its agent is disabled before its turn', async () => {
+    const service = await loadService()
+    checkAgentUpdates.mockResolvedValue(
+      checked([row('claude', '2.1.319', '2.1.320'), row('codex', '0.165.0', '0.166.0')])
+    )
+    await service.refreshAgentUpdates(SETTINGS)
+    let settings = SETTINGS
+    runAgentUpdate.mockImplementation(async () => {
+      settings = { ...SETTINGS, disabledTuiAgents: ['codex'] }
+      return { status: 'done', version: '2.1.320' }
+    })
+
+    await service.startAgentUpdates(['claude', 'codex'], () => settings)
+
+    expect(runAgentUpdate).toHaveBeenCalledTimes(1)
+    expect(service.getAgentUpdatesState().rows.map((entry) => entry.agent)).toEqual(['claude'])
   })
 
   it('returns the state when the check rejects', async () => {
