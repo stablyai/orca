@@ -1,8 +1,20 @@
 import type React from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
+import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
+import {
+  readHostAgentSignInReport,
+  refreshHostAgentSignInReport,
+  subscribeHostAgentSignInReports
+} from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import { useCloudSshMenuState, type CloudSshWorktree } from '../cloud-ssh/use-cloud-ssh-status'
 
-/** A9: the control plane runs each agent's sign-out on an awake sandbox before deleting it. */
+/**
+ * A9: before deleting a running Orca Cloud sandbox the control plane runs each agent's sign-out.
+ * Only a CLI login saved on the sandbox (the kill-switch fallback) has anything to sign out; the
+ * usual Orca-account placeholders report as API keys, so the line stays hidden for them.
+ */
 export function DeleteCloudSandboxAgentsNote({
   worktree
 }: {
@@ -10,8 +22,23 @@ export function DeleteCloudSandboxAgentsNote({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const state = useCloudSshMenuState(worktree)
-  // Only a running sandbox is signed out; asleep or archived ones are never woken for it.
-  if (state.kind !== 'ready' || state.status.running !== true) {
+  const running = state.kind === 'ready' && state.status.running === true
+  const environmentId = useAppStore(
+    (s) => resolveWorktreeRowOpenInRuntimeOwner(s, worktree).runtimeEnvironmentId ?? null
+  )
+  const report = useSyncExternalStore(subscribeHostAgentSignInReports, () =>
+    environmentId ? readHostAgentSignInReport(environmentId) : null
+  )
+  useEffect(() => {
+    // Asked only while running: an asleep sandbox is never woken to probe.
+    if (running && environmentId) {
+      void refreshHostAgentSignInReport(environmentId)
+    }
+  }, [running, environmentId])
+  const holdsLogin = (report?.agents ?? []).some(
+    (entry) => entry.state === 'signedIn' && entry.method !== 'apiKey'
+  )
+  if (!running || !holdsLogin) {
     return null
   }
   return (
