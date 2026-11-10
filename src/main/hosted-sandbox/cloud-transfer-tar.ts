@@ -2,8 +2,7 @@
 // tar. Only regular files and directories are written; links, devices and any path that is absolute
 // or climbs out of the destination are skipped; total bytes and entry counts are capped, and gzip is
 // inflated with a byte cap (no gzip bombs).
-import { createReadStream, createWriteStream } from 'node:fs'
-import { constants as fsConstants } from 'node:fs'
+import { constants as fsConstants, createReadStream, createWriteStream } from 'node:fs'
 import {
   copyFile,
   link,
