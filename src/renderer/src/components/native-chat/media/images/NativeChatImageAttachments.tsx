@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
-import { cn } from '../../../../lib/utils'
+import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'

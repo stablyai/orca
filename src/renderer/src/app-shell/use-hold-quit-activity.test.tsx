@@ -6,7 +6,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { createFreshnessScheduler } from '@/store/slices/agent-status/agent-status-freshness-scheduler'
-import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
+import { resetRendererAppPlatformCacheForTests } from '@/app-shell/platform/renderer-app-platform'
 
 const initialEntries: Record<string, AgentStatusEntry> = {}
 const store = createStore(() => ({

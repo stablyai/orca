@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { hasHoldQuitActiveWork } from '../../../shared/hold-quit-activity'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export function useHoldQuitActivity(): void {
   useEffect(() => {

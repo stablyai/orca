@@ -17,7 +17,6 @@ const contracts = [
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/jsonl-file-reader.test.ts',
   'src/main/usage/jsonl-file-snapshot.test.ts',
-  'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',

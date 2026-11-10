@@ -10,7 +10,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
 import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 import {
   findIndexedReviewRepository,

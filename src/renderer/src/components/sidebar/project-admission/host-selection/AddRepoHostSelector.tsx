@@ -6,7 +6,7 @@ import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { searchHostsLabel } from '../../../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
 import {
   getSidebarHostHealthLabel,

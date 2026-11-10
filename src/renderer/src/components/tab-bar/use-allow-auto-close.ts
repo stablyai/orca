@@ -7,7 +7,7 @@ import {
   readWorkerAutoClose,
   setWorkerKeptOpen,
   type WorkerAutoCloseSubject
-} from '@/lib/worker-auto-close'
+} from '@/runtime/agent-orchestration/worker-auto-close'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
