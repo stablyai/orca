@@ -36,6 +36,7 @@ const CURSOR_EFFORT_CHOICES = [
   { value: 'max', label: 'Max' }
 ]
 
+/** Builds a Cursor effort option capped at the model's highest supported tier. */
 function cursorEffort(ceiling: 'high' | 'xhigh' | 'max' = 'high'): CatalogOption {
   const ceilingIndex = CURSOR_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
   return {
@@ -69,6 +70,7 @@ const CURSOR_THINKING: CatalogOption = {
   apply: { composedIntoModel: true }
 }
 
+/** Parses `cursor-agent models` output rows (`id - Label` or bare IDs) into catalog models. */
 function parseCursorModels(stdout: string): CatalogModel[] {
   const seen = new Set<string>()
   const models: CatalogModel[] = []
@@ -133,6 +135,7 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     ),
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
+  /** Composes a Cursor `--model` identifier from the base model ID and selected option suffixes. */
   composeModelValue: (modelId, values) => {
     if (modelId === 'auto') {
       return modelId
