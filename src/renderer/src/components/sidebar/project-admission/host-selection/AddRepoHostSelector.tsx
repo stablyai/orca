@@ -115,7 +115,9 @@ export function AddRepoHostSelector({
               >
                 {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason)}
               </span>
-            ) : null}
+            ) : (
+              <span className="sr-only">{getSidebarHostHealthLabel(selectedHost.health)}</span>
+            )}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>

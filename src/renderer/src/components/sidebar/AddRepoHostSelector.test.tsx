@@ -28,34 +28,38 @@ vi.mock('@/components/ui/command', () => ({
   )
 }))
 
+function renderSelector(selectedHostId: 'local' | 'ssh:ssh-1'): string {
+  return renderToStaticMarkup(
+    <AddRepoHostSelector
+      hosts={[
+        {
+          id: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          kind: 'local',
+          health: 'local',
+          presence: 'local'
+        },
+        {
+          id: 'ssh:ssh-1',
+          label: 'Builder',
+          detail: 'SSH',
+          kind: 'ssh',
+          health: 'disconnected',
+          presence: 'configured'
+        }
+      ]}
+      selectedHostId={selectedHostId}
+      open={false}
+      onOpenChange={vi.fn()}
+      onSelectHost={vi.fn()}
+    />
+  )
+}
+
 describe('AddRepoHostSelector', () => {
   it('shows disconnected SSH hosts with a connect action in Add Project', () => {
-    const html = renderToStaticMarkup(
-      <AddRepoHostSelector
-        hosts={[
-          {
-            id: 'local',
-            label: 'Local Mac',
-            detail: 'This computer',
-            kind: 'local',
-            health: 'local',
-            presence: 'local'
-          },
-          {
-            id: 'ssh:ssh-1',
-            label: 'Builder',
-            detail: 'SSH',
-            kind: 'ssh',
-            health: 'disconnected',
-            presence: 'configured'
-          }
-        ]}
-        selectedHostId="ssh:ssh-1"
-        open={false}
-        onOpenChange={vi.fn()}
-        onSelectHost={vi.fn()}
-      />
-    )
+    const html = renderSelector('ssh:ssh-1')
 
     expect(html).toContain('Builder')
     expect(html).toContain('Disconnected')
@@ -66,5 +70,11 @@ describe('AddRepoHostSelector', () => {
     // One status dot on the trigger and one on the Builder row.
     expect(html.match(/bg-muted-foreground\/40/g)).toHaveLength(2)
     expect(html).toContain('data-variant="outline"')
+    // The visible status label already names a remote host's state.
+    expect(html).not.toContain('sr-only')
+  })
+
+  it('names the local status for screen readers on the trigger', () => {
+    expect(renderSelector('local')).toContain('<span class="sr-only">Local</span>')
   })
 })
