@@ -12,6 +12,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerApprovalHolds } from './terminal-worker-approval-holds'
+import type { ClaudeToolResult } from './claude-tool-result-close'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -25,13 +26,24 @@ const DIALOG = [
   '   2. No',
   ' Esc to cancel · Tab to amend'
 ]
-const HOOK_DENIED = ['● Bash(rm -rf build)', '  ⎿  Denied by PermissionRequest hook']
-const USER_NO = ['● Bash(rm -rf build)', '  ⎿  Interrupted · What should Claude do instead?']
-const AUTO_BLOCKED = [
-  '● Bash(rm -rf build)',
-  '  ⎿  Permission for this command was denied by a built-in Claude Code safety check'
+// An earlier prompt's deny stays on screen: only this call's tool_result says how it closed.
+const AFTER = [
+  '● Bash(rm -rf old)',
+  '  ⎿  Denied by PermissionRequest hook',
+  '● Bash(rm -rf build)'
 ]
-const RAN = ['● Bash(rm -rf build)', '  ⎿  (No output)']
+const REASON = 'use a script file'
+// tool_result texts as Claude 2.1.322 records them (probe 2026-11-10).
+const OURS: ClaudeToolResult = { isError: true, text: REASON }
+const USER_NO: ClaudeToolResult = {
+  isError: true,
+  text: "The user doesn't want to proceed with this tool use. The tool use was rejected."
+}
+const AUTO_BLOCKED: ClaudeToolResult = {
+  isError: true,
+  text: 'Permission for this command was denied by a built-in Claude Code safety check, not by the user.'
+}
+const RAN: ClaudeToolResult = { isError: false, text: '59' }
 
 function setup(options: { canAnswer?: boolean } = {}) {
   const db = new OrchestrationDb(':memory:')
@@ -42,10 +54,11 @@ function setup(options: { canAnswer?: boolean } = {}) {
   })
   const task = db.createTask({ spec: 'do the work', runId: run.id })
   const dispatch = createRootDispatch(db, task.id, HANDLE, PANE)
-  const screen: { lines: readonly string[] | null; incarnation: string } = {
-    lines: DIALOG,
-    incarnation: 'run-1'
-  }
+  const screen: {
+    lines: readonly string[] | null
+    incarnation: string
+    result: ClaudeToolResult | null
+  } = { lines: DIALOG, incarnation: 'run-1', result: null }
   const timers: { run: () => void; cancelled: boolean }[] = []
   const holds = new TerminalWorkerApprovalHolds({
     notify: vi.fn(),
@@ -53,6 +66,8 @@ function setup(options: { canAnswer?: boolean } = {}) {
     canAnswerPane: () => options.canAnswer ?? true,
     processIncarnation: () => screen.incarnation,
     readScreen: () => screen.lines,
+    readToolResult: ({ transcriptPath, toolUseId }) =>
+      transcriptPath === '/t/session.jsonl' && toolUseId === 'tool-1' ? screen.result : null,
     setTimer: (run) => {
       const timer = { run, cancelled: false }
       timers.push(timer)
@@ -89,7 +104,8 @@ function hook(
     connectionId: null,
     hookEventName: 'PermissionRequest',
     ...(toolUseId ? { toolUseId } : {}),
-    payload: { state: 'blocked', prompt: '', agentType: 'claude', toolName: 'Bash' }
+    payload: { state: 'blocked', prompt: '', agentType: 'claude', toolName: 'Bash' },
+    providerSession: { key: 'session_id', id: 'session-1', transcriptPath: '/t/session.jsonl' }
   }
   return {
     replies,
@@ -132,7 +148,7 @@ const deny = (ctx: ReturnType<typeof setup>, approvalId: string) =>
     dispatchId: ctx.dispatch.id,
     approvalId,
     decision: 'deny',
-    message: 'use a script file'
+    message: REASON
   })
 
 describe('terminal worker approval holds', () => {
@@ -141,29 +157,48 @@ describe('terminal worker approval holds', () => {
     expect(setup({ canAnswer: false }).holds.admit(hook('tool-1').request)).toBe(false)
   })
 
-  it('claims a deny once Claude shows the hook denied it, and only once', async () => {
+  it("claims a deny only from this call's tool_result, despite an older deny line on screen", async () => {
     const ctx = setup()
-    const asked = hook('tool-1', () => (ctx.screen.lines = HOOK_DENIED))
+    const asked = hook('tool-1', () => {
+      ctx.screen.lines = AFTER
+      ctx.screen.result = OURS
+    })
     const approvalId = await opened(ctx, asked)
 
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: true })
-    expect(asked.replies).toEqual([{ behavior: 'deny', message: 'use a script file' }])
+    expect(asked.replies).toEqual([{ behavior: 'deny', message: REASON }])
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
   })
 
-  it('does not claim a deny that lost to a Yes in the terminal; the result names the Yes', async () => {
+  it('does not claim a deny that lost to a Yes, even with an older deny line on screen', async () => {
     const ctx = setup()
-    const asked = hook('tool-1', () => (ctx.screen.lines = RAN))
+    const asked = hook('tool-1', () => {
+      ctx.screen.lines = AFTER
+      ctx.screen.result = RAN
+    })
     const approvalId = await opened(ctx, asked)
 
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
-    ctx.holds.observe(postToolUse('tool-1'))
+    expect(ctx.closing()).toEqual([expect.stringContaining("Allowed in the worker's terminal")])
+  })
+
+  it('names a Yes whose PostToolUse arrived while the deny was in flight', async () => {
+    const ctx = setup()
+    const asked = hook('tool-1', () => {
+      ctx.screen.lines = AFTER
+      ctx.holds.observe(postToolUse('tool-1'))
+    })
+    const approvalId = await opened(ctx, asked)
+    const answering = deny(ctx, approvalId)
+    await ctx.tick(40)
+
+    expect(await answering).toMatchObject({ ok: false, code: 'approval_not_open' })
     expect(ctx.closing()).toEqual([expect.stringContaining("Allowed in the worker's terminal")])
   })
 
   it("does not claim a deny that lost to Claude's 2:00 auto-block", async () => {
     const ctx = setup()
-    const asked = hook('tool-1', () => (ctx.screen.lines = AUTO_BLOCKED))
+    const asked = hook('tool-1', () => (ctx.screen.result = AUTO_BLOCKED))
     const approvalId = await opened(ctx, asked)
 
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
@@ -174,7 +209,7 @@ describe('terminal worker approval holds', () => {
     const ctx = setup()
     const asked = hook('tool-1')
     const approvalId = await opened(ctx, asked)
-    ctx.screen.lines = USER_NO
+    ctx.screen.lines = AFTER
 
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
     expect(asked.replies.filter(Boolean)).toEqual([])
@@ -199,12 +234,13 @@ describe('terminal worker approval holds', () => {
     expect(ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toBeNull()
   })
 
-  it('names a No in the terminal from the screen once the dialog leaves', async () => {
+  it("names a No in the terminal from this call's tool_result once the dialog leaves", async () => {
     const ctx = setup()
     const asked = hook('tool-1')
     await opened(ctx, asked)
-    ctx.screen.lines = USER_NO
-    await ctx.tick()
+    ctx.screen.lines = AFTER
+    ctx.screen.result = USER_NO
+    await ctx.tick(3)
 
     expect(asked.replies).toEqual([null])
     expect(ctx.closing()).toEqual([expect.stringContaining("Denied in the worker's terminal")])
@@ -216,7 +252,7 @@ describe('terminal worker approval holds', () => {
     await opened(ctx, asked)
 
     asked.end('hook-gone')
-    await ctx.tick(40)
+    await ctx.tick(80)
     expect(ctx.closing()).toEqual([
       expect.stringContaining("a person must answer it in the worker's terminal")
     ])
