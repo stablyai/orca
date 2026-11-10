@@ -52,3 +52,11 @@ export type AgentLaunchTabPublished = {
   created: boolean
   placement: AgentLaunchPlacementReceipt
 }
+
+/** A focused launch's chat, which the host window selects once its tab is listed. */
+export type AgentLaunchChatFocus = {
+  worktreeId: string
+  sessionId: string
+  /** An existing workspace is shown too; a created one is shown by its own activation. */
+  revealWorkspace: boolean
+}

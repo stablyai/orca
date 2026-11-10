@@ -11,6 +11,8 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../core'
 import { clientRendersStructuredAgent } from '../structured-sessions/structured-agent-session-policy'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import { agentLaunchTabViewerRule } from './agent-launch-tab-publication'
 
 /** The paired client whose view this launch should move, or null when it moves the host's. */
 export function agentLaunchCallerNavigationId(
@@ -23,7 +25,7 @@ export function agentLaunchCallerNavigationId(
 }
 
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */
-export function selectAgentLaunchTabForCaller(
+function selectAgentLaunchTabForCaller(
   runtime: Pick<OrcaRuntimeService, 'selectCreatedMobileSessionTabForClient'>,
   surface: AgentLaunchPublishedSurface,
   clientNavigationId: string
@@ -51,6 +53,39 @@ export function selectAgentLaunchTabForCaller(
     }
   } catch (error) {
     console.warn('[agent-launch] the launch ran; selecting its tab for the caller did not', error)
+  }
+}
+
+/** Moves the view a launch asked for: the paired caller's own, or the host window's to a focused chat. */
+export function presentAgentLaunchSurface(
+  context: Pick<RpcContext, 'runtime' | 'caller' | 'clientKind'>,
+  surface: AgentLaunchPublishedSurface,
+  presentation: AgentLaunchParams['presentation'],
+  target: AgentLaunchTarget
+): void {
+  const callerNavigationId = agentLaunchCallerNavigationId(target, context)
+  if (callerNavigationId !== null) {
+    if (presentation !== 'background') {
+      selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+    }
+    return
+  }
+  // A terminal's reveal selects its own tab; the window follows a listed chat only on its own intent.
+  if (
+    surface.outcome.kind !== 'structured' ||
+    agentLaunchTabViewerRule(context, presentation) !== 'focus-window'
+  ) {
+    return
+  }
+  try {
+    context.runtime.focusAgentLaunchChatInHostWindow({
+      worktreeId: surface.worktreeId,
+      sessionId: surface.outcome.sessionId,
+      // A created workspace is shown by its own activation.
+      revealWorkspace: target.kind === 'existing'
+    })
+  } catch (error) {
+    console.warn('[agent-launch] the chat started; selecting its tab in the window did not', error)
   }
 }
 

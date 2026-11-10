@@ -2,6 +2,7 @@ import type { AgentLaunchTabPublishRequest } from '../../../../shared/agent-laun
 import { publishAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-publication'
 import { applyAgentLaunchPaneVerdict } from '@/lib/agent-session/launch/pane/agent-launch-pane-verdict-application'
 import { keepAgentLaunchTabMainWrote } from '@/lib/agent-session/launch/pane/agent-launch-tab-main-written'
+import { focusAgentLaunchChat } from '@/lib/agent-session/launch/pane/agent-launch-chat-focus'
 import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
 
 function replyToPublish(request: AgentLaunchTabPublishRequest): void {
@@ -30,4 +31,8 @@ export function registerAgentLaunchTabIpcBridge(unsubs: (() => void)[]): void {
     ),
     window.api.ui.onAgentLaunchPaneVerdict(applyAgentLaunchPaneVerdict)
   )
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (window.api.ui.onFocusAgentLaunchChat) {
+    unsubs.push(window.api.ui.onFocusAgentLaunchChat(focusAgentLaunchChat))
+  }
 }

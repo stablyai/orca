@@ -6,6 +6,7 @@ import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
 import type {
+  AgentLaunchChatFocus,
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
@@ -142,6 +143,12 @@ export const uiTerminalAndSessionTabsApi = {
       callback(data)
     ipcRenderer.on('ui:agentLaunchPaneVerdict', listener)
     return () => ipcRenderer.removeListener('ui:agentLaunchPaneVerdict', listener)
+  },
+  onFocusAgentLaunchChat: (callback: (data: AgentLaunchChatFocus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentLaunchChatFocus) =>
+      callback(data)
+    ipcRenderer.on('ui:focusAgentLaunchChat', listener)
+    return () => ipcRenderer.removeListener('ui:focusAgentLaunchChat', listener)
   },
   onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: PaneLaunchRecipe) => callback(data)

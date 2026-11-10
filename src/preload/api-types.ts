@@ -66,6 +66,7 @@ import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
 import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
+import type { UiAgentLaunchEventApi } from './api/ui-agent-launch-event-api'
 import type { UiWindowApi } from './api/ui-window-api'
 import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
@@ -148,7 +149,7 @@ export type PreloadApi = {
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
-  ui: Merged<UiCommandEventApi & UiWindowApi>
+  ui: Merged<UiCommandEventApi & UiAgentLaunchEventApi & UiWindowApi>
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
