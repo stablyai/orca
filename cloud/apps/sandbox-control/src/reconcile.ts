@@ -6,6 +6,7 @@ import {
   failAndRelease,
   markProviderStopped,
   refreshGitCredentials,
+  renewLease,
   suspendAccountRunning,
   sessionFields,
   suspendSandbox,
@@ -17,6 +18,7 @@ import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './re
 import { listByStatus, transition, type SandboxRow } from './store'
 import { flushUsage, queueUsage } from './usage'
 import { expiredArchives } from './workspace-lifecycle'
+import { ACTIVITY_CHECK_BEFORE_LAPSE_MS, ACTIVITY_RENEW_MS, decideFromActivity, readVmActivity } from './vm-activity'
 
 const STUCK_MS = 15 * 60_000
 /** The desktop rolls over at the deadline; the cron steps in only if it did not (provider cap is +10 min). */
@@ -28,6 +30,8 @@ export type ReconcileSummary = Record<
   | 'suspendedForDeadline'
   | 'suspendedForBilling'
   | 'leaseLapsed'
+  | 'activityRenewed'
+  | 'idleSlept'
   | 'released'
   | 'repaired'
   | 'archivesExpired'
@@ -42,6 +46,8 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
     suspendedForDeadline: 0,
     suspendedForBilling: 0,
     leaseLapsed: 0,
+    activityRenewed: 0,
+    idleSlept: 0,
     released: 0,
     repaired: 0,
     archivesExpired: 0,
@@ -108,6 +114,19 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
     summary.suspendedForDeadline++
     return
   }
+  if (leaseLapsingSoon(row, now)) {
+    // The desktop may be closed: the VM's own activity decides, not whether anyone renewed.
+    const decision = decideFromActivity(await readVmActivity(deps.provider, row.session_id!))
+    if (decision === 'sleep') {
+      await suspendSandbox(deps, row)
+      summary.idleSlept++
+      return
+    }
+    if (decision === 'renew' || decision === 'wait') {
+      row = await renewLease(deps, row, decision === 'renew' ? ACTIVITY_RENEW_MS : ACTIVITY_CHECK_BEFORE_LAPSE_MS + 5 * 60_000)
+      summary.activityRenewed++
+    }
+  }
   if (row.lease_expires_at !== null && now >= row.lease_expires_at) {
     const state = await deps.provider.getSandbox(row.provider_name, { resume: false })
     if (!state || state.session.status !== 'running') {
@@ -131,6 +150,16 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
     await suspendSandbox(deps, current)
     summary.suspendedForBilling++
   }
+}
+
+function leaseLapsingSoon(row: SandboxRow, now: number): boolean {
+  return (
+    row.session_id !== null &&
+    row.lease_expires_at !== null &&
+    now < row.lease_expires_at &&
+    row.lease_expires_at - now <= ACTIVITY_CHECK_BEFORE_LAPSE_MS &&
+    (row.session_deadline_at === null || row.lease_expires_at < row.session_deadline_at)
+  )
 }
 
 /** A suspend/resume call died mid-way: adopt whatever the provider says is true. */
