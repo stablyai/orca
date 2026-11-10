@@ -153,7 +153,9 @@ export function agentLaunchSetupOptionRows(
                         : []),
                       ...option.kind.choices
                     ]
-                  : current && !option.kind.choices.some((choice) => choice.value === current)
+                  : option.id !== 'serviceTier' &&
+                      current &&
+                      !option.kind.choices.some((choice) => choice.value === current)
                     ? [...option.kind.choices, { value: current, label: current }]
                     : option.kind.choices,
                 currentValue: effortInArguments ? 'arguments' : current

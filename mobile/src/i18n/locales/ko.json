@@ -1335,7 +1335,18 @@
     },
     "announce": {
       "typedInto": "{{target}}에 입력됨",
-      "insertedIn": "{{target}}에 삽입됨"
+      "insertedIn": "{{target}}에 삽입됨",
+      "listeningOnPhone": "듣는 중. 이 휴대폰에서 받아쓰는 중입니다.",
+      "listeningOn": "듣는 중. {{computer}}에서 받아쓰는 중입니다.",
+      "listeningOnComputer": "듣는 중. 컴퓨터에서 받아쓰는 중입니다.",
+      "finishing": "마무리 중.",
+      "inserted": "삽입됨.",
+      "cancelled": "받아쓰기가 취소되었습니다.",
+      "movedTo": "이 휴대폰의 받아쓰기가 멈췄습니다. {{computer}}에서 계속합니다.",
+      "movedToComputer": "이 휴대폰의 받아쓰기가 멈췄습니다. 컴퓨터에서 계속합니다.",
+      "stoppedKept": "받아쓰기가 중지되었습니다. {{reason}}. 녹음은 보관됩니다.",
+      "stoppedKeptGeneric": "받아쓰기가 중지되었습니다. 녹음은 보관됩니다.",
+      "stillListening": "계속 듣는 중입니다."
     },
     "pill": {
       "open": "열기",
@@ -2149,6 +2160,10 @@
       "providerExitedRejection": "이 메시지가 전송되기 전에 {{agent}}이(가) 중지되었습니다.",
       "providerExitedRow": "이 응답이 진행되는 동안 {{agent}}이(가) 중지되었습니다. 이 대화에서 계속할 수 있습니다.",
       "providerRateLimited": "{{agent}}이(가) 속도 제한에 걸려 다시 시도하고 있습니다.",
+      "providerUnavailable": "서비스가 혼잡하여 {{agent}}이(가) 응답하지 못했습니다. 다른 모델을 선택하거나 잠시 기다린 후 다시 보내세요.",
+      "providerSafetyStopped": "{{agent}}이(가) 안전 검사 후 이 응답을 중단했습니다. 요청을 검토한 후 다시 보내세요.",
+      "providerResponseFailed": "{{agent}}이(가) 이 응답을 완료하지 못했습니다. 자세한 내용을 열어 확인하세요.",
+      "selectedModel": "선택한 모델",
       "providerRejected": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다.",
       "providerRejectedQuoted": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다: {{detail}}.",
       "providerRetryLastError": "마지막 오류: {{detail}}.",

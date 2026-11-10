@@ -1,5 +1,8 @@
-/** A word or phrase dictation should spell `term`'s way, optionally also replacing what the model hears instead. */
-export type DictationTerm = { term: string; heardAs?: string }
+/**
+ * A word or phrase dictation should spell `term`'s way, optionally also replacing what the model hears instead.
+ * `hint` marks the repo name: it biases recognition and joins its words, but never recases a single word.
+ */
+export type DictationTerm = { term: string; heardAs?: string; hint?: true }
 
 export const MAX_DICTATION_TERMS = 500
 export const MAX_DICTATION_TERM_LENGTH = 100
@@ -20,32 +23,49 @@ function wordKey(text: string): string {
   return (text.normalize('NFKC').toLowerCase().match(WORD_RE) ?? []).join('')
 }
 
-/** Well-formed entries only, trimmed and capped; undefined when the value isn't a list. */
+/** Well-formed, distinct entries only, trimmed and capped; undefined when the value isn't a list. */
 export function normalizeDictationTerms(value: unknown): DictationTerm[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
   }
   const terms: DictationTerm[] = []
+  const seen = new Set<string>()
   for (const entry of value) {
     const term: unknown = entry?.term
     const heardAs: unknown = entry?.heardAs
     if (typeof term !== 'string' || !term.trim()) {
       continue
     }
-    const alias = typeof heardAs === 'string' ? heardAs.trim() : ''
+    const spelling = term.trim().slice(0, MAX_DICTATION_TERM_LENGTH)
+    const alias =
+      typeof heardAs === 'string' ? heardAs.trim().slice(0, MAX_DICTATION_TERM_LENGTH) : ''
+    // The same spelling and alias twice is one stored entry.
+    const id = `${spelling}\u0000${alias}`
+    if (seen.has(id)) {
+      continue
+    }
+    seen.add(id)
     terms.push({
-      term: term.trim().slice(0, MAX_DICTATION_TERM_LENGTH),
-      ...(alias ? { heardAs: alias.slice(0, MAX_DICTATION_TERM_LENGTH) } : {})
+      term: spelling,
+      ...(alias ? { heardAs: alias } : {})
     })
   }
   return terms.slice(0, MAX_DICTATION_TERMS)
 }
 
-/** Repo terms first, so a repo's spelling wins over a personal one for the same words. */
-export function mergeDictationTerms(repoTerms: unknown, personalTerms: unknown): DictationTerm[] {
+/**
+ * The dictionary for a dictation into `repo` (none for a folder workspace): its terms first, so a repo's
+ * spelling wins over a personal one, then the personal terms, then its name as a hint unless that's off.
+ */
+export function dictationTermsFor(
+  voice: { dictationTerms?: unknown; dictationRepoNameHint?: boolean } | undefined,
+  repo: { dictationTerms?: unknown; displayName?: string } | undefined
+): DictationTerm[] {
+  const name = repo?.displayName?.trim().slice(0, MAX_DICTATION_TERM_LENGTH)
   return [
-    ...(normalizeDictationTerms(repoTerms) ?? []),
-    ...(normalizeDictationTerms(personalTerms) ?? [])
+    ...(normalizeDictationTerms(repo?.dictationTerms) ?? []),
+    ...(normalizeDictationTerms(voice?.dictationTerms) ?? []),
+    ...(name && voice?.dictationRepoNameHint !== false ? [{ term: name, hint: true as const }] : [])
   ]
 }
 
@@ -75,8 +95,11 @@ export function createDictationDictionary(
       add(wordKey(heardAs), term)
     }
   }
-  for (const { term } of terms ?? []) {
-    add(wordKey(term), term)
+  for (const { term, hint } of terms ?? []) {
+    // A one-word repo name like "orca" would recase every "Orca"; only a name of several words joins.
+    if (!hint || (term.match(WORD_RE)?.length ?? 0) > 1) {
+      add(wordKey(term), term)
+    }
   }
   if (byKey.size === 0 && unspacedAliases.length === 0) {
     return null

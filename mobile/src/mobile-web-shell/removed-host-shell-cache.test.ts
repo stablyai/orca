@@ -12,7 +12,7 @@ import { createExpoGenerationFileSystem } from './generation-store-file-system'
 import { forgetHostUpdateFailures } from './removed-host-shell-cache'
 
 function store() {
-  return createGenerationStore({ fileSystem: createExpoGenerationFileSystem() })
+  return createGenerationStore({ fileSystem: createExpoGenerationFileSystem('') })
 }
 
 async function seed(hostId: string): Promise<void> {
@@ -42,7 +42,7 @@ describe('forgetHostUpdateFailures', () => {
   })
 
   it('writes nothing when nothing was recorded', async () => {
-    const fileSystem = createExpoGenerationFileSystem()
+    const fileSystem = createExpoGenerationFileSystem('')
     expect(await fileSystem.readText(`${fileSystem.rootUri}/update-failures.json`)).toBeNull()
     const write = vi.spyOn(fileSystem, 'writeText')
     try {

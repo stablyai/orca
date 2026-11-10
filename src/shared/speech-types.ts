@@ -29,7 +29,6 @@ export type SpeechModelErrorRate = {
 export type SpeechModelManifest = {
   id: string
   label: string
-  description: string
   type: SpeechModelType
   provider: SpeechModelProvider
   /** The text pipeline's hint: one language, a bilingual pair such as 'zh-en', or 'multilingual'. */
@@ -48,6 +47,8 @@ export type SpeechModelManifest = {
   sampleRate: number
   streaming: boolean
   recommended?: boolean
+  /** Languages one-click setup offers this model for, ahead of the recommended default. */
+  suggestedFor?: readonly string[]
   /** Retired: never offered for selection, and a saved selection moves to this model on load. */
   replacedBy?: string
   /** Codes the engine accepts (others crash or fail to load it); absent when it ignores the setting. */
@@ -133,10 +134,13 @@ export type VoiceSettings = {
   speechGpu?: SpeechGpuMode
   /** Personal dictionary, used in every repo; each repo adds its own Repo.dictationTerms. */
   dictationTerms?: DictationTerm[]
+  /** Adds the current repo's name as a hint (DictationTerm.hint). Absent = on. */
+  dictationRepoNameHint?: boolean
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */
 export type DictationContext = {
   worktreeId?: string
   repoTerms?: DictationTerm[]
+  repoName?: string
 }

@@ -973,19 +973,6 @@
         "missingHost": "Die Proxy-URL muss einen Host enthalten."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Höchste Genauigkeit für 25 europäische Sprachen. Zeichensetzung, Groß- und Kleinschreibung und Zeitstempel auf Wortebene.",
-        "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
-        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
-        "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
-        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel.",
-        "whisperLargeV3Turbo": "Beste Genauigkeit für Japanisch, Koreanisch und Chinesisch sowie über 90 Sprachen. Langsamer als Parakeet.",
-        "retiredForEngine": "Nicht mehr verfügbar: Die Spracherkennung kann dieses Modell nicht mehr ausführen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "nemotron": "Englisch, Spanisch, Deutsch und viele weitere Sprachen, mit automatischer Spracherkennung."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "das Erstellen von Dateien zur Prüfung ist deaktiviert",
@@ -8947,7 +8934,6 @@
           "7807c11c4d": "Allgemein",
           "6855b0f77d": "Die grundlegenden Abläufe abschließen, die Orca für die parallele Arbeit mit Agenten nützlich machen.",
           "6d119427ef": "Checkliste für den Einstieg",
-          "eb1176a14e": "Lokales Sprachdiktat mit Modellen auf dem Gerät.",
           "5063bb47a5": "Spracheingabe",
           "7118953f14": "Agenten die Steuerung beliebiger Apps auf dem Computer ermöglichen.",
           "c9841721cb": "Computersteuerung",
@@ -9462,7 +9448,6 @@
         "VoicePane": {
           "6fa734ed95": "{{value0}} löschen",
           "68de13f72c": "Modell konnte nicht gelöscht werden.",
-          "1ba81c0ff0": "empfohlen",
           "cfde55c7b0": "Modell konnte nicht heruntergeladen werden.",
           "43fd4f454b": "Spracherkennungsmodell",
           "ba4a900d1d": "Diktatmodus",
@@ -9473,10 +9458,6 @@
           "506df81ba6": "OpenAI-API-Schlüssel gespeichert",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Wird entpackt…",
-          "8f4d2a51d7": "offline",
-          "d504ab05f0": "Streaming",
-          "fbe5990716": "Modell auswählen",
-          "e24f7d43d2": "Ein Spracherkennungsmodell auswählen. Lokale Modelle funktionieren offline; Cloud-Modelle benötigen einen API-Schlüssel.",
           "174da92062": "Gedrückt halten",
           "118b3c2dee": "Umschalten",
           "ad5d036ecc": "Mikrofonberechtigung konnte nicht angefordert werden. Das Diktat wurde nicht aktiviert.",
@@ -9484,7 +9465,6 @@
           "1eac933202": "Die macOS-Einstellungen „Privacy & Security“ wurden geöffnet. Nach der Zugriffsfreigabe das Diktat erneut aktivieren.",
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
-          "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
           "dictationModeAuto": "Automatisch",
           "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken.",
           "speechGpuLabel": "GPU verwenden",
@@ -11320,7 +11300,10 @@
               "modelMemoryKeyword": "speicher",
               "fillerWordsTitle": "Füllwörter entfernen",
               "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
-              "fillerWordsKeyword": "füllwörter"
+              "fillerWordsKeyword": "füllwörter",
+              "vocabularyTitle": "Wortschatz",
+              "vocabularyDescription": "Namen und Code-Begriffe, die das Diktat auf deine Weise schreibt, für dich oder ein Repo.",
+              "vocabularyKeyword": "wörterbuch"
             }
           }
         },
@@ -17177,10 +17160,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Seitenkontext für Agenten erfassen",
-                      "body": "Mit dem Erfassungswerkzeug den Kontext eines Seitenelements für Agenten kopieren."
-                    },
                     "annotate": {
                       "title": "Design-Feedback direkt auf der Seite markieren",
                       "body": "Elemente mit Anmerkungen versehen und diese Notizen an einen Agenten senden."
@@ -17313,7 +17292,6 @@
             "244266c122": "Importieren…",
             "e52a955e6f": "Diese Funktion ist jederzeit unter Einstellungen > Browser verfügbar.",
             "4f5ffaa6a1": "Browserdaten importieren",
-            "b24fef25be": "Importieren",
             "02e89014c5": "{{value0}} Cookies aus {{value1}}{{value2}} importiert.",
             "d40d584769": "{{value0}} Cookies aus Datei importiert."
           },
@@ -17375,7 +17353,6 @@
             "4328a0a062": "Erfassung fehlgeschlagen: {{value0}}",
             "759f32af29": "Wird heruntergeladen",
             "4300f38145": "Wird von {{value0}}{{value1}} heruntergeladen",
-            "acbe79fd01": "Seitenelement erfassen ({{value0}})",
             "cc4a071d3a": "Seitenelement mit Anmerkung versehen ({{value0}})",
             "572046436a": "Entfernter Browser",
             "b313a7275b": "Entfernter Browser wird geöffnet",
@@ -19242,7 +19219,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…"
+        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
+        "cliInstall": "Installieren",
+        "cliRecheck": "Erneut prüfen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {
@@ -19288,6 +19267,11 @@
         "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
         "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
         "providerExitedAnswer": "{{agent}} wurde gestoppt, daher wurde die Antwort nicht gesendet. Zum Fortfahren eine Nachricht senden.",
+        "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+        "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+        "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+        "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
+        "selectedModel": "das ausgewählte Modell",
         "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
         "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
         "attachmentEmpty": "Ein Bild in dieser Nachricht ist leer, daher wurde die Nachricht nicht gesendet.",
@@ -19787,6 +19771,8 @@
         "showAgent": "{{value0}} im Gespräch anzeigen"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
+      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
+      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",
@@ -20656,6 +20642,9 @@
         "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
         "scrollToLatestOnSendSearchPosition": "Position",
+        "markNewMessagesTitle": "Neue Nachrichten bei der Rückkehr in einen Chat markieren",
+        "markNewMessagesCopy": "Bei der Rückkehr in einen Chat erscheint eine Neu-Linie über dem, was in deiner Abwesenheit eingegangen ist. Warst du bei der neuesten Nachricht, scrollt der Chat dorthin.",
+        "markNewMessagesSearchUnread": "ungelesen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20701,6 +20690,88 @@
         "fillerWords": {
           "title": "Füllwörter entfernen",
           "description": "Entfernt Laute wie „äh“ und „ähm“ aus diktiertem Text, passend zur Diktiersprache."
+        },
+        "sectionDescription": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, außer du wählst ein Cloud-Modell.",
+        "input": {
+          "title": "Eingabe",
+          "shortcut": "Tastenkürzel",
+          "shortcutDescription": "Startet das Diktieren im fokussierten Bereich.",
+          "changeShortcut": "Ändern"
+        },
+        "language": {
+          "title": "Sprache"
+        },
+        "cleanup": {
+          "title": "Bereinigung"
+        },
+        "advanced": {
+          "title": "Erweitert"
+        },
+        "setup": {
+          "downloadingDescription": "Du kannst diese Seite verlassen. Diktieren funktioniert, sobald der Download fertig ist.",
+          "title": "Diktieren einrichten",
+          "pickModel": "Sprechen statt tippen, in jedem Bereich. Lade unten ein Sprachmodell herunter; Modelle auf diesem Computer behalten deine Audiodaten hier.",
+          "microphoneMissingTitle": "{{microphone}} ist nicht verbunden",
+          "microphoneMissingDescription": "Diktieren nutzt das Standardmikrofon des Systems, bis es wieder da ist.",
+          "changeMicrophone": "Mikrofon ändern",
+          "onTitle": "Diktieren ist an",
+          "onLocal": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft auf diesem Computer.",
+          "onCloud": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft in der Cloud.",
+          "offTitle": "Diktieren ist aus",
+          "offDescription": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
+          "savedMicrophone": "Dein Mikrofon",
+          "description": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, deine Audiodaten bleiben also hier.",
+          "setUp": "Einrichten",
+          "asksForMicrophone": "Orca fragt nach Zugriff auf das Mikrofon."
+        },
+        "quality": {
+          "unsupported": "Unterstützt deine Sprache nicht",
+          "unmeasured": "Nicht gemessen",
+          "poor": "Schwach",
+          "fair": "Mäßig",
+          "good": "Gut",
+          "veryGood": "Sehr gut",
+          "excellent": "Hervorragend",
+          "characterErrorRate": "{{percent}} % Zeichenfehlerrate",
+          "wordErrorRate": "{{percent}} % Wortfehlerrate",
+          "librispeech": "Test: LibriSpeech (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
+          "fleurs": "Test: FLEURS (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
+          "bench": "Orcas Benchmark auf einem Mac mit Apple Silicon.",
+          "label": "Qualität: {{word}}"
+        },
+        "models": {
+          "retired": "Wird nicht mehr angeboten. Lösche es, um Speicherplatz freizugeben.",
+          "sendsToOpenAi": "Sendet deine Audiodaten an OpenAI.",
+          "delete": "Löschen",
+          "cancelDownload": "Download abbrechen",
+          "inUse": "In Verwendung",
+          "use": "Verwenden",
+          "setUpCloud": "Einrichten",
+          "download": "Herunterladen",
+          "cloud": "Cloud",
+          "description": "Die Qualität ist für {{language}} bewertet. Fahre über eine Bewertung, um den Test dahinter zu sehen.",
+          "where": "Wo Modelle laufen",
+          "local": "Auf diesem Computer",
+          "cloudDescription": "Cloud-Modelle senden deine Audiodaten an den Anbieter. Modelle auf diesem Computer behalten sie hier.",
+          "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast."
+        },
+        "vocabulary": {
+          "title": "Wortschatz",
+          "description": "Namen und Code-Begriffe, die du auf deine Weise geschrieben haben willst. Gib an, wie das Modell sie falsch hört, wenn es sie immer wieder verwechselt.",
+          "repoScope": "Nur beim Diktieren in {{repo}}.",
+          "personalScope": "In jedem Repo.",
+          "scope": "Begriffe für",
+          "personal": "Persönlich · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} entfernen",
+          "term": "Wort oder Wendung",
+          "heardAs": "Gehört als (optional)",
+          "heardAsLabel": "Gehört als",
+          "add": "Hinzufügen",
+          "repoNameHint": "Repo-Namen als Hinweis verwenden",
+          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
+          "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
         }
       },
       "repositoryHooks": {

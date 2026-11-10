@@ -66,7 +66,7 @@ export function AgentLaunchSetupPanel({
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current) {
-      onDraftChange(applyAgentPickerEdit(entry, current, edit))
+      onDraftChange(applyAgentPickerEdit(entry, current, edit), edit.kind)
     }
   }
   const [modelQuery, setModelQuery] = useState('')

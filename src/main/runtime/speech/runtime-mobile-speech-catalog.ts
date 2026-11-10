@@ -69,7 +69,9 @@ export class RuntimeMobileSpeechCatalog {
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
-      dictationTerms: hostDictationTerms(store, worktreeId),
+      // The phone has no Whisper prompt to bias, and its text pass would only join the name; keeping the
+      // hint out also spares a phone page from before hints, which would treat the name as a full term.
+      dictationTerms: hostDictationTerms(store, worktreeId).filter((entry) => !entry.hint),
       models
     }
   }

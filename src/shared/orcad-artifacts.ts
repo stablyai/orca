@@ -189,7 +189,7 @@ export function isOrcadMobileWebAssetPath(path: string): boolean {
   )
 }
 
-/** Slot paths of every asset `manifestText` lists, sorted; throws rather than ship a partial page. */
+/** Slot paths of every asset `manifestText` lists and their brotli copies, sorted; throws rather than ship a partial page. */
 export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   const manifest: unknown = JSON.parse(manifestText)
   const assets =
@@ -197,12 +197,15 @@ export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   if (!Array.isArray(assets) || assets.length === 0) {
     throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} lists no assets`)
   }
-  const filenames = assets.map((asset: unknown) => {
-    const path = asset && typeof asset === 'object' && 'path' in asset ? asset.path : undefined
+  const filenames = assets.flatMap((asset: unknown) => {
+    const entry = asset && typeof asset === 'object' ? asset : {}
+    const path = 'path' in entry ? entry.path : undefined
     if (typeof path !== 'string' || !isOrcadMobileWebAssetPath(path)) {
       throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} names an unsafe asset path: ${String(path)}`)
     }
-    return `${ORCAD_MOBILE_WEB_DIR}/${path}`
+    const slotPath = `${ORCAD_MOBILE_WEB_DIR}/${path}`
+    // The asset's brotli copy, served to phones that inflate it; mirrors mobileWebBundleBrotliPath.
+    return 'brotliByteLength' in entry ? [slotPath, `${slotPath}.br`] : [slotPath]
   })
   return filenames.sort(compareCodeUnits)
 }

@@ -35,7 +35,7 @@ import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
 } from '../diagnostics/NativeChatProviderDetails'
-import { NativeChatSignInButton } from '../../host-access/NativeChatSignInButton'
+import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -239,9 +239,16 @@ export function NativeChatNoticeRow({
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
-    failure?.kind === 'notSignedIn' ||
-    failure?.kind === 'savedConversationMissing' ||
-    failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'notSignedIn',
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -323,7 +330,7 @@ export function NativeChatNoticeRow({
       {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
         <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
       ) : null}
-      <NativeChatSignInButton failureKind={block.failure?.kind} />
+      <NativeChatSetupButton failureKind={block.failure?.kind} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

@@ -48,7 +48,7 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
 /** Fill a manifest-bounded window; early EOF means asset-changed, never a short page. Packaged bundles are unpacked, so positional reads need no file cache (#27976). */
 export async function readMobileWebBundleAssetWindow(
   root: string,
-  asset: MobileWebBundleAsset,
+  asset: Pick<MobileWebBundleAsset, 'path' | 'byteLength'>,
   offset: number,
   length: number
 ): Promise<Buffer> {

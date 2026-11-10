@@ -6,6 +6,7 @@ import {
 } from '../../shared/dictation-text-pipeline'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
+import { sileroVadLanded } from './speech-vad-model'
 import type { SpawnSttWorkerProcess } from './stt-worker-process'
 import { prewarmSttModel } from './stt-session-prewarm'
 import { startSttDictation } from './stt-session-start'
@@ -45,9 +46,30 @@ export class SttService {
 
   constructor(modelManager: ModelManager, spawnWorker: SpawnSttWorkerProcess) {
     this.state = createSttSessionState(modelManager, spawnWorker)
+    modelManager.setProgressCallback((modelId) => {
+      if (sileroVadLanded(modelManager, modelId)) {
+        void this.reloadForVad()
+      }
+    })
   }
 
-  /** `terms`: the dictionary for where this dictation goes, repo terms first (mergeDictationTerms). */
+  /** A recognizer loaded before the VAD landed cuts text only at stop; reload it once no dictation uses it. */
+  private async reloadForVad(): Promise<void> {
+    const engine = this.state.engine
+    if (!engine || engine.retired || engine.vadModelPath) {
+      return
+    }
+    const { modelId, language } = engine
+    const unloaded = this.unloadModelWhenIdle()
+    const generation = this.state.prewarmGeneration
+    await unloaded
+    // A newer pre-warm or a dictation took over; loading is theirs now.
+    if (this.state.prewarmGeneration === generation && !this.state.engine) {
+      await this.prewarm(modelId, language)
+    }
+  }
+
+  /** `terms`: the dictionary for where this dictation goes, repo terms first (dictationTermsFor). */
   startDictation(
     modelId: string,
     sink: SttEventSink,

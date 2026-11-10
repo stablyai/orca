@@ -1,0 +1,140 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeHookPayload } from '../../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { createHookListenerState } from '../../../../../../shared/agent-hook-listener/listener-state'
+import { buildRelayHookEnvelope } from '../../../../../../wsl-guest/agent-hook-envelope-build'
+import { AgentHookServer, _internals } from '../../../agent-hook-server'
+import { PANE, buildBody } from '../../server.test-fixtures'
+
+vi.mock('../../../../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: () => ({ nth_repo_added: 2 })
+}))
+
+// Shapes captured from a live Codex 0.166 run.
+const QUESTIONS = {
+  questions: [
+    { title: 'Which database should the probe use?', options: ['Postgres', 'SQLite', 'MySQL'] },
+    { title: 'What should the probe name the new table?' }
+  ]
+}
+const ASK = {
+  hook_event_name: 'PreToolUse',
+  turn_id: 'turn-1',
+  tool_name: 'request_user_input_async',
+  tool_input: QUESTIONS,
+  tool_use_id: 'call_3_1'
+}
+const ACCEPTED = {
+  ...ASK,
+  hook_event_name: 'PostToolUse',
+  tool_response: '{"accepted":true}'
+}
+const reply = (index: number) => ({
+  hook_event_name: 'UserPromptSubmit',
+  turn_id: 'turn-1',
+  prompt: `<send_user_message_question_reply>\n${JSON.stringify([
+    {
+      answer: 'SQLite',
+      question: QUESTIONS.questions[index]!.title,
+      questionItemId: JSON.stringify(['request_user_input_async', 'call_3_1', index])
+    }
+  ])}\n</send_user_message_question_reply>`
+})
+
+beforeEach(() => {
+  _internals.resetCachesForTests()
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+// The execution host normalizes each hook, then main ingests the relayed row, as for SSH and WSL.
+function codexPane() {
+  const host = createHookListenerState()
+  const server = new AgentHookServer()
+  return {
+    report(payload: Record<string, unknown>) {
+      const event = normalizeHookPayload(
+        host,
+        'codex',
+        buildBody(payload, { worktreeId: 'folder-workspace' }),
+        'production'
+      )
+      if (!event) {
+        throw new Error('Expected a Codex hook event')
+      }
+      server.ingestRemote(buildRelayHookEnvelope(event, 'codex'), 'wsl:Ubuntu')
+      return { host: event.payload, main: server.getStatusSnapshotForPane(PANE)[0] }
+    }
+  }
+}
+
+const waitingOnQuestion = {
+  state: 'waiting',
+  toolName: 'request_user_input_async',
+  interactivePrompt: JSON.stringify(QUESTIONS)
+}
+
+describe('Codex async questions', () => {
+  it('waits on an open question through the turn until every question is answered', () => {
+    const pane = codexPane()
+    pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })
+
+    expect(pane.report(ASK).main).toMatchObject(waitingOnQuestion)
+    // Codex accepts the call at once and keeps working; the question is still open.
+    const accepted = pane.report(ACCEPTED)
+    expect(accepted.host).toMatchObject(waitingOnQuestion)
+    expect(accepted.main).toMatchObject(waitingOnQuestion)
+    pane.report({ hook_event_name: 'PreToolUse', turn_id: 'turn-1', tool_name: 'Bash' })
+    // An approval on screen wins over the open question.
+    const approval = pane.report({
+      hook_event_name: 'PermissionRequest',
+      turn_id: 'turn-1',
+      tool_name: 'Bash',
+      tool_input: { command: 'pnpm tc' }
+    }).main
+    expect(approval?.state).toBe('waiting')
+    expect(approval?.interactivePrompt).toContain('"approval"')
+    pane.report({ hook_event_name: 'PostToolUse', turn_id: 'turn-1', tool_name: 'Bash' })
+    expect(pane.report(reply(0)).main).toMatchObject(waitingOnQuestion)
+
+    const answered = pane.report(reply(1)).main
+    expect(answered).toMatchObject({ state: 'working' })
+    expect(answered?.interactivePrompt).toBeUndefined()
+  })
+
+  it('drops open questions when the user sends a plain message instead of a reply', () => {
+    const pane = codexPane()
+    pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })
+    pane.report(ASK)
+    expect(pane.report(ACCEPTED).main).toMatchObject(waitingOnQuestion)
+
+    // Orca's chat card answers an async question as a quoted message, as Codex clients do.
+    const steered = pane.report({
+      hook_event_name: 'UserPromptSubmit',
+      turn_id: 'turn-1',
+      prompt: '> Which database should the probe use?\n\nSQLite'
+    }).main
+    expect(steered).toMatchObject({ state: 'working' })
+    expect(steered?.interactivePrompt).toBeUndefined()
+  })
+
+  it('drops an unanswered question when the turn ends', () => {
+    const pane = codexPane()
+    pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })
+    pane.report(ASK)
+    expect(pane.report(ACCEPTED).main).toMatchObject(waitingOnQuestion)
+
+    expect(pane.report({ hook_event_name: 'Stop', turn_id: 'turn-1' }).main).toMatchObject({
+      state: 'done'
+    })
+    const next = pane.report({
+      hook_event_name: 'UserPromptSubmit',
+      turn_id: 'turn-2',
+      prompt: 'Next'
+    }).main
+    expect(next).toMatchObject({ state: 'working' })
+    expect(next?.interactivePrompt).toBeUndefined()
+  })
+})

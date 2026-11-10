@@ -91,7 +91,12 @@ export async function createTranscribeCppRecognizer(
   if (!gguf) {
     throw new Error(`No .gguf model file in: ${init.files.join(', ')}`)
   }
+  // Device setup (Metal shader library, Vulkan drivers) and reading the weights each report done,
+  // so a cold disk or a busy machine isn't taken for a GPU that hung.
+  await transcribe.initialize()
+  post({ type: 'loading' })
   const model = await transcribe.TranscribeModel.load(join(init.modelDir, gguf))
+  post({ type: 'loading' })
   // The child runs one call at a time, so every stream can share one session.
   const session = model.createSession({ nThreads: performanceCoreThreads() })
   const { languages } = model.capabilities
@@ -169,9 +174,15 @@ export async function createTranscribeCppRecognizer(
     })
   }
 
+  // Canceled streams, until their queued discard runs; also covers a finish that already closed its stream.
+  const canceled = new Set<string>()
+
   const decode = async (streamId: string, stream: StreamCoverage, chunks: Float32Array[]) => {
     let undecoded = chunks.reduce((total, chunk) => total + chunk.length, 0)
     for (const chunk of chunks) {
+      if (canceled.has(streamId)) {
+        return
+      }
       const startedAt = performance.now()
       const text = await transcribeChunk(chunk, stream.options)
       const decodeMs = performance.now() - startedAt
@@ -249,7 +260,11 @@ export async function createTranscribeCppRecognizer(
       }
     },
     discard(streamId) {
+      canceled.delete(streamId)
       closeStream(streamId)?.vad?.dispose()
+    },
+    cancel(streamId) {
+      canceled.add(streamId)
     }
   }
 }

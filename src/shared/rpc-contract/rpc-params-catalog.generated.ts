@@ -507,6 +507,11 @@ import {
   TaskCreateParams,
   TaskListParams
 } from './orchestration-params'
+import {
+  PeerMailAckParams,
+  PeerMailDeliverParams,
+  PeerMailPullParams
+} from './orchestration-peer-mail-params'
 import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
 import {
   RunCreateParams,
@@ -1317,6 +1322,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileRelay.hosts.list': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
+  'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
@@ -1362,6 +1368,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.inbox': InboxParams,
   'orchestration.partyLocation': PartyLocationParams,
   'orchestration.partyOpen': PartyLocationParams,
+  'orchestration.peerMailAck': PeerMailAckParams,
+  'orchestration.peerMailDeliver': PeerMailDeliverParams,
+  'orchestration.peerMailPull': PeerMailPullParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
