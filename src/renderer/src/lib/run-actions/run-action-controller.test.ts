@@ -63,7 +63,7 @@ vi.mock('@/store/github/refresh/worktree-refresh', () => ({
 vi.stubGlobal('window', new EventTarget())
 
 const { mergeRunActions, loadWorktreeRunActions } = await import('./run-action-config')
-const { startRunAction, stopRunAction, relaunchInterruptedRunActions } =
+const { startRunAction, stopRunAction, relaunchInterruptedRunActions, armRunActionRelaunch } =
   await import('./run-action-controller')
 const { installRunActionEvents, armAutoRunAfterSetup } = await import('./run-action-events')
 const { getRunActionRun, resetRunActionRunsForTests } = await import('./run-actions-store')
@@ -113,6 +113,7 @@ beforeEach(() => {
   state = makeState()
   mocks.ensureHooksConfirmed.mockClear()
   mocks.sendRuntimePtyInput.mockClear()
+  mocks.checkRuntimeHooks.mockResolvedValue({ status: 'ok', hooks: { scripts: { run: [web] } } })
   uninstall = installRunActionEvents()
 })
 afterEach(() => {
@@ -202,6 +203,10 @@ describe('run actions', () => {
   })
 
   it('nonconcurrent stops the project’s action in another workspace first', async () => {
+    mocks.checkRuntimeHooks.mockResolvedValue({
+      status: 'ok',
+      hooks: { scripts: { run: [web], runMode: 'nonconcurrent' } }
+    })
     await startRunAction(WT_A, web, config([web], 'nonconcurrent'))
     const other = getRunActionRun(WT_A, 'web')!
     const starting = startRunAction(WT_B, web, config([web], 'nonconcurrent'))
@@ -239,11 +244,59 @@ describe('run actions', () => {
     expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
   })
 
-  it('does not relaunch actions the user stopped', async () => {
+  it('does not relaunch actions that already exited', async () => {
     mocks.checkRuntimeHooks.mockResolvedValue({ status: 'ok', hooks: { scripts: { run: [web] } } })
     await startRunAction(WT_A, web, config([web]))
     dispatchTerminalCommandFinishedEvent(WT_A, 0, getRunActionRun(WT_A, 'web')!.tabId)
     expect(await relaunchInterruptedRunActions(WT_A)).toBe(0)
+  })
+
+  it('a double restart leaves exactly one tracked run and closes the rest', async () => {
+    await startRunAction(WT_A, web, config([web]))
+    const first = getRunActionRun(WT_A, 'web')!
+    const one = startRunAction(WT_A, web, config([web]))
+    const two = startRunAction(WT_A, web, config([web]))
+    await vi.advanceTimersByTimeAsync(0)
+    dispatchTerminalCommandFinishedEvent(WT_A, 130, first.tabId)
+    await one
+    const second = getRunActionRun(WT_A, 'web')!
+    await vi.advanceTimersByTimeAsync(0)
+    dispatchTerminalCommandFinishedEvent(WT_A, 130, second.tabId)
+    await two
+    const live = state.tabsByWorktree[WT_A].map((tab) => tab.id)
+    expect(live).toEqual([getRunActionRun(WT_A, 'web')!.tabId])
+  })
+
+  it('keeps runs through a host restart even if the tab list is rebuilt before it settles', async () => {
+    mocks.checkRuntimeHooks.mockResolvedValue({ status: 'ok', hooks: { scripts: { run: [web] } } })
+    await startRunAction(WT_A, web, config([web]))
+    armRunActionRelaunch(WT_A)
+    const previous = { tabsByWorktree: { ...state.tabsByWorktree } }
+    state.tabsByWorktree = { [WT_A]: [] }
+    for (const listener of mocks.subscribers) {
+      listener(state, previous)
+    }
+    expect(await relaunchInterruptedRunActions(WT_A)).toBe(1)
+    expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+  })
+
+  it('runs the orca.yaml command as approved, not a stale cached one', async () => {
+    mocks.checkRuntimeHooks.mockResolvedValue({
+      status: 'ok',
+      hooks: { scripts: { run: [{ ...web, command: 'pnpm dev:new' }] } }
+    })
+    await startRunAction(WT_A, web, config([web]))
+    expect(state.createTab).toHaveBeenLastCalledWith(
+      WT_A,
+      undefined,
+      undefined,
+      expect.objectContaining({
+        pendingStartup: expect.objectContaining({ command: 'pnpm dev:new' })
+      })
+    )
+    mocks.checkRuntimeHooks.mockResolvedValue({ status: 'ok', hooks: { scripts: {} } })
+    expect(await startRunAction(WT_B, web, config([web]))).toBe(false)
   })
 
   it('auto-runs the default action once setup succeeds, not when it fails', async () => {

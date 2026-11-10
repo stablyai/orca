@@ -10,7 +10,10 @@ import {
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
+/** `allocatedAt` is refreshed at most daily while the workspace is used, so eviction is LRU. */
 type PersistedBlock = { base: number; allocatedAt: number }
+
+const USE_REFRESH_MS = 24 * 60 * 60 * 1000
 type PersistedRegistry = { version: 1; blocks: Record<string, PersistedBlock> }
 
 const SLOT_COUNT = Math.floor(
@@ -61,9 +64,17 @@ export class WorkspacePortBlockRegistry {
   /** The workspace's block, allocating one on first use. */
   getBlock(worktreePath: string): WorkspacePortBlock {
     const key = normalizeRuntimePathForComparison(worktreePath)
+    const cached = this.load().get(key)
+    if (cached && this.now() - cached.allocatedAt < USE_REFRESH_MS) {
+      return { base: cached.base, count: WORKSPACE_PORT_BLOCK_SIZE }
+    }
+    // Re-read before writing: another Orca process on this host may have allocated since.
+    this.blocks = null
     const blocks = this.load()
     const existing = blocks.get(key)
     if (existing) {
+      blocks.set(key, { base: existing.base, allocatedAt: this.now() })
+      this.save(blocks)
       return { base: existing.base, count: WORKSPACE_PORT_BLOCK_SIZE }
     }
     const base = this.allocate(key, blocks)

@@ -32,6 +32,20 @@ function asTrimmedString(value: unknown): string | undefined {
   return trimmed || undefined
 }
 
+/** Control characters (newlines included) become spaces, so a name can't fake lines in approval text. */
+function singleLine(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined
+  }
+  const text = Array.from(value, (char) => {
+    const code = char.charCodeAt(0)
+    return code < 0x20 || code === 0x7f ? ' ' : char
+  })
+    .join('')
+    .trim()
+  return text || undefined
+}
+
 export function parseOrcaRunMode(value: unknown): OrcaRunMode | undefined {
   return value === 'concurrent' || value === 'nonconcurrent' ? value : undefined
 }
@@ -132,7 +146,8 @@ function normalizeRunAction(id: string, value: unknown): OrcaRunAction | null {
   const availableIn = normalizeHosts(record.availableIn ?? record.available_in)
   return {
     id,
-    name: asTrimmedString(record.name) ?? defaultRunActionName(id),
+    // One line: the name is shown in menus and in the approval text.
+    name: singleLine(asTrimmedString(record.name)) ?? defaultRunActionName(id),
     command: recordCommand,
     ...(cwd ? { cwd } : {}),
     ...(env ? { env } : {}),

@@ -77,6 +77,18 @@ describe('WorkspacePortBlockRegistry', () => {
     expect(registry.getBlock('/repo/overflow').base).toBe(oldest.base)
   })
 
+  it('two processes sharing the file never hand out the same block', () => {
+    const file = registryFile()
+    const a = new WorkspacePortBlockRegistry(file)
+    const b = new WorkspacePortBlockRegistry(file)
+    const bases = new Set<number>()
+    for (let i = 0; i < 50; i++) {
+      bases.add((i % 2 ? a : b).getBlock(`/repo/wt-${i}`).base)
+    }
+    expect(bases.size).toBe(50)
+    expect(b.getBlock('/repo/wt-1')).toEqual(a.getBlock('/repo/wt-1'))
+  })
+
   it('ignores corrupt or out-of-range entries', () => {
     const file = registryFile()
     writeFileSync(

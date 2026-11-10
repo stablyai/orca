@@ -130,46 +130,94 @@ async function stopConflictingRuns(
 }
 
 export type StartRunActionOptions = {
-  /** Focus the run's terminal; background starts (auto-run, wake) leave focus alone. */
+  /** Focus the run's terminal; background starts (auto-run, host restart) leave focus alone. */
   activate?: boolean
-  /** Approval already happened in this flow (e.g. a restart of a run the user approved). */
-  skipTrust?: boolean
   /** Where the run's terminal goes when it has no earlier terminal to replace. */
   groupId?: string
+  /** The earlier run's processes are already gone (its host restarted): skip the interrupt. */
+  previousProcessGone?: boolean
 }
 
-/** Start an action, or restart it if it is already running. Returns false if it did not start. */
-export async function startRunAction(
+const startsInFlight = new Map<string, Promise<boolean>>()
+
+/**
+ * Start an action, or restart it if it is already running. Returns false if it did not start.
+ * Starts of one action in one workspace run one at a time, so a double press never orphans a run.
+ */
+export function startRunAction(
   worktreeId: string,
   action: OrcaRunAction,
   config: WorktreeRunActions,
   options: StartRunActionOptions = {}
 ): Promise<boolean> {
+  const key = `${worktreeId}\n${action.id}`
+  const previous = startsInFlight.get(key) ?? Promise.resolve(true)
+  const next = previous
+    .catch(() => false)
+    .then(() => startRunActionNow(worktreeId, action, config, options))
+    .finally(() => {
+      if (startsInFlight.get(key) === next) {
+        startsInFlight.delete(key)
+      }
+    })
+  startsInFlight.set(key, next)
+  return next
+}
+
+/** The action to execute after approval: re-read, so what runs is exactly what was approved. */
+async function approvedAction(
+  target: RunActionTarget,
+  action: OrcaRunAction,
+  config: WorktreeRunActions
+): Promise<{ action: OrcaRunAction; config: WorktreeRunActions } | null> {
+  if (!config.sharedIds.has(action.id)) {
+    return { action, config }
+  }
+  const decision = await ensureHooksConfirmed(
+    () => useAppStore.getState(),
+    target.repoId,
+    'run',
+    target.hostId
+  )
+  if (decision !== 'run') {
+    return null
+  }
+  const fresh = await loadWorktreeRunActions(target.worktreeId)
+  const freshAction = fresh?.actions.find((candidate) => candidate.id === action.id)
+  if (!fresh || !freshAction || !fresh.sharedIds.has(action.id)) {
+    return null
+  }
+  return { action: freshAction, config: fresh }
+}
+
+async function startRunActionNow(
+  worktreeId: string,
+  requested: OrcaRunAction,
+  requestedConfig: WorktreeRunActions,
+  options: StartRunActionOptions
+): Promise<boolean> {
   const target = resolveRunActionTarget(useAppStore.getState(), worktreeId)
   if (!target) {
     return false
   }
-  if (!options.skipTrust && config.sharedIds.has(action.id)) {
-    const decision = await ensureHooksConfirmed(
-      () => useAppStore.getState(),
-      target.repoId,
-      'run',
-      target.hostId
-    )
-    if (decision !== 'run') {
-      return false
-    }
+  const approved = await approvedAction(target, requested, requestedConfig)
+  if (!approved) {
+    return false
   }
+  const { action, config } = approved
   await stopConflictingRuns(target, action, config.scripts)
 
   const previous = getRunActionRun(worktreeId, action.id)
   let groupId = options.groupId
   if (previous) {
-    await stopRunAction(worktreeId, action.id)
-    const state = useAppStore.getState()
-    groupId = tabGroupId(state, worktreeId, previous.tabId) ?? groupId
+    if (!options.previousProcessGone) {
+      await stopRunAction(worktreeId, action.id)
+    }
+    groupId = tabGroupId(useAppStore.getState(), worktreeId, previous.tabId) ?? groupId
     closeRunTab(previous)
-    deleteRunActionRun(worktreeId, action.id)
+    if (getRunActionRun(worktreeId, action.id)?.tabId === previous.tabId) {
+      deleteRunActionRun(worktreeId, action.id)
+    }
   }
 
   const activate = options.activate !== false
@@ -205,30 +253,66 @@ export async function startRunAction(
   return true
 }
 
+/** Runs remembered while a workspace's host restarts; its tab list may be rebuilt meanwhile. */
+const pendingRelaunches = new Map<string, RunActionRun[]>()
+
 /**
- * The host restarted under these workspaces (wake from sleep, a rollover): their shells are new, so
- * every action that was running is started again in a fresh terminal, without stealing focus.
+ * The workspace's host is about to restart (its shells will be new). Remember what is running
+ * now, so tab-list churn during the restart cannot make Orca forget it.
  */
-export async function relaunchInterruptedRunActions(worktreeId: string): Promise<number> {
-  const interrupted = listRunActionRuns().filter(
+export function armRunActionRelaunch(worktreeId: string): void {
+  const running = listRunActionRuns().filter(
     (run) => run.worktreeId === worktreeId && run.status === 'running'
   )
-  if (interrupted.length === 0) {
+  const armed = pendingRelaunches.get(worktreeId) ?? []
+  const byAction = new Map([...armed, ...running].map((run) => [run.actionId, run]))
+  pendingRelaunches.set(worktreeId, [...byAction.values()])
+}
+
+export function isRunActionRelaunchArmed(worktreeId: string): boolean {
+  return pendingRelaunches.has(worktreeId)
+}
+
+export function disarmRunActionRelaunch(worktreeId: string): void {
+  pendingRelaunches.delete(worktreeId)
+}
+
+/**
+ * The workspace's host restarted: its shells are new, so every action that was running starts
+ * again in a fresh terminal, without stealing focus.
+ */
+export async function relaunchInterruptedRunActions(worktreeId: string): Promise<number> {
+  const byAction = new Map<string, RunActionRun>()
+  for (const run of pendingRelaunches.get(worktreeId) ?? []) {
+    byAction.set(run.actionId, run)
+  }
+  pendingRelaunches.delete(worktreeId)
+  for (const run of listRunActionRuns()) {
+    if (run.worktreeId === worktreeId && run.status === 'running') {
+      byAction.set(run.actionId, run)
+    }
+  }
+  if (byAction.size === 0) {
     return 0
   }
   const config = await loadWorktreeRunActions(worktreeId)
   let started = 0
-  for (const run of interrupted) {
+  for (const run of byAction.values()) {
     const action = config?.actions.find((candidate) => candidate.id === run.actionId)
-    // The process died with the host; only the tab and our record remain.
-    const state = useAppStore.getState()
-    const groupId = tabGroupId(state, worktreeId, run.tabId)
-    closeRunTab(run)
-    deleteRunActionRun(worktreeId, run.actionId)
     if (!action || !config) {
       continue
     }
-    if (await startRunAction(worktreeId, action, config, { activate: false, groupId })) {
+    const groupId = tabGroupId(useAppStore.getState(), worktreeId, run.tabId)
+    // Re-record the run if pruning dropped it, so the start replaces its old terminal.
+    if (!getRunActionRun(worktreeId, run.actionId)) {
+      setRunActionRun(run)
+    }
+    const ok = await startRunAction(worktreeId, action, config, {
+      activate: false,
+      previousProcessGone: true,
+      ...(groupId ? { groupId } : {})
+    })
+    if (ok) {
       started += 1
     }
   }

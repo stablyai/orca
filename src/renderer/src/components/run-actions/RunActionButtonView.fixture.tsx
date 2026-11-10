@@ -37,7 +37,13 @@ const port = (value: number, processName: string): WorkspacePort => ({
   port: value,
   processName,
   protocol: 'http',
-  owner: { worktreeId: 'repo::/w', confidence: 'cwd' }
+  owner: {
+    worktreeId: 'repo::/w',
+    repoId: 'repo',
+    displayName: 'acme-web',
+    path: '/w',
+    confidence: 'cwd'
+  }
 })
 
 const base: RunActionButtonViewProps = {

@@ -1,5 +1,9 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
-import { relaunchInterruptedRunActions } from '@/lib/run-actions/run-action-controller'
+import {
+  armRunActionRelaunch,
+  disarmRunActionRelaunch,
+  relaunchInterruptedRunActions
+} from '@/lib/run-actions/run-action-controller'
 import { offerPendingCloudTransfers } from '@/lib/orca-cloud-transfer-reapply'
 import {
   armInterruptedTurnsForHostRestart,
@@ -70,12 +74,14 @@ export function installOrcaCloudSessionEvents(): () => void {
         // A rollover restarts the host under any working agent: carry its turn on afterwards.
         if (state === 'restarting') {
           armInterruptedTurnsForHostRestart(workspaceId)
+          armRunActionRelaunch(workspaceId)
         } else if (state === 'running') {
           void continueInterruptedTurns(workspaceId)
           // The rollover replaced the host, so the dev servers it ran are gone: start them again.
           void relaunchInterruptedRunActions(workspaceId)
         } else {
           disarmInterruptedTurns(workspaceId)
+          disarmRunActionRelaunch(workspaceId)
         }
       }
     }) ?? (() => {})

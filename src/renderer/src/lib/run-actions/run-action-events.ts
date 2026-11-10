@@ -15,7 +15,11 @@ import {
   patchRunActionRun
 } from './run-actions-store'
 import { loadWorktreeRunActions, pickPrimaryRunAction } from './run-action-config'
-import { notifyRunActionStopped, startRunAction } from './run-action-controller'
+import {
+  isRunActionRelaunchArmed,
+  notifyRunActionStopped,
+  startRunAction
+} from './run-action-controller'
 
 const autoRunSetupTabs = new Map<string, string>()
 
@@ -48,13 +52,23 @@ function handleCommandFinished(detail: TerminalCommandFinishedEventDetail): void
   if (!run || (run.status !== 'running' && run.status !== 'stopping')) {
     return
   }
-  const status = run.status === 'stopping' ? 'stopped' : exitCode === 0 ? 'exited' : 'failed'
+  // OSC 133;D may omit the exit code; without one the run is only known to have ended.
+  const status =
+    run.status === 'stopping'
+      ? 'stopped'
+      : exitCode === 0 || exitCode === null
+        ? 'exited'
+        : 'failed'
   patchRunActionRun(run.worktreeId, run.actionId, { status, exitCode })
   notifyRunActionStopped(tabId)
 }
 
 function pruneClosedRunTabs(state: AppState): void {
   for (const run of listRunActionRuns()) {
+    // A restarting host rebuilds its tab list; the relaunch owns these runs until it settles.
+    if (isRunActionRelaunchArmed(run.worktreeId)) {
+      continue
+    }
     const tabs = state.tabsByWorktree[run.worktreeId]
     // Unhydrated workspaces have no tab list yet; only a loaded list proves the tab is gone.
     if (tabs && !tabs.some((tab) => tab.id === run.tabId)) {
