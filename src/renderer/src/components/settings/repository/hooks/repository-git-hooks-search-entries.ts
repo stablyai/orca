@@ -5,6 +5,33 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
+export function getRepositoryHookScriptDescription(
+  repo: Repo,
+  hook: 'setup' | 'archive',
+  t: Translate
+): string {
+  if (hook === 'setup') {
+    return isFolderRepo(repo)
+      ? t(
+          'components.settings.RepositoryHooksSection.folderSetupDescription',
+          'Local and shared scripts that run after a new workspace is created.'
+        )
+      : t(
+          'auto.components.settings.RepositoryHooksSection.30d555acd2',
+          'Local and shared scripts that run after a new worktree is created.'
+        )
+  }
+  return isFolderRepo(repo)
+    ? t(
+        'components.settings.RepositoryHooksSection.folderArchiveDescription',
+        'Local and shared scripts that run before a workspace is removed.'
+      )
+    : t(
+        'auto.components.settings.RepositoryHooksSection.b91a0f297d',
+        'Local and shared scripts that run before a worktree is archived.'
+      )
+}
+
 export function getRepositoryGitHooksSearchEntries(
   repo: Repo,
   t: Translate = translate
@@ -13,10 +40,7 @@ export function getRepositoryGitHooksSearchEntries(
   return [
     {
       title: t('auto.components.settings.repository.search.810b9f4106', 'Setup script'),
-      description: t(
-        'auto.components.settings.repository.search.baaf70bb37',
-        'Local and shared scripts that run after a new worktree is created.'
-      ),
+      description: getRepositoryHookScriptDescription(repo, 'setup', t),
       keywords: [
         repo.displayName,
         ...translateSearchKeyword('auto.components.settings.repository.search.8655e3387b', 'hooks'),
@@ -42,10 +66,7 @@ export function getRepositoryGitHooksSearchEntries(
     },
     {
       title: t('auto.components.settings.repository.search.1617bc353d', 'Archive script'),
-      description: t(
-        'auto.components.settings.repository.search.acd1157f0c',
-        'Local and shared scripts that run before a worktree is archived.'
-      ),
+      description: getRepositoryHookScriptDescription(repo, 'archive', t),
       keywords: [
         repo.displayName,
         ...translateSearchKeyword('auto.components.settings.repository.search.8655e3387b', 'hooks'),

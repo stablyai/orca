@@ -31,6 +31,7 @@ import {
 import { RepositoryIssueCommandSetting } from './RepositoryIssueCommandSetting'
 import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-draft'
 import { useRepositoryIssueCommand } from './use-repository-issue-command'
+import { getRepositoryHookScriptDescription } from './repository-git-hooks-search-entries'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -126,17 +127,7 @@ export function RepositoryHooksSection({
       >
         <SearchableSetting
           title={t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script')}
-          description={
-            isFolder
-              ? t(
-                  'components.settings.RepositoryHooksSection.folderSetupDescription',
-                  'Local and shared scripts that run after a new workspace is created.'
-                )
-              : t(
-                  'auto.components.settings.RepositoryHooksSection.30d555acd2',
-                  'Local and shared scripts that run after a new worktree is created.'
-                )
-          }
+          description={getRepositoryHookScriptDescription(repo, 'setup', t)}
           className="py-4"
           forceVisible={forceVisible}
           keywords={[
@@ -188,17 +179,7 @@ export function RepositoryHooksSection({
         </SearchableSetting>
         <SearchableSetting
           title={t('auto.components.settings.RepositoryHooksSection.bfdb1266ce', 'Archive script')}
-          description={
-            isFolder
-              ? t(
-                  'components.settings.RepositoryHooksSection.folderArchiveDescription',
-                  'Local and shared scripts that run before a workspace is removed.'
-                )
-              : t(
-                  'auto.components.settings.RepositoryHooksSection.b91a0f297d',
-                  'Local and shared scripts that run before a worktree is archived.'
-                )
-          }
+          description={getRepositoryHookScriptDescription(repo, 'archive', t)}
           className="py-4"
           forceVisible={forceVisible}
           keywords={[
