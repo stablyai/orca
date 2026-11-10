@@ -3,7 +3,10 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorkspaceMetadataCursor } from '../../../../../../shared/worktree/workspace-metadata-set'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceReferenceIdentity } from '../../../../../../shared/workspace-attachments/workspace-reference-identity'
-import { getRuntimeEnvironmentRevision } from '../../../../runtime/rpc/environment-revisions/runtime-environment-revision'
+import {
+  getRuntimeEnvironmentRevision,
+  onRuntimeEnvironmentsRetired
+} from '../../../../runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import type { AppState } from '../../../types'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
@@ -13,11 +16,28 @@ import type { WorktreeFetchOptions } from './worktree-fetch-options'
 import { requestWorkspaceMetadataRecovery } from './workspace-metadata-recovery'
 
 // One producer's workspaceMetadata stream as this client has seen it: the last record seq, and per listed
-// projection (repo on a host) the newest record that touched it and whether a covering listing landed since.
-type Projection = { repoId: string; hostId: ExecutionHostId; latest: number; pending: boolean }
+// projection (repo on a host) the newest record that touched it.
+type Projection = { repoId: string; hostId: ExecutionHostId; latest: number }
 type ProducerCoverage = { epoch: string; lastSeq: number; projections: Map<string, Projection> }
 
 const producers = new Map<string, ProducerCoverage>()
+
+const environmentKeyPrefix = (environmentId: string): string => `env:${environmentId}:`
+
+function dropEnvironmentProducers(environmentId: string, except?: string): void {
+  for (const key of producers.keys()) {
+    if (key !== except && key.startsWith(environmentKeyPrefix(environmentId))) {
+      producers.delete(key)
+    }
+  }
+}
+
+// A removed or re-pointed environment's stream ends with it.
+onRuntimeEnvironmentsRetired((environmentIds) => {
+  for (const environmentId of environmentIds) {
+    dropEnvironmentProducers(environmentId)
+  }
+})
 
 const projectionKey = (repoId: string, hostId: ExecutionHostId): string =>
   `${hostId}\u0000${repoId}`
@@ -32,24 +52,20 @@ export function workspaceMetadataProducerKey(hostId: ExecutionHostId): string {
     return 'local'
   }
   const environmentId = parsed.environmentId
-  return `env:${environmentId}:${getRuntimeEnvironmentRevision(environmentId) ?? ''}:${getRuntimeEnvironmentConnectionGeneration(environmentId)}`
+  return `${environmentKeyPrefix(environmentId)}${getRuntimeEnvironmentRevision(environmentId) ?? ''}:${getRuntimeEnvironmentConnectionGeneration(environmentId)}`
 }
 
-function producerFor(key: string, epoch: string): ProducerCoverage {
+function producerFor(key: string, epoch: string, hostId: ExecutionHostId): ProducerCoverage {
   const current = producers.get(key)
   if (current?.epoch === epoch) {
     return current
   }
   // A new epoch is a restarted producer: what it lists already includes its earlier writes.
   const fresh = { epoch, lastSeq: 0, projections: new Map<string, Projection>() }
-  if (key.startsWith('env:')) {
-    // A re-paired or reconnected environment is a new producer; its earlier bookkeeping dies here.
-    const environmentPrefix = key.slice(0, key.indexOf(':', 4) + 1)
-    for (const other of producers.keys()) {
-      if (other !== key && other.startsWith(environmentPrefix)) {
-        producers.delete(other)
-      }
-    }
+  const parsed = parseExecutionHostId(hostId)
+  if (parsed?.kind === 'runtime') {
+    // A reconnected environment is a new producer; its earlier bookkeeping dies here.
+    dropEnvironmentProducers(parsed.environmentId, key)
   }
   producers.set(key, fresh)
   return fresh
@@ -58,7 +74,7 @@ function producerFor(key: string, epoch: string): ProducerCoverage {
 /**
  * Notes a record before it is applied. `replayed` records are dropped; a `gap` means some earlier
  * record was missed and its projection is unknown, so every projection of this producer needs a
- * covering listing. Projections no longer listed here are forgotten.
+ * covering listing. A projection seen for the first time forgets those no longer listed here.
  */
 export function noteWorkspaceMetadataRecord(
   key: string,
@@ -68,23 +84,21 @@ export function noteWorkspaceMetadataRecord(
   hostId: ExecutionHostId,
   isListed: (repoId: string, hostId: ExecutionHostId) => boolean
 ): { replayed: boolean; gap: boolean } {
-  const producer = producerFor(key, epoch)
+  const producer = producerFor(key, epoch, hostId)
   if (seq <= producer.lastSeq) {
     return { replayed: true, gap: false }
   }
   const gap = producer.lastSeq > 0 && seq > producer.lastSeq + 1
   producer.lastSeq = seq
-  for (const [projection, entry] of producer.projections) {
-    if (!isListed(entry.repoId, entry.hostId)) {
-      producer.projections.delete(projection)
+  const recorded = projectionKey(repoId, hostId)
+  if (!producer.projections.has(recorded)) {
+    for (const [projection, entry] of producer.projections) {
+      if (!isListed(entry.repoId, entry.hostId)) {
+        producer.projections.delete(projection)
+      }
     }
   }
-  producer.projections.set(projectionKey(repoId, hostId), {
-    repoId,
-    hostId,
-    latest: seq,
-    pending: true
-  })
+  producer.projections.set(recorded, { repoId, hostId, latest: seq })
   return { replayed: false, gap }
 }
 
@@ -101,8 +115,7 @@ export function requireWorkspaceMetadataCoverage(
     producer.projections.set(projectionKey(repoId, hostId), {
       repoId,
       hostId,
-      latest: producer.lastSeq,
-      pending: true
+      latest: producer.lastSeq
     })
   }
 }
@@ -127,26 +140,6 @@ export function workspaceMetadataListingCoverage(
   }
   // A different epoch read after a restart, so it includes everything the old epoch wrote.
   return stamp.epoch !== producer.epoch || stamp.seq >= projection.latest ? 'covered' : 'stale'
-}
-
-/** Whether the projection still waits for a listing that includes its newest record. */
-function isPending(key: string, repoId: string, hostId: ExecutionHostId): boolean {
-  return producers.get(key)?.projections.get(projectionKey(repoId, hostId))?.pending === true
-}
-
-/**
- * A covering listing ends the wait. The projection keeps its newest seq, so a listing that read before
- * it and lands later is still recognised as stale.
- */
-export function settleWorkspaceMetadataCoverage(
-  key: string,
-  repoId: string,
-  hostId: ExecutionHostId
-): void {
-  const projection = producers.get(key)?.projections.get(projectionKey(repoId, hostId))
-  if (projection) {
-    projection.pending = false
-  }
 }
 
 /**
@@ -189,9 +182,8 @@ function keepPublishedLinkTitles<T extends Worktree>(
 type FetchWorktrees = (repoId: string, options: WorktreeFetchOptions) => Promise<unknown>
 
 /**
- * A listing's place against the records its repo is waiting on, checked right before it is merged: a
- * stale listing keeps already-shown titles and, once applied, asks for a fresh listing; a covering one
- * ends the repo's obligation.
+ * A listing's place against the newest record for its repo and host, checked right before it is
+ * merged: a stale listing keeps already-shown titles and, once applied, asks for a fresh listing.
  */
 export function listingMetadataCoverage(
   state: AppState,
@@ -224,9 +216,8 @@ export function listingMetadataCoverage(
         }
       : refresh,
     settle: (fetchWorktrees) => {
-      if (coverage === 'covered') {
-        settleWorkspaceMetadataCoverage(key, repoId, hostId)
-      } else if (coverage === 'stale' && isPending(key, repoId, hostId)) {
+      // Whatever the stale listing dropped (a newer link, say), a listing begun now includes.
+      if (coverage === 'stale') {
         requestWorkspaceMetadataRecovery(repoId, hostId, fetchWorktrees)
       }
     }

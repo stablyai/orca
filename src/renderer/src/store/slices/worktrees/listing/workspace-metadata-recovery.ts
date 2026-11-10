@@ -27,8 +27,8 @@ export function requestWorkspaceMetadataRecovery(
   inFlight.add(key)
   const options: WorktreeFetchOptions =
     hostId === LOCAL_EXECUTION_HOST_ID
-      ? { forceLocalOwner: true, forceFresh: true }
-      : { executionHostId: hostId, forceFresh: true }
+      ? { forceLocalOwner: true, forceFresh: true, suppressRemoteLineageRefresh: true }
+      : { executionHostId: hostId, forceFresh: true, suppressRemoteLineageRefresh: true }
   void fetchWorktrees(repoId, options)
     .catch(() => undefined)
     .finally(() => {

@@ -75,7 +75,7 @@ describe('addressed workspace metadata records', () => {
     expect(patchWorktreeMetadataSet(state(), twoLinks, local).applied).toBe(false)
   })
 
-  it('keeps a shown title through a listing that predates it, then lists the repo afresh', () => {
+  it('keeps a shown title through a listing that predates it, then lists the repo afresh', async () => {
     noteWorkspaceMetadataRecord('local', 'e2', 7, 'repo-1', 'local', () => true)
     const shown = {
       ...state(),
@@ -106,17 +106,19 @@ describe('addressed workspace metadata records', () => {
     stale.settle(fetchWorktrees)
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', {
       forceLocalOwner: true,
-      forceFresh: true
+      forceFresh: true,
+      suppressRemoteLineageRefresh: true
     })
 
     const covering = listingMetadataCoverage(shown, 'repo-1', 'local', listing(7))
     expect(covering.refresh.result.worktrees[0].linkedItems).toEqual(issue())
     covering.settle(fetchWorktrees)
-    // A listing that read before record 7 and lands after the covering one still keeps the title,
-    // and asks for nothing more.
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    // A listing that read before record 7 and lands after the covering one still keeps the title, and
+    // lists again for anything else it dropped.
     const late = listingMetadataCoverage(shown, 'repo-1', 'local', listing(6))
     expect(late.refresh.result.worktrees[0].linkedItems).toEqual(issue('Fix login'))
     late.settle(fetchWorktrees)
-    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(fetchWorktrees).toHaveBeenCalledTimes(2))
   })
 })

@@ -31,20 +31,26 @@ function apply(record: unknown, source: MetadataSetSource): void {
   const listingHost: ExecutionHostId =
     source.kind === 'environment' ? toRuntimeExecutionHostId(source.environmentId) : set.hostId
   const producerKey = workspaceMetadataProducerKey(listingHost)
-  const state = useAppStore.getState()
-  // Every repo projection this producer lists here: each repo row on a host this producer serves.
-  const projections = state.repos.flatMap((repo) => {
-    const hostId = getRepoExecutionHostId(repo)
-    return workspaceMetadataProducerKey(hostId) === producerKey ? [{ repoId: repo.id, hostId }] : []
-  })
-  const listed = new Set(projections.map(({ repoId, hostId }) => `${hostId}\u0000${repoId}`))
+  // Every repo projection this producer lists here, built only for a gap or a first-seen projection.
+  let projections: { repoId: string; hostId: ExecutionHostId }[] | undefined
+  let listed: Set<string> | undefined
+  const producerProjections = (): { repoId: string; hostId: ExecutionHostId }[] =>
+    (projections ??= useAppStore.getState().repos.flatMap((repo) => {
+      const hostId = getRepoExecutionHostId(repo)
+      return workspaceMetadataProducerKey(hostId) === producerKey
+        ? [{ repoId: repo.id, hostId }]
+        : []
+    }))
   const { replayed, gap } = noteWorkspaceMetadataRecord(
     producerKey,
     set.epoch,
     set.seq,
     set.repoId,
     listingHost,
-    (repoId, hostId) => listed.has(`${hostId}\u0000${repoId}`)
+    (repoId, hostId) =>
+      (listed ??= new Set(producerProjections().map((p) => `${p.hostId}\u0000${p.repoId}`))).has(
+        `${hostId}\u0000${repoId}`
+      )
   )
   if (replayed) {
     return
@@ -57,8 +63,8 @@ function apply(record: unknown, source: MetadataSetSource): void {
   })
   if (gap) {
     // A missed record names no projection: list every one this producer owns here, each once.
-    requireWorkspaceMetadataCoverage(producerKey, projections)
-    for (const { repoId, hostId } of projections) {
+    requireWorkspaceMetadataCoverage(producerKey, producerProjections())
+    for (const { repoId, hostId } of producerProjections()) {
       requestWorkspaceMetadataRecovery(repoId, hostId, fetchWorktrees)
     }
   } else if (!applied) {

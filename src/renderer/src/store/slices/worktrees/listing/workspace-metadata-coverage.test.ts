@@ -56,7 +56,8 @@ describe('workspace metadata recovery listing', () => {
     expect(fetchWorktrees).toHaveBeenCalledTimes(1)
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-a', {
       forceLocalOwner: true,
-      forceFresh: true
+      forceFresh: true,
+      suppressRemoteLineageRefresh: true
     })
 
     finish()
