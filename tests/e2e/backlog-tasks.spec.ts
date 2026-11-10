@@ -146,6 +146,12 @@ test('Backlog list, read, CLI create/edit, error recovery and launch composer', 
   await orcaPage.getByRole('button', { name: /TASK-1 Seed with handle/ }).click()
   await expect(orcaPage.getByRole('article')).toContainText('Seed description')
   await orcaPage.getByRole('button', { name: 'Edit task', exact: true }).click()
+  await orcaPage.getByRole('button', { name: 'Save task', exact: true }).click()
+  await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
+  await expect(orcaPage.getByRole('button', { name: 'Edit task', exact: true })).toBeFocused()
+  await expect(orcaPage.getByRole('button', { name: 'Edit task', exact: true })).toBeEnabled()
+  await orcaPage.screenshot({ path: testInfo.outputPath('01-noop-saved.png') })
+  await orcaPage.getByRole('button', { name: 'Edit task', exact: true }).click()
   await orcaPage.getByLabel('Title', { exact: true }).fill('Edited through real CLI')
   await orcaPage.getByRole('button', { name: 'Save task', exact: true }).click()
   await expect(

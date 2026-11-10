@@ -52,6 +52,15 @@ export function BacklogTaskEditor({
     if (saving || error) {
       return
     }
+    if (
+      task &&
+      title === task.title &&
+      description === task.description &&
+      status === task.status
+    ) {
+      onClose()
+      return
+    }
     setSaving(true)
     setError(null)
     try {

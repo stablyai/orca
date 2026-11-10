@@ -133,6 +133,42 @@ describe('Backlog Tasks UI', () => {
       )
     }
   )
+  it.each(['Review', 'Legacy'])(
+    'closes unchanged %s edits without calling the host or locking mutations',
+    async (status) => {
+      render(<BacklogTasks />)
+      const row = await screen.findByRole('button', { name: /OPS-007/ })
+      vi.mocked(callBacklog).mockResolvedValueOnce({
+        id: 'OPS-007',
+        title: 'Task title',
+        status,
+        description: 'Description',
+        body: 'Details'
+      })
+      fireEvent.click(row)
+      await screen.findByText('Details')
+      for (const revertChanges of [false, true]) {
+        fireEvent.click(screen.getByRole('button', { name: 'Edit task' }))
+        if (revertChanges) {
+          fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Temporary' } })
+          fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Task title' } })
+          fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Temporary' } })
+          fireEvent.change(screen.getByLabelText('Description'), {
+            target: { value: 'Description' }
+          })
+        }
+        vi.mocked(callBacklog).mockClear()
+        fireEvent.click(screen.getByRole('button', { name: 'Save task' }))
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+        expect(callBacklog).not.toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: 'Edit task' })).toBeEnabled()
+        expect(screen.queryByRole('alert')).toBeNull()
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Back to tasks' }))
+      expect(screen.getByRole('button', { name: 'New task' })).toBeEnabled()
+      expect(callBacklog).not.toHaveBeenCalled()
+    }
+  )
   it('selects the first supported project and excludes unsupported runtime projects', async () => {
     const local = mocks.repos[0]
     mocks.repos = [
