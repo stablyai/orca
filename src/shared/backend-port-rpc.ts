@@ -121,10 +121,6 @@ export class BackendPortRpc {
       return
     }
     const request = parsed.data
-    if (JSON.stringify(request).length > MAX_REQUEST_BYTES) {
-      this.close()
-      return
-    }
     this.admitted.set(request.id, false)
     let reply
     try {
