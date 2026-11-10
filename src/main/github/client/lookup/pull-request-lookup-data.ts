@@ -34,6 +34,8 @@ export type PullRequestLookupData = {
   isDraft?: boolean
   mergeable: string
   reviewDecision?: PRReviewDecision | null
+  /** Raw GraphQL review nodes from the github.com sidebar query; parsed once into `PRInfo.latestReviews`. */
+  latestReviews?: unknown
   autoMergeRequest?: unknown
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null

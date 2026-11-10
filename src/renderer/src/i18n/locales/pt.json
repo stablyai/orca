@@ -20493,6 +20493,15 @@
         "title": "O Orca recusou este navegador",
         "retry": "Tentar novamente"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "Aprovado por {{logins}}",
+        "approved": "Aprovado",
+        "changesRequestedBy": "Alterações solicitadas por {{logins}}",
+        "changesRequested": "Alterações solicitadas",
+        "reviewRequired": "Revisão necessária"
+      }
     }
   },
   "components": {

@@ -40,6 +40,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
+import { getGitHubPRReviewStatus } from '../../../../../../shared/github/pull-requests/pr-reviewer-display'
+import { getGitHubPRReviewStatusLabel } from './github-pr-review-status-copy'
 
 export default function HostedReviewActions({
   review,
@@ -194,8 +196,21 @@ export default function HostedReviewActions({
   }
 
   if (review.state === 'open') {
+    const reviewStatus =
+      review.provider === 'github'
+        ? getGitHubPRReviewStatus({
+            reviewDecision: review.reviewDecision,
+            latestReviews: githubPR?.latestReviews
+          })
+        : null
+    const reviewStatusLabel = reviewStatus ? getGitHubPRReviewStatusLabel(reviewStatus, t) : null
     return (
       <div className="space-y-1.5">
+        {reviewStatusLabel ? (
+          <p className="truncate text-[11px] text-muted-foreground" title={reviewStatusLabel}>
+            {reviewStatusLabel}
+          </p>
+        ) : null}
         <TooltipProvider>
           <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>

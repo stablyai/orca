@@ -18792,6 +18792,15 @@
         "title": "Orca 拒绝了此浏览器",
         "retry": "重试"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "已由 {{logins}} 批准",
+        "approved": "已批准",
+        "changesRequestedBy": "{{logins}} 请求更改",
+        "changesRequested": "已请求更改",
+        "reviewRequired": "需要审查"
+      }
     }
   },
   "components": {

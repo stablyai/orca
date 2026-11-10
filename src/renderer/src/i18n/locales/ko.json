@@ -18476,6 +18476,15 @@
         "title": "Orca가 이 브라우저를 거부했습니다",
         "retry": "다시 시도"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "{{logins}}님이 승인함",
+        "approved": "승인됨",
+        "changesRequestedBy": "{{logins}}님이 변경 요청함",
+        "changesRequested": "변경 요청됨",
+        "reviewRequired": "리뷰 필요"
+      }
     }
   },
   "components": {

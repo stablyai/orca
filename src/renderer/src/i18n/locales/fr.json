@@ -19221,6 +19221,15 @@
         "title": "Orca a refusé ce navigateur",
         "retry": "Réessayer"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "Approuvé par {{logins}}",
+        "approved": "Approuvé",
+        "changesRequestedBy": "Modifications demandées par {{logins}}",
+        "changesRequested": "Modifications demandées",
+        "reviewRequired": "Review requise"
+      }
     }
   },
   "components": {

@@ -19721,6 +19721,15 @@
         "title": "Orca отклонила этот браузер",
         "retry": "Повторить попытку"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "Одобрено: {{logins}}",
+        "approved": "Одобрено",
+        "changesRequestedBy": "Запрошены изменения: {{logins}}",
+        "changesRequested": "Запрошены изменения",
+        "reviewRequired": "Требуется ревью"
+      }
     }
   },
   "components": {

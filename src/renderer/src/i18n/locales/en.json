@@ -20201,6 +20201,15 @@
         "title": "Orca refused this browser",
         "retry": "Try again"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "Approved by {{logins}}",
+        "approved": "Approved",
+        "changesRequestedBy": "Changes requested by {{logins}}",
+        "changesRequested": "Changes requested",
+        "reviewRequired": "Review required"
+      }
     }
   },
   "components": {

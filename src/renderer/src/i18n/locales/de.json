@@ -19160,6 +19160,15 @@
         "title": "Orca hat diesen Browser abgewiesen",
         "retry": "Erneut versuchen"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "Genehmigt von {{logins}}",
+        "approved": "Genehmigt",
+        "changesRequestedBy": "Änderungen angefordert von {{logins}}",
+        "changesRequested": "Änderungen angefordert",
+        "reviewRequired": "Review erforderlich"
+      }
     }
   },
   "components": {
