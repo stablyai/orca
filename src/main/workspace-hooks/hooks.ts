@@ -186,11 +186,12 @@ export function runHook(
   repo: Repo,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
-  options: { identity?: HookWorkspaceIdentity; timeoutMs?: number } = {}
+  options: { identity?: HookWorkspaceIdentity; timeoutMs?: number; hooks?: OrcaHooks } = {}
   // Failed hooks without an observed exit are unverifiable to the removal gate (#19334).
 ): Promise<{ success: boolean; output: string; exitCode?: number }> {
   const timeoutMs = options.timeoutMs ?? HOOK_TIMEOUT
-  const hooks = getEffectiveHooks(repo, hooksPath)
+  // A caller that already resolved the hooks passes them, so orca.yaml is read once.
+  const hooks = options.hooks ?? getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
 
   if (!script) {

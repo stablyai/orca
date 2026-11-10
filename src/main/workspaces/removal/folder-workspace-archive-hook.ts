@@ -20,11 +20,16 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
   runtimeTarget: () => HookRuntimeTarget | undefined
 }): Promise<ArchiveHookOverride | undefined> {
   const { repo } = args
-  if (!args.runArchive || !isRepoOnCatalogHost(repo) || !getEffectiveHooks(repo)?.scripts.archive) {
+  if (!args.runArchive || !isRepoOnCatalogHost(repo)) {
+    return undefined
+  }
+  const hooks = getEffectiveHooks(repo)
+  if (!hooks?.scripts.archive) {
     return undefined
   }
   const result = await runHook('archive', repo.path, repo, repo.path, args.runtimeTarget(), {
-    identity: { worktreeId: args.worktreeId, displayName: args.displayName }
+    identity: { worktreeId: args.worktreeId, displayName: args.displayName },
+    hooks
   })
   return gateWorktreeRemovalOnArchiveHook({
     worktreePath: repo.path,

@@ -117,7 +117,7 @@ async function createWorktreeRunnerScript(args: {
   const runnerFsPath = windowsFsPath(runnerScriptPath)
   await mkdir(dirname(runnerFsPath), { recursive: true })
   if (isFolderRepo(repo)) {
-    await ignoreFolderSetupRunners(dirname(runnerFsPath))
+    await ignoreFolderSetupRunners(dirname(dirname(runnerFsPath)))
   }
 
   if (runnerShell.family === 'cmd') {

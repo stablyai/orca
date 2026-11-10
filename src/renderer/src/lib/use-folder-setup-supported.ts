@@ -27,6 +27,8 @@ function folderSetupHost(repo: Repo | null | undefined): FolderSetupHost {
 
 // Every answer, from the composer's probe or a Create retry, reaches all mounted consumers.
 const folderSetupAnswers = new Map<string, boolean>()
+// Hosts come and go in a session; keep the most recent answers, as the compatibility cache does.
+const FOLDER_SETUP_ANSWERS_MAX = 32
 const folderSetupListeners = new Set<() => void>()
 
 function subscribeFolderSetupAnswers(listener: () => void): () => void {
@@ -39,8 +41,14 @@ async function probeFolderSetup(environmentId: string): Promise<boolean> {
     environmentId,
     WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY
   )
-  if (folderSetupAnswers.get(environmentId) !== supported) {
-    folderSetupAnswers.set(environmentId, supported)
+  const changed = folderSetupAnswers.get(environmentId) !== supported
+  folderSetupAnswers.delete(environmentId)
+  folderSetupAnswers.set(environmentId, supported)
+  const oldest = folderSetupAnswers.keys().next().value
+  if (folderSetupAnswers.size > FOLDER_SETUP_ANSWERS_MAX && oldest !== undefined) {
+    folderSetupAnswers.delete(oldest)
+  }
+  if (changed) {
     folderSetupListeners.forEach((listener) => listener())
   }
   return supported

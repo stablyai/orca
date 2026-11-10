@@ -29,7 +29,7 @@ describe('folder setup runner files', () => {
     const first = writeRunner(WORKSPACE_A)
     const second = writeRunner(WORKSPACE_A)
     expect(first).not.toBe(second)
-    expect(dirname(first)).toBe(join(folder, '.orca'))
+    expect(dirname(first)).toBe(dirname(second))
   })
 
   it("removes only the removed workspace's runners", async () => {
@@ -39,7 +39,8 @@ describe('folder setup runner files', () => {
     writeFileSync(join(folder, '.orca', 'issue-command'), 'claude')
     await removeFolderSetupRunnerFiles(folder, WORKSPACE_A)
     expect(readdirSync(join(folder, '.orca')).sort()).toEqual(
-      ['issue-command', kept.split(/[\\/]/).pop()!].sort()
+      ['issue-command', dirname(kept).split(/[\\/]/).pop()!].sort()
     )
+    expect(readdirSync(dirname(kept))).toEqual([kept.split(/[\\/]/).pop()!])
   })
 })
