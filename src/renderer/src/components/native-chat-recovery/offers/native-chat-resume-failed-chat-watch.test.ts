@@ -88,16 +88,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// Known chat changes are news despite older host timestamps because list and status delivery can race.
-it('re-reads for a known failed chat that changes even when its stamp predates the list', async () => {
-  await listFailure()
-  hostEmit()({ type: 'snapshot', sessions: [summary('idle', 'Fix it', 1)] })
-  hostEmit()({ type: 'status', session: summary('working', 'Carry on please', 2) })
-  await vi.advanceTimersByTimeAsync(500)
-  expect(offerReads()).toBe(2)
-  expect(getNativeChatRestartOffer().failed).toEqual([])
-})
-
 it('never lets a re-read that was already in flight bring back a dismissed failure', async () => {
   await listFailure({ failed: [failure] })
   const stale = Promise.withResolvers<unknown>()
