@@ -121,3 +121,26 @@ export function pickPrimaryRunAction(
     : undefined
   return liveAction ?? pickDefaultRunAction(actions)
 }
+
+const RELAUNCH_RETRY_DELAYS_MS = [0, 3_000, 6_000, 12_000, 24_000, 48_000]
+const RELAUNCH_ATTEMPT_TIMEOUT_MS = 10_000
+
+/** A host that just restarted may not serve repo reads yet; give it a little while to answer. */
+export async function loadRunActionsOnceHostAnswers(
+  worktreeId: string
+): Promise<WorktreeRunActions | null> {
+  for (const delayMs of RELAUNCH_RETRY_DELAYS_MS) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    // A read queued behind a reconnecting host can hang; bound each attempt and try again.
+    const config = await Promise.race([
+      loadWorktreeRunActions(worktreeId, { background: true }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), RELAUNCH_ATTEMPT_TIMEOUT_MS))
+    ])
+    if (config && config.actions.length > 0) {
+      return config
+    }
+  }
+  return null
+}

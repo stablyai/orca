@@ -15,6 +15,7 @@ import {
   type RunActionRun
 } from './run-actions-store'
 import {
+  loadRunActionsOnceHostAnswers,
   loadWorktreeRunActions,
   resolveRunActionTarget,
   type RunActionTarget,
@@ -299,7 +300,7 @@ export async function relaunchInterruptedRunActions(worktreeId: string): Promise
   if (byAction.size === 0) {
     return 0
   }
-  const config = await loadWorktreeRunActions(worktreeId)
+  const config = await loadRunActionsOnceHostAnswers(worktreeId)
   let started = 0
   for (const run of byAction.values()) {
     const action = config?.actions.find((candidate) => candidate.id === run.actionId)

@@ -19,6 +19,8 @@ export type RunActionRun = {
 type RunsByWorktree = Record<string, Record<string, RunActionRun>>
 
 const STORAGE_KEY = 'orca.runActions.v1'
+// Declared before `runs`: reading persisted runs at module load needs it (no temporal dead zone).
+const STATUSES: readonly RunActionStatus[] = ['running', 'stopping', 'stopped', 'exited', 'failed']
 
 let runs: RunsByWorktree = readPersisted()
 const listeners = new Set<() => void>()
@@ -32,8 +34,6 @@ function readPersisted(): RunsByWorktree {
     return {}
   }
 }
-
-const STATUSES: readonly RunActionStatus[] = ['running', 'stopping', 'stopped', 'exited', 'failed']
 
 function readRun(value: unknown): RunActionRun | null {
   if (typeof value !== 'object' || value === null) {
