@@ -71,6 +71,32 @@ describe('profile state dirty-domain writes', () => {
     }
   })
 
+  it('saves a run list per-run rows cannot hold as one replacement row', () => {
+    const db = openTestDatabase()
+    try {
+      const fixtureRun = buildProfileStateCutoverFixture().automationRuns[0]
+      if (!fixtureRun) {
+        throw new Error('Expected automation run fixture')
+      }
+      importProfileStateJson(db, JSON.stringify({ automationRuns: [fixtureRun] }), {
+        now: () => 100
+      })
+      // Legacy histories can keep duplicate run ids, which the per-run rows refuse.
+      const duplicated = [fixtureRun, { ...fixtureRun, title: 'Duplicate id' }]
+
+      expect(
+        writeProfileStateDomains(db, {
+          expectedRevision: 1,
+          replacements: [],
+          automationRunsAfter: duplicated
+        })
+      ).toMatchObject({ changed: true, revision: 2 })
+      expect(JSON.parse(exportProfileStateJson(db)).automationRuns).toEqual(duplicated)
+    } finally {
+      db.close()
+    }
+  })
+
   it('rolls back every domain when a later mutation fails', () => {
     const db = openTestDatabase()
     try {
