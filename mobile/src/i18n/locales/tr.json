@@ -1461,7 +1461,7 @@
       "updateRequired": "PDF'leri açmak için Orca Mobile'ı güncelleyin"
     },
     "unsavedEditsOffer": {
-      "changedSince": "Düzenlemelerinizden sonra masaüstünde değişti ({{time}})",
+      "changedSince": "Düzenlemelerinizden ({{time}}) sonra masaüstünde değişti",
       "copyMyEdits": "Düzenlemelerimi kopyala",
       "discard": "Vazgeç",
       "restore": "Geri yükle",
