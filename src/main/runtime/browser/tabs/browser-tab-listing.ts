@@ -9,6 +9,8 @@ export type BrowserTabBarEntry = {
   url: string
   loadError: BrowserTabInfo['loadError']
   certificateFailure: BrowserTabInfo['certificateFailure']
+  profileId?: string | null
+  profileLabel?: string | null
 }
 
 /**
@@ -23,25 +25,49 @@ export function readBrowserTabBar(
   const selected = worktreeId
     ? [snapshots.get(worktreeId)].filter((snapshot) => snapshot !== undefined)
     : [...snapshots.values()]
-  // Why: a window also publishes the tabs it mirrors from paired servers, which only they can load.
-  return selected
-    .filter((snapshot) => ownsWorkspace(snapshot.worktree))
-    .flatMap((snapshot) =>
-      snapshot.tabs.flatMap((tab) =>
-        tab.type === 'browser' && tab.browserPageId && !tab.placement
-          ? [
-              {
-                browserPageId: tab.browserPageId,
-                worktreeId: snapshot.worktree,
-                title: tab.title,
-                url: tab.url,
-                loadError: tab.loadError ?? null,
-                certificateFailure: tab.certificateFailure ?? null
-              }
-            ]
-          : []
-      )
-    )
+  const result: BrowserTabBarEntry[] = []
+  for (const snapshot of selected) {
+    // Mirrored workspaces belong to their server, which alone can recover their pages.
+    if (!ownsWorkspace(snapshot.worktree)) {
+      continue
+    }
+    const inventory = snapshot.browserPageInventory
+    const savedById = inventory && new Map(inventory.map((page) => [page.browserPageId, page]))
+    const listed = new Set<string>()
+    for (const tab of snapshot.tabs) {
+      if (tab.type !== 'browser' || !tab.browserPageId || tab.placement) {
+        continue
+      }
+      const saved = savedById?.get(tab.browserPageId)
+      if (inventory && !saved) {
+        continue
+      }
+      listed.add(tab.browserPageId)
+      result.push({
+        browserPageId: tab.browserPageId,
+        worktreeId: snapshot.worktree,
+        title: saved?.title ?? tab.title,
+        url: saved?.url ?? tab.url,
+        loadError: saved ? saved.loadError : (tab.loadError ?? null),
+        certificateFailure: saved ? saved.certificateFailure : (tab.certificateFailure ?? null),
+        profileId: saved?.profileId ?? null
+      })
+    }
+    for (const page of inventory ?? []) {
+      if (!listed.has(page.browserPageId)) {
+        result.push({
+          browserPageId: page.browserPageId,
+          worktreeId: snapshot.worktree,
+          title: page.title,
+          url: page.url,
+          loadError: page.loadError,
+          certificateFailure: page.certificateFailure,
+          profileId: page.profileId
+        })
+      }
+    }
+  }
+  return result
 }
 
 /**
@@ -76,9 +102,8 @@ export function mergeBrowserTabListing(input: {
             loadError: entry.loadError,
             certificateFailure: entry.certificateFailure,
             worktreeId: entry.worktreeId,
-            // Why null: the profile is reported from the live guest once the page loads.
-            profileId: null,
-            profileLabel: null,
+            profileId: entry.profileId ?? null,
+            profileLabel: entry.profileLabel ?? null,
             loaded: false
           }
     )

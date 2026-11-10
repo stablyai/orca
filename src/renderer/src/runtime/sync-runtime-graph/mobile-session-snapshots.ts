@@ -30,6 +30,7 @@ import {
 import { buildMobileTerminalSurfaceTabs } from './mobile-session-terminal-tabs'
 import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-editor-tabs'
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
+import { buildBrowserPageInventory } from './browser-page-inventory'
 import type { MobileSessionPublicationInputs } from './types'
 import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -214,6 +215,7 @@ export function buildMobileSessionTabSnapshots(
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),
       ...(tabGroupLayout ? { tabGroupLayout } : {}),
+      browserPageInventory: buildBrowserPageInventory(inputs),
       tabs
     }
     const candidateVersion = ++graphState.mobileSessionSnapshotVersion

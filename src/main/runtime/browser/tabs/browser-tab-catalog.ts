@@ -53,7 +53,14 @@ export class RuntimeBrowserTabCatalog {
       }
     })
     // Why no window check: headless snapshots list saved pages not yet started, which load on switch too.
-    const tabBar = bridge ? (this.host.readBrowserTabBar?.(worktreeId) ?? []) : []
+    const tabBar = bridge
+      ? (this.host.readBrowserTabBar?.(worktreeId) ?? []).map((entry) => ({
+          ...entry,
+          profileLabel: entry.profileId
+            ? (browserSessionRegistry.getProfile(entry.profileId)?.label ?? null)
+            : null
+        }))
+      : []
     return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs })
   }
 

@@ -133,3 +133,87 @@ describe('mobile session graph payload partition', () => {
     ])
   })
 })
+
+describe('saved browser inventory publication scope', () => {
+  it.each([10, 100])(
+    'coalesces hidden sibling metadata at %i worktrees without unrelated publication',
+    async (count) => {
+      const state = makeState(`inventory-${count}`, 0)
+      state.browserTabsByWorktree = {}
+      state.browserPagesByWorkspace = {}
+      for (let index = 0; index < count; index++) {
+        const worktree = `repo::/inventory-${count}-${index}`
+        const workspace = `browser-${count}-${index}`
+        const pages = ['hidden', 'selected'].map((suffix) => ({
+          id: `${workspace}-${suffix}`,
+          workspaceId: workspace,
+          worktreeId: worktree,
+          title: suffix,
+          url: `https://example.com/${suffix}`,
+          browserRuntimeEnvironmentId: null,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          faviconUrl: null,
+          loadError: null,
+          createdAt: 1
+        }))
+        state.browserPagesByWorkspace[workspace] = pages
+        state.browserTabsByWorktree[worktree] = [
+          {
+            ...pages[1]!,
+            id: workspace,
+            pageIds: pages.map((page) => page.id),
+            activePageId: pages[1]!.id
+          }
+        ]
+      }
+      const syncWindowGraph = vi.fn().mockResolvedValue({})
+      const { setState } = startSync(state, syncWindowGraph)
+      await flushSync()
+      const workspace = `browser-${count}-0`
+      const pages = state.browserPagesByWorkspace[workspace]!
+      const rename = {
+        ...state,
+        browserPagesByWorkspace: {
+          ...state.browserPagesByWorkspace,
+          [workspace]: [{ ...pages[0]!, title: 'Updated hidden page' }, pages[1]!]
+        }
+      }
+      setState(rename)
+      // A burst has one changed worktree, independently of how many other worktrees are saved.
+      for (let index = 0; index < count; index++) {
+        scheduleRuntimeGraphSync()
+      }
+      await flushSync()
+      expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+      expect(publishedWorktrees(syncWindowGraph.mock.calls[1])).toEqual([
+        `repo::/inventory-${count}-0`
+      ])
+      expect(withheldWorktrees(syncWindowGraph.mock.calls[1])).toHaveLength(count - 1)
+      expect(
+        graphOf(syncWindowGraph.mock.calls[1]).mobileSessionTabs?.[0]?.browserPageInventory?.[0]
+          ?.title
+      ).toBe('Updated hidden page')
+      // Guest loading/favicon churn changes no saved listing field or visible selected row.
+      setState({
+        ...rename,
+        browserPagesByWorkspace: {
+          ...rename.browserPagesByWorkspace,
+          [workspace]: [
+            {
+              ...rename.browserPagesByWorkspace[workspace]![0]!,
+              loading: true,
+              faviconUrl: 'https://example.com/icon.png'
+            },
+            pages[1]!
+          ]
+        }
+      })
+      scheduleRuntimeGraphSync()
+      await flushSync()
+      expect(publishedWorktrees(syncWindowGraph.mock.calls[2])).toEqual([])
+      expect(withheldWorktrees(syncWindowGraph.mock.calls[2])).toHaveLength(count)
+    }
+  )
+})

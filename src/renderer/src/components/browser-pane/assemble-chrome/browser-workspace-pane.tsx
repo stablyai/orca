@@ -14,7 +14,7 @@ import {
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { useBrowserRemotelyViewedPageIds } from '@/lib/pane-manager/browser-remote-viewer-state'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { getBrowserPageRuntimeEnvironmentId } from '../describe-page/browser-page-url-display'
+import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { RemoteBrowserPagePane } from '../stream-remote/remote-browser-page-pane'
 import { ClientHostedBrowserPagePane } from '../ClientHostedBrowserPagePane'
