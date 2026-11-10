@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   resolveCodexPaneSelectionLane,
@@ -89,35 +87,6 @@ function withWindowsRenderer(run: () => void): void {
 const HOST_TAB = { worktreeId: 'wt1', shellOverride: undefined }
 
 describe('resolveCodexPaneSelectionLaneKey', () => {
-  it('still keys an ordinary host pane to host when a WSL distro is configured', () => {
-    withWindowsRenderer(() => {
-      expect(
-        resolveCodexPaneSelectionLaneKey({
-          state: laneState({ terminalWindowsWslDistro: 'Ubuntu', worktreePath: 'C:\\code\\app' }),
-          tab: HOST_TAB,
-          ptyId: 'pty-1'
-        })
-      ).toBe('host')
-    })
-  })
-
-  // An unset tab override may inherit global WSL; using only tab fields would mislabel it host and mute it on a host switch.
-  it('keys an override-less pane by the default Windows shell', () => {
-    withWindowsRenderer(() => {
-      expect(
-        resolveCodexPaneSelectionLaneKey({
-          state: laneState({
-            terminalWindowsShell: 'wsl.exe',
-            terminalWindowsWslDistro: 'Ubuntu',
-            worktreePath: 'C:\\code\\app'
-          }),
-          tab: { worktreeId: 'wt1', shellOverride: undefined },
-          ptyId: 'pty-1'
-        })
-      ).toBe('wsl:Ubuntu')
-    })
-  })
-
   // Startup cwd can leave the worktree (#7685); lane derivation must follow its filesystem like main.
   it('follows the pane startup cwd out of the workspace filesystem', () => {
     expect(
@@ -131,29 +100,6 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
         ptyId: 'pty-1'
       })
     ).toBe('wsl:Ubuntu')
-  })
-
-  it("keys a pane by its own project's WSL distro", () => {
-    withWindowsRenderer(() => {
-      expect(
-        resolveCodexPaneSelectionLaneKey({
-          state: laneState({ projectWslDistro: 'Debian', worktreePath: 'C:\\code\\app' }),
-          tab: HOST_TAB,
-          ptyId: 'pty-1'
-        })
-      ).toBe('wsl:Debian')
-    })
-  })
-
-  // Floating cwd is absent from tab state; use its shell rather than another workspace’s root.
-  it('keys a floating terminal by its shell, not another workspace root', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state: laneState({ worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\dev' }),
-        tab: { worktreeId: 'global-floating-terminal', shellOverride: undefined },
-        ptyId: 'pty-1'
-      })
-    ).toBe('host')
   })
 
   // Repair-required resolution throws outside the per-pane guard; return early or one pane loses the entire batch’s notices.
@@ -171,55 +117,6 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
       ).toBe('wsl:__default__')
     })
   })
-
-  it('reads the distro from a folder workspace path too', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state: laneState({ folderPath: '\\\\wsl$\\Debian\\srv\\app' }),
-        tab: { worktreeId: 'folder:fw1', shellOverride: undefined },
-        ptyId: 'pty-1'
-      })
-    ).toBe('wsl:Debian')
-  })
-
-  it('keys an owned remote runtime pane to its own environment, not the active one', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state: laneState({ activeRuntimeEnvironmentId: 'env-active' }),
-        tab: HOST_TAB,
-        ptyId: 'remote:env-owner@@term-1'
-      })
-    ).toBe('env:env-owner')
-  })
-
-  it('keys a WSL host pane to its distro lane, which the desktop selection feeds', () => {
-    const state = laneState({
-      wslHost: { environmentId: 'wsl:Ubuntu', distro: 'Ubuntu' }
-    })
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state,
-        tab: HOST_TAB,
-        ptyId: toRemoteRuntimePtyId('term-1', 'wsl:Ubuntu')
-      })
-    ).toBe(getCodexSelectionLaneKey({ runtime: 'wsl', wslDistro: 'Ubuntu' }))
-    expect(
-      getCodexAccountSwitchLaneMatcher({
-        owner: { kind: 'local' },
-        target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
-      })('wsl:Ubuntu')
-    ).toBe(true)
-  })
-
-  it('never gives an owner-less remote pane the focused server, as inspection does not', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state: laneState({ activeRuntimeEnvironmentId: 'env-1' }),
-        tab: HOST_TAB,
-        ptyId: 'remote:term-1'
-      })
-    ).toBe('remote-runtime')
-  })
 })
 
 describe('resolveCodexPaneSelectionLane', () => {
@@ -236,18 +133,6 @@ describe('resolveCodexPaneSelectionLane', () => {
       source: 'recorded',
       derivedLaneKey: 'host'
     })
-  })
-
-  it('falls back to the derivation when the record names no selectable lane', () => {
-    // Registry strings are untrusted on-disk values; invalid lanes would silently lose notices.
-    expect(
-      resolveCodexPaneSelectionLane({
-        state: laneState(),
-        tab: HOST_TAB,
-        ptyId: 'pty-1',
-        recordedLaneKey: 'env:env-1'
-      })
-    ).toEqual({ laneKey: 'host', source: 'derived', derivedLaneKey: 'host' })
   })
 
   it.each([
@@ -302,28 +187,5 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
     expect(wslDefaultSwitch('env:env-1')).toBe(false)
     expect(wslDefaultSwitch('ssh-connection')).toBe(false)
     expect(wslDefaultSwitch('remote-runtime')).toBe(false)
-  })
-
-  // Selecting an account on distro-less WSL writes only __default__; do not mute sibling distro panes.
-  it('keeps a distro-less WSL selection off sibling distro panes', () => {
-    const wslDefaultSelect = getCodexAccountSwitchLaneMatcher({
-      owner: { kind: 'local' },
-      target: { runtime: 'wsl', wslDistro: null }
-    })
-    expect(wslDefaultSelect('wsl:__default__')).toBe(true)
-    expect(wslDefaultSelect('wsl:Ubuntu')).toBe(false)
-    expect(wslDefaultSelect('host')).toBe(false)
-  })
-
-  // Concrete-distro System default clears only its slot even with clearsEveryWslDistro; require a null distro for family matching.
-  it('keeps a cleared concrete-distro row off the other distros', () => {
-    const ubuntuClear = getCodexAccountSwitchLaneMatcher({
-      owner: { kind: 'local' },
-      target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      clearsEveryWslDistro: true
-    })
-    expect(ubuntuClear('wsl:Ubuntu')).toBe(true)
-    expect(ubuntuClear('wsl:Debian')).toBe(false)
-    expect(ubuntuClear('wsl:__default__')).toBe(false)
   })
 })

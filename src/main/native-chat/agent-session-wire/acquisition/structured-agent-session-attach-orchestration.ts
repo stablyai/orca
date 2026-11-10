@@ -1,3 +1,4 @@
+import { readAttachTelemetryCaller } from './structured-agent-session-attach-telemetry'
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
 import {
   publishAttachedChild,
@@ -144,6 +145,7 @@ async function runAttachUnderAbort(
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const recordPhase = options.recordPhase
+  const telemetryCaller = await readAttachTelemetryCaller(context, sessionId, options, lock)
   const prepared = await prepareStructuredAgentSessionAttach(context, params, options, lock)
   if (!prepared.ok) {
     return prepared
@@ -201,6 +203,7 @@ async function runAttachUnderAbort(
         ...(await lock.wait(pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params)))
       },
       callerKey,
+      telemetryCaller: () => telemetryCaller,
       params,
       now: () => context.now(),
       recordPhase,

@@ -1,4 +1,9 @@
 import type Database from '../../sqlite/sync-database'
+import {
+  readPRWatchStorage,
+  type PRWatchRead,
+  type PRWatchReadValues
+} from '../../github/pr-watch/pr-watch-storage'
 import { loadAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { AgentSessionStoreState } from '../../runtime/agent-session/records/agent-session-store-state'
 import { readCommandReceipt } from './writing/command-receipt-table'
@@ -9,6 +14,7 @@ export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'
 }
 
 export type JournalSqlDatabaseRead =
+  | { kind: 'pr-watch'; operation: PRWatchRead }
   | { kind: 'records' }
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
@@ -18,6 +24,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'attachment-sweeps'; after: string | null }
 
 export type JournalSqlDatabaseReadResult =
+  | { kind: 'pr-watch'; value: PRWatchReadValues[PRWatchRead['kind']] }
   | { kind: 'records'; records: JournalSqlStoredRecords }
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
@@ -54,6 +61,8 @@ function read(
   operation: JournalSqlDatabaseRead
 ): JournalSqlDatabaseReadResult {
   switch (operation.kind) {
+    case 'pr-watch':
+      return { kind: 'pr-watch', value: readPRWatchStorage(db, operation.operation) }
     case 'records': {
       const records = loadAgentSessionStoreRows(db)
       return {

@@ -1,5 +1,5 @@
-import { captureNativeChatEditDraftDestination } from '../../native-chat-composer-draft-memory'
-import { useNativeChatPickerCommandDispatch } from '../../use-native-chat-picker-command-dispatch'
+import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
+import { useNativeChatPickerCommandDispatch } from '../../composer/pickers/use-native-chat-picker-command-dispatch'
 import {
   useCallback,
   useImperativeHandle,
@@ -14,14 +14,15 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
 import { registerDictationComposerTarget } from '../../../dictation/dictation-insertion-target'
-import { insertNativeChatComposerDraftText } from '../../native-chat-composer-draft-insertion'
-import { registerNativeChatComposerDestination } from '../../native-chat-composer-destination'
+import { useSendAfterDictation } from '../../../dictation/use-dictation-queued-send'
+import { insertNativeChatComposerDraftText } from '../../drafts/native-chat-composer-draft-insertion'
+import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
+import type { NativeChatComposerSendIntent } from '../../composer/submit/native-chat-composer-send-intent'
 import type {
-  NativeChatComposerSendIntent,
   NativeChatComposerProps,
-  NativeChatComposerHandle,
-  NativeChatStructuredComposerTransport
-} from '../../native-chat-composer-types'
+  NativeChatComposerHandle
+} from '../../composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 
 export function useNativeChatComposerEditSession({
   editSession,
@@ -108,17 +109,18 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
+  const sendOrQueue = useSendAfterDictation(root, sendMessage)
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {
-        sendMessage(intent)
+        sendOrQueue(intent)
         return
       }
       if (!disabled && !sendHeld && editSession.canSave) {
         editSession.save()
       }
     },
-    [disabled, editSession, sendHeld, sendMessage]
+    [disabled, editSession, sendHeld, sendOrQueue]
   )
   const submit = useLatestHandler(() => send())
   // The pane's own handle object, so its identity changes only when that handle does.

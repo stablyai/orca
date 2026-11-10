@@ -9,7 +9,7 @@ import {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 
 /** Queued immediately behind Stop, so no later turn can intervene; wait only for an accepted interrupt. */

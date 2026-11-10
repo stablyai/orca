@@ -3,6 +3,7 @@ import {
   readTestJournalSnapshot,
   readTestJournalSubmissions
 } from '../native-chat/agent-session-journal/journal-observation.test-support'
+import './claude-conversation-worker.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
@@ -623,4 +624,101 @@ describe('Claude chat catch-up', () => {
       expect.objectContaining({ reason: 'leaf-not-in-tail' })
     )
   })
+})
+
+it.each(['removed-leaf', ''])(
+  'recovers the active main chain for copied leaf %j, ignoring covered and metadata rows',
+  async (leafUuid) => {
+    const c = await chat()
+    await c.journal.write({
+      kind: 'epoch-replace',
+      reason: 'session_created',
+      fence: 1,
+      items: [
+        {
+          identity: { provider: 'legacy', agent: 'claude', sessionId: 'source', recordId: 'rich' },
+          ownerFence: 0,
+          observedAt: 1,
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'rich copied answer' }]
+          }
+        }
+      ],
+      historyOrigin: {
+        version: 1,
+        kind: 'native_copy',
+        agent: 'claude',
+        unit: 'claude-entry',
+        providerHandle: { kind: 'claude', sessionId: SID, leafUuid: leafUuid || null },
+        ids: ['p1', 't1', 'a1']
+      }
+    })
+    await c.write([
+      ...chatTurn,
+      prompt('abandoned', 'a1', 'abandoned branch', 3),
+      ...outsideTurn,
+      { type: 'custom-title', uuid: 'metadata', customTitle: 'title', sessionId: SID },
+      ...(leafUuid === ''
+        ? [
+            {
+              ...reply(
+                'helper-output',
+                'a1',
+                'msg_helper',
+                { type: 'text', text: 'x'.repeat(16 * 1024 * 1024) },
+                7
+              ),
+              isSidechain: true
+            }
+          ]
+        : [])
+    ])
+    expect(await c.open(leafUuid)).toBe(true)
+    expect(await c.open(leafUuid)).toBe(true)
+    expect((await c.rows()).filter((row) => row.startsWith('assistant:'))).toEqual([
+      'assistant:rich copied answer',
+      'assistant:answer 2'
+    ])
+    expect(await c.rows()).not.toContain('user:abandoned branch')
+    expect((await readTestJournalItems(await c.replay())).map((item) => item.itemId)).toEqual(
+      (await readTestJournalItems(c.journal)).map((item) => item.itemId)
+    )
+  }
+)
+
+it('keeps terminal turns before the recorded compaction bridge during catch-up', async () => {
+  const c = await chat()
+  await c.live()
+  await c.write([
+    ...chatTurn,
+    ...outsideTurn,
+    {
+      type: 'system',
+      subtype: 'compact_boundary',
+      uuid: 'compact',
+      parentUuid: null,
+      logicalParentUuid: 'a3',
+      isSidechain: false,
+      sessionId: SID,
+      timestamp: '2026-10-21T12:00:07.000Z',
+      content: 'Conversation compacted',
+      compactMetadata: { trigger: 'manual', preTokens: 1000 }
+    },
+    prompt('summary', 'compact', 'Summary of the conversation', 8),
+    prompt('p3', 'summary', 'ask after compaction', 9),
+    reply('a4', 'p3', 'msg_d', { type: 'text', text: 'answer after compaction' }, 10)
+  ])
+  expect(await c.open('a1')).toBe(true)
+  const messages = (await readTestJournalItems(c.journal)).flatMap((item) =>
+    item.body.kind === 'message'
+      ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      : []
+  )
+  expect(messages).toContain('ask 2')
+  expect(messages).toContain('answer 2')
+  expect(messages).toContain('ask after compaction')
+  expect(messages).toContain('answer after compaction')
+  expect(c.warn).not.toHaveBeenCalled()
 })

@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/agent-session-last-turn'
-import type { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
+import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { recordAgentSessionAcquisitionExit } from '../agent-session-acquisition-exit-transition'
 import {
   commitAgentSessionProcessIdentity,

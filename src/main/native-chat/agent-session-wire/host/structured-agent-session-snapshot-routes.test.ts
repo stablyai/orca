@@ -72,10 +72,29 @@ async function snapshotFixture() {
   const retired = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   await live.followSnapshots(routes.observe('orca-session', journal))
   await retired.followSnapshots(routes.observe('orca-session', journal))
+  expect(live.sink.journalSnapshot?.()).toBeNull()
+  live.bind({ journal, fence: 0, publish: () => {} })
   const saved = {
     canonicalByToolUse: [['toolu_a', 'agent-a']],
     // A saved zero still counts as a first run.
     attemptByAgent: [['agent-a', 1]],
+    parents: [
+      [
+        'agent-a',
+        [
+          [
+            'toolu_a',
+            expect.objectContaining({
+              agentId: 'agent-a',
+              providerParentRef: 'toolu_a',
+              producerKind: 'agent',
+              attempt: 0
+            })
+          ]
+        ]
+      ]
+    ],
+    backgrounds: [],
     subagents: [],
     threadGoal: { goal: null, row: null }
   }
@@ -85,7 +104,7 @@ async function snapshotFixture() {
 }
 
 it("holds reading across an epoch replacement and resumes only on the new epoch's facts", async () => {
-  const { journal, live, retired, saved, paused } = await snapshotFixture()
+  const { journal, live, retired, paused } = await snapshotFixture()
   const replaced = journal.write({
     kind: 'epoch-replace',
     reason: 'handle_forked',
@@ -100,11 +119,13 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
   expect(live.sink.journalSnapshot?.()).toEqual({
     canonicalByToolUse: [],
     attemptByAgent: [],
+    parents: [],
+    backgrounds: [],
     subagents: [],
     threadGoal: { goal: null, row: null }
   })
   expect(paused()).toBe(false)
-  expect(retired.sink.journalSnapshot?.()).toEqual(saved)
+  expect(retired.sink.journalSnapshot?.()).toBeNull()
   live.close()
 })
 
@@ -139,7 +160,7 @@ it('rereads the retained facts after a replacement rolls back before allowing tr
 })
 
 it('keeps translation held when the replacement commits but its saved facts cannot be reread', async () => {
-  const { journal, live, saved, failure, paused } = await snapshotFixture()
+  const { journal, live, failure, paused } = await snapshotFixture()
   const snapshot = vi
     .spyOn(journal.reads, 'claudeSnapshot')
     .mockRejectedValueOnce(new Error('snapshot read failed'))
@@ -159,10 +180,12 @@ it('keeps translation held when the replacement commits but its saved facts cann
     await failure
     expect(paused()).toBe(true)
     expect(translationAllowed).toBe(false)
-    expect(live.sink.journalSnapshot?.()).toEqual(saved)
+    expect(live.sink.journalSnapshot?.()).toBeNull()
     expect(await journal.reads.claudeSnapshot()).toEqual({
       canonicalByToolUse: [],
       attemptByAgent: [],
+      parents: [],
+      backgrounds: [],
       subagents: [],
       threadGoal: { goal: null, row: null }
     })

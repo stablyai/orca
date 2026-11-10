@@ -1,5 +1,8 @@
-import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
-import { automationRunRecency } from '../../shared/automation-session-reuse'
+import type {
+  AutomationDispatchResult,
+  AutomationRun
+} from '../../shared/automations/history/automation-run'
+import { automationRunRecency } from '../../shared/automations/history/automation-session-reuse'
 import type { Store } from '../persistence/loading-store/store'
 import { runOwnHandle } from './automation-terminal-launch'
 import {

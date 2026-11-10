@@ -1,6 +1,6 @@
 import { agentStopDisplayStatus } from '../../../../../../../shared/agent-status/lifecycle/agent-stop-display-status'
 import type { useStructuredAgentSession } from '../use-structured-agent-session'
-import type { NativeChatAfterStopSend } from '../../../native-chat-composer-target'
+import type { NativeChatAfterStopSend } from '../../../composer/submit/native-chat-composer-target'
 
 type StopController = Pick<
   ReturnType<typeof useStructuredAgentSession>,

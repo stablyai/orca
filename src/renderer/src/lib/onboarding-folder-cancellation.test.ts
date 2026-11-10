@@ -15,7 +15,7 @@ import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/rpc/testing/runtime-environment-bridge-fixture'
 import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
-import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
+import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import {
   shouldSkipWebRuntimeWakeTerminalRespawn,

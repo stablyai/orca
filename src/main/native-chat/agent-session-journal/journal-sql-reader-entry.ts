@@ -1,3 +1,4 @@
+import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
@@ -19,6 +20,7 @@ if (
 const port = parentPort
 let db: Database.Database | undefined
 let original: Database.Database | undefined
+let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 function reply(message: JournalSqlReaderReply): void {
   port.postMessage(message)
@@ -40,7 +42,31 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
     }
+    if (fork && !operation.kind.startsWith('fork-')) {
+      throw new Error('fork reader is exclusively reserved')
+    }
     switch (operation.kind) {
+      case 'fork-prepare':
+        if (fork || conversions.size) {
+          throw new Error('fork reader reservation is not exclusive')
+        }
+        fork = { id, preparation: new JournalForkPreparation(db, operation.input) }
+        reply({ type: 'fork-prepared', id })
+        break
+      case 'fork-next':
+        if (fork?.id !== operation.preparationId) {
+          throw new Error('fork reader preparation is no longer available')
+        }
+        reply({ type: 'fork-next', id, result: fork.preparation.next() })
+        break
+      case 'fork-release':
+        if (fork?.id !== operation.preparationId) {
+          throw new Error('fork reader preparation is no longer available')
+        }
+        fork.preparation.close()
+        fork = undefined
+        reply({ type: 'released', id })
+        break
       case 'import-state':
         reply({
           type: 'import-state',

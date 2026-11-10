@@ -6,7 +6,9 @@ import {
   type RuntimeEnvironmentCallRequest,
   createCompatibleRuntimeStatusResponseIfNeeded
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
-import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as drafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as draftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as draftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -23,10 +25,14 @@ it.each(['single', 'all-host', 'runtime'] as const)(
       connectionId: 'old'
     }
     const otherRepo = { ...oldRepo, id: 'repo-b' }
-    const from = drafts.nativeChatLaunchPromptDraftScopeKey('repo-a::/x', 'codex', 'ssh:old')
-    const second = drafts.nativeChatLaunchPromptDraftScopeKey('repo-b::/y', 'claude', 'ssh:old')
-    drafts.updateNativeChatComposerDraft(from, { text: 'first task' }, 'immediate')
-    drafts.updateNativeChatComposerDraft(second, { text: 'second task' }, 'immediate')
+    const from = draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo-a::/x', 'codex', 'ssh:old')
+    const second = draftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+      'repo-b::/y',
+      'claude',
+      'ssh:old'
+    )
+    draftsOwner2.updateNativeChatComposerDraft(from, { text: 'first task' }, 'immediate')
+    draftsOwner2.updateNativeChatComposerDraft(second, { text: 'second task' }, 'immediate')
     store.setState({ repos: [oldRepo, otherRepo] })
     store
       .getState()
@@ -36,8 +42,8 @@ it.each(['single', 'all-host', 'runtime'] as const)(
       .getState()
       .recordSshRepoReadoptions([{ oldTargetId: 'old', newTargetId: 'new', repoIds: ['repo-b'] }])
     expect(
-      drafts.readNativeChatComposerDraft(
-        drafts.nativeChatLaunchPromptDraftScopeKey('repo-b::/y', 'claude', 'ssh:new')
+      draftsOwner2.readNativeChatComposerDraft(
+        draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo-b::/y', 'claude', 'ssh:new')
       ).text
     ).toBe('second task')
     store.setState({
@@ -83,18 +89,22 @@ it.each(['single', 'all-host', 'runtime'] as const)(
       await store.getState().fetchRuntimeEnvironmentRepos('fixture-env')
     }
     expect(
-      drafts.readNativeChatComposerDraft(
-        drafts.nativeChatLaunchPromptDraftScopeKey('repo-a::/x', 'codex', 'ssh:fourth')
+      draftsOwner2.readNativeChatComposerDraft(
+        draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo-a::/x', 'codex', 'ssh:fourth')
       ).text
     ).toBe('first task')
     expect(
-      drafts.readNativeChatComposerDraft(
-        drafts.nativeChatLaunchPromptDraftScopeKey('repo-b::/y', 'claude', 'ssh:fourth')
+      draftsOwner2.readNativeChatComposerDraft(
+        draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo-b::/y', 'claude', 'ssh:fourth')
       ).text
     ).toBe('second task')
-    expect(drafts.readNativeChatComposerDraft(from).text).toBe('first task')
-    const occupant = drafts.nativeChatLaunchPromptDraftScopeKey('repo-a::/x', 'codex', 'ssh:third')
-    drafts.updateNativeChatComposerDraft(
+    expect(draftsOwner2.readNativeChatComposerDraft(from).text).toBe('first task')
+    const occupant = draftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+      'repo-a::/x',
+      'codex',
+      'ssh:third'
+    )
+    draftsOwner2.updateNativeChatComposerDraft(
       occupant,
       { text: 'new intermediate occupant' },
       'immediate'
@@ -104,7 +114,9 @@ it.each(['single', 'all-host', 'runtime'] as const)(
       .recordSshRepoReadoptions([
         { oldTargetId: 'third', newTargetId: 'fourth', repoIds: ['repo-a'] }
       ])
-    expect(drafts.readNativeChatComposerDraft(occupant).text).toBe('new intermediate occupant')
+    expect(draftsOwner2.readNativeChatComposerDraft(occupant).text).toBe(
+      'new intermediate occupant'
+    )
     vi.unstubAllGlobals()
     drafts.clearNativeChatComposerDraftsForTests()
   }

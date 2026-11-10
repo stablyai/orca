@@ -178,7 +178,7 @@ export type DetailComment = {
   authorAvatarUrl?: string
   user?: { displayName?: string }
   isBot?: boolean
-  // Set only by hosts that read GitHub GraphQL; GitLab, REST fallbacks and older hosts never send it.
+  // True when the host's gh/glab account wrote it; older hosts send it only for GitHub GraphQL reads.
   viewerDidAuthor?: boolean
   body: string
   createdAt?: string
@@ -246,14 +246,15 @@ export type DetailPayload =
       comments: DetailComment[]
       labels: string[]
       assignees: string[]
-      pipelineJobs: Array<{
+      pipelineJobs: {
         id?: number
         name: string
         stage: string
         status: string
+        allowFailure?: boolean
         webUrl?: string | null
         duration?: number | null
-      }>
+      }[]
     }
   | {
       provider: 'linear'

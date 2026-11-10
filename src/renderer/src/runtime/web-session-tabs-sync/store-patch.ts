@@ -1,4 +1,4 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
@@ -23,7 +23,8 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
-import { reportVisibleTabPickToHost } from '../web-session-visible-tab-pick-report'
+import { markHostMirrorPatchFullResync } from './scoped-patch-annotation'
+import { reportVisibleTabPickToHost } from './navigation/web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -63,6 +64,7 @@ export function applyWebSessionTabsStorePatch(
     changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
     const patch = buildPatch(state, changedAgentPaneKeys)
+    markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey

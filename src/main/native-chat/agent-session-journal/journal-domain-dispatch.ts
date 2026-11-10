@@ -1,4 +1,6 @@
 import type Database from '../../sqlite/sync-database'
+import { JournalSqlScope } from './journal-sql-scope'
+import { journalDomainSubmission } from './journal-domain-status-inputs'
 import { refreshJournalDomainAcceptedHandover } from './journal-domain-input-ends'
 import {
   agentJournalItemKey,
@@ -282,5 +284,16 @@ export function applyJournalDomainDispatch(
     observedAt: savedAt,
     clientMessageId: input.clientMessageId
   })
+  const current = journalDomainSubmission(
+    new JournalSqlScope(db, target.sessionId, target.epoch),
+    input.clientMessageId
+  )
+  result.promptDispatches = [
+    {
+      clientMessageId: input.clientMessageId,
+      state: input.state,
+      ...(current?.queuedMessageId ? { queuedMessageId: current.queuedMessageId } : {})
+    }
+  ]
   return result
 }

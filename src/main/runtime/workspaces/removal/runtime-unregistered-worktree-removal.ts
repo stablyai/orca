@@ -22,7 +22,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../../../workspaces/removal/worktree-removal-safety'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import { isLocalRuntimeWorktreePathMissing } from '../catalog/runtime-worktree-filesystem'
 

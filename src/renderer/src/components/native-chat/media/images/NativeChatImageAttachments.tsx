@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
-import { translate } from '../../../../i18n/i18n'
+import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { PanZoomImageDialog } from '../../../editor/PanZoomImageDialog'
@@ -48,6 +48,7 @@ function TranscriptImagePreview({
   block: Extract<NativeChatBlock, { type: 'image-ref' }>
   runtimeContext: RuntimeFileOperationArgs | null | undefined
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [near, setNear] = useState(false)
   const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
@@ -66,7 +67,7 @@ function TranscriptImagePreview({
   const displaySrc = external && leaseActive ? source : localSrc
   const copySrc = copyableNativeChatImageSrc(displaySrc)
   const label = nativeChatImageLabel(block)
-  const viewImageLabel = translate('components.native-chat.composer.viewAttachment', 'View image')
+  const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
   const fallback = (
     <div
       className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-chat-canvas px-2 py-1 text-xs text-chat-foreground-faint"
@@ -149,6 +150,7 @@ export function NativeChatImageAttachments({
   enablePreview?: boolean
   className?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const images = blocks.filter((block) => block.type === 'image-ref')
   if (images.length === 0) {
     return null
@@ -162,13 +164,13 @@ export function NativeChatImageAttachments({
             image.alt ??
             image.path ??
             image.url ??
-            translate('components.native-chat.transcript.imageFallback', 'Image')
+            t('components.native-chat.transcript.imageFallback', 'Image')
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
           const name =
             image.path && isNativeChatPastedImagePath(image.path)
-              ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+              ? t('components.native-chat.composer.pastedImageLabel', 'Pasted image')
               : image.path
                 ? basename(image.path)
                 : label
@@ -193,7 +195,7 @@ export function NativeChatImageAttachments({
           image.alt ??
           image.path ??
           image.url ??
-          translate('components.native-chat.transcript.imageFallback', 'Image')
+          t('components.native-chat.transcript.imageFallback', 'Image')
         const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
         const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
         imageKeyCounts.set(imageKeyBase, occurrence + 1)

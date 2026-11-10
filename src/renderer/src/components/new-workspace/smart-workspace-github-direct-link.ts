@@ -1,15 +1,15 @@
 import type React from 'react'
-import type { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import type { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
 } from '@/lib/work-items/github/github-work-item-source-lookup'
-import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
+import { lookupSmartGitHubSubmitItem } from '@/lib/work-items/github/smart-github-submit'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   buildTaskSourceContextFromRepo,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type {
   CrossRepoPrompt,
   RepoBackedSearchTarget,

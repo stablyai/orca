@@ -1,3 +1,4 @@
+import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
 import type Database from '../../sqlite/sync-database'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
@@ -22,6 +23,7 @@ import {
 } from './journal-domain-import-discard'
 
 export type JournalSqlMaintenance =
+  | JournalForkStageOperation
   | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
@@ -37,6 +39,7 @@ export type JournalSqlMaintenance =
 export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
+  | JournalForkStageResult
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
   | JournalDomainMaintenanceResult
@@ -50,6 +53,12 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'fork-source-hold':
+    case 'fork-source-release':
+    case 'fork-stage-begin':
+    case 'fork-stage-page':
+    case 'fork-abort':
+      throw new Error('fork staging requires its live writer owner')
     case 'outline-cache':
       return saveJournalDomainOutlineCache(db, operation.cache)
     case 'projection-state':

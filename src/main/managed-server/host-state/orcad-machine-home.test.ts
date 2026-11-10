@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import type { OrcadMachineHomeProbe } from './orcad-machine-home'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
+import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 // Local shell commands run with per-machine hostname and hardware identity shims.
 const shell = vi.hoisted((): { env: NodeJS.ProcessEnv | undefined } => ({
@@ -41,7 +41,7 @@ await import('../install/remote-install-model')
 await import('../install/orcad-remote-launch')
 await import('../install/orcad-remote-host-support')
 await import('../install/orcad-remote-runtime-control')
-const { getRemoteHostPlatform } = await import('../../ssh/ssh-remote-platform')
+const { getRemoteHostPlatform } = await import('../../ssh/remote-host/ssh-remote-platform')
 type Probe = OrcadMachineHomeProbe
 type Host = RemoteHostPlatform
 

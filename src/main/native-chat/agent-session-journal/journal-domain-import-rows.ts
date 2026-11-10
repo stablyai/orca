@@ -1,3 +1,4 @@
+import { journalForkStageHeld } from './journal-fork-stages'
 import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
 import {
   JOURNAL_DOMAIN_ITEM_COLUMNS,
@@ -47,60 +48,13 @@ export function insertJournalDomainImportPage(
   ) {
     return false
   }
+  if (journalForkStageHeld(db, target.sessionId)) {
+    throw new Error('fork stage owns this child')
+  }
   const prefix = [target.sessionId, target.epoch] as const
   switch (page.kind) {
     case 'items': {
-      const insert =
-        db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
-        sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,original_stop_note_json,
-        queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
-        placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
-        VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')}) ON CONFLICT DO NOTHING`)
-      for (const {
-        ordinal,
-        ownerFence,
-        executionOwner,
-        hidden,
-        item,
-        originalStopNoteJson,
-        queueCommandTurn,
-        queueFailedOutcome,
-        queueFailedAt,
-        queueFailureWitnessedThrough,
-        queueFailureReportTurnItemId
-      } of page.rows) {
-        const payload = JSON.stringify(item)
-        const { metadata, values } = journalDomainItemColumns(item, payload)
-        const result = insert.run(
-          ...prefix,
-          item.itemId,
-          ordinal,
-          item.revision,
-          item.sequence,
-          item.sequenceIndex ?? 0,
-          ownerFence,
-          executionOwner,
-          payload,
-          Number(hidden),
-          originalStopNoteJson,
-          Number(queueCommandTurn),
-          Number(queueFailedOutcome),
-          queueFailedAt,
-          queueFailureWitnessedThrough,
-          queueFailureReportTurnItemId,
-          journalDomainItemPlacement(item),
-          ...values
-        )
-        if (Number(result.changes) > 0) {
-          writeJournalDomainItemNames(
-            db,
-            target,
-            item,
-            { ordinal, hidden },
-            metadata.namedSubagentIds
-          )
-        }
-      }
+      insertJournalDomainItemRows(db, target, page.rows)
       break
     }
     case 'tombstones': {
@@ -210,6 +164,9 @@ export function finishJournalDomainImport(
   if (!db.isTransaction) {
     throw new Error('journal domain import requires its writer transaction')
   }
+  if (journalForkStageHeld(db, header.sessionId)) {
+    throw new Error('fork stage owns this child')
+  }
   const { head } = header
   db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,retained_sequence,
     highest_fence,context_boundary,last_activity_at,derived_turn_item_id,history_origin_json,queue_latest_stop_json,
@@ -253,4 +210,75 @@ export function finishJournalDomainImport(
     throw new Error('journal domain import did not publish its chat head')
   }
   return state.epoch
+}
+
+/** Shared scalar/row construction; the fork owner alone selects ordered replacement semantics. */
+export function insertJournalDomainItemRows(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
+  rows: Extract<JournalDomainImportPage, { kind: 'items' }>['rows'],
+  replace = false,
+  writeNames = true,
+  prepared?: ReturnType<typeof prepareJournalDomainItemRow>
+): readonly string[] {
+  let names: readonly string[] = []
+  const prefix = [target.sessionId, target.epoch] as const
+  const insert = db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
+        sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,original_stop_note_json,
+        queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
+        placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
+        VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')}) ${replace ? `ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET ${['ordinal', 'revision', 'sequence', 'sequence_index', 'owner_fence', 'execution_owner', 'payload_json', 'hidden', 'original_stop_note_json', 'queue_command_turn', 'queue_failed_outcome', 'queue_failed_at', 'queue_failure_witnessed_through', 'queue_failure_report_turn_item_id', 'placement_json', ...JOURNAL_DOMAIN_ITEM_COLUMNS].map((column) => `${column}=excluded.${column}`).join(',')}` : 'ON CONFLICT DO NOTHING'}`)
+  for (const {
+    ordinal,
+    ownerFence,
+    executionOwner,
+    hidden,
+    item,
+    originalStopNoteJson,
+    queueCommandTurn,
+    queueFailedOutcome,
+    queueFailedAt,
+    queueFailureWitnessedThrough,
+    queueFailureReportTurnItemId
+  } of rows) {
+    const { payload, metadata, values, placement } = prepared ?? prepareJournalDomainItemRow(item)
+    const result = insert.run(
+      ...prefix,
+      item.itemId,
+      ordinal,
+      item.revision,
+      item.sequence,
+      item.sequenceIndex ?? 0,
+      ownerFence,
+      executionOwner,
+      payload,
+      Number(hidden),
+      originalStopNoteJson,
+      Number(queueCommandTurn),
+      Number(queueFailedOutcome),
+      queueFailedAt,
+      queueFailureWitnessedThrough,
+      queueFailureReportTurnItemId,
+      placement,
+      ...values
+    )
+    names = metadata.namedSubagentIds
+    if (writeNames && Number(result.changes) > 0) {
+      writeJournalDomainItemNames(db, target, item, { ordinal, hidden }, metadata.namedSubagentIds)
+    }
+  }
+
+  return names
+}
+
+/** Account every encoded presentation/index form before admitting the private row-transform unit. */
+export function prepareJournalDomainItemRow(item: Parameters<typeof journalDomainItemColumns>[0]) {
+  const payload = JSON.stringify(item)
+  const { metadata, values } = journalDomainItemColumns(item, payload)
+  const placement = journalDomainItemPlacement(item)
+  const bytes = [payload, placement, ...values].reduce<number>(
+    (total, value) => total + (typeof value === 'string' ? Buffer.byteLength(value) : 8),
+    0
+  )
+  return { payload, metadata, values, placement, bytes }
 }

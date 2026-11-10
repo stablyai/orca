@@ -44,7 +44,7 @@ vi.mock('@/components/agent/AgentLaunchSetupButton', async (importOriginal) => {
     }
   }
 })
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: async (
     _target: unknown,
     method: string,
@@ -81,7 +81,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
     ]
   })
 }))
-vi.mock('@/runtime/use-host-structured-agent-availability', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability', () => ({
   useHostStructuredAgentAvailability: () => ({
     state: 'received',
     byAgent: new Map([
@@ -176,6 +176,8 @@ vi.mock('@/hooks/useComposerState', () => ({
       onReuseSelectedBranchChange: noOp,
       forkPushWarning: null,
       advancedOpen: false,
+      setupChoiceRevealRequest: 0,
+      onSetupChoiceRevealed: noOp,
       onToggleAdvanced: noOp,
       parentWorktreeId: null,
       onParentWorktreeIdChange: noOp,

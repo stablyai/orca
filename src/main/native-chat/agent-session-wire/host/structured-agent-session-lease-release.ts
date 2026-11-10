@@ -1,7 +1,5 @@
-import type {
-  StructuredAgentSessionChildExit,
-  StructuredAgentSessionChildExitContext
-} from '../termination/structured-agent-session-child-exit'
+import type { StructuredAgentSessionChildExit } from '../termination/structured-agent-session-child-exit-record'
+import type { StructuredAgentSessionChildExitContext } from '../termination/structured-agent-session-child-exit'
 import { evictStructuredAgentSession } from '../termination/structured-agent-session-eviction'
 // Release only this host’s child with observed/proven exit; read-only or TUI ownership
 // proves no exit and must never admit a second writer.

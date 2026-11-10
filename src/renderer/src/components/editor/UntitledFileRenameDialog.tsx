@@ -13,6 +13,7 @@ import {
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -33,6 +34,7 @@ export function UntitledFileRenameDialog({
   onClose,
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const baseName = currentName.replace(/\.md$/, '')
   const [name, setName] = useState(baseName)
   const [dir, setDir] = useState(worktreePath)
@@ -155,10 +157,10 @@ export function UntitledFileRenameDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
+            {t('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
               'Name your markdown file and pick a folder.'
             )}
@@ -167,7 +169,7 @@ export function UntitledFileRenameDialog({
         <div className="flex flex-col gap-3">
           <div>
             <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              {translate('auto.components.editor.UntitledFileRenameDialog.b6ed807cc6', 'Name')}
+              {t('auto.components.editor.UntitledFileRenameDialog.b6ed807cc6', 'Name')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
@@ -183,7 +185,7 @@ export function UntitledFileRenameDialog({
                     handleSubmit()
                   }
                 }}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.editor.UntitledFileRenameDialog.c8ac7868e6',
                   'file name'
                 )}
@@ -191,13 +193,13 @@ export function UntitledFileRenameDialog({
                 aria-invalid={!!displayError}
               />
               <span className="text-xs text-muted-foreground shrink-0">
-                {translate('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
+                {t('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
               </span>
             </div>
           </div>
           <div>
             <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              {translate('auto.components.editor.UntitledFileRenameDialog.30099dca46', 'Folder')}
+              {t('auto.components.editor.UntitledFileRenameDialog.30099dca46', 'Folder')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
@@ -223,11 +225,11 @@ export function UntitledFileRenameDialog({
                 onClick={() => void handleBrowse()}
                 title={
                   disableBrowse
-                    ? translate(
+                    ? t(
                         'auto.components.editor.UntitledFileRenameDialog.5e7f0d8a80',
                         'Folder picker unavailable for remote files'
                       )
-                    : translate(
+                    : t(
                         'auto.components.editor.UntitledFileRenameDialog.725868c75d',
                         'Browse folders'
                       )
@@ -241,10 +243,10 @@ export function UntitledFileRenameDialog({
         {displayError && <p className="text-xs text-destructive mt-1">{displayError}</p>}
         <DialogFooter className="mt-1">
           <Button variant="outline" size="sm" onClick={onClose}>
-            {translate('auto.components.editor.UntitledFileRenameDialog.949711deb4', 'Cancel')}
+            {t('auto.components.editor.UntitledFileRenameDialog.949711deb4', 'Cancel')}
           </Button>
           <Button size="sm" onClick={handleSubmit}>
-            {translate('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
+            {t('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
           </Button>
         </DialogFooter>
       </DialogContent>

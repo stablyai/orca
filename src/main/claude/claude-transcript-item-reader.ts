@@ -99,7 +99,31 @@ export async function createClaudeTranscriptItemReader(
     }
     return scope
   }
-  return { saved, localPrompt, scopeOf, promptScope, dependencies, load }
+  const loadRow = async (row: Record<string, unknown>, providerSessionId: string) => {
+    const attachment = row.attachment
+    const source =
+      attachment && typeof attachment === 'object' && 'source_uuid' in attachment
+        ? attachment.source_uuid
+        : undefined
+    const uuids = [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
+    const prompts = await reads.claudeHistoryPrompts(sessionId, uuids)
+    for (const { uuid, itemId } of prompts) {
+      localPrompts.set(uuid, itemId)
+    }
+    const keys = [
+      ...claudeTranscriptItemKeys(row, providerSessionId),
+      ...prompts.map(({ itemId }) => itemId)
+    ]
+    const missing = keys.filter((key) => !loaded.has(key))
+    if (missing.length) {
+      const items = await reads.historyItems(missing, { includeOpeners: true })
+      journal.adopt(items)
+      for (const { key } of items) {
+        loaded.add(key)
+      }
+    }
+  }
+  return { saved, localPrompt, scopeOf, promptScope, dependencies, load, loadRow }
 }
 
 export type ClaudeTranscriptItemReader = Awaited<

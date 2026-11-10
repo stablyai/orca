@@ -49,6 +49,10 @@ export function appendJournalDomainInputCommit<Value>(
   result.receipts.push(...commit.receipts)
   result.cards.push(...commit.cards)
   result.inputChanged ||= commit.inputChanged
+  if (commit.promptDispatches?.length) {
+    result.promptDispatches ??= []
+    result.promptDispatches.push(...commit.promptDispatches)
+  }
   result.acceptedInputs = commit.acceptedInputs ?? result.acceptedInputs
   if (commit.editDeadline !== undefined) {
     result.editDeadline = commit.editDeadline

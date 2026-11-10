@@ -10,6 +10,7 @@ import { openAgentSessionJournal } from '../../../agent-session-journal/journal-
 import { closeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
+import { StructuredAgentSessionSnapshotRoutes } from '../../host/structured-agent-session-snapshot-routes'
 
 it('saves every tool result past 1,024 in one received Claude message, through reopen', async () => {
   const count = 1025
@@ -32,6 +33,8 @@ it('saves every tool result past 1,024 in one received Claude message, through r
     onFailed,
     readingControl
   })
+  const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+  await deferred.followSnapshots(routes.observe(identity.sessionId, journal))
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const translator = createClaudeJournalTranslator({ sink: deferred.sink })
   try {

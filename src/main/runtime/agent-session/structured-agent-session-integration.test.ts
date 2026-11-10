@@ -1,6 +1,6 @@
 import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../rpc/unused-default-rpc-methods.test-fixture'
-import { scriptedCodexCatalogSession } from '../scripted-codex-model-catalog.test-fixture'
+import { scriptedCodexCatalogSession } from './model-catalog/scripted-codex-model-catalog.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

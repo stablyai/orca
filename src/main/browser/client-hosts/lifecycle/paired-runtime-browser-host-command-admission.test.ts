@@ -1,17 +1,18 @@
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
-  RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks
-} from '../../../../shared/remote-runtime/remote-runtime-client'
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserHostLease } from '../leases/paired-runtime-browser-host-lease'
@@ -193,11 +194,13 @@ function createLease(
   })
 }
 
-async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn> }): Promise<{
-  callbacks: { current?: RemoteRuntimeSubscriptionCallbacks }
+async function subscribeLease(options?: {
+  sendRequest?: RemoteRuntimeTransportSubscription['sendRequest']
+}): Promise<{
+  callbacks: { current?: RemoteRuntimeTransportSubscriptionCallbacks }
   close: ReturnType<typeof vi.fn>
 }> {
-  const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
+  const callbacks: { current?: RemoteRuntimeTransportSubscriptionCallbacks } = {}
   const close = vi.fn()
   const sendRequest =
     options && 'sendRequest' in options
@@ -209,15 +212,17 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
           _meta: { runtimeId: 'runtime-a' }
         })
   subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-    async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
-      callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+    async (
+      ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+    ): Promise<RemoteRuntimeTransportSubscription> => {
+      callbacks.current = args[4]
       return {
         requestId: 'browser-host',
         close,
         sendBinary: () => false,
         ...(sendRequest
           ? {
-              sendRequest: sendRequest as unknown as RemoteRuntimeSubscription['sendRequest']
+              sendRequest: sendRequest
             }
           : {})
       }

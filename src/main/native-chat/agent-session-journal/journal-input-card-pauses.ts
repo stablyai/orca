@@ -1,9 +1,9 @@
+import type { DerivedQueuePause } from './queued-messages/queued-message-pause'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   journalQueueStopHolds,
-  type JournalQueuePauseMarks,
-  type DerivedQueuePause
-} from './queued-messages/queued-message-pause'
+  type JournalQueuePauseMarks
+} from './queued-messages/queued-message-pause-marks'
 
 export function journalInputCardPauseInputs(
   epoch: string,

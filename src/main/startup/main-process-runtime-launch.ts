@@ -13,9 +13,9 @@ import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environ
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
-import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
+import { publishHeadlessRuntimeGraph } from '../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
@@ -53,7 +53,7 @@ import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-pres
 import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
-import { getBrowserIdentityModeStatus } from '../browser/identity/browser-identity-mode-store'
+import { getBrowserIdentityModeStatus } from '../browser/identity/mode/browser-identity-mode-store'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 

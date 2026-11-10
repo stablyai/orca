@@ -80,7 +80,7 @@ describe('resolved revisions', () => {
     // Bind within a queued read; resolving at admission would lose the earlier revision.
     await journal.readInOrder(() => deferred.bind(journalTarget()))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(row()).toEqual({
+    expect(await row()).toEqual({
       ...RUNNING,
       contextUsage: { window },
       providerTurnId: 'provider-turn-1'

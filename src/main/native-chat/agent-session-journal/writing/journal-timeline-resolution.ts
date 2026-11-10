@@ -37,6 +37,8 @@ import {
   type AgentJournalFailureVoice
 } from '../../agent-session-timeline/agent-journal-turn-failure-revision'
 import { resolveClaudeBackgroundTaskIdentity } from '../../../claude/claude-background-task-identity'
+import { isBackgroundTaskBlock } from '../../../../shared/native-chat/native-chat-types'
+import { backgroundTaskJournalBody } from '../../../../shared/native-chat/input/native-chat-background-task-row'
 import {
   resolveCodexGoalIdentity,
   type CodexGoalRowChoice
@@ -187,15 +189,28 @@ function resolveTimelineItem(
           })
         : nothing
     }
-    case 'background-task':
+    case 'background-task': {
+      const identity = resolveClaudeBackgroundTaskIdentity(
+        view.withKeyPrefix,
+        resolution.taskId,
+        resolution.toolUseId
+      )
+      const saved = view.itemBody(agentJournalItemKey(identity))
+      const savedBlock =
+        saved?.kind === 'message' ? saved.blocks.find(isBackgroundTaskBlock) : undefined
+      const block =
+        resolution.body.kind === 'message'
+          ? resolution.body.blocks.find(isBackgroundTaskBlock)
+          : undefined
+      const alias = block?.parentToolUseId ?? savedBlock?.parentToolUseId
       return resolved({
-        identity: resolveClaudeBackgroundTaskIdentity(
-          view.withKeyPrefix,
-          resolution.taskId,
-          resolution.toolUseId
-        ),
-        body: resolution.body
+        identity,
+        body:
+          block && alias && block.parentToolUseId === undefined
+            ? backgroundTaskJournalBody({ ...block, parentToolUseId: alias })
+            : resolution.body
       })
+    }
     case 'thread-goal': {
       const identity = resolveCodexGoalIdentity(view.newestWithKeyPrefix, resolution.choice)
       return identity ? resolved({ identity, body: resolution.choice.body }) : nothing

@@ -1,8 +1,8 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause-marks'
 import {
   createQueuePauseContext,
-  type JournalQueuePauseMarks,
   type QueuePauseContext
 } from './queued-messages/queued-message-pause'
 import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'

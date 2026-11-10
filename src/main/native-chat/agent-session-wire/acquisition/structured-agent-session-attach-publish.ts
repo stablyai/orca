@@ -12,7 +12,8 @@ import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress
 import { indexProviderChild } from '../host/structured-agent-session-provider-child'
 import { noteStructuredAgentSessionProviderStarted } from '../startup/structured-agent-session-provider-started'
 import type { StructuredAgentSessionStartupAttempt } from '../startup/structured-agent-session-startup-attempt-contract'
-import { structuredAgentSessionEndedEventExit } from '../termination/structured-agent-session-child-exit'
+import '../termination/structured-agent-session-child-exit'
+import { structuredAgentSessionEndedEventExit } from '../termination/structured-agent-session-child-exit-record'
 import {
   applyStructuredRewindRecovery,
   readStructuredRewindRecovery,

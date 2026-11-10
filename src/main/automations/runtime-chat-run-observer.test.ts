@@ -22,6 +22,10 @@ import {
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { automationRunOperationId } from './automation-run-operation'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 const mocks = vi.hoisted(() => {
   const hostState: { actualHost: StructuredAgentSessionHost | null } = { actualHost: null }
@@ -358,7 +362,12 @@ describe('real host queue publication', () => {
         ).toBeNull()
         if (outcome === 'missing' || outcome === 'end') {
           if (outcome === 'missing') {
-            await rig.store['transact']((draft) => draft.records.delete(HOST_TEST_SESSION))
+            await withTestAgentSessionDatabase(rig.root, (db) =>
+              db
+                .prepare('DELETE FROM agent_session_records WHERE session_id=?')
+                .run(HOST_TEST_SESSION)
+            )
+            rig.host.deps.store = await openTestAgentSessionRecordStore(rig.root)
             sessions.delete(HOST_TEST_SESSION)
           } else {
             rig.host.stopDelivery()

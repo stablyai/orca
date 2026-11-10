@@ -42,7 +42,10 @@ function badSetups(): ProjectHostSetup[] {
 }
 
 import { createTestStore } from '../testing/app-store-test-fixture'
-import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as launchDrafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as launchDraftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as launchDraftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as launchDraftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 
 it.each([false, true])(
   'actual host-setup deletion revokes new return writers only for a returned registered repo=%s',
@@ -56,20 +59,20 @@ it.each([false, true])(
       .mockRejectedValueOnce(new Error('refused'))
       .mockResolvedValue({ project: projects[0], setup, ...(registered ? { repo: repos[0] } : {}) })
     vi.stubGlobal('window', { api: { projects: { deleteHostSetup: deleteSetup } } })
-    const key = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    const key = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
       'repo-1::/source-only',
       'codex',
       'local'
     )
-    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    const other = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
       'repo-1::/source-only',
       'codex',
       'ssh:other'
     )
     for (const scope of [key, other]) {
-      launchDrafts.updateNativeChatComposerDraft(scope, { text: 'task' }, 'immediate')
+      launchDraftsOwner2.updateNativeChatComposerDraft(scope, { text: 'task' }, 'immediate')
     }
-    const attempt = launchDrafts.captureNativeChatComposerSubmission(key)
+    const attempt = launchDraftsOwner3.captureNativeChatComposerSubmission(key)
     expect(
       await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
     ).toBeNull()
@@ -78,8 +81,8 @@ it.each([false, true])(
       await store.getState().deleteProjectHostSetup({ setupId: setup.id, hostId: 'local' })
     ).not.toBeNull()
     expect(attempt.draft === undefined).toBe(registered)
-    expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('task')
-    expect(launchDrafts.readNativeChatComposerDraft(other).text).toBe('task')
+    expect(launchDraftsOwner2.readNativeChatComposerDraft(key).text).toBe('task')
+    expect(launchDraftsOwner2.readNativeChatComposerDraft(other).text).toBe('task')
     launchDrafts.clearNativeChatComposerDraftsForTests()
     vi.unstubAllGlobals()
   }

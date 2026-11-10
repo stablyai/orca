@@ -56,6 +56,8 @@ export function encodeJournalOutcomes(
   format: 2 | 3 = JOURNAL_OUTCOME_FORMAT_2
 ): { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> } {
   const next = scalars(state, format)
+  const historyOrigin = untracked('historyOrigin', state.historyOrigin)
+  next.historyOrigin = historyOrigin
   const values = changes.map((entry) => ({
     seq: state.lastSequence,
     field: entry.path,
@@ -105,7 +107,7 @@ export function encodeJournalOutcomes(
 }
 
 export function journalOutcomeScalars(state: JournalReducerState): Record<string, unknown> {
-  return scalars(state)
+  return { ...scalars(state), historyOrigin: state.historyOrigin }
 }
 
 /** Admits one stored record or refuses the chat: a newer format or field as newer, anything else as

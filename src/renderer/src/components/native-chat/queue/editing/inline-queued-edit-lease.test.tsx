@@ -15,7 +15,10 @@ import { beforeAll, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { QueuedEditHostFixtureModule } from '../../../../../../shared/queued-edit-host.test-fixture'
 
-import { readNativeChatDraftCache, writeNativeChatDraftCache } from '../../native-chat-draft-cache'
+import {
+  readNativeChatDraftCache,
+  writeNativeChatDraftCache
+} from '../../drafts/native-chat-draft-views'
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
@@ -66,7 +69,7 @@ it.each(['unknown-changed', 'unknown-gone', 'pending-proof', 'rebase-loss'] as c
     expect(decision.status).toBe('updated')
     if (mode === 'rebase-loss') {
       const { insertNativeChatComposerDraftText } =
-        await import('../../native-chat-composer-draft-insertion')
+        await import('../../drafts/native-chat-composer-draft-insertion')
       act(() => insertNativeChatComposerDraftText(hook.result.current.editor!.draftScopeKey, 'C'))
     }
     if (mode !== 'pending-proof') {

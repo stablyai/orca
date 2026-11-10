@@ -1,3 +1,9 @@
+import {
+  nativeCopyIds,
+  usableJournalHistoryOrigin,
+  type JournalHistoryOrigin
+} from '../native-chat/agent-session-journal/context-epochs/journal-history-origin'
+import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -18,6 +24,8 @@ import {
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 type ClaudeHistoryView = {
   physicalCursor: AgentJournalCursor
+  origin: JournalHistoryOrigin | null
+  covered?: ReadonlySet<string>
   hasRows: boolean
   newest: { key: string; sequence: number; index: number } | null
 }
@@ -67,7 +75,17 @@ export async function catchUpClaudeTranscript(input: {
             }
           }
         )
-        return { hasRows, newest }
+        const origin = await history.reads.historyOrigin()
+        const copy = usableJournalHistoryOrigin(origin)
+        const covered =
+          copy?.kind === 'native_copy' &&
+          copy.unit === 'claude-entry' &&
+          copy.agent === 'claude' &&
+          copy.providerHandle.kind === 'claude' &&
+          copy.providerHandle.sessionId === input.providerSessionId
+            ? nativeCopyIds(copy)
+            : undefined
+        return { hasRows, newest, origin, covered }
       }),
     prepare: async ({ view, history, signal, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
@@ -83,17 +101,26 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const planned = await view()
-      const tail = await readClaudeTranscriptTail({ filePath, leafUuid: input.leafUuid, check })
+      let leafAbsent = input.leafUuid === '' && !!planned.covered
+      const tail = leafAbsent
+        ? null
+        : await readClaudeTranscriptTail({
+            filePath,
+            leafUuid: input.leafUuid,
+            check,
+            onLeafAbsent: () => {
+              leafAbsent = true
+            }
+          })
       check()
-      if (!tail) {
+      if (!tail && !(leafAbsent && planned.covered)) {
         warn('leaf-not-in-tail')
         return null
       }
-      complete = true
       const items = await createClaudeTranscriptItemReader(
         history.reads,
         input.sessionId,
-        tail.rows.flatMap((row) => {
+        (tail?.rows ?? []).flatMap((row) => {
           const attachment = row.attachment
           const source =
             attachment && typeof attachment === 'object' && 'source_uuid' in attachment
@@ -101,21 +128,33 @@ export async function catchUpClaudeTranscript(input: {
               : undefined
           return [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
         }),
-        tail.rows.flatMap((row) => claudeTranscriptItemKeys(row, input.providerSessionId))
+        (tail?.rows ?? []).flatMap((row) => claudeTranscriptItemKeys(row, input.providerSessionId))
       )
       const staging = createClaudeTranscriptImportPlan({
         sessionId: input.sessionId,
         providerSessionId: input.providerSessionId,
         epoch: history.cursor().epoch,
         items,
-        rewound: planned.hasRows ? tail.rewound : null,
+        rewound: planned.hasRows ? (tail?.rewound ?? true) : null,
         check
       })
       try {
-        for (const row of tail.rows) {
-          await staging.restore(row)
-          await yieldTurn()
+        const restore = async (row: Record<string, unknown>) => {
+          check()
+          if (!planned.covered?.has(String(row.uuid))) {
+            await items.loadRow(row, input.providerSessionId)
+            await staging.restore(row)
+          }
         }
+        if (tail) {
+          for (const row of tail.rows) {
+            await restore(row)
+            await yieldTurn()
+          }
+        } else {
+          await recoverClaudeTranscript({ filePath, signal, restore, yieldTurn })
+        }
+        complete = true
         return await staging.finish()
       } finally {
         staging.dispose()

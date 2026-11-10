@@ -11,11 +11,18 @@ export type ProjectGroup = {
   parentGroupId: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
+  rootProjectOrder?: number
   isCollapsed: boolean
   color: string | null
   createdAt: number
   updatedAt: number
 }
+
+export type ProjectGroupUpdate = Partial<
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>
+> & { rootProjectOrder?: number | null }
+
+export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
 
 export type NestedRepoScanOptions = {
   maxDepth?: number

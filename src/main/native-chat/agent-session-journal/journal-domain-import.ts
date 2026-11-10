@@ -29,7 +29,7 @@ import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalDomainStopNote } from './journal-domain-stop-notes'
-import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause'
+import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause-marks'
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import {
   isCommand,

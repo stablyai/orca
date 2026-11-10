@@ -13,8 +13,10 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SessionSearchAdvancedSection } from './SessionSearchAdvancedSection'
 import { SessionHistoryComputerRow } from './SessionHistoryComputerRow'
 import { SessionHistoryServerRow } from './SessionHistoryServerRow'
@@ -30,8 +32,8 @@ import {
   sessionSearchReadErrorMessage,
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from './session-history-status-copy'
-import { useSessionSearchStatus } from './use-session-search-status'
+} from '../../session-search/session-search-status'
+import { useSessionSearchStatus } from '../../session-search/use-session-search-status'
 import { useRuntimeEnvironmentCatalog } from '../runtime-environments/catalog/use-runtime-environment-catalog'
 
 export function SessionHistorySettingsPane({
@@ -41,6 +43,8 @@ export function SessionHistorySettingsPane({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const policy = resolveAiVaultSearchSettings(settings)
   const isWebClient = isWebClientLocation()
   const closeSettingsPage = useAppStore((state) => state.closeSettingsPage)
@@ -166,27 +170,27 @@ export function SessionHistorySettingsPane({
   let localStatusText: string | undefined
   if (policy.enabled) {
     localStatusText = localRead.failed
-      ? sessionSearchReadErrorMessage()
+      ? sessionSearchReadErrorMessage(t)
       : localStatus
-        ? sessionSearchStatusMessage(localStatus)
-        : sessionSearchCheckingMessage()
+        ? sessionSearchStatusMessage(localStatus, t, intlLocale)
+        : sessionSearchCheckingMessage(t)
   }
 
   return (
-    <div>
-      <div className="space-y-1 py-3">
+    <SettingsGroup>
+      <div data-settings-row="" className="space-y-1 py-3">
         <Label className="select-text">
-          {translate('sessionHistory.settings.indexComputers', 'Search inside sessions')}
+          {t('sessionHistory.settings.indexComputers', 'Search inside sessions')}
         </Label>
         <p className="select-text text-xs text-muted-foreground">
           {isWebClient
-            ? translate(
+            ? t(
                 'sessionHistory.settings.webUnsupported',
                 'Turn on session search from the Orca desktop app on that computer.'
               )
-            : translate(
+            : t(
                 'sessionHistory.settings.computersConsent',
-                'Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.'
+                'Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.'
               )}
         </p>
       </div>
@@ -199,7 +203,7 @@ export function SessionHistorySettingsPane({
             disabled={busy}
             onClick={() => void enableOnAllComputers()}
           >
-            {translate('sessionHistory.settings.enableOnAll', 'Enable on all computers')}
+            {t('sessionHistory.settings.enableOnAll', 'Enable on all computers')}
           </Button>
         </div>
       )}
@@ -213,7 +217,7 @@ export function SessionHistorySettingsPane({
             onToggle={() => void toggleEnabled()}
             {...(isWebClient || localStatusText === undefined
               ? {}
-              : { status: localStatusText, details: sessionSearchStatusDetails(localStatus) })}
+              : { status: localStatusText, details: sessionSearchStatusDetails(localStatus, t) })}
           />
         }
         servers={orderedServers.map((entry) => ({
@@ -231,9 +235,8 @@ export function SessionHistorySettingsPane({
       />
       {isWebClient ? null : (
         <SettingsRow
-          className="border-t border-border"
-          label={translate('sessionHistory.settings.openInSidebar', 'Open in the sidebar')}
-          description={translate(
+          label={t('sessionHistory.settings.openInSidebar', 'Open in the sidebar')}
+          description={t(
             'sessionHistory.settings.openInSidebarCopy',
             'Type what you remember, or ask an agent: “find the session where we fixed the login timeout.”'
           )}
@@ -247,7 +250,7 @@ export function SessionHistorySettingsPane({
                 closeSettingsPage()
               }}
             >
-              {translate('sessionHistory.settings.open', 'Open')}
+              {t('sessionHistory.settings.open', 'Open')}
             </Button>
           }
         />
@@ -260,11 +263,11 @@ export function SessionHistorySettingsPane({
         onCleared={() => setRefresh((value) => value + 1)}
       />
       {error ? (
-        <p role="alert" className="pt-3 text-xs text-destructive">
+        <p role="alert" className="pb-3 text-xs text-destructive">
           {error}
         </p>
       ) : null}
-    </div>
+    </SettingsGroup>
   )
 }
 

@@ -1,6 +1,6 @@
-import { clearSuccessor } from '../../agent-session-sender-identity-revision'
+import { clearSuccessor } from './agent-session-sender-identity-revision'
 import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
+import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
 import {

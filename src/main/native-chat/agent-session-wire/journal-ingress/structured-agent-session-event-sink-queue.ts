@@ -1,39 +1,18 @@
+import * as drain from './structured-agent-session-sink-drain'
+export type {
+  StructuredAgentSessionSinkOperation,
+  StructuredAgentSessionDrainWaiter
+} from './structured-agent-session-sink-drain'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  StructuredAgentSessionEventTarget,
-  StructuredAgentSessionReadingControl,
-  StructuredAgentSessionSinkAdmission,
-  StructuredAgentSessionSinkBarrier,
-  StructuredAgentSessionSinkState,
-  StructuredAgentSessionSinkWatermarks
-} from './structured-agent-session-event-sink'
+import type * as events from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 import { StructuredAgentSessionSinkSnapshots } from './structured-agent-session-sink-snapshots'
 
-export type StructuredAgentSessionSinkOperation = {
-  sequence: number
-  bytes: number
-  /** Only publications coalesce by key; replacing journal writes would reorder them behind later work. */
-  publicationKey?: string
-  /** Handover synchronously joins the journal queue in submission order. */
-  run: (target: StructuredAgentSessionEventTarget) => Promise<unknown> | void
-}
-
-type Admitted = StructuredAgentSessionSinkOperation & { superseded?: boolean }
-
-const MAX_PRE_CONTROL_OPERATIONS = 1_024
-const MAX_PRE_CONTROL_BYTES = 32 * 1024 * 1024
-
-export type StructuredAgentSessionDrainWaiter = {
-  through: number
-  resolve: (result: StructuredAgentSessionSinkBarrier) => void
-}
-
 /** Hand writes to the journal in issuance order; bound startup work until reading can pause. */
 export class StructuredAgentSessionSinkQueue {
-  private readingControl: StructuredAgentSessionReadingControl | undefined
+  private readingControl: events.StructuredAgentSessionReadingControl | undefined
   private hasBoundReadingControl: boolean
-  private target: StructuredAgentSessionEventTarget | null = null
+  private target: events.StructuredAgentSessionEventTarget | null = null
   private closed = false
   private failure: { error: unknown } | null = null
   private queuedBytes = 0
@@ -44,9 +23,9 @@ export class StructuredAgentSessionSinkQueue {
   /** Closing drops only buffered operations after this handover sequence. */
   private handedOverSequence = 0
   private handedOverSettled: Promise<void> = Promise.resolve()
-  private readonly buffered: Admitted[] = []
-  private readonly waitingPublications = new Map<string, Admitted>()
-  private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
+  private readonly buffered: drain.Admitted[] = []
+  private readonly waitingPublications = new Map<string, drain.Admitted>()
+  private readonly waiters: drain.StructuredAgentSessionDrainWaiter[] = []
   private readonly settledTurnListeners = new Set<(turnItemIds: readonly string[]) => void>()
   private releaseSettledTurns: (() => void) | undefined
   private readingPaused = false
@@ -61,11 +40,9 @@ export class StructuredAgentSessionSinkQueue {
       : this.snapshots.readLiveText(target.journal.cursor().epoch)
   }
 
-  flushLiveText = (): void => {
-    this.snapshots.flushLiveText()
-  }
+  flushLiveText = (): void => this.snapshots.flushLiveText()
 
-  publishLiveText = (): StructuredAgentSessionSinkAdmission =>
+  publishLiveText = (): events.StructuredAgentSessionSinkAdmission =>
     this.submit({
       bytes: 1,
       publicationKey: 'live-text',
@@ -75,16 +52,20 @@ export class StructuredAgentSessionSinkQueue {
         }
       }
     })
-  readonly snapshots = new StructuredAgentSessionSinkSnapshots(() => this.syncReading())
+  readonly snapshots = new StructuredAgentSessionSinkSnapshots(() => {
+    this.syncReading()
+    this.notifyJournalBound()
+  })
+  private readonly boundListeners = new Set<() => void>()
 
   constructor(
     private readonly deps: {
-      watermarks: StructuredAgentSessionSinkWatermarks
+      watermarks: events.StructuredAgentSessionSinkWatermarks
       onFailed?: (error: unknown) => void
-      readingControl?: StructuredAgentSessionReadingControl
+      readingControl?: events.StructuredAgentSessionReadingControl
       onBackpressureChange?: (
         backpressured: boolean,
-        state: StructuredAgentSessionSinkState
+        state: events.StructuredAgentSessionSinkState
       ) => void
     }
   ) {
@@ -92,7 +73,7 @@ export class StructuredAgentSessionSinkQueue {
     this.hasBoundReadingControl = deps.readingControl !== undefined
   }
 
-  state = (): StructuredAgentSessionSinkState => ({
+  state = (): events.StructuredAgentSessionSinkState => ({
     queuedBytes: this.queuedBytes,
     queuedOperations: this.queuedOperations,
     backpressured: this.backpressured,
@@ -100,6 +81,32 @@ export class StructuredAgentSessionSinkQueue {
   })
 
   journalEpoch = (): string | null => this.target?.journal.cursor().epoch ?? null
+
+  journalSnapshot = () =>
+    this.target && !this.closed && this.failure === null ? this.snapshots.current() : null
+
+  private notifyJournalBound(): void {
+    if (this.journalSnapshot() === null) {
+      return
+    }
+    for (const listener of this.boundListeners) {
+      try {
+        listener()
+      } catch (error) {
+        this.fail(error)
+      }
+    }
+  }
+
+  onJournalBound = (listener: () => void): (() => void) => {
+    if (!this.closed) {
+      this.boundListeners.add(listener)
+      if (this.journalSnapshot() !== null) {
+        listener()
+      }
+    }
+    return () => this.boundListeners.delete(listener)
+  }
 
   journalHistory = (): StructuredAgentSessionHistoryJournal | null => this.target?.journal ?? null
 
@@ -111,7 +118,7 @@ export class StructuredAgentSessionSinkQueue {
     }
   }
 
-  bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
+  bindReadingControl(control: events.StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control
     this.hasBoundReadingControl = true
     this.readingPaused = false
@@ -123,7 +130,7 @@ export class StructuredAgentSessionSinkQueue {
     }
   }
 
-  bind(target: StructuredAgentSessionEventTarget): void {
+  bind(target: events.StructuredAgentSessionEventTarget): void {
     if (this.closed) {
       return
     }
@@ -137,6 +144,7 @@ export class StructuredAgentSessionSinkQueue {
     for (const operation of this.buffered.splice(0)) {
       this.handOver(operation, target)
     }
+    this.notifyJournalBound()
   }
 
   unbind(): void {
@@ -150,11 +158,12 @@ export class StructuredAgentSessionSinkQueue {
     this.releaseSettledTurns = undefined
     this.snapshots.close()
     this.closed = true
+    this.boundListeners.clear()
     this.dropBuffered()
     this.updateBackpressure()
   }
 
-  barrier = (): Promise<StructuredAgentSessionSinkBarrier> => {
+  barrier = (): Promise<events.StructuredAgentSessionSinkBarrier> => {
     const through = this.acceptedSequence
     if (this.settledSequence >= through) {
       return Promise.resolve(this.barrierResult())
@@ -163,7 +172,7 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   /** Unlike barrier, report close-dropped admitted writes as not landed. */
-  written = async (): Promise<StructuredAgentSessionSinkBarrier> => {
+  written = async (): Promise<events.StructuredAgentSessionSinkBarrier> => {
     const through = this.acceptedSequence
     const settled = await this.barrier()
     return settled.ok && this.handedOverSequence < through
@@ -172,8 +181,8 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   submit(
-    operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
-  ): StructuredAgentSessionSinkAdmission {
+    operation: Omit<drain.StructuredAgentSessionSinkOperation, 'sequence'>
+  ): events.StructuredAgentSessionSinkAdmission {
     if (this.closed) {
       return { accepted: false, reason: 'closed' }
     }
@@ -194,12 +203,13 @@ export class StructuredAgentSessionSinkQueue {
     const queuedOperations = this.queuedOperations + (replaceAt >= 0 ? 0 : 1)
     if (
       !this.hasBoundReadingControl &&
-      (queuedBytes > MAX_PRE_CONTROL_BYTES || queuedOperations > MAX_PRE_CONTROL_OPERATIONS)
+      (queuedBytes > drain.MAX_PRE_CONTROL_BYTES ||
+        queuedOperations > drain.MAX_PRE_CONTROL_OPERATIONS)
     ) {
       this.fail(new Error('Agent journal queue capacity exceeded before reading control bound'))
       return { accepted: false, reason: 'failed' }
     }
-    const accepted: Admitted = { ...operation, sequence: ++this.acceptedSequence }
+    const accepted: drain.Admitted = { ...operation, sequence: ++this.acceptedSequence }
     if (replaceAt >= 0) {
       this.buffered.splice(replaceAt, 1)
     } else if (replaced) {
@@ -217,17 +227,20 @@ export class StructuredAgentSessionSinkQueue {
     return { accepted: true }
   }
 
-  private handOver(operation: Admitted, bound: StructuredAgentSessionEventTarget): void {
+  private handOver(
+    operation: drain.Admitted,
+    bound: events.StructuredAgentSessionEventTarget
+  ): void {
     const earlier = this.handedOverSettled
     this.handedOverSequence = operation.sequence
     const key = operation.publicationKey
     let outcome: Promise<unknown>
     if (key === undefined) {
-      outcome = runNow(() => operation.run(bound))
+      outcome = drain.runNow(() => operation.run(bound))
     } else {
       this.waitingPublications.set(key, operation)
       // Publications read in journal order so they cannot overtake prior writes.
-      outcome = runNow(() =>
+      outcome = drain.runNow(() =>
         bound.journal.readInOrder(() => {
           if (this.waitingPublications.get(key) === operation) {
             this.waitingPublications.delete(key)
@@ -238,19 +251,18 @@ export class StructuredAgentSessionSinkQueue {
         })
       )
     }
-    // Observe failure immediately even if earlier writes are still settling.
     const landed = outcome.then(() => undefined, this.fail)
     this.handedOverSettled = Promise.all([earlier, landed]).then(() => this.settle(operation))
   }
 
-  private settle(operation: Admitted): void {
+  private settle(operation: drain.Admitted): void {
     this.release(operation)
     this.settledSequence = Math.max(this.settledSequence, operation.sequence)
     this.updateBackpressure()
     this.settleWaiters()
   }
 
-  private release(operation: Admitted): void {
+  private release(operation: drain.Admitted): void {
     this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
     this.queuedOperations = Math.max(0, this.queuedOperations - 1)
   }
@@ -279,7 +291,6 @@ export class StructuredAgentSessionSinkQueue {
     this.deps.onBackpressureChange?.(next, this.state())
   }
 
-  /** A drain must not resume a stream still held for an epoch replacement. */
   private syncReading(): void {
     const paused = !this.closed && (this.backpressured || this.snapshots.held)
     if (paused === this.readingPaused) {
@@ -305,18 +316,12 @@ export class StructuredAgentSessionSinkQueue {
     this.setBackpressure(next)
   }
 
-  private barrierResult(): StructuredAgentSessionSinkBarrier {
+  private barrierResult(): events.StructuredAgentSessionSinkBarrier {
     return this.failure === null ? { ok: true } : { ok: false, error: this.failure.error }
   }
 
   private settleWaiters(): void {
-    for (let index = this.waiters.length - 1; index >= 0; index -= 1) {
-      const waiter = this.waiters[index]
-      if (waiter && waiter.through <= this.settledSequence) {
-        this.waiters.splice(index, 1)
-        waiter.resolve(this.barrierResult())
-      }
-    }
+    drain.settleSinkDrainWaiters(this.waiters, this.settledSequence, this.barrierResult())
   }
 
   private fail = (error: unknown): void => {
@@ -326,13 +331,5 @@ export class StructuredAgentSessionSinkQueue {
     }
     this.dropBuffered()
     this.updateBackpressure()
-  }
-}
-
-function runNow(run: () => Promise<unknown> | void): Promise<unknown> {
-  try {
-    return Promise.resolve(run())
-  } catch (error) {
-    return Promise.reject(error)
   }
 }

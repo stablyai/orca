@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ClearPaneTitleMenuItem({
   onSelect,
@@ -10,13 +10,11 @@ export function ClearPaneTitleMenuItem({
   /** Omitted where the pane's own keyboard shortcut does not reach. */
   shortcut?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuItem onSelect={onSelect}>
       <X />
-      {translate(
-        'auto.components.terminal.pane.TerminalContextMenu.clearPaneTitle',
-        'Clear Pane Title'
-      )}
+      {t('auto.components.terminal.pane.TerminalContextMenu.clearPaneTitle', 'Clear Pane Title')}
       {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
     </DropdownMenuItem>
   )

@@ -1,3 +1,4 @@
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { persistRewindRecord, settleUnsupportedClaudeRewind } from './structured-rewind-record'
 
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
@@ -7,11 +8,9 @@ import type {
 } from '../host/structured-agent-session-host-types'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { isDeepStrictEqual } from 'node:util'
-import { structuredRewindCut, type StructuredRewindCut } from './structured-rewind-cut'
+import { legacyRewindTurns, rewindJournalCut } from './structured-rewind-cut'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -34,28 +33,9 @@ type RecoveredRewind = Awaited<
 /** Read provider evidence outside serialization; apply journal/record changes inside it. */
 export type StructuredRewindRecoveryEvidence = {
   rewind: AgentSessionRewindRecord
-  turns?: { beforeTurnId: string; keptTurnId: string | null }
+  turns?: { beforeTurnId: string; keptTurnId: string | null; threadId?: string }
   recovered?: RecoveredRewind
 } | null
-
-// Only rewind replaces an existing epoch, so a changed epoch proves replacement committed.
-async function rewindJournalCut(
-  record: AgentSessionRecord | null,
-  journal: AgentSessionJournal,
-  rewind: AgentSessionRewindRecord
-): Promise<{ alreadyReplaced: boolean; cut: StructuredRewindCut | null }> {
-  const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
-  const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-  const cut =
-    alreadyReplaced || !record || !head
-      ? null
-      : await structuredRewindCut(journal, {
-          itemId: rewind.itemId,
-          provider: record.provider,
-          nativeId: head.nativeId
-        })
-  return { alreadyReplaced, cut }
-}
 
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
 export async function recoverStructuredRewind(
@@ -104,7 +84,10 @@ export async function readStructuredRewindRecovery(
   ) {
     return { rewind }
   }
-  const turns = { beforeTurnId: cut.beforeTurnId, keptTurnId: cut.keptTurnId }
+  const turns =
+    rewind.providerRevert ??
+    legacyRewindTurns(journal, cut, target?.provider === 'codex' ? target.threadId : '')!
+
   const read = adapter?.recoverRewind?.({
     sessionId,
     fence,
@@ -155,8 +138,11 @@ export async function applyStructuredRewindRecovery(
       throw new Error('agent_session_rewind:outcome-unknown')
     }
     if (
-      evidence.turns?.beforeTurnId !== cut.beforeTurnId ||
-      evidence.turns.keptTurnId !== cut.keptTurnId
+      !isDeepStrictEqual(
+        evidence.turns,
+        rewind.providerRevert ??
+          legacyRewindTurns(journal, cut, target?.provider === 'codex' ? target.threadId : '')
+      )
     ) {
       throw new Error('agent_session_rewind:stale-evidence')
     }

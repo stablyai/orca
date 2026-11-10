@@ -1,5 +1,5 @@
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'

@@ -1,3 +1,4 @@
+import { journalForkStageHeld } from './journal-fork-stages'
 import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
 import { copyAgentSessionStoreCache } from '../../runtime/agent-session/records/agent-session-store-cache'
 import { journalDomainPublicCursor } from './journal-domain-context-replacement'
@@ -48,6 +49,13 @@ export function resolveJournalWriterStoreMutation(
   value: unknown
   changed: boolean
 } {
+  if (
+    mutation.kind === 'command' &&
+    mutation.command.kind === 'found' &&
+    journalForkStageHeld(db, mutation.command.request.sessionId)
+  ) {
+    throw new Error('fork stage owns this child founding')
+  }
   const state: AgentSessionStoreState = {
     records: new Map(),
     operations: new Map(),

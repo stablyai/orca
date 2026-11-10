@@ -34,6 +34,7 @@ export class StructuredAgentSessionSinkSnapshots {
 
   private snapshot: ClaudeJournalSnapshot | null = null
   private release: (() => void) | undefined
+  private source: object | undefined
   private holds = 0
   private closed = false
   private readonly unheld: (() => void)[] = []
@@ -44,7 +45,7 @@ export class StructuredAgentSessionSinkSnapshots {
     return this.holds > 0
   }
 
-  current = (): ClaudeJournalSnapshot | null => this.snapshot
+  current = (): ClaudeJournalSnapshot | null => (this.closed || this.held ? null : this.snapshot)
 
   /** Resolves when no epoch replacement's saved facts are outstanding. */
   settled = (): Promise<void> =>
@@ -56,20 +57,48 @@ export class StructuredAgentSessionSinkSnapshots {
       return Promise.reject(new Error('agent_session_sink_closed'))
     }
     this.release?.()
+    const token = {}
+    this.source = token
+    this.snapshot = null
+    const holds = new Set<() => void>()
+    this.onHeldChange()
     const { release, adopted } = source({
       adopt: (snapshot) => {
-        if (!this.closed) {
+        if (!this.closed && this.source === token) {
           this.snapshot = snapshot
+          this.onHeldChange()
         }
       },
-      hold: () => this.hold()
+      hold: () => {
+        if (this.closed || this.source !== token) {
+          return () => {}
+        }
+        const unhold = this.hold()
+        const releaseHold = () => {
+          holds.delete(releaseHold)
+          unhold()
+        }
+        holds.add(releaseHold)
+        return releaseHold
+      }
     })
-    this.release = release
+    this.release = () => {
+      if (this.source === token) {
+        this.source = undefined
+        this.snapshot = null
+      }
+      release()
+      for (const unhold of holds) {
+        unhold()
+      }
+      this.onHeldChange()
+    }
     return adopted
   }
 
   close(): void {
     this.closed = true
+    this.snapshot = null
     this.liveSources.clear()
     this.release?.()
     this.release = undefined

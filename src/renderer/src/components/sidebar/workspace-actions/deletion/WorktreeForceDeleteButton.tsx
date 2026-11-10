@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
 import {
@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 
 // Sonner hides toasts through collapsed stacking or its visible-toast limit.
 function isHiddenInToastStack(toastElement: Element): boolean {
@@ -33,7 +32,7 @@ export function WorktreeForceDeleteButton({
   menuSide,
   moreActionsLabel,
   alwaysForceDeleteLabel,
-  alwaysForceDeleteTooltip,
+  alwaysForceDeleteDescription,
   children
 }: {
   toastId?: string
@@ -47,9 +46,10 @@ export function WorktreeForceDeleteButton({
   menuSide?: 'top' | 'bottom'
   moreActionsLabel?: string
   alwaysForceDeleteLabel?: string
-  alwaysForceDeleteTooltip?: string
+  alwaysForceDeleteDescription?: string
   children?: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const [isSaving, setIsSaving] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const groupRef = useRef<HTMLDivElement>(null)
@@ -89,7 +89,7 @@ export function WorktreeForceDeleteButton({
       await onAlwaysForceDelete()
     } catch (error) {
       toast.error(
-        translate('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
+        t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
         { description: error instanceof Error ? error.message : String(error) }
       )
       return
@@ -132,8 +132,7 @@ export function WorktreeForceDeleteButton({
           className={fullWidth ? 'min-w-0 flex-1' : undefined}
           onClick={forceDelete}
         >
-          {children ??
-            translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
+          {children ?? t('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
         </Button>
         {onAlwaysForceDelete ? (
           <DropdownMenuTrigger asChild>
@@ -143,8 +142,7 @@ export function WorktreeForceDeleteButton({
               size={size === 'sm' ? 'icon-sm' : 'icon'}
               disabled={disabled || isSaving}
               aria-label={
-                moreActionsLabel ??
-                translate('workspaceDeletion.moreActions', 'More force delete options')
+                moreActionsLabel ?? t('workspaceDeletion.moreActions', 'More force delete options')
               }
             >
               <ChevronDown className="size-3.5" />
@@ -166,26 +164,27 @@ export function WorktreeForceDeleteButton({
             }
           }}
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => {
-                  void alwaysForceDelete()
-                }}
-              >
+          <DropdownMenuItem
+            variant="destructive"
+            className="max-w-72 whitespace-normal"
+            onSelect={() => {
+              void alwaysForceDelete()
+            }}
+          >
+            <div className="flex min-w-0 flex-col gap-1">
+              <span>
                 {alwaysForceDeleteLabel ??
-                  translate('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
-              </DropdownMenuItem>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8}>
-              {alwaysForceDeleteTooltip ??
-                translate(
-                  'workspaceDeletion.alwaysForceDeleteTooltip',
-                  'Applies to all future workspace deletions.'
-                )}
-            </TooltipContent>
-          </Tooltip>
+                  t('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {alwaysForceDeleteDescription ??
+                  t(
+                    'workspaceDeletion.alwaysForceDeleteDescription',
+                    'Applies to all future workspace deletions.'
+                  )}
+              </span>
+            </div>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       ) : null}
     </DropdownMenu>

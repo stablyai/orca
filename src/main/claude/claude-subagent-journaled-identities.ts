@@ -1,3 +1,10 @@
+import {
+  indexClaudeBackgroundTask,
+  selectClaudeBackgroundTask,
+  type ClaudeBackgroundTaskIndex,
+  type ClaudeBackgroundTaskDescriptor
+} from './claude-background-task-identity'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { namedSubagents } from '../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { JournalItemLinkageVisitor } from '../native-chat/agent-session-journal/journal-store-contracts'
@@ -7,6 +14,8 @@ import type { JournalThreadGoalSource } from '../native-chat/agent-session-journ
 type Reading = {
   canonicalByToolUse: Map<string, string>
   attemptByAgent: Map<string, number>
+  parents: Map<string, Map<string | undefined, AgentJournalProducerLinkage>>
+  backgrounds: Map<string, ClaudeBackgroundTaskIndex>
   subagents: Set<string>
 }
 
@@ -14,6 +23,18 @@ type Reading = {
 export type ClaudeJournalSnapshot = {
   canonicalByToolUse: [toolUseId: string, agentId: string][]
   attemptByAgent: [agentId: string, attempt: number][]
+  parents: [
+    agentId: string,
+    runs: [run: string | undefined, linkage: AgentJournalProducerLinkage][]
+  ][]
+  backgrounds: [
+    taskId: string,
+    index: {
+      latest?: ClaudeBackgroundTaskDescriptor
+      unresolved?: ClaudeBackgroundTaskDescriptor
+      aliases: [string, ClaudeBackgroundTaskDescriptor][]
+    }
+  ][]
   subagents: string[]
   threadGoal: JournalThreadGoalSource
 }
@@ -53,6 +74,14 @@ export function readClaudeJournalSnapshot(journal: ClaudeLinkageJournal): Claude
   return {
     canonicalByToolUse: [...reading.canonicalByToolUse],
     attemptByAgent: [...reading.attemptByAgent],
+    parents: [...reading.parents].map(([id, runs]) => [id, [...runs]]),
+    backgrounds: [...reading.backgrounds].map(([id, index]) => [
+      id,
+      {
+        ...index,
+        aliases: [...index.aliases]
+      }
+    ]),
     subagents: [...reading.subagents],
     threadGoal: journal.threadGoalSource()
   }
@@ -71,6 +100,15 @@ export class ClaudeJournaledSubagents {
   /** Zero means no journaled attempt. */
   attempt = (agentId: string): number => this.read()?.attemptByAgent.get(agentId) ?? 0
 
+  parent = (taskId: string, run?: string): string | undefined =>
+    (run === undefined
+      ? [...(this.read()?.parents.get(taskId)?.values() ?? [])].at(-1)
+      : this.read()?.parents.get(taskId)?.get(run)
+    )?.parentAgentId
+
+  background = (taskId: string, run?: string): ClaudeBackgroundTaskDescriptor | undefined =>
+    selectClaudeBackgroundTask(this.read()?.backgrounds.get(taskId), run)
+
   isSubagent = (taskId: string): boolean => this.read()?.subagents.has(taskId) === true
 
   /** Dereference the acquisition's current snapshot; a replacement swaps it whole. */
@@ -81,6 +119,16 @@ export class ClaudeJournaledSubagents {
       this.reading = snapshot && {
         canonicalByToolUse: new Map(snapshot.canonicalByToolUse),
         attemptByAgent: new Map(snapshot.attemptByAgent),
+        parents: new Map(snapshot.parents.map(([id, runs]) => [id, new Map(runs)])),
+        backgrounds: new Map(
+          snapshot.backgrounds.map(([id, index]) => [
+            id,
+            {
+              ...index,
+              aliases: new Map(index.aliases)
+            }
+          ])
+        ),
         subagents: new Set(snapshot.subagents)
       }
     }
@@ -92,9 +140,24 @@ function read(journal: Pick<ClaudeLinkageJournal, 'visitItemsWithLinkage'>): Rea
   const reading: Reading = {
     canonicalByToolUse: new Map(),
     attemptByAgent: new Map(),
+    parents: new Map(),
+    backgrounds: new Map(),
     subagents: new Set()
   }
-  journal.visitItemsWithLinkage((_itemId, _sequence, body, linkage) => {
+  journal.visitItemsWithLinkage((itemId, _sequence, body, linkage) => {
+    if (linkage.agentId !== undefined && linkage.producerKind === 'agent') {
+      const parents = reading.parents.get(linkage.agentId) ?? new Map()
+      parents.delete(linkage.providerParentRef)
+      parents.set(linkage.providerParentRef, linkage)
+      reading.parents.set(linkage.agentId, parents)
+    }
+    if (body.kind === 'message') {
+      for (const block of body.blocks.filter(isBackgroundTaskBlock)) {
+        const index = reading.backgrounds.get(block.taskId) ?? { aliases: new Map() }
+        indexClaudeBackgroundTask(index, itemId, block.taskId, block.parentToolUseId, linkage)
+        reading.backgrounds.set(block.taskId, index)
+      }
+    }
     readAgentRow(reading, linkage)
     if (body.kind === 'message' && linkage.agentId === undefined) {
       for (const entry of body.blocks.flatMap(namedSubagents)) {

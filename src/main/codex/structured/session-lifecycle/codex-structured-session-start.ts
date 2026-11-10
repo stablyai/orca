@@ -164,6 +164,7 @@ export async function openCodexStructuredSession(
   const session: CodexSession = {
     events: input.events,
     account: start.account,
+    codexHome: launch.codexHome,
     connection,
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,

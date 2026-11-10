@@ -38,6 +38,7 @@ async function connectCodexAppServer(
   })
   const { child } = managed
   const tree = createClaudeChildTreeReaper(child, {
+    site: 'codex-app-server-child-close',
     exited: () => managed.rootVerdict === 'exited',
     supervised: managed.supervised
   })

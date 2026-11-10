@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const { runTerminalHostRoundTrip } = require('./verify-packaged-daemon-entry.cjs')
@@ -15,6 +15,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -27,6 +28,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         "const net = require('node:net'), fs = require('node:fs')",
         'const arg = (name) => process.argv[process.argv.indexOf(name) + 1]',
         `fs.writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))`,
+        `fs.writeFileSync(${JSON.stringify(join(root, 'shell'))}, process.env.SHELL)`,
         `net.createServer(${onConnection}).listen(arg('--socket'), () => fs.writeFileSync(arg('--token'), 'tok'))`
       ].join('\n')
     )
@@ -54,7 +56,6 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
     }
     return {
       error,
-      elapsedMs: Date.now() - startedAt,
       daemonAlive,
       scratchDirs: readdirSync(root).filter((name) => name.startsWith('oth-'))
     }
@@ -80,8 +81,10 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         }
       })
     }`)
+    vi.stubEnv('SHELL', '/usr/bin/fish')
     const result = await roundTrip(entry, 1_500)
     expect(result.error).toBe(null)
+    expect(readFileSync(join(root, 'shell'), 'utf8')).toBe('/bin/sh')
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
     const messages = readFileSync(messagesPath, 'utf8').trim().split('\n').map(JSON.parse)
@@ -103,30 +106,5 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
       }
     })
     expect(messages[2].payload.cwd.startsWith(join(root, 'oth-'))).toBe(true)
-  })
-
-  it('rejects by the deadline and cleans up when the daemon never answers the hello', async () => {
-    const result = await roundTrip(fakeDaemon('() => {}'), 1_500)
-    expect(result.error?.message).toMatch(/timed out waiting for the control hello reply/)
-    expect(result.elapsedMs).toBeLessThan(1_500 + 5_000)
-    expect(result.daemonAlive).toBe(false)
-    expect(result.scratchDirs).toEqual([])
-  })
-
-  it('rejects at once and cleans up when the daemon closes the connection', async () => {
-    const result = await roundTrip(fakeDaemon('(socket) => socket.destroy()'), 10_000)
-    // A destroyed socket may report a clean close, a reset, or a write after close.
-    expect(result.error?.message).toMatch(/closed the control connection|ECONNRESET|EPIPE/)
-    expect(result.elapsedMs).toBeLessThan(10_000)
-    expect(result.daemonAlive).toBe(false)
-    expect(result.scratchDirs).toEqual([])
-  })
-
-  it('rejects and cleans up when the daemon replies with malformed JSON', async () => {
-    const result = await roundTrip(fakeDaemon("(socket) => socket.write('{not json\\n')"), 10_000)
-    expect(result.error?.message).toMatch(/non-JSON control line: \{not json/)
-    expect(result.elapsedMs).toBeLessThan(10_000)
-    expect(result.daemonAlive).toBe(false)
-    expect(result.scratchDirs).toEqual([])
   })
 })

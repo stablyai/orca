@@ -112,7 +112,7 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
       const { parseRuntimeNativeChatReadSessionResult } =
         await import('../../src/renderer/src/components/native-chat/session/terminal/read/native-chat-runtime-contract')
       const { createNativeChatMessageListProjection } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-message-list-projection')
+        await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
       const { commandMarkersAsMessages } =
         await import('../../src/renderer/src/components/native-chat/session/terminal/delivery/native-chat-command-marker')
       hookRows = [{ ...sshHookRow(transcriptPath), connectionId: null }]

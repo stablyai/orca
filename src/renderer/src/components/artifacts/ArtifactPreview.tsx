@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/host-guest/webview-registry'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 const ARTIFACT_PREVIEW_LOAD_TIMEOUT_MS = 20_000
@@ -61,6 +62,7 @@ function attachArtifactWebview({
 }
 
 export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.Element {
+  const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<PreviewState>('loading')
 
@@ -151,10 +153,10 @@ export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.E
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-editor-surface px-6 text-center">
           <AlertCircle className="size-6 text-muted-foreground" />
           <p className="text-sm font-medium">
-            {translate('auto.components.artifacts.previewUnavailable', 'Preview unavailable')}
+            {t('auto.components.artifacts.previewUnavailable', 'Preview unavailable')}
           </p>
           <p className="max-w-sm text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.artifacts.previewUnavailableDescription',
               'Open this artifact in your browser to view it.'
             )}

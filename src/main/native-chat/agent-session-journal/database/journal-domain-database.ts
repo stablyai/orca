@@ -1,3 +1,4 @@
+import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from '../../../sqlite/sync-database'
@@ -107,6 +108,7 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
     db.pragma('checkpoint_fullfsync = ON')
     db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
     migrateJournalDomainSchema(db)
+    ensurePRWatchTables(db)
     hardenSqliteDatabaseFiles(filename)
     transferred = true
     return { db, readOnly: false }

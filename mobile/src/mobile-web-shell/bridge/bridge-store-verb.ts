@@ -14,6 +14,11 @@ export const BRIDGE_STORE_READ_REPLY_BUDGET_CHARS = BRIDGE_MAX_REPLY_BYTES - 2 *
 const tableSchema = z.enum(['cache', 'draft'])
 const keySchema = z.string().min(1).max(512)
 
+// The shell refuses a whole call with any other key, so the page checks each key before sending it.
+export function isBridgeStoreKey(key: string): boolean {
+  return keySchema.safeParse(key).success
+}
+
 // Values are base64(gzip(JSON)) in both tables: the store seals the base64 string as the bytes it encodes.
 export const storeParamsSchema = z.discriminatedUnion('action', [
   z.strictObject({

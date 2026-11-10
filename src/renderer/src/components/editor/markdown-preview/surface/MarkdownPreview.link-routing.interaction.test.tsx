@@ -73,7 +73,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }
 })
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../../runtime/rpc/targets/use-worktree-runtime-target', () => ({
   useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
     runtimeEnvironmentId
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
@@ -82,10 +82,10 @@ vi.mock('@/runtime/use-worktree-runtime-target', () => ({
 vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   statRuntimePath: statRuntimePathMock
 }))
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: (worktreeId: string) => targetConnectionOwners.get(worktreeId)
 }))
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   createConnectionIdForFileSelector: () => () => connectionOwner.value
 }))
 vi.mock('@/i18n/i18n', () => ({

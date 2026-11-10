@@ -11,6 +11,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
+import { StructuredAgentSessionSnapshotRoutes } from '../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
 
 export const SESSION = 'session-claude-catch-up'
 export const SID = '402eff2b-84dc-4e05-8fe8-49fffb2cd3c3'
@@ -115,8 +116,14 @@ export async function chat(project = '-work', cwd = '/work') {
     now: () => 1_000
   })
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+  let releaseReplacement = journal.epochReplacements.observe((replaced) =>
+    routes.replacing(SESSION, journal, replaced)
+  )
+  await deferred.followSnapshots(routes.observe(SESSION, journal))
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
+    releaseReplacement()
     deferred.close()
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
@@ -130,8 +137,13 @@ export async function chat(project = '-work', cwd = '/work') {
     },
     replay: async () => {
       await deferred.drained()
+      releaseReplacement()
       await journal.close()
       journal = await journals.open({ identity, stateDirectory: root, now: () => 1_000 })
+      releaseReplacement = journal.epochReplacements.observe((replaced) =>
+        routes.replacing(SESSION, journal, replaced)
+      )
+      await deferred.followSnapshots(routes.observe(SESSION, journal))
       deferred.bind({ journal, fence: 1, publish: () => {} })
       return journal
     },

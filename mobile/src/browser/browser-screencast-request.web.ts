@@ -1,6 +1,6 @@
 import { BRIDGE_MAX_MESSAGE_BYTES } from '../mobile-web-shell/bridge/bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
-import { METADATA_KEYS } from '../transport/browser-screencast-protocol'
+import { METADATA_KEYS } from './browser-screencast-protocol'
 import {
   assembleMobileBrowserScreencastRequest,
   MOBILE_VIEW_DEVICE_SCALE_FACTOR,
@@ -37,7 +37,7 @@ const WIDEST_JSON_DOUBLE_CHARS = 25
 const NARROWEST_JSON_DOUBLE_CHARS = 1
 
 // Derive envelope bound from real protocol shape: longest correlation id, MAX_SAFE_INTEGER counters and every metadata field widened to finite-double maximum.
-// Budget cannot predict unknown loose metadata or letterboxed web frames; shell drops over-cap frames. browser-screencast-budget-at-the-shell.test.ts reconstructs bound from real encoded/serialized event.
+// Budget cannot predict unknown loose metadata or letterboxed web frames; shell drops over-cap frames.
 export function binaryEventEnvelopeBytes(): number {
   const skeleton = JSON.stringify({
     v: BRIDGE_PROTOCOL_VERSION,

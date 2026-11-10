@@ -1,3 +1,5 @@
+import type { JournalSqlForkCopy } from '../../agent-session-journal/journal-sql-fork-copy'
+import type { NativeCopyOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 // Store CAS and idempotency rows make retried create/ensure replay instead of reserving another owner.
 
@@ -49,7 +51,14 @@ export type AgentSessionAttachParams = {
   /** Retain native in params because fingerprints include it. */
   runtimeKind: 'native'
   /** Host-only create defaults; remote schemas reject these. */
-  fork?: { sessionId: string; itemId: string; revalidate: () => Promise<void> }
+  fork?: {
+    sessionId: string
+    itemId: string
+    revalidate: () => Promise<void>
+    prepared: JournalSqlForkCopy
+    withAdmission: <T>(run: () => Promise<T>) => Promise<T>
+    historyOrigin?: NativeCopyOrigin
+  }
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string

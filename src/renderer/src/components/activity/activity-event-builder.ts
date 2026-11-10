@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -18,17 +18,17 @@ import { capActivityEvents } from './activity-event-cap'
 import { newestActivityHistoryEntries } from './activity-pane-events'
 import {
   createActivityEventBuildCache,
+  resolveActivityTabIndexes,
   resolvePaneBuild,
   type ActivityEventBuildCache
 } from './activity-event-build-cache'
 import { appendUnsupportedAndRetainedEvents } from './activity-event-builder-sources'
 import {
   attributedActivityTabContext,
-  buildActivityTabContext,
-  buildActivityTabHostIndex,
   resolveActivityEventOwner,
   type ActivityEventOwner
 } from './activity-event-builder-context'
+import type { Translate } from '@/i18n/use-translate'
 
 export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
 
@@ -52,7 +52,8 @@ export type BuildActivityEventsArgs = {
 
 export function buildActivityEvents(
   args: BuildActivityEventsArgs,
-  cache?: ActivityEventBuildCache
+  cache?: ActivityEventBuildCache,
+  t?: Translate
 ): {
   events: ActivityEvent[]
   liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
@@ -61,12 +62,7 @@ export function buildActivityEvents(
   const events: ActivityEvent[] = []
   const paneEntryByPaneKey: Record<string, AgentStatusEntry> = {}
   const seenEventIds = new Set<string>()
-  const tabContext = buildActivityTabContext(
-    args.tabsByWorktree,
-    args.unifiedTabsByWorktree,
-    args.chatNames
-  )
-  const tabHostIndex = buildActivityTabHostIndex(args.unifiedTabsByWorktree)
+  const { context: tabContext, hosts: tabHostIndex } = resolveActivityTabIndexes(args, cache)
   const ownerCache = new Map<string, ActivityEventOwner>()
   const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
   const seenCacheKeys = cache ? new Set<string>() : null
@@ -103,7 +99,8 @@ export function buildActivityEvents(
       entry,
       context.tab.ptyId,
       tabHostIndex,
-      ownerCache
+      ownerCache,
+      t
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
     // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.

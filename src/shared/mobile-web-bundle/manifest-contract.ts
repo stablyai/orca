@@ -4,8 +4,8 @@ import { sha256 } from '../sha256'
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
 
-/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. */
-export const MOBILE_WEB_PAGE_VERSION = 2
+/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. 3: also hands an `open` for the session on top its pane, and reports which session it shows. */
+export const MOBILE_WEB_PAGE_VERSION = 3
 
 /** The only stable-named asset, and the only one that references the content-addressed names. */
 export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'
@@ -65,11 +65,24 @@ export const MobileWebBundleAssetSchema = z
     path: MobileWebBundleAssetPathSchema,
     sha256: z.string().regex(SHA256_PATTERN),
     byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
-    contentType: z.string().min(1).max(MAX_CONTENT_TYPE_LENGTH).regex(CONTENT_TYPE_PATTERN)
+    contentType: z.string().min(1).max(MAX_CONTENT_TYPE_LENGTH).regex(CONTENT_TYPE_PATTERN),
+    /** Length of the brotli copy at `mobileWebBundleBrotliPath(path)`, present only where it is smaller.
+     *  Outside buildId, so phones keep caching and reusing by the raw bytes. */
+    brotliByteLength: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+      .optional()
   })
   .strict()
 
 export type MobileWebBundleAsset = z.infer<typeof MobileWebBundleAssetSchema>
+
+/** The build writes each brotli copy next to its asset under this name. */
+export function mobileWebBundleBrotliPath(assetPath: string): string {
+  return `${assetPath}.br`
+}
 
 /** Code-unit order, not `localeCompare`: the sort feeds a content hash, so it must not vary. */
 function compareAssetPaths(left: MobileWebBundleAsset, right: MobileWebBundleAsset): number {

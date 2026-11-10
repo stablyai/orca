@@ -22,10 +22,11 @@ import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-m
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../../workspace-creator-context'
+import { claimTerminalForRemoteAttach } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
@@ -70,16 +71,26 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       }
 
       const db = runtime.getOrchestrationDb()
-      db.createRemoteDispatchAttachment({
-        runId: params.runId,
+      // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
+      const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
         dispatchId: params.dispatchId,
-        taskId: params.taskId,
-        homePeerFingerprint: orchestrationMutation.callerFingerprint,
-        protocolVersion: params.protocolVersion,
-        runtimeEpoch: runtime.getRuntimeId(),
-        depth: params.depth,
-        mutationReceipt: orchestrationMutation
+        taskId: params.taskId
       })
+      try {
+        db.createRemoteDispatchAttachment({
+          runId: params.runId,
+          dispatchId: params.dispatchId,
+          taskId: params.taskId,
+          homePeerFingerprint: orchestrationMutation.callerFingerprint,
+          protocolVersion: params.protocolVersion,
+          runtimeEpoch: runtime.getRuntimeId(),
+          depth: params.depth,
+          mutationReceipt: orchestrationMutation
+        })
+      } catch (error) {
+        releaseTerminalClaim()
+        throw error
+      }
       const effects: FederationEffect[] = []
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
@@ -254,6 +265,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           setup,
           launch: launch.receipt
         })
+      } finally {
+        releaseTerminalClaim()
       }
     }
   })

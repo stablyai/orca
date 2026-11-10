@@ -1,4 +1,7 @@
-import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
+import {
+  nativeCopyIds,
+  usableJournalHistoryOrigin
+} from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
@@ -34,6 +37,8 @@ export type CodexHistoryJournalView = {
   hasRows: boolean
   /** Proven transcript origin, independent of subsequently imported provider identities. */
   importedAt: number | null
+  covered?: ReadonlySet<string>
+  origin?: unknown
   unresolvedOrigin: boolean
 }
 
@@ -128,10 +133,22 @@ export async function readCodexHistoryJournalView(
     }
     const origin = usableJournalHistoryOrigin(rawOrigin)
     const importedAt =
-      origin?.providerHandle.kind === 'codex' && origin.providerHandle.threadId === threadId
+      origin?.kind === 'legacy_import' &&
+      origin.providerHandle.kind === 'codex' &&
+      origin.providerHandle.threadId === threadId
         ? origin.importedAt
         : null
+    const copy =
+      origin?.kind === 'native_copy' &&
+      origin.unit === 'codex-turn' &&
+      origin.agent === 'codex' &&
+      origin.providerHandle.kind === 'codex' &&
+      origin.providerHandle.threadId === threadId
+        ? origin
+        : null
     return {
+      ...(copy ? { covered: nativeCopyIds(copy) } : {}),
+      origin: rawOrigin,
       epoch: physicalCursor.epoch,
       nativePromptKeys: new Set([...nativePromptKeys, ...captured.keys]),
       unresolvedIds: new Set(unsettled.submissions.map((send) => send.clientMessageId)),
@@ -142,7 +159,7 @@ export async function readCodexHistoryJournalView(
       latestPosition,
       hasRows,
       importedAt,
-      unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null
+      unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null && !copy
     }
   })
 }

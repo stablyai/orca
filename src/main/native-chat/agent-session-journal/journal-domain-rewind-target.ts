@@ -1,3 +1,5 @@
+import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { isReadableAgentSessionStoreRecord } from '../../runtime/agent-session/records/agent-session-store-row-rules'
 import { isAgentSessionRewindTarget } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -37,12 +39,28 @@ export function readJournalDomainRewindTarget(
     return row ? scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json) : undefined
   }
   const selected = item(itemId)
+  const raw = scope.db
+    .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+    .get(scope.sessionId)
+  const stored: unknown = raw && JSON.parse(String(raw.record_json))
+  const boundary = isReadableAgentSessionStoreRecord(scope.sessionId, stored)
+    ? decodePersistedAgentSessionRecord(stored).record.forkedFrom?.childBoundary
+    : undefined
+  const inherited =
+    boundary?.kind === 'item' &&
+    scope.db
+      .prepare(`SELECT 1 FROM journal_items selected
+    CROSS JOIN journal_items anchor WHERE selected.session_id=? AND selected.epoch=? AND selected.item_id=? AND selected.hidden=0
+    AND anchor.session_id=selected.session_id AND anchor.epoch=selected.epoch AND anchor.item_id=? AND anchor.hidden=0
+    AND (selected.sequence,selected.sequence_index,selected.ordinal)<=(anchor.sequence,anchor.sequence_index,anchor.ordinal)`)
+      .get(...scope.prefix, itemId, boundary.itemId) !== undefined
   return {
     cursor: { epoch, sequence: Number(head.last_sequence) },
     floor,
     sequence: selected?.sequence ?? null,
     eligible: Boolean(
       selected &&
+      !inherited &&
       (!floor || selected.sequence > floor.sequence) &&
       isAgentSessionRewindTarget(
         selected,

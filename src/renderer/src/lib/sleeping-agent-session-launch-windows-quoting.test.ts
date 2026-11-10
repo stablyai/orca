@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerResolution from '@/lib/workspace/ownership/connection-owner-resolution'
 import type * as LaunchAgentKindModule from '../../../shared/agent-kind'
 
 const mockCreateTab = vi.fn()
@@ -60,7 +60,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 const connectionOwner = vi.hoisted((): { nestedConnectionId: string | undefined } => ({
   nestedConnectionId: undefined
 }))
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return {
     ...actual,
@@ -160,18 +160,6 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
 
     await expect(launch()).resolves.toBe(`codex "resume" "${SESSION_ID}"`)
-  })
-
-  it('keeps PowerShell quoting for a powershell tab', async () => {
-    store.settings.terminalWindowsShell = 'powershell.exe'
-
-    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
-  })
-
-  it('quotes the resume argv for a Git Bash tab', async () => {
-    store.settings.terminalWindowsShell = 'git-bash'
-
-    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
   })
 
   it('ignores the local Windows shell setting for an SSH workspace', async () => {

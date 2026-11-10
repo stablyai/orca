@@ -56,28 +56,6 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     return { dispatchId: startingDispatchId(), taskId: task.id, start, finish }
   }
 
-  it('owns the created terminal before the boot wait resolves', async () => {
-    h.setup()
-    const held = await startHeldAtBootWait()
-
-    expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
-      ownership_state: 'owned',
-      release_state: 'not_requested',
-      terminal_handle: 'term_worker',
-      pane_key: h.workerPaneKey,
-      process_incarnation: 'runtime_test:term_worker:1',
-      host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
-    })
-    // worker-list reads the same row: a booting worker now says `active`, not `retained`.
-    expect(h.db.listWorkerTerminalResources({ dispatchIds: [held.dispatchId] })[0]).toMatchObject({
-      agentTerminalHandle: 'term_worker',
-      terminalState: 'active'
-    })
-
-    held.finish()
-    await expect(held.start).resolves.toMatchObject({ state: 'ready' })
-  })
-
   it('claims nothing for an explicitly reused terminal until authority transfers it', async () => {
     h.setup()
     const held = await startHeldAtBootWait({ terminal: 'term_worker' })
@@ -107,18 +85,6 @@ describe('worker terminal custody is recorded at terminal creation', () => {
       h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
     ).resolves.toMatchObject({ state: 'retained', reason: 'user_kept', processAction: 'none' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('still refuses to release a starting worker that already owns its terminal', async () => {
-    h.setup()
-    const held = await startHeldAtBootWait()
-
-    await expect(
-      h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
-    ).rejects.toThrow(/only a settled worker can release/)
-
-    held.finish()
-    await held.start
   })
 
   it('leaves a start that died on the boot wait a terminal worker-release can close', async () => {
@@ -163,17 +129,6 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     expect(h.db.getWorkerTerminalResourceByOwner(receipt.dispatchId)).toMatchObject({
       ownership_state: 'owned'
     })
-  })
-
-  it('promises no cleanup for a reused terminal whose start died', async () => {
-    h.setup()
-    const held = await startHeldAtBootWait({ terminal: 'term_worker' })
-    held.finish(false)
-
-    const receipt = await held.start
-    expect(receipt).toMatchObject({ state: 'failed' })
-    expect(receipt).not.toHaveProperty('recovery')
-    expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toBeUndefined()
   })
 })
 

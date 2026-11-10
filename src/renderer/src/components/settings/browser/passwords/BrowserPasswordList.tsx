@@ -7,9 +7,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type { BrowserPasswordEntrySummary } from '../../../../../../shared/browser-passwords-types'
-import { browserPasswordHostOf } from './browser-password-import-toast'
+import { browserPasswordHostOf } from './browser-passwords-copy'
 
 export type BrowserPasswordRowActions = {
   onCopy: (entry: BrowserPasswordEntrySummary) => void
@@ -38,8 +39,8 @@ function groupBySite(entries: BrowserPasswordEntrySummary[]): SiteGroup[] {
   )
 }
 
-function usernameText(entry: BrowserPasswordEntrySummary): string {
-  return entry.username || translate('settings.browser.passwords.noUsername', '(no username)')
+function usernameText(entry: BrowserPasswordEntrySummary, t: Translate = translate): string {
+  return entry.username || t('settings.browser.passwords.noUsername', '(no username)')
 }
 
 function SiteTile({ host }: { host: string }): React.JSX.Element {
@@ -56,12 +57,13 @@ function SiteTile({ host }: { host: string }): React.JSX.Element {
 
 /** Host, plus the scheme when it is plain http so it can't pass for the https login. */
 function SiteName({ group }: { group: SiteGroup }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="truncate text-sm">
       {group.host}
       {group.origin.startsWith('http:') ? (
         <span className="text-2xs text-muted-foreground">
-          {translate('settings.browser.passwords.httpSuffix', ' · http')}
+          {t('settings.browser.passwords.httpSuffix', ' · http')}
         </span>
       ) : null}
     </div>
@@ -81,15 +83,17 @@ function PasswordRow({
   now: number
   actions: BrowserPasswordRowActions
 }): React.JSX.Element {
-  const account = translate('settings.browser.passwords.account', '{{username}} on {{site}}', {
-    username: usernameText(entry),
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const account = t('settings.browser.passwords.account', '{{username}} on {{site}}', {
+    username: usernameText(entry, t),
     site: group.host
   })
   const lastUsed =
     entry.lastUsedAt === null
       ? null
-      : translate('settings.browser.passwords.lastUsed', 'Used {{when}}', {
-          when: formatUiRelativeTime(entry.lastUsedAt - now)
+      : t('settings.browser.passwords.lastUsed', 'Used {{when}}', {
+          when: formatUiRelativeTime(entry.lastUsedAt - now, intlLocale)
         })
   return (
     <div className="group/pw flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/60 focus-within:bg-accent/60">
@@ -97,7 +101,7 @@ function PasswordRow({
       <div className="min-w-0 flex-1">
         {nested ? null : <SiteName group={group} />}
         <div className={nested ? 'truncate text-sm' : 'truncate text-xs text-muted-foreground'}>
-          {usernameText(entry)}
+          {usernameText(entry, t)}
         </div>
       </div>
       {lastUsed ? <div className="shrink-0 text-2xs text-muted-foreground">{lastUsed}</div> : null}
@@ -107,14 +111,10 @@ function PasswordRow({
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label={translate(
-            'settings.browser.passwords.copyFor',
-            'Copy password for {{account}}',
-            {
-              account
-            }
-          )}
-          title={translate('settings.browser.passwords.copy', 'Copy password')}
+          aria-label={t('settings.browser.passwords.copyFor', 'Copy password for {{account}}', {
+            account
+          })}
+          title={t('settings.browser.passwords.copy', 'Copy password')}
           onClick={() => actions.onCopy(entry)}
         >
           <Copy />
@@ -123,10 +123,10 @@ function PasswordRow({
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label={translate('settings.browser.passwords.editFor', 'Edit {{account}}', {
+          aria-label={t('settings.browser.passwords.editFor', 'Edit {{account}}', {
             account
           })}
-          title={translate('settings.browser.passwords.edit', 'Edit')}
+          title={t('settings.browser.passwords.edit', 'Edit')}
           onClick={() => actions.onEdit(entry)}
         >
           <Pencil />
@@ -137,7 +137,7 @@ function PasswordRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={translate(
+              aria-label={t(
                 'settings.browser.passwords.moreActions',
                 'More actions for {{account}}',
                 { account }
@@ -149,7 +149,7 @@ function PasswordRow({
           <DropdownMenuContent align="end" className="min-w-36">
             <DropdownMenuItem variant="destructive" onSelect={() => actions.onDelete(entry)}>
               <Trash2 />
-              {translate('settings.browser.passwords.delete', 'Delete…')}
+              {t('settings.browser.passwords.delete', 'Delete…')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -168,6 +168,7 @@ export function BrowserPasswordList({
   now: number
   actions: BrowserPasswordRowActions
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     // Why a capped scroll box: a vault can hold hundreds of logins and must not push the rest of Settings away.
     <div className="scrollbar-sleek max-h-[min(26rem,55vh)] divide-y divide-border/50 overflow-y-auto overscroll-contain rounded-md border border-border/50 p-1">
@@ -188,7 +189,7 @@ export function BrowserPasswordList({
               <div className="min-w-0 flex-1">
                 <SiteName group={group} />
                 <div className="text-xs text-muted-foreground">
-                  {translate('settings.browser.passwords.accountCount', '{{count}} accounts', {
+                  {t('settings.browser.passwords.accountCount', '{{count}} accounts', {
                     count: group.entries.length
                   })}
                 </div>

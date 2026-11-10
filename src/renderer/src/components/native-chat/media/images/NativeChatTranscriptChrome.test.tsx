@@ -12,7 +12,7 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import {
   nativeChatFanoutFixture,
   nativeChatFanoutWorkspace
-} from '../../native-chat-workspace-test-fixtures'
+} from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 
 // Chat images carry their runtime owner without resolving an editor connection.
 const mocks = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 

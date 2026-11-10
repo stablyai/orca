@@ -1,3 +1,4 @@
+import { JournalForkStages } from './journal-fork-stages'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -30,6 +31,7 @@ const stateDirectory: string = workerData.stateDirectory
 let db: Database.Database | undefined
 let batch: JournalSqlBatch | undefined
 let commands: JournalSqlCommand | undefined
+let forks: JournalForkStages | undefined
 let checkpoint: JournalCheckpointOwner | undefined
 let checkpointClosing: Promise<void> | undefined
 let readOnly = true
@@ -47,7 +49,8 @@ async function open(): Promise<void> {
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
     readOnly = opened.readOnly
-    commands = new JournalSqlCommand(db, stateDirectory)
+    forks = new JournalForkStages(db, stateDirectory)
+    commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {
       checkpoint = new JournalCheckpointOwner(db, workerData.filename)
     }
@@ -116,25 +119,47 @@ async function drain(): Promise<void> {
         throw fault
       }
       assertJournalWritable(readOnly, 'database')
-      const result = await batch.run<WriteRequest, CommitResponse>(writes, async (request) => {
-        const { command, id } = request
-        if (command.type === 'maintenance') {
-          return {
-            type: 'maintenance',
-            id,
-            result: applyJournalSqlMaintenance(database, command.operation)
-          }
-        }
-        return command.type === 'write'
-          ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
-          : {
-              type: 'effects',
-              id,
-              results: command.effects.map((effect) =>
-                applyJournalWriterEffect(database, stateDirectory, effect)
-              )
+      const result = await batch.run<WriteRequest, CommitResponse>(
+        writes,
+        async (request) => {
+          const { command, id } = request
+          const checkpoint = forks!.checkpoint()
+          try {
+            if (command.type === 'maintenance') {
+              return {
+                type: 'maintenance',
+                id,
+                result:
+                  command.operation.kind === 'fork-source-hold' ||
+                  command.operation.kind === 'fork-source-release' ||
+                  command.operation.kind === 'fork-stage-begin' ||
+                  command.operation.kind === 'fork-stage-page' ||
+                  command.operation.kind === 'fork-abort'
+                    ? forks!.apply(command.operation, Date.now())
+                    : applyJournalSqlMaintenance(database, command.operation)
+              }
             }
-      })
+            return command.type === 'write'
+              ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
+              : {
+                  type: 'effects',
+                  id,
+                  results: command.effects.map((effect) =>
+                    applyJournalWriterEffect(database, stateDirectory, effect)
+                  )
+                }
+          } catch (error) {
+            forks!.rollback(checkpoint)
+            throw error
+          }
+        },
+        writes.some(
+          (request) => request.command.type === 'write' && request.command.command.forkInstall
+        )
+          ? 'full'
+          : 'normal'
+      )
+      forks!.acknowledge()
       // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
       responses = result.outcomes.map((outcome, index) =>
         outcome.committed
@@ -147,6 +172,7 @@ async function drain(): Promise<void> {
             }
       )
     } catch (error) {
+      forks?.rollback()
       const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
       fault ??= batch.fault
       responses = writes.map((request) => ({

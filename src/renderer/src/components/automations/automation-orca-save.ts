@@ -15,7 +15,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { ensureHooksApproved } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'

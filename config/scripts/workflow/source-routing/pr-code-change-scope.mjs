@@ -102,8 +102,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/trust/identity/codex-trust-identity',
   'src/main/codex/trust/toml/config-toml-hook-trust-',
   'src/main/codex/configuration/toml/config-toml-key-path',
-  'src/main/agent-hooks/posix-hook-command',
-  'src/main/agent-hooks/hook-post-command',
+  'src/main/agent-hooks/installation/commands/posix-hook-command',
+  'src/main/agent-hooks/installation/scripts/hook-post-command',
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
@@ -209,7 +209,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
-  'src/shared/browser-network-tunnel-protocol',
+  'src/shared/browser/network/tunnels/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/ws-transport.ts',
   'src/shared/web-origin-security.ts',
@@ -252,7 +252,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
   'src/main/claude/claude-model-catalog-probe.ts',
-  'src/main/runtime/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
@@ -264,7 +263,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/orchestration-session-caller.ts',
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
   'src/main/runtime/rpc/orchestration-mutation-executor.ts',
-  'src/shared/orchestration-rpc-contract.ts',
+  'src/shared/orchestration/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch/agent-launch',
   'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',
@@ -574,10 +573,12 @@ export function isUnitTestSupportSource(file) {
     file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
     file ===
       'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
-    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts' ||
     file ===
       'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
-    file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+    file ===
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
   )
 }
 

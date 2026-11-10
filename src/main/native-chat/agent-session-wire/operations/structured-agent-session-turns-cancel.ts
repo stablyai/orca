@@ -28,7 +28,7 @@ import {
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 import type { StructuredAgentSessionStopWindDown } from '../termination/structured-agent-session-stop-wind-down'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import { structuredAgentSessionFailedStopMark } from '../termination/structured-agent-session-stopping'
 import { settleTakenStop } from '../termination/structured-agent-session-taken-stop-settle'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'

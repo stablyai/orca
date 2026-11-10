@@ -18,6 +18,7 @@ import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redr
 import type { TerminalTailWaitState } from '../wait/terminal-wait-tail-state'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
+import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 
@@ -92,6 +93,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
+  /** Whether the process still runs an Orca launch; missing when main can't tell. */
+  launchEvidence?: LaunchEvidence
   /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
   launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
@@ -100,6 +103,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null
+  /** What the last command printed before the incarnation's PTY exited. */
+  lastExitOutput?: { incarnationId: PtyIncarnationId | null; text: string }
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
   /** First-party OSC 9999 report, distinct from title-inferred lastAgentStatus; absent until one arrives. */

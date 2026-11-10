@@ -15,10 +15,11 @@ import {
 } from '@/lib/workspace-ports/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-ports/workspace-port-groups'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function PortAction({
   label,
@@ -55,7 +56,7 @@ function PortAction({
   )
 
   return (
-    <Tooltip delayDuration={200}>
+    <Tooltip>
       <TooltipTrigger asChild>
         {disabled ? <span className="inline-flex">{button}</span> : button}
       </TooltipTrigger>
@@ -76,6 +77,7 @@ export function PortRow({
   activeWorktreeId: string | null
   external?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -90,12 +92,9 @@ export function PortRow({
     port.processName ??
     (port.pid
       ? `PID ${port.pid}`
-      : translate(
-          'auto.components.status.bar.ports.status.popover.rows.unknownProcess',
-          'Unknown process'
-        ))
+      : t('auto.components.status.bar.ports.status.popover.rows.unknownProcess', 'Unknown process'))
   const canStop = canStopWorkspacePort(port)
-  const openBrowserLabel = translate(
+  const openBrowserLabel = t(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
     'Open in Browser'
   )
@@ -219,9 +218,12 @@ export function PortRow({
       </span>
       <div className="min-w-0 space-y-0.5">
         <div className="relative flex h-5 min-w-0 items-center">
-          <Tooltip delayDuration={200}>
+          <Tooltip>
             <TooltipTrigger asChild>
-              <span className="block min-w-0 select-text truncate text-[11px] text-muted-foreground">
+              <span
+                tabIndex={0}
+                className="block min-w-0 select-text truncate text-2xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 {processLabel}
               </span>
             </TooltipTrigger>
@@ -238,7 +240,7 @@ export function PortRow({
               <ExternalLink className="size-3" />
             </PortAction>
             <PortAction
-              label={translate(
+              label={t(
                 'auto.components.status.bar.ports.status.popover.rows.536d48a5dc',
                 'Copy {{value0}}',
                 { value0: addressForPort(port) }
@@ -248,7 +250,7 @@ export function PortRow({
               <Copy className="size-3" />
             </PortAction>
             <PortAction
-              label={translate(
+              label={t(
                 'auto.components.status.bar.ports.status.popover.rows.0e72c8d9fb',
                 'Stop Process'
               )}
@@ -274,6 +276,7 @@ export function WorkspaceGroupRows({
   group: WorkspacePortGroup
   activeWorktreeId: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const handleGoToWorkspace = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
@@ -298,7 +301,7 @@ export function WorkspaceGroupRows({
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <PortAction
-            label={translate(
+            label={t(
               'auto.components.status.bar.ports.status.popover.rows.a49ea79246',
               'Go to Worktree'
             )}

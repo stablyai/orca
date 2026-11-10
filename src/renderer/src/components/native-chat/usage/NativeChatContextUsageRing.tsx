@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   contextUsageRingReadout,
+  formatContextTokenCount,
   keyContextUsageRows,
   type NativeChatContextUsageSummary
 } from '../../../../../shared/native-chat/native-chat-context-usage-summary'
@@ -62,20 +63,52 @@ function useContextCardOpen(): {
   return { open, setOpen, setOpenAfterHover }
 }
 
+/** Deferred rows sit outside the window, so they show tokens rather than a share of it. */
+function ContextUsageRowList({
+  rows,
+  className
+}: {
+  rows: ReturnType<typeof keyContextUsageRows>
+  className: string
+}): React.JSX.Element {
+  return (
+    <ul className={cn('space-y-1 text-xs', className)}>
+      {rows.map(({ key, row }) => (
+        <li key={key} className="flex items-baseline justify-between gap-3">
+          <span
+            className={cn(
+              'min-w-0 truncate',
+              row.deferred ? 'text-muted-foreground' : 'text-foreground'
+            )}
+          >
+            {row.name}
+          </span>
+          <span className="shrink-0 tabular-nums text-muted-foreground">
+            {row.deferred ? formatContextTokenCount(row.tokens) : `${row.percentage}%`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 /** Composer ring for context-window usage; hover, click, tap, or Enter shows the provider's breakdown. */
 export function NativeChatContextUsageRing({
   usage
 }: {
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
+  const t = useTranslate()
   const { filled, critical, used, window } = contextUsageRingReadout(usage)
-  const label = translate(
+  const label = t(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
     { used, window, percent: String(usage.percentage) }
   )
   const { open, setOpen, setOpenAfterHover } = useContextCardOpen()
   const rows = keyContextUsageRows(usage.rows)
+  const counted = rows.filter(({ row }) => !row.deferred)
+  const deferred = rows.filter(({ row }) => row.deferred)
   return (
     <div
       className="flex"
@@ -90,6 +123,7 @@ export function NativeChatContextUsageRing({
           setOpenAfterHover(false)
         }
       }}
+      onContextMenu={() => setOpen(false)}
     >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -154,28 +188,28 @@ export function NativeChatContextUsageRing({
           <div className="p-4">
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="font-medium text-foreground">
-                {translate('components.native-chat.contextUsage.title', 'Context')}
+                {t('components.native-chat.contextUsage.title', 'Context')}
               </span>
               <span className="tabular-nums text-muted-foreground">
                 {used}/{window}
               </span>
             </div>
             <Progress value={filled} aria-label={label} className="mt-2 h-1.5" />
-            {rows.length > 0 ? (
-              <ul className="mt-3 space-y-1 text-xs">
-                {rows.map(({ key, row }) => (
-                  <li key={key} className="flex items-baseline justify-between gap-3">
-                    <span className="min-w-0 truncate text-foreground">{row.name}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {row.percentage}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            {counted.length > 0 ? <ContextUsageRowList rows={counted} className="mt-3" /> : null}
+            {deferred.length > 0 ? (
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-2xs text-muted-foreground">
+                  {t(
+                    'components.native-chat.contextUsage.deferredNote',
+                    'Loaded on demand. Not counted in the used total.'
+                  )}
+                </p>
+                <ContextUsageRowList rows={deferred} className="mt-2" />
+              </div>
             ) : null}
             {usage.estimated ? (
               <p className="mt-3 text-2xs text-muted-foreground">
-                {translate(
+                {t(
                   'components.native-chat.contextUsage.estimated',
                   'Estimated from the last response.'
                 )}

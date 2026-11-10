@@ -1,4 +1,4 @@
-import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
@@ -43,7 +43,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
   readUsageLimitContinue?: (
     id: string,
-    cut: NativeChatUsageLimitCut | null
+    cut: HostUsageLimitCut | null
   ) => AgentSessionStatusSummary['usageLimitContinue']
   now: () => number
   /** Observer/sink failure must not block subscriber events. */

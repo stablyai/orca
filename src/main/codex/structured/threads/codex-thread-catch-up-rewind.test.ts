@@ -131,9 +131,9 @@ it('retains the original adoption cutoff through native rewind and disk recovery
   store = await openTestAgentSessionRecordStore(c.root)
   await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
   expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
-  expect(usableJournalHistoryOrigin(await c.journal.reads.historyOrigin())?.importedAt).toBe(
-    200_000
-  )
+  expect(usableJournalHistoryOrigin(await c.journal.reads.historyOrigin())).toMatchObject({
+    importedAt: 200_000
+  })
   await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
   expect((await c.texts()).filter((text) => text.startsWith('assistant:'))).toEqual([
     'assistant:old A answer',
@@ -172,4 +172,47 @@ it('keeps erased-origin legacy chats readable without guessing from native IDs',
   )
   await c.open([turn(3)])
   expect(await c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
+})
+
+it('keeps copied bodies while catching an uncovered same-second turn once across two opens and restart', async () => {
+  const c = await chat({ now: 200_000 })
+  await c.journal.write({
+    kind: 'epoch-replace',
+    reason: 'session_created',
+    fence: 1,
+    items: [
+      {
+        identity: { provider: 'legacy', agent: 'codex', sessionId: 'source', recordId: '#0' },
+        ownerFence: 0,
+        observedAt: 7,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'rich copied answer' }]
+        }
+      }
+    ],
+    historyOrigin: {
+      version: 1,
+      kind: 'native_copy',
+      agent: 'codex',
+      unit: 'codex-turn',
+      providerHandle: { kind: 'codex', threadId: THREAD },
+      ids: ['turn-1', 'turn-2']
+    }
+  })
+  const input = [turn(1), turn(3)].map((value) => ({ ...value, startedAt: 200 }))
+  await c.open(input, { returnedTurns: input })
+  await c.open(input)
+  await c.reopen()
+  await c.open(input)
+  expect((await c.texts()).filter((text) => text.startsWith('assistant:'))).toEqual([
+    'assistant:rich copied answer',
+    'assistant:answer 3'
+  ])
+  await c.journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 1, items: [] })
+  await c.open([turn(1), turn(2), turn(4)])
+  expect((await c.texts()).filter((text) => text.startsWith('assistant:'))).toEqual([
+    'assistant:answer 4'
+  ])
 })

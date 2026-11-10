@@ -1,5 +1,9 @@
+import type { AgentSessionReserveRequest } from '../../../runtime/agent-session/ownership/agent-session-reservation-admission'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  isAgentSessionRefusalError,
+  refuse
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   commandReceiptScope,
@@ -196,4 +200,43 @@ async function commitNoOpReceipt(
     )
     return false
   }
+}
+
+/** Founding and opening-message provenance must commit together. */
+export function openingMessageReceipt(
+  store: AgentSessionRecordStore,
+  request: AgentSessionReserveRequest,
+  clientMessageId: string
+): JournalOperationReceipt {
+  return composeJournalOperationReceipts(
+    store.founding.receipt(request),
+    buildCommandReceiptTransaction(
+      { kind: 'global' },
+      {
+        operationId: clientMessageId,
+        sessionId: request.sessionId,
+        callerKey: request.operation.callerKey,
+        method: 'agentSession.create',
+        fingerprint: request.operation.fingerprint,
+        status: 'accepted',
+        acceptedAt: request.now,
+        result: { kind: 'journal-row', epoch: '', sequence: 0 }
+      },
+      { at: 'first', kinds: ['submission'], answer: 'journal-row' }
+    )
+  )
+}
+
+export function openingMessageReceiptRefusal(
+  error: CommandReceiptExistsError,
+  clientMessageId: string,
+  envelope: AgentSessionMutationEnvelope
+) {
+  return error.result.reason === 'conflict'
+    ? refuse(
+        'agent_session_operation_invalid',
+        { reason: 'messageIdReused' },
+        `Message id ${clientMessageId} was already used for another send.`
+      )
+    : agentSessionOperationOutcomeUnknown(envelope.clientOperationId)
 }

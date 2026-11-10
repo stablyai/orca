@@ -1,6 +1,6 @@
 import type { CodexModelCatalogProbeDeps } from '../../codex/structured/catalog/codex-model-catalog-probe'
-import type { AcpStructuredSessionAdapterDeps } from '../../acp/acp-structured-session-adapter-deps'
-import type { AcpStructuredLaunchPartDeps } from '../../acp/acp-structured-launch-resolution'
+import type { AcpStructuredSessionAdapterDeps } from '../../acp/session/acp-structured-session-adapter-deps'
+import type { AcpStructuredLaunchPartDeps } from '../../acp/launch/acp-structured-launch-resolution'
 import type { ClaudeStructuredSessionAdapterDeps } from '../../claude/structured/claude-structured-session-state'
 import type { CodexStructuredSessionAdapterDeps } from '../../codex/structured/session-lifecycle/codex-structured-session-state'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'

@@ -1,4 +1,4 @@
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalForkInstall } from '../../agent-session-journal/journal-fork-stages'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRefusalError,
@@ -32,6 +32,9 @@ export async function prepareAdoptedTranscript(
   | { ok: true; items: JournalReplacementItem[] | null }
   | { ok: false; refusal: AgentSessionWireRefusal }
 > {
+  if (params.fork) {
+    return { ok: true, items: null }
+  }
   if (!params.adopt) {
     return { ok: true, items: null }
   }
@@ -91,7 +94,41 @@ export async function importAdoptedTranscript(
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
   options: { uncommittedCreate?: true; store?: AgentSessionRecordStore } = {}
-): Promise<void> {
+): Promise<JournalForkInstall | undefined> {
+  if (params.fork) {
+    const installation = await attached.journal.stageFork(params.fork.prepared, {
+      fence: record.lease.runtimeFence,
+      operationId: params.envelope.clientOperationId,
+      fingerprint: params.envelope.payloadFingerprint,
+      historyOrigin: params.fork.historyOrigin
+    })
+    if (options.uncommittedCreate) {
+      return installation
+    }
+    if (!options.store) {
+      throw new Error('fork adoption requires its record receipt owner')
+    }
+    let installed = false
+    try {
+      const receipt = options.store.conversationReceipts.forkBoundary(record.sessionId, {
+        sessionId: params.fork.sessionId,
+        itemId: params.fork.itemId,
+        childBoundary: { kind: 'start' }
+      })
+      await params.fork.withAdmission(() =>
+        attached.journal.write({ kind: 'fork-install' }, () => ({
+          receipt,
+          forkInstall: installation
+        }))
+      )
+      installed = true
+    } finally {
+      if (!installed) {
+        await attached.journal.abortFork(installation)
+      }
+    }
+    return
+  }
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
     if (prepared || attached.journal.cursor().sequence > 1) {
@@ -106,6 +143,7 @@ export async function importAdoptedTranscript(
   }
   // Failed import must not close the conversation-owned journal.
   await applyAdoptedTranscript(params, attached, record, prepared, options.store)
+  return undefined
 }
 
 async function applyAdoptedTranscript(
@@ -121,19 +159,6 @@ async function applyAdoptedTranscript(
     return
   }
   if (prepared) {
-    await params.fork?.revalidate()
-    const fork = params.fork
-    const last = prepared.at(-1)
-    const receipt =
-      fork && store
-        ? store.conversationReceipts.forkBoundary(record.sessionId, {
-            sessionId: fork.sessionId,
-            itemId: fork.itemId,
-            childBoundary: last
-              ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
-              : { kind: 'start' }
-          })
-        : undefined
     await attached.journal.write(
       {
         kind: 'epoch-replace',
@@ -141,7 +166,7 @@ async function applyAdoptedTranscript(
         fence: record.lease.runtimeFence,
         items: prepared
       },
-      receipt ? () => ({ receipt }) : undefined
+      undefined
     )
     return
   }

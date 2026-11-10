@@ -6,7 +6,7 @@ import {
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
@@ -51,6 +51,7 @@ export function PRFilesCombinedDiffViewer({
   onCommentAdded,
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
+  const t = useTranslate()
   const isDark = useDocumentDarkTheme()
   const diffEntrySignature = useMemo(
     () =>
@@ -365,7 +366,7 @@ export function PRFilesCombinedDiffViewer({
                     retrySection={retrySection}
                     toggleSection={toggleSection}
                     openSection={openFilesOnGitHub}
-                    openSectionTitle={translate(
+                    openSectionTitle={t(
                       'auto.components.GitHubItemDialog.85a2b66f54',
                       'Open files on GitHub'
                     )}
@@ -380,11 +381,11 @@ export function PRFilesCombinedDiffViewer({
                       })
                     }
                     onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel={translate(
+                    addLineCommentLabel={t(
                       'auto.components.GitHubItemDialog.bf43425540',
                       'Comment'
                     )}
-                    addLineCommentPlaceholder={translate(
+                    addLineCommentPlaceholder={t(
                       'auto.components.GitHubItemDialog.86d84a17ca',
                       'Add a review comment'
                     )}

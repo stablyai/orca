@@ -1,4 +1,7 @@
-import { nativeChatSignInLabel, type NativeChatSignIn } from '../../host-access/native-chat-sign-in'
+import {
+  nativeChatSetupAction,
+  type NativeChatHostSetup
+} from '../../host-access/native-chat-host-setup'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/agent-session-availability'
@@ -13,13 +16,14 @@ import { inSendOrder } from '../../../../../../shared/native-chat/native-chat-se
 import { agentSessionRefusalReasonWords } from '../../../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
-import { sayAgentSessionFailureTranslated } from '../../agent-session-failure-words-text'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import {
   cliMissingSentence,
   notSignedInSentence
 } from '../../../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
-import type { NativeChatComposerNotice } from '../../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Why the chat's latest start failed, unless a turn has run since. */
 function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined): string | null {
@@ -60,7 +64,7 @@ function shownRejectionReason(
 
 /** Advisory host verdicts never block Send; dismiss per verdict and omit reasons already explained by a failed start or newest send. */
 export function useNativeChatAvailabilityNotice(input: {
-  signIn?: NativeChatSignIn | null
+  setup?: NativeChatHostSetup | null
   unavailable: AgentSessionUnavailable | null | undefined
   agent: AgentType
   /** The WSL distro the chat's host runs in, to say where the agent is missing. */
@@ -71,6 +75,7 @@ export function useNativeChatAvailabilityNotice(input: {
   /** The lines under the chat's messages, by message key: a refused send's says why. */
   deliveryNotices?: ReadonlyMap<string, unknown>
 }): NativeChatComposerNotice | null {
+  const t = useTranslate()
   const { unavailable, journalItems } = input
   const key = !unavailable
     ? null
@@ -106,15 +111,7 @@ export function useNativeChatAvailabilityNotice(input: {
   const agentName = structuredAgentLabel(input.agent)
   return {
     key: 'availability',
-    action:
-      unavailable.reason === 'notSignedIn' && input.signIn
-        ? {
-            label: nativeChatSignInLabel(input.signIn),
-            primary: true,
-            onClick: input.signIn.signIn,
-            disabled: input.signIn.signingIn
-          }
-        : undefined,
+    action: nativeChatSetupAction(unavailable.reason, input.setup, t),
     kind: 'error',
     text:
       unavailable.reason === 'cliMissing'
@@ -133,7 +130,8 @@ export function useNativeChatAvailabilityNotice(input: {
     content: nativeChatAntigravitySignInContent(
       unavailable.reason,
       input.agent,
-      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined
+      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined,
+      t
     ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }

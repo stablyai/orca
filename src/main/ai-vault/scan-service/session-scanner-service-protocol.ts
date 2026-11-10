@@ -130,6 +130,7 @@ export type AiVaultServiceResultValue =
   | { operation: 'searchClear'; value: null }
 
 export type AiVaultServiceChildMessage =
+  | { type: 'trace'; record: unknown }
   | { type: 'sessionSearchRoots'; id: number }
   | {
       type: 'ready'
@@ -166,6 +167,9 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
     return false
   }
   const message = value as Record<string, unknown>
+  if (message.type === 'trace') {
+    return true
+  }
   if (message.type === 'ready') {
     return message.protocol === AI_VAULT_SERVICE_PROTOCOL_VERSION && Number.isInteger(message.pid)
   }

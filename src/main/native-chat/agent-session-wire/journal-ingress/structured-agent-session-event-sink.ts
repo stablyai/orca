@@ -132,9 +132,10 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   journalEpoch?(): string | null
   /** Notices of turns settled by any writer while this sink is bound. */
   observeSettledTurns?(listener: (turnItemIds: readonly string[]) => void): () => void
-  /** Saved facts the acquisition read before translating, replaced whole per epoch. */
+  /** Saved facts read before translating, replaced whole per epoch. */
   journalSnapshot?(): ClaudeJournalSnapshot | null
   snapshotCurrent?(): Promise<void>
+  onJournalBound?(listener: () => void): () => void
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
   appendLifecycleBatch?(
     settlementId: string,
@@ -283,8 +284,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
       observeSettledTurns: queue.observeSettledTurns,
-      journalSnapshot: queue.snapshots.current,
+      journalSnapshot: queue.journalSnapshot,
       snapshotCurrent: queue.snapshots.settled,
+      onJournalBound: queue.onJournalBound,
       journalHistory: queue.journalHistory,
       appendLifecycleBatch: (settlementId, mutations) => {
         const admission = appendLifecycleBatch(settlementId, mutations)

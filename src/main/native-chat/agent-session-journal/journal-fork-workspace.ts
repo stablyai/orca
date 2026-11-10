@@ -1,0 +1,26 @@
+import type Database from '../../sqlite/sync-database'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
+
+export function createJournalForkWorkspace(db: Database.Database): void {
+  if (
+    (db.pragma('compile_options') as SqliteRow[]).some((row) =>
+      Object.values(row).includes('TEMP_STORE=3')
+    )
+  ) {
+    throw new Error('fork preparation requires file-backed temporary storage')
+  }
+  db.exec('PRAGMA temp_store=FILE; PRAGMA temp.cache_size=-2048')
+  if (Number(db.pragma('temp_store', { simple: true })) !== 1) {
+    throw new Error('fork preparation temporary storage is not file-backed')
+  }
+  db.exec(`CREATE TEMP TABLE fork_headers(rank INTEGER PRIMARY KEY,item_id TEXT UNIQUE,provider_key TEXT,
+      member TEXT,turn_item_id TEXT,turn_id TEXT,provider_turn_id TEXT,sequence INTEGER,sequence_index INTEGER,ordinal INTEGER,candidate INTEGER NOT NULL DEFAULT 0);
+      CREATE INDEX temp.fork_headers_member ON fork_headers(member,rank);
+      CREATE TEMP TABLE fork_aliases(item_id TEXT PRIMARY KEY,provider_key TEXT NOT NULL);
+      CREATE TEMP TABLE fork_kept(member TEXT PRIMARY KEY);
+      CREATE TEMP TABLE fork_bodies(rank INTEGER PRIMARY KEY,item_id TEXT UNIQUE,payload TEXT NOT NULL,mapped TEXT NOT NULL,notice TEXT);
+      CREATE TEMP TABLE fork_edges(parent TEXT NOT NULL,child TEXT NOT NULL,PRIMARY KEY(parent,child)) WITHOUT ROWID;
+      CREATE TEMP TABLE fork_omitted(id TEXT UNIQUE,processed INTEGER NOT NULL DEFAULT 0);
+      CREATE INDEX temp.fork_omitted_pending ON fork_omitted(processed);
+      CREATE TEMP TABLE fork_work(anchor TEXT PRIMARY KEY,last_rank INTEGER NOT NULL);`)
+}

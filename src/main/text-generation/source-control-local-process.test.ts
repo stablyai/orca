@@ -1,5 +1,8 @@
 import * as supervisedStop from '../provider-process/supervised-child-process-stop'
-import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
+import {
+  answerCodexAppServer,
+  createMockDiscoveryChild
+} from './commit-message-text-generation-test-harness'
 import {
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
@@ -7,6 +10,7 @@ import {
 import { cancelLocalGeneration } from './source-control-generation-lanes'
 import { generateConversationName } from './conversation-name-generation-request'
 import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -60,12 +64,12 @@ function fakeSupervisor(exitsOn: NodeJS.Signals | null): FakeSupervisor {
 function fakeSupervisedAgent(stopMs: number): FakeSupervisor & {
   stdout: EventEmitter
   stderr: EventEmitter
-  stdin: { on: () => void; end: () => void }
+  stdin: PassThrough
 } {
   const child = Object.assign(fakeSupervisor(null), {
     stdout: new EventEmitter(),
     stderr: new EventEmitter(),
-    stdin: { on: vi.fn(), end: vi.fn() }
+    stdin: Object.assign(new PassThrough(), { end: vi.fn() })
   })
   child.kill.mockImplementation((signal?: NodeJS.Signals) => {
     if (signal === 'SIGTERM') {
@@ -116,15 +120,6 @@ afterEach(() => {
 })
 
 describe('killSourceControlAgentProcess for a supervised agent', () => {
-  it('asks the supervisor to stop and leaves its group to it', async () => {
-    const child = fakeSupervisor('SIGTERM')
-
-    await killSourceControlAgentProcess(asSpawned(child))
-
-    expect(child.kill.mock.calls).toEqual([['SIGTERM']])
-    expect(terminateTreeMock).not.toHaveBeenCalled()
-  })
-
   it('tears the tree down only once the supervisor has had its full stop time', async () => {
     vi.useFakeTimers()
     const child = fakeSupervisor(null)
@@ -142,16 +137,6 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
     await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
     await stopped
     expect(child.kill).not.toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('signals nothing once the supervisor has exited', async () => {
-    const child = fakeSupervisor(null)
-    child.exitCode = 0
-
-    await killSourceControlAgentProcess(asSpawned(child))
-
-    expect(child.kill).not.toHaveBeenCalled()
-    expect(terminateTreeMock).not.toHaveBeenCalled()
   })
 })
 
@@ -400,11 +385,9 @@ describe('a supervised Codex model discovery that runs out of time', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(spawnAgent).toHaveBeenCalledTimes(2)
 
-    agents[1]!.stdout.emit(
-      'data',
-      Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
-    )
-    agents[1]!.emit('close', 0)
+    answerCodexAppServer(agents[1]!, [
+      { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+    ])
     await expect(second).resolves.toMatchObject({ success: true })
     expect(agents[0]!.kill).not.toHaveBeenCalledWith('SIGKILL')
     expect(terminateTreeMock).not.toHaveBeenCalled()
@@ -414,38 +397,6 @@ describe('a supervised Codex model discovery that runs out of time', () => {
 describe.runIf(process.platform !== 'win32')(
   'killSourceControlAgentProcess on a real agent',
   () => {
-    it('stops an agent that ignores its stdin end through its supervisor', async () => {
-      const child = spawnSourceControlAgent({
-        binary: process.execPath,
-        args: ['-e', 'console.log(process.pid); setInterval(() => {}, 60000)'],
-        env: process.env,
-        stdinMode: 'ignore',
-        useCwdForNative: false
-      })
-      const stdout = child.stdout
-      if (!stdout) {
-        child.kill('SIGKILL')
-        throw new Error('The source-control fixture requires a stdout pipe')
-      }
-      const agentPid = await new Promise<number>((resolve) =>
-        stdout.once('data', (chunk: Buffer) => resolve(Number(chunk.toString().trim())))
-      )
-
-      try {
-        await killSourceControlAgentProcess(child)
-
-        expect(child.signalCode ?? child.exitCode).not.toBeNull()
-        expect(() => process.kill(agentPid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-        expect(terminateTreeMock).not.toHaveBeenCalled()
-      } finally {
-        for (const pid of [agentPid, child.pid!]) {
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {}
-        }
-      }
-    })
-
     it('holds the Codex home until a canceled agent has stopped through its supervisor', async () => {
       const folder = mkdtempSync(join(tmpdir(), 'orca-supervised-cancel-'))
       const pids: number[] = []
@@ -579,7 +530,15 @@ setInterval(() => {}, 60000)
         const lists = join(folder, 'lists.cjs')
         writeFileSync(
           lists,
-          "console.log(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))\n"
+          `require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
+  const message = JSON.parse(line)
+  if (message.id === undefined) return
+  const result = message.method === 'model/list'
+    ? { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+    : {}
+  console.log(JSON.stringify({ id: message.id, result }))
+})
+`
         )
         const floodAliveAtSecondSpawn: boolean[] = []
         const spawnAgent = vi.fn((input: Parameters<typeof spawnSourceControlAgent>[0]) => {

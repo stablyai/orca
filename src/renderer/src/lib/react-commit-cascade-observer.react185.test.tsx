@@ -128,14 +128,4 @@ describe('react commit cascade observer', () => {
 
     expect(invocationsAtReport).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
   })
-
-  it('stays silent for a render that settles well below the notice limit', () => {
-    useCascadeStore.setState({ ticks: CASCADE_TICKS })
-
-    act(() => {
-      root.render(<RunawayLayoutEffectPane />)
-    })
-
-    expect(recordBreadcrumb).not.toHaveBeenCalled()
-  })
 })

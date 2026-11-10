@@ -1,20 +1,24 @@
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import {
   isNativeChatUsageLimitCutSchedulable,
-  NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE,
-  type NativeChatUsageLimitCut
+  NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import {
+  USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
+  usageLimitContinueIdentity as identity,
+  usageLimitContinueMessageId,
+  usageLimitContinueTag,
+  type HostUsageLimitCut
+} from './structured-agent-session-usage-limit-chain'
 import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import { journalSqlReads } from '../../agent-session-journal/journal-sql-reads'
-import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from '../operations/structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 
-type Cut = NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number }
+type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
   host: Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue' | 'logger'> & {
@@ -29,27 +33,17 @@ type Deps = {
   }
   sessions: ReadonlyMap<string, unknown>
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
-  readSavedCut: (id: string) => Promise<NativeChatUsageLimitCut | null>
+  readSavedCut: (id: string) => Promise<HostUsageLimitCut | null>
   serialize: <T>(id: string, run: () => Promise<T>) => Promise<T>
   send: (
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ) => ReturnType<typeof sendStructuredAgentSessionTurn>
-  readLoadedCut: (id: string) => Promise<NativeChatUsageLimitCut | null>
+  readLoadedCut: (id: string) => Promise<HostUsageLimitCut | null>
   publish: (id: string) => void
   now: () => number
 }
 
-/** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
-export async function readSavedUsageLimitCut(
-  database: JournalSqlDatabase,
-  id: string
-): Promise<NativeChatUsageLimitCut | null> {
-  const epoch = await database.ensureSessionEpoch(id)
-  return epoch === null ? null : journalSqlReads(database.readers, id).usageLimitCut()
-}
-
-const identity = (cut: NativeChatUsageLimitCut): string =>
-  JSON.stringify([cut.turnItemId, cut.resetsAt])
+export { readSavedUsageLimitCut } from './structured-agent-session-usage-limit-chain'
 
 /** Scheduling is derived from the current cut; only a person's cancellation survives restart. */
 export class StructuredAgentSessionUsageLimitContinue {
@@ -57,7 +51,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   private stopSettings: (() => void) | undefined
   private running = false
   private disposed = false
-  private readonly coldCuts = new Map<string, NativeChatUsageLimitCut | null>()
+  private readonly coldCuts = new Map<string, HostUsageLimitCut | null>()
   /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
   private readonly coldFailures = new Map<string, number>()
   private readonly attempts = new Map<string, Attempt>()
@@ -130,7 +124,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.coldFailures.delete(id)
   }
 
-  private async readCut(id: string, cold = false): Promise<NativeChatUsageLimitCut | null> {
+  private async readCut(id: string, cold = false): Promise<HostUsageLimitCut | null> {
     if (this.deps.sessions.has(id)) {
       this.coldCuts.delete(id)
       return this.deps.readLoadedCut(id)
@@ -143,7 +137,7 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   readState = (
     id: string,
-    cut: NativeChatUsageLimitCut | null
+    cut: HostUsageLimitCut | null
   ): AgentSessionStatusSummary['usageLimitContinue'] => {
     // A cut Orca can never continue shows only the manual actions, whatever the setting.
     if (!cut || !isNativeChatUsageLimitCutSchedulable(cut, this.deps.now())) {
@@ -154,7 +148,8 @@ export class StructuredAgentSessionUsageLimitContinue {
     const state =
       cancel?.turnItemId === cut.turnItemId && cancel.resetsAt === cut.resetsAt
         ? 'cancelled'
-        : attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed)
+        : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
+            (attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed))
           ? 'failed'
           : this.eligible(id, cut)
             ? 'scheduled'
@@ -162,10 +157,11 @@ export class StructuredAgentSessionUsageLimitContinue {
     return { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt, state }
   }
 
-  private eligible(id: string, cut: NativeChatUsageLimitCut): cut is Cut {
+  private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
     const record = this.deps.host.store.getRecord(id)
     return (
       !this.disposed &&
+      cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
       this.deps.host.usageLimitAutoContinue?.isEnabled() === true &&
       isNativeChatUsageLimitCutSchedulable(cut, this.deps.now()) &&
       record !== null &&
@@ -231,8 +227,8 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
       }
       due.sort((a, b) => a.at - b.at || a.cut.resetsAt - b.cut.resetsAt)
-      const next = due[0]
-      if (next) {
+      // Every due chat goes this pass; one at a time, since a cold send can start an agent process.
+      for (const next of due) {
         await this.send(next.id, next.cut)
       }
     } catch (error) {
@@ -270,12 +266,16 @@ export class StructuredAgentSessionUsageLimitContinue {
       count: (this.attempts.get(id)?.count ?? 0) + 1,
       at
     }
-    const tag = createHash('sha256').update(identity(cut)).digest('hex').slice(0, 16)
+    const tag = usageLimitContinueTag(cut)
     try {
       const result = await this.deps.send({
         ...structuredAgentSessionMessageSendMutation({
           sessionId: id,
-          clientOperationId: `${Math.trunc(at).toString().padStart(13, '0')}-${tag}${randomUUID().replaceAll('-', '').slice(0, 16)}`,
+          clientOperationId: usageLimitContinueMessageId(
+            at,
+            tag,
+            randomUUID().replaceAll('-', '').slice(0, 16)
+          ),
           expectedRuntimeFence: record.lease.runtimeFence,
           body: {
             kind: 'message',

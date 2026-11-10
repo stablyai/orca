@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WslDriveUncConversionResult } from '../../../../shared/wsl-drive-unc-conversion-types'
@@ -24,6 +24,7 @@ export function WslDriveUncConversionRow({
 }: {
   repo: Pick<Repo, 'id' | 'path'>
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [step, setStep] = useState<Step>({ kind: 'idle' })
   const distro = parseWslUncPath(repo.path)?.distro
   const drivePath = distro ? wslUncDrivePathToWindows(repo.path, distro) : null
@@ -37,11 +38,11 @@ export function WslDriveUncConversionRow({
       result = await window.api.wslDriveUnc.convert({ distro, repoIds: [repo.id] })
     } catch {
       setStep({ kind: 'idle' })
-      toast.error(translate('wslDriveUnc.failed', 'Orca could not convert this project.'))
+      toast.error(t('wslDriveUnc.failed', 'Orca could not convert this project.'))
       return
     }
     if (result.outcome === 'restarting') {
-      toast(translate('wslDriveUnc.restarting', 'Restarting Orca to convert this project…'))
+      toast(t('wslDriveUnc.restarting', 'Restarting Orca to convert this project…'))
       return
     }
     setStep({ kind: 'problem', messages: wslDriveUncConversionMessages(result, drivePath) })
@@ -49,9 +50,9 @@ export function WslDriveUncConversionRow({
   return (
     <div className="space-y-2">
       <SettingsRow
-        label={translate('wslDriveUnc.label', 'Location')}
+        label={t('wslDriveUnc.label', 'Location')}
         alignTop
-        description={translate(
+        description={t(
           'wslDriveUnc.description',
           'Orca opens this project through WSL. Open it at {{drivePath}} instead: Git runs on Windows, which is much faster here, and terminals and agents stay in {{distro}}.',
           { drivePath, distro }
@@ -64,7 +65,7 @@ export function WslDriveUncConversionRow({
               size="sm"
               onClick={() => setStep({ kind: 'review' })}
             >
-              {translate('wslDriveUnc.convert', 'Open at {{drivePath}}', { drivePath })}
+              {t('wslDriveUnc.convert', 'Open at {{drivePath}}', { drivePath })}
             </Button>
           )
         }
@@ -79,7 +80,7 @@ export function WslDriveUncConversionRow({
       {step.kind === 'review' || step.kind === 'converting' ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'wslDriveUnc.review',
               'Orca pauses this project’s terminals, restarts, and reopens it at {{drivePath}}. Tabs, terminals with their history, chats and settings come along, and paused terminals pick up where they were.',
               { drivePath }
@@ -93,7 +94,7 @@ export function WslDriveUncConversionRow({
               disabled={step.kind === 'converting'}
               onClick={() => setStep({ kind: 'idle' })}
             >
-              {translate('wslDriveUnc.cancel', 'Cancel')}
+              {t('wslDriveUnc.cancel', 'Cancel')}
             </Button>
             <Button
               type="button"
@@ -101,7 +102,7 @@ export function WslDriveUncConversionRow({
               disabled={step.kind === 'converting'}
               onClick={() => void convert()}
             >
-              {translate('wslDriveUnc.confirm', 'Restart and convert')}
+              {t('wslDriveUnc.confirm', 'Restart and convert')}
             </Button>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { journalForkStageEpochs } from './journal-fork-stages'
 import type Database from '../../sqlite/sync-database'
 
 export type JournalDomainMaintenance =
@@ -13,7 +14,11 @@ export type JournalDomainMaintenanceResult =
 
 const RETIRED_PAGE_BYTES = 1024 * 1024
 // Only a ready head naming another epoch proves retirement; import shells have no epoch.
-const RETIRED_TABLES: readonly { name: string; key: string; payload?: readonly string[] }[] = [
+export const JOURNAL_EPOCH_TABLES: readonly {
+  name: string
+  key: string
+  payload?: readonly string[]
+}[] = [
   {
     name: 'journal_items',
     key: 'item_id',
@@ -55,9 +60,11 @@ export function pruneJournalDomainRetiredPage(
   if (head?.epoch !== target.epoch) {
     return { kind: 'domain-retired', deleted: 0, more: false }
   }
+  const held = journalForkStageEpochs(db, target.sessionId)
+  const start = performance.now()
   let deleted = 0
   let bytes = 0
-  for (const { name, key, payload } of RETIRED_TABLES) {
+  for (const { name, key, payload } of JOURNAL_EPOCH_TABLES) {
     const columns = ['session_id', 'epoch', ...(key ? key.split(',') : [])]
     const sizes = [...columns, ...(payload ?? [])]
       .map((column) => `COALESCE(octet_length(${column}),0)`)
@@ -70,9 +77,9 @@ export function pruneJournalDomainRetiredPage(
       // octet_length(column) reads stored lengths without loading overflow payloads.
       const rows = db
         .prepare(`SELECT ${columns.join(',')},${sizes} AS work_bytes FROM ${name}
-        WHERE session_id=? AND epoch${comparison}?
+        WHERE session_id=? AND epoch${comparison}? AND epoch NOT IN (SELECT value FROM json_each(?))
         LIMIT ?`)
-        .all(target.sessionId, target.epoch, 50 - deleted)
+        .all(target.sessionId, target.epoch, JSON.stringify(held), 50 - deleted)
       for (const row of rows) {
         const size = Number(row.work_bytes)
         if (deleted > 0 && bytes + size > RETIRED_PAGE_BYTES) {
@@ -81,7 +88,7 @@ export function pruneJournalDomainRetiredPage(
         deleted += Number(remove.run(...columns.map((column) => row[column])).changes)
         bytes += size
         // An oversized row progresses alone; it must not bring another row into its unit.
-        if (deleted === 50 || bytes >= RETIRED_PAGE_BYTES) {
+        if (deleted === 50 || bytes >= RETIRED_PAGE_BYTES || performance.now() - start >= 8) {
           return { kind: 'domain-retired', deleted, more: true }
         }
       }

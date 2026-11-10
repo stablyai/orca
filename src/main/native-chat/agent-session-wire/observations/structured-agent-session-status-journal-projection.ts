@@ -4,7 +4,7 @@ import type {
   JournalWorkAuthority,
   JournalObserverResult
 } from '../../agent-session-journal/journal-observer-read'
-import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
 import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
 export type StructuredAgentSessionStatusState = JournalObserverResult['state']
 
@@ -20,7 +20,7 @@ export type StructuredAgentSessionJournalProjection = {
   workRevision: number
   /** Stop settlement edges write no row and need an independent cache key. */
   stopRevision: number
-  usageLimitCut: NativeChatUsageLimitCut | null
+  usageLimitCut: HostUsageLimitCut | null
   state: StructuredAgentSessionStatusState
   acceptedSendKey: string
   firstInputSubmissionKey: string | null

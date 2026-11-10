@@ -117,6 +117,7 @@ export type JournalLateDispatchInput =
 
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   /** Resolve the provider's stopped turn at the write position, falling back to turnScope. */
+  onlyBetweenTurns?: true
   stoppedTurnId?: string
   echoOf?: JournalItemEcho['echoOf']
   fence: number

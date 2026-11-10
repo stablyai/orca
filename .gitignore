@@ -24,6 +24,7 @@ out/
 /build/
 release/
 !config/scripts/release/
+!src/main/runtime/orchestration/terminal-authority/release/
 native/**/.build/
 native/windows-cli-launcher/target/
 native/windows-agent-hook/target/
@@ -98,6 +99,7 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/development.md
 !docs/styleguide/
 !docs/styleguide/**
 !docs/agents-md-refs/

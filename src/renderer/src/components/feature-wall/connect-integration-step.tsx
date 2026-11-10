@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { IntegrationStepState } from './use-integration-connection-status'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type { IntegrationStepState }
 
@@ -17,6 +17,7 @@ export function IntegrationStep(props: {
   canToggle?: boolean
   children?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const { state, expanded, onToggle } = props
   const done = state === 'done'
   const active = state === 'active'
@@ -65,23 +66,11 @@ export function IntegrationStep(props: {
           <span className="shrink-0 text-[12px] font-medium text-muted-foreground">
             {done
               ? expanded
-                ? translate(
-                    'auto.components.feature.wall.connect.integration.step.5538eb6743',
-                    'Done'
-                  )
-                : translate(
-                    'auto.components.feature.wall.connect.integration.step.0f47ff17c6',
-                    'Change'
-                  )
+                ? t('auto.components.feature.wall.connect.integration.step.5538eb6743', 'Done')
+                : t('auto.components.feature.wall.connect.integration.step.0f47ff17c6', 'Change')
               : expanded
-                ? translate(
-                    'auto.components.feature.wall.connect.integration.step.close_step',
-                    'Close'
-                  )
-                : translate(
-                    'auto.components.feature.wall.connect.integration.step.open_step',
-                    'Open'
-                  )}
+                ? t('auto.components.feature.wall.connect.integration.step.close_step', 'Close')
+                : t('auto.components.feature.wall.connect.integration.step.open_step', 'Open')}
           </span>
         ) : null}
       </button>
