@@ -4,6 +4,10 @@ import type { Repo } from '../../../../../shared/repo-types'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { getRepositoryPaneSearchMetadata } from './repository-search-metadata'
 import * as worktreeSearch from './worktrees/repository-git-worktree-search-entries'
+import {
+  buildSettingsProjectList,
+  getSettingsTargetHostSelection
+} from '../navigation/settings-project-list'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -32,11 +36,17 @@ it('builds project search indexes without constructing selected-pane groups at f
     expect(buildWorktreeGroups).not.toHaveBeenCalled()
 
     const changed = { ...repos[0], displayName: 'Renamed project' }
-    const updated = buildNavigation([changed, ...repos.slice(1)])
+    const updatedRepos = [changed, ...repos.slice(1)]
+    const updated = buildNavigation(updatedRepos)
+    const changedSelection = getSettingsTargetHostSelection(
+      buildSettingsProjectList(updatedRepos),
+      changed.id,
+      'local'
+    )
     expect(updated).toHaveLength(projectCount)
     expect(
       updated
-        .find((section) => section.id === 'repo-project-0')
+        .find((section) => section.id === `repo-${changedSelection?.selectionKey}`)
         ?.searchEntries.some((entry) => entry.keywords?.includes('Renamed project'))
     ).toBe(true)
     expect(buildWorktreeGroups).not.toHaveBeenCalled()
