@@ -11,10 +11,20 @@ import { PI_RPC_AGENT } from './rpc-agent-definition'
 import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
 import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
 import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
+import { PiAtRestCommandCatalog } from './rpc/options/rpc-at-rest-commands'
 
+/** Bind command discovery and chat launches to the same host environment and workspace resolvers. */
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
+    atRestCommands: new PiAtRestCommandCatalog({
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),
+      refreshEnvironmentAfterMiss: context.environment.refreshAfterMissingProgram,
+      ...(deps.resolveAgentCommandSettings
+        ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
+        : {})
+    }),
     resolveLaunch:
       deps.resolvePiLaunch ??
       composeStructuredLaunch(

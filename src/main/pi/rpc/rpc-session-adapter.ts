@@ -21,12 +21,14 @@ import { openPiStart, watchPiStartExit, capturePiProcessIdentity } from './rpc-s
 import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { applyPiRpcSessionOption } from './options/rpc-options'
 import { supportsSupervisedProviderChildLocation } from '../../provider-process/supervised-provider-child-location'
+import type { StructuredAgentSessionAtRestCommands } from '../../native-chat/agent-session-wire/options/structured-agent-session-at-rest-commands'
 
 export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
   resolveLaunch: (input: {
     [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
   }) => Promise<PiRpcResolvedLaunch>
   readProcessStartTime?: (pid: number) => Promise<number | null>
+  atRestCommands?: StructuredAgentSessionAtRestCommands
 }
 
 export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
@@ -35,7 +37,10 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly starts = new ProviderAcquisitionStarts<PiRpcConnection>()
   private readonly retiring = new Set<Promise<void>>()
   private readonly endings = new AgentSessionStartEndings()
-  constructor(private readonly deps: PiRpcSessionAdapterDeps) {}
+  readonly atRestCommands: StructuredAgentSessionAtRestCommands | undefined
+  constructor(private readonly deps: PiRpcSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
+  }
 
   supportsLocation = supportsSupervisedProviderChildLocation
   supportsCreate: NonNullable<StructuredAgentSessionAdapter['supportsCreate']> = (
@@ -276,11 +281,12 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   }
   async closeAll(): Promise<void> {
     this.endings.clear()
-    await Promise.all(
-      [...this.sessions.keys()].map((id) =>
+    await Promise.all([
+      this.atRestCommands?.closeAll?.(),
+      ...[...this.sessions.keys()].map((id) =>
         stopAgentSessionProviderRoot(() => this.closeSession(id))
       )
-    )
+    ])
   }
   async drainObservedExits(): Promise<void> {
     await Promise.all([
