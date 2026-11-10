@@ -11,6 +11,7 @@ import { LoadingRows, PanelSection } from './cloud-sections/PanelSection'
 import type { HostAgentPanelRow, HostAgentPanelState } from './host-agents-panel-model'
 import type { SshAgentSignInFlow } from '../../../../shared/ssh-agent-sign-in-types'
 import { SshCodeSignIn, type SshCodeSignInActions } from './ssh-classic/SshCodeSignIn'
+import { apiKeyOverridesDetail } from '../settings/agent-accounts/overview/overview-copy'
 
 export type HostAgentsPanelSectionProps = {
   title: string
@@ -190,6 +191,11 @@ export function HostAgentsPanelSection(props: HostAgentsPanelSectionProps): Reac
                     <span className="text-sm text-foreground">
                       {[stateLabel(row.state, t), muted].filter(Boolean).join(' · ')}
                     </span>
+                    {row.state === 'apiKeyOverrides' ? (
+                      <span className="text-xs text-muted-foreground">
+                        {apiKeyOverridesDetail(row.agent, t)}
+                      </span>
+                    ) : null}
                     {props.accounts?.[row.agent] ? (
                       <span className="break-words text-xs text-muted-foreground">
                         {t(

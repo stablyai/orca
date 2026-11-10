@@ -1,7 +1,7 @@
 // S3 words (§7 annotation 4). The Orca Cloud cells reuse the panel and build-sheet wording.
 import type { Translate } from '@/i18n/use-translate'
 import { formatDate } from '../orca-cloud-account-row-shell'
-import { keyOptionLabel } from '../orca-cloud-accounts-copy'
+import { keyOptionLabel, productName } from '../orca-cloud-accounts-copy'
 import type { OverviewCell } from './agent-accounts-overview-model'
 
 export type OverviewCellTone = 'plain' | 'muted' | 'warning'
@@ -77,4 +77,13 @@ export function overviewCellText(
         tone: 'muted'
       }
   }
+}
+
+/** Why "API key overrides sign-in" matters (design-squad): who pays, and how to use the sign-in. */
+export function apiKeyOverridesDetail(agent: 'claude' | 'codex', t: Translate): string {
+  return t(
+    'agentHostPanel.host.apiKeyOverridesDetail',
+    'Usage is billed to the API key, not your {{product}} account. Remove the key for this host to use the sign-in.',
+    { product: productName(agent, t) }
+  )
 }

@@ -27548,7 +27548,8 @@
       "lastChecked": "last checked {{date}}",
       "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in.",
       "apiKeyOverrides": "API key overrides sign-in",
-      "selectedAccount": "Account: {{name}} (selected in Accounts)"
+      "selectedAccount": "Account: {{name}} (selected in Accounts)",
+      "apiKeyOverridesDetail": "Usage is billed to the API key, not your {{product}} account. Remove the key for this host to use the sign-in."
     },
     "ssh": {
       "signIn": "Sign in",

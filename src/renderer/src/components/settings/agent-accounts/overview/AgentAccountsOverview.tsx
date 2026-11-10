@@ -14,7 +14,8 @@ import {
 import { HostGlyph, type HostGlyphKind } from '@/components/host-row-icon'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsSegmentedControl'
 import type { OverviewAction, OverviewRow } from './agent-accounts-overview-model'
-import { overviewCellText } from './overview-copy'
+import { apiKeyOverridesDetail, overviewCellText } from './overview-copy'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { agentName } from '../orca-cloud-accounts-copy'
 
 export type AgentAccountsOverviewProps = {
@@ -47,7 +48,20 @@ function Cell({ row, agent }: { row: OverviewRow; agent: 'claude' | 'codex' }): 
   const { text, tone } = overviewCellText(row.cells[agent], t)
   return (
     <td className="px-3 py-2.5 align-middle text-sm">
-      {tone === 'warning' ? (
+      {row.cells[agent].kind === 'apiKeyOverrides' ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              tabIndex={0}
+              className="inline-flex rounded-full focus-visible:outline-[var(--focus-ring)]"
+            >
+              <Badge variant="statusWarning">{text}</Badge>
+              <span className="sr-only">. {apiKeyOverridesDetail(agent, t)}</span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-72">{apiKeyOverridesDetail(agent, t)}</TooltipContent>
+        </Tooltip>
+      ) : tone === 'warning' ? (
         <Badge variant="statusWarning">{text}</Badge>
       ) : (
         <span className={cn(tone === 'muted' ? 'text-muted-foreground' : 'text-foreground')}>
