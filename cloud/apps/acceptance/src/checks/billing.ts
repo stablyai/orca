@@ -215,6 +215,116 @@ export const billingChecks: Record<string, Check> = {
     }
   },
 
+  'billing.entitlement-gate': async (ctx) => {
+    // The control plane's own billing gate, end to end: `dev:billing-test-*` accounts go through the
+    // real billing Worker (#166). One account walks: no plan -> refused; active plan -> allowed;
+    // plan concurrency -> refused; included hours used up -> refused; next period with a failing card
+    // -> past_due -> refused; grace expired (backdated) -> running VM suspended by the cron; paid -> allowed.
+    const cp = secrets.controlPlaneToken()
+    if (!cp) {
+      return { status: 'skipped', detail: 'no control-plane token' }
+    }
+    const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
+    const who = { sub: `billing-test-w9${tag}` }
+    const accountId = `dev:${who.sub}`
+    const steps: string[] = []
+    const held: string[] = []
+    const create = async (label: string) => {
+      const r = await control.as(who, 'POST', '/v1/sandboxes', { workspaceId: `w9-gate-${label}`, machineSize: 'standard' })
+      if (r.status === 200) {
+        held.push(r.body.sandbox.id)
+        ctx.sandboxes.adopt(r.body.sandbox.id, who)
+        ctx.run.created({ kind: 'sandbox', id: r.body.sandbox.id, label: `gate ${label}`, vcpus: 4 })
+      }
+      return r
+    }
+    const startCheck = async () =>
+      (await billing.raw('POST', '/v1/internal/entitlements/check', cp, { accountId, machineSize: 'standard', runningSandboxes: 0 })).body
+    const noPlan = await control.as(who, 'POST', '/v1/sandboxes', { workspaceId: 'w9-gate-noplan', machineSize: 'standard' })
+    steps.push(`no plan -> ${noPlan.status} ${noPlan.body?.reason ?? ''}`)
+    const clock = await stripe('POST', '/v1/test_helpers/test_clocks', { frozen_time: Math.floor(Date.now() / 1000), name: `orca-gate-${ctx.run.file.runId}` })
+    ctx.run.created({ kind: 'stripe_test_clock', id: clock.id, label: 'gate clock' })
+    const customer = await stripe('POST', '/v1/customers', { email: `eval+${who.sub}@example.com`, test_clock: clock.id, metadata: { account_id: accountId } })
+    ctx.run.created({ kind: 'stripe_customer', id: customer.id, label: 'gate customer (test clock)' })
+    let ok = false
+    try {
+      linkBillingAccount(accountId, customer.id)
+      const visa = await stripe('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customer.id })
+      await stripe('POST', `/v1/customers/${customer.id}`, { invoice_settings: { default_payment_method: visa.id } })
+      const sub = await stripe('POST', '/v1/subscriptions', { customer: customer.id, items: [{ price: TEAM_MONTHLY_PRICE, quantity: 1 }], metadata: { account_id: accountId } })
+      await until(startCheck, (c: any) => c?.allow === true, 120_000)
+      const a = await create('a')
+      steps.push(`active plan -> ${a.status}`)
+      const b = await create('b')
+      const c = await create('c')
+      const d = await create('d')
+      steps.push(`plan concurrency (1 seat): 2nd ${b.status}, 3rd ${c.status}, 4th ${d.status} ${d.body?.reason ?? ''}`)
+      for (const id of held.slice(1)) {
+        await ctx.sandboxes.destroy(id)
+      }
+      held.splice(1)
+      // Use up the included hours (1 seat = 60 h) with usage reports, overage off.
+      const end = Date.now() - 60_000
+      for (let i = 0; i < 3; i++) {
+        const endedAt = end - i * 25 * HOUR * 1000
+        await billing.raw('POST', '/v1/internal/usage', cp, {
+          usageId: `w9-gate-${ctx.run.file.runId}-${i}`,
+          accountId,
+          sandboxId: `sbx-w9gate-${ctx.run.file.runId}`,
+          machineSize: 'standard',
+          startedAt: endedAt - 24 * HOUR * 1000,
+          endedAt
+        })
+      }
+      const exhausted = await control.as(who, 'POST', '/v1/sandboxes', { workspaceId: 'w9-gate-hours', machineSize: 'standard' })
+      steps.push(`included hours used up -> ${exhausted.status} ${exhausted.body?.reason ?? ''}`)
+      // Next period with a failing card: the renewal fails -> past_due.
+      const failing = await stripe('POST', '/v1/payment_methods/pm_card_chargeCustomerFail/attach', { customer: customer.id })
+      await stripe('POST', `/v1/customers/${customer.id}`, { invoice_settings: { default_payment_method: failing.id } })
+      const live0 = await stripe('GET', `/v1/subscriptions/${sub.id}`)
+      const periodEnd = (live0.items?.data?.[0]?.current_period_end ?? live0.current_period_end) as number
+      await advanceClock(clock.id, periodEnd + HOUR)
+      await until(startCheck, (x: any) => x?.reason === 'payment_past_due', 150_000)
+      const pastDue = await control.as(who, 'POST', '/v1/sandboxes', { workspaceId: 'w9-gate-pastdue', machineSize: 'standard' })
+      steps.push(`payment failed (in grace) -> ${pastDue.status} ${pastDue.body?.reason ?? ''}`)
+      d1Billing(`UPDATE subscriptions SET past_due_since = ${Date.now() - 97 * HOUR * 1000} WHERE account_id = '${accountId}'`)
+      let suspendedMs: number | null = null
+      const t0 = Date.now()
+      while (Date.now() - t0 < 4 * 60_000) {
+        const v = await control.as(who, 'GET', `/v1/sandboxes/${held[0]}`)
+        if (v.body?.sandbox?.status === 'suspended') {
+          suspendedMs = Date.now() - t0
+          break
+        }
+        await sleep(10_000)
+      }
+      const graceStart = await control.as(who, 'POST', `/v1/sandboxes/${held[0]}/resume`)
+      steps.push(`grace expired -> running VM suspended by cron ${suspendedMs !== null ? `in ${Math.round(suspendedMs / 1000)} s` : 'NOT within 4 min'}, resume -> ${graceStart.status} ${graceStart.body?.reason ?? ''}`)
+      const good = await stripe('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customer.id })
+      await stripe('POST', `/v1/customers/${customer.id}`, { invoice_settings: { default_payment_method: good.id } })
+      const live = await stripe('GET', `/v1/subscriptions/${sub.id}`)
+      await stripe('POST', `/v1/invoices/${live.latest_invoice}/pay`, { payment_method: good.id })
+      await until(startCheck, (x: any) => x?.allow === true, 120_000)
+      const paid = await control.as(who, 'POST', `/v1/sandboxes/${held[0]}/resume`)
+      steps.push(`paid (new period) -> resume ${paid.status}`)
+      ok =
+        noPlan.status === 403 && noPlan.body?.reason === 'no_subscription' && a.status === 200 && b.status === 200 && c.status === 200 &&
+        d.status === 403 && exhausted.status === 403 && pastDue.status === 403 && pastDue.body?.reason === 'payment_past_due' &&
+        suspendedMs !== null && graceStart.status === 403 && paid.status === 200
+      return { status: ok ? 'pass' : 'fail', detail: `control plane gate via the real billing Worker (account ${accountId}): ${steps.join('; ')}` }
+    } catch (error) {
+      return { status: 'fail', detail: `${steps.join('; ')}; threw ${String(error).slice(0, 200)}` }
+    } finally {
+      for (const id of held) {
+        await ctx.sandboxes.destroy(id).catch(() => null)
+      }
+      await stripe('DELETE', `/v1/customers/${customer.id}`).catch(() => {})
+      ctx.run.destroyed('stripe_customer', customer.id)
+      await stripe('DELETE', `/v1/test_helpers/test_clocks/${clock.id}`).catch(() => {})
+      ctx.run.destroyed('stripe_test_clock', clock.id)
+    }
+  },
+
   'billing.dunning': async (ctx) => {
     // Full payment-failure path on real systems: Stripe test clock renewal with a failing card ->
     // past_due -> grace expiry (past_due_since backdated 97 h in the dev billing D1 instead of
