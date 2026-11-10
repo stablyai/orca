@@ -10,6 +10,7 @@ import {
   FAILED_LOG,
   LOG,
   frame,
+  seedCloudAgentAccounts,
   LOG_LINES,
   NOW,
   seedFixtureRepo,
@@ -247,15 +248,31 @@ export const checksSkipped = frame(
   })
 )
 
-export const cloudChecksFailed = frame(
+const cloudChecks = frame(
   entry(
     { environmentCheck: { status: 'failed', checks: FAILED_CHECKS, ...CHECKS_FAILED_AT } },
     CLOUD_RECIPE
   )
 )
+// Claude isn't set up through the Orca account: the sign-in warning says where to set it up.
+export const cloudChecksFailed = defineFixture({
+  ...cloudChecks,
+  setup: () => {
+    cloudChecks.setup?.()
+    seedCloudAgentAccounts('none')
+  }
+})
+// Claude is covered by the Orca account: the sandbox's own sign-in probe isn't shown at all.
+export const cloudChecksAgentCovered = defineFixture({
+  ...cloudChecks,
+  setup: () => {
+    cloudChecks.setup?.()
+    seedCloudAgentAccounts('active')
+  }
+})
 
 // One failure plus a warning: the title counts failures only, in the singular.
-export const cloudChecksFailedOne = frame(
+const cloudChecksOne = frame(
   entry(
     {
       environmentCheck: {
@@ -267,6 +284,14 @@ export const cloudChecksFailedOne = frame(
     CLOUD_RECIPE
   )
 )
+
+export const cloudChecksFailedOne = defineFixture({
+  ...cloudChecksOne,
+  setup: () => {
+    cloudChecksOne.setup?.()
+    seedCloudAgentAccounts('none')
+  }
+})
 
 // A narrow sheet: the pills keep one column and Delete sandbox wraps under the recovery actions.
 export const cloudChecksFailedNarrow = defineFixture({

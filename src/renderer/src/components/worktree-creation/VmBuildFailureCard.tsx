@@ -7,6 +7,7 @@ import { getLastBillingStatus } from '@/components/billing/billing-summary-store
 import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
 import { FailureActionRow, type VmBuildFailureActions } from './VmBuildFailureActions'
 import { CheckRow } from './VmBuildCheckRow'
+import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { VmBuildErrorDetails } from './VmBuildErrorDetails'
 
 export type { VmBuildFailureActions }
@@ -40,6 +41,8 @@ export function VmBuildFailureCard({
   actions: VmBuildFailureActions
 }): React.JSX.Element {
   const t = useTranslate()
+  // Read only on Orca Cloud with checks to show; recipe VMs keep the host's own sign-in copy.
+  const accounts = useOrcaCloudAgentAccounts(cloud && failure?.kind === 'checks')
   // Why: a closing card still needs its content, or it would empty out before it finishes collapsing.
   const [shown, setShown] = React.useState(failure)
   // Each opening is a new run, so the rows remount and their stagger replays on a repeated failure.
@@ -111,7 +114,14 @@ export function VmBuildFailureCard({
             {visible.kind === 'checks' ? (
               <ul className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2">
                 {visible.problems.map((check, index) => (
-                  <CheckRow key={check.id} check={check} index={index} cloud={cloud} t={t} />
+                  <CheckRow
+                    key={check.id}
+                    check={check}
+                    index={index}
+                    cloud={cloud}
+                    accounts={accounts}
+                    t={t}
+                  />
                 ))}
               </ul>
             ) : null}

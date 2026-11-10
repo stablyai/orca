@@ -27977,5 +27977,16 @@
     "pasteInstead": "Paste a code instead",
     "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open"
+  },
+  "cloudAgentCheck": {
+    "keyAgentSignedOut": "{{agent}} isn’t signed in.",
+    "keyAgentFix": "Add its API key in Settings → Cloud secrets, or sign in when it starts in this workspace.",
+    "notSetUp": "{{agent}} isn’t set up for Orca Cloud yet.",
+    "notSetUpFix": "Set it up once in Settings → Agent accounts. Every cloud workspace uses it.",
+    "expired": "Your {{agent}} sign-in for Orca Cloud expired.",
+    "expiredFix": "Renew it once in Settings → Agent accounts. Every cloud workspace uses it.",
+    "signInHere": "{{agent}} isn’t signed in for this workspace.",
+    "pausedFix": "Orca account sign-in is paused. Sign in for this workspace; the sign-in stays with this workspace.",
+    "notOfferedFix": "Signs in for each cloud workspace for now. Sign in for this workspace; the sign-in stays with this workspace."
   }
 }
