@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { writeFileSync } from 'node:fs'
+import * as fs from 'node:fs'
+import * as providerConfig from '../codex/structured/launch/codex-model-provider-config'
+import { getCodexAccountAuthWarning } from '../../renderer/src/components/settings/accounts/codex/codex-account-auth-warning'
 import { join } from 'node:path'
 import {
   createCodexAuthJson,
@@ -93,6 +96,16 @@ describe('CodexAccountService config sync', () => {
           providerAccountId: null,
           workspaceLabel: null
         })
+        expect(
+          getCodexAccountAuthWarning({
+            limits: null,
+            target: { runtime: 'host' },
+            runtime: { runtime: 'host' },
+            activeAccountId: null,
+            accountId: null,
+            authKind: withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind
+          })
+        ).toBeNull()
       }
     )
 
@@ -164,6 +177,51 @@ describe('CodexAccountService config sync', () => {
         workspaceLabel: null
       })
     })
+
+    it.each([750, 7_500])(
+      'reuses unchanged provider input across snapshots with %i saved projects',
+      async (projectCount) => {
+        const configPath = join(systemCodexHomeDir(), 'config.toml')
+        const projects = Array.from(
+          { length: projectCount },
+          (_, index) => `[projects."/work/project-${index}"]\ntrust_level = "trusted"\n`
+        ).join('')
+        writeFileSync(configPath, `model_provider = "amazon-bedrock"\n${projects}`)
+        writeFileSync(
+          systemAuthPath(),
+          createCodexAuthJson('real@home.dev', 'acct-real', 'refresh')
+        )
+        const service = await newService()
+        const read = vi.spyOn(fs, 'readFileSync')
+        const parse = vi.spyOn(providerConfig, 'readCodexTopLevelModelProvider')
+        const configReads = () => read.mock.calls.filter(([path]) => path === configPath).length
+
+        try {
+          for (let update = 0; update < 20; update += 1) {
+            expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe(
+              'api-key'
+            )
+          }
+          // Usage updates do not invalidate the one current provider classification.
+          expect(configReads()).toBe(1)
+          expect(parse).toHaveBeenCalledTimes(1)
+
+          writeFileSync(configPath, `model_provider = "openai"\n${projects}`)
+          expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+            hasAuth: true,
+            authKind: 'oauth',
+            email: 'real@home.dev',
+            providerAccountId: 'acct-real',
+            workspaceLabel: null
+          })
+          expect(configReads()).toBe(2)
+          expect(parse).toHaveBeenCalledTimes(2)
+        } finally {
+          read.mockRestore()
+          parse.mockRestore()
+        }
+      }
+    )
 
     it('degrades safely when auth.json contains valid JSON with the wrong shape', async () => {
       writeFileSync(systemAuthPath(), 'null', 'utf-8')

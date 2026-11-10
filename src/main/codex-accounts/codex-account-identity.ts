@@ -3,7 +3,6 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { CodexSystemDefaultIdentity } from '../../shared/managed-account-types'
-import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
 import { readCodexAuthIdentity, type CodexAuthIdentity } from './codex-auth-identity'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 
@@ -103,8 +102,7 @@ export class CodexAccountIdentity {
   }
 
   // Resolve the system default live from ~/.codex rather than stored managed-account identity.
-  resolveSystemDefault(config: string | undefined): CodexSystemDefaultIdentity {
-    const provider = config ? readCodexTopLevelModelProvider(config) : null
+  resolveSystemDefault(provider: string | null): CodexSystemDefaultIdentity {
     const usesProviderAuth = provider !== null && PROVIDERS_WITHOUT_OPENAI_AUTH.has(provider)
     let contents: string
     try {

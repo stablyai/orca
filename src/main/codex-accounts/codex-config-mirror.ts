@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { createIntegrationStateFileCache } from '../credentials/integration-state-file-cache'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
@@ -20,6 +22,25 @@ export type CanonicalCodexConfig = {
 }
 
 export class CodexConfigMirror {
+  private readonly hostModelProvider = createIntegrationStateFileCache({
+    filePath: () => join(homedir(), '.codex', 'config.toml'),
+    readFromDisk: () =>
+      readCodexTopLevelModelProvider(
+        readFileSync(join(homedir(), '.codex', 'config.toml'), 'utf-8')
+      )
+  })
+
+  readHostModelProvider(): string | null {
+    try {
+      return this.hostModelProvider.get()
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        console.warn('[codex-accounts] Failed to read canonical provider config')
+      }
+      return null
+    }
+  }
+
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
     private readonly assertManagedHomePath: (
@@ -146,7 +167,7 @@ export class CodexConfigMirror {
     )
   }
 
-  readHostConfig(): CanonicalCodexConfig | null {
+  private readHostConfig(): CanonicalCodexConfig | null {
     const sourceHomePath = join(homedir(), '.codex')
     const primaryConfigPath = join(sourceHomePath, 'config.toml')
     if (!existsSync(primaryConfigPath)) {
