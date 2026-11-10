@@ -7,6 +7,7 @@ import {
 } from '../../../rpc/methods/orchestration/access/orchestration-method-access'
 import { emptyWorkerListPage } from '../../../rpc/methods/orchestration/worker/worker-list-method'
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
@@ -97,7 +98,8 @@ async function routeServerCall(
   ctx: RpcContext,
   on: string
 ): Promise<Routed> {
-  if (!SERVER_CALLS.has(request.method)) {
+  // A chat named by its session ID is refused by the ordinary start before any server is asked.
+  if (!SERVER_CALLS.has(request.method) || isSessionAddress(values.terminal)) {
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
@@ -305,6 +307,10 @@ function openLinkFor(
       `SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ? AND state = 'open'`
     )
     .get(runId, environmentId) as RemoteRunLinkRow | undefined
+}
+
+function isSessionAddress(value: unknown): boolean {
+  return typeof value === 'string' && value.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
 }
 
 function stringField(values: Values, field: string): string | undefined {

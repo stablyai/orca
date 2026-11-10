@@ -40,6 +40,7 @@ describe('commands about a worker a paired server owns', () => {
   let sent: Sent[]
   let answers: Record<string, Answer[]>
   let capabilities: string[]
+  let whileSending: () => Promise<void>
   let sequence = 0
   const server: OrchestrationWorkerServer = {
     environmentId: 'env_b',
@@ -71,6 +72,7 @@ describe('commands about a worker a paired server owns', () => {
         params: (prepared?.params ?? params) as Record<string, unknown>,
         envelope: prepared?.envelope ?? envelope
       })
+      await whileSending()
       const answer = answers[method]?.shift() ?? 'unreachable'
       if (answer === 'unreachable') {
         throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
@@ -90,6 +92,7 @@ describe('commands about a worker a paired server owns', () => {
   beforeEach(() => {
     sent = []
     answers = {}
+    whileSending = async () => undefined
     capabilities = [
       ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
       ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
@@ -198,6 +201,21 @@ describe('commands about a worker a paired server owns', () => {
       state: 'reserved',
       outcome_unknown: 1
     })
+  })
+
+  it('records nothing for a start the server answers after the Run was reset, and says so', async () => {
+    whileSending = async () => {
+      db.resetTasks()
+    }
+    answers['orchestration.workerStart'] = [started()]
+    const response = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'late', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    expect(response.ok ? undefined : response.error.code).toBe('run_not_found')
+    expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
   })
 
   it('scopes the retry key to the caller: two terminals reusing an ID never collide, one retrying gets its own key', async () => {
