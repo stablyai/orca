@@ -1,5 +1,6 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
+import { deleteAgentSourcesForSandbox } from './agent-sources'
 import type { EntitlementClient, MachineSize } from './entitlements'
 import { parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
@@ -833,6 +834,8 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
   // So does its sealed read snapshot.
   await deleteReadSnapshot(deps.db, row.id)
+  // And its per-workspace agent Source overrides.
+  await deleteAgentSourcesForSandbox(deps.db, row.id)
   const destroyed = await claim(deps, destroying, {
     status: 'destroyed',
     ...NO_SESSION,
