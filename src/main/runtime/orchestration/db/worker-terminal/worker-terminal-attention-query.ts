@@ -58,6 +58,7 @@ export function readWorkerAttentionInputs(
     return new Map()
   }
   const serializedIds = JSON.stringify(ids)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects each schema-owned WorkerAttentionRow column.
   const rows = db.db
     .prepare(
       `SELECT d.id AS dispatch_id, d.task_id, d.status AS dispatch_status,
@@ -84,8 +85,8 @@ export function readWorkerAttentionInputs(
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
         WHERE d.id IN (SELECT value FROM json_each(?))`
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects each schema-owned WorkerAttentionRow column.
     .all(serializedIds) as WorkerAttentionRow[]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects the schema-owned observation column list.
   const observationRows = db.db
     .prepare(
       `SELECT ${ATTEMPT_OBSERVATION_FACT_COLUMN_LIST} FROM attempt_observation_facts

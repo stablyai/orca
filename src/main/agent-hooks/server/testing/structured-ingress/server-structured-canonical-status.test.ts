@@ -74,10 +74,7 @@ describe('structured canonical production slice', () => {
       { ...SCOPE, executionHostId: 'ssh:other' },
       SESSION
     )
-    server.ingestStructuredStatus(
-      { ...summary(second), agent: 'claude', status: 'waiting' },
-      second
-    )
+    server.ingestStructuredStatus({ ...summary(second), agent: 'claude', status: 'idle' }, second)
     expect(deps.getAgentStatusSnapshotForPane(PANE).map(({ state }) => state)).toEqual(['working'])
     expect(
       deps
