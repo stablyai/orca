@@ -121,7 +121,8 @@ export function createUpdateWorktreeMeta(
       return { ok: true }
     }
     normalizedUpdates = normalizeGitHubPRSuppressionUpdate(
-      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates)
+      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates),
+      worktreeForUpdate?.linkedPR
     )
     const currentResolvedPushTarget =
       normalizedUpdates.linkedPR === linkedPrForPushTarget ? resolvedPushTarget : undefined

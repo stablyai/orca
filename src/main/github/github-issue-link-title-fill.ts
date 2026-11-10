@@ -24,7 +24,8 @@ export type GitHubIssueLinkTitleFillStore = {
   getRepos: () => Repo[]
 }
 
-const NOTIFY_WINDOW_MS = 2_000
+// Each publication refreshes the repo's whole workspace list in every client.
+const NOTIFY_WINDOW_MS = 30_000
 
 type Job = {
   worktreeId: string
@@ -57,12 +58,24 @@ export function installGitHubIssueLinkTitleFill(deps: {
 
   const pendingNotify = new Set<string>()
   let lastNotifyAt = 0
+  let notifyTimer: ReturnType<typeof setTimeout> | null = null
   const flushNotify = (): void => {
+    notifyTimer = null
     lastNotifyAt = Date.now()
     for (const repoId of pendingNotify) {
       deps.notifyChanged(repoId)
     }
     pendingNotify.clear()
+  }
+  // A quiet host publishes a title at once; a burst publishes at most once per window, never per title.
+  const scheduleNotify = (repoId: string): void => {
+    pendingNotify.add(repoId)
+    if (!notifyTimer) {
+      notifyTimer = setTimeout(
+        flushNotify,
+        Math.max(0, lastNotifyAt + NOTIFY_WINDOW_MS - Date.now())
+      )
+    }
   }
 
   // The job's link as it is now; null once removed, retitled or its workspace re-created.
@@ -94,7 +107,7 @@ export function installGitHubIssueLinkTitleFill(deps: {
       linkedItemsBase: items,
       linkedItems: items.map((item, i) => (i === index ? { ...item, title } : item))
     })
-    pendingNotify.add(getRepoIdFromWorktreeId(job.worktreeId))
+    scheduleNotify(getRepoIdFromWorktreeId(job.worktreeId))
   }
 
   const drain = async (): Promise<void> => {
@@ -122,27 +135,20 @@ export function installGitHubIssueLinkTitleFill(deps: {
         if (title?.trim() && !disposed) {
           apply(job, title.trim())
         }
-        // One client refresh per repo per window during a burst, not one per filled title.
-        if (Date.now() - lastNotifyAt >= NOTIFY_WINDOW_MS) {
-          flushNotify()
-        }
       }
     } finally {
       draining = false
-      if (!disposed) {
-        flushNotify()
-      }
     }
   }
 
   const unsubscribe = deps.store.onWorktreeMetaWritten(({ worktreeId, hostId, previous, next }) => {
     // Most writes (stamps, flags, comments) leave links untouched; skip them without normalizing.
+    // linkedWorkItem is re-created on every write and always titled, so it is not compared.
     if (
       previous &&
       previous.instanceId === next.instanceId &&
       previous.linkedItems === next.linkedItems &&
-      previous.linkedIssue === next.linkedIssue &&
-      previous.linkedWorkItem === next.linkedWorkItem
+      previous.linkedIssue === next.linkedIssue
     ) {
       return
     }
@@ -173,6 +179,9 @@ export function installGitHubIssueLinkTitleFill(deps: {
   })
   return () => {
     disposed = true
+    if (notifyTimer) {
+      clearTimeout(notifyTimer)
+    }
     queue.clear()
     unsubscribe()
   }
