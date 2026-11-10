@@ -85,13 +85,13 @@ describe('structured canonical production slice', () => {
         .map(({ agentType, state }) => ({ agentType, state }))
     ).toEqual([
       { agentType: 'codex', state: 'working' },
-      { agentType: 'claude', state: 'waiting' }
+      { agentType: 'claude', state: 'done' }
     ])
     expect(deps.getAgentStatusSnapshot().map(({ paneKey, state }) => ({ paneKey, state }))).toEqual(
       [
         { paneKey: PANE, state: 'working' },
         { paneKey: PANE_KEY, state: 'working' },
-        { paneKey: PANE_KEY, state: 'waiting' }
+        { paneKey: PANE_KEY, state: 'done' }
       ]
     )
   })

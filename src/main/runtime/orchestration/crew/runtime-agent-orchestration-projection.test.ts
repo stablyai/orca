@@ -264,8 +264,14 @@ it('updates child nesting when its creator dispatch settles without a child task
 it('updates legacy nesting when a coordinator starts and finishes without a dispatch write', () => {
   const db = new OrchestrationDb(':memory:')
   try {
+    const legacy = db.createRun({
+      objective: 'Legacy work',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    db.db.prepare('UPDATE runs SET legacy = 1 WHERE id = ?').run(legacy.id)
     db.createDispatchContext({
-      taskId: db.createTask({ spec: 'Legacy worker' }).id,
+      taskId: db.createTask({ runId: legacy.id, spec: 'Legacy worker' }).id,
       assigneeHandle: TERMINAL_WORKER_HANDLE,
       assigneePaneKey: TERMINAL_WORKER_PANE,
       creator: { kind: 'system' },

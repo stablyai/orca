@@ -107,7 +107,7 @@ it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refr
     const retained = db.createDispatchContext({
       taskId: db.createTask({ runId: run.id, spec: 'Old worker' }).id,
       assigneeHandle: 'old-worker',
-      assigneePaneKey: PANE,
+      assigneePaneKey: 'tab-retained:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       creator: { kind: 'system' },
       maxDepth: 99
     })
@@ -118,6 +118,9 @@ it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refr
       creator: { kind: 'system' },
       maxDepth: 99
     })
+    db.db
+      .prepare('UPDATE dispatch_contexts SET assignee_pane_key = ? WHERE id = ?')
+      .run(PANE, retained.id)
     f.runtime.setOrchestrationDb(db)
     expect(
       f.runtime.syncWindowGraph(1, identityGraph('current')).agentOrchestrationByPaneKey?.[PANE]
