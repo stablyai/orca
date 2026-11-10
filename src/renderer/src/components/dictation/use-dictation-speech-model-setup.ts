@@ -30,14 +30,14 @@ export function useDictationSpeechModelSetup(
     async (voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>): Promise<boolean> => {
       const request = ++startRequestRef.current
       const target = await checkSpeechModelUpdate(voice)
+      if (request !== startRequestRef.current) {
+        return false
+      }
       if (target) {
         if (isIdle()) {
           setPillAnchor(dictationPillAnchorFor(captureInsertionTarget()))
           setSetupTarget(target)
         }
-        return false
-      }
-      if (request !== startRequestRef.current) {
         return false
       }
       setSetupTarget(null)

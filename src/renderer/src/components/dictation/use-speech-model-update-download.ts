@@ -53,7 +53,10 @@ export function useSpeechModelUpdateDownload(
   }
 
   const cancel = (): void => {
-    void window.api.speech.cancelDownload(model.id).finally(() => void refreshModelStates())
+    void window.api.speech
+      .cancelDownload(model.id)
+      .catch(() => undefined)
+      .finally(() => void refreshModelStates())
   }
 
   const deleteRetired = (): void => {

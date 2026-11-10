@@ -13,7 +13,11 @@ export function loadSpeechCatalog(): Promise<SpeechModelManifest[]> {
   catalogRequest ??= Promise.resolve()
     // The paired web client's fallback resolves with nothing rather than a list.
     .then(async () => (await window.api.speech.getCatalog()) ?? [])
-    .catch(() => [])
+    .catch(() => {
+      // Not cached, so the next press asks again.
+      catalogRequest = null
+      return []
+    })
   return catalogRequest
 }
 
@@ -35,7 +39,8 @@ export async function checkSpeechModelUpdate(
     ])
     useAppStore.getState().setModelStates(states)
     const target = findSpeechModelUpdateTarget(voice, catalog, states)
-    if (!target) {
+    // An empty catalog proves nothing, so it isn't remembered as up to date.
+    if (!target && catalog.length > 0) {
       upToDateModelIds.add(voice.sttModel)
     }
     return target
