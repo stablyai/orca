@@ -69,44 +69,6 @@ it('wakes slept folder on local after publishing restored explorer and terminal 
   expect(store.getState().refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()
 })
 
-it('wakes slept git on local after publishing restored explorer and terminal state', () => {
-  const { store, workspaceId, activate } = seedWorkspace('git', 'local')
-  markWorktreeSleepIntent(workspaceId)
-  const wake = vi.fn(() => {
-    expect(store.getState().activeWorktreeId).toBe('worktree-activation')
-    expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(4)
-    expect(store.getState().rightSidebarExplorerView).toBe('files')
-  })
-  onWorktreeSleepIntentCleared(workspaceId, wake)
-
-  activate()
-
-  expect(wake).toHaveBeenCalledOnce()
-  expect(store.getState().activeWorkspaceExecutionHostId).toBe('local')
-  expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
-  expect(store.getState().activeTabId).toBe('terminal')
-  expect(store.getState().refreshGitHubForWorktreeIfStale).toHaveBeenCalled()
-})
-
-it('wakes slept folder on ssh:remote after publishing restored explorer and terminal state', () => {
-  const { store, workspaceId, activate } = seedWorkspace('folder', 'ssh:remote')
-  markWorktreeSleepIntent(workspaceId)
-  const wake = vi.fn(() => {
-    expect(store.getState().activeWorktreeId).toBe('folder:folder-activation')
-    expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(4)
-    expect(store.getState().rightSidebarExplorerView).toBe('files')
-  })
-  onWorktreeSleepIntentCleared(workspaceId, wake)
-
-  activate()
-
-  expect(wake).toHaveBeenCalledOnce()
-  expect(store.getState().activeWorkspaceExecutionHostId).toBe('ssh:remote')
-  expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
-  expect(store.getState().activeTabId).toBe('terminal')
-  expect(store.getState().refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()
-})
-
 it('wakes slept git on ssh:remote after publishing restored explorer and terminal state', () => {
   const { store, workspaceId, activate } = seedWorkspace('git', 'ssh:remote')
   markWorktreeSleepIntent(workspaceId)

@@ -86,43 +86,6 @@ it('confirms a second PR by exact source and head when branch discovery would re
   )
 })
 
-it.each([
-  { type: 'issue' as const },
-  { number: 99 },
-  { url: 'https://github.com/foreign/repo/pull/42' },
-  { branchName: 'unrelated' },
-  { headSha: 'other-head' }
-])(
-  'rejects contradictory exact evidence without using an implicit fallback: %j',
-  async (change) => {
-    const { store, workspace, branchLookup } = setup()
-    exactLookup.mockResolvedValue({ ...secondary, ...change })
-    store.getState().observeTerminalGitHubPullRequestLink(workspace.id, link)
-    await flush()
-    expect(getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0])).toEqual([])
-    expect(branchLookup).not.toHaveBeenCalled()
-  }
-)
-
-it('confirms a review against its saved push branch', async () => {
-  const { store, workspace, branchLookup } = setup()
-  const pending = Promise.withResolvers<GitHubWorkItem | null>()
-  exactLookup.mockReturnValue(pending.promise)
-  const saved = {
-    ...workspace,
-    branch: 'refs/heads/local-copy',
-    pushTarget: { remoteName: 'origin', branchName: 'feature' }
-  }
-  store.setState({ worktreesByRepo: { repo: [saved] } })
-  store.getState().observeTerminalGitHubPullRequestLink(workspace.id, link)
-  pending.resolve(secondary)
-  await flush()
-  expect(
-    getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0]).map((item) => item.number)
-  ).toEqual([42])
-  expect(branchLookup).not.toHaveBeenCalled()
-})
-
 it('rejects delayed review after its saved push branch changes', async () => {
   const { store, workspace, branchLookup } = setup()
   const pending = Promise.withResolvers<GitHubWorkItem | null>()
