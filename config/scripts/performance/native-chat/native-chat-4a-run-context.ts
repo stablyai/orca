@@ -17,7 +17,7 @@ export type RunContext = {
   rows: Row[]
   log: (line: string) => void
   /** Relaunch on the same profile (cold rows); replaces `launch`. */
-  relaunch: () => Promise<void>
+  relaunch: (prepare?: (userDataDir: string) => void) => Promise<void>
 }
 
 export const page = (ctx: RunContext): Page => ctx.launch.page
@@ -105,15 +105,23 @@ export function profileRunner(input: {
       log,
       relaunch: async () => undefined
     }
-    ctx.relaunch = async () => {
-      await stopArm(ctx.launch)
+    let running = true
+    ctx.relaunch = async (prepare?: (userDataDir: string) => void) => {
+      if (running) {
+        await stopArm(ctx.launch)
+        running = false
+      }
+      prepare?.(ctx.launch.userDataDir)
       ctx.launch = await open()
+      running = true
     }
     try {
       await body(ctx, observer)
     } finally {
       await observer.stop()
-      await stopArm(ctx.launch)
+      if (running) {
+        await stopArm(ctx.launch)
+      }
       renameSync(
         profileDir,
         path.join(

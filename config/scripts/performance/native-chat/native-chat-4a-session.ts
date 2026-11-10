@@ -83,7 +83,8 @@ export async function mutate<T = unknown>(
   arm: Arm,
   method: string,
   sessionId: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  beforeRequest?: () => void
 ) {
   const envelope = {
     sessionId,
@@ -95,6 +96,7 @@ export async function mutate<T = unknown>(
       fields
     })
   }
+  beforeRequest?.()
   return rpc<T>(page, method, { envelope, ...fields })
 }
 
@@ -103,7 +105,8 @@ export async function send(
   arm: Arm,
   sessionId: string,
   text: string,
-  queueIfActive = true
+  queueIfActive = true,
+  beforeRequest?: () => void
 ) {
   const params = arm.protocol.structuredAgentSessionMessageSendMutation({
     sessionId,
@@ -112,6 +115,7 @@ export async function send(
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
     ...(queueIfActive ? { delivery: 'queue-if-active' as const } : {})
   })
+  beforeRequest?.()
   return rpc<{ ok?: boolean; queued?: unknown }>(page, 'agentSession.send', params)
 }
 

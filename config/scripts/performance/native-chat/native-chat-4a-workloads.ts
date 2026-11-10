@@ -200,6 +200,19 @@ export function streamPrompt(workload: Workload, stream: StreamCase): string {
   })
 }
 
+export const toolBurstPrompt = (workload: Workload, tag: string): string =>
+  providerText.formatDirective({
+    op: 'history',
+    tag,
+    tools: 8,
+    toolRunMs: 250,
+    toolOutputBytes: workload.history.toolOutputBytes,
+    replyBytes: workload.history.replyBytes
+  })
+
+export const streamPhaseBytes = (workload: Workload): number[] =>
+  workload.profile === 'full' ? [8 * MiB, 16 * MiB] : [128 * 1024]
+
 export const shapesPrompt = (workload: Workload, tag: string): string =>
   providerText.formatDirective({ op: 'shapes', tag, ...workload.shapes })
 export const subagentPrompt = (
@@ -281,6 +294,27 @@ export function dryRunWorkload(workload: Workload): Record<string, unknown> {
     ),
     fillerPromptDigest: providerText.digest(fillerTurn(0, 0, workload)),
     streams,
+    streamContention: {
+      thresholds: streamPhaseBytes(workload),
+      streamBytes: streamPhaseBytes(workload).map((bytes) => bytes + MiB),
+      operations: 'competing send, large tail read and Stop at observed current text size',
+      observationEveryMs: 100
+    },
+    liveToolBurst: {
+      tools: 8,
+      promptDigest: providerText.digest(toolBurstPrompt(workload, 'burst'))
+    },
+    outlineCache: [
+      'observed source-key miss',
+      'confirmed persisted hit',
+      'invalidation after real send'
+    ],
+    forkPressure: {
+      unrelatedRetiredRows: expectedItems(workload.history.largeTurns, workload),
+      preparation: 'stopped profile copy; original restored after pressure case',
+      concurrent: 'other-chat send',
+      peaks: 'WAL and file bytes'
+    },
     shapesPromptDigest: providerText.digest(shapesPrompt(workload, 'shapes')),
     subagentPromptDigests: (['interleaved', 'sparse'] as const).map((mode) =>
       providerText.digest(subagentPrompt(workload, 'subagents', mode))

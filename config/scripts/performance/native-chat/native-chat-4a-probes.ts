@@ -171,9 +171,9 @@ export async function mutationGaps(page: Page, from: number, to: number): Promis
 
 export const rendererNow = (page: Page): Promise<number> => page.evaluate(() => performance.now())
 
-export type HostWork = { cpuMs: number; mainThreadActiveMs: number; offMainThreadCpuMs: number }
+export type HostWork = { processCpuMs: number; mainThreadEluActiveMs: number }
 
-/** Process CPU covers the main thread and its storage workers; main-thread ELU separates the two. */
+/** Process CPU covers all process threads; main-thread ELU is active wall time, not CPU attribution. */
 export async function hostWorkMark(app: ElectronApplication): Promise<() => Promise<HostWork>> {
   // Main-process callbacks see Node's performance, not the DOM one this file is typed against.
   const start = await retryTransientMainEvaluate(() =>
@@ -194,11 +194,10 @@ export async function hostWorkMark(app: ElectronApplication): Promise<() => Prom
         }
       }, start)
     )
-    const cpuMs = (delta.cpu.user + delta.cpu.system) / 1000
+    const processCpuMs = (delta.cpu.user + delta.cpu.system) / 1000
     return {
-      cpuMs,
-      mainThreadActiveMs: delta.elu.active,
-      offMainThreadCpuMs: Math.max(0, cpuMs - delta.elu.active)
+      processCpuMs,
+      mainThreadEluActiveMs: delta.elu.active
     }
   }
 }

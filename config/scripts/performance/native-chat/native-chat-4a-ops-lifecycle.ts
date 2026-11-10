@@ -81,7 +81,7 @@ export async function openRows(ctx: RunContext): Promise<void> {
   const coldOutline = addRow(ctx, {
     family: 'outline',
     operation: 'conversationOutline',
-    variant: 'first in process (cold)',
+    variant: 'first in process (persisted cache unclassified)',
     context
   })
   // A third chat is left active, so the relaunch restores it and the measured chats open for the first time.
