@@ -252,7 +252,7 @@ it('carries mounted recovery purpose through both real usage reads without sendi
     ['claudeUsage:getSnapshot', { scope: 'orca', range: '30d', limit: 10 }, 'recovery']
   ])
   expect(received.mock.calls).toEqual([
-    ['claudeUsage:getScanState', undefined],
-    ['claudeUsage:getSnapshot', { scope: 'orca', range: '30d', limit: 10 }]
+    ['claudeUsage:getScanState', undefined, expect.any(AbortSignal)],
+    ['claudeUsage:getSnapshot', { scope: 'orca', range: '30d', limit: 10 }, expect.any(AbortSignal)]
   ])
 })
