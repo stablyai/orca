@@ -32,6 +32,8 @@ describe('useDocumentAppearance', () => {
   beforeEach(() => {
     mocks.applyDocumentTheme.mockReset()
     mocks.buildAppFontFamily.mockClear()
+    // Why: useWindowActive reads window.api.ui; an empty bridge leaves it feature-detected off.
+    vi.stubGlobal('api', { ui: {} })
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -41,6 +43,7 @@ describe('useDocumentAppearance', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     useAppStore.setState(initialState, true)
     // The document root is shared between cases, so a write here would leak forward.
     document.documentElement.style.removeProperty('--pane-single-max-width')
