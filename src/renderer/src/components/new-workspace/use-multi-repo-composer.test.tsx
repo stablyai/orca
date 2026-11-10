@@ -10,7 +10,9 @@ import { loadLastMultiRepoSet } from './multi-repo-last-set-storage'
 import { useMultiRepoComposer, type UseMultiRepoComposerInput } from './use-multi-repo-composer'
 
 const mocks = vi.hoisted(() => ({ activate: vi.fn() }))
-vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activate
+}))
 vi.mock('@/runtime/rpc/targets/runtime-client-target', () => ({
   ipcOrRuntimeTargetForHostId: () => ({ kind: 'local' })
 }))

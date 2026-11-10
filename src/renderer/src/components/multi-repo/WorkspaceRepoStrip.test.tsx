@@ -8,7 +8,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import WorkspaceRepoStrip from './WorkspaceRepoStrip'
 
 const mocks = vi.hoisted(() => ({ activate: vi.fn() }))
-vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activate
+}))
 
 const workspace: FolderWorkspace = {
   id: 'f1',

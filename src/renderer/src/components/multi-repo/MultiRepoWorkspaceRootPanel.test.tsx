@@ -7,7 +7,9 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { MultiRepoMember } from '../../../../shared/multi-repo-workspace'
 import MultiRepoWorkspaceRootPanel from './MultiRepoWorkspaceRootPanel'
 
-vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorkspace: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 function workspace(members: MultiRepoMember[]): FolderWorkspace {
