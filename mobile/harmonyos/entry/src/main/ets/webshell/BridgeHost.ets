@@ -562,6 +562,7 @@ export class BridgeHost {
 
   private routeGrants(pathname: string = this.routePathname): string[] {
     let grants = new Set<string>(['rpcEnvelope']);
+    if (this.faultSink) { grants.add('fault'); }
     let hostArea = this.ownsHostArea(pathname);
     let entries = this.servedRoutes();
     let matching = hostArea ? entries : entries.filter((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname));
@@ -700,7 +701,7 @@ export class BridgeHost {
     }
     if (name === 'fault') {
       let error: ESObject = msg['error'];
-      if (this.faultSink && this.routeGrants().includes('fault') && !this.pageFaulted
+      if (this.faultSink && this.navigationReady()
         && error && typeof error === 'object' && !Array.isArray(error)
         && typeof error['category'] === 'string' && typeof error['message'] === 'string'
         && typeof error['isRpcDeliveryUnknown'] === 'boolean') {

@@ -435,3 +435,18 @@ test('only the current document can finish its startup and stale faults do not r
   assert.deepEqual(failures, ['page failed'])
   startup.cancel()
 })
+
+test('page faults remount once per visit while renderer recovery renews after a paint', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { ShellStartup } = loadArkts('webshell/ShellStartup.ets', ['ShellStartup'])
+  const startup = new ShellStartup(() => {})
+  assert.equal(startup.allowRemount('page'), true)
+  assert.equal(startup.allowRemount('renderer'), true)
+  assert.equal(startup.allowRemount('renderer'), false)
+  startup.complete(startup.begin())
+  assert.equal(startup.allowRemount('renderer'), true)
+  assert.equal(startup.allowRemount('page'), false)
+  startup.resetRecovery()
+  assert.equal(startup.allowRemount('page'), true)
+  startup.cancel()
+})

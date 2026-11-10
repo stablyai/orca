@@ -1,9 +1,13 @@
+export type ShellDocumentFailure = 'page' | 'renderer';
+
 /** One first-paint verdict per document, bounded by inactivity. */
 export class ShellStartup {
   private timer: number = -1;
   private generation: number = 0;
   private pending: boolean = false;
   private timeout: number = 45000;
+  private pageRemounted: boolean = false;
+  private rendererRemounted: boolean = false;
   private failed: (message: string) => void;
   constructor(failed: (message: string) => void) { this.failed = failed; }
   begin(timeout: number = 45000): number {
@@ -19,8 +23,17 @@ export class ShellStartup {
   }
   complete(generation: number): boolean {
     if (!this.pending || generation !== this.generation) { return false; }
-    this.pending = false; this.clearTimer(); return true;
+    this.pending = false; this.rendererRemounted = false; this.clearTimer(); return true;
   }
+  allowRemount(reason: ShellDocumentFailure): boolean {
+    if (reason === 'page') {
+      if (this.pageRemounted) { return false; }
+      this.pageRemounted = true; return true;
+    }
+    if (this.rendererRemounted) { return false; }
+    this.rendererRemounted = true; return true;
+  }
+  resetRecovery(): void { this.pageRemounted = false; this.rendererRemounted = false; }
   fail(generation: number, message: string): void {
     if (!this.pending || generation !== this.generation) { return; }
     this.pending = false; this.clearTimer(); this.failed(message);

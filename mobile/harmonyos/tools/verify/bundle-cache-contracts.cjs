@@ -110,6 +110,33 @@ test('a completion marker does not hide an evicted bundle asset', async (t) => {
   assert.equal(fs.readFileSync(path.join(restored, 'index.html'), 'utf8'), 'complete bundle')
 })
 
+test('retry replaces an unusable generation without changing another cached generation or open file', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-bundle-cache-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const loader = fetcher(root, 'normal bundle')
+  const offered = manifest('normal bundle')
+  const directory = await loader.ensureBundle(offered)
+  const asset = path.join(directory, 'index.html')
+  const other = manifest('cached fallback')
+  const otherDirectory = await fetcher(root, 'cached fallback').ensureBundle(other)
+  fs.writeFileSync(asset, 'faulty bundle')
+  const openAsset = fs.openSync(asset, 'r')
+  try {
+    loader.constructor.invalidateCompletedBundle({ cacheDir: root }, offered)
+    assert.equal(loader.completedDirectory(offered), null)
+    await loader.ensureBundle(offered)
+    assert.equal(fs.readFileSync(asset, 'utf8'), 'normal bundle')
+    assert.equal(fs.readFileSync(openAsset, 'utf8'), 'faulty bundle')
+    assert.equal(loader.completedDirectory(other), otherDirectory)
+    assert.equal(
+      fs.readFileSync(path.join(otherDirectory, 'index.html'), 'utf8'),
+      'cached fallback'
+    )
+  } finally {
+    fs.closeSync(openAsset)
+  }
+})
+
 test('cold offline startup can reopen only the verified bundle for this pairing', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-bundle-cache-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))

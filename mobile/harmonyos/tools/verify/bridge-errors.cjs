@@ -63,6 +63,25 @@ test('only a live page that negotiated app inactivity receives the save signal',
   assert.equal(frames.at(-1).type, 'init')
 })
 
+test('a ready document can report one fault without a desktop manifest grant', () => {
+  const { bridge, frames } = createBridge(createRpcPeer(), null)
+  const faults = []
+  bridge.setFaultSink((message) => faults.push(message))
+  const fault = {
+    type: 'notify',
+    name: 'fault',
+    error: { category: 'page', message: 'fixture failure', isRpcDeliveryUnknown: false }
+  }
+  post(bridge, fault)
+  assert.deepEqual(faults, [])
+  post(bridge, { type: 'ready' })
+  assert.ok(frames.find((frame) => frame.type === 'init').grants.native.includes('fault'))
+  post(bridge, fault)
+  post(bridge, fault)
+  assert.equal(faults.length, 1)
+  bridge.dispose()
+})
+
 test('an oversized document is refused with the native media size reason and a smaller retry works', async () => {
   let size = 18 * 1024 * 1024 + 1
   const { NativeDevice, NativeMediaTooLargeError } = loadArkts(

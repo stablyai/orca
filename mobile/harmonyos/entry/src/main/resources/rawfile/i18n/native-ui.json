@@ -8064,5 +8064,31 @@
     "tr": "Sürüm {{version}}",
     "zh-Hant": "版本 {{version}}",
     "zh": "版本 {{version}}"
+  },
+  "无法打开已下载的应用。": {
+    "en": "The downloaded app could not be opened.",
+    "zh": "无法打开已下载的应用。",
+    "zh-Hant": "無法開啟已下載的應用程式。",
+    "ko": "다운로드한 앱을 열지 못했습니다.",
+    "ja": "ダウンロードしたアプリを開けませんでした。",
+    "es": "No se pudo abrir la aplicación descargada.",
+    "fr": "Impossible d'ouvrir l'application téléchargée.",
+    "pt": "Não foi possível abrir o app baixado.",
+    "ru": "Не удалось открыть скачанное приложение.",
+    "tr": "İndirilen uygulama açılamadı.",
+    "de": "Die heruntergeladene App konnte nicht geöffnet werden."
+  },
+  "工作区已停止响应。": {
+    "en": "The workspace stopped responding.",
+    "zh": "工作区已停止响应。",
+    "zh-Hant": "工作區已停止回應。",
+    "ko": "워크스페이스가 응답하지 않습니다.",
+    "ja": "ワークスペースが応答しなくなりました。",
+    "es": "El espacio de trabajo dejó de responder.",
+    "fr": "L'espace de travail ne répond plus.",
+    "pt": "O espaço de trabalho parou de responder.",
+    "ru": "Рабочее пространство перестало отвечать.",
+    "tr": "Çalışma alanı yanıt vermeyi durdurdu.",
+    "de": "Der Arbeitsbereich reagiert nicht mehr."
   }
 }

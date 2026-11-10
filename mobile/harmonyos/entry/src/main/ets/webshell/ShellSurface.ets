@@ -14,9 +14,9 @@ import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import {
   BundleCompatibilityError, BundleManifest, BundleRemedy, CachedWebBundle, DesktopBundleStatus, WebBundleFetcher
 } from '../transport/WebBundleFetcher';
-import { ShellStartup } from './ShellStartup';
+import { ShellDocumentFailure, ShellStartup } from './ShellStartup';
 import { ShellDocument, ShellDocumentMount } from './ShellDocument';
-import { claimHomeDocument } from './HomeShellPrewarm';
+import { claimHomeDocument, invalidateHomePrewarm } from './HomeShellPrewarm';
 import { BridgeHost, BridgeNativePage } from './BridgeHost';
 import { HostMeta } from '../storage/HostStore';
 import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute, shellRouterParams } from '../navigation/ShellRoute';
@@ -92,7 +92,11 @@ export struct ShellSurface {
   @State directionPadAvailable: boolean = false;
   @State pdfPreview: PdfPreview | null = null;
   @State clipboardPrompt: ClipboardPastePrompt | null = null;
-  private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
+  private startup: ShellStartup = new ShellStartup((message: string): void => {
+    let document = this.document;
+    if (document) { this.onDocumentFailure(document, 'page'); }
+    else { this.failStartup(message); }
+  });
   private startupGeneration: number = 0;
   private routePathname: string = '';
   private routeParams: Record<string, string> = {};
@@ -116,6 +120,7 @@ export struct ShellSurface {
   private cacheOnly: boolean = false;
   private attachingClient: SpikeRpcClient | null = null;
   private activationFallback: BundleActivationFallback | null = null;
+  private failedDocumentManifest: BundleManifest | null = null;
   private foregroundListener: () => void = (): void => {
     this.foreground = true; this.publishWindowLayout(); this.updateViewing();
     this.flushDrawerRoute();
@@ -292,10 +297,13 @@ export struct ShellSurface {
 
   private reconcileDocumentLayout(): void {
     let document = this.document;
-    let connection = this.desktop?.connection;
-    let meta = connection?.getPairedMeta();
+    let meta = this.desktop?.connection.getPairedMeta();
     if (!document || !meta || this.disposed || !this.pageVisible || !this.foreground || this.navigation.isPending()
       || this.keyboardTop >= 0 || !this.bridge?.layoutChangesRouteView(this.isWideSurface())) { return; }
+    this.remountDocument(document, meta);
+  }
+
+  private remountDocument(document: ShellDocument, meta: HostMeta): void {
     let client = this.client;
     let cacheOnly = this.cacheOnly;
     let fallback = this.activationFallback;
@@ -306,7 +314,7 @@ export struct ShellSurface {
     this.painted = false; this.startupGeneration = this.startup.begin();
     try {
       this.mountBundle(client, meta, document.manifest, document.baseDir, generation);
-      let ready = client ? null : connection?.getClient();
+      let ready = client ? null : this.desktop?.connection.getClient();
       if (ready && this.document) { this.reattachDocument(ready, meta, this.document).catch(() => {}); }
     } catch (e) { this.handleStartupFailure(e as Error); }
   }
@@ -384,9 +392,21 @@ export struct ShellSurface {
     this.nativeDevice?.setDesktopClient(null);
     this.bridge.suspendTransport(attempt, pendingPath, reachability);
   }
-  private failStartup(message: string): void {
+  private onDocumentFailure(document: ShellDocument, reason: ShellDocumentFailure): void {
+    if (this.disposed || this.document !== document) { return; }
+    let meta = this.desktop?.connection.getPairedMeta();
+    if ((!this.activationFallback || this.painted) && meta && this.startup.allowRemount(reason)) {
+      this.remountDocument(document, meta);
+      return;
+    }
+    this.failStartup(reason === 'page' ? '无法打开已下载的应用。' : '工作区已停止响应。',
+      reason === 'page' ? document.manifest : null);
+  }
+
+  private failStartup(message: string, failedManifest: BundleManifest | null = null): void {
     if (this.disposed) { return; }
     if (!this.painted && this.restoreAfterFailedActivation()) { return; }
+    if (failedManifest) { this.failedDocumentManifest = failedManifest; }
     this.startup.cancel(); this.generation++; this.releaseBridge();
     this.painted = false;
     this.failureMessage = message;
@@ -423,7 +443,12 @@ export struct ShellSurface {
   }
 
   private handleStartupFailure(error: Object): void {
-    if (!(error instanceof BundleCompatibilityError)) { this.failStartup('会话加载未完成，请重试'); return; }
+    if (!(error instanceof BundleCompatibilityError)) {
+      let document = this.document;
+      if (document) { this.onDocumentFailure(document, 'page'); }
+      else { this.failStartup('会话加载未完成，请重试'); }
+      return;
+    }
     this.startup.cancel(); this.generation++; this.releaseBridge();
     this.painted = false; this.bundleRemedy = error.remedy;
     if (!error.message.startsWith('page-route-')) { WebBundleFetcher.forgetPairedBundle(getContext(this), this.hostId); }
@@ -440,6 +465,7 @@ export struct ShellSurface {
     if (this.startup.complete(this.startupGeneration)) {
       this.painted = true;
       this.activationFallback = null;
+      this.failedDocumentManifest = null;
       if (this.client) { this.rememberBundle(meta, document); this.publishPhase('已连接', 'ready'); }
       this.recordResume(this.bridge?.getRoute() ?? this.routePathname, this.bridge?.getRouteParams() ?? this.routeParams);
       this.publishPageRegions();
@@ -488,6 +514,15 @@ export struct ShellSurface {
   }
 
   private retryStartup(): void {
+    let failedManifest = this.failedDocumentManifest;
+    if (failedManifest) {
+      try { WebBundleFetcher.invalidateCompletedBundle(getContext(this), failedManifest); }
+      catch (e) { this.failStartup('无法打开已下载的应用。'); return; }
+      invalidateHomePrewarm(this.hostId);
+      this.failedDocumentManifest = null;
+    }
+    this.startup.resetRecovery();
+    this.triedCachedBundle = false;
     let connection = this.desktop?.connection;
     if (!connection) { this.boot(); return; }
     let client = connection.getClient();
@@ -716,7 +751,7 @@ export struct ShellSurface {
         if (this.bridge === bridge) { this.openOverlayRoute(pathname, params); }
       });
     }
-    bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
+    bridge.setFaultSink((_message: string): void => this.onDocumentFailure(document, 'page'));
     this.bridge = bridge;
     this.requireRoute(bridge.routeBlock(entry));
     let open = target && bridge.ownsHostArea(root) && !bridge.routeBlock(target.pathname)
@@ -730,7 +765,7 @@ export struct ShellSurface {
     document.onLoaded = (): void => {
       if (this.document === document && !this.painted) { this.publishPhase('页面已加载，正在初始化…', 'opening'); }
     };
-    document.onFailure = (message: string): void => { if (this.document === document) { this.failStartup(message); } };
+    document.onFailure = (reason: ShellDocumentFailure): void => this.onDocumentFailure(document, reason);
     this.publishPhase('正在打开会话…', 'opening');
     document.bind(bridge, this.asDrawer);
     document.prepare(this.getUIContext());

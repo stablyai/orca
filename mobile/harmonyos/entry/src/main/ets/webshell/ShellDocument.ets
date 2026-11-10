@@ -3,6 +3,7 @@ import { webview } from '@kit.ArkWeb';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { BundleManifest, isSafeBundlePath, WebBundleFetcher } from '../transport/WebBundleFetcher';
 import { BridgeHost } from './BridgeHost';
+import { ShellDocumentFailure } from './ShellStartup';
 import { SHELL_PAGE_CHANNEL_SCRIPT } from './ShellPageChannelScript';
 
 const SHELL_ORIGIN = 'https://appassets.orca-shell.local';
@@ -74,7 +75,7 @@ export class ShellDocument {
   private disposed: boolean = false;
   onReady: () => void = (): void => {};
   onLoaded: () => void = (): void => {};
-  onFailure: (message: string) => void = (_message: string): void => {};
+  onFailure: (reason: ShellDocumentFailure) => void = (_reason: ShellDocumentFailure): void => {};
   allowExternal: () => boolean = (): boolean => false;
 
   constructor(manifest: BundleManifest, baseDir: string, parked: boolean) {
@@ -171,10 +172,10 @@ function renderShellWeb(document: ShellDocument) {
     .onPageEnd((event): void => { if (event.url === document.source) { document.onLoaded(); } })
     .onErrorReceive((event): void => {
       if (event.request.isMainFrame() && event.request.getRequestUrl() === document.source) {
-        document.onFailure('会话页面加载失败，请重试');
+        document.onFailure('page');
       }
     })
-    .onRenderExited((): void => document.onFailure('会话页面进程已退出，请重试'))
+    .onRenderExited((): void => document.onFailure('renderer'))
     .onInterceptRequest((event) => { return document.intercept(event.request.getRequestUrl()); })
     .width('100%').height('100%')
 }

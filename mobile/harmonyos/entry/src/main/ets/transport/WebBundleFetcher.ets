@@ -366,11 +366,18 @@ export class WebBundleFetcher {
     } catch (e) {
       // HarmonyOS mkdirSync throws File exists even with recursion — ignore.
     }
-    let file = fs.openSync(target, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+    let temp = `${baseDir}-asset.tmp`;
     try {
-      if (fs.writeSync(file.fd, bytes.buffer) !== bytes.byteLength) { throw new Error('Incomplete bundle asset write'); }
+      let file = fs.openSync(temp, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+      try {
+        if (fs.writeSync(file.fd, bytes.buffer) !== bytes.byteLength) { throw new Error('Incomplete bundle asset write'); }
+      } finally { fs.closeSync(file); }
+      // Other documents can still hold a descriptor for the original asset during repair.
+      fs.renameSync(temp, target);
+    } catch (e) {
+      try { fs.unlinkSync(temp); } catch (ignored) {}
+      throw e as Error;
     }
-    finally { fs.closeSync(file); }
   }
 
   private static isComplete(manifest: BundleManifest, baseDir: string, fingerprint: string): boolean {
@@ -425,6 +432,16 @@ export class WebBundleFetcher {
 
   static forgetPairedBundle(context: common.Context, hostId: string): void {
     try { fs.unlinkSync(pairedBundlePath(context, hostId)); } catch (e) {}
+  }
+
+  static invalidateCompletedBundle(context: common.Context, manifest: BundleManifest): void {
+    validateManifest(manifest);
+    let fingerprint = bundleFingerprint(manifest);
+    let directory = bundleDirectory(context, manifest, fingerprint);
+    try { fs.unlinkSync(`${directory}/.complete`); }
+    catch (e) {
+      if (WebBundleFetcher.isComplete(manifest, directory, fingerprint)) { throw e as Error; }
+    }
   }
 
   completedDirectory(manifest: BundleManifest): string | null {
