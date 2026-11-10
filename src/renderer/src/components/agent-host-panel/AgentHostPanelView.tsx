@@ -40,6 +40,8 @@ export type AgentHostPanelViewProps = {
   /** Section 3's body where it isn't one line (recipe VM warning). */
   environment?: React.ReactNode
   onFooterLink: (link: AgentHostFooterLink) => void
+  /** Deep link to one agent's row (S3 "Review", S4 Details): scrolled to and its action focused. */
+  focusAgent?: 'claude' | 'codex'
 }
 
 /** The sheet's contents; the caller owns the Sheet (open state) so fixtures can render it open. */
@@ -51,7 +53,8 @@ export function AgentHostPanelView({
   cloudSections,
   keys,
   environment,
-  onFooterLink
+  onFooterLink,
+  focusAgent
 }: AgentHostPanelViewProps): React.JSX.Element {
   const t = useTranslate()
   const titleId = React.useId()
@@ -66,7 +69,14 @@ export function AgentHostPanelView({
       // Start on the labelled title, never on a control (a disabled one would pop its tooltip).
       onOpenAutoFocus={(event) => {
         event.preventDefault()
-        document.getElementById(headerId)?.focus()
+        const row = focusAgent
+          ? event.currentTarget instanceof HTMLElement
+            ? event.currentTarget.querySelector<HTMLElement>(`[data-agent="${focusAgent}"]`)
+            : null
+          : null
+        row?.scrollIntoView({ block: 'nearest' })
+        const action = row?.querySelector<HTMLElement>('button')
+        ;(action ?? document.getElementById(headerId))?.focus()
       }}
     >
       {/* The labelled header takes first focus; it has no ring because no control is focused. */}

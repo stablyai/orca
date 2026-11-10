@@ -43,6 +43,7 @@ export function CloudHostPanel({
       agents={body.agents}
       cloudSections={body.cloudSections}
       onFooterLink={openAgentHostSettings}
+      focusAgent={focus === 'claude' || focus === 'codex' ? focus : undefined}
     />
   )
 }
@@ -50,7 +51,13 @@ export function CloudHostPanel({
 const NO_ENVIRONMENT = '\u0000'
 
 /** Every other kind: the host's own sign-ins, this computer's keys that apply, one env line. */
-export function HostPanel({ host }: { host: ResolvedAgentHost }): React.JSX.Element {
+export function HostPanel({
+  host,
+  focus
+}: {
+  host: ResolvedAgentHost
+  focus?: AgentHostPanelFocus
+}): React.JSX.Element {
   const t = useTranslate()
   const [generation, setGeneration] = useState(0)
   const cached = useSyncExternalStore(subscribeHostAgentSignInReports, () =>
@@ -82,6 +89,7 @@ export function HostPanel({ host }: { host: ResolvedAgentHost }): React.JSX.Elem
       keys={body.keys}
       environment={body.environment}
       onFooterLink={openAgentHostSettings}
+      focusAgent={focus === 'claude' || focus === 'codex' ? focus : undefined}
     />
   )
 }
@@ -94,7 +102,7 @@ export function AgentHostPanel(): React.JSX.Element {
       {host?.kind === 'cloud' ? (
         <CloudHostPanel key={host.hostId} host={host} focus={request?.focus} />
       ) : host ? (
-        <HostPanel key={host.hostId} host={host} />
+        <HostPanel key={host.hostId} host={host} focus={request?.focus} />
       ) : null}
     </Sheet>
   )
