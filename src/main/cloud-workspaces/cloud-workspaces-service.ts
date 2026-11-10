@@ -18,6 +18,7 @@ import {
   type CloudWorkspacesClient
 } from './cloud-workspaces-client'
 import { generateGrantRecipientKey, nodeSealedGrantPrimitives } from './sealed-grant-node'
+import { createReadSnapshotReader, type ReaderKeyAccess } from './cloud-read-snapshot-reader'
 
 const PRESENCE_BEAT_MS = 20_000
 /** Renew a teammate-opened workspace's lease well before the control plane's 30 min lease lapses. */
@@ -52,6 +53,8 @@ export function createCloudWorkspacesService(deps: {
   config: HostedSandboxConfig
   clientId: string
   fetch?: typeof fetch
+  /** This profile's reader key (sleeping-workspace snapshots); absent: reading them is off. */
+  readerKey?: ReaderKeyAccess
 }) {
   const client: CloudWorkspacesClient = createCloudWorkspacesClient({
     baseUrl: deps.config.controlPlaneUrl,
@@ -69,6 +72,11 @@ export function createCloudWorkspacesService(deps: {
   let heartbeat: ReturnType<typeof setInterval> | null = null
   let leaseSandboxId: string | null = null
   let leaseRenewedAt = 0
+  const reader = deps.readerKey
+    ? createReadSnapshotReader({ client, readerKey: deps.readerKey })
+    : null
+  // Register the key up front: a workspace seals its snapshot to the keys known when it sleeps.
+  void reader?.register()
 
   function localWorkspaces(): LocalCloudWorkspace[] {
     const out: LocalCloudWorkspace[] = []
@@ -126,7 +134,23 @@ export function createCloudWorkspacesService(deps: {
 
   return {
     available: true as const,
-    list: (query: CloudWorkspaceListQuery) => wrap(() => client.list(query)),
+    list: (query: CloudWorkspaceListQuery) =>
+      wrap(async () => {
+        const workspaces = await client.list(query)
+        // Cheap when already registered; catches a sign-in or account switch since the last list.
+        void reader?.register()
+        return workspaces
+      }),
+    /** Sign-out: revoke this device's reader key server-side (callers bound the wait). */
+    revokeReaderKey: (timeoutMs: number) => reader?.revoke(timeoutMs) ?? Promise.resolve(),
+    /** A sleeping workspace's sealed snapshot, opened on this device; never wakes it. */
+    readSnapshot: (id: string) =>
+      wrap(async () => {
+        if (!reader) {
+          throw new CloudWorkspacesError(0, 'not_configured')
+        }
+        return reader.read(id)
+      }),
     get: (id: string) => wrap(() => client.get(id)),
     patch: (id: string, patch: CloudWorkspacePatch) =>
       wrap(async () => (await client.patch(id, patch)).workspace),

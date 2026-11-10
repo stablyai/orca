@@ -41,8 +41,12 @@ export function entry(
     provisioningLog: log,
     provisioningLogStamps: stampsFor(log === '' ? 0 : log.split('\n').length),
     phaseLog: [{ phase: 'provisioning-vm', at: T0 }],
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only name and ephemeralVmRecipe from the request.
-    request: { name: 'fix-login', ephemeralVmRecipe: recipe } as PendingWorktreeCreation['request'],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only name, note and ephemeralVmRecipe from the request.
+    request: {
+      name: 'fix-login',
+      note: 'Fix the login redirect',
+      ephemeralVmRecipe: recipe
+    } as PendingWorktreeCreation['request'],
     ...patch
   }
 }
@@ -64,6 +68,7 @@ export function sheet(
         onCancel={() => {}}
         onRetry={() => {}}
         onDismiss={() => {}}
+        onReturnToComposer={() => {}}
         onEditRecipe={() => {}}
         agentSignInRow={agentSignInRow}
         stepTimings={FIXTURE_STEP_TIMINGS}

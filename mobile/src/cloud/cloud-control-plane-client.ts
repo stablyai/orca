@@ -42,6 +42,8 @@ export type CloudWorkspace = {
   /** Awake time so far, from the team registry; the plan meters hours, not per-workspace dollars. */
   sandboxMs: number | null
   createdByUserId: string | null
+  /** When the last sleeping read snapshot was stored (ms); null when none or unknown. */
+  readSnapshotAt: number | null
 }
 const SANDBOX_STATUS: Record<string, CloudWorkspaceStatus> = {
   creating: 'creating',
@@ -93,7 +95,8 @@ function fromRegistry(row: TeamWorkspace): CloudWorkspace {
     createdAt: row.createdAt,
     lastActivityAt: row.lastActivityAt,
     sandboxMs: row.cost.computeMs,
-    createdByUserId: row.createdBy
+    createdByUserId: row.createdBy,
+    readSnapshotAt: row.readSnapshotAt ?? null
   }
 }
 
@@ -108,7 +111,8 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
     createdAt: row.createdAt,
     lastActivityAt: null,
     sandboxMs: null,
-    createdByUserId: null
+    createdByUserId: null,
+    readSnapshotAt: null
   }
 }
 // Lists archived rows as `archived` rather than folding them into `suspended` (W2 lifecycle).

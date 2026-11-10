@@ -9,8 +9,8 @@ import {
   type SealedGrantPrimitives
 } from '../../../src/shared/cloud-workspaces/sealed-grant'
 
-// Hermes has no WebCrypto, so the shared opener runs on pure-JS primitives here.
-const PRIMITIVES: SealedGrantPrimitives = {
+// Hermes has no WebCrypto, so the shared openers (grants, read snapshots) run on pure-JS primitives.
+export const CLOUD_SEALED_PRIMITIVES: SealedGrantPrimitives = {
   x25519: (secretKey, publicKey) =>
     nacl.scalarMult(new Uint8Array(secretKey), new Uint8Array(publicKey)),
   x25519PublicKey: (secretKey) => nacl.scalarMult.base(new Uint8Array(secretKey)),
@@ -29,5 +29,5 @@ export function openCloudSealedGrant(
   grantId: string,
   recipientSecretKey: Uint8Array
 ): Promise<OpenedGrant> {
-  return openSealedGrant(sealed, grantId, recipientSecretKey, PRIMITIVES, 'mobile')
+  return openSealedGrant(sealed, grantId, recipientSecretKey, CLOUD_SEALED_PRIMITIVES, 'mobile')
 }

@@ -205,6 +205,12 @@
         }
       },
       "billing": {
+        "checkout": {
+          "lineItemMonthly_one": "{{seats}} × {{price}} per seat per month",
+          "lineItemMonthly_other": "{{seats}} × {{price}} per seat per month",
+          "lineItemYearly_one": "{{seats}} × {{price}} per seat, billed yearly",
+          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
+        },
         "plans": {
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member"
@@ -2060,6 +2066,12 @@
         }
       }
     },
+    "orcaCloud": {
+      "read": {
+        "showMore_one": "Show {{count}} earlier message",
+        "showMore_other": "Show {{count}} earlier messages"
+      }
+    },
     "orchestrationCrew": {
       "needsYou_one": "{{count}} needs you",
       "needsYou_other": "{{count}} need you",
@@ -2124,6 +2136,12 @@
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
           "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
         }
+      }
+    },
+    "confirmation": {
+      "itemList": {
+        "showMore_one": "Show {{count}} more",
+        "showMore_other": "Show {{count}} more"
       }
     }
   },
@@ -2244,6 +2262,11 @@
     }
   },
   "orcaCloudWorkspace": {
+    "archived": {
+      "files": "{{count}} files",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {

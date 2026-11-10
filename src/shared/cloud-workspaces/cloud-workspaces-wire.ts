@@ -50,7 +50,10 @@ export const CloudWorkspaceSchema = z.object({
   presence: z.array(CloudWorkspacePresenceSchema),
   // Display names (each member's token `name` claim) for the ids above. Labels only, and the org
   // roster wins where it has an entry. Older control planes omit it.
-  memberNames: z.record(z.string(), z.string().max(80)).optional().catch(undefined)
+  memberNames: z.record(z.string(), z.string().max(80)).optional().catch(undefined),
+  // When the last sleeping read snapshot was stored (ms), present only when the caller can open the
+  // workspace; drives "As of" in lists without fetching the blob. Older control planes omit it.
+  readSnapshotAt: z.number().nullable().optional().catch(undefined)
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
@@ -93,6 +96,34 @@ export const CloudWorkspaceGrantIssuedSchema = z.object({
 export const CloudWorkspaceGrantListSchema = z.object({
   grants: z.array(CloudWorkspaceGrantSchema)
 })
+
+// Reader keys: this device's long-lived X25519 key that sleeping workspaces seal their read snapshot to.
+export const CloudReaderKeySchema = z.object({
+  id: z.string().regex(/^rk_[0-9a-f]{24}$/),
+  deviceKind: z.enum(['desktop', 'mobile']),
+  deviceLabel: z.string(),
+  createdAt: z.number(),
+  lastSeenAt: z.number()
+})
+export type CloudReaderKeyRegistration = z.infer<typeof CloudReaderKeySchema>
+export const CloudReaderKeyResponseSchema = z.object({ readerKey: CloudReaderKeySchema })
+
+/** Mirrors SealedReadSnapshot in read-snapshot.ts (the opener re-checks every length). */
+export const SealedReadSnapshotSchema = z.object({
+  v: z.literal(1),
+  snapshotId: Id,
+  workspaceId: Id,
+  storedAt: z.number(),
+  nonceB64: z.string().max(64),
+  ciphertextB64: z.string().max(16 * 1024 * 1024),
+  recipient: z.object({
+    keyId: Id,
+    ephemeralPublicKeyB64: z.string().max(64),
+    nonceB64: z.string().max(64),
+    wrappedKeyB64: z.string().max(128)
+  })
+})
+export const CloudReadSnapshotResponseSchema = z.object({ snapshot: SealedReadSnapshotSchema })
 
 export type CloudWorkspaceListQuery = {
   scope?: 'mine' | 'team' | 'all'

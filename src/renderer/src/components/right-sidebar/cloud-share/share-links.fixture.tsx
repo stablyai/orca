@@ -4,6 +4,7 @@ import type { WorkspacePort } from '../../../../../shared/workspace-ports'
 import { LocalPortRow } from '../local-port-row'
 import { SharedLinksList, type SharedLinksListProps } from './shared-links-list'
 import { SharePortDialog } from './share-port-dialog'
+import { SharePortButton, SharePortMenuItem } from './use-share-port-action'
 
 const NOW = Date.UTC(2026, 10, 9, 12, 0, 0)
 const HOUR = 3_600_000
@@ -175,6 +176,58 @@ export const besidePorts = defineFixture({
       />
     </div>
   )
+})
+
+const shareAction = { available: true, openShareDialog: noop }
+// Shows the focus-ring as keyboard focus would (Chromium honors focusVisible).
+const FOCUS_VISIBLE: FocusOptions & { focusVisible: boolean } = { focusVisible: true }
+
+/** A cloud port row as keyboard users get it: Open in browser, Share…, Copy, Stop, More actions. */
+function CloudPortRow({ tall = false }: { tall?: boolean }) {
+  return (
+    <div className={`bg-background px-3 pt-2 pb-3 text-foreground ${tall ? 'h-[260px]' : ''}`}>
+      <LocalPortRow
+        port={devServer}
+        onStop={noop}
+        onShowDetails={noop}
+        onOpenInBrowser={noop}
+        shareAction={<SharePortButton port={devServer.port} action={shareAction} />}
+        forwardMenuItems={<SharePortMenuItem port={devServer.port} action={shareAction} />}
+      />
+    </div>
+  )
+}
+
+/** Tabbing onto the row: the focus-ring outline shows and the row buttons appear. */
+export const portRowFocused = defineFixture({
+  width: 300,
+  render: () => <CloudPortRow />,
+  interact: (frame) => {
+    frame.querySelector<HTMLElement>('[role="group"]')?.focus(FOCUS_VISIBLE)
+  }
+})
+
+/** Share… reached from the keyboard: the row's Share button focused. */
+export const portRowShareFocused = defineFixture({
+  width: 300,
+  render: () => <CloudPortRow />,
+  interact: (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="Share port 3000…"]')
+      ?.focus(FOCUS_VISIBLE)
+  }
+})
+
+/** "More actions for port 3000" opens the same menu as right-click, Share… included. */
+export const portRowMoreActions = defineFixture({
+  width: 300,
+  render: () => <CloudPortRow tall />,
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="More actions for port 3000"]')
+      ?.click()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
 })
 
 function Dialog({

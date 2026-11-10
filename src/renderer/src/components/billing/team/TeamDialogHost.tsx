@@ -14,6 +14,7 @@ import { createTeamFailureCopy, mutationFailureCopy } from './team-copy'
 import { clearTeamPageArrival, closeTeamPage, useTeamPageState } from './team-page-store'
 import { useOrgRoster } from './use-org-roster'
 import { useTeamActions } from './use-team-actions'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
 function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState>['arrival'] }) {
   const t = useTranslate()
@@ -199,7 +200,11 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
       onManageBilling={openPortal}
       onCreateWorkspace={() => {
         closeTeamPage()
-        openModal('new-workspace-composer', { telemetrySource: 'unknown' })
+        // The plan is for Orca Cloud, so the composer opens on it rather than this computer.
+        openModal('new-workspace-composer', {
+          initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID,
+          telemetrySource: 'unknown'
+        })
       }}
       onDismissArrival={clearTeamPageArrival}
       onContactSales={(url) => void window.api.shell.openUrl(url)}

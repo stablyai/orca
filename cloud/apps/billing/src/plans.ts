@@ -64,8 +64,8 @@ export type PlanCatalog = { team: TeamPlan; enterprise: EnterpriseOffer }
 export const DEFAULT_PLANS: PlanCatalog = {
   team: {
     label: 'Team',
-    monthlyPriceLabel: '$50/seat/mo',
-    annualPriceLabel: '$480/seat/yr',
+    monthlyPriceLabel: '$50 per seat per month',
+    annualPriceLabel: '$480 per seat, billed yearly',
     monthlyPriceCentsPerSeat: 5000,
     annualPriceCentsPerSeat: 48000,
     includedHoursPerSeat: 60,

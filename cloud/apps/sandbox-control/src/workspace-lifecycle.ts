@@ -233,7 +233,7 @@ export async function restartSandbox(deps: LifecycleDeps, row: SandboxRow): Prom
     throw new LifecycleError('conflict', `sandbox_${current.status}`)
   }
   const suspending = await claim(deps, current, { status: 'suspending' })
-  const stopped = await stopForSuspend(deps, suspending, { drainSeconds: RESTART_DRAIN_SECONDS })
+  const stopped = await stopForSuspend(deps, suspending, { drainSeconds: RESTART_DRAIN_SECONDS, captureRead: false })
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
   return wake(deps, await claim(deps, stopped, { status: 'resuming' }))
 }
@@ -300,7 +300,7 @@ export async function archiveSandbox(
   let stopped = row
   if (row.status === 'running') {
     // Short drain: the desktop's Sleep normally ran first; a long drain would outlive the caller.
-    stopped = await stopForSuspend(deps, await claim(deps, row, { status: 'suspending' }), { drainSeconds: ARCHIVE_DRAIN_SECONDS })
+    stopped = await stopForSuspend(deps, await claim(deps, row, { status: 'suspending' }), { drainSeconds: ARCHIVE_DRAIN_SECONDS, captureRead: false })
     await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
   }
   const ttl = config.archiveTtlMs ?? DEFAULT_ARCHIVE_TTL_MS

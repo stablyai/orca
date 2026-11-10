@@ -13,6 +13,7 @@ import {
   type CloudEnrollment
 } from './cloud-device-identity'
 import { pruneCloudHostsMissingFrom } from './cloud-host-pruning'
+import { ensureCloudReaderKey } from './cloud-read-snapshot'
 import {
   cloudHostRemover,
   forgetRevokedCloudSession,
@@ -75,6 +76,8 @@ export function useCloudWorkspaces(enrollment: CloudEnrollment | null | undefine
       try {
         const startedAt = Date.now()
         const list = await listCloudWorkspaces(plane, signal)
+        // Keeps this phone's reader key registered (at most every 6 h) so the next sleep seals to it.
+        void ensureCloudReaderKey(plane).catch(() => undefined)
         if (list.complete) {
           // A linked workspace the list lacks is checked by id; one the registry says is gone
           // (destroyed, or no longer shared) stops being retried.

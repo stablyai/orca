@@ -6,6 +6,7 @@ import { revokeMemberDeviceSessions } from './device-sessions'
 import { revokeGrantsForMember } from './grants'
 import type { LifecycleDeps } from './lifecycle'
 import { memberChangeTime, recordMemberChange } from './member-changes'
+import { revokeMemberReaderKeys } from './read-snapshots'
 import { disableMemberRoutines } from './routines/runs'
 
 export type MemberRemoval = {
@@ -14,6 +15,7 @@ export type MemberRemoval = {
   grantsRevoked: number
   grantsQueued: number
   routinesDisabled: number
+  readerKeysRevoked: number
 }
 
 export async function removeMember(
@@ -37,6 +39,8 @@ export async function removeMember(
   ])
   // Their phones sign as them; then every workspace device they were granted (phones' included).
   const devicesRevoked = await revokeMemberDeviceSessions(life.db, accountId, userId, now)
+  // No device of theirs can open a sleeping workspace's read snapshot again (wrapped keys deleted).
+  const readerKeysRevoked = await revokeMemberReaderKeys(life.db, accountId, userId, now)
   const grants = await revokeGrantsForMember(life, accountId, userId)
   // Routines run with their creator's secrets: a departed member's stop, and nothing of theirs keeps running.
   const routines = await disableMemberRoutines({ life }, accountId, userId)
@@ -45,7 +49,8 @@ export async function removeMember(
     devicesRevoked,
     grantsRevoked: grants.revoked,
     grantsQueued: grants.queued,
-    routinesDisabled: routines.disabled
+    routinesDisabled: routines.disabled,
+    readerKeysRevoked
   }
   await audit(life.db, { accountId, type: 'system', id: 'auth', userId }, { action: 'member.removed', detail: { ...result, runsCancelled: routines.cancelled } }, now)
   return result

@@ -209,3 +209,44 @@ export const deliveryFailed = defineFixture({
       />
     )
 })
+
+/** Merged with the copy the workspace saved when it went to sleep: PR, line counts, "As of". */
+export const withCloudSnapshot = defineFixture({
+  width: 900,
+  render: () =>
+    frame(
+      <CloudWorkspaceOfflineView
+        snapshot={{
+          ...snapshot,
+          capturedAt: NOW - 6 * MIN,
+          source: 'mixed',
+          pr: {
+            number: 412,
+            title: 'Keep a read-only copy of sleeping workspaces',
+            state: 'open',
+            url: 'https://github.com/acme/web/pull/412',
+            checksStatus: 'success',
+            checksSummary: '12/12 passed'
+          },
+          git: {
+            ...snapshot.git!,
+            at: NOW - 6 * MIN,
+            added: 182,
+            removed: 41,
+            changes: snapshot.git!.changes.map((change, index) => ({
+              ...change,
+              added: [120, 54, 8][index] ?? 0,
+              removed: [0, 37, 4][index] ?? 0
+            }))
+          }
+        }}
+        queued={[]}
+        workspaceName="fix-auth-redirect"
+        now={NOW}
+        onWake={noop}
+        onQueue={yes}
+        onCancel={noop}
+        onEdit={yes}
+      />
+    )
+})
