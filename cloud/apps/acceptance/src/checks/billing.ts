@@ -36,7 +36,7 @@ function d1(dir: string, binding: string, sql: string): any[] {
   return (JSON.parse(out.slice(out.indexOf('['))) as Array<{ results: any[] }>)[0]?.results ?? []
 }
 const d1Billing = (sql: string) => d1(BILLING_DIR, 'BILLING_DB', sql)
-const d1Control = (sql: string) => d1(new URL('../../../sandbox-control/', import.meta.url).pathname, 'SANDBOX_DB', sql)
+export const d1Control = (sql: string) => d1(new URL('../../../sandbox-control/', import.meta.url).pathname, 'SANDBOX_DB', sql)
 
 async function advanceClock(clock: string, to: number): Promise<void> {
   await stripe('POST', `/v1/test_helpers/test_clocks/${clock}/advance`, { frozen_time: Math.floor(to) })

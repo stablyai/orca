@@ -16,6 +16,7 @@ import {
 } from './worktree-creation-clock'
 import { VmBuildSheet } from './VmBuildSheet'
 import { VmDeleteConfirmDialog } from './VmDeleteConfirmDialog'
+import { composerDataFromRefusedCreate } from './vm-build-composer-return'
 
 /** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
 export default function WorktreeCreationPanel({
@@ -91,6 +92,15 @@ export default function WorktreeCreationPanel({
             onCancel={dismiss}
             onRetry={() => retryBackgroundWorktreeCreation(creationId)}
             onDismiss={leave}
+            onReturnToComposer={({ local }) => {
+              const data = composerDataFromRefusedCreate(entry, { local })
+              dismiss()
+              const store = useAppStore.getState()
+              // Never replace a dialog the user opened meanwhile.
+              if (store.activeModal === 'none') {
+                store.openModal('new-workspace-composer', data)
+              }
+            }}
             onEditRecipe={() => {
               const state = useAppStore.getState()
               state.openSettingsTarget({

@@ -142,7 +142,16 @@ function ProjectAndHostPreview({
   )
 }
 
-export const closed = defineFixture({ width: 560, render: () => <ProjectAndHostPreview /> })
+export const closed = defineFixture({
+  width: 560,
+  // The browser preload answers agent keys and Cloud secrets with stubs the Orca Cloud agent hint
+  // can't read; without them the hint shows nothing, as it does before they load.
+  setup: () => {
+    window.api.agentApiKeys = undefined
+    window.api.cloudSecrets = undefined
+  },
+  render: () => <ProjectAndHostPreview />
+})
 export const narrow = defineFixture({ width: 360, render: () => <ProjectAndHostPreview /> })
 export const folderOnly = defineFixture({
   width: 560,
@@ -186,7 +195,11 @@ export const hostMenuOrcaCloud = defineFixture({
 })
 export const hostMenuOrcaCloudLocked = defineFixture({
   ...hostMenu,
-  render: () => <ProjectAndHostPreview orcaCloud={{ state: 'no-plan', lapsed: false }} />
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: true }}
+    />
+  )
 })
 export const orcaCloudSelected = defineFixture({
   ...closed,
@@ -196,7 +209,10 @@ export const orcaCloudSelected = defineFixture({
 export const orcaCloudSelectedNoPlan = defineFixture({
   ...closed,
   render: () => (
-    <ProjectAndHostPreview orcaCloud={{ state: 'no-plan', lapsed: false }} cloudSelected />
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: true }}
+      cloudSelected
+    />
   )
 })
 export const orcaCloudSelectedOutOfHoursMember = defineFixture({
@@ -213,6 +229,43 @@ export const orcaCloudSelectedPaymentAdmin = defineFixture({
   render: () => (
     <ProjectAndHostPreview
       orcaCloud={{ state: 'payment-issue', canManageBilling: true }}
+      cloudSelected
+    />
+  )
+})
+// DS-15: a member can't choose a plan or raise the cap, so the hint says who can and offers no fix.
+export const orcaCloudSelectedNoPlanMember = defineFixture({
+  ...closed,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
+      cloudSelected
+    />
+  )
+})
+export const orcaCloudSelectedCapMember = defineFixture({
+  ...closed,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'out-of-hours', cause: 'cap', canManageBilling: false }}
+      cloudSelected
+    />
+  )
+})
+export const hostMenuOrcaCloudNoPlanMember = defineFixture({
+  ...hostMenu,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
+    />
+  )
+})
+// DS-16: back from a paid Checkout, the composer is open again with Orca Cloud picked and its hours.
+export const orcaCloudAfterCheckout = defineFixture({
+  ...closed,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'entitled', remainingSeconds: 300 * 3600 }}
       cloudSelected
     />
   )

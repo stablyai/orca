@@ -13,12 +13,29 @@ import {
 
 // Orca Cloud refusals and failures, one card each.
 
+function stubBillingRole(canManageBilling: boolean): void {
+  window.api.orcaProfiles.billingStatus = () =>
+    Promise.resolve({
+      status: 'ok',
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only canManageBilling.
+      entitlement: { canManageBilling } as never
+    })
+}
+
+// An owner unless stated: the card's billing fix depends on the role billing reports.
 function cloudFailure(errorCode: string | undefined, error: string, log = CLOUD_LOG) {
-  return frame(
+  const fixture = frame(
     entry({ status: 'error', errorCode, provisioningLog: log, errorAt: T0 + 2_000 }, CLOUD_RECIPE),
     error,
     T0 + 2_000
   )
+  return defineFixture({
+    ...fixture,
+    setup: () => {
+      seedFixtureRepo()
+      stubBillingRole(true)
+    }
+  })
 }
 
 export const cloudPlanRequired = cloudFailure(
@@ -63,12 +80,7 @@ function asMember(fixture: ReturnType<typeof cloudFailure>) {
     ...fixture,
     setup: () => {
       seedFixtureRepo()
-      window.api.orcaProfiles.billingStatus = () =>
-        Promise.resolve({
-          status: 'ok',
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only canManageBilling.
-          entitlement: { canManageBilling: false } as never
-        })
+      stubBillingRole(false)
     }
   })
 }
@@ -160,3 +172,15 @@ export const cloudPaymentDue = cloudFailure(
 )
 
 export const cloudNetwork = cloudFailure(undefined, 'fetch failed', CLOUD_LOG)
+
+// An owner without a plan gets See plans and Try again; More holds "Create on this computer
+// instead", which every billing card offers.
+export const cloudPlanRequiredMore = defineFixture({
+  ...cloudPlanRequired,
+  interact: async (frameElement) => {
+    Array.from(frameElement.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'More')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})

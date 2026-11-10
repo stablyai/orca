@@ -11,6 +11,13 @@ import {
   createCloudWorkspacesService,
   type CloudWorkspacesService
 } from '../cloud-workspaces/cloud-workspaces-service'
+import {
+  getCloudReaderKeyStore,
+  setCloudReaderKeyRevoker
+} from '../cloud-workspaces/cloud-reader-key-store'
+import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
+import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
@@ -60,8 +67,11 @@ function getService(): Promise<CloudWorkspacesService | null> {
     service = createCloudWorkspacesService({
       userDataPath,
       config,
-      clientId: await clientIdFor(userDataPath)
+      clientId: await clientIdFor(userDataPath),
+      readerKey: profileReaderKey(userDataPath)
     })
+    const started = service
+    setCloudReaderKeyRevoker((timeoutMs) => started.revokeReaderKey(timeoutMs))
     return service
   })()
   servicePromise = starting
@@ -72,6 +82,38 @@ function getService(): Promise<CloudWorkspacesService | null> {
     }
   })
   return starting
+}
+
+/** The active Orca profile's reader key; registrations follow its signed-in user and account. */
+function profileReaderKey(userDataPath: string): ReaderKeyAccess {
+  return {
+    identity: () => {
+      const active = ensureActiveOrcaProfile(userDataPath)
+      const cloud = active.profile.cloud
+      return cloud
+        ? JSON.stringify([active.profile.id, cloud.userId ?? null, cloud.activeOrgId ?? null])
+        : null
+    },
+    load: () =>
+      getCloudReaderKeyStore(userDataPath).load(ensureActiveOrcaProfile(userDataPath).profile.id),
+    peek: () =>
+      getCloudReaderKeyStore(userDataPath).peek(ensureActiveOrcaProfile(userDataPath).profile.id)
+  }
+}
+
+/**
+ * The owner's asleep view merges this in (main process). Null when it cannot be read (no control
+ * plane, keychain, network); the view then keeps showing this computer's own copy.
+ */
+export async function readCloudWorkspaceSnapshot(
+  sandboxId: string
+): Promise<CloudReadSnapshotState | null> {
+  if (!Id.safeParse(sandboxId).success) {
+    return null
+  }
+  const s = await getService().catch(() => null)
+  const result = await s?.readSnapshot(sandboxId)
+  return result?.ok ? result.value : null
 }
 
 /** Stable per-install id for presence rows (one row per device, not per window). */
@@ -186,6 +228,11 @@ export function registerCloudWorkspacesHandlers(): void {
     const parsed = z.object({ id: Id }).safeParse(args)
     const s = await getService()
     return !s ? NOT_CONFIGURED : parsed.success ? s.openGrant(parsed.data.id) : INVALID
+  })
+  handle('cloudWorkspaces:readSnapshot', async (args) => {
+    const parsed = z.object({ id: Id }).safeParse(args)
+    const s = await getService()
+    return !s ? NOT_CONFIGURED : parsed.success ? s.readSnapshot(parsed.data.id) : INVALID
   })
   handle('cloudWorkspaces:listGrants', async (args) => {
     const parsed = z.object({ id: Id }).safeParse(args)

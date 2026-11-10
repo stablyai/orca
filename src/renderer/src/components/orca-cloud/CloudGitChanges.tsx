@@ -17,7 +17,15 @@ export type CloudGitChangesData = {
   behind?: number | null
   /** A `--shortstat` line, if captured. */
   diffStat?: string | null
-  changes: readonly { status: string; path: string }[]
+  /** Line totals when known directly (the sleep snapshot); wins over `diffStat`. */
+  lineTotals?: { added: number; removed: number } | null
+  /** Per-file line counts are optional: only the sleep snapshot has them. */
+  changes: readonly {
+    status: string
+    path: string
+    added?: number | null
+    removed?: number | null
+  }[]
   /** Total uncommitted changes when `changes` was capped. */
   changeCount?: number
   commits: readonly { sha: string; subject: string; at: number | null }[]
@@ -68,8 +76,10 @@ export function CloudGitChanges({
   now: number
 }): React.JSX.Element {
   const t = useTranslate()
-  const stat = parseDiffStat(data.diffStat)
   const totalChanges = Math.max(data.changeCount ?? 0, data.changes.length)
+  const stat = data.lineTotals
+    ? { files: totalChanges, insertions: data.lineTotals.added, deletions: data.lineTotals.removed }
+    : parseDiffStat(data.diffStat)
   return (
     <div
       className="flex flex-col gap-3 rounded-lg border border-border p-3"
@@ -92,7 +102,10 @@ export function CloudGitChanges({
         ) : null}
         {stat ? (
           <span className="tabular-nums text-muted-foreground">
-            {t('orcaCloudWorkspace.archived.files', '{{count}} files', { count: stat.files })}{' '}
+            {t('orcaCloudWorkspace.archived.files', '{{count}} files', {
+              count: stat.files,
+              defaultValue_one: '{{count}} file'
+            })}{' '}
             <span className="text-[var(--git-decoration-added)]">+{stat.insertions}</span>{' '}
             <span className="text-[var(--git-decoration-deleted)]">−{stat.deletions}</span>
           </span>
@@ -112,7 +125,17 @@ export function CloudGitChanges({
                     {CHANGE_LETTER[kind]}
                   </span>
                   <span className="sr-only">{kindLabel(kind, t)}:</span>
-                  <span className="truncate text-foreground">{change.path}</span>
+                  <span className="min-w-0 flex-1 truncate text-foreground">{change.path}</span>
+                  {typeof change.added === 'number' || typeof change.removed === 'number' ? (
+                    <span className="shrink-0 tabular-nums">
+                      <span className="text-[var(--git-decoration-added)]">
+                        +{change.added ?? 0}
+                      </span>{' '}
+                      <span className="text-[var(--git-decoration-deleted)]">
+                        −{change.removed ?? 0}
+                      </span>
+                    </span>
+                  ) : null}
                 </li>
               )
             })}

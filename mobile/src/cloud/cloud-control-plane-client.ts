@@ -27,6 +27,9 @@ export type CloudWorkspaceStatus =
   | 'sleeping'
   | 'archived'
   | 'failed'
+  /** Up but not answering (glossary "Not responding"); a restart usually fixes it. */
+  | 'unresponsive'
+  | 'deleting'
 
 export type CloudWorkspace = {
   /** The sandbox row id: stable across sleep, wake and rollover. */
@@ -42,6 +45,8 @@ export type CloudWorkspace = {
   /** Awake time so far, from the team registry; the plan meters hours, not per-workspace dollars. */
   sandboxMs: number | null
   createdByUserId: string | null
+  /** When the last sleeping read snapshot was stored (ms); null when none or unknown. */
+  readSnapshotAt: number | null
 }
 const SANDBOX_STATUS: Record<string, CloudWorkspaceStatus> = {
   creating: 'creating',
@@ -55,8 +60,8 @@ const SANDBOX_STATUS: Record<string, CloudWorkspaceStatus> = {
   sleeping: 'sleeping',
   archived: 'archived',
   failed: 'failed',
-  unresponsive: 'failed',
-  destroying: 'stopping'
+  unresponsive: 'unresponsive',
+  destroying: 'deleting'
 }
 
 const SandboxViewSchema = z.object({
@@ -93,7 +98,8 @@ function fromRegistry(row: TeamWorkspace): CloudWorkspace {
     createdAt: row.createdAt,
     lastActivityAt: row.lastActivityAt,
     sandboxMs: row.cost.computeMs,
-    createdByUserId: row.createdBy
+    createdByUserId: row.createdBy,
+    readSnapshotAt: row.readSnapshotAt ?? null
   }
 }
 
@@ -108,7 +114,8 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
     createdAt: row.createdAt,
     lastActivityAt: null,
     sandboxMs: null,
-    createdByUserId: null
+    createdByUserId: null,
+    readSnapshotAt: null
   }
 }
 // Lists archived rows as `archived` rather than folding them into `suspended` (W2 lifecycle).
@@ -193,6 +200,20 @@ export async function sleepCloudWorkspace(
     `/v1/sandboxes/${encodeURIComponent(sandboxId)}/suspend`,
     z.unknown(),
     { timeoutMs: 60_000 }
+  )
+}
+
+/** "Not responding": restart the sandbox (files kept). Owner route; a teammate gets not_found. */
+export async function restartCloudWorkspace(
+  plane: CloudControlPlane,
+  sandboxId: string
+): Promise<void> {
+  await request(
+    plane,
+    'POST',
+    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/restart`,
+    z.unknown(),
+    { body: {}, timeoutMs: 120_000 }
   )
 }
 

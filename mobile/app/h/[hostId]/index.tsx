@@ -1,4 +1,5 @@
 import { useLocalSearchParams } from 'expo-router'
+import { CloudHostAsleepGate } from '../../../src/cloud/CloudHostAsleepGate'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
@@ -24,14 +25,17 @@ function HostListScreen() {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
   return (
-    <MobileWebShellScreen
-      // Remount on host change to discard the old session’s grants; `open` updates the document in place.
-      key={hostId}
-      hostId={hostId}
-      route={route}
-      onRouteParamClear={onRouteParamClear}
-      onPageLocation={onPageLocation}
-    />
+    // An asleep cloud workspace's VM is not an offline computer: say so and offer Wake first.
+    <CloudHostAsleepGate hostId={hostId}>
+      <MobileWebShellScreen
+        // Remount on host change to discard the old session’s grants; `open` updates the document in place.
+        key={hostId}
+        hostId={hostId}
+        route={route}
+        onRouteParamClear={onRouteParamClear}
+        onPageLocation={onPageLocation}
+      />
+    </CloudHostAsleepGate>
   )
 }
 

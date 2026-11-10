@@ -1,8 +1,10 @@
 // Copy for control-plane error codes from the team workspace registry.
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
 import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
 import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
 
 /**
  * Whose seat a start counts against. The per-seat running cap counts the workspace owner's seat,
@@ -23,7 +25,8 @@ export function describeError(
     )
   }
   if (error === 'entitlement_denied') {
-    if (reason === 'concurrency_limit') {
+    const denial = classifyEntitlementDenial(reason)
+    if (denial === 'teamLimit') {
       const limit = sandboxLimitFromBilling(getLastBillingStatus())
       return limit
         ? t(
@@ -36,7 +39,7 @@ export function describeError(
             "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again."
           )
     }
-    if (reason === 'member_concurrency_limit') {
+    if (denial === 'memberLimit') {
       return describeSeatLimit(owner, t)
     }
     return t(
@@ -68,10 +71,7 @@ export function describeError(
     )
   }
   if (error === 'unauthorized') {
-    return t(
-      'auto.components.cloudWorkspaces.errorUnauthorized',
-      'Your Orca Cloud session expired. Sign in again.'
-    )
+    return signInAgainMessage(t)
   }
   return t(
     'auto.components.cloudWorkspaces.errorUnknown',
@@ -81,7 +81,8 @@ export function describeError(
 
 /**
  * The same messages for an inline error that already carries the action button (Retry or Sign
- * in), so the body does not repeat "Try again." or "Sign in again.".
+ * in), so the body does not repeat "Try again.". An expired session keeps the one shared
+ * sign-in sentence so every surface says the same thing.
  */
 export function describeInlineError(
   error: string,
@@ -89,10 +90,7 @@ export function describeInlineError(
   t: Translate = translate
 ): string {
   if (error === 'unauthorized') {
-    return t(
-      'auto.components.cloudWorkspaces.errorUnauthorizedInline',
-      'Your Orca Cloud session expired.'
-    )
+    return signInAgainMessage(t)
   }
   if (error === 'timeout' || error === 'unavailable' || error === 'provider_unavailable') {
     return t(

@@ -11,6 +11,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
+  // Preview aliases (wrangler versions upload --preview-alias) must stay reachable for pre-merge VM tests.
+  "preview_urls": true,
   "d1_databases": [
     {
       "binding": "SANDBOX_DB",

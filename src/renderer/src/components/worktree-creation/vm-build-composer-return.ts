@@ -1,0 +1,33 @@
+import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
+import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
+
+type ReturnSource = Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
+
+/** What the user typed for the agent: a prompt queued during the build, else the composer's. */
+export function typedComposerPrompt(entry: ReturnSource): string {
+  return entry.heldChatMessage ?? entry.request.note
+}
+
+/**
+ * The composer as it was submitted, for a create billing refused before anything started: same
+ * project, name, base, agent and prompt. `local` drops the sandbox so it runs on this computer;
+ * otherwise the same Run-on target is kept.
+ */
+export function composerDataFromRefusedCreate(
+  entry: ReturnSource,
+  { local }: { local: boolean }
+): ComposerModalData {
+  const { request } = entry
+  const recipe = request.ephemeralVmRecipe
+  return {
+    initialRepoId: recipe?.sourceRepoId ?? request.repoId,
+    ...(!local && recipe ? { initialEphemeralVmRecipeId: recipe.recipeId } : {}),
+    // A generated name is regenerated; only a name the user typed comes back.
+    ...(request.displayNameKind === 'user' && request.displayName
+      ? { prefilledName: request.displayName }
+      : {}),
+    ...(request.baseBranch ? { initialBaseBranch: request.baseBranch } : {}),
+    recovery: { note: typedComposerPrompt(entry), agent: request.agent },
+    telemetrySource: request.telemetrySource ?? 'unknown'
+  }
+}

@@ -8,6 +8,7 @@ import {
   type CommandResult,
   type ProviderSandboxState,
   type ProviderSession,
+  type ProviderSessionUsage,
   type SandboxProviderApi
 } from './sandbox-provider'
 
@@ -26,7 +27,13 @@ const Session = z.looseObject({
   id: z.string(),
   status: Status,
   startedAt: z.number().optional(),
-  timeout: z.number()
+  timeout: z.number(),
+  // Usage fields (SDK 3.9.1). activeCpuDurationMs only appears once the VM has stopped.
+  vcpus: z.number().optional(),
+  memory: z.number().optional(),
+  duration: z.number().optional(),
+  stoppedAt: z.number().optional(),
+  activeCpuDurationMs: z.number().optional()
 })
 const Sandbox = z.looseObject({
   name: z.string(),
@@ -104,6 +111,15 @@ export function createVercelSandboxApi(
     startedAt: session.startedAt ?? null,
     timeoutMs: session.timeout
   })
+  const toUsage = (session: z.infer<typeof Session>): ProviderSessionUsage => ({
+    sessionId: session.id,
+    status: session.status,
+    activeCpuMs: session.activeCpuDurationMs ?? null,
+    durationMs: session.duration ?? null,
+    vcpus: session.vcpus ?? null,
+    memoryMb: session.memory ?? null,
+    stoppedAt: session.stoppedAt ?? null
+  })
   const toState = (body: z.infer<typeof SandboxAndSession>): ProviderSandboxState => ({
     sandbox: {
       name: body.sandbox.name,
@@ -163,8 +179,22 @@ export function createVercelSandboxApi(
 
     async stopSession(sessionId) {
       const response = await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/stop`)
-      const body = await json(z.looseObject({ snapshot: Snapshot.optional() }), response)
-      return { snapshotId: body.snapshot?.id ?? null }
+      const body = await json(z.looseObject({ snapshot: Snapshot.optional(), session: z.unknown().optional() }), response)
+      // Usage is internal-only and best-effort: a session shape we can't read never fails the stop.
+      const session = Session.safeParse(body.session)
+      return { snapshotId: body.snapshot?.id ?? null, usage: session.success ? toUsage(session.data) : null }
+    },
+
+    async getSessionUsage(sessionId) {
+      try {
+        const response = await request('GET', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}`)
+        return toUsage((await json(z.looseObject({ session: Session }), response)).session)
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 404) {
+          return null
+        }
+        throw error
+      }
     },
 
     async extendTimeout(sessionId, durationMs) {

@@ -55,7 +55,7 @@ function filesLabel(count: number): string {
   )
 }
 
-function checkedDetail(headMoved: boolean): string {
+export function checkedDetail(headMoved: boolean): string {
   const detail = translate(
     'components.native-chat.rewind.restoreFilesOutcome',
     'Files go back to how they were when this message was sent. Later changes are discarded. You can undo the file restore afterwards.'
@@ -68,15 +68,31 @@ function checkedDetail(headMoved: boolean): string {
     : detail
 }
 
+/** The changed paths, when the host named them (older hosts send only the count). */
+export function changedFilesList(
+  preview: Extract<AgentSessionCheckpointPreview, { available: true }>
+): Pick<ConfirmationDialogOptions, 'itemList'> {
+  return preview.paths && preview.paths.length > 0
+    ? {
+        itemList: {
+          label: translate('components.native-chat.rewind.changedFilesList', 'Changed files'),
+          items: preview.paths,
+          total: preview.changedFiles
+        }
+      }
+    : {}
+}
+
 /** The prompt's wording and files choice; `choose` hears whether to restore files, on confirm. */
 export function nativeChatRewindPrompt(
   preview: AgentSessionCheckpointPreview | null,
   choose: (restoreFiles: boolean) => void
-): Pick<ConfirmationDialogOptions, 'description' | 'option'> {
+): Pick<ConfirmationDialogOptions, 'description' | 'option' | 'itemList'> {
   if (preview?.available && preview.changedFiles > 0) {
     const busy = preview.busy === true
     return {
       description: BASE(),
+      ...changedFilesList(preview),
       option: {
         label: filesLabel(preview.changedFiles),
         detail: busy
@@ -120,35 +136,90 @@ function restoredText(count: number): string {
   })
 }
 
-function failureText(error: unknown): string {
+/** Why files weren't restored. `chatRewound` says whether the chat already went back (after a
+ *  rewind) or stays as it is (restoring files only). */
+export function failureText(error: unknown, chatRewound = true): string {
+  const say = (rewound: () => string, only: () => string) => (chatRewound ? rewound() : only())
   switch (agentSessionCheckpointRefusalOf(error)) {
     case 'busy':
-      return translate(
-        'components.native-chat.rewind.chatRewoundBusy',
-        "The chat was rewound, but files weren't restored because the agent is still working. Nothing on disk changed."
+      return say(
+        () =>
+          translate(
+            'components.native-chat.rewind.chatRewoundBusy',
+            "The chat was rewound, but files weren't restored because the agent is still working. Nothing on disk changed."
+          ),
+        () =>
+          translate(
+            'components.native-chat.rewind.filesOnlyBusy',
+            "Files weren't restored because the agent is still working. Nothing on disk changed."
+          )
       )
     case 'merge-conflicts':
-      return translate(
-        'components.native-chat.rewind.chatRewoundConflicts',
-        "The chat was rewound, but files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed."
+      return say(
+        () =>
+          translate(
+            'components.native-chat.rewind.chatRewoundConflicts',
+            "The chat was rewound, but files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed."
+          ),
+        () =>
+          translate(
+            'components.native-chat.rewind.filesOnlyConflicts',
+            "Files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed."
+          )
       )
     case 'blocked-path':
-      return translate(
-        'components.native-chat.rewind.chatRewoundBlocked',
-        "The chat was rewound, but files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed."
+      return say(
+        () =>
+          translate(
+            'components.native-chat.rewind.chatRewoundBlocked',
+            "The chat was rewound, but files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed."
+          ),
+        () =>
+          translate(
+            'components.native-chat.rewind.filesOnlyBlocked',
+            "Files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed."
+          )
       )
     case 'none':
-      return translate(
-        'components.native-chat.rewind.chatRewoundMissing',
-        "The chat was rewound, but files weren't restored because Orca no longer has the files saved for this message. Nothing on disk changed."
+      return say(
+        () =>
+          translate(
+            'components.native-chat.rewind.chatRewoundMissing',
+            "The chat was rewound, but files weren't restored because Orca no longer has the files saved for this message. Nothing on disk changed."
+          ),
+        () =>
+          translate(
+            'components.native-chat.rewind.filesOnlyMissing',
+            "Files weren't restored because Orca no longer has the files saved for this message. Nothing on disk changed."
+          )
       )
     case 'partial':
+      return say(
+        () =>
+          translate(
+            'components.native-chat.rewind.chatRewoundPartial',
+            "The chat was rewound, but some files couldn't be restored. Undo puts back the files Orca changed."
+          ),
+        () =>
+          translate(
+            'components.native-chat.rewind.filesOnlyPartial',
+            "Some files couldn't be restored. Undo puts back the files Orca changed."
+          )
+      )
     case 'not-a-repo':
     case 'unsafe-path':
     case null:
-      return translate(
-        'components.native-chat.rewind.chatRewoundFailed',
-        "The chat was rewound, but some files couldn't be restored. Check Source Control before you continue."
+      return say(
+        () =>
+          translate(
+            'components.native-chat.rewind.chatRewoundFailed',
+            "The chat was rewound, but some files couldn't be restored. Check Source Control before you continue."
+          ),
+        () =>
+          translate(
+            'components.native-chat.rewind.filesOnlyFailed',
+            "Some files couldn't be restored. Check Source Control before you continue."
+          )
       )
   }
 }
@@ -156,7 +227,8 @@ function failureText(error: unknown): string {
 /** Restores after the chat rewound, then offers Undo for the files. */
 export async function restoreNativeChatRewindFiles(
   client: NativeChatCheckpointClient,
-  itemId: string
+  itemId: string,
+  chatRewound = true
 ): Promise<void> {
   let result: AgentSessionCheckpointRestoreResult
   try {
@@ -165,37 +237,43 @@ export async function restoreNativeChatRewindFiles(
     console.warn('[native-chat-rewind] file restore failed', error)
     const undoId = agentSessionCheckpointPartialUndoIdOf(error)
     toast.error(
-      failureText(error),
-      undoId ? { action: undoAction(client, undoId), duration: Infinity } : undefined
+      failureText(error, chatRewound),
+      undoId ? { action: undoAction(client, undoId, chatRewound), duration: Infinity } : undefined
     )
     return
   }
   toast.success(restoredText(result.changedFiles), {
-    action: undoAction(client, result.undoId)
+    action: undoAction(client, result.undoId, chatRewound)
   })
 }
 
-function undoAction(client: NativeChatCheckpointClient, undoId: string) {
+function undoAction(client: NativeChatCheckpointClient, undoId: string, chatRewound: boolean) {
   return {
     label: translate('components.native-chat.rewind.undoRestore', 'Undo'),
-    onClick: () => void undoNativeChatRewindFiles(client, undoId)
+    onClick: () => void undoNativeChatRewindFiles(client, undoId, chatRewound)
   }
 }
 
 async function undoNativeChatRewindFiles(
   client: NativeChatCheckpointClient,
-  undoId: string
+  undoId: string,
+  chatRewound: boolean
 ): Promise<void> {
   try {
     await client.undo(undoId)
     toast.success(
-      translate(
-        'components.native-chat.rewind.undoneRestore',
-        'Files are back to how they were before the rewind.'
-      )
+      chatRewound
+        ? translate(
+            'components.native-chat.rewind.undoneRestore',
+            'Files are back to how they were before the rewind.'
+          )
+        : translate(
+            'components.native-chat.rewind.undoneFilesOnly',
+            'Files are back to how they were before the restore.'
+          )
     )
   } catch (error) {
     console.warn('[native-chat-rewind] file restore undo failed', error)
-    toast.error(failureText(error))
+    toast.error(failureText(error, chatRewound))
   }
 }

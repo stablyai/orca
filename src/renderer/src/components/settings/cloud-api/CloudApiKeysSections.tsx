@@ -109,8 +109,11 @@ export function AccessLinks({
 
 export function OrgSettings({
   settings,
-  onToggle
+  onToggle,
+  blocked = false
 }: {
+  /** The page shows one load error; this section stays quiet instead of repeating it. */
+  blocked?: boolean
   settings: CloudLoadState<CloudApiSettings>
   onToggle: (enabled: boolean) => Promise<string | null>
 }): React.JSX.Element {
@@ -158,7 +161,7 @@ export function OrgSettings({
               </span>
             ) : null}
           </p>
-          {settings.status === 'error' ? (
+          {settings.status === 'error' && !blocked ? (
             <InlineError tone="neutral" title={settings.message} className="mt-2" />
           ) : null}
           {error ? <InlineError title={error} className="mt-2" /> : null}

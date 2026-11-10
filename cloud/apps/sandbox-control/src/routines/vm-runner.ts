@@ -95,9 +95,43 @@ codex)
     --output-last-message "$D/last.txt" - >"$D/agent.out" 2>"$D/agent.err" <"$D/prompt.txt" || code=$?
   summary="$(head -c 6000 "$D/last.txt" 2>/dev/null || true)"
   ;;
+opencode)
+  # "--" ends the flags, so a prompt starting with "-" stays the message.
+  timeout --kill-after=20 "$limit" opencode run --auto --format json -- "$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  # JSON events: the final message is the last text part (tool output never becomes the summary).
+  summary="$(jq -rs 'map(select(.type == "text")) | last | .part.text // empty' "$D/agent.out" 2>/dev/null | head -c 6000)"
+  ;;
+gemini)
+  # --prompt=TEXT, not "-p TEXT": a prompt starting with "-" would read as a flag.
+  timeout --kill-after=20 "$limit" gemini --yolo --output-format json --prompt="$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  summary="$(jq -r '.response // empty' "$D/agent.out" 2>/dev/null | head -c 6000)"
+  if [ "$code" = 0 ] && [ -n "$(jq -r '.error // empty' "$D/agent.out" 2>/dev/null)" ]; then code=1; fi
+  ;;
+cursor)
+  timeout --kill-after=20 "$limit" cursor-agent --print --force --trust --output-format json -- "$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  summary="$(jq -rs 'map(select(type == "object" and .type == "result")) | last | .result // empty' "$D/agent.out" 2>/dev/null | head -c 6000)"
+  ;;
+copilot)
+  # --silent: only the agent's response, no tool output or stats.
+  timeout --kill-after=20 "$limit" copilot --allow-all --silent --prompt="$(cat "$D/prompt.txt")" \
+    >"$D/agent.out" 2>"$D/agent.err" </dev/null || code=$?
+  summary="$(head -c 6000 "$D/agent.out" 2>/dev/null || true)"
+  ;;
 *) code=2; note=unknown_agent; finish ;;
 esac
 [ -n "$summary" ] || summary="$(tail -c 2000 "$D/agent.out" 2>/dev/null || true)"
+# The summary can be posted publicly (comment / PR body): no session secret value leaves in it, even
+# one an agent printed (AWS keys and plain env secrets are real values in this VM).
+summary="$(ORCA_SUMMARY="$summary" node -e '
+let s = process.env.ORCA_SUMMARY || ""
+for (const name of (process.env.ORCA_SESSION_ENV_NAMES || "").split(/\s+/)) {
+  const value = process.env[name]
+  if (value && value.length >= 8) s = s.split(value).join("[redacted]")
+}
+process.stdout.write(s)' 2>/dev/null)" || summary=""
 echo "routine: agent exit $code"
 if [ "$code" = 0 ] && [ "$post" = pr ] && [ -n "$start_sha" ]; then
   git add -A >/dev/null 2>&1 || true

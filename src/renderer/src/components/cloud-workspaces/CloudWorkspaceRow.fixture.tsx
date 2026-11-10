@@ -13,10 +13,13 @@ import {
 const WIDTH = 760
 const ACTIONS: RowActions = {
   open: () => {},
+  read: () => {},
   copyLink: () => {},
   copyWorkspaceLink: () => {},
   goToChat: () => {},
-  patch: () => {}
+  patch: () => {},
+  archive: () => {},
+  unarchive: () => {}
 }
 const SECTIONS = ['Payments', 'Platform']
 const MEMBERS = [...DIRECTORY.entries()].map(([userId, m]) => ({ userId, name: m.name }))

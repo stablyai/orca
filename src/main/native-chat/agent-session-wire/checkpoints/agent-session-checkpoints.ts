@@ -5,6 +5,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
+  AGENT_SESSION_CHECKPOINT_PREVIEW_PATHS,
   AGENT_SESSION_CHECKPOINT_UNDO_ID,
   agentSessionCheckpointPartialMessage,
   agentSessionCheckpointRefusalMessage,
@@ -157,6 +158,9 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
       return {
         available: true,
         changedFiles: changes.length,
+        paths: [...new Set(changes.map((change) => change.path))]
+          .sort()
+          .slice(0, AGENT_SESSION_CHECKPOINT_PREVIEW_PATHS),
         headMoved,
         createdAt: found.checkpoint.createdAt,
         busy:

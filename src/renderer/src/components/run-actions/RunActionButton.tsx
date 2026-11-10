@@ -13,6 +13,7 @@ import { startRunAction, stopRunAction } from '@/lib/run-actions/run-action-cont
 import { useWorktreeRunActionRuns, type RunActionRun } from '@/lib/run-actions/run-actions-store'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { RunActionButtonView } from './RunActionButtonView'
+import { findLiveRunTabId } from '@/lib/run-actions/run-action-tabs'
 
 const EMPTY_PORTS: WorkspacePort[] = []
 
@@ -57,7 +58,7 @@ function useWorktreePorts(worktreeId: string): WorkspacePort[] {
 function focusRunTab(run: RunActionRun): void {
   const state = useAppStore.getState()
   state.setActiveTabType('terminal', run.worktreeId)
-  state.setActiveTab(run.tabId)
+  state.setActiveTab(findLiveRunTabId(state, run.worktreeId, run.tabId) ?? run.tabId)
 }
 
 function openPortsPanel(): void {

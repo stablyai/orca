@@ -19,7 +19,7 @@ function DialogBody({
   escapeGuardRef: React.Ref<() => boolean>
 }): React.JSX.Element {
   const t = useTranslate()
-  const { model, save } = useCloudAgentSetup({ repo: null })
+  const { model, save, saveDesktopKey } = useCloudAgentSetup({ repo: null })
   const [saved, setSaved] = useState<CloudAgentSetupSaved | null>(null)
   if (saved) {
     return <CloudAgentSetupSavedNotice saved={saved} onClose={onClose} />
@@ -38,6 +38,8 @@ function DialogBody({
     <CloudAgentSetupView
       readiness={model.readiness}
       canShare={model.canShare}
+      desktopKeys={model.desktopKeys}
+      onSaveDesktopKey={saveDesktopKey}
       steadyHeight
       escapeGuardRef={escapeGuardRef}
       onSave={save}

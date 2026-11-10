@@ -13,6 +13,7 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
+import { readSnapshotTimes } from './read-snapshots'
 import { sandboxView } from './wire'
 import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
@@ -66,6 +67,13 @@ export function canOpen(caller: SandboxCaller, row: SandboxRow): boolean {
 /** Rename, section, archive, visibility: the owner, or an org admin for anything in the org. */
 function canManage(caller: SandboxCaller, row: SandboxRow): boolean {
   return row.account_id === caller.accountId && (row.user_id === caller.userId || isOrgAdmin(caller))
+}
+
+/** Owner or a team admin; anyone else gets forbidden (or not_found when they can't see it). */
+export function assertCanManageWorkspace(caller: SandboxCaller, row: SandboxRow): void {
+  if (!canManage(caller, row)) {
+    throw new WorkspaceError(canSee(caller, row) ? 'forbidden' : 'not_found', 'owner_or_admin_only')
+  }
 }
 
 /** A row the caller may address by id; anything else is indistinguishable from a missing one. */
@@ -162,10 +170,11 @@ function repoView(row: SandboxRow) {
 
 export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted] = await Promise.all([
+  const [presence, compute, granted, readAt] = await Promise.all([
     presenceFor(db, ids, now),
     computeMsFor(db, ids),
-    activeGrantUsers(db, ids, caller.userId)
+    activeGrantUsers(db, ids, caller.userId),
+    readSnapshotTimes(db, ids)
   ])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
     [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id)].filter(
@@ -199,7 +208,9 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       access,
       presence: live.map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at })),
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
-      memberNames
+      memberNames,
+      // When its sleeping read-only copy was saved ("As of"); only for those who may read it.
+      readSnapshotAt: canOpen(caller, row) ? (readAt.get(row.id) ?? null) : null
     }
   })
 }
@@ -281,6 +292,9 @@ export async function patchWorkspace(
   } else if (!canManage(caller, row)) {
     throw new WorkspaceError(canSee(caller, row) ? 'forbidden' : 'not_found', 'owner_or_admin_only')
   }
+  if (patch.archived === true) {
+    throw new WorkspaceError('invalid_request', 'archive_via_lifecycle')
+  }
   if (patch.visibility === 'team' && !row.account_id.includes('org:')) {
     // A personal account has no team to share with.
     throw new WorkspaceError('invalid_request', 'personal_account')
@@ -299,7 +313,9 @@ export async function patchWorkspace(
     ...(patch.branch !== undefined ? { repo_branch: patch.branch } : {}),
     ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
     ...(patch.section !== undefined ? { section: patch.section } : {}),
-    ...(patch.archived !== undefined ? { archived_at: patch.archived ? (row.archived_at ?? now) : null } : {}),
+    // Archiving is a lifecycle change (archiveSandbox stops the VM, then sets archived_at); this edit
+    // can only clear a label left by an older label-only archive.
+    ...(patch.archived === false ? { archived_at: null } : {}),
     ...(patch.ownerUserId !== undefined ? { user_id: patch.ownerUserId } : {}),
     ...(patch.tokenUsdMicros !== undefined ? { token_usd_micros: patch.tokenUsdMicros } : {})
   })

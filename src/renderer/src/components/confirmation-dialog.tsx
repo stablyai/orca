@@ -20,7 +20,10 @@ import {
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import { ConfirmationDialogOption } from '@/components/confirmation-dialog-option'
+import {
+  ConfirmationDialogItemList,
+  ConfirmationDialogOption
+} from '@/components/confirmation-dialog-option'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -195,6 +198,13 @@ export function ConfirmationDialogProvider({
               option={displayedRequest.options.option}
               checked={optionChecked ?? displayedRequest.options.option.defaultChecked}
               onCheckedChange={setOptionChecked}
+            />
+          ) : null}
+          {displayedRequest?.options.itemList ? (
+            <ConfirmationDialogItemList
+              key={activeRequest?.id}
+              indented={Boolean(displayedRequest.options.option)}
+              list={displayedRequest.options.itemList}
             />
           ) : null}
           {displayedRequest?.options.fields ? (

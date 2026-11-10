@@ -15,15 +15,18 @@ import {
   type RunActionRun
 } from './run-actions-store'
 import {
+  loadRunActionsOnceHostAnswers,
   loadWorktreeRunActions,
   resolveRunActionTarget,
   type RunActionTarget,
   type WorktreeRunActions
 } from './run-action-config'
+import { findLiveRunTabId, sameRunTab } from './run-action-tabs'
 
 /** Conductor's grace period: an interrupted dev server gets this long before its shell is closed. */
 export const RUN_ACTION_STOP_GRACE_MS = 5_000
 const INTERRUPT = '\x03'
+const RELAUNCH_TAB_SETTLE_MS = 5_000
 
 function joinWorkspacePath(root: string, relative: string | undefined): string | undefined {
   if (!relative) {
@@ -34,21 +37,22 @@ function joinWorkspacePath(root: string, relative: string | undefined): string |
 }
 
 export function tabExists(state: AppState, worktreeId: string, tabId: string): boolean {
-  return (state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+  return findLiveRunTabId(state, worktreeId, tabId) !== null
 }
 
 function tabGroupId(state: AppState, worktreeId: string, tabId: string): string | undefined {
   return (
     state.unifiedTabsByWorktree[worktreeId]?.find(
-      (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
+      (tab) => sameRunTab(tab.entityId, tabId) && tab.contentType === 'terminal'
     )?.groupId ?? undefined
   )
 }
 
 function closeRunTab(run: RunActionRun): void {
   const state = useAppStore.getState()
-  if (tabExists(state, run.worktreeId, run.tabId)) {
-    state.closeTab(run.tabId, { recordInteraction: false, captureRecentlyClosed: false })
+  const liveTabId = findLiveRunTabId(state, run.worktreeId, run.tabId)
+  if (liveTabId) {
+    state.closeTab(liveTabId, { recordInteraction: false, captureRecentlyClosed: false })
   }
 }
 
@@ -97,8 +101,9 @@ async function stopRunActionOnce(worktreeId: string, actionId: string): Promise<
     return
   }
   const state = useAppStore.getState()
-  const ptyId = state.ptyIdsByTabId[run.tabId]?.[0]
-  if (!ptyId || !tabExists(state, worktreeId, run.tabId)) {
+  const liveTabId = findLiveRunTabId(state, worktreeId, run.tabId)
+  const ptyId = liveTabId ? state.ptyIdsByTabId[liveTabId]?.[0] : undefined
+  if (!ptyId) {
     deleteRunActionRun(worktreeId, actionId)
     return
   }
@@ -119,12 +124,14 @@ async function stopConflictingRuns(
   if (effectiveRunMode(action, scripts) !== 'nonconcurrent') {
     return
   }
-  // nonconcurrent: the project shares one port/database/stack, so any other live action must stop first.
+  // nonconcurrent (Conductor's run_mode): the same action can't run in two workspaces of the project
+  // at once (one fixed port, database or stack). Other actions keep running.
   const conflicting = listRunActionRuns().filter(
     (run) =>
       run.repoId === target.repoId &&
-      (run.status === 'running' || run.status === 'stopping') &&
-      !(run.worktreeId === target.worktreeId && run.actionId === action.id)
+      run.actionId === action.id &&
+      run.worktreeId !== target.worktreeId &&
+      (run.status === 'running' || run.status === 'stopping')
   )
   await Promise.all(conflicting.map((run) => stopRunAction(run.worktreeId, run.actionId)))
 }
@@ -295,7 +302,7 @@ export async function relaunchInterruptedRunActions(worktreeId: string): Promise
   if (byAction.size === 0) {
     return 0
   }
-  const config = await loadWorktreeRunActions(worktreeId)
+  const config = await loadRunActionsOnceHostAnswers(worktreeId)
   let started = 0
   for (const run of byAction.values()) {
     const action = config?.actions.find((candidate) => candidate.id === run.actionId)
@@ -314,6 +321,13 @@ export async function relaunchInterruptedRunActions(worktreeId: string): Promise
     })
     if (ok) {
       started += 1
+      // The restarted host republishes its old tabs after a moment; retire the dead run tab then.
+      setTimeout(() => {
+        const current = getRunActionRun(worktreeId, run.actionId)
+        if (!current || !sameRunTab(current.tabId, run.tabId)) {
+          closeRunTab(run)
+        }
+      }, RELAUNCH_TAB_SETTLE_MS)
     }
   }
   return started

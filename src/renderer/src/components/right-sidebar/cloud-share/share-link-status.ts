@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
 import type { CloudShareFailureCode } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 
 export function shareErrorMessage(code: CloudShareFailureCode): string {
@@ -17,10 +18,7 @@ export function shareErrorMessage(code: CloudShareFailureCode): string {
         'That link is no longer active.'
       )
     case 'unauthorized':
-      return translate(
-        'auto.components.right.sidebar.CloudShare.errorUnauthorized',
-        'Sign in to Orca again, then try again.'
-      )
+      return signInAgainMessage()
     case 'invalid_request':
       return translate(
         'auto.components.right.sidebar.CloudShare.errorInvalid',

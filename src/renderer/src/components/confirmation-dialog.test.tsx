@@ -134,6 +134,21 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
+  it('shows three listed items, then the rest on request', async () => {
+    renderDialog({
+      title: 'Rewind to here?',
+      itemList: { label: 'Changed files', items: ['a', 'b', 'c', 'd', 'e'], total: 7 }
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const list = await screen.findByRole('list', { name: 'Changed files' })
+    expect(list.querySelectorAll('li')).toHaveLength(3)
+    await userEvent.click(screen.getByRole('button', { name: 'Show 4 more' }))
+    expect(list.querySelectorAll('li')).toHaveLength(5)
+    expect(screen.getByRole('button', { name: 'Show fewer' }).getAttribute('aria-expanded')).toBe(
+      'true'
+    )
+  })
+
   it('never saves the preference when the user backs out', async () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({

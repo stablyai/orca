@@ -17,10 +17,13 @@ import { NEW_SECTION } from './CloudWorkspaceRowMenu'
 import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
+import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
+import { useCloudReadPanel } from './use-cloud-read-panel'
 import { formatSandboxHours, sandboxHours, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
+import { homeArchiveActions, runHomeArchive } from './cloud-workspace-home-archive'
 import { frontCloudChat } from './cloud-workspace-links'
 import {
   cloudWorkspaceTitle,
@@ -28,6 +31,7 @@ import {
   openCloudWorkspace
 } from './open-cloud-workspace'
 import { useCloudWorkspaces, useCloudWorkspacesAvailable } from './use-cloud-workspaces'
+import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 
 const INITIAL_FILTERS: CloudWorkspacesFilters = {
   scope: 'team',
@@ -80,16 +84,25 @@ export function CloudWorkspacesHome({
   const available = useCloudWorkspacesAvailable()
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
+  const account = useOrcaAccountKey()
   const [filters, setFilters] = useState(INITIAL_FILTERS)
+  // Owner and repo filters name the previous team's people and repos; a team switch starts over.
+  const [filtersAccount, setFiltersAccount] = useState(account)
+  if (filtersAccount !== account) {
+    setFiltersAccount(account)
+    setFilters(INITIAL_FILTERS)
+  }
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
+  const { readingId, readingRef, setReadingId, readWake, setReadWake } = useCloudReadPanel()
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
     { scope, archived: filters.archived ? 'only' : 'exclude' },
-    Boolean(cloud)
+    Boolean(cloud),
+    account
   )
 
   // Relative "last active" times tick while the window is visible; hidden windows skip the work.
@@ -165,19 +178,35 @@ export function CloudWorkspacesHome({
   const totalMs = visible.reduce((sum, w) => sum + w.cost.computeMs, 0)
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
-  const open = useCallback(async (w: CloudWorkspace, chatId?: string | null) => {
-    setOpening(w.id)
-    try {
-      const outcome = await openCloudWorkspace(w)
-      if (!outcome.ok) {
-        toast.error(outcome.message)
-      } else if (chatId) {
-        await focusCloudChat(outcome.worktreeId, chatId)
+  const open = useCallback(
+    async (w: CloudWorkspace, chatId?: string | null) => {
+      setOpening(w.id)
+      const fromPanel = readingRef.current === w.id
+      if (fromPanel) {
+        setReadWake({ phase: 'waking', startedAt: Date.now() })
       }
-    } finally {
-      setOpening((current) => (current === w.id ? null : current))
-    }
-  }, [])
+      try {
+        const outcome = await openCloudWorkspace(w)
+        if (!outcome.ok) {
+          if (fromPanel && readingRef.current === w.id) {
+            // The panel shows the failure in place (with the reason) instead of a toast.
+            setReadWake({ phase: 'failed', message: outcome.message })
+          } else {
+            toast.error(outcome.message)
+          }
+          return
+        }
+        // Woken from its read-only copy: the live workspace replaces it.
+        setReadingId((current) => (current === w.id ? null : current))
+        if (chatId) {
+          await focusCloudChat(outcome.worktreeId, chatId)
+        }
+      } finally {
+        setOpening((current) => (current === w.id ? null : current))
+      }
+    },
+    [readingRef, setReadWake, setReadingId]
+  )
 
   const patch = useCallback(
     async (w: CloudWorkspace, change: CloudWorkspacePatch, confirmed = false) => {
@@ -217,12 +246,6 @@ export function CloudWorkspacesHome({
         )
       } else if (change.ownerUserId) {
         toast.success(t('auto.components.cloudWorkspaces.ownerChanged', 'Owner changed'))
-      } else if (change.archived !== undefined) {
-        toast.success(
-          change.archived
-            ? t('auto.components.cloudWorkspaces.archived', 'Archived')
-            : t('auto.components.cloudWorkspaces.restored', 'Restored')
-        )
       }
       refresh()
     },
@@ -232,15 +255,17 @@ export function CloudWorkspacesHome({
   const actions = useMemo(
     () => ({
       open: (w: CloudWorkspace) => void open(w),
+      read: (w: CloudWorkspace) => setReadingId(w.id),
       copyLink: (w: CloudWorkspace) => {
         const front = frontCloudChat()
         void copyCloudWorkspaceLink(w.id, front?.sandboxId === w.id ? front.chatId : null)
       },
       copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
-      patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change)
+      patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change),
+      ...homeArchiveActions({ selfId, t, refresh, confirmArchive: setConfirm })
     }),
-    [open, patch]
+    [open, patch, refresh, selfId, setReadingId, t]
   )
 
   // Nothing (not even a skeleton) until we know this build has a control plane and you are in.
@@ -365,6 +390,14 @@ export function CloudWorkspacesHome({
           : null}
       </div>
 
+      <CloudReadSnapshotSheet
+        // The list row (refreshed by polling) so a wake elsewhere shows up; gone rows close it.
+        workspace={readingId ? (all.find((w) => w.id === readingId) ?? null) : null}
+        wake={readWake}
+        onWake={(w) => void open(w)}
+        onClose={() => setReadingId(null)}
+      />
+
       {confirm && (
         <CloudWorkspaceConfirmDialog
           pending={confirm}
@@ -373,6 +406,11 @@ export function CloudWorkspacesHome({
           canAdmin={canAdmin}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
+            if (confirm.kind === 'archive') {
+              setConfirm(null)
+              runHomeArchive(confirm.workspace, t, refresh)
+              return
+            }
             const change: CloudWorkspacePatch =
               confirm.kind === 'private'
                 ? { visibility: 'private' }

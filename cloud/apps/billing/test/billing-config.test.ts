@@ -24,7 +24,7 @@ describe('config: tax and plan catalog', () => {
   it('takes Team numbers and labels and the Enterprise contact from BILLING_PLANS', async () => {
     const h = await createHarness({
       BILLING_PLANS: JSON.stringify({
-        team: { includedHoursPerSeat: 40, monthlyPriceLabel: '$45/seat/mo', defaultSpendCapCents: 5000 },
+        team: { includedHoursPerSeat: 40, monthlyPriceLabel: '$45 per seat per month', defaultSpendCapCents: 5000 },
         enterprise: { contactUrl: 'https://example.test/sales' }
       })
     })
@@ -33,8 +33,8 @@ describe('config: tax and plan catalog', () => {
     expect(entitlement.body.offers).toEqual({
       team: {
         label: 'Team',
-        monthlyPriceLabel: '$45/seat/mo',
-        annualPriceLabel: '$480/seat/yr',
+        monthlyPriceLabel: '$45 per seat per month',
+        annualPriceLabel: '$480 per seat, billed yearly',
         monthlyPriceCentsPerSeat: 5000,
         annualPriceCentsPerSeat: 48000,
         largeMachineWeight: 1,
@@ -42,7 +42,8 @@ describe('config: tax and plan catalog', () => {
         concurrentSandboxesPerSeat: 3,
         idleSleepMinutes: 15,
         overageCentsPerHour: 100,
-        defaultSpendCapCents: 5000
+        defaultSpendCapCents: 5000,
+        maxSpendCapCents: 500_000
       },
       enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
     })

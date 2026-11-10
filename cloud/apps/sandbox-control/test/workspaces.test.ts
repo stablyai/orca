@@ -81,6 +81,72 @@ describe('workspace registry', () => {
     expect((await t.req(t.admin, 'POST', `/v1/sandboxes/${t.id}/resume`)).status).toBe(404)
   })
 
+  it('archives for real from the team list: the sandbox stops with a snapshot TTL; unarchive leaves it asleep', async () => {
+    const t = await team()
+    const name = `orca-test-${t.id}`
+    expect(t.h.vercel.boxes.get(name)!.status).toBe('running')
+    const archived = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(archived.status).toBe(200)
+    expect(archived.body.workspace.archivedAt).toBe(t.h.now())
+    expect(t.h.vercel.boxes.get(name)!.status).toBe('stopped')
+    expect(t.h.raw.prepare('SELECT status, archive_expires_at FROM sandboxes WHERE id = ?').get(t.id)).toMatchObject({
+      status: 'archived'
+    })
+    expect(t.h.vercel.snapshotExpirations.get(name)).toBe(37 * 24 * 60 * MIN)
+    const restored = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: false })
+    expect(restored.body.workspace.archivedAt).toBeNull()
+    expect(t.h.raw.prepare('SELECT status FROM sandboxes WHERE id = ?').get(t.id)).toEqual({ status: 'suspended' })
+    // Restoring does not start (or bill) the sandbox; opening it wakes it as usual.
+    expect(t.h.vercel.boxes.get(name)!.status).toBe('stopped')
+    expect(t.h.vercel.snapshotExpirations.get(name)).toBe(104 * 24 * 60 * MIN)
+  })
+
+  it('refuses to archive a sandbox that is starting or mid-transition, and leaves the row unchanged', async () => {
+    const t = await team()
+    for (const status of ['creating', 'suspending']) {
+      t.h.raw.prepare(`UPDATE sandboxes SET status = ? WHERE id = ?`).run(status, t.id)
+      const busy = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+      expect(busy).toMatchObject({ status: 409, body: { reason: `sandbox_${status}` } })
+    }
+    t.h.raw.prepare(`UPDATE sandboxes SET status = 'resuming' WHERE id = ?`).run(t.id)
+    const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(res).toMatchObject({ status: 409, body: { error: 'conflict', reason: 'sandbox_resuming' } })
+    expect(t.h.raw.prepare('SELECT status, archived_at FROM sandboxes WHERE id = ?').get(t.id)).toEqual({
+      status: 'resuming',
+      archived_at: null
+    })
+  })
+
+  it('archives an asleep sandbox without waking it', async () => {
+    const t = await team()
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
+    const { START_COMMAND } = await import('../src/sandbox-vm-commands')
+    const starts = t.h.vercel.commands.filter((c) => c.command === START_COMMAND).length
+    const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(res.status).toBe(200)
+    expect(t.h.raw.prepare('SELECT status FROM sandboxes WHERE id = ?').get(t.id)).toEqual({ status: 'archived' })
+    expect(t.h.vercel.commands.filter((c) => c.command === START_COMMAND)).toHaveLength(starts)
+    expect(t.h.vercel.boxes.get(`orca-test-${t.id}`)!.status).toBe('stopped')
+  })
+
+  it('never labels a running sandbox archived when the archive itself fails', async () => {
+    const t = await team()
+    const { ProviderError } = await import('../src/sandbox-provider')
+    t.h.vercel.stopSession = async () => {
+      throw new ProviderError(500, 'internal_error')
+    }
+    const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    expect((t.h.raw.prepare('SELECT archived_at FROM sandboxes WHERE id = ?').get(t.id) as { archived_at: number | null }).archived_at).toBeNull()
+  })
+
+  it('only the owner or a team admin can archive', async () => {
+    const t = await team()
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })).status).toBe(403)
+    expect(t.h.vercel.boxes.get(`orca-test-${t.id}`)!.status).toBe('running')
+  })
+
   it('reports cost from metered compute at the billing rate, plus reported token spend', async () => {
     const t = await team()
     t.h.advance(90 * MIN)
@@ -233,7 +299,7 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
     const res = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
-    expect(res.body).toEqual({ revoked: 1, queued: 0, keysRevoked: 0, devicesRevoked: 0, grantsRevoked: 1, grantsQueued: 0, routinesDisabled: 0 })
+    expect(res.body).toEqual({ revoked: 1, queued: 0, keysRevoked: 0, devicesRevoked: 0, grantsRevoked: 1, grantsQueued: 0, routinesDisabled: 0, readerKeysRevoked: 0 })
   })
 })
 

@@ -1,4 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
+import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
 import type {
   CloudSecretScope,
   CloudSecretsErrorCode
@@ -31,6 +32,11 @@ export function cloudSecretsErrorCopy(
   t: Translate
 ): string {
   switch (code) {
+    case 'not_swappable':
+      return t(
+        'cloudSecrets.error.notSwappable',
+        'A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that.'
+      )
     case 'invalid_name':
       return t(
         'cloudSecrets.error.invalidName',
@@ -67,7 +73,7 @@ export function cloudSecretsErrorCopy(
         'This scope already holds 100 secrets. Delete one first.'
       )
     case 'unauthorized':
-      return t('cloudSecrets.error.unauthorized', 'Sign in to Orca again to manage cloud secrets.')
+      return signInAgainMessage(t)
     case 'not_configured':
       return t('cloudSecrets.error.notConfigured', 'Orca Cloud is not available in this build.')
     case 'unavailable':

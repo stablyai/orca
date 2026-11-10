@@ -26,6 +26,7 @@ import { VM_COMMAND_SPECS } from './vm'
 import { VM_ENV_COMMAND_SPECS } from './vm-env'
 import { CLOUD_ENV_COMMAND_SPECS } from './cloud-env'
 import { CLOUD_SSH_COMMAND_SPECS } from './cloud-ssh'
+import { SECRET_COMMAND_SPECS } from './secret'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
 import { SEARCH_COMMAND_SPECS } from './search'
@@ -66,6 +67,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...VM_ENV_COMMAND_SPECS,
   ...CLOUD_ENV_COMMAND_SPECS,
   ...CLOUD_SSH_COMMAND_SPECS,
+  ...SECRET_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
   ...SKILL_COMMAND_SPECS,
   ...SEARCH_COMMAND_SPECS,

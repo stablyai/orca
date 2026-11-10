@@ -149,6 +149,8 @@ type ListRowProps = {
   /** Working on a press: stops taking taps without the disabled dimming. */
   busy?: boolean
   accessibilityLabel?: string
+  /** What a tap does, when the title alone doesn't say (e.g. it removes something). */
+  accessibilityHint?: string
   accessibilityRole?: 'button' | 'link' | 'radio' | 'checkbox' | 'switch'
   testID?: string
 }
@@ -169,6 +171,7 @@ export function ListRow({
   disabled = false,
   busy = false,
   accessibilityLabel,
+  accessibilityHint,
   accessibilityRole,
   testID
 }: ListRowProps) {
@@ -232,6 +235,7 @@ export function ListRow({
       disabled={inertState.disabled}
       accessibilityRole={accessibilityRole ?? (selected === undefined ? 'button' : 'radio')}
       accessibilityLabel={accessibilityLabel ?? (value ? `${title}, ${value}` : title)}
+      accessibilityHint={accessibilityHint}
       accessibilityState={
         selected === undefined ? inertState : { ...inertState, checked: selected, selected }
       }

@@ -24,3 +24,18 @@ export function buildWorkspacePortEnv(block: WorkspacePortBlock): Record<string,
 export function isPortInWorkspaceBlock(port: number, block: WorkspacePortBlock): boolean {
   return port >= block.base && port < block.base + block.count
 }
+
+/**
+ * The block a host launcher set for everything it starts (ORCA_PORT in the host process env), or
+ * null. A copy inherited from a parent Orca pane carries pane identity and names that pane's
+ * workspace instead, so it doesn't count.
+ */
+export function hostLauncherPortBase(env: NodeJS.ProcessEnv): number | null {
+  if (env.ORCA_PANE_KEY || env.ORCA_WORKTREE_ID) {
+    return null
+  }
+  const base = Number(env.ORCA_PORT)
+  return Number.isInteger(base) && base >= 1024 && base <= 65535 - WORKSPACE_PORT_BLOCK_SIZE
+    ? base
+    : null
+}

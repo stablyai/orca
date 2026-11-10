@@ -3,11 +3,13 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  BookOpen,
   FolderInput,
   FolderPlus,
   Link2,
   Lock,
   MoreHorizontal,
+  Play,
   UserRoundCog,
   Users
 } from 'lucide-react'
@@ -37,13 +39,19 @@ import { MemberAvatar } from './CloudMemberAvatars'
 import { memberName, presentMembers, type MemberDirectory } from './cloud-workspace-format'
 
 export type RowActions = {
+  /** Opens it, waking it first when it is asleep. */
   open: (w: CloudWorkspace) => void
+  /** Asleep: the read-only copy it saved when it went to sleep (never wakes it). */
+  read: (w: CloudWorkspace) => void
   /** The link to the chat you have in front when this workspace is in front, else the workspace. */
   copyLink: (w: CloudWorkspace) => void
   copyWorkspaceLink: (w: CloudWorkspace) => void
   /** One-time jump: open the workspace on the chat this teammate has in front. */
   goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
   patch: (w: CloudWorkspace, patch: CloudWorkspacePatch) => void
+  /** Sleep and archive with a snapshot (Undo for 5 s); never just a label. */
+  archive: (w: CloudWorkspace) => void
+  unarchive: (w: CloudWorkspace) => void
 }
 
 /** Placeholder replaced by the inline section editor in CloudWorkspacesHome. */
@@ -52,6 +60,15 @@ export const NEW_SECTION = '\u0000new-section'
 const NO_SECTION = '\u0000none'
 // Keeps submenus off the window edge when the row sits near the bottom of Home.
 const SUBMENU_COLLISION_PADDING = 8
+
+/** An Asleep workspace this account can open: its row reads the saved copy instead of waking. */
+export function isReadableAsleep(w: CloudWorkspace): boolean {
+  return (
+    w.archivedAt === null &&
+    w.access !== 'none' &&
+    (w.status === 'suspended' || w.status === 'suspending')
+  )
+}
 
 export function CloudWorkspaceRowMenu({
   workspace: w,
@@ -116,7 +133,20 @@ export function CloudWorkspaceRowMenu({
           }
         }}
       >
-        {canOpen && (
+        {canOpen && isReadableAsleep(w) && (
+          <>
+            <DropdownMenuItem onSelect={() => actions.read(w)}>
+              <BookOpen />
+              {t('auto.components.cloudWorkspaces.viewAsleep', 'View read-only copy')}
+              <DropdownMenuShortcut>↵</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => actions.open(w)}>
+              <Play />
+              {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
+            </DropdownMenuItem>
+          </>
+        )}
+        {canOpen && !isReadableAsleep(w) && (
           <DropdownMenuItem onSelect={() => actions.open(w)}>
             <ArrowUpRight />
             {t('auto.components.cloudWorkspaces.open', 'Open')}
@@ -238,12 +268,12 @@ export function CloudWorkspaceRowMenu({
             )}
             <DropdownMenuSeparator />
             {w.archivedAt === null ? (
-              <DropdownMenuItem onSelect={() => actions.patch(w, { archived: true })}>
+              <DropdownMenuItem onSelect={() => actions.archive(w)}>
                 <Archive />
                 {t('auto.components.cloudWorkspaces.archive', 'Archive')}
               </DropdownMenuItem>
             ) : (
-              <DropdownMenuItem onSelect={() => actions.patch(w, { archived: false })}>
+              <DropdownMenuItem onSelect={() => actions.unarchive(w)}>
                 <ArchiveRestore />
                 {t('auto.components.cloudWorkspaces.unarchive', 'Unarchive')}
               </DropdownMenuItem>

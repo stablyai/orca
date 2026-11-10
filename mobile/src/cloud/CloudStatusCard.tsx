@@ -27,21 +27,21 @@ function spendLine(
   if (!awake) {
     return t(
       'cloud.usage.asleep',
-      '{{hours}} sandbox hours so far · no sandbox hours while asleep',
+      '{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.',
       {
         count: value,
         hours: label,
-        defaultValue_one: '{{hours}} sandbox hour so far · no sandbox hours while asleep'
+        defaultValue_one: '{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.'
       }
     )
   }
   return t(
     'cloud.usage.running',
-    '{{hours}} sandbox hours so far · uses sandbox hours while running',
+    '{{hours}} sandbox hours so far. Uses sandbox hours while running.',
     {
       count: value,
       hours: label,
-      defaultValue_one: '{{hours}} sandbox hour so far · uses sandbox hours while running'
+      defaultValue_one: '{{hours}} sandbox hour so far. Uses sandbox hours while running.'
     }
   )
 }
@@ -67,11 +67,9 @@ export function CloudStatusCard(props: {
       <View style={styles.statusHeadline}>
         <CloudStatusDot status={active ? 'waking' : workspace.status} warn={notConnected} />
         <Text style={styles.statusLabel} accessibilityRole="header">
-          {active
-            ? t('cloud.status.waking', 'Waking')
-            : notConnected
-              ? t('cloud.status.cantConnect', 'Can’t connect')
-              : cloudStatusLabel(workspace.status, t)}
+          {/* Only glossary states: a running workspace this phone can't reach still reads
+              "Running" (with the warning dot); the error banner below says what went wrong. */}
+          {active ? t('cloud.status.waking', 'Waking') : cloudStatusLabel(workspace.status, t)}
         </Text>
       </View>
       {active ? (

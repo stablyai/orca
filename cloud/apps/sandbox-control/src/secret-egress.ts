@@ -5,7 +5,7 @@
 // Codex) hang under Vercel transform rules, so these hosts always take the forwardURL path through
 // /v1/egress/proxy, the same path api.github.com uses. Placeholders are not secrets: the proxy
 // authenticates the sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
-import { SWAPPED_CREDENTIALS, credentialShape, credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
+import { SWAPPED_CREDENTIALS, credentialTarget, credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
 import type { SandboxRow } from './store'
 
 export type SecretEgressHost = CredentialTarget
@@ -24,21 +24,28 @@ export function encodeEgressSecretHosts(targets: readonly CredentialTarget[]): s
 
 /** Credential routes recorded on the row for this session. */
 export function egressSecretHosts(row: Pick<SandboxRow, 'egress_secret_hosts'>): SecretEgressHost[] {
-  const recorded: Record<string, string> = {}
+  const recorded = new Map<string, Set<string>>()
   for (const entry of (row.egress_secret_hosts ?? '').split(',').filter(Boolean)) {
     const at = entry.indexOf('@')
     const [secret, host] = at === -1 ? [LEGACY_HOSTS[entry], entry] : [entry.slice(0, at), entry.slice(at + 1)]
     if (secret && host) {
-      recorded[secret] = host
+      recorded.set(secret, (recorded.get(secret) ?? new Set()).add(host))
     }
   }
   // Header shapes and policies come from the code, never from the row. The base URL value is only
-  // used to pick the default-vs-custom host, and the recorded host is what was allowlisted at boot.
-  return SWAPPED_CREDENTIALS.flatMap((secret) => {
-    const host = recorded[secret]
-    const shape = host ? credentialShape(secret) : null
-    return host && shape ? [{ ...shape, host }] : []
-  })
+  // used to pick the default-vs-custom host, and the recorded hosts are what was allowlisted at boot.
+  return SWAPPED_CREDENTIALS.flatMap((secret) =>
+    [...(recorded.get(secret) ?? [])].flatMap((host) => {
+      const target = credentialTarget(secret, host)
+      return target ? [target] : []
+    })
+  )
+}
+
+/** Every header value the VM may send a credential's placeholder in. */
+export function placeholderValues(target: CredentialTarget, header: string, placeholder: string): string[] {
+  const format = target.headers[header]
+  return format ? [format(placeholder), ...(target.altHeaderFormats?.[header] ?? []).map((alt) => alt(placeholder))] : []
 }
 
 /**
