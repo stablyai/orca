@@ -30,16 +30,13 @@ export type {
 } from './agent-model-catalog-entry'
 export { withLiveCatalogListing } from './agent-model-catalog-entry'
 import {
-  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AgentModelCatalogFailures,
   type AgentModelCatalogFailure
 } from './agent-model-catalog-failures'
-import {
-  AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
-  AgentModelCatalogListingWaiters
-} from './agent-model-catalog-listing-waiters'
+import { AgentModelCatalogListingWaiters } from './agent-model-catalog-listing-waiters'
 
-export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from './agent-model-catalog-failures'
+export { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from './agent-model-catalog-listing-waiters'
 export type { AgentModelCatalogFailure }
 
 // Persist successful display catalogs; launch proof requires fresh in-process discovery.

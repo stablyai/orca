@@ -1,3 +1,4 @@
+import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 // Atomically accept Stop/withdrawals/receipt before acting on the captured target.
 // Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
@@ -290,4 +291,26 @@ export function mutateWithChatStop<TValue>(
   })
   void shutdown.catch(logChildEnd)
   return result
+}
+
+/** Abort unnamed Stop’s startup waits immediately; named stale turns must leave newer starts alone. */
+export function abortProviderWaitForStop(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope,
+  plan: MutationPlan<AgentSessionCancelResult>
+): { reached: boolean; handedOver: boolean } | null {
+  const { store } = context.deps
+  if (
+    !agentSessionMutationAdmitsNow({
+      store,
+      callerKey: caller.callerKey,
+      envelope,
+      plan,
+      now: context.now
+    })
+  ) {
+    return null
+  }
+  return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }

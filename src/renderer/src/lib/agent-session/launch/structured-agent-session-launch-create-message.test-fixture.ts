@@ -3,11 +3,7 @@ import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
-import {
-  CreateIntentParams,
-  SetOptionParams,
-  SendParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+import * as intentParams from '../../../../../shared/rpc-contract/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'
@@ -157,7 +153,7 @@ function deferred<T>() {
   return Promise.withResolvers<T>()
 }
 function createParams() {
-  return CreateIntentParams.parse(
+  return intentParams.CreateIntentParams.parse(
     mocks.call.mock.calls.find(([, method]) => method === 'agentSession.create')?.[2]
   )
 }
@@ -227,7 +223,7 @@ function startLegacyActionLaunch(
         ? { ok: false, refusal }
         : { ok: true, value: { options: { model: launchOptions.model } } }
     }
-    const send = SendParams.parse(params)
+    const send = intentParams.SendParams.parse(params)
     const clientMessageId = send.envelope.clientOperationId
     return { ok: true, value: { clientMessageId, submission: submission(clientMessageId) } }
   })
@@ -269,7 +265,7 @@ export function legacyAction(
       return create.promise
     }
     if (method === 'agentSession.setOption') {
-      const { key, value } = SetOptionParams.parse(params)
+      const { key, value } = intentParams.SetOptionParams.parse(params)
       if (value === null) {
         throw new Error('This legacy action does not reset models')
       }
@@ -278,7 +274,7 @@ export function legacyAction(
     if (method === 'agentSession.history') {
       return { ok: true, page: { ...created().value.page, fence: 2 } }
     }
-    const send = SendParams.parse(params)
+    const send = intentParams.SendParams.parse(params)
     return {
       ok: true,
       value: {
@@ -310,4 +306,4 @@ export const refusedOption = {
 export const optionCalls = () =>
   mocks.call.mock.calls
     .filter(([, method]) => method === 'agentSession.setOption')
-    .map(([, , params]) => SetOptionParams.parse(params))
+    .map(([, , params]) => intentParams.SetOptionParams.parse(params))

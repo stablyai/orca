@@ -35,18 +35,12 @@ import {
   sendPreparation,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
-import {
-  cancelPlan,
-  sendPlan,
-  setOptionPlan,
-  type MutationPlan
-} from './structured-agent-session-mutation-plans'
+import { cancelPlan, sendPlan, setOptionPlan } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
 import { resetStructuredAgentSessionModel } from '../structured-agent-session-model-default'
-import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
-import { mutateWithChatStop } from './structured-agent-session-chat-stop'
+import { mutateWithChatStop, abortProviderWaitForStop } from './structured-agent-session-chat-stop'
 import {
   runWithReadyStructuredAgentSessionOperation,
   runAfterRewindStart
@@ -208,28 +202,6 @@ export function cancelStructuredAgentSessionTurn(
         )
       : stop().then(({ outcome }) => outcome)
   )
-}
-
-/** Abort unnamed Stop’s startup waits immediately; named stale turns must leave newer starts alone. */
-function abortProviderWaitForStop(
-  context: StructuredAgentSessionMutationContext,
-  caller: StructuredAgentSessionCaller,
-  envelope: AgentSessionMutationEnvelope,
-  plan: MutationPlan<AgentSessionCancelResult>
-): { reached: boolean; handedOver: boolean } | null {
-  const { store } = context.deps
-  if (
-    !agentSessionMutationAdmitsNow({
-      store,
-      callerKey: caller.callerKey,
-      envelope,
-      plan,
-      now: context.now
-    })
-  ) {
-    return null
-  }
-  return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }
 
 export function respondToStructuredAgentSessionPrompt(
