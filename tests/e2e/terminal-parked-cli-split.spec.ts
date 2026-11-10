@@ -268,11 +268,12 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
     result: {
       split: {
         tabId: targetTabId,
-        paneRuntimeId: sourcePane.numericPaneId
+        leafId: expect.any(String)
       }
     }
   })
   expect(splitRun.response.result.split.handle).toMatch(/^term_/)
+  expect(splitRun.response.result.split.leafId).not.toBe(sourcePane.leafId)
   expect(await readActiveUiContext(orcaPage)).toEqual(contextBefore)
 
   await waitForTabParked(orcaPage, targetTabId, { parkDelayMs: PARKING_DELAY_MS })
@@ -287,6 +288,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   if (!createdPane?.ptyId) {
     throw new Error('Revealed split has no second PTY identity')
   }
+  expect(createdPane.leafId).toBe(splitRun.response.result.split.leafId)
 
   let listedAfterReveal: RuntimeTerminalSummary[] = []
   await expect
