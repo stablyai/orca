@@ -46,6 +46,8 @@ export const CATALOG: Feature[] = [
   { id: 'run.cloud-resume', section: S.life, feature: 'A running action comes back after wake and after rollover in a cloud workspace', conductor: 'Restart run scripts after wake (manual)', owner: 'gap-run-actions', priority: 'P0', better: 'Comes back by itself' },
   { id: 'run.conductor-import', section: S.acct, feature: 'Conductor importer keeps run / run_mode / auto_run_after_setup (settings.toml, settings.local.toml, conductor.json)', conductor: 'n/a (migration)', owner: 'gap-run-actions', priority: 'P0' },
   { id: 'life.read-asleep', section: S.life, feature: 'Chats, PR comments and check logs readable while asleep from any device (no wake)', conductor: '0.80/0.85, server-held', owner: 'gap-read-asleep', priority: 'P0' },
+  { id: 'life.read-asleep-access', section: S.life, feature: 'Read-while-asleep access control: removed member loses access at once (keys deleted), private workspace is owner-only', conductor: 'Org access to server-held chats', owner: 'gap-read-asleep', priority: 'P0', better: 'End-to-end encrypted; server holds only ciphertext' },
+  { id: 'life.read-asleep-phone', section: S.life, feature: 'Phone shows "Latest from this workspace" for a sleeping workspace without waking it', conductor: 'iOS app reads server-held chats', owner: 'gap-read-asleep', priority: 'P1' },
   { id: 'local.checkpoints', section: S.acct, feature: 'Per-turn code checkpoints: revert restores files and chat together', conductor: '0.19 (Claude), 0.44 (Codex) checkpoints', owner: 'gap-checkpoints', priority: 'P0' },
   // 1. Substrate
   { id: 'sub.create', section: S.sub, feature: 'Hosted microVM per workspace, one call / one click', conductor: '0.78 GA', owner: 'core', priority: 'P0' },
