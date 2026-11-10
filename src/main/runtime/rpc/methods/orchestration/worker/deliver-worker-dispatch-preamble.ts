@@ -69,6 +69,9 @@ export async function deliverWorkerDispatchPreamble(args: {
           : terminalHandle,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    // Structured and chat workers have no pane shell to lack the handle.
+    checkNamesTerminal:
+      !structuredSession && !chat && runtime.terminalToolsLackHandle(terminalHandle),
     unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {

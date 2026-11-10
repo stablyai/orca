@@ -76,6 +76,8 @@ export type TuiAgentConfig = {
   windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
+  /** The agent runs its tools outside the pane's shell, so they never see `ORCA_TERMINAL_HANDLE`; mail pointers name the terminal. */
+  toolsLackTerminalHandle?: true
 }
 
 /** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */

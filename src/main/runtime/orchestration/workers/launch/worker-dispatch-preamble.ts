@@ -28,6 +28,8 @@ export type PreambleParams = {
   subWorkersInOwnRun?: boolean
   // Mail already in the Dispatch's mailbox, which no wake will announce.
   unreadMail?: boolean
+  // The worker's tools cannot read ORCA_TERMINAL_HANDLE, so every `check` must name its terminal.
+  checkNamesTerminal?: boolean
 }
 
 /** A session address names a chat worker; any other handle is a terminal. */
@@ -82,7 +84,12 @@ ${
   ${cli} orchestration check --terminal ${params.workerHandle}
 
 `
-    : ''
+    : params.checkNamesTerminal
+      ? `  # Your shell has no ORCA_TERMINAL_HANDLE: name your terminal whenever you check mail.
+  ${cli} orchestration check --terminal ${params.workerHandle}
+
+`
+      : ''
 }  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.

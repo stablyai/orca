@@ -40,5 +40,6 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   dsh: 36,
   zcode: 37,
   openclaw: 38,
-  jcode: 39
+  jcode: 39,
+  aiwork: 40
 }

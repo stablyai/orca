@@ -1,0 +1,309 @@
+{
+  "id": "aiwork",
+  "engineVersion": 1,
+  "anchors": [
+    {
+      "id": "approval_menu_en",
+      "why": "AiWork reports its own state over OSC 7501 (blocked/permission while this box is open); these anchors are the fallback for releases or settings without it, and they give terminal wait its blocked reason. AiWork's title does not change while the box is open. English literals avoid inner spaces, which the tail can lose where a chunk ends. Footer keys stay untranslated and AiWork cuts its footer from the end, so `enter confirm` survives narrow panes.",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "proceed"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "contains": "reject"
+            },
+            {
+              "regex": "enter\\s*confirm"
+            }
+          ]
+        },
+        "lines": {
+          "atLeast": 1,
+          "includingLast": false,
+          "test": {
+            "regex": "choose\\s*how\\s*to\\s*proceed"
+          }
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-approval-prompt"
+      }
+    },
+    {
+      "id": "approval_menu_zh",
+      "why": "approval_menu_en in AiWork's default Simplified Chinese UI (`选择处理方式`, `拒绝`, `enter 确认当前选项`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "选择处理方式"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "contains": "拒绝"
+            },
+            {
+              "regex": "enter\\s*确认"
+            }
+          ]
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-approval-prompt"
+      }
+    },
+    {
+      "id": "approval_menu_zh_hk",
+      "why": "approval_menu_en in AiWork's Traditional Chinese UI (`選擇處理方式`, `拒絕`, `enter 確認當前選項`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "選擇處理方式"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "contains": "拒絕"
+            },
+            {
+              "regex": "enter\\s*確認"
+            }
+          ]
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-approval-prompt"
+      }
+    },
+    {
+      "id": "question_menu_en",
+      "why": "AiWork's ask-user box ends with `Decline answer` (`Decline all questions` for a group) and a footer such as `↑↓ Switch options · enter Submit · esc Exit`; multi-question and multi-select boxes say `enter Next`, `enter Confirm` or `enter Review`. Enter takes the highlighted answer, so typed input must wait.",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "decline"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "regex": "^decline\\s*(?:answer|all\\s*questions)"
+            },
+            {
+              "regex": "enter\\s*(?:submit|confirm|next|review)"
+            }
+          ]
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "question_menu_zh",
+      "why": "question_menu_en in Simplified Chinese (`拒绝回答` or `拒绝整组问题`, footer `enter 提交`, `确认`, `下一题` or `审查`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "拒绝"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "regex": "^拒绝(?:回答|整组问题)"
+            },
+            {
+              "regex": "enter\\s*(?:提交|确认|下一题|审查)"
+            }
+          ]
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "question_menu_zh_hk",
+      "why": "question_menu_en in Traditional Chinese (`拒絕回答` or `拒絕整組問題`, footer `enter 提交`, `確認`, `下一題` or `審查`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "拒絕"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "regex": "^拒絕(?:回答|整組問題)"
+            },
+            {
+              "regex": "enter\\s*(?:提交|確認|下一題|審查)"
+            }
+          ]
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "plan_review_en",
+      "why": "AiWork's full-screen plan review takes single-key actions (`Run(a)  Revise(m)  Discard(r)  Copy(y)  Close(Esc)`) and reports idle over OSC 7501 while it is open, so typed letters would act on the plan.",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "discard(r)"
+        },
+        "withinLastLines": 4,
+        "after": {
+          "regex": "\\(y\\)\\s*\\S+\\(esc\\)"
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "plan_review_zh",
+      "why": "plan_review_en in Simplified Chinese (`执行(a)  修改(m)  废弃(r)  复制(y)  关闭(Esc)`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "废弃(r)"
+        },
+        "withinLastLines": 4,
+        "after": {
+          "regex": "\\(y\\)\\s*\\S+\\(esc\\)"
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "plan_review_zh_hk",
+      "why": "plan_review_en in Traditional Chinese (`執行(a)  修改(m)  廢棄(r)  複製(y)  關閉(Esc)`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "廢棄(r)"
+        },
+        "withinLastLines": 4,
+        "after": {
+          "regex": "\\(y\\)\\s*\\S+\\(esc\\)"
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "plan_gate_en",
+      "why": "AiWork's plan-confirmation box (`Review the change plan`, options `Confirm and execute` and `Cancel`) answers with Enter like its approval box.",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "change"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "all": [
+            {
+              "regex": "^change\\s*plan"
+            },
+            {
+              "regex": "enter\\s*confirm"
+            }
+          ]
+        },
+        "lines": {
+          "atLeast": 1,
+          "includingLast": false,
+          "test": {
+            "regex": "review\\s*the\\s*change\\s*plan"
+          }
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "plan_gate_zh",
+      "why": "plan_gate_en in Simplified Chinese (`审查变更 Plan`, footer `enter 确认当前选项`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "审查变更"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "regex": "enter\\s*确认"
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "plan_gate_zh_hk",
+      "why": "plan_gate_en in Traditional Chinese (`審查變更 Plan`, footer `enter 確認當前選項`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "審查變更"
+        },
+        "withinLastLines": 12,
+        "after": {
+          "regex": "enter\\s*確認"
+        }
+      },
+      "answer": {
+        "state": "blocked",
+        "reason": "agent-interactive-prompt"
+      }
+    },
+    {
+      "id": "composer_back",
+      "why": "AiWork repaints without newlines, so an answered box stays in the line tail. Its composer `❱` (U+2771, unlike other agents' `❯`) is hidden while a box or the plan review is open and painted again above its `─` rule once it closes, in every language and width. Sent messages also start with `❱` but no rule follows them, and the pane must show AiWork's mode row (`Agent ·`, `Plan ·`).",
+      "when": {
+        "region": "text",
+        "find": {
+          "lastOf": "❱"
+        },
+        "after": {
+          "regex": "^❱[^❱]*─{8,}"
+        },
+        "lines": {
+          "atLeast": 1,
+          "includingLast": false,
+          "test": {
+            "regex": "(?:agent|plan)\\s*·\\s*(?:◆\\s*)?\\S"
+          }
+        }
+      },
+      "answer": {
+        "state": "live"
+      }
+    }
+  ],
+  "rules": []
+}

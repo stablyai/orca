@@ -34,7 +34,10 @@ import {
   agentLaunchProjectRuntime,
   resolveAgentLaunchRuntime
 } from './agent-launch-scope-runtime'
-import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution'
+import {
+  resolveInstalledAgentTerminalCommand,
+  resolvesInstalledAgentCommand
+} from './installed-agent-command-resolution'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -137,8 +140,8 @@ export async function resolveAgentTerminalCreateOptions(
   if (!launch.launchAgent) {
     return launch
   }
-  const qoderLaunch = await resolveQoderLaunchCommand(launch, workspace, store, runtime)
-  return runtime ? { ...qoderLaunch, launchRuntime: runtime } : qoderLaunch
+  const installedLaunch = await resolveInstalledLaunchCommand(launch, workspace, store, runtime)
+  return runtime ? { ...installedLaunch, launchRuntime: runtime } : installedLaunch
 }
 
 /** Desktop-selected account env overrides the launch plan; explicit caller env/accountEnv still wins. */
@@ -247,18 +250,18 @@ async function buildRuntimeAgentTerminalStartupOptions(
   }
 }
 
-/** Qoder ships under two command names; the launch runs whichever the machine that runs it has. */
-function resolveQoderLaunchCommand(
+/** Qoder and AiWork ship under several command names; the launch runs whichever the machine that runs it has. */
+function resolveInstalledLaunchCommand(
   launch: TerminalCreateOptions,
   workspace: TerminalWorkspaceLaunchScope,
   store: RuntimeStore,
   runtime: AgentLaunchRuntime | undefined
 ): Promise<TerminalCreateOptions> {
-  if (launch.launchAgent !== 'qoder') {
+  if (!resolvesInstalledAgentCommand(launch.launchAgent)) {
     return Promise.resolve(launch)
   }
   if (workspace.connectionId) {
-    return resolveQoderTerminalCommand(launch, {
+    return resolveInstalledAgentTerminalCommand(launch, {
       connectionId: workspace.connectionId,
       shell: resolveStartupShell(remoteExecutionPlatform(workspace.path))
     })
@@ -281,7 +284,7 @@ function resolveQoderLaunchCommand(
     shellOverride: fact.pty.shellOverride,
     terminalWindowsWslDistro: fact.pty.terminalWindowsWslDistro
   })
-  return resolveQoderTerminalCommand(launch, {
+  return resolveInstalledAgentTerminalCommand(launch, {
     context: wsl ? { wslDistro: wsl.distro } : {},
     shell: agentLaunchQuotingShell(fact)
   })

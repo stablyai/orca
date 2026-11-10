@@ -20,6 +20,7 @@ export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATA
 // Preserve only brands/products/code; translate generic agent/terminal/commit/repo/Continue via locale-generic-ui-terms, pin product senses by key prefixes.
 export const NEVER_TRANSLATE_VALUES = new Set([
   'Aider',
+  'AiWork',
   'Amp',
   'Android',
   'Antigravity',

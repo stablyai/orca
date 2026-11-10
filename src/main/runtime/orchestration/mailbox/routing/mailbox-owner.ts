@@ -10,6 +10,8 @@ export type OrchestrationMailboxTerminal = {
   paneKeys: readonly string[]
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
+  /** The agent's tools cannot read ORCA_TERMINAL_HANDLE, so its mail pointer names this terminal. */
+  pointerNamesHandle?: true
 }
 
 /** An agent at rest or mid-turn takes typed mail: agents queue or steer text sent during a turn. */

@@ -28,7 +28,7 @@ one resolver, `src/shared/program-status/presentation.ts`.
 
 ## OSC 7501 support matrix
 
-_Last updated: 2026-10-17._ Each "✅ live" row was checked by running the real CLI in a PTY whose
+_Last updated: 2026-11-06._ Each "✅ live" row was checked by running the real CLI in a PTY whose
 terminal answered queries the way Orca does.
 
 **Columns:**
@@ -47,6 +47,7 @@ terminal answered queries the way Orca does.
 | pi (`pi`)              | ✅ live, 1.3.0                            | required (`PI_PROGRAM_STATUS=1` forces it) | all five | all three            | session name, dialog title, first line of an error             | —            | extension        | Fallback                                                                      |
 | oh-my-pi (`omp`)       | ✅ live, 18.10.3                          | sends without asking                       | all five | permission, question | on `blocked`/`error` only                                      | —            | extension        | Fallback                                                                      |
 | Codex (`codex`)        | ✅ live, 0.163.0                          | sends without asking                       | all five | none sent (0.163)    | none                                                           | —            | hooks            | Fallback; state only                                                          |
+| AiWork (`aiwork`)      | ✅ live, 1.26455                          | required                                   | 3 of 5 ² | permission, question | activity, "Awaiting approval", "Awaiting your answer"          | —            | —                | Status and approvals (no hooks) ³                                             |
 
 ### Agents that don't send OSC 7501 yet
 
@@ -70,6 +71,12 @@ returns or the terminal resets, even though a `done`/`error` record stays on scr
 agent in the same pane is classified by its own titles again. Because answering changes what Claude
 paints, a client answers for a remote Orca host only when that host advertises
 `terminal.program-status.v1`.
+
+² AiWork 1.26455 sent `idle`, `working` and `blocked`; its recorded turns ended in `idle`, and it
+sends `done` and `error` only once its daemon has recorded how a turn ended.
+
+³ Its plan review reports `idle` while it waits for a decision, so Orca also refuses input while
+that review, or an approval or question box, is on the grid (`aiwork-terminal-readiness.ts`).
 
 ## Could an agent drop its hook for OSC 7501?
 
