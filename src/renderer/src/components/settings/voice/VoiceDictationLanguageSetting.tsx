@@ -22,8 +22,8 @@ function describeLanguageSetting(
 ): string {
   if (model && modelIgnoresLanguage) {
     return t(
-      'components.settings.voice.dictationLanguage.ignored',
-      '{{model}} only transcribes the languages it was built for, so it ignores this setting.',
+      'components.settings.voice.dictationLanguage.ignoredShort',
+      'Quality is rated for it. {{model}} doesn’t use it.',
       { model: model.label }
     )
   }
@@ -35,8 +35,8 @@ function describeLanguageSetting(
     )
   }
   return t(
-    'components.settings.voice.dictationLanguage.description',
-    'The language you speak. Auto-detect lets the model work it out each time.'
+    'components.settings.voice.dictationLanguage.rated',
+    'The language you speak. Quality is rated for it.'
   )
 }
 
@@ -44,12 +44,14 @@ type VoiceDictationLanguageSettingProps = {
   voiceSettings: VoiceSettings
   selectedModel: SpeechModelManifest | undefined
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
+  className?: string
 }
 
 export function VoiceDictationLanguageSetting({
   voiceSettings,
   selectedModel,
-  onUpdateVoiceSettings
+  onUpdateVoiceSettings,
+  className
 }: VoiceDictationLanguageSettingProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -67,11 +69,12 @@ export function VoiceDictationLanguageSetting({
   const options = codes
     .map((code) => ({ code, name: languageDisplayName(code, intlLocale) }))
     .sort((a, b) => collator.compare(a.name, b.name))
-  const label = t('components.settings.voice.dictationLanguage.a9df191aba', 'Dictation language')
+  const label = t('components.settings.voice.language.title', 'Language')
   const autoLabel = t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')
 
   return (
     <SettingsRow
+      className={className}
       label={label}
       description={describeLanguageSetting(
         selectedModel,

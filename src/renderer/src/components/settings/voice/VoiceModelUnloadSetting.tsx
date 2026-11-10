@@ -12,6 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 
 const NEVER_VALUE = 'never'
+// Shortest to longest keep, so Always comes last.
+const KEEP_LOADED_CHOICES = [
+  ...UNLOAD_MODEL_AFTER_MINUTES_CHOICES.filter((minutes) => minutes !== null),
+  null
+]
 
 function choiceValue(minutes: UnloadModelAfterMinutes): string {
   return minutes === null ? NEVER_VALUE : String(minutes)
@@ -22,11 +27,12 @@ function choiceLabel(
   t: Translate = translate,
   intlLocale?: string
 ): string {
+  // The row asks how long to keep the model, so never unloading reads Always and unloading at once Never.
   if (minutes === null) {
-    return t('components.settings.voice.modelUnload.never', 'Never')
+    return t('components.settings.voice.keepLoaded.always', 'Always')
   }
   if (minutes === 0) {
-    return t('components.settings.voice.modelUnload.immediately', 'Immediately')
+    return t('components.settings.voice.keepLoaded.never', 'Never')
   }
   return formatMinutesDuration(minutes, intlLocale)
 }
@@ -50,7 +56,7 @@ export function VoiceModelUnloadSetting({
 
   return (
     <SettingsRow
-      label={t('components.settings.voice.modelUnload.94afd37271', 'Unload speech model')}
+      label={t('components.settings.voice.keepLoaded.label', 'Keep model loaded')}
       description={
         isCloudModel
           ? t(
@@ -58,8 +64,8 @@ export function VoiceModelUnloadSetting({
               'Cloud models run on the provider’s servers, so nothing stays loaded here.'
             )
           : t(
-              'components.settings.voice.modelUnload.description',
-              'How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.'
+              'components.settings.voice.keepLoaded.description',
+              'Dictation starts at once while it’s loaded.'
             )
       }
       labelId={labelId}
@@ -78,7 +84,7 @@ export function VoiceModelUnloadSetting({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {UNLOAD_MODEL_AFTER_MINUTES_CHOICES.map((minutes) => (
+            {KEEP_LOADED_CHOICES.map((minutes) => (
               <SelectItem key={choiceValue(minutes)} value={choiceValue(minutes)}>
                 {choiceLabel(minutes, t, intlLocale)}
               </SelectItem>
