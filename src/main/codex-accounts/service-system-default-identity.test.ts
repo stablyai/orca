@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import * as fs from 'node:fs'
 import * as providerConfig from '../codex/structured/launch/codex-model-provider-config'
 import { getCodexAccountAuthWarning } from '../../renderer/src/components/settings/accounts/codex/codex-account-auth-warning'
@@ -206,6 +206,14 @@ describe('CodexAccountService config sync', () => {
           expect(configReads()).toBe(1)
           expect(parse).toHaveBeenCalledTimes(1)
 
+          rmSync(configPath)
+          expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe(
+            'oauth'
+          )
+          expect(configReads()).toBe(2)
+          service.listAccounts()
+          expect(configReads()).toBe(2)
+
           writeFileSync(configPath, `model_provider = "openai"\n${projects}`)
           expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
             hasAuth: true,
@@ -214,7 +222,7 @@ describe('CodexAccountService config sync', () => {
             providerAccountId: 'acct-real',
             workspaceLabel: null
           })
-          expect(configReads()).toBe(2)
+          expect(configReads()).toBe(3)
           expect(parse).toHaveBeenCalledTimes(2)
         } finally {
           read.mockRestore()

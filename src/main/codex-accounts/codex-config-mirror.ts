@@ -24,19 +24,25 @@ export type CanonicalCodexConfig = {
 export class CodexConfigMirror {
   private readonly hostModelProvider = createIntegrationStateFileCache({
     filePath: () => join(homedir(), '.codex', 'config.toml'),
-    readFromDisk: () =>
-      readCodexTopLevelModelProvider(
-        readFileSync(join(homedir(), '.codex', 'config.toml'), 'utf-8')
-      )
+    readFromDisk: () => {
+      try {
+        return readCodexTopLevelModelProvider(
+          readFileSync(join(homedir(), '.codex', 'config.toml'), 'utf-8')
+        )
+      } catch (error) {
+        if (!isDefinitiveAbsence(error)) {
+          throw error
+        }
+        return null
+      }
+    }
   })
 
   readHostModelProvider(): string | null {
     try {
       return this.hostModelProvider.get()
-    } catch (error) {
-      if (!isDefinitiveAbsence(error)) {
-        console.warn('[codex-accounts] Failed to read canonical provider config')
-      }
+    } catch {
+      console.warn('[codex-accounts] Failed to read canonical provider config')
       return null
     }
   }
