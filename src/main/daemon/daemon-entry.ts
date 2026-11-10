@@ -1,4 +1,5 @@
 import '../memory/host-malloc-tunables-claim'
+import { logCgroupPidsLimit } from './admission/daemon-cgroup-pids-pressure'
 import { parseArgs } from './launch/daemon-command-arguments'
 import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './server/daemon-main'
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
   const log = (event: string, details?: Record<string, unknown>): void =>
     daemonLog.log(event, details)
   const processCeiling = initializeTerminalScopes(daemonScope, log)
+  void logCgroupPidsLimit(log).catch(() => {})
   startDaemonScopeDeathWatch({ daemonScope, log })
   void warmPwshAvailabilityCache()
 

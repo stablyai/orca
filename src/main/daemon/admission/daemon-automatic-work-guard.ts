@@ -7,6 +7,7 @@ import type {
 import type { ProcessGrowthTrip } from '../../../shared/process-growth-breaker'
 import { AutomaticWorkRunMarker } from './automatic-work-run-marker-store'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
+import { CgroupPidsPressure } from './daemon-cgroup-pids-pressure'
 import { DaemonProcessGrowthMonitor } from './daemon-process-growth-monitor'
 import { HostTerminalLedger, resolveMaxHostTerminals } from './host-terminal-ledger'
 import { LegacyRestoreRecords, legacyRestoreRecordsPathFor } from './legacy-restore-records'
@@ -31,6 +32,7 @@ export class DaemonAutomaticWorkGuard {
   private readonly marker: AutomaticWorkRunMarker
   private readonly legacyRestores: LegacyRestoreRecords
   private readonly monitor: DaemonProcessGrowthMonitor
+  private readonly cgroupPids: CgroupPidsPressure
   private pressurePausedSince: number | null = null
 
   constructor(private readonly options: DaemonAutomaticWorkGuardOptions) {
@@ -48,11 +50,16 @@ export class DaemonAutomaticWorkGuard {
         onLevelChanged: (level) => this.onPressureChanged(level),
         onTrip: (trips) => this.onTrip(trips)
       })
+    this.cgroupPids = new CgroupPidsPressure({
+      log: (event, details) => options.log.log(event, details),
+      onLevelChanged: () => this.gate.onPressureChanged()
+    })
     const policy = options.terminalPolicy
     this.gate = new TerminalSpawnGate({
       log: (event, details) => options.log.log(event, details),
       mode: options.mode,
-      pressure: () => this.monitor.level,
+      pressure: () => (this.cgroupPids.level === 'critical' ? 'critical' : this.monitor.level),
+      refreshPressure: () => this.cgroupPids.refresh(),
       automaticWorkMode: () => this.automaticWorkMode(),
       armAutomaticWork: () => this.marker.arm(),
       legacyRestores: this.legacyRestores,
