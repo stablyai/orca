@@ -20,6 +20,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { SignJWT, exportJWK, generateKeyPair, importJWK } from 'jose'
+import { DEFAULT_PLANS } from '../src/plans'
 import { encodeForm } from '../src/stripe'
 
 const HOUR = 3600
@@ -263,21 +264,23 @@ check('100% included-hours warning', warned.usageWarningPercent === 100, warned.
 await reportUsage(accountA, 20)
 await reportUsage(accountA, 20)
 const capped = await startCheck(accountA)
-check('spend cap ($25 = 33.3 overage h) reached -> new starts blocked', capped.allow === false && capped.reason === 'overage_cap_reached', capped)
+check(`spend cap ($25 = ${(2500 / DEFAULT_PLANS.team.overageCentsPerHour).toFixed(1)} overage h) reached -> new starts blocked`, capped.allow === false && capped.reason === 'overage_cap_reached', capped)
 const spent = await entitlement(orgA)
 check('metered spend stops at the cap', spent.overage?.spentCents <= 2500 && spent.overage?.spentCents >= 2490, spent.overage)
 
 const meterEnd = Math.ceil(Date.now() / 1000 / 60) * 60 + 60
+// The $25 default cap in overage seconds at the plan's overage rate (single source: plans.ts).
+const CAP_SECONDS = Math.floor((2500 / DEFAULT_PLANS.team.overageCentsPerHour) * HOUR)
 const summaries = await until(
   'meter event summaries',
   () => stripe<{ data: Array<{ aggregated_value: number }> }>('GET', `/v1/billing/meters/${catalog.meter}/event_summaries`, {
     customer: customerA, start_time: meterStart, end_time: meterEnd
   }),
-  (s) => s.data.reduce((sum, row) => sum + row.aggregated_value, 0) >= Math.floor((2500 / 75) * HOUR),
+  (s) => s.data.reduce((sum, row) => sum + row.aggregated_value, 0) >= CAP_SECONDS,
   240_000
 )
 const meteredTotal = summaries.data.reduce((sum, row) => sum + row.aggregated_value, 0)
-check('Stripe meter received exactly the capped overage seconds', meteredTotal === Math.floor((2500 / 75) * HOUR), { meteredTotal })
+check('Stripe meter received exactly the capped overage seconds', meteredTotal === CAP_SECONDS, { meteredTotal })
 
 // ---- 5. Portal ------------------------------------------------------------------------------
 // ---- 5a. Seats follow membership (auth pushes member counts) ------------------------------------

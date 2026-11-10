@@ -15,7 +15,7 @@ export const sampleOffers: OrcaBillingOffers = {
     includedHoursPerSeat: 60,
     concurrentSandboxesPerSeat: 3,
     idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
-    overageCentsPerHour: 75,
+    overageCentsPerHour: 100,
     defaultSpendCapCents: 2500
   },
   enterprise: {
@@ -40,7 +40,7 @@ export const sampleTeam: OrcaBillingEntitlement = {
   remainingIncludedSeconds: 78.5 * HOUR,
   usageWarningPercent: null,
   overageSeconds: 0,
-  overage: { optedIn: false, active: false, spendCapCents: 2500, spentCents: 0, centsPerHour: 75 },
+  overage: { optedIn: false, active: false, spendCapCents: 2500, spentCents: 0, centsPerHour: 100 },
   payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
   canStartSandbox: true,
   reason: null,
