@@ -4140,7 +4140,6 @@
             "fixWithAgent": "Fix with agent",
             "openAnyway": "Open anyway",
             "provision": "Provision VM",
-            "retryChecks": "Retry checks",
             "provisionCloud": "Start sandbox",
             "checksCloud": "Prepare environment",
             "createCloud": "Open workspace",
@@ -4162,7 +4161,8 @@
             "stateDone": "Done",
             "stateFailed": "Failed",
             "openFailedCloud": "Couldn’t open your cloud workspace",
-            "stateSkipped": "Skipped"
+            "stateSkipped": "Skipped",
+            "runChecksAgain": "Run checks again"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
@@ -20832,7 +20832,6 @@
         "reassignOwner": "Reassign owner",
         "reassignTitle": "Make {{name}} the owner?",
         "refresh": "Refresh cloud workspaces",
-        "retry": "Retry",
         "rowActions": "Actions for {{value0}}",
         "rowDescription2": "{{usage}}. Last active {{lastActive}}. {{visibility}}.",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
@@ -26551,7 +26550,8 @@
       "moreChanges": "{{count}} more",
       "noCommits": "No commits on this branch yet.",
       "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "files_other": "{{count}} files",
+      "loadFailedDetail": "Your files are safe in the archive."
     },
     "state": {
       "archived": "Archived",
@@ -26561,10 +26561,11 @@
       "waking": "Waking",
       "notResponding": "Not responding",
       "failed": "Couldn’t start",
-      "unknown": "Checking…"
+      "unknown": "Checking…",
+      "starting": "Starting",
+      "wakeFailed": "Couldn’t wake"
     },
     "unarchive": "Unarchive",
-    "retry": "Retry",
     "change": {
       "modified": "Modified",
       "added": "Added",
@@ -26614,10 +26615,13 @@
     "detail": {
       "restartKeeps": "Restart keeps your files; agents resume.",
       "restarting": "Orca resumes your agents after the restart.",
-      "asleep": "Files and chats are saved. Opening it wakes it.",
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
-      "failed": "The last start failed. Your files are saved.",
-      "waking": "Waking…"
+      "waking": "Waking…",
+      "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
+      "starting": "Starting the sandbox…",
+      "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
+      "startFailed": "The sandbox couldn’t start. Nothing was lost.",
+      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
     },
     "restarting": "Restarting…",
     "restart": "Restart",
@@ -26631,13 +26635,10 @@
     "usedOfTotal": "{{used}} / {{total}}",
     "disk": "Disk",
     "uptime": "Up for",
-    "usedLabel": "Used",
-    "overage": "Overage so far",
     "keptUntil": "Kept until",
     "ago": "{{ago}} ago",
     "wake": "Wake",
     "error": {
-      "noHours": "You’re out of sandbox hours. Your files are safe.",
       "seePlans": "See plans",
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
@@ -26687,7 +26688,14 @@
     "archiveFailedNamed": "Couldn’t archive {{name}}",
     "archivedNamed": "Archived {{name}}",
     "archivedWorkspace": "Archived the workspace",
-    "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files."
+    "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
+    "tryAgain": "Try again",
+    "sandboxHoursUsedLabel": "Sandbox hours used",
+    "sleep": "Sleep",
+    "thisWorkspace": "This workspace",
+    "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
+    "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
+    "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

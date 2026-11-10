@@ -15,7 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
 import { describeInlineError } from './cloud-workspace-errors'
 
-/** The list failed to load. An expired session offers Sign in; anything else offers Retry. */
+/** The list failed to load. An expired session offers Sign in; anything else offers Try again. */
 export function ErrorState({
   error,
   reason,
@@ -37,7 +37,7 @@ export function ErrorState({
     <InlineError
       className="m-1"
       title={describeInlineError(error, reason, t)}
-      retryLabel={t('auto.components.cloudWorkspaces.retry', 'Retry')}
+      retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
       retrying={retrying}
       onRetry={onRetry}
     />

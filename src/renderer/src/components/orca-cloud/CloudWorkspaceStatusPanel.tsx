@@ -1,5 +1,5 @@
 import React from 'react'
-import { Archive, ArchiveRestore, Cloud, Laptop, Loader2, Play, RotateCw } from 'lucide-react'
+import { Archive, ArchiveRestore, Cloud, Laptop, Loader2, Moon, Play, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { cloudWorkspaceMoved } from '@/lib/orca-cloud/orca-cloud-move-store'
@@ -32,6 +32,8 @@ export type CloudPanelActions = {
   onRestart: () => void
   onArchive: () => void
   onUnarchive: () => void
+  /** Put a running sandbox to sleep (frees one of the team's running slots). */
+  onSleep?: () => void
   /** "Move to this computer"; absent where the move isn't offered (fixtures, older bridges). */
   onMoveToComputer?: () => void
 }
@@ -156,8 +158,9 @@ export function CloudWorkspaceStatusPanel({
   const unavailable = !status && Boolean(entry?.error)
   const firstLoad = !status && !entry?.error
   const anyBusy = pending !== undefined
-  const canRestart = state === 'running' || state === 'unresponsive' || state === 'failed'
-  const restartPrimary = state === 'unresponsive' || state === 'failed'
+  const canRestart =
+    state === 'running' || state === 'unresponsive' || state === 'failed' || state === 'wakeFailed'
+  const restartPrimary = state === 'unresponsive' || state === 'failed' || state === 'wakeFailed'
   const canArchive = state === 'running' || state === 'sleeping' || state === 'unresponsive'
   const memPercent = metrics ? percentOf(metrics.memUsedBytes, metrics.memTotalBytes) : 0
   const diskPercent = metrics ? percentOf(metrics.diskUsedBytes, metrics.diskTotalBytes) : 0
@@ -203,7 +206,7 @@ export function CloudWorkspaceStatusPanel({
         <InlineError
           tone="neutral"
           title={t('orcaCloudWorkspace.statusUnavailableDetail', 'Orca Cloud didn’t answer.')}
-          retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
+          retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}
           density="compact"
@@ -313,6 +316,17 @@ export function CloudWorkspaceStatusPanel({
                 {moved
                   ? t('orcaCloudWorkspace.moveAgain', 'Move again')
                   : t('orcaCloudWorkspace.moveHere', 'Move here')}
+              </Button>
+            ) : null}
+            {actions.onSleep && state === 'running' && !restarting ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-muted-foreground"
+                {...busyProps(false, anyBusy, actions.onSleep)}
+              >
+                <Moon />
+                {t('orcaCloudWorkspace.sleep', 'Sleep')}
               </Button>
             ) : null}
             {canArchive && !restarting ? (

@@ -33,6 +33,7 @@ function dotState(w: CloudWorkspace): CloudDotState {
     case 'running':
       return 'running'
     case 'creating':
+      return 'starting'
     case 'resuming':
       return 'waking'
     case 'suspending':
