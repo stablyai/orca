@@ -206,3 +206,20 @@ describe('orcad env', () => {
     expect(start).toMatch(/env -i HOME="\$HOME" USER="\$\(id -un\)" LANG=C\.UTF-8 TERM=xterm-256color "\$\{ca_env\[@\]\}"/)
   })
 })
+
+describe('copilot wrapper', () => {
+  it('drops only the Orca GitHub placeholders, and keeps them for BYOK', () => {
+    const provision = readFileSync(fileURLToPath(new URL('./provision-golden.sh', import.meta.url).href), 'utf8')
+    const block = provision.slice(provision.indexOf('copilot_loader='), provision.indexOf("# The agents' first run"))
+    const root = mkdtempSync(join(tmpdir(), 'orca-copilot-'))
+    const loaderDir = join(root, 'tools/lib/node_modules/@github/copilot')
+    spawnSync('mkdir', ['-p', loaderDir, join(root, 'tools/bin')])
+    spawnSync('sh', ['-c', `printf '#!/bin/sh\\necho "$GH_TOKEN|$GITHUB_TOKEN|$*"\\n' > "${loaderDir}/npm-loader.js" && chmod +x "${loaderDir}/npm-loader.js"`])
+    expect(spawnSync('bash', ['-c', block], { env: { ...process.env, ORCA_HOME: root } }).status).toBe(0)
+    const run = (env: Record<string, string>) =>
+      spawnSync(join(root, 'tools/bin/copilot'), ['-i', 'a b'], { env: { PATH: process.env.PATH ?? '', ...env }, encoding: 'utf8' }).stdout.trim()
+    expect(run({ GH_TOKEN: 'orca-ph-sbx1', GITHUB_TOKEN: 'orca-ph-sbx1' })).toBe('||-i a b')
+    expect(run({ GH_TOKEN: 'github_pat_user' })).toBe('github_pat_user||-i a b')
+    expect(run({ GH_TOKEN: 'orca-ph-sbx1', COPILOT_PROVIDER_BASE_URL: 'https://llm.example.com/v1' })).toBe('orca-ph-sbx1||-i a b')
+  })
+})
