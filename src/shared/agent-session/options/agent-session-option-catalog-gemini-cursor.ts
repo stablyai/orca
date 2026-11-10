@@ -65,6 +65,7 @@ const CURSOR_THINKING: CatalogOption = {
 const CURSOR_LABELED_ROW = /^([a-z0-9][a-z0-9._-]*)\s+-\s+(.+)$/i
 const CURSOR_ROW_MARKER = /\s+\((?:default|current)\)$/i
 
+/** Private enrichment-gate parser; accepts newer `id - Label` rows and legacy bare-id rows, and trims `(default)`/`(current)` markers. */
 function parseCursorModels(stdout: string): CatalogModel[] {
   const seen = new Set<string>()
   const models: CatalogModel[] = []
