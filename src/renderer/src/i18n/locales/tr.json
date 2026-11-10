@@ -20721,6 +20721,22 @@
           "repoNameHint": "Depo adını ipucu olarak kullan",
           "repoNameHintDescription": "Depo adının tanınmasına yardımcı olur.",
           "repoSaveFailed": "Deponun terimleri kaydedilemedi. Bu deponun ana makinesinde Orca güncellemesi gerekebilir."
+        },
+        "micTest": {
+          "test": "Test et",
+          "recording": "Kaydediliyor {{elapsed}} / {{limit}}",
+          "stop": "Durdur",
+          "hint": "Normalde dikte ettiğiniz gibi bir cümle söyleyin.",
+          "playing": "Oynatılıyor {{elapsed}}",
+          "skip": "Atla",
+          "levelGood": "Ses düzeyi iyi görünüyor",
+          "levelQuiet": "Çok sessiz. Mikrofonu kontrol edin ya da yaklaşın.",
+          "playAgain": "Tekrar oynat",
+          "testAgain": "Tekrar test et",
+          "listening": "{{model}} da dinliyor…",
+          "heardLabel": "{{model}} şunu duydu",
+          "heardNothing": "Hiç kelime yok. Daha yüksek sesle konuşmayı deneyin.",
+          "heardFailed": "{{model}} kaydı yazıya dökemedi."
         }
       },
       "repositoryHooks": {

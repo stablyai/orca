@@ -20020,6 +20020,22 @@
           "repoNameHint": "저장소 이름을 힌트로 사용",
           "repoNameHintDescription": "저장소 이름을 더 잘 인식하도록 돕습니다.",
           "repoSaveFailed": "저장소 용어를 저장하지 못했습니다. 이 저장소의 호스트에서 Orca 업데이트가 필요할 수 있습니다."
+        },
+        "micTest": {
+          "test": "테스트",
+          "recording": "녹음 중 {{elapsed}} / {{limit}}",
+          "stop": "중지",
+          "hint": "평소 받아쓰기하듯 한 문장을 말해 보세요.",
+          "playing": "재생 중 {{elapsed}}",
+          "skip": "건너뛰기",
+          "levelGood": "음량이 적당합니다",
+          "levelQuiet": "소리가 매우 작습니다. 마이크를 확인하거나 더 가까이에서 말하세요.",
+          "playAgain": "다시 재생",
+          "testAgain": "다시 테스트",
+          "listening": "{{model}}도 듣고 있습니다…",
+          "heardLabel": "{{model}}이(가) 들은 내용",
+          "heardNothing": "들린 말이 없습니다. 더 크게 말해 보세요.",
+          "heardFailed": "{{model}}이(가) 녹음을 받아쓰지 못했습니다."
         }
       },
       "repositoryHooks": {

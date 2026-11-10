@@ -20739,6 +20739,22 @@
           "repoNameHint": "Repo-Namen als Hinweis verwenden",
           "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
           "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
+        },
+        "micTest": {
+          "test": "Testen",
+          "recording": "Aufnahme {{elapsed}} von {{limit}}",
+          "stop": "Stopp",
+          "hint": "Sprich einen Satz so, wie du sonst diktierst.",
+          "playing": "Wiedergabe {{elapsed}}",
+          "skip": "Überspringen",
+          "levelGood": "Pegel sieht gut aus",
+          "levelQuiet": "Sehr leise. Prüfe das Mikrofon oder geh näher heran.",
+          "playAgain": "Erneut abspielen",
+          "testAgain": "Erneut testen",
+          "listening": "{{model}} hört ebenfalls zu…",
+          "heardLabel": "{{model}} hat verstanden",
+          "heardNothing": "Keine Wörter. Sprich lauter.",
+          "heardFailed": "{{model}} konnte die Aufnahme nicht transkribieren."
         }
       },
       "repositoryHooks": {

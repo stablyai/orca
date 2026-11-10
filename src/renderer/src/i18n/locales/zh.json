@@ -20019,6 +20019,22 @@
           "repoNameHint": "将仓库名用作提示",
           "repoNameHintDescription": "帮助识别仓库名称。",
           "repoSaveFailed": "无法保存仓库的术语。运行此仓库的主机可能需要更新 Orca。"
+        },
+        "micTest": {
+          "test": "测试",
+          "recording": "正在录音 {{elapsed}} / {{limit}}",
+          "stop": "停止",
+          "hint": "像平时听写那样说一句话。",
+          "playing": "正在回放 {{elapsed}}",
+          "skip": "跳过",
+          "levelGood": "音量正常",
+          "levelQuiet": "声音很小。请检查麦克风或靠近一些。",
+          "playAgain": "再听一遍",
+          "testAgain": "重新测试",
+          "listening": "{{model}} 也在听…",
+          "heardLabel": "{{model}} 听到的内容",
+          "heardNothing": "没有听到任何词。请大声一点。",
+          "heardFailed": "{{model}} 无法转写这段录音。"
         }
       },
       "repositoryHooks": {

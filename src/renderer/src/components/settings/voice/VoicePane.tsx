@@ -371,6 +371,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
       <VoiceInputSettings
         voiceSettings={voiceSettings}
+        readyModel={selectedState?.status === 'ready' ? selectedModel : undefined}
         onUpdateVoiceSettings={updateVoiceSettings}
       />
 

@@ -20422,6 +20422,22 @@
           "repoNameHint": "將儲存庫名稱用作提示",
           "repoNameHintDescription": "幫助辨識儲存庫名稱。",
           "repoSaveFailed": "無法儲存儲存庫的術語。執行此儲存庫的主機可能需要更新 Orca。"
+        },
+        "micTest": {
+          "test": "測試",
+          "recording": "正在錄音 {{elapsed}} / {{limit}}",
+          "stop": "停止",
+          "hint": "像平常聽寫那樣說一句話。",
+          "playing": "正在播放 {{elapsed}}",
+          "skip": "略過",
+          "levelGood": "音量正常",
+          "levelQuiet": "聲音很小。請檢查麥克風或靠近一點。",
+          "playAgain": "再聽一次",
+          "testAgain": "重新測試",
+          "listening": "{{model}} 也在聽…",
+          "heardLabel": "{{model}} 聽到的內容",
+          "heardNothing": "沒有聽到任何字詞。請大聲一點。",
+          "heardFailed": "{{model}} 無法轉寫這段錄音。"
         }
       },
       "repositoryHooks": {
