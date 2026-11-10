@@ -187,6 +187,7 @@ const MessageBody = z.object({
   state: z.string().min(1).optional(),
   completedAt: z.number().finite().optional()
 })
+const MessageMetadata = MessageBody.omit({ blocks: true })
 
 /** A turn's lifecycle, as the turn item and the legacy status row both carry it. */
 const TurnLifecycleFields = {
@@ -330,6 +331,11 @@ export function isAdmissibleAgentJournalMessageBody(
   value: unknown
 ): value is AgentJournalMessageItem {
   return MessageBody.safeParse(value).success
+}
+
+/** Plain text snapshots validate their unchanged block shape before entering the narrow writer. */
+export function isAdmissibleAgentJournalMessageMetadata(value: unknown): boolean {
+  return MessageMetadata.safeParse(value).success
 }
 
 export function isAdmissibleAgentJournalRenderItem(

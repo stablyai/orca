@@ -18,6 +18,21 @@ afterEach(() => {
   }
 })
 
+it('rejects unreadable metadata in an existing text snapshot without changing saved text', async () => {
+  const { commit, item } = fixture()
+  await commit(message('Saved'))
+  const invalid = message('Unreadable')
+  invalid.body.completedAt = Number.NaN
+  expect((await commit(invalid)).outcomes[0]).toMatchObject({
+    committed: true,
+    value: { value: { failure: { code: 'journal_row_rejected' } } }
+  })
+  expect(item('orca:assistant')).toMatchObject({
+    revision: 1,
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Saved' }] }
+  })
+})
+
 it('publishes exact committed snapshots and their final body in order', async () => {
   const { db, command, commitCommands, commit, item, published } = fixture()
   db.prepare('UPDATE journal_chat_state SET context_boundary=7').run()

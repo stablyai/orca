@@ -51,8 +51,20 @@ describe('a refused event changes nothing and its retry lands it once', () => {
       BACKPRESSURE
     )
     refusing = false
-    assembler.flush()
-    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe('Observed text')
+    expect(
+      assembler.apply({
+        type: 'text.delta',
+        item: { id: 'm1' },
+        channel: 'assistant',
+        text: ' and more'
+      }).admission
+    ).toEqual({ accepted: true })
+    expect(assembler.apply({ type: 'text.close', item: { id: 'm1' } }).admission).toEqual({
+      accepted: true
+    })
+    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe(
+      'Observed text and more'
+    )
   })
 
   it('keeps window text while the sink is full and retries it, and lets it go once the sink is gone', async () => {

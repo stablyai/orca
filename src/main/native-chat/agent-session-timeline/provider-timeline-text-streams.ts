@@ -78,7 +78,7 @@ export class ProviderTimelineTextStreams {
       this.stop(stream, stream.stoppedIn)
       return undefined
     }
-    return stream
+    return stream?.closing ? undefined : stream
   }
 
   /** Drop trailing text for the same stopped turn, including events naming no turn. */
@@ -149,6 +149,9 @@ export class ProviderTimelineTextStreams {
   /** Flush preceding text before the event’s own writes. */
   planFlush(plan: ProviderTimelinePlan, except?: ProviderTimelineStream): void {
     for (const stream of this.byId.values()) {
+      if (stream.closing) {
+        continue
+      }
       const snapshot = this.coalescer.snapshot(stream.id)
       if (snapshot && stream !== except && snapshot.text.length !== stream.queuedLength) {
         this.planText(plan, stream, snapshot.text)

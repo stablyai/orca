@@ -25,6 +25,8 @@ import {
   type JournalDomainInputItemObservation
 } from './journal-domain-input-ends'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { readAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
+import { AgentSessionJournalError } from './writing/journal-write-guards'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -62,16 +64,6 @@ export function writeJournalDomainCurrentItem(
   if (!db.isTransaction) {
     throw new Error('journal item persistence requires its writer transaction')
   }
-  if (
-    readAgentJournalTurn(input.item.body) ||
-    readAgentJournalTurn(input.previous?.item.body) ||
-    isAgentSessionContextClear(input.item.body)
-  ) {
-    beforeJournalRequestWrite(db, target, 'turn', input.item.itemId)
-  }
-  const prefix = [target.sessionId, target.epoch] as const
-  const ordinal =
-    input.ordinal ?? input.previous?.ordinal ?? nextJournalDomainItemOrdinal(db, target)
   const body = normalizeJournalDomainItemBody(
     db,
     target,
@@ -80,6 +72,22 @@ export function writeJournalDomainCurrentItem(
     input.stopSettle
   )
   const item = body === input.item.body ? input.item : { ...input.item, body }
+  if (readAgentJournalItemBody(item.body) !== 'readable') {
+    throw new AgentSessionJournalError(
+      'journal_row_rejected',
+      `journal item for ${target.sessionId} is not readable`
+    )
+  }
+  if (
+    readAgentJournalTurn(item.body) ||
+    readAgentJournalTurn(input.previous?.item.body) ||
+    isAgentSessionContextClear(item.body)
+  ) {
+    beforeJournalRequestWrite(db, target, 'turn', item.itemId)
+  }
+  const prefix = [target.sessionId, target.epoch] as const
+  const ordinal =
+    input.ordinal ?? input.previous?.ordinal ?? nextJournalDomainItemOrdinal(db, target)
   const stopNote = journalDomainStopNote(item, (id) => {
     if (id === input.item.itemId) {
       return item

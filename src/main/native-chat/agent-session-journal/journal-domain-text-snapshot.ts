@@ -5,6 +5,8 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { journalDomainItemWire } from './journal-domain-history-metadata'
 import { journalDomainOutlineSource } from './journal-domain-outline-source'
 import { journalItemStatusMetadata } from './journal-item-status-metadata'
+import { isAdmissibleAgentJournalMessageMetadata } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { AgentSessionJournalError } from './writing/journal-write-guards'
 
 /** Stable text placement and classifications need no membership or indexed-column rewrite. */
 export function writeJournalDomainTextSnapshot(
@@ -36,6 +38,12 @@ export function writeJournalDomainTextSnapshot(
   const { revision, body: _body, ...placement } = item
   if (!isDeepStrictEqual(previousPlacement, placement)) {
     return false
+  }
+  if (!isAdmissibleAgentJournalMessageMetadata(item.body)) {
+    throw new AgentSessionJournalError(
+      'journal_row_rejected',
+      `journal item for ${target.sessionId} is not readable`
+    )
   }
   const payload = JSON.stringify(item)
   const { wireBytes, wireJson, detailJson } = journalDomainItemWire(item, payload)

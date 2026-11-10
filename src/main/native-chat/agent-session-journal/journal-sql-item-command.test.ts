@@ -19,6 +19,26 @@ afterEach(() => {
   }
 })
 
+it('keeps a completed turn while dropping its unusable context annotation before admission', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    body: {
+      kind: 'turn',
+      turnId: 'turn',
+      state: 'completed',
+      contextUsage: { window: { tokens: 0, capturedAt: 0 } }
+    },
+    options
+  })
+  expect(f.item('orca:turn')?.body).toEqual({
+    kind: 'turn',
+    turnId: 'turn',
+    state: 'completed'
+  })
+})
+
 it('publishes and binds ordinary writes to the same public epoch as history after replacement', async () => {
   const f = domainLifecycleFixture(cleanups)
   f.db.exec(`INSERT INTO agent_session_records VALUES('chat','{}')`)

@@ -119,6 +119,8 @@ it('publishes live text while restart keeps the saved block, then saves a clean 
   expect(saved()).toBe('Hello world\n\n')
   expect(text(delivered.at(-1)?.[0])).toBe('Hello world\n\nNext unfinished')
   assembler.apply({ type: 'text.close', item: { id: 'message' }, text: 'Replacement' })
+  expect(delta(' late').dropped).toBe('item-settled')
+  assembler.flush()
   await drain()
   expect(saved()).toBe('Replacement')
   expect(source?.read('epoch')).toEqual([])

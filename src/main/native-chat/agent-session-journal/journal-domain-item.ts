@@ -109,7 +109,14 @@ export function applyJournalDomainItem(
     input.kind === 'text-snapshot' &&
     (input.body.role === 'assistant' || input.body.role === 'reasoning') &&
     input.body.command === undefined &&
-    input.body.blocks.every((block) => block.type === 'text')
+    input.body.blocks.every(
+      (block) =>
+        block.type === 'text' &&
+        typeof block.text === 'string' &&
+        (block.presentation === undefined || typeof block.presentation === 'string') &&
+        (block.tone === undefined || typeof block.tone === 'string') &&
+        block.providerFrame === undefined
+    )
   const stored = db
     .prepare(`SELECT revision,sequence,ordinal,owner_fence,execution_owner,hidden,placement_json,
       message_role,lifecycle_state,assistant_prose,
