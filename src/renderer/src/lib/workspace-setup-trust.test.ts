@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import { __resetTrustPromptChainForTests } from './ensure-hooks-confirmed'
-import { confirmWorkspaceSetupDecision } from './workspace-setup-trust'
+import { __resetTrustPromptChainForTests } from '../runtime/repo-hooks/ensure-hooks-confirmed'
+import { confirmWorkspaceSetupDecision } from './workspace/creation/setup/workspace-setup-trust'
 
 const hooksCheckMock = vi.fn()
 
