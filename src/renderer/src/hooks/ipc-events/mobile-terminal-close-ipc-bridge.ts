@@ -3,7 +3,10 @@ import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
-import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
+import {
+  getWorkspaceFilePreviewPlan,
+  openFileInBrowserTab
+} from '@/lib/browser/documents/file-preview'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { isHtmlFilePath } from '@/components/terminal-pane/links/files/local-html-file-destinations'
 import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
