@@ -4,7 +4,10 @@ import type { ProjectGroupImportProjectResult } from '../../../../../../shared/p
 export function nestedImportFailureDescription(
   failure: ProjectGroupImportProjectResult | undefined
 ): string | undefined {
-  switch (failure?.errorCode) {
+  if (!failure?.errorCode) {
+    return failure?.error
+  }
+  switch (failure.errorCode) {
     case 'not_in_scan':
       return translate(
         'nestedImport.error.notInScan',
@@ -14,7 +17,6 @@ export function nestedImportFailureDescription(
       return translate('nestedImport.error.notGitRepository', 'Not a valid Git repository')
     case 'import_failed':
       return translate('nestedImport.error.importFailed', 'Repository could not be imported')
-    default:
-      return failure?.error
   }
+  return failure.error
 }
