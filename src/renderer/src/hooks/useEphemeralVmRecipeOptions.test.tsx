@@ -167,6 +167,32 @@ describe('useEphemeralVmRecipeOptions', () => {
     expect(container.querySelector('[data-testid="error"]')?.textContent).toBe('none')
   })
 
+  // A1: signed out (or no plan yet) the composer must still be able to pick Orca Cloud and reach
+  // "Set up and start"; main only lists the recipe once the account can use it.
+  it('offers Orca Cloud while the account still needs setup, and keeps an initial pick', async () => {
+    for (const orcaCloud of ['needs-sign-in', 'needs-capability'] as const) {
+      installApi(vi.fn().mockResolvedValue({ ...result([]), orcaCloud }))
+      const { container } = await render(
+        <Harness repoId="repo-1" customRecipesEnabled={false} initialRecipeId="cloud" />
+      )
+      await vi.waitFor(() =>
+        expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('cloud')
+      )
+      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('cloud')
+    }
+  })
+
+  it('offers nothing extra when Orca Cloud is unavailable', async () => {
+    installApi(vi.fn().mockResolvedValue({ ...result([]), orcaCloud: 'unavailable' }))
+    const { container } = await render(
+      <Harness repoId="repo-1" customRecipesEnabled={false} initialRecipeId="cloud" />
+    )
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('none')
+    )
+    expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('')
+  })
+
   it('reloads when the account signs in, so Orca Cloud appears without switching projects', async () => {
     const listRecipes = vi
       .fn()

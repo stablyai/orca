@@ -26,6 +26,29 @@ function orcaCloudNeedsSetup(availability: OrcaCloudAvailability | undefined): b
   return availability === 'needs-sign-in' || availability === 'needs-capability'
 }
 
+/**
+ * Main lists the Orca Cloud recipe only once the account can use it. Until then the composer still
+ * offers it, so a signed-out or not-yet-entitled user can pick Orca Cloud and reach "Set up and
+ * start" (spec A1/B1); the setup panel runs instead of a create, so this entry never starts a VM.
+ */
+const ORCA_CLOUD_SETUP_RECIPE: OrcaVmRecipe = {
+  id: ORCA_CLOUD_RECIPE_ID,
+  name: 'Orca Cloud',
+  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
+  provider: 'orca-cloud',
+  create: 'orca-cloud create'
+}
+
+export function withOrcaCloudSetupRecipe(
+  recipes: OrcaVmRecipe[],
+  availability: OrcaCloudAvailability | undefined
+): OrcaVmRecipe[] {
+  if (!orcaCloudNeedsSetup(availability) || recipes.some((r) => r.id === ORCA_CLOUD_RECIPE_ID)) {
+    return recipes
+  }
+  return [ORCA_CLOUD_SETUP_RECIPE, ...recipes]
+}
+
 export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs): {
   recipes: OrcaVmRecipe[]
   selectedRecipeId: string | null
@@ -71,8 +94,11 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
             return
           }
           // Orca Cloud rides its account capability, not the experimental VM-recipes flag.
-          const nextRecipes = (result.recipes ?? []).filter(
-            (recipe) => args.customRecipesEnabled || recipe.provider === 'orca-cloud'
+          const nextRecipes = withOrcaCloudSetupRecipe(
+            (result.recipes ?? []).filter(
+              (recipe) => args.customRecipesEnabled || recipe.provider === 'orca-cloud'
+            ),
+            result.orcaCloud
           )
           setRecipes(nextRecipes)
           setOrcaCloud(result.orcaCloud ?? 'unavailable')
@@ -82,8 +108,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           // Orca Cloud stays picked while the account still needs setup: the composer's setup panel
           // says what's missing instead of the pick silently falling back to this computer.
           const keeps = (recipeId: string): boolean =>
-            nextRecipes.some((recipe) => recipe.id === recipeId) ||
-            (recipeId === ORCA_CLOUD_RECIPE_ID && orcaCloudNeedsSetup(result.orcaCloud))
+            nextRecipes.some((recipe) => recipe.id === recipeId)
           setSelectedRecipeId((current) => {
             if (resetSelection) {
               return args.initialRecipeId && keeps(args.initialRecipeId)
