@@ -25,6 +25,8 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
     created?: string | string[]
     warning?: string | string[]
     paneKey?: string | string[]
+    /** `terminal` | `chat`: the view the paneKey tap asks for (it rides with paneKey and clears with it). */
+    paneView?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
@@ -37,7 +39,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
       if (param !== 'paneKey' || paneKey === '' || value !== paneKey) {
         return
       }
-      router.setParams({ paneKey: '' })
+      router.setParams({ paneKey: '', paneView: '' })
     },
     [paneKey, router]
   )
@@ -45,7 +47,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   // Omit empty params: created=1 is one-shot, warning is host text, absent name derives a label, and empty paneKey marks a spent tap.
   const routeParams: Record<string, string> = {
     ...Object.fromEntries(
-      (['name', 'created', 'warning', 'paneKey'] as const)
+      (['name', 'created', 'warning', 'paneKey', 'paneView'] as const)
         .map((key) => [key, firstParam(params[key])] as const)
         .filter(([, value]) => value !== '')
     ),
@@ -64,7 +66,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   }
   // Remount for grant-bearing route changes, excluding paneKey: pane taps update the current page without discarding its bridge.
   // Keep shared shellScreenRouteKey unchanged because other screens treat param changes as identity changes.
-  const { paneKey: _paneKey, ...identity } = routeParams
+  const { paneKey: _paneKey, paneView: _paneView, ...identity } = routeParams
   return (
     <MobileWebShellScreen
       key={shellScreenRouteKey({ pathname: route.pathname, params: identity })}

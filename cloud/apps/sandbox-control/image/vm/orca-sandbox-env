@@ -29,6 +29,7 @@ tmp="$(mktemp "$dir/.session.env.XXXXXX")"
 count=0
 openai_base_url=''
 openai_model=''
+anthropic_key_tail=''
 while IFS= read -r line; do
   name="${line%%=*}" b64="${line#*=}"
   case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
@@ -38,12 +39,15 @@ while IFS= read -r line; do
   case "$name" in
     OPENAI_BASE_URL) openai_base_url="$(printf '%s' "$b64" | base64 -d)" ;;
     OPENAI_MODEL) openai_model="$(printf '%s' "$b64" | base64 -d)" ;;
+    # Claude Code asks once per key whether to use ANTHROPIC_API_KEY; it remembers the last 20 chars.
+    ANTHROPIC_API_KEY) anthropic_key_tail="$(printf '%s' "$b64" | base64 -d | tail -c 20)" ;;
   esac
 done < <(printf '%s\n' "${ORCA_SECRET_ENV:-}")
 mv -f "$tmp" "$dir/session.env"
 printf '%s' "$generation" >"$dir/generation"
 
-# ---- Codex provider block (no secret values: env_key names the variable) ----
+# ---- Codex: trust the workspace and use the configured provider (no secret values) ----
+PROJECT=/vercel/sandbox/project
 codex_config="$HOME/.codex/config.toml"
 toml_string() { # TOML basic string; the control plane only accepts https URLs and plain model ids
   local value="${1//\\/\\\\}"
@@ -52,35 +56,82 @@ toml_string() { # TOML basic string; the control plane only accepts https URLs a
 strip_managed() { # drop both managed blocks
   awk '/^# >>> orca-cloud managed/{skip=1} !skip{print} /^# <<< orca-cloud managed/{skip=0}' "$1"
 }
-if [ -n "$openai_base_url" ] || grep -q '^# >>> orca-cloud managed' "$codex_config" 2>/dev/null; then
+# Always managed: an agent launched from the phone or the API has no one to answer Codex's
+# "trust this folder?" screen, so the workspace project is trusted up front.
+if true; then
   mkdir -p "$HOME/.codex"
   user_part="$(mktemp "$HOME/.codex/.config.XXXXXX")"
   if [ -f "$codex_config" ]; then strip_managed "$codex_config" >"$user_part"; fi
   next="$(mktemp "$HOME/.codex/.config.XXXXXX")"
   openai_host="${openai_base_url#https://}"
   openai_host="${openai_host%%/*}"
-  if [ -n "$openai_base_url" ] && [ "$openai_host" != api.openai.com ]; then
-    # Top-level keys must precede every table; skip ours if the user already chose a provider/model.
-    head_keys="$(awk '/^\[/{exit} {print}' "$user_part")"
-    {
-      printf '# >>> orca-cloud managed (Orca Cloud provider; edit in Orca settings)\n'
-      if ! grep -Eq '^[[:space:]]*model_provider[[:space:]]*=' <<<"$head_keys"; then
-        printf 'model_provider = "orca_cloud"\n'
-      fi
-      if [ -n "$openai_model" ] && ! grep -Eq '^[[:space:]]*model[[:space:]]*=' <<<"$head_keys"; then
+  custom_provider=''
+  if [ -n "$openai_base_url" ] && [ "$openai_host" != api.openai.com ]; then custom_provider=1; fi
+  # Top-level keys must precede every table; each is skipped when the user already set it.
+  head_keys="$(awk '/^\[/{exit} {print}' "$user_part")"
+  has_key() { grep -Eq "^[[:space:]]*$1[[:space:]]*=" <<<"$head_keys"; }
+  {
+    printf '# >>> orca-cloud managed (Orca Cloud; edit in Orca settings)\n'
+    # The sandbox is the isolation boundary: Codex's own bwrap sandbox can't start in it ("Unexpected
+    # capabilities"), and a prompt delivered from the phone or the API has no one to approve commands.
+    has_key sandbox_mode || printf 'sandbox_mode = "danger-full-access"\n'
+    has_key approval_policy || printf 'approval_policy = "never"\n'
+    if [ -n "$custom_provider" ]; then
+      has_key model_provider || printf 'model_provider = "orca_cloud"\n'
+      if [ -n "$openai_model" ] && ! has_key model; then
         printf 'model = %s\n' "$(toml_string "$openai_model")"
       fi
-      printf '# <<< orca-cloud managed\n'
-      cat "$user_part"
+    fi
+    printf '# <<< orca-cloud managed\n'
+    cat "$user_part"
+    if [ -n "$custom_provider" ]; then
       printf '\n# >>> orca-cloud managed provider\n[model_providers.orca_cloud]\nname = "Orca Cloud"\n'
       printf 'base_url = %s\nenv_key = "OPENAI_API_KEY"\nwire_api = "responses"\n' "$(toml_string "$openai_base_url")"
       printf '# <<< orca-cloud managed\n'
-    } >"$next"
-  else
-    cat "$user_part" >"$next"
+    fi
+  } >"$next"
+  if ! grep -qF "[projects.\"$PROJECT\"]" "$user_part"; then
+    printf '\n# >>> orca-cloud managed trust\n[projects."%s"]\ntrust_level = "trusted"\n# <<< orca-cloud managed\n' "$PROJECT" >>"$next"
   fi
   chmod 600 "$next"
   mv -f "$next" "$codex_config"
   rm -f "$user_part"
+fi
+# ---- Claude Code: first-run screens answered once (theme picker, folder trust, bypass-mode warning,
+# the "use this API key?" question). A prompt delivered from the phone or the API has no one to click
+# through them, and the agent would sit there doing nothing. Merges; never touches credentials.
+node_bin="$(command -v node || find /opt/orca/runtime/runtimes -type f -name node 2>/dev/null | head -n 1)"
+if [ -n "$node_bin" ]; then
+  ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" "$node_bin" -e '
+const fs = require("fs"), path = require("path"), os = require("os")
+const home = os.homedir()
+const readJson = (file) => { try { const v = JSON.parse(fs.readFileSync(file, "utf8")); return v && typeof v === "object" && !Array.isArray(v) ? v : {} } catch { return {} } }
+const write = (file, value) => {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
+  const tmp = `${file}.orca-${process.pid}`
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 })
+  fs.renameSync(tmp, file)
+}
+const claudeFile = path.join(process.env.CLAUDE_CONFIG_DIR || home, ".claude.json")
+const c = readJson(claudeFile)
+const before = JSON.stringify(c)
+c.hasCompletedOnboarding = true
+c.theme = c.theme || "dark"
+c.bypassPermissionsModeAccepted = true
+c.projects = c.projects && typeof c.projects === "object" ? c.projects : {}
+const p = process.env.ORCA_PROJECT
+c.projects[p] = { ...(c.projects[p] || {}), hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true }
+const tail = process.env.ORCA_KEY_TAIL
+if (tail) {
+  const r = c.customApiKeyResponses && typeof c.customApiKeyResponses === "object" ? c.customApiKeyResponses : {}
+  const approved = Array.isArray(r.approved) ? r.approved : []
+  const rejected = Array.isArray(r.rejected) ? r.rejected.filter((t) => t !== tail) : []
+  c.customApiKeyResponses = { ...r, approved: approved.includes(tail) ? approved : [...approved, tail], rejected }
+}
+if (JSON.stringify(c) !== before) write(claudeFile, c)
+const settingsFile = path.join(home, ".claude", "settings.json")
+const s = readJson(settingsFile)
+if (s.skipDangerousModePermissionPrompt !== true) write(settingsFile, { ...s, skipDangerousModePermissionPrompt: true })
+' || echo 'agent first-run state not seeded' >&2
 fi
 printf '{"names":%d}\n' "$count"

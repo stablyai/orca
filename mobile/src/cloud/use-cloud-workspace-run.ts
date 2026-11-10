@@ -275,6 +275,8 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
       const paneKey = view === 'terminal' ? run.agent.paneKey : undefined
       if (paneKey) {
         params.set('paneKey', paneKey)
+        // The agent waits in its terminal (sign-in); the page must not open the tab in chat view.
+        params.set('paneView', 'terminal')
       }
       setRun({ kind: 'idle' })
       router.push(
