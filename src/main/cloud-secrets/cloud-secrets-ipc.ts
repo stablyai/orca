@@ -68,7 +68,8 @@ const CHANNELS = [
   'cloudSecrets:batch',
   'cloudSecrets:effective',
   'cloudSecrets:refreshEnv',
-  'cloudSecrets:saveDesktopKey'
+  'cloudSecrets:saveDesktopKey',
+  'cloudSecrets:workspaceSharing'
 ] as const
 
 async function attempt<T>(
@@ -178,6 +179,17 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
       return { ok: false, error: valueError }
     }
     return attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
+  })
+  // Reads the control plane only; never wakes the sandbox.
+  ipcMain.handle('cloudSecrets:workspaceSharing', (_event, raw: unknown) => {
+    const request = RefreshRequest.safeParse(raw)
+    if (!request.success) {
+      return invalid
+    }
+    const sandboxId = sandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    return sandboxId
+      ? attempt(client, (c) => c.workspaceSharing(sandboxId))
+      : { ok: false, error: 'not_found' }
   })
   ipcMain.handle('cloudSecrets:refreshEnv', (_event, raw: unknown) => {
     const request = RefreshRequest.safeParse(raw)
