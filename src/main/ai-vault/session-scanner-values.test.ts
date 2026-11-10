@@ -5,7 +5,6 @@ import {
   extractFullFirstUserPromptText,
   extractPreviewContentText,
   normalizePrimeAgentSessionsDir,
-  piSessionsDirFromEnv,
   primeAgentSessionsDirFromEnv,
   normalizePreviewText,
   normalizeTitleText
@@ -107,36 +106,6 @@ describe('AI Vault session scanner text values', () => {
       )
       for (const value of ['/', '.', '..', 'rel/path', '   ', 'C:foo']) {
         expect(primeAgentSessionsDirFromEnv({ PRIME_AGENT_SESSION_DIR: value })).toBe(defaultDir)
-      }
-    })
-  })
-
-  describe('piSessionsDirFromEnv', () => {
-    const defaultDir = join(homedir(), '.pi', 'agent', 'sessions')
-
-    it('prefers the sessions-root override verbatim over the agent home', () => {
-      expect(
-        piSessionsDirFromEnv({
-          PI_CODING_AGENT_DIR: '/opt/pi-agent',
-          PI_CODING_AGENT_SESSION_DIR: '/mnt/transcripts'
-        })
-      ).toBe('/mnt/transcripts')
-    })
-
-    it('keeps normalizing the agent home when only PI_CODING_AGENT_DIR is set', () => {
-      expect(piSessionsDirFromEnv({ PI_CODING_AGENT_DIR: '/opt/pi-agent' })).toBe('/opt/pi-agent')
-      expect(piSessionsDirFromEnv({ PI_CODING_AGENT_DIR: '/opt/.pi' })).toBe(
-        join('/opt/.pi', 'agent', 'sessions')
-      )
-      expect(piSessionsDirFromEnv({})).toBe(defaultDir)
-    })
-
-    it('expands a tilde and rejects a non-absolute sessions-root override', () => {
-      expect(piSessionsDirFromEnv({ PI_CODING_AGENT_SESSION_DIR: '~/t' })).toBe(
-        join(homedir(), 't')
-      )
-      for (const value of ['/', '.', '..', 'rel/path', '   ', 'C:foo']) {
-        expect(piSessionsDirFromEnv({ PI_CODING_AGENT_SESSION_DIR: value })).toBe(defaultDir)
       }
     })
   })

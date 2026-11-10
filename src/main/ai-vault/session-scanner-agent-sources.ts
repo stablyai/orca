@@ -31,7 +31,8 @@ import { getHermesHome } from '../hermes/hermes-default-home'
 import { isClaudeProjectBucketDirectory } from './scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
-import { piSessionsDirFromEnv, primeAgentSessionsDirFromEnv } from './session-scanner-values'
+import { resolvePiSessionsDir } from './scanners/pi/pi-session-root'
+import { primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
@@ -43,7 +44,7 @@ const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 export function piSessionHistorySessionsDir(): string {
-  return piSessionsDirFromEnv()
+  return resolvePiSessionsDir()
 }
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 const DEVIN_TRANSCRIPTS_DIR = join(
