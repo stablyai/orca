@@ -21,7 +21,7 @@ export function renderServersSettingsSection(
     <RuntimeServersPageProvider>
       <SettingsSection
         id="servers"
-        title={t('auto.components.settings.Settings.bd0181eeca', 'Remote Orca Servers')}
+        title={t('auto.components.settings.Settings.022effa46f', 'Remote Orca servers')}
         description={
           model.isWebClient
             ? t(
@@ -66,7 +66,7 @@ export function renderSshSettingsSection(
     <SshHostsHeaderSlotProvider>
       <SettingsSection
         id="ssh"
-        title={t('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
+        title={t('auto.components.settings.Settings.045db77e21', 'SSH hosts')}
         description={t(
           'auto.components.settings.Settings.c2ee313198',
           'Use existing machines over SSH for files, terminals, Git, and workspaces.'
@@ -119,7 +119,9 @@ export function renderDeveloperPermissionsSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('developer-permissions')}
     >
       {view.isSectionMounted('developer-permissions') ? (
-        <DeveloperPermissionsPane highlightedSettingId={model.highlightedSettingsTargetId} />
+        <DeveloperPermissionsPane
+          highlightedSettingId={model.highlightedSettingsTarget?.id ?? null}
+        />
       ) : null}
     </SettingsSection>
   ) : null
@@ -133,7 +135,7 @@ export function renderPrivacySettingsSection(
   return (
     <SettingsSection
       id="privacy"
-      title={t('auto.components.settings.Settings.d7e3f62d70', 'Privacy & Telemetry')}
+      title={t('auto.components.settings.Settings.742ca66ea6', 'Privacy & telemetry')}
       description={t(
         'auto.components.settings.Settings.c1b43dc4e2',
         'Anonymous usage data and telemetry controls.'

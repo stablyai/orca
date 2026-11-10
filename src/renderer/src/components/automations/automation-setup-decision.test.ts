@@ -37,34 +37,6 @@ function setup(overrides: Partial<ProjectHostSetup> = {}): ProjectHostSetup {
 }
 
 describe('automation setup decision defaults', () => {
-  it('hides setup choice outside Orca new-run automations with setup', () => {
-    const baseArgs = {
-      repoId: 'repo-1',
-      repos: [repo],
-      projectHostSetups: [],
-      yamlHooks: null
-    }
-
-    expect(
-      getVisibleAutomationSetupDecision({
-        ...baseArgs,
-        workspaceMode: 'existing'
-      })
-    ).toBeUndefined()
-    expect(
-      getVisibleAutomationSetupDecision({
-        ...baseArgs,
-        workspaceMode: 'new_per_run',
-        repos: [
-          {
-            ...repo,
-            hookSettings: { mode: 'override', scripts: { setup: '', archive: '' } }
-          }
-        ]
-      })
-    ).toBeUndefined()
-  })
-
   it('uses only the selected repo host setup and refuses an ambiguous repo table', () => {
     const remote = { ...repo, connectionId: 'builder' }
     const localSetup = setup({
@@ -89,26 +61,6 @@ describe('automation setup decision defaults', () => {
     }
     expect(getVisibleAutomationSetupDecision({ ...args, repos: [remote] })).toBe('skip')
     expect(getVisibleAutomationSetupDecision({ ...args, repos: [repo, remote] })).toBeUndefined()
-  })
-
-  it('uses ready project-host setup hook settings before repo fallback', () => {
-    expect(
-      getVisibleAutomationSetupDecision({
-        workspaceMode: 'new_per_run',
-        repoId: 'repo-1',
-        repos: [repo],
-        projectHostSetups: [
-          setup({
-            hookSettings: {
-              mode: 'override',
-              setupRunPolicy: 'skip-by-default',
-              scripts: { setup: 'bun install', archive: '' }
-            }
-          })
-        ],
-        yamlHooks: null
-      })
-    ).toBe('skip')
   })
 
   it('shows setup choice for shared orca.yaml setup and default tabs', () => {

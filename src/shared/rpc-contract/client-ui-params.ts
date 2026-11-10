@@ -260,6 +260,7 @@ export const UiUpdateFields = z
     pluginsAlphaNoticeDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    speechModelUpdateNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),

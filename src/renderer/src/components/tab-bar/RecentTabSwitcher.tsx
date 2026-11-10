@@ -20,7 +20,7 @@ import {
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
 import { useTranslate } from '@/i18n/use-translate'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { cn } from '@/lib/utils'
 
 type SwitcherState = {

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ClipboardEvent } from 'react'
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import { copyCsvSelection, pasteCsvSelection } from './csv-cell-clipboard'
 import type { CsvCellSelection } from './csv-cell-selection'
 import type { CsvCellEditSession } from './csv-grid-interaction'

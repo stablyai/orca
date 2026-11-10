@@ -1,4 +1,4 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React from 'react'
 import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'

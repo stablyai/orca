@@ -55,17 +55,19 @@ export function VoiceDictationLanguageSetting({
   const intlLocale = useIntlLocale()
   const modelIgnoresLanguage = selectedModel !== undefined && !selectedModel.dictationLanguages
   const language = voiceSettings.dictationLanguage || DICTATION_LANGUAGE_AUTO
-  const choices = selectedModel?.dictationLanguages ?? DICTATION_LANGUAGES
-  // Keep a choice the model lacks selectable rather than showing a blank trigger.
-  const codes =
-    language === DICTATION_LANGUAGE_AUTO || choices.includes(language)
-      ? choices
-      : [language, ...choices]
+  // Every language, even ones this model lacks: the choice also rates the other models.
+  const codes = [
+    ...new Set([
+      ...(language === DICTATION_LANGUAGE_AUTO ? [] : [language]),
+      ...DICTATION_LANGUAGES,
+      ...(selectedModel?.dictationLanguages ?? [])
+    ])
+  ]
   const collator = uiCollator(NAME_COLLATOR, intlLocale)
   const options = codes
     .map((code) => ({ code, name: languageDisplayName(code, intlLocale) }))
     .sort((a, b) => collator.compare(a.name, b.name))
-  const label = t('components.settings.voice.dictationLanguage.title', 'Dictation Language')
+  const label = t('components.settings.voice.dictationLanguage.a9df191aba', 'Dictation language')
   const autoLabel = t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')
 
   return (
@@ -99,7 +101,6 @@ export function VoiceDictationLanguageSetting({
             'auto.components.settings.SettingsSearchableSelect.searchLanguages',
             'Search languages…'
           )}
-          disabled={!voiceSettings.enabled || modelIgnoresLanguage}
           onValueChange={(value) => onUpdateVoiceSettings({ dictationLanguage: value })}
         />
       }

@@ -15,8 +15,8 @@ import {
 import {
   readJiraBoardIssueDragData,
   writeJiraBoardIssueDragData
-} from '@/lib/jira-board-drag-payload'
-import type { JiraBoardIssueDragRef } from '@/lib/jira-board-drag-payload'
+} from '@/lib/work-items/jira/jira-board-drag-payload'
+import type { JiraBoardIssueDragRef } from '@/lib/work-items/jira/jira-board-drag-payload'
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../shared/jira/jira-types'
 import {
   buildJiraBoardSections,

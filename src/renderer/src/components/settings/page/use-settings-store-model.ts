@@ -1,3 +1,4 @@
+import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
@@ -158,11 +159,12 @@ export function useSettingsStoreModel() {
     [fontSuggestions]
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [generalSubPage, setGeneralSubPage] = useState<GeneralSubPage | null>(null)
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
-  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+  const [highlightedSettingsTarget, setHighlightedSettingsTarget] = useState<{ id: string } | null>(
     null
   )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
@@ -206,6 +208,8 @@ export function useSettingsStoreModel() {
   )
 
   return {
+    generalSubPage,
+    setGeneralSubPage,
     settings,
     keybindings,
     updateSettings,
@@ -263,8 +267,8 @@ export function useSettingsStoreModel() {
     setMountedSectionIds,
     pendingNavRequestTick,
     setPendingNavRequestTick,
-    highlightedSettingsTargetId,
-    setHighlightedSettingsTargetId,
+    highlightedSettingsTarget,
+    setHighlightedSettingsTarget,
     quickCommandAddIntentSignal,
     setQuickCommandAddIntentSignal,
     sshHostAddIntentSignal,

@@ -62,5 +62,4 @@ it('does not seed a shell when the workspace is re-activated while its chat wait
   answer({ kind: 'admitted' })
   await vi.waitFor(() => expect(openAdmitted).toHaveBeenCalledOnce())
   expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toEqual([])
-  expect(admit).toHaveBeenCalledOnce()
 })

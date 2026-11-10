@@ -51,11 +51,15 @@ export function useNewTabAgentMenuRows(
   detectionTarget: AgentDetectionTarget | undefined,
   options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
-  return useAgentMenuObservation(target, open, detectionTarget, options).model
+  // Only the new-tab menu opens setup chats; pickers that save an agent need one that runs.
+  return useAgentMenuObservation(target, open, detectionTarget, {
+    ...options,
+    offerAgentSetup: true
+  }).model
 }
 
 /** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
-export type AgentMenuObservationOptions = { wakeOnOpen?: boolean }
+export type AgentMenuObservationOptions = { wakeOnOpen?: boolean; offerAgentSetup?: boolean }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
@@ -233,7 +237,9 @@ export function useAgentMenuObservation(
     chatAgents,
     chatProgram: (agent) =>
       unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
-    hostChatAnswer: answerFor
+    hostChatAnswer: answerFor,
+    offerAgentSetup: options?.offerAgentSetup,
+    hostPlatform: facts.hostPlatform
   }).map((row) => ({ ...row, executionHostId }))
   const model: NewTabAgentMenuModel = loading
     ? {

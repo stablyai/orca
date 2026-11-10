@@ -93,6 +93,7 @@ export function createClaudeSessionPublication(input: {
   leafUuid: string | null
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
+  delivery: ClaudeAcquisitionAttempt['delivery']
   unbindReadingControl?: () => void
   process: AgentSessionAcquisition['process']
   initialization: Omit<
@@ -130,7 +131,7 @@ export function createClaudeSessionPublication(input: {
       retiredDispatchWaiters: [],
       replayContentFallbackBlocked: false,
       backgroundTasks: new ClaudeBackgroundTaskTracker(),
-      childWork: new ClaudeChildWorkDecoder(),
+      childWork: new ClaudeChildWorkDecoder(input.translator?.taskInvocations),
       // An unread catalog is unavailable, not empty.
       commands: new ClaudeSlashCommandCatalog(),
       dispatchSequence: 0,
@@ -148,6 +149,7 @@ export function createClaudeSessionPublication(input: {
       ),
       fastModeAtStart: false,
       translator: input.translator,
+      delivery: input.delivery,
       events: input.request.events,
       ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {}),
       link,
@@ -208,9 +210,7 @@ export async function publishClaudeSessionAttempt({
   await withAgentSessionCreatePhase('publish', recordPhase, async () => {
     callbacks.publish(session)
     attempt.published = true
-    for (const event of attempt.buffered.splice(0)) {
-      event()
-    }
+    attempt.delivery.flush()
   })
   // Buffered exit delivery can remove the session during publication.
   if (sessions.get(sessionId) !== session) {

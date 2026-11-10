@@ -7,7 +7,7 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
 
 export { getShortcutPlatform }
 

@@ -166,6 +166,23 @@ test('hides the VM checkout while a create is paused on failed checks, and leave
       body: await orcaPage.screenshot(),
       contentType: 'image/png'
     })
+    // The jump palette reads the same pending set, so it offers no workspace for the VM checkout.
+    const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
+    await orcaPage.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
+    await palette.getByRole('combobox').fill(workspaceName)
+    // The palette has answered the query once its create-from-query row is listed.
+    await expect(palette.getByRole('option', { name: /Create/ }).first()).toBeVisible()
+    await expect(
+      palette
+        .getByRole('option', { name: new RegExp(workspaceName) })
+        .filter({ hasNotText: /Create/ })
+    ).toHaveCount(0)
+    await testInfo.attach('paused-vm-create-palette', {
+      body: await palette.screenshot(),
+      contentType: 'image/png'
+    })
+    await palette.getByRole('combobox').press('Escape')
+    await expect(palette).toHaveCount(0)
 
     await sidebar.getByRole('button', { name: 'Cancel worktree creation' }).click()
     await expect(pendingRow).toBeHidden()

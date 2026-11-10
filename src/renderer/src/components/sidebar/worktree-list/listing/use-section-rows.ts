@@ -1,5 +1,5 @@
 import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
@@ -19,6 +19,7 @@ import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { readHiddenVmCheckouts, subscribeHiddenVmCheckouts } from '@/lib/vm-create-hidden-checkouts'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
 import {
   deferHostSectionCollapse,
@@ -100,6 +101,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [repos]
   )
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
+  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   const placeholderRepoIds = useMemo(
     () =>
       getEmptyProjectPlaceholderRepoIds({
@@ -107,9 +109,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         repos: args.visibleReposForRows,
         worktreesByRepo,
         visibleWorktrees: worktrees,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        pendingVmRepoIds: hiddenVmCheckouts.repoIds
       }),
-    [args.filterRepoIds, args.groupBy, args.visibleReposForRows, worktrees, worktreesByRepo]
+    [
+      args.filterRepoIds,
+      args.groupBy,
+      args.visibleReposForRows,
+      worktrees,
+      worktreesByRepo,
+      hiddenVmCheckouts
+    ]
   )
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.

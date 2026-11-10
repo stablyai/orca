@@ -51,8 +51,8 @@ export function TerminalWindowSection({
       <div className="ml-4 space-y-4">
         <SearchableSetting
           title={t(
-            'auto.components.settings.TerminalWindowSection.ea7b1a158e',
-            'Background Opacity'
+            'auto.components.settings.TerminalWindowSection.e80b782206',
+            'Background opacity'
           )}
           description={t(
             'auto.components.settings.TerminalWindowSection.03acb60aa0',
@@ -62,8 +62,8 @@ export function TerminalWindowSection({
         >
           <NumberField
             label={t(
-              'auto.components.settings.TerminalWindowSection.ea7b1a158e',
-              'Background Opacity'
+              'auto.components.settings.TerminalWindowSection.e80b782206',
+              'Background opacity'
             )}
             description={t(
               'auto.components.settings.TerminalWindowSection.809f37738d',
@@ -83,7 +83,7 @@ export function TerminalWindowSection({
 
         {isWebClientLocation() ? null : (
           <SearchableSetting
-            title={t('settings.windowMaterial.title', 'Window Material')}
+            title={t('settings.windowMaterial.fc2ba9b528', 'Window material')}
             description={t(
               'settings.windowMaterial.description',
               'What shows behind translucent terminals. Requires restart.'
@@ -97,8 +97,8 @@ export function TerminalWindowSection({
 
         <SearchableSetting
           title={t(
-            'auto.components.settings.TerminalWindowSection.36b8402015',
-            'Horizontal Padding'
+            'auto.components.settings.TerminalWindowSection.2d8a13cabd',
+            'Horizontal padding'
           )}
           description={t(
             'auto.components.settings.TerminalWindowSection.25e2f8e8e1',
@@ -108,8 +108,8 @@ export function TerminalWindowSection({
         >
           <NumberField
             label={t(
-              'auto.components.settings.TerminalWindowSection.36b8402015',
-              'Horizontal Padding'
+              'auto.components.settings.TerminalWindowSection.2d8a13cabd',
+              'Horizontal padding'
             )}
             description=""
             value={settings.terminalPaddingX ?? 4}
@@ -123,7 +123,7 @@ export function TerminalWindowSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={t('auto.components.settings.TerminalWindowSection.1afcc1d973', 'Vertical Padding')}
+          title={t('auto.components.settings.TerminalWindowSection.44c6f429e9', 'Vertical padding')}
           description={t(
             'auto.components.settings.TerminalWindowSection.1846f6ee6a',
             'Vertical padding around the terminal grid in pixels.'
@@ -132,8 +132,8 @@ export function TerminalWindowSection({
         >
           <NumberField
             label={t(
-              'auto.components.settings.TerminalWindowSection.1afcc1d973',
-              'Vertical Padding'
+              'auto.components.settings.TerminalWindowSection.44c6f429e9',
+              'Vertical padding'
             )}
             description=""
             value={settings.terminalPaddingY ?? 4}
@@ -148,8 +148,8 @@ export function TerminalWindowSection({
 
         <SearchableSetting
           title={t(
-            'auto.components.settings.TerminalWindowSection.3530908ef9',
-            'Hide Mouse While Typing'
+            'auto.components.settings.TerminalWindowSection.a649973dd3',
+            'Hide mouse while typing'
           )}
           description={t(
             'auto.components.settings.TerminalWindowSection.1d1920dc8a',
@@ -161,15 +161,15 @@ export function TerminalWindowSection({
           <div className="space-y-0.5">
             <Label>
               {t(
-                'auto.components.settings.TerminalWindowSection.3530908ef9',
-                'Hide Mouse While Typing'
+                'auto.components.settings.TerminalWindowSection.a649973dd3',
+                'Hide mouse while typing'
               )}
             </Label>
           </div>
           <Switch
             aria-label={t(
-              'auto.components.settings.TerminalWindowSection.3530908ef9',
-              'Hide Mouse While Typing'
+              'auto.components.settings.TerminalWindowSection.a649973dd3',
+              'Hide mouse while typing'
             )}
             checked={settings.terminalMouseHideWhileTyping ?? false}
             onCheckedChange={(checked) =>
@@ -181,7 +181,7 @@ export function TerminalWindowSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={t('auto.components.settings.TerminalWindowSection.63f8d9336e', 'Color Overrides')}
+          title={t('auto.components.settings.TerminalWindowSection.c9d73aee44', 'Color overrides')}
           description={t(
             'auto.components.settings.TerminalWindowSection.e86e09b5c7',
             'Override individual terminal colors.'
@@ -197,7 +197,7 @@ export function TerminalWindowSection({
               <span className={`transition-transform ${colorOverridesExpanded ? 'rotate-90' : ''}`}>
                 ▶
               </span>
-              {t('auto.components.settings.TerminalWindowSection.63f8d9336e', 'Color Overrides')}
+              {t('auto.components.settings.TerminalWindowSection.c9d73aee44', 'Color overrides')}
             </button>
             <div
               className={`grid overflow-hidden transition-all duration-300 ease-out ${

@@ -6,25 +6,30 @@ import type { HttpLinkSourceOwner } from './http-link-routing'
 export const RELAY_OPEN_TIMEOUT_MS = 4_000
 
 /** Before a host's OAuth page opens in this computer's browser, listen on its loopback redirect port
- * and carry the callback to the host, where the agent (an MCP sign-in, say) is waiting for it. */
-export async function relayRemoteOAuthCallback(
+ * and carry the callback to the host, where the agent (an MCP sign-in, say) is waiting for it.
+ * Null when there is nothing to relay, so ordinary links open without waiting a turn. */
+export function relayRemoteOAuthCallback(
   url: string,
   sourceOwner: HttpLinkSourceOwner | undefined
-): Promise<void> {
+): Promise<void> | null {
   if (sourceOwner?.kind !== 'runtime') {
-    return
+    return null
   }
   const port = loopbackOAuthRedirectPort(url)
-  const open = window.api.runtimeEnvironments.openLoopbackCallbackForward
+  const open = window.api.runtimeEnvironments?.openLoopbackCallbackForward
   if (port === null || !open) {
-    return
+    return null
   }
+  return forwardThenWarn(open({ environmentId: sourceOwner.runtimeEnvironmentId, port }))
+}
+
+async function forwardThenWarn(forward: Promise<{ ok: boolean }>): Promise<void> {
   // A dead tunnel must not hold the browser back: past this the page opens anyway (and the relay
   // may still come up in time, since the user approves on the provider's page first).
   const timedOut = Symbol('timeout')
   let timer: ReturnType<typeof setTimeout> | undefined
   const result = await Promise.race([
-    open({ environmentId: sourceOwner.runtimeEnvironmentId, port }).catch(() => null),
+    forward.catch(() => null),
     new Promise<typeof timedOut>((resolve) => {
       timer = setTimeout(() => resolve(timedOut), RELAY_OPEN_TIMEOUT_MS)
     })
@@ -40,5 +45,19 @@ export async function relayRemoteOAuthCallback(
         'Orca could not pass this sign-in back to the remote host, so the browser may show a connection error when it finishes.'
       )
     )
+  }
+}
+
+/** Opens `url` in the system browser, after its loopback relay is listening when there is one. */
+export function openAfterRemoteOAuthRelay(
+  url: string,
+  sourceOwner: HttpLinkSourceOwner | undefined,
+  openLink: (url: string) => unknown
+): void {
+  const relay = relayRemoteOAuthCallback(url, sourceOwner)
+  if (relay) {
+    void relay.finally(() => openLink(url))
+  } else {
+    void openLink(url)
   }
 }

@@ -56,8 +56,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'cursorAccent',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.a2d9f095a7',
-            'Cursor Text'
+            'auto.components.settings.TerminalWindowSection.e3e70efcec',
+            'Cursor text'
           )
         },
         get description() {
@@ -71,8 +71,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'selectionBackground',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.40c3cfd30a',
-            'Selection Background'
+            'auto.components.settings.TerminalWindowSection.cd4ab89dc6',
+            'Selection background'
           )
         },
         get description() {
@@ -86,8 +86,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'selectionForeground',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.8b450b5305',
-            'Selection Foreground'
+            'auto.components.settings.TerminalWindowSection.b1dce93161',
+            'Selection foreground'
           )
         },
         get description() {
@@ -100,7 +100,7 @@ export const COLOR_OVERRIDE_GROUPS: {
       {
         key: 'bold',
         get label() {
-          return translate('auto.components.settings.TerminalWindowSection.862e463f7f', 'Bold Text')
+          return translate('auto.components.settings.TerminalWindowSection.6ec3252c1f', 'Bold text')
         },
         get description() {
           // xterm has no bold color slot (#6032); explain why saved values are not rendered.
@@ -114,7 +114,7 @@ export const COLOR_OVERRIDE_GROUPS: {
   },
   {
     get label() {
-      return translate('auto.components.settings.TerminalWindowSection.68e9f07de0', 'ANSI Normal')
+      return translate('auto.components.settings.TerminalWindowSection.5bea0a1ca1', 'ANSI normal')
     },
     keys: [
       {
@@ -217,15 +217,15 @@ export const COLOR_OVERRIDE_GROUPS: {
   },
   {
     get label() {
-      return translate('auto.components.settings.TerminalWindowSection.1be593d3e8', 'ANSI Bright')
+      return translate('auto.components.settings.TerminalWindowSection.9881daf4f5', 'ANSI bright')
     },
     keys: [
       {
         key: 'brightBlack',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.260d69ce9a',
-            'Bright Black'
+            'auto.components.settings.TerminalWindowSection.f5bda64f57',
+            'Bright black'
           )
         },
         get description() {
@@ -239,8 +239,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightRed',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.32b1b6acd7',
-            'Bright Red'
+            'auto.components.settings.TerminalWindowSection.c863ae6b57',
+            'Bright red'
           )
         },
         get description() {
@@ -254,8 +254,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightGreen',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.7dafd57730',
-            'Bright Green'
+            'auto.components.settings.TerminalWindowSection.93e2bff3ed',
+            'Bright green'
           )
         },
         get description() {
@@ -269,8 +269,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightYellow',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.936a326be3',
-            'Bright Yellow'
+            'auto.components.settings.TerminalWindowSection.0451b1e684',
+            'Bright yellow'
           )
         },
         get description() {
@@ -284,8 +284,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightBlue',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.66820332fa',
-            'Bright Blue'
+            'auto.components.settings.TerminalWindowSection.8a4b23b3c4',
+            'Bright blue'
           )
         },
         get description() {
@@ -299,8 +299,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightMagenta',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.e56e7d6ea0',
-            'Bright Magenta'
+            'auto.components.settings.TerminalWindowSection.2b813ceecc',
+            'Bright magenta'
           )
         },
         get description() {
@@ -314,8 +314,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightCyan',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.f94adc4113',
-            'Bright Cyan'
+            'auto.components.settings.TerminalWindowSection.db0a91c623',
+            'Bright cyan'
           )
         },
         get description() {
@@ -329,8 +329,8 @@ export const COLOR_OVERRIDE_GROUPS: {
         key: 'brightWhite',
         get label() {
           return translate(
-            'auto.components.settings.TerminalWindowSection.16948119cb',
-            'Bright White'
+            'auto.components.settings.TerminalWindowSection.2e5ea3f11b',
+            'Bright white'
           )
         },
         get description() {

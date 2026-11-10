@@ -86,7 +86,7 @@ function AgentPermissionsDescription({
 export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): React.JSX.Element {
   const t = useTranslate()
   const { mode, nonAutoMode, onChange, onChangeNonAuto, autoSupported = true } = props
-  const title = t('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')
+  const title = t('auto.components.settings.AgentsPane.9f30095d49', 'Agent permissions')
   const showOthers = mode === 'auto' && onChangeNonAuto !== undefined
   return (
     <section className="flex items-start justify-between gap-3">

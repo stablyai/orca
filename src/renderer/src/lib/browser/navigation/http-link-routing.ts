@@ -14,7 +14,7 @@ import { translate } from '@/i18n/i18n'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { toast } from 'sonner'
-import { relayRemoteOAuthCallback } from './remote-oauth-callback-relay'
+import { openAfterRemoteOAuthRelay } from './remote-oauth-callback-relay'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
 import {
@@ -293,7 +293,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void relayRemoteOAuthCallback(url, sourceOwner).finally(() => openSystemHttpLink(url))
+    openAfterRemoteOAuthRelay(url, sourceOwner, openSystemHttpLink)
     return
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

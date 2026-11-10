@@ -2,7 +2,7 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 
 const textareaVariants = cva('', {
   variants: {
