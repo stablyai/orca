@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostClient } from '../transport/connection/host-client-hooks'
-import type { CloudWorkspace } from './cloud-control-plane-client'
+import { isCloudWorkspaceGoneFromRegistry, type CloudWorkspace } from './cloud-control-plane-client'
 import { cloudDeviceLabel } from './cloud-device-label'
 import {
   deliverQueuedCloudPrompts,
@@ -11,7 +11,9 @@ import {
   markWaitingCloudPromptsFailed,
   requeueUnsentCloudPrompts
 } from './cloud-prompt-queue'
+import { isCloudWorkspaceGone, pruneGoneCloudHost } from './cloud-host-pruning'
 import {
+  cloudHostRemover,
   forgetRevokedCloudSession,
   loadCloudControlPlane,
   useCloudHostRemoval
@@ -250,6 +252,13 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
           return
         }
         await forgetRevokedCloudSession(error, removal)
+        if (
+          isCloudWorkspaceGone(error) &&
+          (await isCloudWorkspaceGoneFromRegistry(plane, sandboxId).catch(() => false))
+        ) {
+          // Destroyed: its pairing and queued prompts go, so nothing retries a VM that no longer exists.
+          await pruneGoneCloudHost(sandboxId, cloudHostRemover(removal)).catch(() => undefined)
+        }
         // Prompts that were going out with this attach now say so, instead of "waiting".
         await markWaitingCloudPromptsFailed(sandboxId, 'not_connected').catch(() => undefined)
         const role = await roleForCloudError(error, plane, controller.signal)

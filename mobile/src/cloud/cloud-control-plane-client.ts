@@ -115,11 +115,20 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
 // Lists archived rows as `archived` rather than folding them into `suspended` (W2 lifecycle).
 const FEATURES = { 'x-orca-sandbox-features': 'archive' }
 
+/**
+ * `complete`: this is the team registry, so a workspace this phone can open that is missing from it
+ * is gone. The owner-only fallback omits teammates' workspaces and never proves that.
+ */
+export type CloudWorkspaceList = { workspaces: CloudWorkspace[]; complete: boolean }
+
+// A destroyed workspace is gone, whatever list still carries it.
+const isLive = (row: { status: string }): boolean => row.status !== 'destroyed'
+
 /** The team registry (titles, repos, cost) first; the owner-only lifecycle list until it ships. */
 export async function listCloudWorkspaces(
   plane: CloudControlPlane,
   signal?: AbortSignal
-): Promise<CloudWorkspace[]> {
+): Promise<CloudWorkspaceList> {
   try {
     const body = await request(
       plane,
@@ -128,7 +137,7 @@ export async function listCloudWorkspaces(
       CloudWorkspaceListResponseSchema,
       { signal }
     )
-    return body.workspaces.map(fromRegistry)
+    return { workspaces: body.workspaces.filter(isLive).map(fromRegistry), complete: true }
   } catch (error) {
     if (!(error instanceof CloudRequestError) || error.status !== 404) {
       throw error
@@ -141,7 +150,7 @@ export async function listCloudWorkspaces(
     z.object({ sandboxes: z.array(SandboxViewSchema) }),
     { signal, headers: FEATURES }
   )
-  return body.sandboxes.map(fromSandbox)
+  return { workspaces: body.sandboxes.filter(isLive).map(fromSandbox), complete: false }
 }
 
 export type CloudWakeState = HostedWakeResponse['state']
@@ -248,6 +257,28 @@ export async function renameCloudWorkspace(
       body: { title }
     }
   ).catch(() => undefined)
+}
+
+/**
+ * True only when the team registry says this workspace does not exist for this phone (destroyed,
+ * or no longer shared with it). Any other answer or failure is not proof.
+ */
+export async function isCloudWorkspaceGoneFromRegistry(
+  plane: CloudControlPlane,
+  sandboxId: string
+): Promise<boolean> {
+  try {
+    await request(
+      plane,
+      'GET',
+      `/v1/team/workspaces/${encodeURIComponent(sandboxId)}`,
+      z.unknown(),
+      { timeoutMs: 10_000 }
+    )
+    return false
+  } catch (error) {
+    return error instanceof CloudRequestError && error.status === 404 && error.code === 'not_found'
+  }
 }
 
 export type CloudRole = 'owner' | 'admin' | 'member'

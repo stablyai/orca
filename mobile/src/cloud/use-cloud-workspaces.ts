@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  isCloudWorkspaceGoneFromRegistry,
   listCloudWorkspaces,
   readCloudWorkspaceStatus,
   type CloudWorkspace
@@ -11,7 +12,9 @@ import {
   subscribeCloudDeviceIdentity,
   type CloudEnrollment
 } from './cloud-device-identity'
+import { pruneCloudHostsMissingFrom } from './cloud-host-pruning'
 import {
+  cloudHostRemover,
   forgetRevokedCloudSession,
   loadCloudControlPlane,
   useCloudHostRemoval
@@ -70,7 +73,19 @@ export function useCloudWorkspaces(enrollment: CloudEnrollment | null | undefine
         return []
       }
       try {
-        return await listCloudWorkspaces(plane, signal)
+        const startedAt = Date.now()
+        const list = await listCloudWorkspaces(plane, signal)
+        if (list.complete) {
+          // A linked workspace the list lacks is checked by id; one the registry says is gone
+          // (destroyed, or no longer shared) stops being retried.
+          void pruneCloudHostsMissingFrom(
+            new Set(list.workspaces.map((workspace) => workspace.id)),
+            startedAt,
+            (sandboxId) => isCloudWorkspaceGoneFromRegistry(plane, sandboxId),
+            cloudHostRemover(removal)
+          ).catch(() => undefined)
+        }
+        return list.workspaces
       } catch (error) {
         await forgetRevokedCloudSession(error, removal)
         throw error

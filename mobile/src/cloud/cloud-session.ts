@@ -39,6 +39,11 @@ export function useCloudHostRemoval(): CloudHostRemoval {
   return useMemo(() => ({ forgetHostClient, queryClient }), [forgetHostClient, queryClient])
 }
 
+/** Unpairs one cloud VM host and closes its connection. */
+export function cloudHostRemover(removal: CloudHostRemoval): (hostId: string) => Promise<void> {
+  return (hostId) => removeHostAndCloseClient(hostId, removal.forgetHostClient, removal.queryClient)
+}
+
 /** Ends everything Orca Cloud gave this phone: its VM pairings first, then the session and key. */
 export async function forgetAllCloudAccess(removal: CloudHostRemoval): Promise<void> {
   for (const hostId of await cloudWorkspaceHostIds()) {

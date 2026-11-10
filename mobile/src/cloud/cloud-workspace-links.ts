@@ -9,7 +9,9 @@ const LinkSchema = z.object({
   hostId: z.string().optional(),
   pairedAt: z.number().optional(),
   /** From the create response; the VM's checkout of the workspace's repo. */
-  projectRoot: z.string().startsWith('/').optional()
+  projectRoot: z.string().startsWith('/').optional(),
+  /** Last write: a list that started before it cannot prove the workspace is gone. */
+  updatedAt: z.number().optional()
 })
 const LinksSchema = z.record(z.string(), LinkSchema)
 type Links = z.infer<typeof LinksSchema>
@@ -50,9 +52,44 @@ function updateLinks(change: (links: Links) => void): Promise<void> {
 export function recordCloudWorkspaceHost(sandboxId: string, hostId: string | null): Promise<void> {
   return updateLinks((links) => {
     const current = links[sandboxId] ?? {}
+    const now = Date.now()
     links[sandboxId] = hostId
-      ? { ...current, hostId, pairedAt: Date.now() }
-      : { projectRoot: current.projectRoot }
+      ? { ...current, hostId, pairedAt: now, updatedAt: now }
+      : { projectRoot: current.projectRoot, updatedAt: now }
+  })
+}
+
+type Link = Links[string]
+export type TakenCloudWorkspaceLink = { sandboxId: string; hostId: string | null; link: Link }
+
+export async function cloudWorkspaceLinkEntries(): Promise<[string, Link][]> {
+  return Object.entries(await readLinks())
+}
+
+/** Removes, in one write, every link `matches` picks; returns what was removed. */
+export async function takeCloudWorkspaceLinks(
+  matches: (sandboxId: string, link: Link) => boolean
+): Promise<TakenCloudWorkspaceLink[]> {
+  const taken: TakenCloudWorkspaceLink[] = []
+  await updateLinks((links) => {
+    for (const [sandboxId, link] of Object.entries(links)) {
+      if (matches(sandboxId, link)) {
+        taken.push({ sandboxId, hostId: link.hostId ?? null, link })
+        delete links[sandboxId]
+      }
+    }
+  })
+  return taken
+}
+
+/** Puts back taken links whose cleanup failed; a link written since then wins. */
+export function restoreCloudWorkspaceLinks(
+  restored: readonly TakenCloudWorkspaceLink[]
+): Promise<void> {
+  return updateLinks((links) => {
+    for (const entry of restored) {
+      links[entry.sandboxId] ??= entry.link
+    }
   })
 }
 
@@ -64,7 +101,7 @@ export function recordCloudWorkspaceProjectRoot(
     return Promise.resolve()
   }
   return updateLinks((links) => {
-    links[sandboxId] = { ...links[sandboxId], projectRoot }
+    links[sandboxId] = { ...links[sandboxId], projectRoot, updatedAt: Date.now() }
   })
 }
 

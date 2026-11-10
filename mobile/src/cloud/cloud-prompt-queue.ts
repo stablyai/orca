@@ -152,6 +152,14 @@ export function removeCloudPrompt(id: string): Promise<void> {
   return mutate((queue) => ({ next: queue.filter((entry) => entry.id !== id), result: undefined }))
 }
 
+/** The workspaces are gone: nothing queued for them can ever be delivered. */
+export function removeCloudPromptsFor(sandboxIds: ReadonlySet<string>): Promise<void> {
+  return mutate((queue) => ({
+    next: queue.filter((entry) => !sandboxIds.has(entry.sandboxId)),
+    result: undefined
+  }))
+}
+
 export function subscribeCloudPromptQueue(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
