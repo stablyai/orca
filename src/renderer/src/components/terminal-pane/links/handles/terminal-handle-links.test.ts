@@ -37,7 +37,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 

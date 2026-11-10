@@ -22,7 +22,9 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
   current: null
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 // Hold the remote capability/status round trip before bytes are sent.
 const hostCheck = vi.hoisted((): { wait: Promise<void> | null } => ({ wait: null }))
 vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => {

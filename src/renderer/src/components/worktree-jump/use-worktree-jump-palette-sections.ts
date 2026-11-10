@@ -3,7 +3,7 @@ import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { bestCmdJPaletteSectionQualityClass } from '@/components/cmd-j/palette-results'
 import {
   bestPaletteQualityRank,
-  NO_PALETTE_QUALITY_RANK,
+  shouldExtraSectionLeadPaletteSections,
   shouldIntentSectionLeadPaletteSections,
   shouldOpenTabsLeadPaletteSections
 } from '@/lib/cmd-j-section-leadership'
@@ -30,12 +30,15 @@ import type { WorktreeJumpPaletteProjectTargets } from './use-worktree-jump-pale
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
+import type { VisiblePaletteExtraSection } from './worktree-jump-palette-extra-list-entries'
+import type { WorktreeJumpPaletteExtraResults } from './use-worktree-jump-palette-extra-results'
 
 type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteRecentTabs &
   WorktreeJumpPaletteProjectTargets &
   Pick<WorktreeJumpPaletteQuickActions, 'middleItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
+  Pick<WorktreeJumpPaletteExtraResults, 'extraSections'> &
   Pick<
     WorktreeJumpPaletteLocalState,
     | 'createWorktreeName'
@@ -52,6 +55,7 @@ export function useWorktreeJumpPaletteSections({
   recentTabItems,
   projectTargetItems,
   middleItems,
+  extraSections,
   createWorktreeName,
   showCreateAction,
   expandedSectionCaps,
@@ -72,17 +76,24 @@ export function useWorktreeJumpPaletteSections({
     })
   }, [hasQuery, openTabItems, worktreeItems])
 
+  const bestWorkspaceOrTabQualityRank = useMemo(
+    () =>
+      Math.min(
+        bestPaletteQualityRank(worktreeItems.map((item) => item.match.qualityClass)),
+        bestPaletteQualityRank(openTabItems.map((item) => item.result.qualityClass))
+      ),
+    [openTabItems, worktreeItems]
+  )
+
   const middleLeadsSections = useMemo(() => {
     if (!hasQuery) {
       return false
     }
     const bestEntityQualityRank = Math.min(
-      worktreeItems.length
-        ? bestPaletteQualityRank(worktreeItems.map((item) => item.match.qualityClass))
-        : NO_PALETTE_QUALITY_RANK,
-      openTabItems.length
-        ? bestPaletteQualityRank(openTabItems.map((item) => item.result.qualityClass))
-        : NO_PALETTE_QUALITY_RANK
+      bestWorkspaceOrTabQualityRank,
+      bestPaletteQualityRank(
+        extraSections.flatMap((section) => section.items.map((item) => item.result.qualityClass))
+      )
     )
     return shouldIntentSectionLeadPaletteSections({
       bestEntityQualityRank,
@@ -91,7 +102,7 @@ export function useWorktreeJumpPaletteSections({
         bestCmdJPaletteSectionQualityClass(projectTargetItems.map((item) => item.result))
       ])
     })
-  }, [hasQuery, middleItems, openTabItems, projectTargetItems, worktreeItems])
+  }, [bestWorkspaceOrTabQualityRank, extraSections, hasQuery, middleItems, projectTargetItems])
 
   const handleExpandSection = useCallback(
     (sectionKey: string) => {
@@ -174,7 +185,10 @@ export function useWorktreeJumpPaletteSections({
       // Whole-field equality outranks website navigation; exact words alone do not.
       hasExactEntityDestination:
         worktreeItems.some((item) => (item.match.rank?.destination ?? 3) <= 1) ||
-        openTabItems.some((item) => (item.result.rank?.destination ?? 3) <= 1),
+        openTabItems.some((item) => (item.result.rank?.destination ?? 3) <= 1) ||
+        extraSections.some((section) =>
+          section.items.some((item) => (item.result.rank?.destination ?? 3) <= 1)
+        ),
       visibleWorktreeItems: worktrees.visible as PaletteItem[],
       worktreeOverflowCount: worktrees.overflowCount,
       visibleProjectTargetItems: projectTargets.visible as PaletteItem[],
@@ -184,10 +198,33 @@ export function useWorktreeJumpPaletteSections({
       visibleOpenTabItems: openTabs.visible as PaletteItem[],
       openTabOverflowCount: openTabs.overflowCount,
       multiPrimaryFirstScreen,
-      multiPrimaryLayout
+      multiPrimaryLayout,
+      visibleExtraSections: extraSections.map(({ source, items }): VisiblePaletteExtraSection => {
+        const expanded = expandedSectionCaps[`extra:${source.id}`] ?? 0
+        const capped = capPaletteSection(
+          items,
+          (hasQuery ? PALETTE_SECTION_RENDER_CAP : source.emptyQueryCap) + expanded
+        )
+        return {
+          source,
+          visible: capped.visible,
+          overflowCount: capped.overflowCount,
+          leads:
+            hasQuery &&
+            shouldExtraSectionLeadPaletteSections({
+              bestEntityQualityRank: bestWorkspaceOrTabQualityRank,
+              bestExtraQualityRank: bestPaletteQualityRank(
+                items.map((item) => item.result.qualityClass)
+              ),
+              leadsOnTie: source.leadsOnTie
+            })
+        }
+      })
     }
   }, [
+    bestWorkspaceOrTabQualityRank,
     expandedSectionCaps,
+    extraSections,
     hasQuery,
     middleItems,
     openTabItems,

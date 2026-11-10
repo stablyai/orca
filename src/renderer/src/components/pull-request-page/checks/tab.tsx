@@ -25,10 +25,10 @@ import { resolvePullRequestRepo } from '@/components/github/github-work-item-ide
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { resolveRepoExecutionHostPlatform } from '@/lib/execution-host-facts'
+import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type {
   GitHubWorkItem,

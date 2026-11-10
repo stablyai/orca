@@ -63,7 +63,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     removeStructuredLaunchSlot(owner, worktreeId, sessionId)
   }
   if (!alreadyCancelled && owner) {
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(sessionId)
   }
   return !alreadyCancelled
 }

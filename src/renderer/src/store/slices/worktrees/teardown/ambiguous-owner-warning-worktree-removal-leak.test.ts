@@ -1,6 +1,6 @@
 /** Purge module-level ambiguous-owner warning keys on both removal paths. Otherwise IDs leak forever and recreated workspaces cannot report newly ambiguous ownership. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -13,7 +13,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   unregisterPtyDataHandlers: vi.fn()
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

@@ -1,5 +1,5 @@
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
-import { agentLaunchRecoveryMessage } from '@/lib/agent-launch-failure'
+import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import { prepareDirectWorkItemSetup } from './direct-work-item-setup'
 import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
 import { useAppStore } from '@/store/index'
@@ -17,7 +17,7 @@ import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
+import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,

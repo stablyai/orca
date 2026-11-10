@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useCloneFolderOverride } from '../../../sidebar/project-admission/clone-folder/use-clone-folder-override'
+import { getProjectCloneCheckTarget } from '../../../../store/projects/project-host-routing'
 import { Plus, X } from 'lucide-react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type {
@@ -34,6 +36,7 @@ type RepositoryHostSetupActionsProps = {
     hostId: ExecutionHostId
     url: string
     destination: string
+    folderName?: string
     displayName: string
   }) => Promise<ProjectHostSetupResult | null>
   createProjectHostSetup: (args: {
@@ -65,6 +68,8 @@ export function RepositoryHostSetupActions({
   const [setupKind, setSetupKind] = useState<'git' | 'folder'>('git')
   const [cloneUrl, setCloneUrl] = useState('')
   const [cloneDestination, setCloneDestination] = useState('')
+  const { cloneFolder, cloneArgs, setCloneFolderName, resetCloneFolder, checkCloneFolderTaken } =
+    useCloneFolderOverride(cloneUrl, cloneDestination)
   const [isSettingUp, setIsSettingUp] = useState(false)
   const [isCloning, setIsCloning] = useState(false)
   const [isCreatingPendingSetup, setIsCreatingPendingSetup] = useState(false)
@@ -91,6 +96,7 @@ export function RepositoryHostSetupActions({
     setSetupPath('')
     setCloneUrl('')
     setCloneDestination('')
+    resetCloneFolder()
   }
 
   const handleExistingFolder = async (): Promise<void> => {
@@ -121,11 +127,13 @@ export function RepositoryHostSetupActions({
     }
     setIsCloning(true)
     try {
+      if (await checkCloneFolderTaken(getProjectCloneCheckTarget(setupTargetHostId))) {
+        return
+      }
       const result = await setupProjectClone({
         projectId: selectedProjectHostSetup.projectId,
         hostId: setupTargetHostId,
-        url: cloneUrl.trim(),
-        destination: cloneDestination.trim(),
+        ...cloneArgs,
         displayName: repoDisplayName
       })
       if (result) {
@@ -260,6 +268,8 @@ export function RepositoryHostSetupActions({
           onBack={() => setStep('choose')}
           onCloneUrlChange={setCloneUrl}
           onCloneDestinationChange={setCloneDestination}
+          cloneFolder={cloneFolder}
+          onCloneFolderNameChange={setCloneFolderName}
           onSubmit={handleClone}
         />
       ) : null}

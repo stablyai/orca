@@ -108,7 +108,7 @@ export function WarpThemeImportModal({
                 onClick={() => void handlePreviewSource({ kind: 'chooseFile' })}
               >
                 <FileUp className="size-4" />
-                {t('auto.components.settings.WarpThemeImportModal.choose_file', 'Choose File')}
+                {t('auto.components.settings.WarpThemeImportModal.77f3e3d390', 'Choose file')}
               </Button>
               <Button
                 variant="outline"
@@ -118,7 +118,7 @@ export function WarpThemeImportModal({
                 onClick={() => void handlePreviewSource({ kind: 'chooseFolder' })}
               >
                 <FolderOpen className="size-4" />
-                {t('auto.components.settings.WarpThemeImportModal.choose_folder', 'Choose Folder')}
+                {t('auto.components.settings.WarpThemeImportModal.00aaf588da', 'Choose folder')}
               </Button>
             </div>
           ) : null}
@@ -302,7 +302,7 @@ export function WarpThemeImportModal({
                     defaultValue_one: 'Import {{value0}} Theme'
                   }
                 )
-              : t('auto.components.settings.WarpThemeImportModal.import_themes', 'Import Themes')}
+              : t('auto.components.settings.WarpThemeImportModal.1bceb1553d', 'Import themes')}
           </Button>
         </DialogFooter>
       </DialogContent>

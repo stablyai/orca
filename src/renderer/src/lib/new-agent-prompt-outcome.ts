@@ -1,4 +1,4 @@
-import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
+import type { ActiveAgentNotesSendResult } from './agent-session/messaging/terminal/active-agent-note-send-result'
 import type { StructuredPromptDeliveryResult } from './agent-session/launch/structured-agent-session-launch-prompt'
 
 /** Delivered releases notes once host/composer owns the text; failure is omitted when the chat already reports startup/cancellation. */

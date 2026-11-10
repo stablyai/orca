@@ -76,7 +76,7 @@ export function FileResultRow({
 
   return (
     <div className="pt-1.5">
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <Tooltip>
           <ContextMenu>
             <ContextMenuTrigger asChild>

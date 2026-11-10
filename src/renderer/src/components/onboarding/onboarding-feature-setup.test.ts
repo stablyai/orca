@@ -3,7 +3,7 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import { ORCHESTRATION_ENABLED_STORAGE_KEY } from '@/lib/orchestration-setup-state'
 import {

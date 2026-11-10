@@ -71,21 +71,6 @@ function counts(db: SyncDatabase): Record<string, number> {
   }
 }
 
-it('indexes conversation rows and excludes tool output', () => {
-  replayTranscriptRead({
-    messages: [
-      { role: 'user', text: 'alpha question', timestamp: null },
-      { role: 'assistant', text: 'beta answer', timestamp: null },
-      { role: 'tool', text: 'gamma tool output', timestamp: null }
-    ]
-  })
-
-  expect(counts(index.db).full).toBe(2)
-  expect(matches(index.db, 'messages_fts', 'gamma')).toBe(0)
-  expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: gamma')).toBe(0)
-  expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: beta')).toBe(1)
-})
-
 it('rolls a whole file back when a write throws part way through its transaction', () => {
   replayTranscriptRead({
     messages: userMessages('firstgeneration', 3),

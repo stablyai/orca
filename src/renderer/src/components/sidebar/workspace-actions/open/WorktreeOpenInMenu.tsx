@@ -20,8 +20,8 @@ import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capa
 import {
   getWorkspaceEditorSshHost,
   type WorkspaceEditorSshHost
-} from '@/lib/workspace-editor-ssh-target'
-import type { WorkspaceOwnerRef } from '@/lib/resolve-owner'
+} from '@/components/file-actions/workspace-editor-ssh-target'
+import type { WorkspaceOwnerRef } from '@/lib/workspace/ownership/resolve-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import { showOpenFailureToast } from './worktree-open-failure-toast'
 import type { OpenInApplication } from '../../../../../../shared/ui-chrome-types'

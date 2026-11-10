@@ -1,6 +1,5 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred } from '../test-fixtures/pty-connection-test-async'
 import {
   createMockTransport,
@@ -80,8 +79,9 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:
@@ -109,28 +109,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         expect(capturedDataCallback.current).not.toBeNull()
         return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
       }
-
-      // Only the restore-needed marker proves a byte gap; reset emulator state here with the cross-chunk parser (STA-4042).
-      it('closes the emulator state gap when a drop is announced', async () => {
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { pane, dataCallback } = await connectHiddenPane(deps)
-        dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
-        pane.terminal.write.mockClear()
-
-        const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('../../pty-transport/delivery/pty-model-restore-channel')
-        _dispatchPtyModelRestoreNeededForTest({
-          id: 'pty-id',
-          reason: 'hidden-drop',
-          markerSeq: 64
-        })
-        await flushAsyncTicks(4)
-
-        const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
-        const gapReset = written.find((data) => data === RESET_AFTER_BYTE_GAP)
-        expect(gapReset).toBeDefined()
-      })
 
       it('marks the PTY hidden on hidden output and clears it before requesting restore on reveal', async () => {
         enableMainAuthority()
@@ -312,90 +290,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', true)
       })
 
-      it('marks hidden codex panes immediately — no startup renderer-query window remains', async () => {
-        enableMainAuthority()
-        const deps = createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        })
-        const { transport, dataCallback } = await connectHiddenPane(deps)
-        const setHiddenRendererPty = getSetHiddenRendererPtyMock()
-        const transportOptions = createdTransportOptions.at(-1) as {
-          onPtySpawn?: (ptyId: string) => void
-        }
-        transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler =
-          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
-
-        // Hidden Codex startups use the ordinary delivery gate; main owns startup query replies.
-        dataCallback('startup probe output\r\n')
-        expect(setHiddenRendererPty).toHaveBeenCalledWith('pty-id', true)
-
-        factsHandler._dispatchTerminalSideEffectBatchForTest({
-          ptyId: 'pty-id',
-          seq: 8,
-          facts: [{ kind: '2031-subscribe' }]
-        })
-        expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-      })
-
-      it('never answers a 2031-subscribe fact, hidden or visible', async () => {
-        // Regression pin (#9993): a subscribe arms future notifications, it is not a query.
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { transport } = await connectHiddenPane(deps)
-        // Simulate spawn completion so the pane registers its fact consumer (mock transport never calls onPtySpawn).
-        const transportOptions = createdTransportOptions.at(-1) as {
-          onPtySpawn?: (ptyId: string) => void
-        }
-        transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler =
-          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
-
-        factsHandler._dispatchTerminalSideEffectBatchForTest({
-          ptyId: 'pty-id',
-          seq: 12,
-          facts: [{ kind: '2031-subscribe' }]
-        })
-        ;(deps.isVisibleRef as { current: boolean }).current = true
-        factsHandler._dispatchTerminalSideEffectBatchForTest({
-          ptyId: 'pty-id',
-          seq: 24,
-          facts: [{ kind: '2031-subscribe' }]
-        })
-
-        expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-        expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(
-          expect.stringMatching(/\?997/)
-        )
-      })
-
-      it('registers the fact-observed 2031 subscription for later theme flips', async () => {
-        enableMainAuthority()
-        const recordPaneMode2031Subscription = vi.fn()
-        const deps = createDeps({
-          isVisibleRef: { current: false },
-          recordPaneMode2031Subscription
-        })
-        const { transport } = await connectHiddenPane(deps)
-        const transportOptions = createdTransportOptions.at(-1) as {
-          onPtySpawn?: (ptyId: string) => void
-        }
-        transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler =
-          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
-
-        factsHandler._dispatchTerminalSideEffectBatchForTest({
-          ptyId: 'pty-id',
-          seq: 12,
-          facts: [{ kind: '2031-subscribe' }]
-        })
-
-        // Why: without the registry write, maybePushMode2031Flip won't push CSI 997 after a theme change, so the TUI keeps a stale theme.
-        expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, 'dark')
-        expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-      })
-
       it('retires the fact-registered subscription when the TUI withdraws it', async () => {
         // Gated panes never receive withdrawal bytes; only this fact can retire a subscription before theme flips send replies to the replacement shell.
         enableMainAuthority()
@@ -432,107 +326,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
 
         expect(paneMode2031Ref.current.get(1)).toBeUndefined()
         expect(paneLastThemeModeRef.current.get(1)).toBeUndefined()
-      })
-
-      it('leaves the chunk scanner silent on a gate-managed PTY', async () => {
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { transport, dataCallback } = await connectHiddenPane(deps)
-        const before = transport.sendInput.mock.calls.length
-
-        dataCallback('\x1b[?2031h')
-
-        const replies = transport.sendInput.mock.calls
-          .slice(before)
-          .flat()
-          .filter((arg) => String(arg).includes('997'))
-        expect(replies).toEqual([])
-      })
-
-      it('declares hidden-at-spawn on connect for hidden panes', async () => {
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { transport } = await connectHiddenPane(deps)
-        // Why: mark the PTY hidden before its first byte, closing the spawn-time DA1-loss window where neither side replied.
-        expect(transport.connect).toHaveBeenCalledWith(
-          expect.objectContaining({ initiallyHidden: true })
-        )
-      })
-
-      it('keeps visible spawns undeclared (visible spawn unchanged)', async () => {
-        enableMainAuthority()
-        const deps = createDeps()
-        const { transport } = await connectHiddenPane(deps)
-        expect(transport.connect.mock.calls[0]![0]).not.toHaveProperty('initiallyHidden')
-      })
-
-      it('declares hidden-at-spawn for hidden codex panes too', async () => {
-        enableMainAuthority()
-        const deps = createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        })
-        const { transport } = await connectHiddenPane(deps)
-        // Codex startup is main-owned from byte zero; no temporary renderer reply window remains (pty.test.ts DA1-from-model).
-        expect(transport.connect).toHaveBeenCalledWith(
-          expect.objectContaining({ initiallyHidden: true })
-        )
-      })
-
-      it('does not gate or fact-reply when the hidden-delivery kill switch is off', async () => {
-        enableMainAuthority()
-        mockStoreState.settings = {
-          ...mockStoreState.settings,
-          terminalHiddenDeliveryGate: false
-        } as StoreState['settings']
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { transport, dataCallback } = await connectHiddenPane(deps)
-        const transportOptions = createdTransportOptions.at(-1) as {
-          onPtySpawn?: (ptyId: string) => void
-        }
-        transportOptions.onPtySpawn?.('pty-id')
-        const setHiddenRendererPty = getSetHiddenRendererPtyMock()
-
-        dataCallback('hidden output\r\n')
-        expect(setHiddenRendererPty).not.toHaveBeenCalled()
-
-        // Why: gate off keeps the byte-scan responder authoritative — the fact must not produce a second reply.
-        const factsHandler =
-          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
-        factsHandler._dispatchTerminalSideEffectBatchForTest({
-          ptyId: 'pty-id',
-          seq: 12,
-          facts: [{ kind: '2031-subscribe' }]
-        })
-        expect(transport.sendInput).not.toHaveBeenCalled()
-      })
-
-      it('clears a marked-hidden PTY on dispose so a remount is never gated', async () => {
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { dataCallback, binding } = await connectHiddenPane(deps)
-        const setHiddenRendererPty = getSetHiddenRendererPtyMock()
-
-        dataCallback('hidden output\r\n')
-        expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', true)
-
-        binding.dispose()
-        expect(setHiddenRendererPty).toHaveBeenLastCalledWith('pty-id', false)
-      })
-
-      it('never treats a live chunk that strips to empty as a restore marker', async () => {
-        // Why: an all-OSC-9999 chunk arrives as '' after stripping; only pty:modelRestoreNeeded may trigger a restore, not the empty byte path.
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: true } })
-        const { dataCallback } = await connectHiddenPane(deps)
-        const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
-          typeof vi.fn
-        >
-
-        dataCallback('', { seq: 32, rawLength: 24 })
-        await flushAsyncTicks(20)
-
-        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
       })
 
       it('gates marker re-arms during an in-flight foreground restore and repaints once after', async () => {

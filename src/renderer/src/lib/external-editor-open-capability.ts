@@ -1,7 +1,7 @@
 import { isRemoteSshEditorCommand } from '../../../shared/remote-ssh-editor-launcher'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { getWindowsPathAccess } from './windows-path-access'
-import type { WorkspaceEditorSshHost } from './workspace-editor-ssh-target'
+import type { WorkspaceEditorSshHost } from '../components/file-actions/workspace-editor-ssh-target'
 
 export type ExternalEditorOpenCapability =
   | {

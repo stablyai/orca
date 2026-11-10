@@ -51,7 +51,7 @@ function getSetupStatusLabel(status: TaskProviderSetupStatus, t: Translate = tra
         'Status unavailable'
       )
     case 'hidden':
-      return t('auto.components.settings.TaskSourceProviderCard.statusHidden', 'Hidden from Tasks')
+      return t('auto.components.settings.TaskSourceProviderCard.d2d9e9707b', 'Hidden from tasks')
     case 'incomplete':
       return t('auto.components.settings.TaskSourceProviderCard.statusIncomplete', 'Needs setup')
   }

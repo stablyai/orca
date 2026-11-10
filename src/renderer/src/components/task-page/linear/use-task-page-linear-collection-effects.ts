@@ -1,6 +1,6 @@
 import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { linearIssueReadError } from '@/lib/linear-read-error'
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { translate } from '@/i18n/i18n'
 import type { TaskPageLinearInOrcaEffectsModel } from './use-task-page-linear-in-orca-effects'
 import { useEffect } from 'react'

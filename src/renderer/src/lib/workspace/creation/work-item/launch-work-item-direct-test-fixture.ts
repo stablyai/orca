@@ -78,7 +78,7 @@ vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mocks.pasteDraftWhenAgentReady
 }))
 
@@ -91,7 +91,7 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
   ensureHooksApproved: vi.fn().mockResolvedValue({ decision: 'run' })
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 

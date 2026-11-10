@@ -4,6 +4,52 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import { reportSessionSearchBackgroundError, traceSessionSearch } from './session-search-trace'
 
+const SCANNED_KEY = 'tool_purge_scanned_rowid'
+const FLOOR_KEY = 'tool_purge_floor_rowid'
+export const SESSION_SEARCH_TOOL_PURGE_TRIGGER = 'search_tool_purge_floor'
+
+/** Older builds still index tool rows; any writer's tool insert lowers the next pass's start, even
+ * when a rowid below the scanned mark is reused after tail deletes. */
+export const SESSION_SEARCH_TOOL_PURGE_SQL = `
+CREATE TRIGGER IF NOT EXISTS ${SESSION_SEARCH_TOOL_PURGE_TRIGGER} AFTER INSERT ON messages
+WHEN NEW.role = 'tool' BEGIN
+  INSERT INTO meta(key, value) VALUES ('${FLOOR_KEY}', NEW.id - 1)
+    ON CONFLICT(key) DO UPDATE SET
+      value = MIN(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER));
+END;
+`
+
+function readMetaInteger(db: SyncDatabase, key: string): number | null {
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key)
+  const value = row ? Number(row.value) : Number.NaN
+  return Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
+function writeScannedMark(db: SyncDatabase, value: number): void {
+  db.prepare(`INSERT INTO meta(key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(SCANNED_KEY, String(value))
+}
+
+/** Fold the trigger's floor into the persisted mark atomically, so a cancelled pass loses nothing. */
+export function claimSessionSearchToolPurgeStart(db: SyncDatabase): number {
+  if (readMetaInteger(db, FLOOR_KEY) === null) {
+    return readMetaInteger(db, SCANNED_KEY) ?? 0
+  }
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const scanned = readMetaInteger(db, SCANNED_KEY) ?? 0
+    const floor = readMetaInteger(db, FLOOR_KEY)
+    const start = floor === null ? scanned : Math.min(scanned, floor)
+    writeScannedMark(db, start)
+    db.prepare('DELETE FROM meta WHERE key = ?').run(FLOOR_KEY)
+    db.exec('COMMIT')
+    return start
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 /** Seek over gaps, then examine at most 256 rowids, including conversation rows in the bound. */
 export function readSessionSearchToolPurgePage(db: SyncDatabase, after: number) {
   const first = db.prepare('SELECT id FROM messages WHERE id > ? ORDER BY id LIMIT 1').get(after)
@@ -17,7 +63,7 @@ export function readSessionSearchToolPurgePage(db: SyncDatabase, after: number) 
   return { cursor, ids }
 }
 
-/** The rows themselves record unfinished work; no persisted migration cursor is needed. */
+/** A persisted high-water rowid bounds steady-state passes to rows written since the last one. */
 export class SessionSearchToolPurge {
   private requested = false
   private running: Promise<void> | null = null
@@ -45,7 +91,8 @@ export class SessionSearchToolPurge {
       await yieldToEventLoop()
       while (this.requested && !this.closed()) {
         this.requested = false
-        let cursor = 0
+        const start = claimSessionSearchToolPurgeStart(this.db)
+        let cursor = start
         let changed = false
         while (!this.closed()) {
           // Why: sparse/empty pages must yield too, without acquiring the write lock to scan.
@@ -60,6 +107,10 @@ export class SessionSearchToolPurge {
           }
           cursor = page.cursor
           await yieldToEventLoop()
+        }
+        // Why: tool rows inserted mid-pass re-create the floor, so overwriting the mark loses none.
+        if (cursor > start && !this.closed()) {
+          writeScannedMark(this.db, cursor)
         }
         if (changed && !this.closed()) {
           await this.compact()

@@ -149,7 +149,7 @@ export function EditorPanelHeader({
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
       {canOpenPreview && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -168,7 +168,7 @@ export function EditorPanelHeader({
         </TooltipProvider>
       )}
       {isSingleDiff && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -212,7 +212,7 @@ export function EditorPanelHeader({
         />
       )}
       {isDiffSurface && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -293,7 +293,7 @@ export function EditorPanelHeader({
           editorViewToggle
         ))}
       {canShowMarkdownTableOfContents && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button

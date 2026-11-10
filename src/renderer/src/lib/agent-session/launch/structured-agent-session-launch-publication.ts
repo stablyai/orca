@@ -43,7 +43,7 @@ export function markStructuredAgentSessionLaunchPublished(
       return false
     }
     deleteStructuredAgentLaunchRecord(sessionId)
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(sessionId)
     return true
   }
   if (
@@ -71,7 +71,7 @@ export function markStructuredAgentSessionLaunchPublished(
   state.callers.outcome = 'published'
   deleteStructuredAgentLaunchRecord(sessionId)
   state.callers.onSettled()
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 

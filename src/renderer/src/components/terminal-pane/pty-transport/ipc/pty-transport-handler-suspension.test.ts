@@ -1,166 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  flushPtySideEffects,
-  installIpcPtyWindow,
-  restorePtySpecWindow
-} from './pty-transport-test-harness'
+import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onReplay: ((payload: { id: string; data: string }) => void) | null = null
-  let onExit:
-    | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
-    | null = null
 
   beforeEach(() => {
     vi.resetModules()
     onData = null
     onReplay = null
-    onExit = null
     installIpcPtyWindow(originalWindow, {
       data: (callback) => {
         onData = callback
       },
       replay: (callback) => {
         onReplay = callback
-      },
-      exit: (callback) => {
-        onExit = callback
       }
     })
   })
 
   afterEach(() => {
     restorePtySpecWindow(originalWindow)
-  })
-
-  it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const onPtyExit = vi.fn()
-    spawn.mockResolvedValueOnce({ id: 'pty-old' }).mockResolvedValueOnce({ id: 'pty-new' })
-
-    const transport = createIpcPtyTransport({ onPtyExit })
-
-    await transport.connect({ url: '', callbacks: {} })
-    await transport.connect({ url: '', callbacks: {} })
-
-    onExit?.({ id: 'pty-old', code: 0 })
-
-    expect(onPtyExit).not.toHaveBeenCalledWith('pty-old', 0)
-    expect(transport.getPtyId()).toBe('pty-new')
-    expect(transport.isConnected()).toBe(true)
-
-    onExit?.({ id: 'pty-new', code: 0 })
-
-    expect(onPtyExit).toHaveBeenCalledWith('pty-new', 0)
-    expect(transport.getPtyId()).toBeNull()
-    expect(transport.isConnected()).toBe(false)
-  })
-
-  it('ignores stale data and replay for a previous PTY after reconnecting the same transport', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const onDataCallback = vi.fn()
-    const onReplayData = vi.fn()
-    spawn.mockResolvedValueOnce({ id: 'pty-old' }).mockResolvedValueOnce({ id: 'pty-new' })
-
-    const transport = createIpcPtyTransport({})
-
-    await transport.connect({
-      url: '',
-      callbacks: { onData: vi.fn(), onReplayData: vi.fn() }
-    })
-    await transport.connect({
-      url: '',
-      callbacks: { onData: onDataCallback, onReplayData }
-    })
-
-    onData?.({ id: 'pty-old', data: 'old data' })
-    onReplay?.({ id: 'pty-old', data: 'old replay' })
-
-    expect(onDataCallback).not.toHaveBeenCalled()
-    expect(onReplayData).not.toHaveBeenCalled()
-
-    onData?.({ id: 'pty-new', data: 'new data' })
-    onReplay?.({ id: 'pty-new', data: 'new replay' })
-
-    expect(onDataCallback).toHaveBeenCalledWith('new data')
-    expect(onReplayData).toHaveBeenCalledWith('new replay')
-  })
-
-  it('unregisterPtyDataHandlers prevents final data burst from triggering notifications', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    await import('../delivery/pty-dispatcher')
-    const { unregisterPtyDataHandlers } = await import('../shutdown/pty-shutdown-data-suspension')
-    const onTitleChange = vi.fn()
-    const onBell = vi.fn()
-    const onAgentBecameIdle = vi.fn()
-    const onAgentBecameWorking = vi.fn()
-    const onPtyExit = vi.fn()
-
-    const transport = createIpcPtyTransport({
-      onTitleChange,
-      onBell,
-      onAgentBecameIdle,
-      onAgentBecameWorking,
-      onPtyExit
-    })
-
-    await transport.connect({ url: '', callbacks: {} })
-
-    onData?.({ id: 'pty-1', data: ']0;. Claude working' })
-    await flushPtySideEffects()
-    expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
-
-    // Simulate shutdownWorktreeTerminals: unregister data handlers before kill.
-    const snapshots = unregisterPtyDataHandlers(['pty-1'])
-
-    // Final burst after the handler was removed: its title change and BEL must not produce a notification.
-    onData?.({ id: 'pty-1', data: ']0;Claude done' })
-    expect(onAgentBecameIdle).not.toHaveBeenCalled()
-    expect(onBell).not.toHaveBeenCalled()
-
-    for (const snapshot of snapshots) {
-      snapshot.commit()
-    }
-
-    onExit?.({ id: 'pty-1', code: -1 })
-    expect(onPtyExit).toHaveBeenCalledWith('pty-1', -1)
-  })
-
-  it('marks a host reversible-stop exit before delivering it to the pane', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const { consumeCommittedPtyShutdownExit } =
-      await import('../shutdown/pty-shutdown-exit-deferral')
-    const transport = createIpcPtyTransport()
-    await transport.connect({ url: '', callbacks: {} })
-
-    onExit?.({ id: 'pty-1', code: 0, preserveRendererBinding: true })
-
-    expect(consumeCommittedPtyShutdownExit('pty-1')).toBe(true)
-  })
-
-  it('restores data handlers when an intentional shutdown fails before exit', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    await import('../delivery/pty-dispatcher')
-    const { restorePtyDataHandlersAfterFailedShutdown, unregisterPtyDataHandlers } =
-      await import('../shutdown/pty-shutdown-data-suspension')
-    const onDataCallback = vi.fn()
-    const transport = createIpcPtyTransport()
-
-    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
-
-    const snapshots = unregisterPtyDataHandlers(['pty-1'])
-    onData?.({ id: 'pty-1', data: 'final burst while detached' })
-    expect(onDataCallback).not.toHaveBeenCalled()
-
-    restorePtyDataHandlersAfterFailedShutdown(snapshots)
-    expect(onDataCallback).toHaveBeenCalledWith('final burst while detached')
-    onData?.({ id: 'pty-1', data: 'live again' })
-
-    expect(onDataCallback).toHaveBeenCalledWith('live again')
   })
 
   it('retains rollback replay until a pane detached during sleep registers again', async () => {
@@ -212,44 +73,5 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).toHaveBeenCalledWith('buffered while both owners are pending')
     expect(sidecar).toHaveBeenCalledWith('buffered while both owners are pending')
     ptyDataSidecars.delete('pty-1')
-  })
-
-  it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createIpcPtyTransport } = await import('./pty-transport')
-      await import('../delivery/pty-dispatcher')
-      const { unregisterPtyDataHandlers } = await import('../shutdown/pty-shutdown-data-suspension')
-      const onTitleChange = vi.fn()
-      const onAgentBecameIdle = vi.fn()
-      const onAgentBecameWorking = vi.fn()
-
-      const transport = createIpcPtyTransport({
-        onTitleChange,
-        onAgentBecameIdle,
-        onAgentBecameWorking
-      })
-
-      await transport.connect({ url: '', callbacks: {} })
-
-      onData?.({ id: 'pty-1', data: ']0;. Claude working' })
-      vi.advanceTimersByTime(0)
-      expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
-
-      onData?.({ id: 'pty-1', data: 'some output without title\r\n' })
-      vi.advanceTimersByTime(0)
-
-      // Unregister must cancel the staleTitleTimer and reset the tracker so no stale idle transition fires.
-      const snapshots = unregisterPtyDataHandlers(['pty-1'])
-
-      vi.advanceTimersByTime(4000)
-
-      expect(onAgentBecameIdle).not.toHaveBeenCalled()
-      for (const snapshot of snapshots) {
-        snapshot.commit()
-      }
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

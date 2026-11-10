@@ -27,7 +27,9 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
 vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.navigate
 }))
-vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: mocks.moved }))
+vi.mock('./workspace/activation/wsl-moved-chat-activation', () => ({
+  activateWslMovedWorkspace: mocks.moved
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({

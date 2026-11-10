@@ -1,3 +1,4 @@
+import { isFocusKeepingPress } from '@/lib/focus-keeping-press'
 import {
   isDocumentBodyOrNull,
   refreshTerminalImeInputContext,
@@ -40,7 +41,10 @@ export function releaseTerminalFocusForOutsidePointerDown(args: {
     return false
   }
 
-  if (isNode(args.pointerTarget) && args.container.contains(args.pointerTarget)) {
+  if (
+    (isNode(args.pointerTarget) && args.container.contains(args.pointerTarget)) ||
+    isFocusKeepingPress(args.pointerTarget)
+  ) {
     return false
   }
 
