@@ -766,7 +766,11 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     expect(subject.status().phase).not.toBe('indexing')
     await subject.reconcile({ full: true })
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
+    await subject.settled()
+    await subject.reconcile()
+    expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
     expect(matching('predecessorowedneedle')).toEqual({ n: 0 })
+    expect(subject.status().phase).not.toBe('indexing')
   } finally {
     probe.mockRestore()
     polling.mockRestore()
