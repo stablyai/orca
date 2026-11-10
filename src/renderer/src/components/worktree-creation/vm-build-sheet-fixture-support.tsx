@@ -56,7 +56,7 @@ export function sheet(
   error: string | null,
   now: number,
   agentSignInRow?: React.ReactNode,
-  options: { cloudAgentStep?: React.ReactNode; secretsRow?: React.ReactNode } = {}
+  options: { cloudAgentsRow?: React.ReactNode; secretsRow?: React.ReactNode } = {}
 ) {
   return (
     <div className="bg-background p-3">
@@ -73,7 +73,7 @@ export function sheet(
         onEditRecipe={() => {}}
         agentSignInRow={agentSignInRow}
         stepTimings={FIXTURE_STEP_TIMINGS}
-        cloudAgentStep={options.cloudAgentStep ?? null}
+        cloudAgentsRow={options.cloudAgentsRow ?? null}
         secretsRow={options.secretsRow ?? null}
       />
     </div>

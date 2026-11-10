@@ -8,6 +8,7 @@ import {
 } from '../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
+import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
 import { claudeStateFile, readClaudeFolderLogin } from '../claude-accounts/claude-account-folder'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
@@ -25,6 +26,10 @@ const AgentRequest = z.object({ agent: Agent })
 // Bounded well above a real token; the service checks the exact shape.
 const PasteRequest = z.object({ token: z.string().min(1).max(1024) })
 const SourceRequest = z.object({ agent: Agent, source: z.enum(['sign-in', 'key']).nullable() })
+// A runtime environment, never a raw sandbox id: main resolves only sandboxes this desktop made.
+const RuntimeEnvironment = z.string().min(1).max(256)
+const WorkspaceRequest = z.object({ runtimeEnvironmentId: RuntimeEnvironment })
+const WorkspaceSourceRequest = SourceRequest.extend({ runtimeEnvironmentId: RuntimeEnvironment })
 
 const CHANNELS = [
   'orcaCloudAgents:status',
@@ -36,7 +41,9 @@ const CHANNELS = [
   'orcaCloudAgents:pasteClaudeToken',
   'orcaCloudAgents:acknowledge',
   'orcaCloudAgents:remove',
-  'orcaCloudAgents:setDefaultSource'
+  'orcaCloudAgents:setDefaultSource',
+  'orcaCloudAgents:workspaceSources',
+  'orcaCloudAgents:setWorkspaceSource'
 ] as const
 
 function broadcast(setups: OrcaCloudAgentSetups): void {
@@ -147,5 +154,25 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
     return request.success
       ? service.setDefaultSource(request.data.agent, request.data.source)
       : invalid
+  })
+  // Before the sandbox exists there is no workspace to name: the reply is not_found.
+  const notFound = { ok: false, error: 'not_found' } as const
+  ipcMain.handle('orcaCloudAgents:workspaceSources', (_event, raw: unknown) => {
+    const request = WorkspaceRequest.safeParse(raw)
+    if (!request.success) {
+      return invalid
+    }
+    const workspaceId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    return workspaceId ? service.workspaceSources(workspaceId) : notFound
+  })
+  ipcMain.handle('orcaCloudAgents:setWorkspaceSource', (_event, raw: unknown) => {
+    const request = WorkspaceSourceRequest.safeParse(raw)
+    if (!request.success) {
+      return invalid
+    }
+    const workspaceId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    return workspaceId
+      ? service.setWorkspaceSource(request.data.agent, request.data.source, workspaceId)
+      : notFound
   })
 }

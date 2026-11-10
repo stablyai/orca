@@ -26977,8 +26977,7 @@
     "saved": {
       "team": "{{agent}} key saved · shared with your team",
       "personal": "{{agent}} key saved · personal",
-      "detail": "New terminals and agents in running cloud workspaces get it within seconds, no rebuild.",
-      "short": "Hidden from now on"
+      "detail": "New terminals and agents in running cloud workspaces get it within seconds, no rebuild."
     },
     "option": {
       "signIn": "Subscription",
@@ -26997,22 +26996,9 @@
     "gotIt": "Got it",
     "save": "Save",
     "done": "Done",
-    "later": "Later",
-    "skippedTitle": "Agent setup skipped",
-    "signInPending": "Agent sign-in",
-    "signInPendingDetail": "Opens when the sandbox is ready. Keep Orca open until then.",
-    "signInCancelled": "Sign-in cancelled",
-    "skipSignIn": "Don’t sign in",
-    "readyTitle": "Agents ready",
-    "readyOne": "{{agent}} ready",
-    "change": "Change",
-    "signInQueued": "Agent sign-in will open when the sandbox is ready",
-    "subtitleBuild": "Give your agents access in Orca Cloud.",
-    "useKey": "Use a key",
     "discardQuestion": "Discard the key you typed?",
     "discard": "Discard",
     "keepEditing": "Keep editing",
-    "signInHandedOff": "Continues in the Agent sign-in row below.",
     "desktopKeys": {
       "title": "Keys on this computer",
       "detail": "Save it to your Orca account to use it in cloud workspaces. It stays outside the sandbox.",
@@ -27025,8 +27011,7 @@
       "rowSaved": "{{agent}}: your API key ••••{{hint}}",
       "scopeNote": "Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces."
     },
-    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
-    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets."
+    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model."
   },
   "cloudSecrets": {
     "editor": {
@@ -27701,5 +27686,59 @@
       "personal": "your API key"
     },
     "copyAndOpen": "Copy code and open"
+  },
+  "vmBuildAgents": {
+    "menu": {
+      "notYet": "You can choose once the sandbox is created.",
+      "failed": "Couldn’t read this workspace’s choice.",
+      "shared": "Personal accounts aren’t used in shared workspaces.",
+      "label": "Agent sign-in options",
+      "inThisWorkspace": "{{agent}} in this workspace",
+      "yourAccount": "Your account",
+      "useKey": "Use an API key instead",
+      "manage": "Manage agent accounts…",
+      "saveFailed": "Couldn’t change it. Nothing was changed."
+    },
+    "codeCopied": "Code copied",
+    "cancel": "Cancel",
+    "renew": "Renew",
+    "setUp": "Set up",
+    "openAgain": "Open again",
+    "copyAndOpen": "Copy code and open",
+    "pasteToken": "Paste token",
+    "tryAgain": "Try again",
+    "dismiss": "Dismiss",
+    "signInAgain": "Sign in again",
+    "signInHere": "Sign in for this workspace",
+    "checking": "Checking agent sign-in",
+    "readyDetail": "Every cloud workspace uses it. Nothing to do here.",
+    "keyFailed": "Couldn’t save {{name}}. Nothing was changed.",
+    "queued": "Opens when the sandbox is ready. Keep Orca open until then.",
+    "deviceEnter": "Enter",
+    "deviceOn": "on {{host}}",
+    "manage": "Manage",
+    "separator": " · ",
+    "stepOf": "{{step}} of {{of}}",
+    "settingUp": "Setting up {{agent}}",
+    "finishInBrowser": "Finish in your browser",
+    "preparing": "Getting {{product}} sign-in ready…",
+    "deviceGuard": "Only continue if you started this sign-in in Orca.",
+    "pasteTitle": "Paste a {{agent}} setup token",
+    "pasteDetail": "Paste it in Settings → Agent accounts.",
+    "saving": "Saving to your Orca account…",
+    "savingDetail": "Every cloud workspace will use it.",
+    "signIn": "Agent sign-in",
+    "optionalOnce": "optional · one time",
+    "offerDetail": "Sign in to {{agents}} once. Every cloud workspace uses it.",
+    "stillOpens": "The workspace still opens.",
+    "expired": "Your {{agent}} sign-in for Orca Cloud expired",
+    "expiredDetail": "Sign in again once. Every cloud workspace picks it up.",
+    "agentSignIn": "{{agent}} sign-in",
+    "paused": "Orca account sign-in is paused",
+    "pausedDetail": "This sign-in stays with this workspace",
+    "error": "Couldn’t check agent sign-in",
+    "errorDetail": "The workspace still opens. Agents can sign in later.",
+    "groupAccount": "{{agents}} from your Orca account",
+    "groupKey": "{{agents}} with {{key}}"
   }
 }
