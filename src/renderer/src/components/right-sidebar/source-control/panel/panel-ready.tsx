@@ -37,7 +37,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     isCreatePrIntentInFlight,
     isCreatingPr,
     isExecutingBulk,
+    isManualRefreshing,
     manualReviewUrl,
+    onManualRefresh,
     openHostedReviewInChecks,
     prGenerating,
     refreshBranchCompare,
@@ -92,6 +94,8 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           onChangeBaseRef={() => setBaseRefDialogOpen(true)}
           onRefreshBranchCompare={() => void refreshBranchCompare()}
           branchCompareRefreshDisabled={!branchSummary || branchSummary.status === 'loading'}
+          onManualRefresh={() => void onManualRefresh()}
+          isManualRefreshing={isManualRefreshing}
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
