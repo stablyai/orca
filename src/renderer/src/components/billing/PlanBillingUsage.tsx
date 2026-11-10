@@ -160,24 +160,19 @@ export function OverageControls({
   const parsedCap = Number(capDollars)
   const capValid = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
   const changed = capValid && capDollars.trim() !== savedDollars
-  const largeWeight = entitlement.offers?.team.largeMachineWeight ?? 2
   const paymentFailed = entitlement.payment.pastDueSince !== null
   const description = t(
-    'auto.components.billing.overageDescription4',
-    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set ({{value2}} by default).',
+    'auto.components.billing.overageDescription5',
+    'Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default).',
     {
       value0: formatCents(overage.centsPerHour, locale),
-      value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale),
-      value2: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
+      value1: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
     }
   )
   const descriptionOn = t(
-    'auto.components.billing.overageDescriptionOn',
-    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set.',
-    {
-      value0: formatCents(overage.centsPerHour, locale),
-      value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale)
-    }
+    'auto.components.billing.overageDescriptionOn2',
+    'Optional overage at {{value0}}/hour, up to a monthly spend cap you set.',
+    { value0: formatCents(overage.centsPerHour, locale) }
   )
   const capPercent =
     overage.spendCapCents > 0

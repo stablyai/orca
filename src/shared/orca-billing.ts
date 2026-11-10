@@ -25,7 +25,7 @@ export type OrcaBillingOffers = {
     /** Per-seat prices in cents for totals and the annual saving; null from older services. */
     monthlyPriceCentsPerSeat: number | null
     annualPriceCentsPerSeat: number | null
-    /** How many Standard hours one Large hour uses. */
+    /** Legacy: billing now sells one size (1x), so this is 1 and the desktop no longer shows it. */
     largeMachineWeight: number
     includedHoursPerSeat: number
     concurrentSandboxesPerSeat: number

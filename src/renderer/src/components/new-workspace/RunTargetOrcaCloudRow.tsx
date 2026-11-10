@@ -12,6 +12,7 @@ import {
   getOrcaCloudHoursLeft,
   type OrcaCloudRunTargetAccess
 } from './orca-cloud-run-target-access'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 /**
  * Looks like a button but is plain option content: focus stays in the combobox input, Enter on the
@@ -46,7 +47,7 @@ function RowAction({
 }
 
 /**
- * "Hosted sandbox · 4 vCPU · 8 GB". The specs never split: below a 28rem container (the menu, or
+ * "Hosted sandbox · 8 vCPU · 16 GB". The specs never split: below a 28rem container (the menu, or
  * the hint under the field) they drop out whole so "N sandbox hours left" keeps its room.
  */
 export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
@@ -55,7 +56,14 @@ export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
       {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Hosted sandbox')}
       <span className="hidden whitespace-nowrap @[28rem]:inline">
         {' · '}
-        {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudSpecs', '4 vCPU · 8 GB')}
+        {t(
+          'auto.components.new.workspace.RunTargetCombobox.orcaCloudSpecs2',
+          '{{value0}} vCPU · {{value1}} GB',
+          {
+            value0: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+            value1: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+          }
+        )}
       </span>
     </>
   )

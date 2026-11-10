@@ -7,8 +7,8 @@ Code: `cloud/apps/billing` (Worker), desktop `src/main/billing`, `src/renderer/s
 
 | Plan | Price | Includes |
 |---|---|---|
-| Team | $50/seat/mo or $480/seat/yr | 60 Standard (4 vCPU / 8 GB) sandbox hours per seat per month, pooled across the org; Large (8/16) burns 2x; 3 running sandboxes per seat; 15-min idle sleep |
-| Overage | opt-in, off by default | $0.75/h Standard ($1.50/h Large); monthly spend cap, default $25, admins can raise (max $5,000); warnings at 80% / 100% of included hours |
+| Team | $50/seat/mo or $480/seat/yr | 60 sandbox hours per seat per month, pooled across the org; one sandbox size, 8 vCPU / 16 GB (`ORCA_CLOUD_SANDBOX_SPEC`), at 1x; 3 running sandboxes per seat; 15-min idle sleep |
+| Overage | opt-in, off by default | $0.75 per sandbox hour; monthly spend cap, default $25, admins can raise (max $5,000); warnings at 80% / 100% of included hours |
 | Enterprise | Custom | "Contact us" (no Stripe price) |
 
 No free plan, no trial, no other tiers. Numbers and labels live in `src/plans.ts` defaults and can be overridden
@@ -171,7 +171,7 @@ account is the upgrade path for strict per-account start locking.
   included/used/remaining, `usageWarningPercent`, overage {optedIn, active, cap, spent, rate}, limits,
   `canStartSandbox`, `reason`, `canManageBilling`, and `offers` (Team + Enterprise, for the plan cards).
 - Control plane (bearer `CONTROL_PLANE_TOKEN`):
-  - `POST /v1/internal/entitlements/check {accountId, machineSize: standard|large, runningSandboxes}` → `{allow, reason}`.
+  - `POST /v1/internal/entitlements/check {accountId, machineSize: standard|large, runningSandboxes}` → `{allow, reason}`. `large` is legacy: the control plane runs it as Standard and billing counts it 1x.
   - `POST /v1/internal/usage {usageId, accountId, sandboxId, machineSize, startedAt, endedAt}` (segments ≤24 h).
   - `GET /v1/internal/suspensions` → `{accounts: [{accountId, pastDueSince, graceEndsAt}]}`.
   - Reasons: `no_subscription | subscription_inactive | payment_past_due | payment_grace_expired |

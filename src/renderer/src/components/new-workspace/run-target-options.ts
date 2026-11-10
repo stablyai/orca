@@ -9,6 +9,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { boundHostList } from '@/components/host-picker/bounded-host-list'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
@@ -56,8 +57,12 @@ export function isOrcaCloudSelection({
 
 export function getOrcaCloudDetail(t: Translate = translate): string {
   return `${t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Hosted sandbox')} · ${t(
-    'auto.components.new.workspace.RunTargetCombobox.orcaCloudSpecs',
-    '4 vCPU · 8 GB'
+    'auto.components.new.workspace.RunTargetCombobox.orcaCloudSpecs2',
+    '{{value0}} vCPU · {{value1}} GB',
+    {
+      value0: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+      value1: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+    }
   )}`
 }
 

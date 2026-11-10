@@ -96,7 +96,7 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
     path: ['cloud', 'workspace', 'create'],
     summary: 'Create an Orca Cloud workspace and wait until it is running',
     usage:
-      'orca cloud workspace create [--name <name>] [--project <id-or-name>] [--repo <https-url> [--ref <ref>]] [--size standard|large] [--region <region>] [--agent claude|codex --prompt <text>] [--json]',
+      'orca cloud workspace create [--name <name>] [--project <id-or-name>] [--repo <https-url> [--ref <ref>]] [--region <region>] [--agent claude|codex --prompt <text>] [--json]',
     allowedFlags: [
       ...LOCAL_COMMAND_FLAGS,
       'name',

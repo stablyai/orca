@@ -2,8 +2,10 @@
 // sales, no Stripe price). Stripe price ids are Worker vars; every number and label below is a
 // default that BILLING_PLANS (JSON) can override, so pricing changes need no code change.
 //
-// Usage is metered in "standard seconds": wall-clock seconds x the machine size weight, so one
-// included hour is one hour on the Standard 4 vCPU / 8 GB box and a Large box burns 2x.
+// Usage is metered in "standard seconds": wall-clock seconds x the machine size weight. There is
+// one size, Standard (ORCA_CLOUD_SANDBOX_SPEC, 8 vCPU / 16 GB), so one included hour is one hour
+// awake. 'large' stays on the wire for older clients and rows not yet migrated; the control plane
+// runs it as Standard, so it also counts 1x.
 // Included hours are a MONTHLY per-seat allowance pooled across the org, for annual plans too.
 import { z } from 'zod'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
@@ -16,7 +18,7 @@ export type BillingInterval = (typeof BILLING_INTERVALS)[number]
 
 export const MACHINE_SIZES = ['standard', 'large'] as const
 export type MachineSize = (typeof MACHINE_SIZES)[number]
-export const MACHINE_SIZE_WEIGHT: Record<MachineSize, number> = { standard: 1, large: 2 }
+export const MACHINE_SIZE_WEIGHT: Record<MachineSize, number> = { standard: 1, large: 1 }
 
 const TeamSchema = z
   .object({

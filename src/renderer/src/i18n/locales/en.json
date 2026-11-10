@@ -16580,7 +16580,7 @@
             "orcaCloudPaymentFailed": "Payment failed",
             "orcaCloudSignInButton": "Sign in",
             "orcaCloudHosted": "Hosted sandbox",
-            "orcaCloudSpecs": "4 vCPU · 8 GB",
+            "orcaCloudSpecs2": "{{value0}} vCPU · {{value1}} GB",
             "orcaCloudPlanEnded": "Your Team plan ended",
             "orcaCloudCapReached": "Spend cap reached",
             "orcaCloudTurnOnOverage": "Turn on overage",
@@ -20607,9 +20607,8 @@
           "seatsPeriod": "{{value0}} · {{value1}}",
           "was": "Was",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
-          "featureStandard": "Standard (4 vCPU · 8 GB)",
-          "featureLarge4": "Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate",
-          "featureOverage3": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)",
+          "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
+          "featureOverage5": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default)",
           "footTerms4": "Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
           "vpSecretsBody4": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
@@ -20681,7 +20680,7 @@
         "enterpriseContactSales": "Contact sales",
         "openForbidden2": "Only an owner or admin can manage billing.",
         "openSignedOut2": "Sign in to Orca again to manage your team.",
-        "overageDescription4": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set ({{value2}} by default).",
+        "overageDescription5": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default).",
         "overageHoursOnly": "{{value0}} overage hours this month",
         "overageMemberHint": "Owners and admins can change overage.",
         "overageOffRead": "Off",
@@ -20701,7 +20700,7 @@
         "sandboxHoursUsedMonth": "{{value0}} of {{value1}} sandbox hours used this month",
         "warn100b": "All of this month’s sandbox hours are used.",
         "warnPercent2": "You’ve used {{value0}}% of this month’s sandbox hours.",
-        "overageDescriptionOn": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set.",
+        "overageDescriptionOn2": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set.",
         "reasonCapMember3": "Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.",
         "reasonGraceExpired3": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.",
         "reasonGraceExpiredMember2": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.",
@@ -26269,9 +26268,7 @@
     },
     "header": {
       "active": "New workspaces start from build #{{number}}",
-      "noActive": "No build yet: workspaces start from a fresh sandbox",
-      "large": "Large",
-      "standard": "Standard"
+      "noActive": "No build yet: workspaces start from a fresh sandbox"
     },
     "agent": {
       "hint": "Starts your default agent in a local checkout. It writes the install script and builds until it succeeds.",
@@ -26360,10 +26357,7 @@
     "readOnlyAsk": "Ask an owner or admin to change the environment or start a build.",
     "size": {
       "label": "Sandbox size",
-      "large": "Large (8 vCPU · 16 GB)",
-      "standard": "Standard (4 vCPU · 8 GB)",
-      "rateNote": "Large uses sandbox hours at 2× the rate.",
-      "hint": "Used for builds and for cloud workspaces started from this environment. Large uses sandbox hours at 2× the rate."
+      "spec": "{{value0}} vCPU · {{value1}} GB"
     },
     "staleness": {
       "rebuild": "Rebuild",
