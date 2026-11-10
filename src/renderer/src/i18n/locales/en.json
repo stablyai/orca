@@ -14207,7 +14207,7 @@
             "value": "Key",
             "keepValue": "Leave empty to keep ••••{{hint}}",
             "where": "Use it on",
-            "allHosts": "Every host",
+            "allHosts": "Every host except Orca Cloud",
             "someHosts": "Only these hosts",
             "cancel": "Cancel",
             "update": "Save",
@@ -14215,7 +14215,7 @@
             "customPlaceholder": "MY_PROVIDER_API_KEY"
           },
           "scope": {
-            "all": "Every host",
+            "all": "Every host except Orca Cloud",
             "gone": "A host that is no longer listed"
           },
           "keep": "Keep",
@@ -26692,14 +26692,14 @@
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
     "title": "Add an agent",
-    "subtitle": "Choose how Claude Code or Codex gets access in your Orca Cloud workspaces.",
+    "subtitle": "Choose how your agents get access in your Orca Cloud workspaces.",
     "getKey": "Get a key",
     "keyHelp": "Write-only. You won’t see it again after saving.",
     "provider": "Provider",
     "anthropicKey": "Anthropic API key",
     "openaiKey": "OpenAI API key",
     "gatewayKey": "AI Gateway API key",
-    "claudeModel": "Claude Code model (optional)",
+    "claudeModel": "Claude model (optional)",
     "gatewayModelHint": "Free gateway accounts can’t use anthropic/* models; try moonshotai/kimi-k2.",
     "codexModel": "Codex model (optional)",
     "gatewayCodexHint": "A gateway model id, such as openai/gpt-5.",
@@ -26732,9 +26732,9 @@
       "apiKey": "Agent key",
       "apiKeyDetail": "An Anthropic or OpenAI API key, billed by usage.",
       "gateway": "AI Gateway",
-      "gatewayDetail": "One Vercel AI Gateway key runs both Claude Code and Codex.",
+      "gatewayDetail": "One Vercel AI Gateway key runs both Claude and Codex.",
       "custom": "Custom provider",
-      "customDetail": "Any Anthropic-compatible endpoint, for Claude Code."
+      "customDetail": "Any Anthropic-compatible endpoint, for Claude."
     },
     "notSaved": "Couldn’t reach Orca Cloud. Your key wasn’t saved. Try again.",
     "signIn": {
@@ -26743,7 +26743,7 @@
     "gotIt": "Got it",
     "save": "Save",
     "done": "Done",
-    "composerHint": "Claude Code and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.",
+    "composerHint": "Claude and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.",
     "later": "Later",
     "skippedTitle": "Agent setup skipped",
     "skippedDetail": "Set it up any time from Settings › Orca Account › Cloud secrets.",
@@ -26755,7 +26755,7 @@
     "readyOne": "{{agent}} ready",
     "change": "Change",
     "signInQueued": "Agent sign-in will open when the sandbox is ready",
-    "subtitleBuild": "Give Claude Code or Codex access in Orca Cloud.",
+    "subtitleBuild": "Give your agents access in Orca Cloud.",
     "useKey": "Use a key",
     "discardQuestion": "Discard the key you typed?",
     "discard": "Discard",
@@ -26763,11 +26763,13 @@
     "signInHandedOff": "Continues in the Agent sign-in row below.",
     "desktopKeys": {
       "title": "Keys on this computer",
-      "detail": "Cloud workspaces don’t get the API keys saved in Orca on this computer. Save one as a personal Cloud secret and the workspace only ever sees a stand-in for it.",
-      "saved": "Saved as a Cloud secret",
-      "saveLabel": "Save {{name}} as a personal Cloud secret",
-      "save": "Save as personal Cloud secret",
-      "retry": "Try again"
+      "detail": "Save it to your Orca account to use it in cloud workspaces. It stays outside the sandbox.",
+      "saved": "Saved to your Orca account",
+      "saveLabel": "Save {{name}} to your Orca account",
+      "save": "Save to your Orca account",
+      "retry": "Try again",
+      "row": "{{agent}}: your API key ••••{{hint}} is only on this computer",
+      "failed": "Couldn’t save {{name}}. Nothing was changed."
     }
   },
   "cloudSecrets": {
