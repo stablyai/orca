@@ -27,7 +27,7 @@ export class CodexConfigMirror {
     readFromDisk: () => {
       try {
         return readCodexTopLevelModelProvider(
-          readFileSync(join(homedir(), '.codex', 'config.toml'), 'utf-8')
+          this.readHostConfigContents(join(homedir(), '.codex', 'config.toml'))
         )
       } catch (error) {
         if (!isDefinitiveAbsence(error)) {
@@ -173,6 +173,10 @@ export class CodexConfigMirror {
     )
   }
 
+  private readHostConfigContents(configPath: string): string {
+    return readFileSync(configPath, 'utf-8')
+  }
+
   private readHostConfig(): CanonicalCodexConfig | null {
     const sourceHomePath = join(homedir(), '.codex')
     const primaryConfigPath = join(sourceHomePath, 'config.toml')
@@ -180,7 +184,7 @@ export class CodexConfigMirror {
       return null
     }
     try {
-      return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
+      return { contents: this.readHostConfigContents(primaryConfigPath), sourceHomePath }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
       return null

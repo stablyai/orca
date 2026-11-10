@@ -1,8 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { rmSync, writeFileSync } from 'node:fs'
-import * as fs from 'node:fs'
-import * as providerConfig from '../codex/structured/launch/codex-model-provider-config'
+import type * as FileSystem from 'node:fs'
 import { getCodexAccountAuthWarning } from '../../renderer/src/components/settings/accounts/codex/codex-account-auth-warning'
 import { join } from 'node:path'
 import {
@@ -14,6 +13,35 @@ import {
   registerCodexAccountsTestHomes,
   testState
 } from './service-test-harness'
+
+const configWork = vi.hoisted(() => ({ readPaths: new Array<unknown>(), parses: 0 }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileSystem>()
+  return {
+    ...actual,
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      configWork.readPaths.push(args[0])
+      return actual.readFileSync(...args)
+    }
+  }
+})
+
+vi.mock(
+  import('../codex/structured/launch/codex-model-provider-config'),
+  async (importOriginal) => {
+    const actual = await importOriginal()
+    return {
+      ...actual,
+      readCodexTopLevelModelProvider: (
+        ...args: Parameters<typeof actual.readCodexTopLevelModelProvider>
+      ) => {
+        configWork.parses += 1
+        return actual.readCodexTopLevelModelProvider(...args)
+      }
+    }
+  }
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -192,42 +220,35 @@ describe('CodexAccountService config sync', () => {
           createCodexAuthJson('real@home.dev', 'acct-real', 'refresh')
         )
         const service = await newService()
-        const read = vi.spyOn(fs, 'readFileSync')
-        const parse = vi.spyOn(providerConfig, 'readCodexTopLevelModelProvider')
-        const configReads = () => read.mock.calls.filter(([path]) => path === configPath).length
+        configWork.readPaths = []
+        configWork.parses = 0
+        const configReads = () => configWork.readPaths.filter((path) => path === configPath).length
 
-        try {
-          for (let update = 0; update < 20; update += 1) {
-            expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe(
-              'api-key'
-            )
-          }
-          // Usage updates do not invalidate the one current provider classification.
-          expect(configReads()).toBe(1)
-          expect(parse).toHaveBeenCalledTimes(1)
-
-          rmSync(configPath)
+        for (let update = 0; update < 20; update += 1) {
           expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe(
-            'oauth'
+            'api-key'
           )
-          expect(configReads()).toBe(2)
-          service.listAccounts()
-          expect(configReads()).toBe(2)
-
-          writeFileSync(configPath, `model_provider = "openai"\n${projects}`)
-          expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
-            hasAuth: true,
-            authKind: 'oauth',
-            email: 'real@home.dev',
-            providerAccountId: 'acct-real',
-            workspaceLabel: null
-          })
-          expect(configReads()).toBe(3)
-          expect(parse).toHaveBeenCalledTimes(2)
-        } finally {
-          read.mockRestore()
-          parse.mockRestore()
         }
+        // Usage updates do not invalidate the one current provider classification.
+        expect(configReads()).toBe(1)
+        expect(configWork.parses).toBe(1)
+
+        rmSync(configPath)
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault?.authKind).toBe('oauth')
+        expect(configReads()).toBe(2)
+        service.listAccounts()
+        expect(configReads()).toBe(2)
+
+        writeFileSync(configPath, `model_provider = "openai"\n${projects}`)
+        expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+          hasAuth: true,
+          authKind: 'oauth',
+          email: 'real@home.dev',
+          providerAccountId: 'acct-real',
+          workspaceLabel: null
+        })
+        expect(configReads()).toBe(3)
+        expect(configWork.parses).toBe(2)
       }
     )
 
