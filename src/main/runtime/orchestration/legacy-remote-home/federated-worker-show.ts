@@ -9,9 +9,9 @@ import {
   callFederatedWorkerShow,
   exposeFederatedWorkerObservation,
   exposeWorker,
-  projectFleetWorkerPage,
-  resolvePinnedFederatedServer
+  projectFleetWorkerPage
 } from '../../rpc/methods/orchestration/worker/worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
