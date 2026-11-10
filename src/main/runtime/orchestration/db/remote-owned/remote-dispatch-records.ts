@@ -265,3 +265,22 @@ export function deferRemoteDispatchStop(
       record.stop_attempt
     )
 }
+
+export type RemoteOwnedQuestionRow = {
+  message_id: string
+  conversation_id: string
+  run_id: string
+  environment_id: string
+  dispatch_id: string
+}
+
+/** A question a remote worker asked here, which its server answers. */
+export function getRemoteOwnedQuestion(
+  db: OrchestrationDb,
+  messageId: string
+): RemoteOwnedQuestionRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
+  return db.db
+    .prepare('SELECT * FROM remote_owned_questions WHERE message_id = ?')
+    .get(messageId) as RemoteOwnedQuestionRow | undefined
+}

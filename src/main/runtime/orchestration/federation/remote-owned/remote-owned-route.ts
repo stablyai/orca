@@ -12,6 +12,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   getRemoteDispatch,
+  getRemoteOwnedQuestion,
   oweRemoteDispatchStop,
   remoteStopKey
 } from '../../db/remote-owned/remote-dispatch-records'
@@ -179,13 +180,7 @@ function remoteSubject(
           ? value.slice('dispatch:'.length)
           : undefined
     const record = dispatchId ? getRemoteDispatch(db, dispatchId) : undefined
-    const question =
-      kind === 'message' && value
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
-          (db.db
-            .prepare('SELECT conversation_id FROM remote_owned_questions WHERE message_id = ?')
-            .get(value) as { conversation_id: string } | undefined)
-        : undefined
+    const question = kind === 'message' && value ? getRemoteOwnedQuestion(db, value) : undefined
     const conversationId = record?.conversation_id ?? question?.conversation_id
     const link = conversationId ? getRemoteRunLink(db, conversationId) : undefined
     if (link) {
