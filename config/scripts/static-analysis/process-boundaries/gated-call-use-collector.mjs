@@ -38,6 +38,15 @@ function isValueReference(node) {
   )
 }
 
+function isExportedDeclaration(declaration) {
+  const statement = declaration.parent?.parent
+  return (
+    !!statement &&
+    ts.isVariableStatement(statement) &&
+    !!statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+  )
+}
+
 /**
  * Each family lists module specifiers (packages, or repo paths without extension) and the gated
  * exports to count, each with advice for the failure message.
@@ -72,7 +81,7 @@ export function createGatedCallCollector(families, ratchetName) {
     )
   }
 
-  // Count each gated value reference, alias use and re-export; imports alone do not count.
+  // Count each gated value reference, alias use and re-export; imports and plain alias bindings alone do not count.
   // File-wide, not scope-aware: computed specifiers/members and non-const holder flows are unresolved; local wrappers are not traced.
   function collectUses(file, contents) {
     // Escaped spellings and relative imports inside gated modules still need the full analysis.
@@ -197,7 +206,7 @@ export function createGatedCallCollector(families, ratchetName) {
         identifiers.push(node)
       } else if (ts.isVariableDeclaration(node) && node.initializer) {
         if (ts.isIdentifier(node.name)) {
-          aliases.push({ name: node.name.text, initializer: node.initializer })
+          aliases.push({ name: node.name.text, initializer: node.initializer, declaration: node })
         } else if (ts.isObjectBindingPattern(node.name)) {
           destructures.push(node)
         }
@@ -236,14 +245,30 @@ export function createGatedCallCollector(families, ratchetName) {
         }
       }
     }
+    // Binding a tracked alias is setup, not a use: its calls are charged instead, so an alias refactor
+    // keeps the count. Conditional/fallback aliases and exported bindings stay charged (conservative).
+    const aliasSetup = new Set()
+    for (const { name, initializer, declaration } of aliases) {
+      const target = unwrap(initializer)
+      if (
+        functions.has(name) &&
+        (ts.isIdentifier(target) ||
+          ts.isPropertyAccessExpression(target) ||
+          ts.isElementAccessExpression(target)) &&
+        gatedFunction(target) &&
+        !isExportedDeclaration(declaration)
+      ) {
+        aliasSetup.add(target)
+      }
+    }
     for (const node of members) {
       const name = propertyName(node)
-      if (moduleSymbols(node.expression)?.has(name)) {
+      if (!aliasSetup.has(node) && moduleSymbols(node.expression)?.has(name)) {
         recordUse(name)
       }
     }
     for (const node of identifiers) {
-      const name = functions.get(node.text)
+      const name = aliasSetup.has(node) ? null : functions.get(node.text)
       if (name) {
         recordUse(name)
       }

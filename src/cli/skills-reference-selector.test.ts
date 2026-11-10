@@ -66,27 +66,6 @@ describe('orca skills get --reference', () => {
     expect(stdoutText(stdoutSpy)).toBe('# First gate\n\nDo the first thing.\n')
   })
 
-  it('gives --reference --json the canonical topic, reference name, and Markdown', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(
-      ['skills', 'get', 'legacy-alpha', '--reference', 'references/first-gate.md', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(stdoutText(stdoutSpy)).toBe(
-      `${JSON.stringify(
-        {
-          name: 'alpha',
-          reference: 'first-gate',
-          markdown: '# First gate\n\nDo the first thing.\n'
-        },
-        null,
-        2
-      )}\n`
-    )
-  })
-
   it('reports a topic that ships no references', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 

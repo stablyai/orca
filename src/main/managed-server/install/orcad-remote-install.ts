@@ -10,13 +10,13 @@ import {
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { OrcadHostTransport } from './orcad-host-transport'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { acquireInstallLock } from './remote-install-lock'
 import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence-scope'
-import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../../ssh/orcad-held-fence-tokens'
-import { exitedOwnLockProof } from '../../ssh/orcad-exited-own-lock'
+import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../activation/orcad-held-fence-tokens'
+import { exitedOwnLockProof } from '../activation/orcad-exited-own-lock'
 import { orcadWindowsBaseDir } from './orcad-remote-windows-node'
 import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import {

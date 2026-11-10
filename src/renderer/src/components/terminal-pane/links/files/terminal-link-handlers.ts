@@ -1,5 +1,5 @@
-import type { TerminalPathExistsCache } from '../../terminal-path-exists-cache'
-import { createTerminalPathExistenceBatch } from '../../terminal-path-existence-batch'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
+import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { extractTerminalFileLinkReadings } from '../../../../../../shared/terminal/links/terminal-links'
 import { preferLongestNonOverlappingMatches } from '../../../../../../shared/longest-non-overlapping-matches'
@@ -21,10 +21,10 @@ import {
   getTerminalFileOpenHint
 } from '../terminal-link-open-hints'
 import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activation'
-import { getTerminalBufferPositionForMouseEvent } from '../../terminal-mouse-buffer-position'
+import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { handleTerminalFileLink } from './terminal-file-link-actions'
-import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 
 export type LinkHandlerDeps = {
   worktreeId: string

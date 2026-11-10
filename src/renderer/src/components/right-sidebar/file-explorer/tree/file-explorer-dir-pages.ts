@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { sortDirEntries } from '../../../../../../shared/file-name-sort'
+import { sortDirEntries } from '../../../../../../shared/file-listing/file-name-sort'
 import type { DirCache } from './file-explorer-types'
 import type { FileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {

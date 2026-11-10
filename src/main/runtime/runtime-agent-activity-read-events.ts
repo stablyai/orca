@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeStore } from './construction/runtime-store-contract'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
 export function publishAgentActivityReadChanges(

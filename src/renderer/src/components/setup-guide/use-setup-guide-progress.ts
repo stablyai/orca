@@ -2,20 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { hasEffectiveSetupCommand } from '@/runtime/repo-hooks/setup-script-status'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-skill-names'
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import {
   getSetupGuideProgressSnapshot,
   type FeatureWallSetupProgress
@@ -28,7 +28,7 @@ import {
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
 } from './setup-guide-progress-readiness'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   readSetupScriptProbeCache,
   setSetupScriptProbeCache,

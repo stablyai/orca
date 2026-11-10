@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type {
   DetectedWorktreeListResult,
   GitPushTarget,
@@ -84,8 +84,6 @@ export type WorktreeLineageUpdateResult = {
   workspaceLineage?: WorkspaceLineage | null
   updatedRemoteWorktree?: WorktreeWithLineage
 }
-
-export type { HostedReviewLinkKey } from '../../../../../../shared/worktree/hosted-review-links'
 
 export type RuntimeWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null

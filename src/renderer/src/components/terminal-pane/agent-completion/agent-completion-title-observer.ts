@@ -3,7 +3,7 @@ import type { AgentStatus } from '../../../../../shared/agent-status/title/agent
 import {
   titleHasExplicitAgentIdentity,
   titleIsInconclusiveNativeDroidTitle
-} from '../title-agent-identity'
+} from '../titles/title-agent-identity'
 type TitleObserverOptions = {
   getLastStatus: () => AgentStatus | null
   setLastStatus: (status: AgentStatus | null) => void

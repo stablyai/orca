@@ -1,5 +1,5 @@
-import { defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   AgentActivityReadSnapshotSchema,
   AgentActivityReadStateSchema

@@ -2,217 +2,160 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type SetStateAction
 } from 'react'
-import { AppState } from 'react-native'
-import type { RpcResponse } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
-import { hostStatusProbe } from '../transport/host-status-probe-operations'
-import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
-import { subscribeSharedClientEvents } from '../transport/shared-client-events'
+import { useQueryClient } from '@tanstack/react-query'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
+import { hostConnectionEpoch, readHostStatusReply } from '../query/host-status-query'
+import { defineHostQuery, useHostQuery } from '../query/host-query'
+import { useHostEventRouter } from '../query/host-event-router'
+import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
+import { isHostNotConnectedError } from '../query/host-query-errors'
+import { readViewBase } from '../query/host-read-client'
 import { automationListRead } from './automation-operations'
 import { automationOutcomeUnknownMessage, automationErrorMessage } from './automation-error'
 import type { MobileAutomationRow } from './automation-reply-schema'
 
-type CatalogBatch = {
-  promise: Promise<void>
-  finish: () => void
-  warning?: number
-}
-type CatalogReadScope = {
-  current: () => boolean
-  pending: (CatalogBatch & { controller: AbortController }) | null
-  trailing: CatalogBatch | null
-}
-function catalogBatch(warning?: number): CatalogBatch {
-  let finish = () => {}
-  const promise = new Promise<void>((resolve) => {
-    finish = resolve
-  })
-  return { promise, finish, warning }
+type AutomationCatalog = {
+  rows: MobileAutomationRow[]
+  capabilities: readonly string[]
+  // The connection the rows were read on.
+  epoch: string
 }
 
-export function useAutomationCatalog(client: RpcClient | null, server: boolean) {
-  const [rows, setRows] = useState<MobileAutomationRow[]>([])
-  const [capabilities, setCapabilities] = useState<readonly string[]>([])
-  const [loaded, setLoaded] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+const NO_INPUT = {}
+// The paired desktop's list carries its SSH-owned automations too.
+const PAIRED_TARGET: HostQueryTarget = { exec: 'local' }
+// Server automation events are not relayed to phones yet (D16), so a visible server list polls.
+const SERVER_POLL_MS = 15_000
+
+async function readAutomationCatalog(client: RpcClient): Promise<AutomationCatalog> {
+  const [rows, host] = await Promise.all([
+    automationListRead.request(client, {}).then(automationListRead.interpret),
+    readHostStatusReply(client).then(hostStatusProbe.interpret)
+  ])
+  return {
+    rows,
+    capabilities: host.accepted ? (host.value.capabilities ?? []) : [],
+    epoch: hostConnectionEpoch(readViewBase(client))
+  }
+}
+
+const automationCatalogQuery = defineHostQuery<typeof NO_INPUT, AutomationCatalog>({
+  family: 'automation.list',
+  fetch: (client) => readAutomationCatalog(client),
+  // Mounts revalidate: events missed while no screen held the router never marked it stale.
+  staleTime: 0,
+  gcTime: 30 * 60_000,
+  // A hidden page only marks the list stale on change events; coming back reads it.
+  refetchOnWindowFocus: true,
+  signal: { events: ['automationsChanged'] }
+})
+
+const serverAutomationCatalogQuery = defineHostQuery<typeof NO_INPUT, AutomationCatalog>({
+  ...automationCatalogQuery,
+  signal: undefined
+})
+
+export function useAutomationCatalog(
+  hostId: string,
+  client: RpcClient | null,
+  executionHost?: ExecutionHostId
+) {
+  const queryClient = useQueryClient()
+  const server = executionHost !== undefined
+  const queryKey = useMemo(
+    () =>
+      hostQueryKey(
+        hostId,
+        automationCatalogQuery.family,
+        executionHost ? { exec: executionHost } : PAIRED_TARGET,
+        NO_INPUT
+      ),
+    [hostId, executionHost]
+  )
+  useHostEventRouter(hostId, server ? null : client)
+  const catalog = useHostQuery(
+    server ? serverAutomationCatalogQuery : automationCatalogQuery,
+    { hostId, client },
+    queryKey[3],
+    NO_INPUT,
+    { refetchInterval: server ? SERVER_POLL_MS : false }
+  )
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [connected, setConnected] = useState(client?.getState() === 'connected')
-  const [revision, setRevision] = useState(0)
   const latestClient = useRef(client)
   useLayoutEffect(() => {
     latestClient.current = client
   }, [client])
-  const snapshotCurrent = useRef<() => boolean>(() => false)
   const epoch = useRef(0)
-  const readScope = useRef<CatalogReadScope | null>(null)
   const warningAuthority = useRef(0)
   const setActionWarning = useCallback((value: SetStateAction<string | null>) => {
     warningAuthority.current++
     setActionError(value)
   }, [])
-  const retireReads = useCallback(() => {
-    const scope = readScope.current
-    readScope.current = null
-    snapshotCurrent.current = () => false
-    scope?.pending?.finish()
-    scope?.trailing?.finish()
-    scope?.pending?.controller.abort()
-  }, [])
   const locked = useRef(false)
   const mounted = useRef(false)
-  const streamReady = useRef(false)
-
-  const refresh = useCallback(
-    (explicit = false, periodic = false): Promise<void> => {
-      if (
-        !mounted.current ||
-        latestClient.current !== client ||
-        !client ||
-        client.getState() !== 'connected'
-      ) {
-        return Promise.resolve()
-      }
-      if (readScope.current && !readScope.current.current()) {
-        retireReads()
-      }
-      if (!readScope.current) {
-        const at = epoch.current
-        const generation = client.getGeneration?.()
-        const scope: CatalogReadScope = {
-          current: () =>
-            mounted.current &&
-            latestClient.current === client &&
-            at === epoch.current &&
-            generation === client.getGeneration?.() &&
-            readScope.current === scope,
-          pending: null,
-          trailing: null
-        }
-        readScope.current = scope
-      }
-      const scope = readScope.current
-      const warning = explicit ? warningAuthority.current : undefined
-      if (scope.pending) {
-        if (periodic) {
-          return scope.pending.promise
-        }
-        scope.trailing ??= catalogBatch(warning)
-        if (explicit) {
-          scope.trailing.warning = warning
-        }
-        return scope.trailing.promise
-      }
-      const run = async (batch: CatalogBatch): Promise<void> => {
-        const controller = new AbortController()
-        const pending = { ...batch, controller }
-        scope.pending = pending
-        const requests: Promise<RpcResponse>[] = []
-        try {
-          const listRequest = automationListRead.request(client, {}, { signal: controller.signal })
-          requests.push(listRequest)
-          const statusRequest = hostStatusProbe.request(client, undefined, {
-            signal: controller.signal
-          })
-          requests.push(statusRequest)
-          const [parsed, host] = await Promise.all([
-            listRequest.then(automationListRead.interpret),
-            statusRequest.then(hostStatusProbe.interpret)
-          ])
-          if (!scope.current()) {
-            return
-          }
-          snapshotCurrent.current = scope.current
-          setRows(parsed)
-          setCapabilities(host.accepted ? (host.value.capabilities ?? []) : [])
-          setLoaded(true)
-          setRevision((value) => value + 1)
-          setError(null)
-          if (batch.warning !== undefined && batch.warning === warningAuthority.current) {
-            setActionWarning(null)
-          }
-        } catch (failure) {
-          controller.abort()
-          await Promise.allSettled(requests)
-          if (scope.current()) {
-            setError(automationErrorMessage(failure))
-          }
-        } finally {
-          batch.finish()
-          if (scope.pending === pending) {
-            scope.pending = null
-            const trailing = scope.trailing
-            scope.trailing = null
-            if (trailing) {
-              if (scope.current()) {
-                void run(trailing)
-              } else {
-                trailing.finish()
-              }
-            }
-          }
-        }
-      }
-      const batch = catalogBatch(warning)
-      void run(batch)
-      return batch.promise
-    },
-    [client, retireReads, setActionWarning]
-  )
-
-  useEffect(() => {
-    if (!client || server) {
-      return
-    }
-    return subscribeSharedClientEvents(client, (event) => {
-      if (event.type === 'end' || event.type === 'error') {
-        streamReady.current = false
-      }
-      if (event.type === 'ready' || event.type === 'automationsChanged') {
-        streamReady.current = true
-        void refresh()
-      }
-    })
-  }, [client, server, refresh])
 
   useEffect(() => {
     mounted.current = true
     setConnected(client?.getState() === 'connected')
-    const stateChanged = () => {
+    const stopState = client?.onStateChange(() => {
       epoch.current++
-      retireReads()
-      streamReady.current = false
-      setConnected(client?.getState() === 'connected')
-      void refresh()
-    }
-    const stopState = client?.onStateChange(stateChanged)
-    const stopRevival = subscribeConnectionRevival(() => void refresh())
-    const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        void refresh()
-      }
+      setConnected(client.getState() === 'connected')
     })
-    // Server automation events are not relayed; visible reads also recover an interrupted stream.
-    const poll = setInterval(() => {
-      if (AppState.currentState === 'active' && (server || !streamReady.current)) {
-        void refresh(false, true)
-      }
-    }, 15000)
-    void refresh()
     return () => {
       mounted.current = false
       epoch.current++
-      retireReads()
       stopState?.()
-      stopRevival()
-      appState.remove()
-      clearInterval(poll)
     }
-  }, [client, server, refresh, retireReads])
+  }, [client])
+
+  // A local patch keeps the read time, so it does not count as a new read (revision).
+  const setRows = useCallback(
+    (update: SetStateAction<MobileAutomationRow[]>) => {
+      const updatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt
+      queryClient.setQueryData<AutomationCatalog>(
+        queryKey,
+        (held) =>
+          held && {
+            ...held,
+            rows: typeof update === 'function' ? update(held.rows) : update
+          },
+        { updatedAt }
+      )
+    },
+    [queryClient, queryKey]
+  )
+
+  // An explicit refresh clears the action warning it was asked under once a fresh list lands.
+  const refresh = useCallback(
+    async (explicit = false): Promise<void> => {
+      if (!client || client.getState() !== 'connected') {
+        return
+      }
+      const warning = warningAuthority.current
+      const startedAt = Date.now()
+      await queryClient.refetchQueries({ queryKey, exact: true })
+      const read = queryClient.getQueryState(queryKey)
+      if (
+        explicit &&
+        mounted.current &&
+        warning === warningAuthority.current &&
+        read?.status === 'success' &&
+        read.dataUpdatedAt >= startedAt
+      ) {
+        setActionWarning(null)
+      }
+    },
+    [client, queryClient, queryKey, setActionWarning]
+  )
 
   async function perform<T>(
     action: (port: RpcClient, current: () => boolean) => Promise<T>,
@@ -234,15 +177,11 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     try {
       const value = await action(client, current)
       if (current()) {
-        retireReads()
         accept(value)
       } else if (mounted.current) {
         setActionWarning(automationOutcomeUnknownMessage())
       }
     } catch (failure) {
-      if (current()) {
-        retireReads()
-      }
       if (mounted.current) {
         setActionWarning(
           current() ? automationErrorMessage(failure) : automationOutcomeUnknownMessage()
@@ -250,24 +189,41 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
       }
     } finally {
       locked.current = false
+      // Replaces any list read sent before the write, which would land over the accepted rows.
+      void queryClient.refetchQueries({ queryKey, exact: true })
       if (mounted.current) {
         setBusy(false)
-        void refresh()
       }
     }
   }
+  // Reads while disconnected fail fast; the screen already says it is offline.
+  const readError =
+    catalog.error && !isHostNotConnectedError(catalog.error)
+      ? automationErrorMessage(catalog.error)
+      : null
   return {
-    rows,
+    rows: catalog.data?.rows ?? NO_ROWS,
     setRows,
-    capabilities,
-    loaded,
-    error: actionError ?? error,
+    capabilities: catalog.data?.capabilities ?? NO_CAPABILITIES,
+    loaded: catalog.data !== undefined,
+    error: actionError ?? readError,
     setError: setActionWarning,
     busy,
     connected,
-    revision,
-    isCurrentSnapshot: () => snapshotCurrent.current(),
+    // Bumps on every list read, so run history re-reads alongside it.
+    revision: catalog.dataUpdatedAt,
+    isCurrentSnapshot: () => {
+      const port = latestClient.current
+      return (
+        mounted.current &&
+        port?.getState() === 'connected' &&
+        queryClient.getQueryData<AutomationCatalog>(queryKey)?.epoch === hostConnectionEpoch(port)
+      )
+    },
     refresh,
     perform
   }
 }
+
+const NO_ROWS: MobileAutomationRow[] = []
+const NO_CAPABILITIES: readonly string[] = []

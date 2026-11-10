@@ -13,6 +13,7 @@ import {
 } from './codex-terminal-server-isolation-copy'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CodexTerminalServerIsolationSettingProps = {
   settings: GlobalSettings
@@ -23,37 +24,38 @@ export function CodexTerminalServerIsolationSetting({
   settings,
   updateSettings
 }: CodexTerminalServerIsolationSettingProps): React.JSX.Element {
-  const title = getCodexTerminalServerIsolationTitle()
-  const description = getCodexTerminalServerIsolationDescription()
+  const t = useTranslate()
+  const title = getCodexTerminalServerIsolationTitle(t)
+  const description = getCodexTerminalServerIsolationDescription(t)
   const enabled = isCodexTerminalServerIsolationEnabled(settings)
   return (
-    <section className="space-y-3">
-      <SearchableSetting
-        id={CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID}
-        title={title}
+    <SearchableSetting
+      id={CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID}
+      title={title}
+      description={description}
+      keywords={getCodexTerminalServerIsolationSearchKeywords(t)}
+      // Two independent switches share one search unit, so split them like separate rows.
+      className="divide-y divide-border"
+    >
+      <SettingsSwitchRow
+        label={title}
         description={description}
-        keywords={getCodexTerminalServerIsolationSearchKeywords()}
-      >
+        checked={enabled}
+        onChange={() => void updateSettings({ codexTerminalServerIsolation: !enabled })}
+      />
+      {/* With isolation off, sharing is intentional and needs no warning control. */}
+      {enabled ? (
         <SettingsSwitchRow
-          label={title}
-          description={description}
-          checked={enabled}
-          onChange={() => void updateSettings({ codexTerminalServerIsolation: !enabled })}
+          label={getCodexSharedServerWarningTitle(t)}
+          description={getCodexSharedServerWarningDescription(t)}
+          checked={isCodexSharedServerWarningEnabled(settings)}
+          onChange={() =>
+            void updateSettings({
+              codexSharedServerWarning: !isCodexSharedServerWarningEnabled(settings)
+            })
+          }
         />
-        {/* With isolation off, sharing is intentional and needs no warning control. */}
-        {enabled ? (
-          <SettingsSwitchRow
-            label={getCodexSharedServerWarningTitle()}
-            description={getCodexSharedServerWarningDescription()}
-            checked={isCodexSharedServerWarningEnabled(settings)}
-            onChange={() =>
-              void updateSettings({
-                codexSharedServerWarning: !isCodexSharedServerWarningEnabled(settings)
-              })
-            }
-          />
-        ) : null}
-      </SearchableSetting>
-    </section>
+      ) : null}
+    </SearchableSetting>
   )
 }

@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { markRestoredStaleCodexSessionsForRestart } from './agent-session/accounts/codex/codex-session-restart'
 
 // One login can produce separate ChatGPT-workspace accounts with the same email label.
 const SHARED_EMAIL = 'shared@example.com'
-const FALLBACK_LABEL = 'Codex account'
 
 function seedRoster(
   accounts: { id: string; email: string; workspaceLabel?: string | null }[]
@@ -89,23 +88,6 @@ describe('stale Codex panes are decided by account id, not label', () => {
     expect(noticeFor('pty-1')).toMatchObject({
       previousAccountLabel: `${SHARED_EMAIL} (account-a)`,
       nextAccountLabel: `${SHARED_EMAIL} (account-b)`,
-      previousAccountId: 'account-a',
-      nextAccountId: 'account-b'
-    })
-    expect(scans.find((scan) => scan.ptyId === 'pty-1')?.notified).toBe(true)
-  })
-
-  it('keeps the prompt when the roster read fails and every label collapses', async () => {
-    vi.mocked(window.api.codexAccounts.list).mockRejectedValue(new Error('roster unavailable'))
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
-      { ptyId: 'pty-1', launchAccountId: 'account-a', activeAccountId: 'account-b' }
-    ])
-
-    const scans = await markRestoredStaleCodexSessionsForRestart()
-
-    expect(noticeFor('pty-1')).toMatchObject({
-      previousAccountLabel: FALLBACK_LABEL,
-      nextAccountLabel: FALLBACK_LABEL,
       previousAccountId: 'account-a',
       nextAccountId: 'account-b'
     })

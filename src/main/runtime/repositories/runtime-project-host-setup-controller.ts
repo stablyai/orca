@@ -26,7 +26,7 @@ import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error
 import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/worktree-change-invalidators'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { readAllWorktreeMetaForRepo } from '../../persistence/host-qualified-worktree-meta'
 import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
 import {
@@ -51,7 +51,7 @@ type RuntimeProjectHostSetupDependencies = {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
   addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
-  cloneRepo: (url: string, destination: string, hostId: ExecutionHostId) => Promise<Repo>
+  cloneRepo: (args: ProjectHostSetupCloneArgs) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
@@ -151,7 +151,7 @@ export class RuntimeProjectHostSetupController {
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
-    const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
+    const repo = await this.deps.cloneRepo(args)
     return this.completeSetup(
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,

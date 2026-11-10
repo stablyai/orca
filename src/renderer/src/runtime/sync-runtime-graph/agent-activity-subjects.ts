@@ -1,12 +1,12 @@
 import type { AppState } from '@/store/types'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import {
-  buildActivityEvents,
-  createActivityEventBuildCache
-} from '../../components/activity/activity-event-builder'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { buildActivityEvents } from '../../components/activity/activity-event-builder'
+import { createActivityEventBuildCache } from '../../components/activity/activity-event-build-cache'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import type { AgentActivitySubject } from '../../../../shared/agent-activity-read-state'
-import type { StructuredChatTabNames } from '../structured-chat-tab-name'
+import type { StructuredChatTabNames } from '../native-chat/naming/structured-chat-tab-name'
 
 const cache = createActivityEventBuildCache()
 const names: StructuredChatTabNames = new Map()
@@ -30,8 +30,8 @@ export function buildAgentActivitySubjects(state: AppState): AgentActivitySubjec
       runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
       tabsByWorktree,
       unifiedTabsByWorktree,
-      worktreeMap: getWorktreeMapFromState(state),
-      repoMap: getRepoMapFromState(state),
+      worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(state)),
+      repoMap: getIndexedRepoMap(state.repos),
       repos: state.repos,
       resolveWorktree: state.getKnownWorktreeById,
       acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},

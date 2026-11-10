@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -413,7 +413,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const { resolveWebAgentSessionHandoff } =
-      await import('../../../../runtime/web-agent-session-handoff')
+      await import('../../../../runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff')
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'provisional-tab',

@@ -1,6 +1,7 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -93,8 +94,11 @@ export function startWindowTabInMain(
   const cwd = state.pendingInitialCwdByTabId[tab.id] ?? tab.startupCwd
   if (startup) {
     // Main runs it; a later mount of the pane must not run it again.
-    const { [tab.id]: _started, ...pendingStartupByTabId } = state.pendingStartupByTabId
-    store.setState({ pendingStartupByTabId })
+    store.setState({
+      pendingStartupByTabId: replaceRecordEntries<TabStartup>(state.pendingStartupByTabId, [
+        [tab.id, null]
+      ])
+    })
   }
   void callRuntimeRpc<{ terminal: { ptyId: string } }>({ kind: 'local' }, 'terminal.create', {
     worktree: `id:${tab.worktreeId}`,
@@ -114,7 +118,8 @@ export function startWindowTabInMain(
       ? { resumeProviderSession: startup.resumeProviderSession }
       : {}),
     ...(startup?.launchToken ? { launchToken: startup.launchToken } : {}),
-    ...(startup?.launchAgent ? { launchAgent: startup.launchAgent } : {})
+    ...(startup?.launchAgent ? { launchAgent: startup.launchAgent } : {}),
+    ...(startup?.trustWorktreeId ? { trustWorktreeId: startup.trustWorktreeId } : {})
   }).then(
     (reply) => releaseOnceDrawn(store, tab.id, leafId, reply?.terminal?.ptyId ?? null, mark),
     (error: unknown) => {
@@ -122,8 +127,9 @@ export function startWindowTabInMain(
       if (message === 'host_not_owned') {
         // Restore startup only if main started nothing and the tab remains open; closed tabs cannot consume it.
         if (startup && store.getState().terminalLayoutsByTabId[tab.id]) {
+          const pending = store.getState().pendingStartupByTabId
           store.setState({
-            pendingStartupByTabId: { ...store.getState().pendingStartupByTabId, [tab.id]: startup }
+            pendingStartupByTabId: replaceRecordEntries(pending, [[tab.id, startup]])
           })
         }
         clearWindowTabMark(store, paneKey, mark)

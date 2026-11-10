@@ -1,10 +1,14 @@
 import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
-} from '../../../../shared/browser-guest-events'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { BrowserManagerBindings } from './browser-manager-bindings'
-import type { PendingPermissionEvent, PendingPopupEvent } from './browser-manager-types'
+
+export type PendingPermissionEvent = Omit<BrowserPermissionDeniedEvent, 'browserPageId'>
+
+export type PendingPopupEvent = Omit<BrowserPopupEvent, 'browserPageId'>
 
 export abstract class BrowserManagerEventForwarding extends BrowserManagerBindings {
   protected forwardOrQueueGuestLoadFailure(

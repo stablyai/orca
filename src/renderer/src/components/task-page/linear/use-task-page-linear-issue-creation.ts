@@ -1,13 +1,13 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageLinearProjectCreationModel } from './use-task-page-linear-project-creation'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { linearCreateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearCreateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { useAppStore } from '@/store'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreationModel) {
   const {

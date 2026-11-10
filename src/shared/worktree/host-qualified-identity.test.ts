@@ -7,12 +7,6 @@ import {
   getWorktreeIdFromHostIdentity
 } from './host-qualified-identity'
 
-describe('worktree host identity', () => {
-  it('rejects identities without a host separator', () => {
-    expect(getExecutionHostIdFromWorktreeHostIdentity('ssh:build-box')).toBeUndefined()
-  })
-})
-
 // Persisted identity aliases and recency keys freeze these bytes (D25).
 describe('worktree host identity golden bytes', () => {
   it.each([

@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { sendMessageToAgent } from '../../agent-message-send'
+import { sendMessageToAgent } from '../messaging/agent-message-send'
 import { SendParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import { beginStructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
@@ -9,18 +9,18 @@ import {
 } from './structured-agent-session-launch-status'
 import { admitStructuredAgentSession } from '../structured-agent-session-busy'
 import { renderHook } from '@testing-library/react'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-registry'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
-import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/structured-agent-session-message-sender'
+import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   mocks,
   deferred,

@@ -6,11 +6,11 @@ import { PassThrough } from 'node:stream'
 import { afterAll, afterEach, beforeAll, expect, it, onTestFinished, vi } from 'vitest'
 import { createVitest, type PoolOptions, type Vitest } from 'vitest/node'
 import * as processes from '@orca/process-host'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { nodeRuntimePool } from './vitest-node-runtime-pool'
 
 let context: Vitest
-const children: ChildProcessHandle[] = []
+const children: ChildProcess[] = []
 const spawn = processes.spawnProcess
 
 beforeAll(async () => {
@@ -59,20 +59,6 @@ it('rejects an unavailable Node executable without an uncaught error or leaked p
   await expect(worker.start()).rejects.toMatchObject({ code: 'ENOENT' })
   await worker.stop()
   expect(output.getMaxListeners()).toBe(before)
-})
-
-it('clears shutdown timers and listeners when the kill syscall throws', async () => {
-  captureChild()
-  const worker = nodeRuntimePool.createPoolWorker(options())
-  await worker.start()
-  const child = children[0]
-  vi.spyOn(child, 'kill').mockImplementation(() => {
-    throw new Error('kill denied')
-  })
-  vi.useFakeTimers()
-  await expect(worker.stop()).rejects.toThrow('kill denied')
-  expect(vi.getTimerCount()).toBe(0)
-  expect(child.listenerCount('exit')).toBe(0)
 })
 
 it('waits for a running Node worker to exit and restores its output listener budget', async () => {

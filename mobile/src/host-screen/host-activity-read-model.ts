@@ -2,8 +2,8 @@ import {
   agentActivitySubjectKey,
   type AgentActivityReadState
 } from '../../../src/shared/agent-activity-read-state'
-import type { RpcClient } from '../transport/rpc-client'
-import { runRpcOperation } from '../transport/rpc-operation'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { runRpcOperation } from '../transport/rpc/rpc-operation'
 import { activityReadSnapshot, activityReadWrite } from './host-activity-read-operations'
 
 export type HostActivityReadSnapshot = {

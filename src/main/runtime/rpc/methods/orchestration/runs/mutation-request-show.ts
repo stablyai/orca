@@ -1,13 +1,14 @@
 import {
   describeMutationRequestState,
   type OrchestrationMutationRequestShowResult
-} from '../../../../../../shared/orchestration-mutation-request'
-import { defineMethod } from '../../../core'
+} from '../../../../../../shared/orchestration/orchestration-mutation-request'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
 
 export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.requestShow',
+    access: { kind: 'reads', targets: { request: 'request' } },
     permission: 'workspace',
     params: RequestShowParams,
     // Read durable receipts without writing/mutating again; keep this recovery query outside ORCHESTRATION_MUTATION_METHODS.

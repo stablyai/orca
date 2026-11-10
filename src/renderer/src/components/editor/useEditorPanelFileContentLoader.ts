@@ -1,14 +1,17 @@
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readEditorPanelFileContent } from './editor-panel-file-reads'
-import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import {
+  getConnectionIdForFile,
+  isWorktreeConnectionResolved
+} from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store'
-import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
+import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -19,25 +22,23 @@ import {
   type EditorPanelFileContentLoader,
   type UseEditorPanelFileContentLoaderParams
 } from './editor-panel-content-types'
-import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import {
   migrateRestoredEditorFileOwner,
   restoredOwnerMigrationErrorMessage
 } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
-import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
+import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/files/access/local-file-access'
 import { placeAbsoluteTab } from './absolute-tab-placement'
-import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import {
   applyEditorFileLoadFailure,
   getEditorFileLoadFailureContent
 } from './external-changes/editor-deleted-file-reload'
-export type { EditorPanelFileContentLoader } from './editor-panel-content-types'
 import {
   acquireEditorFileOperation,
   isSameEditorFileOperationIdentity
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-owner'
 
 export function useEditorPanelFileContentLoader({
   fileLoadRetryAttemptsRef,
@@ -47,14 +48,8 @@ export function useEditorPanelFileContentLoader({
   outstandingFileReadsRef,
   setFileContents
 }: UseEditorPanelFileContentLoaderParams): EditorPanelFileContentLoader {
-  return useCallback(
-    async (
-      filePath: string,
-      id: string,
-      worktreeId?: string,
-      relativePath?: string,
-      options?: EditorPanelContentLoadOptions
-    ): Promise<void> => {
+  return useCallback<EditorPanelFileContentLoader>(
+    async (filePath, id, worktreeId, relativePath, options) => {
       const generation = ++fileReadGenerationCounterRef.current
       fileReadGenerationRef.current[id] = generation
       outstandingFileReadsRef.current[id] = generation

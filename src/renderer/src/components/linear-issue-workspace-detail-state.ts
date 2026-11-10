@@ -1,15 +1,16 @@
 import { useAppStore } from '@/store'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import { translate } from '@/i18n/i18n'
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
-import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
+import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import {
   initLinearIssueEditState,
   type LinearEditState,

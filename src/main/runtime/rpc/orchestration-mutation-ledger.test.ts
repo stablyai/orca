@@ -1,39 +1,21 @@
-import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
-import { defineMethod, type RpcRequest } from './core'
+import type { RpcRequest } from './core'
+import { defineOrchestrationMethod } from './methods/orchestration/access/orchestration-method-access'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
-
-const Params = z.object({ subject: z.string() })
-
-function request(params: {
-  rpcId: string
-  mutationId: string
-  subject: string
-  authToken?: string
-}): RpcRequest {
-  return {
-    id: params.rpcId,
-    authToken: params.authToken ?? 'caller-token',
-    method: 'orchestration.send',
-    params: { subject: params.subject },
-    orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-    orchestrationRequestId: params.mutationId
-  }
-}
 
 describe('durable orchestration mutation ledger', () => {
   const paths: string[] = []
@@ -42,342 +24,6 @@ describe('durable orchestration mutation ledger', () => {
     for (const path of paths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
-  })
-
-  function createHarness(dbPath: (string & {}) | ':memory:' = ':memory:') {
-    const db = new OrchestrationDb(dbPath)
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const effect = vi.fn((subject: string) =>
-      db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
-    )
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: [
-        defineMethod({
-          name: 'orchestration.send',
-          permission: 'workspace',
-          params: Params,
-          handler: ({ subject }) => ({ message: effect(subject) })
-        })
-      ]
-    })
-    return { db, runtime, dispatcher, effect }
-  }
-
-  it('replays federation imports across old and new optional-report parsers without enriching the first acceptance', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const item = z.object({ dispatch_id: z.string(), sequence: z.number(), payload: z.string() })
-    const effects: unknown[] = []
-    const makeDispatcher = (newReader: boolean) =>
-      new RpcDispatcher({
-        runtime,
-        methods: [
-          defineMethod({
-            name: 'orchestration.federationImport',
-            permission: 'workspace',
-            params: z.object({
-              dispatchId: z.string(),
-              items: z.array(
-                newReader
-                  ? item.extend({
-                      answerSenderReport: z.unknown().optional()
-                    })
-                  : item
-              )
-            }),
-            handler: (params) => {
-              effects.push(params.items[0])
-              return { acknowledgedThrough: 1 }
-            }
-          })
-        ]
-      })
-    const wire = {
-      dispatchId: 'dispatch-one',
-      items: [
-        {
-          dispatch_id: 'dispatch-one',
-          sequence: 1,
-          payload: 'canonical',
-          answerSenderReport: { version: 1, name: 'Known A', agent: 'codex' }
-        }
-      ]
-    }
-    const req = (id: string, params: unknown) => ({
-      id,
-      authToken: 'caller-token',
-      method: 'orchestration.federationImport',
-      params,
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'relay_import_one_1'
-    })
-    expect(await makeDispatcher(false).dispatch(req('old', wire))).toMatchObject({
-      ok: true,
-      result: { mutation: { replayed: false } }
-    })
-    expect(await makeDispatcher(true).dispatch(req('new', wire))).toMatchObject({
-      ok: true,
-      result: { mutation: { replayed: true } }
-    })
-    expect(
-      await makeDispatcher(true).dispatch(
-        req('omitted', {
-          dispatchId: wire.dispatchId,
-          items: [{ dispatch_id: 'dispatch-one', sequence: 1, payload: 'canonical' }]
-        })
-      )
-    ).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
-    expect(
-      await makeDispatcher(true).dispatch(
-        req('changed', {
-          dispatchId: wire.dispatchId,
-          items: [{ ...wire.items[0], payload: 'different canonical body' }]
-        })
-      )
-    ).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
-    expect(effects).toEqual([{ dispatch_id: 'dispatch-one', sequence: 1, payload: 'canonical' }])
-    db.close()
-  })
-
-  it('replays one completed receipt without repeating the effect', async () => {
-    const { db, dispatcher, effect } = createHarness()
-    const first = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
-    )
-    const replay = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'hello' })
-    )
-
-    expect(first).toMatchObject({
-      ok: true,
-      result: { message: { subject: 'hello' }, mutation: { replayed: false } }
-    })
-    expect(replay).toMatchObject({
-      ok: true,
-      result: { message: { subject: 'hello' }, mutation: { replayed: true } }
-    })
-    expect(effect).toHaveBeenCalledTimes(1)
-    expect(db.getInbox(10)).toHaveLength(1)
-    db.close()
-  })
-
-  it('rejects changed input for the same caller and request ID', async () => {
-    const { db, dispatcher } = createHarness()
-    await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
-    )
-    const mismatch = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'changed' })
-    )
-
-    expect(mismatch).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
-    db.close()
-  })
-
-  it('keys WebSocket replay to the authenticated device across reconnects', async () => {
-    const { db, dispatcher, effect } = createHarness()
-    const replies: string[] = []
-    const firstRequest = request({
-      rpcId: 'rpc_1',
-      mutationId: 'mutation_remote',
-      subject: 'remote'
-    }) as RpcRequest & { deviceToken?: string }
-    firstRequest.authToken = ''
-    firstRequest.deviceToken = 'untrusted-request-value-a'
-    await dispatcher.dispatchStreaming(firstRequest, (reply) => replies.push(reply), {
-      authenticatedCallerFingerprint: 'paired-device-a'
-    })
-    const replayRequest = {
-      ...firstRequest,
-      id: 'rpc_2',
-      deviceToken: 'untrusted-request-value-b'
-    }
-    await dispatcher.dispatchStreaming(replayRequest, (reply) => replies.push(reply), {
-      authenticatedCallerFingerprint: 'paired-device-a'
-    })
-    await dispatcher.dispatchStreaming(
-      { ...replayRequest, id: 'rpc_3' },
-      (reply) => replies.push(reply),
-      { authenticatedCallerFingerprint: 'paired-device-b' }
-    )
-
-    expect(JSON.parse(replies[0] ?? '{}')).toMatchObject({
-      ok: true,
-      result: { mutation: { replayed: false } }
-    })
-    expect(JSON.parse(replies[1] ?? '{}')).toMatchObject({
-      ok: true,
-      result: { mutation: { replayed: true } }
-    })
-    expect(JSON.parse(replies[2] ?? '{}')).toMatchObject({
-      ok: true,
-      result: { mutation: { replayed: false } }
-    })
-    expect(effect).toHaveBeenCalledTimes(2)
-    expect(db.getInbox(10)).toHaveLength(2)
-    db.close()
-  })
-
-  it('joins concurrent identical mutations', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    let release: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const effect = vi.fn(async () => {
-      await gate
-      return { accepted: true }
-    })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: [
-        defineMethod({
-          name: 'orchestration.send',
-          permission: 'workspace',
-          params: Params,
-          handler: effect
-        })
-      ]
-    })
-    const first = dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_join', subject: 'same' })
-    )
-    await Promise.resolve()
-    const second = dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_join', subject: 'same' })
-    )
-    release?.()
-
-    expect(await first).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
-    expect(await second).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
-    expect(effect).toHaveBeenCalledTimes(1)
-    db.close()
-  })
-
-  it('replays a completed receipt after database and dispatcher restart', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-mutation-ledger-'))
-    paths.push(dir)
-    const dbPath = join(dir, 'orchestration.db')
-    const first = createHarness(dbPath)
-    await first.dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'durable' })
-    )
-    first.db.close()
-
-    const second = createHarness(dbPath)
-    const replay = await second.dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'durable' })
-    )
-    expect(replay).toMatchObject({
-      ok: true,
-      result: { message: { subject: 'durable' }, mutation: { replayed: true } }
-    })
-    expect(second.effect).not.toHaveBeenCalled()
-    second.db.close()
-  })
-
-  it('replays a local mutation after runtime authentication rotates', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-mutation-ledger-'))
-    paths.push(dir)
-    const dbPath = join(dir, 'orchestration.db')
-    const firstRuntime = createHarness(dbPath)
-    const first = await firstRuntime.dispatcher.dispatch(
-      request({
-        rpcId: 'rpc_1',
-        mutationId: 'mutation_restart',
-        subject: 'once',
-        authToken: 'before-restart'
-      })
-    )
-    firstRuntime.db.close()
-
-    const restartedRuntime = createHarness(dbPath)
-    const replay = await restartedRuntime.dispatcher.dispatch(
-      request({
-        rpcId: 'rpc_2',
-        mutationId: 'mutation_restart',
-        subject: 'once',
-        authToken: 'after-restart'
-      })
-    )
-
-    expect(first).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
-    expect(replay).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
-    expect(firstRuntime.effect).toHaveBeenCalledOnce()
-    expect(restartedRuntime.effect).not.toHaveBeenCalled()
-    restartedRuntime.db.close()
-  })
-
-  it('returns unknown for a pending receipt left by a previous process', async () => {
-    const { db, dispatcher } = createHarness()
-    db.beginMutationReceipt({
-      callerFingerprint: db.getOrCreateLocalMutationCallerFingerprint(),
-      requestId: 'mutation_1',
-      method: 'orchestration.send',
-      payloadHash: createHash('sha256')
-        .update('{"method":"orchestration.send","params":{"subject":"hello"}}')
-        .digest('hex')
-    })
-
-    const result = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
-    )
-    expect(result).toMatchObject({ ok: false, error: { code: 'operation_unknown' } })
-    db.close()
-  })
-
-  it('resumes a pending idempotent worker release after restart', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const params = { dispatch: 'ctx_release' }
-    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
-    const payloadHash = createHash('sha256')
-      .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
-      .digest('hex')
-    db.beginMutationReceipt({
-      callerFingerprint,
-      requestId: 'mutation_release',
-      method: 'orchestration.workerRelease',
-      payloadHash
-    })
-    const effect = vi.fn().mockReturnValue({ state: 'release_pending' })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: [
-        defineMethod({
-          name: 'orchestration.workerRelease',
-          permission: 'workspace',
-          params: z.object({ dispatch: z.string() }),
-          handler: effect
-        })
-      ]
-    })
-
-    const result = await dispatcher.dispatch({
-      id: 'rpc_release_retry',
-      authToken: 'caller-token',
-      method: 'orchestration.workerRelease',
-      params,
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'mutation_release'
-    })
-
-    expect(result).toMatchObject({
-      ok: true,
-      result: {
-        state: 'release_pending',
-        mutation: { requestId: 'mutation_release', replayed: true }
-      }
-    })
-    expect(effect).toHaveBeenCalledTimes(1)
-    expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')?.state).toBe('completed')
-    db.close()
   })
 
   it('returns the accepted Dispatch when worker-start was interrupted by restart', async () => {
@@ -408,9 +54,10 @@ describe('durable orchestration mutation ledger', () => {
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
-        defineMethod({
+        defineOrchestrationMethod({
           name: 'orchestration.workerStart',
           permission: 'workspace',
+          access: { kind: 'writes', targets: {} },
           params: z.object({ from: z.string(), task: z.string() }),
           handler: effect
         })

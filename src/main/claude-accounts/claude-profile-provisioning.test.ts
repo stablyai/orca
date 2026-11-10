@@ -2,13 +2,13 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as FsUtils from '../codex-accounts/fs-utils'
+import type * as FsUtils from '../filesystem/atomic-file-publication'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
   const actual = await original<typeof fs>()
   return { ...actual, symlinkSync: vi.fn(actual.symlinkSync) }
 })
-vi.mock('../codex-accounts/fs-utils', async (original) => {
+vi.mock('../filesystem/atomic-file-publication', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
@@ -150,6 +150,7 @@ describe('Claude profile refresh from the default home', () => {
       firstStartTime: 'source-start',
       firstStartVersion: '1.0.0',
       groveConfigCache: { a: 1 },
+      groveChoiceSeenAt: { 'account-a': 99, 'account-b': 10 },
       cachedArtifactRoster: [],
       clientDataCacheSlots: {},
       passesEligibilityCache: {},
@@ -163,7 +164,10 @@ describe('Claude profile refresh from the default home', () => {
       subscriptionNoticeCount: 2
     })
     expect((await provision(f)).surfaces['.claude.json']).toBe('synced')
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(shared)
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
+      ...shared,
+      groveChoiceSeenAt: { 'account-a': 99, 'account-b': 10 }
+    })
     expect(fs.readdirSync(f.profileHome).filter((name) => name.endsWith('.tmp'))).toEqual([])
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
 
@@ -172,6 +176,7 @@ describe('Claude profile refresh from the default home', () => {
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
+      groveChoiceSeenAt: { 'account-a': 120, 'account-b': 5 },
       theme: 'light',
       onlyHere: true
     })
@@ -180,6 +185,7 @@ describe('Claude profile refresh from the default home', () => {
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
+      groveChoiceSeenAt: { 'account-a': 120, 'account-b': 10 },
       onlyHere: true,
       ...shared
     })

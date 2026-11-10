@@ -1,6 +1,7 @@
 import type { PRCommentAudienceFilter } from '../../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export const getPrCommentAudienceFilters = createLocalizedCatalog(
   (): { value: PRCommentAudienceFilter; label: string }[] => [
@@ -10,13 +11,16 @@ export const getPrCommentAudienceFilters = createLocalizedCatalog(
   ]
 )
 
-export function getPRCommentAudienceEmptyLabel(filter: PRCommentAudienceFilter): string {
+export function getPRCommentAudienceEmptyLabel(
+  filter: PRCommentAudienceFilter,
+  t: Translate = translate
+): string {
   switch (filter) {
     case 'bot':
-      return translate('auto.lib.pr.comment.audience.empty.bot', 'No bot comments.')
+      return t('auto.lib.pr.comment.audience.empty.bot', 'No bot comments.')
     case 'human':
-      return translate('auto.lib.pr.comment.audience.empty.human', 'No human comments.')
+      return t('auto.lib.pr.comment.audience.empty.human', 'No human comments.')
     case 'all':
-      return translate('auto.lib.pr.comment.audience.empty.all', 'No comments yet.')
+      return t('auto.lib.pr.comment.audience.empty.all', 'No comments yet.')
   }
 }

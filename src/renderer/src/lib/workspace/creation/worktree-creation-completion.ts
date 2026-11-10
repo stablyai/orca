@@ -1,8 +1,11 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
-import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
+import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
-import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 
 export async function completeWorktreeCreation(args: {
@@ -13,6 +16,7 @@ export async function completeWorktreeCreation(args: {
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
   startupTerminalTabId?: string
+  startupAgent?: TuiAgent
   backendSpawned: boolean
   /** The host was asked to plan the agent launch, so the desktop's plan never runs. */
   hostPlannedStartup: boolean
@@ -29,19 +33,26 @@ export async function completeWorktreeCreation(args: {
       worktreeId: args.worktreeId,
       primaryTabId: args.primaryTabId,
       startupTerminalTabId: args.startupTerminalTabId,
+      startupAgent: args.startupAgent,
       backendSpawned: args.backendSpawned
     })
   }
-  if (
+  const paired =
+    parseExecutionHostId(request.workspaceRunContext?.hostId ?? request.executionHostId)?.kind ===
+      'runtime' ||
+    Boolean(runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), args.worktreeId))
+  const deferred =
     !args.structuredLaunchAccepted &&
-    request.startupPlan &&
     !args.backendSpawned &&
-    !args.hostPlannedStartup
-  ) {
+    !args.hostPlannedStartup &&
+    (!paired || request.ephemeralVmRecipe)
+      ? (request.startupPlan ?? request.creationStartup?.legacy().startupPlan)
+      : null
+  if (deferred) {
     void ensureAgentStartupInTerminal({
       worktreeId: args.worktreeId,
       primaryTabId: args.primaryTabId,
-      startup: request.startupPlan
+      startup: deferred
     })
   }
   if (

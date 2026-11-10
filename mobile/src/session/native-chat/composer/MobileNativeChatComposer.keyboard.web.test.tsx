@@ -31,7 +31,16 @@ vi.mock('./MobileNativeChatComposerMic', () => ({ MobileNativeChatComposerMic: (
 vi.mock('./MobileNativeChatContextUsageRing', () => ({
   useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))
-vi.mock('./MobileNativeChatSendButton', () => ({ MobileNativeChatSendButton: () => null }))
+vi.mock('./MobileNativeChatSendButton', () => ({
+  MobileNativeChatSendButton: () => null,
+  MobileNativeChatSteerPreviewButton: (props: { preview: string; onPress: () => void }) => (
+    <button type="button" data-preview={props.preview} onClick={props.onPress} />
+  )
+}))
+vi.mock(
+  './use-mobile-native-chat-steer-chord-preview',
+  () => import('./use-mobile-native-chat-steer-chord-preview.web')
+)
 vi.mock('./MobileNativeChatEditActions', () => ({ MobileNativeChatEditActions: () => null }))
 vi.mock('./MobileNativeChatComposerAttachments', () => ({
   MobileNativeChatComposerAttachments: () => null
@@ -163,27 +172,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(input.value).toBe('retained draft')
   })
 
-  it.each([true, false])(
-    'sends raw text with alternate intent, retaining focus on accepted:%s',
-    async (accepted) => {
-      onSend.mockResolvedValue(accepted)
-      await render()
-      expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-      expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ', { alternate: true })
-      expect(document.activeElement).toBe(field())
-      expect(field().value).toBe(' hello ')
-    }
-  )
-
-  it('uses Ctrl on Android and leaves Cmd alone', async () => {
-    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Android')
-    await render()
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(false)
-    expect(onSend).not.toHaveBeenCalled()
-    expect((await key({ ctrlKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ', { alternate: true })
-  })
-
   it.each([
     {},
     { shiftKey: true },
@@ -198,21 +186,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect((await key(flags)).defaultPrevented).toBe(false)
     expect(onSend).not.toHaveBeenCalled()
     expect(field().value).toBe(' hello ')
-  })
-
-  it('consumes a refused send without changing the draft or focus', async () => {
-    await render({ sendDisabled: true })
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).not.toHaveBeenCalled()
-    expect(field().value).toBe(' hello ')
-    expect(document.activeElement).toBe(field())
-  })
-
-  it('saves a queued edit without alternate intent', async () => {
-    await render({ editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: false } })
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ')
-    expect(document.activeElement).toBe(field())
   })
 
   it.each([

@@ -2,8 +2,8 @@ import { CheckCircle2, CircleAlert, FolderOpen, X } from 'lucide-react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { Button } from '../../../ui/button'
-import { translate } from '@/i18n/i18n'
-import { emulatorMessageText } from '@/lib/emulator-error-copy'
+import { useTranslate } from '@/i18n/use-translate'
+import { emulatorMessageText } from '@/lib/simulator/launch/emulator-error-copy'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type CodedMessage = { message?: string; messageCode?: unknown; messageParams?: unknown }
@@ -65,6 +65,7 @@ export function MobileEmulatorAvailabilityDetails({
   configuredPath,
   onSetAndroidSdkPath
 }: MobileEmulatorAvailabilityDetailsProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!availability) {
     return null
   }
@@ -84,7 +85,7 @@ export function MobileEmulatorAvailabilityDetails({
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.MobileEmulatorSdkStatus.63fe73a1ea',
               'Could not update Android SDK folder.'
             )
@@ -99,7 +100,7 @@ export function MobileEmulatorAvailabilityDetails({
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.MobileEmulatorSdkStatus.63fe73a1ea',
               'Could not update Android SDK folder.'
             )
@@ -112,19 +113,16 @@ export function MobileEmulatorAvailabilityDetails({
       <div className="divide-y divide-border/40 rounded-md border border-border/50 px-3">
         <ToolchainStatusRow
           ok={android.sdkFound}
-          title={translate(
-            'auto.components.settings.MobileEmulatorSdkStatus.027cbf668a',
-            'Android SDK'
-          )}
+          title={t('auto.components.settings.MobileEmulatorSdkStatus.027cbf668a', 'Android SDK')}
           detail={
             android.sdkFound ? (
               <>
                 {configuredPath
-                  ? translate(
+                  ? t(
                       'auto.components.settings.MobileEmulatorSdkStatus.f6d080d128',
                       'Using configured path'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.MobileEmulatorSdkStatus.7fe4bd5907',
                       'Detected at'
                     )}{' '}
@@ -132,7 +130,7 @@ export function MobileEmulatorAvailabilityDetails({
               </>
             ) : (
               emulatorMessageText(android) ||
-              translate(
+              t(
                 'auto.components.settings.MobileEmulatorSdkStatus.2784f0b22d',
                 'Not found. Install Android Studio, then create a Virtual Device.'
               )
@@ -147,7 +145,7 @@ export function MobileEmulatorAvailabilityDetails({
                   variant="outline"
                   onClick={(event) => openAppHttpLink(ANDROID_STUDIO_URL, { event })}
                 >
-                  {translate(
+                  {t(
                     'auto.components.settings.MobileEmulatorSdkStatus.b94ff260e6',
                     'Download Android Studio'
                   )}
@@ -161,7 +159,7 @@ export function MobileEmulatorAvailabilityDetails({
                 className={sdkPathActionClassName}
               >
                 <FolderOpen className="size-3" />
-                {translate(
+                {t(
                   'auto.components.settings.MobileEmulatorSdkStatus.18925b082d',
                   'Locate SDK folder'
                 )}
@@ -175,10 +173,7 @@ export function MobileEmulatorAvailabilityDetails({
                   className={sdkPathActionClassName}
                 >
                   <X className="size-3" />
-                  {translate(
-                    'auto.components.settings.MobileEmulatorSdkStatus.8c52684db8',
-                    'Clear'
-                  )}
+                  {t('auto.components.settings.MobileEmulatorSdkStatus.8c52684db8', 'Clear')}
                 </Button>
               ) : null}
             </>
@@ -188,18 +183,18 @@ export function MobileEmulatorAvailabilityDetails({
         {showIos ? (
           <ToolchainStatusRow
             ok={iosOk}
-            title={translate(
+            title={t(
               'auto.components.settings.MobileEmulatorSdkStatus.76eb88b88e',
               'iOS Simulator (Xcode)'
             )}
             detail={
               iosOk
-                ? translate('auto.components.settings.MobileEmulatorSdkStatus.c6f3ea4f12', 'Ready')
+                ? t('auto.components.settings.MobileEmulatorSdkStatus.c6f3ea4f12', 'Ready')
                 : emulatorMessageText(
                     [availability.simctl, availability.serveSim].find((check) => check?.message) ??
                       {}
                   ) ||
-                  translate(
+                  t(
                     'auto.components.settings.MobileEmulatorSdkStatus.e4f14b50d7',
                     'Install Xcode and add an iOS Simulator runtime.'
                   )

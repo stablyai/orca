@@ -20,6 +20,12 @@ import {
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
 import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
+import {
+  prWatchQueueKey,
+  schedulePRWatchEntry,
+  type PRWatchJob,
+  type PRWatchJobHooks
+} from './pr-refresh-watch-jobs'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
@@ -32,12 +38,42 @@ const visibility = new PRRefreshVisibility()
 const events = new PRRefreshEventPublisher()
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
 
-export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
-  events.setOutcomeObserver(observer)
+export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
+  return events.addOutcomeObserver(observer)
 }
 
 export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
   drainer.setRegistrationCheck(check)
+}
+
+export function setPRWatchJobHooks(hooks: PRWatchJobHooks | null): void {
+  drainer.watchJobs.setHooks(hooks)
+}
+
+/** Queue a watch read; `defer` only moves a queued one later, as another surface just read it. */
+export function schedulePRWatchRead(
+  job: PRWatchJob,
+  candidate: GitHubPRRefreshCandidate,
+  dueAt: number,
+  options: { defer?: boolean } = {}
+): void {
+  schedulePRWatchEntry(queue, job, candidate, dueAt, options.defer === true)
+  drainer.schedule()
+}
+
+export function cancelPRWatchRead(job: PRWatchJob): void {
+  queue.delete(prWatchQueueKey(job))
+}
+
+/** A read a paired server made for a client reaches every observer. It takes no queue ownership,
+ *  so a desktop read in flight for the same checkout keeps its follow-up. */
+export async function runHostedPRRead(
+  candidate: GitHubPRRefreshCandidate,
+  read: () => Promise<PRRefreshOutcome>
+): Promise<PRRefreshOutcome> {
+  const outcome = await read()
+  events.observe(candidate, outcome)
+  return outcome
 }
 
 function removeInvisibleVisibleRefreshes(): void {
@@ -232,7 +268,7 @@ export async function refreshPRNow(
     plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
     broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
   }
-  events.observe(candidate, outcome)
+  events.observe(candidate, outcome, aliases)
   retry.noteManualGate(key, broadcastOutcome)
   events.broadcast(
     { aliases, reason, outcome: broadcastOutcome, requestStartedAt },

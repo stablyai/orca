@@ -3,8 +3,8 @@ import { Goal } from 'lucide-react-native'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import { isBareStructuredAgentSessionGoalCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { MobileNativeChatThreadGoalStrip } from '../input/MobileNativeChatThreadGoalStrip'
 import { MobileNativeChatComposerModeChip } from './MobileNativeChatComposerModeChip'
 
@@ -24,6 +24,8 @@ export function useMobileNativeChatComposerGoalMode(
   send: (send: ComposerSend, text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   placeholder: string | undefined
   sendFollowUp: (followUp: NativeChatSendFollowUp | null) => NativeChatSendFollowUp | null
+  /** A host goal is no message, so the composer neither queues, steers nor sends a waiting card. */
+  holdsFollowUp: boolean
   strip: ReactNode
   chip: ReactNode
 } {
@@ -72,6 +74,7 @@ export function useMobileNativeChatComposerGoalMode(
       : undefined,
     // A host goal is no message, so it neither queues nor steers.
     sendFollowUp: (followUp) => (active && hostSetsGoals ? null : followUp),
+    holdsFollowUp: active && hostSetsGoals,
     // Each goal opens collapsed, so a tap meant for a new goal never lands on the last one's controls.
     strip: threadGoal
       ? createElement(MobileNativeChatThreadGoalStrip, {

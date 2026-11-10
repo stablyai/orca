@@ -2,21 +2,22 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import {
-  createTestStore,
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab
-} from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { buildActiveSurfacePatch } from '../store/slices/tabs/tabs-surface'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('../store', () => ({ useAppStore: { getState: mocks.getState } }))
-vi.mock('@/lib/cycled-tab-owner-activation', () => ({ activateCycledTabOnOwner: vi.fn() }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/lib/workspace/tabs/cycled-tab-owner-activation', () => ({
+  activateCycledTabOnOwner: vi.fn()
+}))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 
 import { handleSwitchTerminalTab } from './ipc-tab-switch'
-import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
+import { switchFloatingWorkspaceTab } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 describe.each(['main', 'floating'] as const)('%s terminal shortcut chat order', (surface) => {
   it('cycles terminal, chat, terminal in both directions using exact tab selection', () => {

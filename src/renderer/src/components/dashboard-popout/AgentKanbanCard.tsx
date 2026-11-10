@@ -7,8 +7,7 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft
 } from 'lucide-react'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -20,22 +19,24 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 
-function formatStartedAgo(startedAt: number, now: number): string {
+function formatStartedAgo(startedAt: number, now: number, t: Translate = translate): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (seconds < 60) {
-    return translate('dashboardPopout.card.time.justNow', 'just now')
+    return t('dashboardPopout.card.time.justNow', 'just now')
   }
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) {
-    return translate('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
+    return t('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return translate('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
+    return t('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
   }
-  return translate('dashboardPopout.card.time.days', '{{count}}d', {
+  return t('dashboardPopout.card.time.days', '{{count}}d', {
     count: Math.floor(hours / 24)
   })
 }
@@ -45,8 +46,8 @@ function displayTimestamp(card: DashboardCard): number {
   return card.finishedAt ?? card.startedAt
 }
 
-function formatSubagentCount(count: number): string {
-  return translate('dashboardPopout.card.subagents', '{{count}} subagents', {
+function formatSubagentCount(count: number, t: Translate = translate): string {
+  return t('dashboardPopout.card.subagents', '{{count}} subagents', {
     count,
     defaultValue_one: '{{count}} subagent'
   })
@@ -133,6 +134,7 @@ const REVIEW_PRESENTATION = {
 } as const
 
 function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!card.review) {
     return null
   }
@@ -141,13 +143,13 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
   const title = (() => {
     switch (card.review.state) {
       case 'open':
-        return translate('dashboardPopout.card.review.open', 'Open review')
+        return t('dashboardPopout.card.review.open', 'Open review')
       case 'draft':
-        return translate('dashboardPopout.card.review.draft', 'Draft review')
+        return t('dashboardPopout.card.review.draft', 'Draft review')
       case 'merged':
-        return translate('dashboardPopout.card.review.merged', 'Merged review')
+        return t('dashboardPopout.card.review.merged', 'Merged review')
       case 'closed':
-        return translate('dashboardPopout.card.review.closed', 'Closed review')
+        return t('dashboardPopout.card.review.closed', 'Closed review')
     }
   })()
   return (
@@ -198,6 +200,7 @@ export const AgentKanbanCard = memo(
     now,
     onOpenTerminal
   }: AgentKanbanCardProps): React.JSX.Element {
+    const t = useTranslate()
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
     // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
@@ -242,25 +245,8 @@ export const AgentKanbanCard = memo(
             {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
-          {card.lastUserMessage || card.lastAgentMessage ? (
-            <div className="flex w-full flex-col gap-0.5">
-              {card.lastUserMessage ? (
-                <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
-                  <span className="font-medium text-foreground/45">
-                    {translate('dashboardPopout.card.you', 'You')}
-                  </span>{' '}
-                  {card.lastUserMessage}
-                </div>
-              ) : null}
-              {card.lastAgentMessage ? (
-                <div className="line-clamp-2 text-xs leading-snug text-foreground/90">
-                  <span className="font-medium text-foreground/45">
-                    {formatAgentTypeLabel(card.agentType)}
-                  </span>{' '}
-                  {card.lastAgentMessage}
-                </div>
-              ) : null}
-            </div>
+          {hasAgentCardLastMessages(card) ? (
+            <AgentCardLastMessages card={card} clamp />
           ) : card.task ? (
             <div className="line-clamp-2 w-full text-xs leading-snug text-foreground/90">
               {card.task}
@@ -286,7 +272,7 @@ export const AgentKanbanCard = memo(
               <ChevronRight
                 className={cn('size-3 transition-transform', subagentsOpen && 'rotate-90')}
               />
-              {formatSubagentCount(card.subagents.length)}
+              {formatSubagentCount(card.subagents.length, t)}
             </button>
             {subagentsOpen ? (
               <div className="ml-1 flex flex-col gap-1 border-l border-border pl-2">
@@ -332,7 +318,7 @@ export const AgentKanbanCard = memo(
           <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
-              {formatStartedAgo(displayTimestamp(card), now)}
+              {formatStartedAgo(displayTimestamp(card), now, t)}
             </span>
           ) : null}
         </button>

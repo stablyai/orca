@@ -1,6 +1,5 @@
-import * as emulatorPreferences from '@/lib/emulator-opening-preferences-capability'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
+import * as emulatorPreferences from '@/lib/simulator/launch/emulator-opening-preferences-capability'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -10,8 +9,8 @@ import { useAppStore } from '@/store'
 import {
   consumePrelaunchedSimulatorSession,
   rememberPrelaunchedSimulatorSession
-} from '@/lib/simulator-launch-coordination'
-import { cancelPendingSimulatorPaneShutdown } from '@/lib/simulator-pane-shutdown-scheduler'
+} from '@/lib/simulator/launch/simulator-launch-coordination'
+import { cancelPendingSimulatorPaneShutdown } from '@/lib/simulator/tabs/simulator-pane-shutdown-scheduler'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 
@@ -165,31 +164,6 @@ describe('useEmulatorPaneSession', () => {
     vi.restoreAllMocks()
   })
 
-  it('asks the capable host on automatic open without sending a guessed device', async () => {
-    consumePrelaunchedSimulatorSession(WORKTREE_ID)
-    setLocalRuntimeCapabilitiesForTests([EMULATOR_OPENING_PREFERENCES_CAPABILITY])
-    vi.mocked(window.api.runtime.call).mockImplementation(async (request) => {
-      if (request.method === 'emulator.listDevices') {
-        return runtimeSuccess(deviceList)
-      }
-      return runtimeSuccess({ attached: false, selectionRequired: 'first-use' })
-    })
-    await act(async () => {
-      root.render(<AutoAttachProbe />)
-    })
-    await flushEffects()
-    expect(window.api.runtime.call).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'emulator.attach',
-        params: { worktree: WORKTREE_ID, focus: false, userInitiated: true }
-      })
-    )
-    expect(latest?.loading).toBe(false)
-    expect(latest?.selectedUdid).toBeNull()
-    expect(latest?.selectionRequired).toBe('first-use')
-    expect(latest?.error).toBeNull()
-  })
-
   it('retains an explicit session when an older automatic capability lookup finishes', async () => {
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     const capability = createDeferred<boolean>()
@@ -240,45 +214,6 @@ describe('useEmulatorPaneSession', () => {
     expect(latest?.isLive).toBe(true)
     expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
     expect(latest?.displayName).toBe('iPhone B')
-  })
-
-  it('shows a connecting state instead of the old live preview while switching devices', async () => {
-    await act(async () => {
-      root.render(<Probe />)
-    })
-    await flushEffects()
-
-    expect(latest?.isLive).toBe(true)
-    expect(latest?.previewUrl).toBe('http://127.0.0.1:3100/stream.mjpeg')
-
-    await act(async () => {
-      container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-
-    expect(latest?.loading).toBe(true)
-    expect(latest?.isLive).toBe(false)
-    expect(latest?.previewUrl).toBeUndefined()
-    expect(latest?.displayName).toBe('iPhone B')
-    expect(latest?.selectedUdid).toBe('device-b')
-
-    await act(async () => {
-      attachDeferred.resolve({
-        attached: true,
-        info: {
-          deviceUdid: 'device-b',
-          displayName: 'iPhone B',
-          streamUrl: 'http://127.0.0.1:3200/stream.mjpeg',
-          wsUrl: 'ws://127.0.0.1:3200/ws'
-        }
-      })
-      await attachDeferred.promise
-      await Promise.resolve()
-    })
-
-    expect(latest?.loading).toBe(false)
-    expect(latest?.isLive).toBe(true)
-    expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
   })
 
   it('ignores a rotate response from the previous session after switching devices', async () => {

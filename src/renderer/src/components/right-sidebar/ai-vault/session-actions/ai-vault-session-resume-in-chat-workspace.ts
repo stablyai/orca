@@ -1,10 +1,10 @@
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   structuredAgentSessionLaunchFeasible,
   type AgentSessionStructuredFeasibilityRequest
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
+import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'

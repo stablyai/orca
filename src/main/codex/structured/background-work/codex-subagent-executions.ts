@@ -15,6 +15,7 @@ export type CodexChildExecution = {
 
 export type CodexExecutionChild = {
   agentThreadId: string
+  observationOrder: number
   registered: boolean
   label: string | null
   /** Spawn announcements arrive on the parent's thread. */
@@ -28,6 +29,10 @@ export type CodexExecutionChild = {
 export class CodexSubagentExecutions {
   private readonly children = new Map<string, CodexExecutionChild>()
   private readonly settledTurns = new Map<string, NativeChatSubagentState>()
+  private readonly working = new Map<string, CodexExecutionChild>()
+  private readonly workingOrder: CodexExecutionChild[] = []
+  private readonly workingBySpawner = new Map<string, Set<CodexExecutionChild>>()
+  private readonly changed = new Set<string>()
 
   register(
     agentThreadId: string,
@@ -35,6 +40,7 @@ export class CodexSubagentExecutions {
     spawnerThreadId?: string
   ): CodexExecutionChild {
     const child = this.child(agentThreadId)
+    const previousLabel = child.label
     // Keep the original spawner across duplicate announcement frames.
     child.spawnerThreadId ??= spawnerThreadId ?? null
     child.registered = true
@@ -44,6 +50,10 @@ export class CodexSubagentExecutions {
         ?.trim()
         .replace(/\s+/g, ' ')
         .slice(0, MAX_SUBAGENT_FIELD_CHARS + 1) || null
+    this.updateWorking(child)
+    if (previousLabel !== child.label) {
+      this.changed.add(agentThreadId)
+    }
     return child
   }
 
@@ -83,6 +93,7 @@ export class CodexSubagentExecutions {
     }
     if (state === 'working' || !child.execution || child.execution.turnId === turnId) {
       child.execution = execution
+      this.updateWorking(child)
     }
     return { child, execution }
   }
@@ -113,42 +124,76 @@ export class CodexSubagentExecutions {
     return this.children.get(agentThreadId)
   }
 
-  lineage(agentThreadId: string): CodexExecutionChild[] {
-    const spawnedByThread = new Map<string, string[]>()
-    for (const child of this.children.values()) {
-      if (child.spawnerThreadId === null) {
-        continue
+  lineage(roots: ReadonlySet<string>, commandThreads: Iterable<string>): CodexExecutionChild[] {
+    const ancestors = new Map<string, CodexExecutionChild | undefined>()
+    const spawnedBy = new Map<string, CodexExecutionChild[]>()
+    const candidates = new Set([...this.working.keys(), ...commandThreads])
+    for (const threadId of candidates) {
+      let id: string | null = threadId
+      while (id !== null && !ancestors.has(id)) {
+        const child = this.children.get(id)
+        ancestors.set(id, child)
+        if (!child) {
+          break
+        }
+        if (child.spawnerThreadId !== null) {
+          const siblings = spawnedBy.get(child.spawnerThreadId) ?? []
+          siblings.push(child)
+          spawnedBy.set(child.spawnerThreadId, siblings)
+        }
+        id = child.spawnerThreadId
       }
-      const siblings = spawnedByThread.get(child.spawnerThreadId) ?? []
-      siblings.push(child.agentThreadId)
-      spawnedByThread.set(child.spawnerThreadId, siblings)
     }
     const lineage: CodexExecutionChild[] = []
     const seen = new Set<string>()
-    const pending = [agentThreadId]
-    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-      const child = this.children.get(id)
-      if (!child || seen.has(id)) {
-        continue
-      }
-      seen.add(id)
-      lineage.push(child)
-      for (const spawned of spawnedByThread.get(id) ?? []) {
-        pending.push(spawned)
+    const orderedRoots = [...roots]
+      .flatMap((root) => {
+        const child = ancestors.get(root)
+        return child ? [child] : []
+      })
+      .sort((a, b) => a.observationOrder - b.observationOrder)
+    for (const root of orderedRoots) {
+      const pending = [root.agentThreadId]
+      for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+        const child = ancestors.get(id)
+        if (!child || seen.has(id)) {
+          continue
+        }
+        seen.add(id)
+        lineage.push(child)
+        const spawned = spawnedBy.get(id) ?? []
+        spawned.sort((a, b) => a.observationOrder - b.observationOrder)
+        for (const child of spawned) {
+          pending.push(child.agentThreadId)
+        }
       }
     }
     return lineage
   }
 
   workingChildren(): CodexExecutionChild[] {
-    return [...this.children.values()].filter(
-      (child) => child.registered && child.execution?.state === 'working'
+    return [...this.workingOrder]
+  }
+
+  workingSpawnedBy(threadId: string): CodexExecutionChild[] {
+    return [...(this.workingBySpawner.get(threadId) ?? [])].sort(
+      (a, b) => a.observationOrder - b.observationOrder
     )
+  }
+
+  takeChangedThreads(): string[] {
+    const threads = [...this.changed]
+    this.changed.clear()
+    return threads
   }
 
   clear(): void {
     this.children.clear()
     this.settledTurns.clear()
+    this.working.clear()
+    this.workingOrder.length = 0
+    this.workingBySpawner.clear()
+    this.changed.clear()
   }
 
   retentionSizes(): { children: number; settledTurns: number } {
@@ -162,6 +207,7 @@ export class CodexSubagentExecutions {
     }
     const child: CodexExecutionChild = {
       agentThreadId,
+      observationOrder: this.children.size,
       registered: false,
       label: null,
       spawnerThreadId: null,
@@ -171,6 +217,36 @@ export class CodexSubagentExecutions {
     }
     this.children.set(agentThreadId, child)
     return child
+  }
+
+  private updateWorking(child: CodexExecutionChild): void {
+    const working = child.registered && child.execution?.state === 'working'
+    if (working !== this.working.has(child.agentThreadId)) {
+      this.changed.add(child.agentThreadId)
+      if (working) {
+        this.working.set(child.agentThreadId, child)
+        const next = this.workingOrder.findIndex(
+          (other) => other.observationOrder > child.observationOrder
+        )
+        this.workingOrder.splice(next === -1 ? this.workingOrder.length : next, 0, child)
+      } else {
+        this.working.delete(child.agentThreadId)
+        this.workingOrder.splice(this.workingOrder.indexOf(child), 1)
+      }
+    }
+    const spawner = child.spawnerThreadId
+    if (spawner !== null) {
+      const children = this.workingBySpawner.get(spawner) ?? new Set<CodexExecutionChild>()
+      if (working) {
+        children.add(child)
+        this.workingBySpawner.set(spawner, children)
+      } else {
+        children.delete(child)
+        if (children.size === 0) {
+          this.workingBySpawner.delete(spawner)
+        }
+      }
+    }
   }
 
   private numberTurn(child: CodexExecutionChild, turnId: string): void {

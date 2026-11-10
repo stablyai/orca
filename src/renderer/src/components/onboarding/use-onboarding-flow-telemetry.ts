@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

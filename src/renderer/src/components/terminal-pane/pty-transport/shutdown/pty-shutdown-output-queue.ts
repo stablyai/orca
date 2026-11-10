@@ -14,16 +14,6 @@ type PtyShutdownOutputChunk = {
   eventBytes?: Uint32Array
 }
 
-export type PtyShutdownOutputQueueStorage = {
-  backingLength: number
-  byteBackingLength: number
-  chunkBackingLength: number
-  head: number
-  headChunk: number
-  retainedBytes: number
-  retainedEvents: number
-}
-
 export class PtyShutdownOutputQueue {
   private chunks: (PtyShutdownOutputChunk | undefined)[] = []
   private headChunk = 0
@@ -84,26 +74,6 @@ export class PtyShutdownOutputQueue {
 
   get length(): number {
     return this.retainedEvents
-  }
-
-  getStorageForTest(): PtyShutdownOutputQueueStorage {
-    let backingLength = 0
-    let byteBackingLength = 0
-    for (const chunk of this.chunks) {
-      if (chunk) {
-        backingLength += chunk.events.length
-        byteBackingLength += chunk.eventBytes?.length ?? 0
-      }
-    }
-    return {
-      backingLength,
-      byteBackingLength,
-      chunkBackingLength: this.chunks.length,
-      head: this.headOffset,
-      headChunk: this.headChunk,
-      retainedBytes: this.retainedBytes,
-      retainedEvents: this.length
-    }
   }
 
   private evictOldest(): void {

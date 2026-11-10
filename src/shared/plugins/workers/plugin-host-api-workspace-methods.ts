@@ -28,6 +28,9 @@ const workspaceListResult = z.object({
         /** `folder`: a plain folder, with no Git branch. */
         kind: z.enum(['worktree', 'folder']),
         name: z.string().max(512),
+        /** Its project's (repository's) name, or null when it has none, as for project folders.
+         *  Absent before host API 1.5. */
+        project: z.string().max(512).nullable().optional(),
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
@@ -42,6 +45,47 @@ const workspaceListResult = z.object({
 
 const workspaceOpenParams = z.strictObject({ workspaceId })
 const workspaceOpenResult = z.object({ opened: z.literal(true) })
+
+export const PLUGIN_WORKSPACE_NAME_MAX = 200
+// Characters that are invisible or reorder text: controls, bidi controls, zero-width and
+// filler characters, variation selectors, tags and interlinear annotation marks.
+const HIDDEN_OR_CONTROL_RANGES: readonly (readonly [number, number])[] = [
+  [0x00, 0x1f],
+  [0x7f, 0x9f],
+  [0xad, 0xad],
+  [0x34f, 0x34f],
+  [0x61c, 0x61c],
+  [0x115f, 0x1160],
+  [0x17b4, 0x17b5],
+  [0x180b, 0x180f],
+  [0x200b, 0x200f],
+  [0x2028, 0x202e],
+  [0x2060, 0x206f],
+  [0x2800, 0x2800],
+  [0x3164, 0x3164],
+  [0xfe00, 0xfe0f],
+  [0xfeff, 0xfeff],
+  [0xffa0, 0xffa0],
+  [0xfff0, 0xfffb],
+  [0x1d173, 0x1d17a],
+  [0xe0000, 0xe0fff]
+]
+const isHiddenOrControl = (char: string): boolean => {
+  const code = char.codePointAt(0) ?? 0
+  return HIDDEN_OR_CONTROL_RANGES.some(([low, high]) => code >= low && code <= high)
+}
+const workspaceRenameParams = z.strictObject({
+  workspaceId,
+  /** The name the sidebar shows. It replaces an automatic (branch) name or a person's rename. */
+  name: z
+    .string()
+    .max(PLUGIN_WORKSPACE_NAME_MAX)
+    .refine((name) => name.trim().length > 0, 'name must not be blank')
+    // A sidebar label is one line of plain text: no control, bidi or invisible characters,
+    // which could make it read as another workspace's name.
+    .refine((name) => ![...name].some(isHiddenOrControl), 'name must be one line of plain text')
+})
+const workspaceRenameResult = z.object({ name: z.string() })
 
 const terminalCreateParams = z.strictObject({
   workspaceId,
@@ -124,6 +168,17 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     surfaces: WORKER_ONLY,
     params: workspaceOpenParams,
     result: workspaceOpenResult
+  }),
+  'workspace.rename': spec({
+    summary:
+      "Renames a workspace in Orca's sidebar, as renaming it by hand does; the name stays until it is renamed again.",
+    since: 5,
+    scope: 'any-workspace',
+    capability: 'workspace:write',
+    mutation: true,
+    surfaces: WORKER_ONLY,
+    params: workspaceRenameParams,
+    result: workspaceRenameResult
   }),
   'terminal.create': spec({
     summary: 'Opens a terminal in a workspace, optionally running a command, in the background.',

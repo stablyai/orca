@@ -1,4 +1,3 @@
-import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -196,16 +195,9 @@ export type CreatePrIntentReviewOptions = Pick<
 > & {
   activeRepo: SourceControlWorktreeContext['activeRepo']
   createHostedReview: SourceControlStoreActions['createHostedReview']
-  createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
-  createPrIntentActiveTargetConflicts: SourceControlWorktreeOperationState['createPrIntentActiveTargetConflicts']
-  createPrIntentCurrentTargetRef: SourceControlWorktreeOperationState['createPrIntentCurrentTargetRef']
-  createPrIntentRunStillOwnsWorktree: SourceControlWorktreeOperationState['createPrIntentRunStillOwnsWorktree']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
   prImageUploadPendingRef?: React.RefObject<boolean>
-  resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
-  setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
-  setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
-  settings: SourceControlWorktreeContext['settings']
 }

@@ -1,17 +1,17 @@
 import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
-import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useStructuredAgentSessionOptions } from '@/components/native-chat/session/options/structured/use-structured-agent-session-options'
+import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import {
   getStructuredAgentSessionPendingSends,
   structuredAgentSessionSendOut
-} from '@/components/native-chat/structured-agent-session-pending-sends'
-import { structuredConversationCommandRunner } from '@/components/native-chat/structured-conversation-command-send'
-import { sendMessageToAgent } from '../../agent-message-send'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { structuredConversationCommandRunner } from '@/components/native-chat/session/structured/writes/structured-conversation-command-send'
+import { sendMessageToAgent } from '../messaging/agent-message-send'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-registry'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import {

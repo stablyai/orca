@@ -7,8 +7,9 @@ import {
   useRoutingFixture
 } from './task-page-linear-refresh-test-fixtures'
 import { reads as issueReadRegistry } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-publication'
-import { deferred } from '@/store/slices/linear-slice-test-harness'
+import '@/store/slices/linear/linear-issue-read'
+import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-write-publication'
+import { deferred } from '@/store/slices/linear/linear-slice-test-harness'
 import type { useTaskPageDetailRouting } from '../use-task-page-detail-routing'
 import { expect, it } from 'vitest'
 import { act, render, renderHook, screen } from '@testing-library/react'

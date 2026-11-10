@@ -1,0 +1,328 @@
+import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
+import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
+import { Minimize2, Smartphone } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+
+import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
+import {
+  createMobileDriverOverlayCollapseState,
+  getMobileDriverOverlayCollapseState
+} from './mobile-driver-overlay-collapse'
+import { useTranslate } from '@/i18n/use-translate'
+
+type Props = {
+  driver: RuntimeTerminalDriverState
+  hasFitOverride: boolean
+  onAction: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>
+  /** Identifier class on the rendered root, used by e2e selectors. */
+  rootClassName?: string
+}
+
+// Driving preserves streamed output and permits a collapsed chip; held-fit has no live output and stays prominent until Restore (docs/mobile-presence-lock.md).
+export function MobileDriverOverlay({
+  driver,
+  hasFitOverride,
+  onAction,
+  onAllAction,
+  rootClassName
+}: Props): ReactElement | null {
+  const t = useTranslate()
+  const isMobileDriving = driver.kind === 'mobile'
+  const isHeldAtPhoneFit = !isMobileDriving && hasFitOverride
+  const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
+
+  const [collapseState, setCollapseState] = useState(() =>
+    createMobileDriverOverlayCollapseState(driverClientId)
+  )
+  const [actionPending, setActionPending] = useState(false)
+  const [allActionPending, setAllActionPending] = useState(false)
+  const mountedRef = useRef(false)
+
+  const setOverlayRootRef = useCallback((node: HTMLDivElement | null): void => {
+    mountedRef.current = node !== null
+    if (node) {
+      // Reset pending state after take-back/restore so a later mobile session cannot inherit disabled actions.
+      setActionPending(false)
+      setAllActionPending(false)
+    }
+  }, [])
+
+  const currentCollapseState = getMobileDriverOverlayCollapseState(collapseState, driverClientId)
+  // Why: a new mobile actor must be loud even if the prior driver was collapsed.
+  if (currentCollapseState !== collapseState) {
+    setCollapseState(currentCollapseState)
+  }
+  const collapsed = currentCollapseState.collapsed
+
+  if (!isMobileDriving && !isHeldAtPhoneFit) {
+    return null
+  }
+
+  const handleAction = async (): Promise<void> => {
+    if (actionPending || allActionPending) {
+      return
+    }
+    setActionPending(true)
+    try {
+      await onAction()
+    } finally {
+      if (mountedRef.current) {
+        setActionPending(false)
+      }
+    }
+  }
+
+  const handleAllAction = async (): Promise<void> => {
+    if (!onAllAction || actionPending || allActionPending) {
+      return
+    }
+    setAllActionPending(true)
+    try {
+      await onAllAction()
+    } finally {
+      if (mountedRef.current) {
+        setAllActionPending(false)
+      }
+    }
+  }
+
+  if (isHeldAtPhoneFit) {
+    return (
+      <LoudOverlay
+        title={t(
+          'auto.components.terminal.pane.MobileDriverOverlay.4b7e1c9a20',
+          'Still sized for your phone'
+        )}
+        body={t(
+          'auto.components.terminal.pane.MobileDriverOverlay.9d2f6a3e58',
+          'Your phone session ended. Restore to fit this window.'
+        )}
+        actionLabel={t('auto.components.terminal.pane.MobileDriverOverlay.1e5c8b7d43', 'Restore')}
+        actionPending={actionPending}
+        allActionLabel={t(
+          'auto.components.terminal.pane.MobileDriverOverlay.6a3d9f2c71',
+          'Restore all'
+        )}
+        allActionPending={allActionPending}
+        onAction={handleAction}
+        onAllAction={onAllAction ? handleAllAction : undefined}
+        tone="held"
+        rootRef={setOverlayRootRef}
+        rootClassName={rootClassName}
+      />
+    )
+  }
+
+  if (collapsed) {
+    return (
+      <LockChip
+        actionPending={actionPending}
+        onAction={handleAction}
+        onExpand={() => setCollapseState(createMobileDriverOverlayCollapseState(driverClientId))}
+        rootRef={setOverlayRootRef}
+        rootClassName={rootClassName}
+      />
+    )
+  }
+
+  return (
+    <LoudOverlay
+      title={t(
+        'auto.components.terminal.pane.MobileDriverOverlay.c7e4a2b8f1',
+        'Your phone is in control'
+      )}
+      body={t(
+        'auto.components.terminal.pane.MobileDriverOverlay.8c1a5e9f36',
+        'Desktop typing is paused. Output keeps streaming.'
+      )}
+      actionLabel={t('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}
+      actionPending={actionPending}
+      allActionLabel={t(
+        'auto.components.terminal.pane.MobileDriverOverlay.2f7b4d1e95',
+        'Take back all'
+      )}
+      allActionPending={allActionPending}
+      onAction={handleAction}
+      onAllAction={onAllAction ? handleAllAction : undefined}
+      onCollapse={() => setCollapseState({ driverClientId, collapsed: true })}
+      tone="driving"
+      rootRef={setOverlayRootRef}
+      rootClassName={rootClassName}
+    />
+  )
+}
+
+type LoudOverlayProps = {
+  title: string
+  body: string
+  actionLabel: string
+  actionPending: boolean
+  allActionLabel?: string
+  allActionPending?: boolean
+  onAction: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>
+  onCollapse?: () => void
+  tone: 'driving' | 'held'
+  rootRef?: (node: HTMLDivElement | null) => void
+  rootClassName?: string
+}
+
+function LoudOverlay({
+  title,
+  body,
+  actionLabel,
+  actionPending,
+  allActionLabel,
+  allActionPending = false,
+  onAction,
+  onAllAction,
+  onCollapse,
+  tone,
+  rootRef: outerRootRef,
+  rootClassName
+}: LoudOverlayProps): ReactElement {
+  const t = useTranslate()
+  const titleId = useId()
+  const collapseLabel = t(
+    'auto.components.terminal.pane.MobileDriverOverlay.3a9c5f7e12',
+    'Minimize'
+  )
+  const bodyId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const actionRef = useRef<HTMLButtonElement>(null)
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      rootRef.current = node
+      outerRootRef?.(node)
+    },
+    [outerRootRef]
+  )
+  // Focus recovery only outside editable inputs; unconditional autofocus could turn someone’s next Space/Enter into Take back or Restore.
+  useEffect(() => {
+    const paneScope = rootRef.current?.parentElement
+    if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
+      actionRef.current?.focus()
+    }
+  }, [])
+  // Keep live output readable while mobile owns input; omit pane-wide scrims and blur.
+  return (
+    <div
+      ref={setRootRef}
+      role="dialog"
+      data-overlay-focus-scope="parent"
+      aria-live="assertive"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      className={cn(
+        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-6',
+        rootClassName
+      )}
+    >
+      <div className="pointer-events-auto relative flex w-full max-w-sm gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-floating">
+        <div className="relative mt-0.5 shrink-0">
+          <Smartphone className="size-4 text-muted-foreground" aria-hidden="true" />
+          {tone === 'driving' ? (
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 size-1.5 animate-pulse rounded-full bg-foreground ring-2 ring-card motion-reduce:animate-none"
+            />
+          ) : null}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div id={titleId} className="pr-6 text-sm font-semibold leading-5">
+            {title}
+          </div>
+          <div id={bodyId} className="mt-0.5 text-sm text-muted-foreground">
+            {body}
+          </div>
+          <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+            {onAllAction && allActionLabel ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onAllAction}
+                disabled={actionPending || allActionPending}
+              >
+                {allActionLabel}
+              </Button>
+            ) : null}
+            <Button
+              ref={actionRef}
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={onAction}
+              disabled={actionPending || allActionPending}
+            >
+              {actionLabel}
+            </Button>
+          </div>
+        </div>
+        {onCollapse && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="absolute right-2 top-2"
+                aria-label={collapseLabel}
+                onClick={onCollapse}
+              >
+                <Minimize2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {collapseLabel}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type ChipProps = {
+  actionPending: boolean
+  onAction: () => void | Promise<void>
+  onExpand: () => void
+  rootRef?: (node: HTMLDivElement | null) => void
+  rootClassName?: string
+}
+
+function LockChip({
+  actionPending,
+  onAction,
+  onExpand,
+  rootRef,
+  rootClassName
+}: ChipProps): ReactElement {
+  const t = useTranslate()
+  return (
+    <div
+      ref={rootRef}
+      className={cn(
+        'absolute right-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium text-card-foreground shadow-xs',
+        rootClassName
+      )}
+    >
+      <Smartphone className="size-3 text-foreground" aria-hidden="true" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="px-1 font-medium"
+        onClick={onExpand}
+      >
+        {t('auto.components.terminal.pane.MobileDriverOverlay.c44659e09f', 'Phone driving')}
+      </Button>
+      <Button type="button" variant="default" size="xs" onClick={onAction} disabled={actionPending}>
+        {t('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}
+      </Button>
+    </div>
+  )
+}

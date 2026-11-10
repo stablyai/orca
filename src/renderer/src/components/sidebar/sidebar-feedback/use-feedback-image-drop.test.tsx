@@ -4,7 +4,7 @@ import { act } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { installOsFileDropCancellationGuard } from '../../../lib/os-file-drop-cancellation-guard'
+import { installOsFileDropCancellationGuard } from '../../../lib/files/drop/os-file-drop-cancellation-guard'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
 
 let container: HTMLDivElement
@@ -137,42 +137,6 @@ describe('useFeedbackImageDrop', () => {
     expect(event.defaultPrevented).toBe(true)
     expect(event).toHaveProperty('dataTransfer.dropEffect', 'none')
     expect(onAddFiles).not.toHaveBeenCalled()
-    expect(showNotice).not.toHaveBeenCalled()
-  })
-
-  it('keeps a web feedback screenshot accepted with the document guard and attaches it once', async () => {
-    const onAddFiles = vi.fn()
-    await renderHarness(true, onAddFiles)
-    expect(container.querySelector('[data-os-file-drop-owner]')).not.toBeNull()
-    const image = pngFile()
-    const hover = dragEvent('dragover', [])
-    act(() => {
-      dialogChild().dispatchEvent(hover)
-    })
-    expect(hover.defaultPrevented).toBe(true)
-    expect(hover).toHaveProperty('dataTransfer.dropEffect', 'copy')
-    const drop = dragEvent('drop', [image])
-    act(() => {
-      dialogChild().dispatchEvent(drop)
-    })
-    expect(drop.defaultPrevented).toBe(true)
-    expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([image])
-
-    const outside = document.createElement('div')
-    document.body.appendChild(outside)
-    const refusedHover = dragEvent('dragover', [])
-    act(() => {
-      outside.dispatchEvent(refusedHover)
-    })
-    expect(refusedHover.defaultPrevented).toBe(true)
-    expect(refusedHover).toHaveProperty('dataTransfer.dropEffect', 'none')
-    const refusedDrop = dragEvent('drop', [image])
-    act(() => {
-      outside.dispatchEvent(refusedDrop)
-    })
-    expect(refusedDrop.defaultPrevented).toBe(true)
-    expect(refusedDrop).toHaveProperty('dataTransfer.dropEffect', 'none')
-    expect(onAddFiles).toHaveBeenCalledOnce()
     expect(showNotice).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react'
 import { ClaudeIcon } from '@/components/status-bar/icons'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { BrowserPricingStoryboard } from './BrowserPricingStoryboard'
@@ -21,6 +21,7 @@ export function BrowserStoryboardWindow(props: {
   targets: BrowserVisualTargetRefs
   newBrowserShortcutLabel: string
 }): JSX.Element {
+  const t = useTranslate()
   const { state, targets } = props
   const { phase } = state
   const isIntroPhase =
@@ -59,16 +60,13 @@ export function BrowserStoryboardWindow(props: {
           <BrowserTab
             minimized={!isIntroPhase}
             icon={<TerminalGlyph />}
-            title={translate(
-              'auto.components.feature.wall.BrowserAnimatedVisual.04096318ab',
-              'Terminal 1'
-            )}
+            title={t('auto.components.feature.wall.BrowserAnimatedVisual.04096318ab', 'Terminal 1')}
           />
           {!isIntroPhase ? (
             <BrowserTab
               incoming
               icon={<GlobeGlyph />}
-              title={translate(
+              title={t(
                 'auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf',
                 'localhost:3000'
               )}
@@ -112,7 +110,7 @@ export function BrowserStoryboardWindow(props: {
               <GlobeGlyph />
             </span>
             <span className="text-[11.5px] text-popover-foreground">
-              {translate(
+              {t(
                 'auto.components.feature.wall.BrowserAnimatedVisual.0a2bd01c02',
                 'New Browser Tab'
               )}
@@ -142,21 +140,15 @@ export function BrowserStoryboardWindow(props: {
           ) : (
             <>
               <span className="truncate text-foreground">
-                {translate(
+                {t(
                   'auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf',
                   'localhost:3000'
                 )}
               </span>
               <span className="truncate text-muted-foreground transition-colors duration-200">
                 {showSignup
-                  ? translate(
-                      'auto.components.feature.wall.BrowserAnimatedVisual.f39be6ca14',
-                      '/signup'
-                    )
-                  : translate(
-                      'auto.components.feature.wall.BrowserAnimatedVisual.73bbb46073',
-                      '/pricing'
-                    )}
+                  ? t('auto.components.feature.wall.BrowserAnimatedVisual.f39be6ca14', '/signup')
+                  : t('auto.components.feature.wall.BrowserAnimatedVisual.73bbb46073', '/pricing')}
               </span>
             </>
           )}
@@ -194,7 +186,7 @@ export function BrowserStoryboardWindow(props: {
             style={{ left: state.annotateAnchor.left, top: state.annotateAnchor.top, width: 188 }}
           >
             <span className="block w-full shrink-0 truncate font-mono text-[9.5px] leading-none text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.feature.wall.BrowserAnimatedVisual.d8856b604a',
                 'div.pricing-grid > div.card.starter:nth-of-type(1) > a.cta'
               )}
@@ -208,7 +200,7 @@ export function BrowserStoryboardWindow(props: {
                 </>
               ) : (
                 <span className="text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.BrowserAnimatedVisual.3d2352f94b',
                     'Describe the change…'
                   )}
@@ -218,7 +210,7 @@ export function BrowserStoryboardWindow(props: {
             <div className="flex justify-end">
               <span
                 ref={targets.sendButtonRef}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.feature.wall.BrowserAnimatedVisual.0f8481e1a7',
                   'Send to Claude'
                 )}

@@ -5,7 +5,7 @@ import { selectExistingWorkerStartRun } from './worker-start-run-authority'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type {
   DispatchContextRow,
   RunRow,
@@ -14,7 +14,7 @@ import type {
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { createBoundRun } from '../runs/runs'
-import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/nested-worker-depth'
+import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/orchestration/workers/nested-worker-depth'
 import { readCustodyCohort } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 import { createHelperStartScope } from './helper-start-scope'
 import { requireOrchestrationAdmission } from '../../../../orchestration/addressing/orchestration-admission'

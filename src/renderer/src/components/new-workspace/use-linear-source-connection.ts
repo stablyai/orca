@@ -1,9 +1,7 @@
-import type {
-  LinearIssueData,
-  LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
+import type { LinearIssueData } from '@/store/slices/linear/linear-issue-read'
+import type { LinearIssueView } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { linearStatus } from '@/runtime/runtime-linear-client'
+import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import { useAppStore } from '@/store'
 import { getLinearStatusReadGeneration } from '@/store/slices/linear/linear-slice-request-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
@@ -11,11 +9,11 @@ import {
   linearReadAccountRejections,
   withoutLinearAccountWorkspaces
 } from '@/store/slices/linear/linear-cache'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { LinearConnectionStatus } from '../../../../shared/linear/workspace-types'
 
 type LinearSourceConnection = {

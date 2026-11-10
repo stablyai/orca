@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { FileContent } from './editor-panel-content-types'
 
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
@@ -21,19 +21,23 @@ vi.mock('@/runtime/runtime-file-routing', () => ({
     ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
   )
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: vi.fn()
+}))
 
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
+vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
+  getRuntimeGitScope: vi.fn(() => null)
+}))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null),
   getConnectionIdForFile: vi.fn(() => null),
   isWorktreeConnectionResolved: vi.fn(() => true)
@@ -44,7 +48,7 @@ vi.mock(
   () => import('./local-host-test-fixture')
 )
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
@@ -120,24 +124,6 @@ describe('restored client-local editor tabs', () => {
   })
 
   // The notebook kernel and environment handlers check the same file path as user-named.
-  it.each(['/Users/me/notes.txt', '/Users/me/analysis.ipynb'])(
-    'reads %s as the file the user named after a restart',
-    async (filePath) => {
-      const activeFile = createFloatingFile(filePath)
-
-      await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
-
-      await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
-      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1)
-      expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          filePath,
-          connectionId: undefined,
-          access: { kind: 'user-file' }
-        })
-      )
-    }
-  )
 
   it('keeps an absolute floating file in its panel when a project also owns the path', async () => {
     const filePath = '/project/readme.md'

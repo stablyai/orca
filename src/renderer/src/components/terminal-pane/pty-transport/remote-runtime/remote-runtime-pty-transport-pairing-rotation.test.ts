@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import type { PtyTransport } from '../pty-transport-types'
@@ -103,7 +103,7 @@ async function installRepairableMain(): Promise<{
   }
   publishCatalog()
   const { setRuntimeEnvironmentCatalogRefresher } =
-    await import('@/runtime/runtime-environment-pairing-refresh')
+    await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
   setRuntimeEnvironmentCatalogRefresher(async () => publishCatalog())
   const isStale = (request: RevisionedRequest): boolean =>
     request.expectedEnvironmentPairingRevision !== undefined &&
@@ -154,9 +154,9 @@ async function createCatalogStore() {
     toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
   }))
   const { createRuntimeStatusTestStore } =
-    await import('@/store/slices/runtime-status.test-fixture')
+    await import('@/store/slices/runtime-status/runtime-status.test-fixture')
   const { resetDeferredPeerChecksForTests } =
-    await import('@/store/slices/runtime-environment-peer-replacement')
+    await import('@/store/slices/runtime-status/runtime-environment-peer-replacement')
   resetDeferredPeerChecksForTests()
   return createRuntimeStatusTestStore()
 }
@@ -197,7 +197,7 @@ describe('remote runtime pane across a pairing rotation', () => {
 
   afterEach(async () => {
     const { setRuntimeEnvironmentCatalogRefresher } =
-      await import('@/runtime/runtime-environment-pairing-refresh')
+      await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
     setRuntimeEnvironmentCatalogRefresher(null)
   })
 

@@ -24,14 +24,14 @@ import {
   recordSelfWrite,
   SELF_WRITE_REMOTE_TTL_MS
 } from '../../external-changes/editor-self-write-registry'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import {
   markEditorSaveRefusal,
   settleEditorRecordAfterWrite,
   setModelExternalMutation,
   waitForModelBaselineRestamps
 } from './editor-save-rebaseline'
-import type { FileWriteResult } from '../../../../../../shared/file-write-disk-precondition'
+import type { FileWriteResult } from '../../../../../../shared/file-write/file-write-disk-precondition'
 import {
   editorSavePrecondition,
   editorSaveGrant,

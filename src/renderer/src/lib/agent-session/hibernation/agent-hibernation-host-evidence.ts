@@ -1,12 +1,12 @@
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   RuntimeTerminalAttention,
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../../../shared/runtime-terminal-contracts'
-import { resolveTerminalPtyOwner } from '../../terminal-worktree-route'
+import { resolveTerminalPtyOwner } from '../../workspace/ownership/terminal-worktree-route'
 import { toAgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
 import { getEntryTabId } from './agent-hibernation-pane-eligibility'
 

@@ -22,7 +22,7 @@ import {
 } from './declarative-renderer-support'
 import { readHostMessage } from './declarative-host-messages'
 import { createPanelContext } from './declarative-panel-context'
-import { createDeclarativePersistence } from './declarative-storage-sync'
+import { createHydratedPersistence } from './declarative-hydration-persistence'
 
 export type { OrcaWireNode } from './declarative-evaluate'
 export type {
@@ -187,10 +187,11 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     }
   }
 
-  const persistence = createDeclarativePersistence({
+  const { persistence, hydrate } = createHydratedPersistence({
     bridge,
     report,
-    post: (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document, entries })
+    post: (fields) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document, ...fields }),
+    hydratePanel: panel.hydrate
   })
   const flushPersist = persistence.flush
 
@@ -198,7 +199,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     ? [
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.event, dispatchEvent),
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.ack, acknowledge),
-        bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, panel.hydrate),
+        bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, hydrate),
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.visibility, panel.setVisibility),
         ...actSnapshotSubscriptions(bridge.on.bind(bridge), document),
         bridge.on('theme', (payload) => {
@@ -272,7 +273,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     mounted: () => component !== null,
     dispatchEvent,
     acknowledge,
-    hydrate: panel.hydrate,
+    hydrate,
     rerender: () => render(),
     flush() {
       if (scheduled) {

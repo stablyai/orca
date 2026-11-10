@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { HostActivityReadModel } from './host-activity-read-model'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import type { RpcResponse } from '../transport/types'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { agentActivitySubjectKey } from '../../../src/shared/agent-activity-read-state'
 
 const a = {

@@ -5,10 +5,13 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getRuntimeTargetHostId, type HostRoute } from '../../../../runtime/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import {
+  getRuntimeTargetHostId,
+  type HostRoute
+} from '../../../../runtime/rpc/targets/runtime-client-target'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 import {
   lineageStoreKeyOfTarget,

@@ -1,7 +1,7 @@
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import type { AppState } from '@/store/types'
 import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
-import { resolveOwner } from './resolve-owner'
+import { resolveOwner } from './workspace/ownership/resolve-owner'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."

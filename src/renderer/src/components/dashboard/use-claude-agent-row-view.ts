@@ -3,11 +3,11 @@ import type { DashboardAgentRow } from './useDashboardData'
 import { useFocusedAgentPaneKey } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   readClaudeAgentViews,
   subscribeClaudeAgentViews
-} from '@/runtime/claude-agent-view-observations'
+} from '@/runtime/provider-accounts/observations/claude-agent-view-observations'
 
 export function useClaudeAgentRowView(agent: DashboardAgentRow) {
   const paneKey = agent.activationPaneKey ?? agent.paneKey

@@ -1,5 +1,5 @@
-import type { SearchResult } from '../../../../../../shared/code-search-types'
-import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
+import type { SearchResult } from '../../../../../../shared/file-search/code-search-types'
+import type { FileSearchResultOwner } from '@/lib/files/search/file-search-result-owner'
 
 export type FileSearchWorktreeState = {
   query: string

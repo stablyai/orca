@@ -9,8 +9,8 @@ import {
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -238,7 +238,8 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('keeps a mounted HUB mirror alive when the old stream ends before the replacement snapshot', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+    const handleEvents =
+      await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
     const onPtyExit = vi.fn()
     const onPtySpawn = vi.fn()
     const onPtyRebind = vi.fn()

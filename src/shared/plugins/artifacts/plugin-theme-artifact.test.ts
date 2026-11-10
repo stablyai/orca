@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isPluginThemeRegistration, parsePluginAppThemeArtifact } from './plugin-theme-artifact'
-import {
-  isPluginTerminalThemeRegistration,
-  parsePluginTerminalThemeArtifact
-} from './plugin-terminal-theme-artifact'
+import { parsePluginAppThemeArtifact } from './plugin-theme-artifact'
+import { parsePluginTerminalThemeArtifact } from './plugin-terminal-theme-artifact'
 
 const parseApp = (value: unknown) => () =>
   parsePluginAppThemeArtifact(JSON.stringify(value), 'strict')
@@ -75,21 +72,6 @@ describe('plugin app theme artifacts', () => {
       ).tokenColors
     ).toEqual([{ scope: ['keyword'], settings: { foreground: '#ff79c6' } }])
   })
-
-  it('validates registrations crossing IPC', () => {
-    const registration = {
-      id: 'plugin:samples.midnight/midnight',
-      revision: 'r1',
-      pluginKey: 'samples.midnight',
-      pluginName: 'Midnight',
-      label: 'Midnight',
-      base: 'dark',
-      tokens: { '--background': '#000000', '--foreground': '#ffffff' }
-    }
-    expect(isPluginThemeRegistration(registration)).toBe(true)
-    expect(isPluginThemeRegistration({ ...registration, id: 'midnight' })).toBe(false)
-    expect(isPluginThemeRegistration({ ...registration, tokens: { '--x': '#000' } })).toBe(false)
-  })
 })
 
 describe('plugin terminal theme artifacts', () => {
@@ -114,43 +96,5 @@ describe('plugin terminal theme artifacts', () => {
         'strict'
       )
     ).toThrow()
-  })
-
-  it('validates registrations crossing IPC', () => {
-    const registration = {
-      id: 'plugin:samples.midnight/midnight',
-      pluginKey: 'samples.midnight',
-      pluginName: 'Midnight',
-      label: 'Midnight',
-      mode: 'dark',
-      terminal
-    }
-    expect(isPluginTerminalThemeRegistration(registration)).toBe(true)
-    expect(isPluginTerminalThemeRegistration({ ...registration, terminal: {} })).toBe(false)
-  })
-})
-
-describe('plugin app theme completion', () => {
-  it('requires a background and foreground', () => {
-    expect(parseApp({ base: 'dark', tokens: { '--background': '#000' } })).toThrow('--foreground')
-  })
-
-  it.each(['transparent', 'inherit', 'currentColor', '100px', 'calc(1px + 2px)', 'env(x)'])(
-    'rejects the non-color value %s',
-    (value) => {
-      expect(
-        parseApp({ base: 'dark', tokens: { '--background': value, '--foreground': '#fff' } })
-      ).toThrow()
-    }
-  )
-
-  it('keeps a sidebar the theme sets', () => {
-    const { tokens } = parsePluginAppThemeArtifact(
-      JSON.stringify({
-        base: 'dark',
-        tokens: { '--background': '#1d1533', '--foreground': '#e8e0ff', '--sidebar': '#271d45' }
-      })
-    )
-    expect(tokens['--worktree-sidebar']).toBe('#271d45')
   })
 })

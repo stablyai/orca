@@ -1,4 +1,4 @@
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store'
 
 // Share visibility policy between Settings nav/page and reject another runtime’s cached status.

@@ -41,7 +41,6 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -65,8 +64,9 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
 
     it('keeps split hidden-to-visible Codex stateful queries behind snapshot restore', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -121,8 +121,9 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
 
     it('preserves live agent cursor and focus modes on hidden-to-visible snapshot restore', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -198,8 +199,9 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
 
     it('lets fresh host shell proof outrank stale live-agent metadata on reveal', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -266,8 +268,9 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
 
     it('preserves current behavior when a snapshot has no host ownership proof', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -330,8 +333,9 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
 
     it('keeps a live alternate-screen pane interactive when a legacy snapshot omits its mode flag', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -390,8 +394,9 @@ export function registerPtyConnectionHiddenQuerySnapshotAuthorityTests(): void {
 
     it('grounds a stale alternate-screen snapshot when the host proves shell ownership', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks14 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks14 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(

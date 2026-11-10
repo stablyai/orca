@@ -1,6 +1,9 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { resolveOwner, runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { hostRouteForAuthority, type HostRoute } from '@/runtime/runtime-client-target'
+import {
+  resolveOwner,
+  runtimeTargetForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
+import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AppState } from '../../../types'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'

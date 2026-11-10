@@ -4,16 +4,18 @@ import type {
 } from '../../../../../shared/bundled-skill-plan'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../../shared/skills'
 
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import {
   type OrchestrationSkillAgentStatus,
   getOrchestrationSkillAgentStatuses,
   sortOrchestrationAgents
-} from '@/lib/orchestration-skill-coverage'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+} from '@/lib/skills/orchestration-skill-coverage'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type AgentCoverageStatus = OrchestrationSkillAgentStatus & { needsAttention?: boolean }
 
@@ -26,29 +28,32 @@ function skillReadFailed(observed: BundledSkillObserved | undefined): boolean {
   )
 }
 
-function getAgentCoverageSummary(props: {
-  loading: boolean
-  totalCount: number
-  installedCount: number
-  fullCoverage: boolean
-  noCoverage: boolean
-}): string {
+function getAgentCoverageSummary(
+  props: {
+    loading: boolean
+    totalCount: number
+    installedCount: number
+    fullCoverage: boolean
+    noCoverage: boolean
+  },
+  t: Translate = translate
+): string {
   const { loading, totalCount, installedCount, fullCoverage, noCoverage } = props
 
   if (loading) {
-    return translate(
+    return t(
       'auto.components.settings.OrchestrationSkillAgentCoverage.checking',
       'Checking installed agents and skill paths…'
     )
   }
   if (totalCount === 0) {
-    return translate(
+    return t(
       'auto.components.settings.OrchestrationSkillAgentCoverage.noAgents',
       'No agent CLIs detected on PATH. Install agents in Settings → Agents, then re-check.'
     )
   }
   if (fullCoverage) {
-    return translate(
+    return t(
       'auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage',
       'All {{value0}} detected agents have the skill.',
       {
@@ -59,12 +64,12 @@ function getAgentCoverageSummary(props: {
     )
   }
   if (noCoverage) {
-    return translate(
+    return t(
       'auto.components.settings.OrchestrationSkillAgentCoverage.noCoverage',
       'Install the skill above, then re-check.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.OrchestrationSkillAgentCoverage.partialCoverage',
     '{{value0}} of {{value1}} detected agents have the skill.',
     { value0: installedCount, value1: totalCount }
@@ -72,6 +77,7 @@ function getAgentCoverageSummary(props: {
 }
 
 function AgentCoverageChip({ status }: { status: AgentCoverageStatus }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span
       className={cn(
@@ -90,16 +96,10 @@ function AgentCoverageChip({ status }: { status: AgentCoverageStatus }): React.J
         )}
       >
         {status.needsAttention
-          ? translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+          ? t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
           : status.installed
-            ? translate(
-                'auto.components.settings.OrchestrationSkillAgentCoverage.1e8f8d8fae',
-                'Ready'
-              )
-            : translate(
-                'auto.components.settings.OrchestrationSkillAgentCoverage.ffe13e36fb',
-                'Missing'
-              )}
+            ? t('auto.components.settings.OrchestrationSkillAgentCoverage.1e8f8d8fae', 'Ready')
+            : t('auto.components.settings.OrchestrationSkillAgentCoverage.ffe13e36fb', 'Missing')}
       </span>
     </span>
   )
@@ -113,6 +113,7 @@ export function OrchestrationSkillAgentCoverage(props: {
   embedded?: boolean
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const { skills, sources, loading: skillsLoading, embedded = false, className } = props
   const { detectedIds, isLoading: agentsLoading } = useDetectedAgents(
     props.plan ? undefined : { kind: 'local' }
@@ -152,13 +153,16 @@ export function OrchestrationSkillAgentCoverage(props: {
   const fullCoverage = !loading && totalCount > 0 && installedCount === totalCount
   const noCoverage = !loading && totalCount > 0 && installedCount === 0
   const showAgentChips = !loading && totalCount > 0 && !fullCoverage
-  const summary = getAgentCoverageSummary({
-    loading,
-    totalCount,
-    installedCount,
-    fullCoverage,
-    noCoverage
-  })
+  const summary = getAgentCoverageSummary(
+    {
+      loading,
+      totalCount,
+      installedCount,
+      fullCoverage,
+      noCoverage
+    },
+    t
+  )
 
   return (
     <div
@@ -169,7 +173,7 @@ export function OrchestrationSkillAgentCoverage(props: {
     >
       <div className="space-y-1">
         <h3 className="text-sm font-medium text-foreground">
-          {translate(
+          {t(
             'auto.components.settings.OrchestrationSkillAgentCoverage.6dec5ce2d2',
             'Agent coverage'
           )}

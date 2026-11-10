@@ -1,4 +1,4 @@
-import type { ManagedBrowserProfileOwner } from '../../../../shared/browser-profile-scope'
+import type { ManagedBrowserProfileOwner } from '../../../../shared/browser/profiles/browser-profile-scope'
 
 type ManagedBrowserProfileDeleter = (owner: ManagedBrowserProfileOwner) => unknown
 

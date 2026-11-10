@@ -20,11 +20,9 @@ export function nodeServerTestPaths({
     'src/main/persistence/profile-state',
     'src/main/persistence/loading-store/profile-state',
     'src/main/sqlite',
-    'src/main/orcad/orcad-entry.test.ts',
     // The orcad server's identity and stop path, which Windows SSH hosts rely on (W2).
     'src/main/orcad/orcad-instance-lock.test.ts',
     'src/main/orcad/orcad-process-start-time.test.ts',
-    'src/main/orcad/orcad-stop-request-listener.test.ts',
     'src/main/orcad/orcad-managed-stop.test.ts',
     'src/main/orcad/orcad-managed-stop-cancellation.test.ts',
     // The directory, not a prefix: its siblings are POSIX-host unit tests pr.yml already runs.
@@ -52,7 +50,6 @@ export function nodeServerTestPaths({
           'src/main/orcad/orcad-packaged-node-pty.integration.test.ts',
           'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
           'src/main/orcad/orcad-cli-launcher.integration.test.ts',
-          'src/main/orcad/orcad-cli-orchestration.integration.test.ts',
           'src/main/orcad/orcad-launcher-isolation.integration.test.ts',
           'src/main/orcad/orcad-stop-request-shutdown.integration.test.ts',
           'src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts',

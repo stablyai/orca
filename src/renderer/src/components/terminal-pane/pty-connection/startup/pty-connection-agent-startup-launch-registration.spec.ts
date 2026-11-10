@@ -35,7 +35,6 @@ export function registerPtyConnectionNonAgentLaunchRegistrationTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -60,8 +59,9 @@ export function registerPtyConnectionNonAgentLaunchRegistrationTests(): void {
 
     it('clears stale launch config when a pane consumes a non-agent startup command', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -92,7 +92,6 @@ export function registerPtyConnectionUnboundAgentLaunchRegistrationTests(): void
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -118,8 +117,9 @@ export function registerPtyConnectionUnboundAgentLaunchRegistrationTests(): void
     it('clears launch config when an agent startup spawn produces no PTY', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)

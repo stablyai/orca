@@ -163,27 +163,18 @@ async function continueThroughOptionalSetupToNotifications(page: Page): Promise<
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 }
 
-async function continueFromNotificationsToAddProject(page: Page): Promise<void> {
+async function completeOnboardingIntoHome(page: Page): Promise<void> {
   await continueOnboarding(page)
-  const taskSourcesVisible = await page
-    .getByRole('heading', { name: TASK_SOURCES_HEADING })
-    .waitFor({ state: 'visible', timeout: 1_000 })
-    .then(() => true)
-    .catch(() => false)
-  if (taskSourcesVisible) {
-    await continueOnboarding(page)
-  }
-  const windowsTerminalVisible = await page
-    .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
-    .waitFor({ state: 'visible', timeout: 1_000 })
-    .then(() => true)
-    .catch(() => false)
-  if (windowsTerminalVisible) {
-    await continueOnboarding(page)
-  }
-  await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible({
-    timeout: 15_000
-  })
+  await expect(page.locator('[data-onboarding-overlay]')).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: /Add a project/i })).toHaveCount(0)
+}
+
+// Onboarding launches the chosen agent in the fresh ~ workspace, whose first launch asks once.
+async function answerAgentFolderTrustPrompt(page: Page, repoName: string): Promise<void> {
+  const prompt = page.getByRole('dialog', { name: `Trust ${repoName} for agents?` })
+  await expect(prompt).toBeVisible({ timeout: 15_000 })
+  await prompt.getByRole('button', { name: 'Let agents ask' }).click()
+  await expect(prompt).toBeHidden()
 }
 
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
@@ -371,7 +362,11 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
   })
   const newTabStep = page.getByRole('dialog', { name: 'New agents start here', exact: true })
   await expect(newTabStep).toBeVisible()
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await page
+    .locator(
+      '[data-workspace-surface-id][aria-hidden="false"] [data-contextual-tour-target="tab-create-menu"]'
+    )
+    .click()
   await expect(page.getByRole('menu')).toBeVisible()
   await expect(newTabStep).toBeHidden()
   await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeHidden()
@@ -384,7 +379,11 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
   await expect(splitStep).toBeVisible()
   await splitStep.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(newTabStep).toBeVisible()
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await page
+    .locator(
+      '[data-workspace-surface-id][aria-hidden="false"] [data-contextual-tour-target="tab-create-menu"]'
+    )
+    .click()
   await expect(newTabStep).toBeHidden()
   await page.getByRole('menuitem', { name: /^New Terminal/ }).click()
   await expect(page.getByRole('menu')).toBeHidden()
@@ -462,7 +461,10 @@ test.describe('New-user golden core flow', () => {
     await continueThroughOptionalSetupToNotifications(orcaPage)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await chooseNotificationSound(orcaPage)
-    await continueFromNotificationsToAddProject(orcaPage)
+    await completeOnboardingIntoHome(orcaPage)
+    await answerAgentFolderTrustPrompt(orcaPage, '~')
+    await orcaPage.getByRole('button', { name: 'Add project', exact: true }).click()
+    await expect(orcaPage.getByRole('dialog', { name: /Add a project/i })).toBeVisible()
 
     const repoPath = await createGitRepo('orca-e2e-golden-new-', 'golden-new-project')
     await chooseFolderInNativeDialog(electronApp, repoPath)

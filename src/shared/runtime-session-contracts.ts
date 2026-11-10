@@ -17,11 +17,9 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
-import type { CliStatusCaller } from './orchestration-caller-status'
+import type { CliStatusCaller } from './orchestration/orchestration-caller-status'
 import type { RuntimeHostDescriptor } from './remote-runtime/host-status/runtime-host-descriptor'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-
-export type * from './runtime-mobile-session-tab-contracts'
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
@@ -35,8 +33,6 @@ export type RuntimeTerminalDriverState =
   | { kind: 'idle' }
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
-
-export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
 
