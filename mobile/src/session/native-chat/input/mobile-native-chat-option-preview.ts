@@ -24,7 +24,7 @@ export function prepareOptionPreview(preview: string): { lines: string[]; column
           text.push(character)
           if (!/\p{Mark}/u.test(character) && character !== '\u200d' && character !== '\ufe0f') {
             column +=
-              /[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff01-\uff60\uffe0-\uffe6\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(
+              /[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff01-\uff60\uffe0-\uffe6\u{20000}-\u{3fffd}\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(
                 character
               )
                 ? 2
