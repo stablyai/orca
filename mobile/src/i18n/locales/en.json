@@ -5154,6 +5154,10 @@
         "create": "Nothing was created, and you weren’t charged.",
         "existing": "Your files are safe."
       }
+    },
+    "wake": {
+      "slowQueued": "Taking longer than usual. Your files are safe. Your prompt sends as soon as it’s awake.",
+      "slow": "Taking longer than usual. Your files are safe."
     }
   }
 }

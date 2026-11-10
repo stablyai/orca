@@ -4,6 +4,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { CloudPhaseSteps } from './CloudPhaseSteps'
 import { CloudStatusDot } from './CloudStatusDot'
+import { CloudWakeSlowNote } from './CloudWakeSlowNote'
 import type { CloudWorkspace } from './cloud-control-plane-client'
 import { cloudStatusLabel, formatCloudCost } from './cloud-workspace-display'
 import { statusSentence } from './cloud-workspace-copy'
@@ -60,11 +61,20 @@ export function CloudStatusCard(props: {
         </Text>
       </View>
       {active ? (
-        <CloudPhaseSteps
-          phase={run.kind === 'attaching' ? run.phase : 'delivering'}
-          since={run.startedAt}
-          delivering={run.kind === 'delivering' || props.promptsWaiting}
-        />
+        <>
+          <CloudPhaseSteps
+            phase={run.kind === 'attaching' ? run.phase : 'delivering'}
+            since={run.startedAt}
+            delivering={run.kind === 'delivering' || props.promptsWaiting}
+          />
+          {/* Counted from the run's start, which is also the wake step's start. */}
+          <CloudWakeSlowNote
+            key={run.startedAt}
+            since={run.startedAt}
+            waking={run.kind === 'attaching' && run.phase === 'waking'}
+            promptQueued={props.promptsWaiting}
+          />
+        </>
       ) : notConnected ? null : (
         // Not connected: the error banner right below says it, once.
         <Text style={styles.statusLine}>{statusSentence(workspace, t, props.uptimeMs)}</Text>
