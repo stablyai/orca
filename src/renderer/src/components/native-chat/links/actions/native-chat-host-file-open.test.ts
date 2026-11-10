@@ -5,10 +5,20 @@ import {
   flushDoubleRaf,
   installTerminalLinkTestEnvironment
 } from '../../../terminal-pane/links/terminal-link-handlers-test-harness'
-import { nativeChatFileOpenDeps } from './native-chat-link-target-actions'
+import {
+  nativeChatFileLinkActions,
+  nativeChatFileOpenDeps
+} from './native-chat-link-target-actions'
 
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
+const {
+  storeState,
+  statMock,
+  openFileMock,
+  openFilePathMock,
+  runtimeEnvironmentCallMock,
+  revealInExplorerMock
+} = doubles
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
@@ -69,3 +79,38 @@ it.each([false, true])(
     })
   }
 )
+
+it('reveals a folder below a paired workspace in the file explorer', async () => {
+  const folderPath = '/srv/repo/docs'
+  runtimeEnvironmentCallMock.mockResolvedValue({
+    id: 'resolve',
+    ok: true,
+    result: {
+      worktree: context.worktreeId,
+      relativePath: 'docs',
+      absolutePath: folderPath,
+      exists: true,
+      isDirectory: true
+    },
+    _meta: { runtimeId: 'remote-runtime' }
+  })
+  openDetectedFilePath(
+    folderPath,
+    null,
+    null,
+    nativeChatFileOpenDeps({ absolutePath: folderPath, line: null, column: null }, context)
+  )
+  await flushDoubleRaf()
+
+  // A folder below the root has no workspace to switch to; it must still reveal visibly.
+  expect(revealInExplorerMock).toHaveBeenCalledWith(context.worktreeId, folderPath)
+  expect(openFilePathMock).not.toHaveBeenCalled()
+})
+
+it('labels a trailing-separator folder link as Open folder', () => {
+  const actions = nativeChatFileLinkActions(
+    { absolutePath: '/srv/repo/docs', line: null, column: null, isDirectoryHint: true },
+    context
+  )
+  expect(actions.primary.label).toBe('Open folder')
+})
