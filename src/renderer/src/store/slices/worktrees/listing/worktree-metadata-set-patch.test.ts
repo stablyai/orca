@@ -65,10 +65,18 @@ describe('addressed workspace metadata records', () => {
       patch: null,
       applied: false
     })
+
+    // A second titled link the row doesn't list yet still needs a listing.
+    const twoLinks = record(3, 'e1')
+    twoLinks.row.linkedItems = [
+      ...issue('Fix login'),
+      { provider: 'github', type: 'issue', number: 43, title: 'Fix logout' }
+    ]
+    expect(patchWorktreeMetadataSet(state(), twoLinks, local).applied).toBe(false)
   })
 
   it('keeps a shown title through a listing that predates it, then lists the repo afresh', () => {
-    noteWorkspaceMetadataRecord('local', 'e2', 7, 'repo-1')
+    noteWorkspaceMetadataRecord('local', 'e2', 7, 'repo-1', 'local', () => true)
     const shown = {
       ...state(),
       ...patchWorktreeMetadataSet(state(), record(7, 'e2', 'local'), local).patch
@@ -104,8 +112,11 @@ describe('addressed workspace metadata records', () => {
     const covering = listingMetadataCoverage(shown, 'repo-1', 'local', listing(7))
     expect(covering.refresh.result.worktrees[0].linkedItems).toEqual(issue())
     covering.settle(fetchWorktrees)
-    // Settled: an older listing no longer owes anything and passes through untouched.
-    const after = listing(6)
-    expect(listingMetadataCoverage(shown, 'repo-1', 'local', after).refresh).toBe(after)
+    // A listing that read before record 7 and lands after the covering one still keeps the title,
+    // and asks for nothing more.
+    const late = listingMetadataCoverage(shown, 'repo-1', 'local', listing(6))
+    expect(late.refresh.result.worktrees[0].linkedItems).toEqual(issue('Fix login'))
+    late.settle(fetchWorktrees)
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
   })
 })

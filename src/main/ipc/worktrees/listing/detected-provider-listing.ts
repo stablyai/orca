@@ -84,7 +84,8 @@ export async function listDetectedWorktreesForCapturedRepo(
           authoritative: false,
           source: 'metadata-fallback',
           worktrees: [],
-          catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+          catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+          ...(workspaceMetadata ? { workspaceMetadata } : {})
         }
       }
       return {
@@ -92,6 +93,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {}),
         worktrees: projectWorktreeLineageWithHostPeers(
           store,
           repo,
@@ -117,7 +119,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: false,
         source: 'metadata-fallback',
         worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees),
-        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     const pendingAtScan = snapshotPendingWorktreeRemovals()
@@ -149,7 +152,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: false,
         source: 'metadata-fallback',
         worktrees: [],
-        catalogVersion: localWorktreeCatalogVersionAt(scan.generation)
+        catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     if (freshScan) {
@@ -223,7 +227,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       worktrees: [],
       unavailableReason,
       failureKind,
-      catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+      catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+      ...(workspaceMetadata ? { workspaceMetadata } : {})
     }
   }
 }

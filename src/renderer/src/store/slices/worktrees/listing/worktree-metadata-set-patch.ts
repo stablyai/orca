@@ -54,27 +54,30 @@ export function patchWorktreeMetadataSet(
   if (!rows || index === -1) {
     return { patch: null, applied: titles.size === 0 }
   }
-  let present = false
+  const seen = new Set<string>()
   let filled = false
   const linkedItems = getWorkspaceAttachments(rows[index]).map((item) => {
-    const title = titles.get(getWorkspaceReferenceIdentity(item))
+    const identity = getWorkspaceReferenceIdentity(item)
+    const title = titles.get(identity)
     if (!title) {
       return item
     }
-    present = true
+    seen.add(identity)
     if (item.title?.trim()) {
       return item
     }
     filled = true
     return { ...item, title }
   })
+  // Every titled link must be listed here; one that isn't needs a listing that includes it.
+  const applied = seen.size === titles.size
   if (!filled) {
-    return { patch: null, applied: present }
+    return { patch: null, applied }
   }
   const next = rows.slice()
   next[index] = { ...rows[index], linkedItems }
   return {
     patch: { worktreesByRepo: { ...selectWorktreesByRepo(state), [set.repoId]: next } },
-    applied: true
+    applied
   }
 }
