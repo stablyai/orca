@@ -30,6 +30,7 @@ type RecordStoreSlot = {
   opened: Promise<OpenedAgentSessionRecordStore>
   /** Nonawaiting readers can inspect the store only after open resolves. */
   store?: AgentSessionRecordStore
+  database?: JournalSqlDatabase
   retire?: (opened: OpenedAgentSessionRecordStore | null) => Promise<void>
   retiring?: Promise<void>
 }
@@ -67,8 +68,12 @@ export function openAgentSessionRecordStoreOnce(
     stateDirectory: location.stateDirectory,
     opened: openRecordStore(location).then(
       (opened) => {
+        slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store
+          void opened.journalDatabase.startMaintenance()
+        } else {
+          opened.journalDatabase.stopMaintenance()
         }
         if (opening === slot && !slot.retire) {
           sessionCrewChanges.notify(new Set(['topology', 'records']))
@@ -126,6 +131,7 @@ export function retireAgentSessionRecordStore(
   }
   if (!slot.retire) {
     slot.retire = retire
+    slot.database?.stopMaintenance()
     slot.store = undefined
     sessionCrewChanges.notify(new Set(['topology', 'records']))
   }

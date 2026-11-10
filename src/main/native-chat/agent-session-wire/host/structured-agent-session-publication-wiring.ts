@@ -13,6 +13,7 @@ export function createStructuredAgentSessionPublicationWiring(input: {
   client: () => StructuredAgentSessionClientDelivery
   delivery: () => StructuredAgentSessionConversationDelivery
   opened: (id: string) => void
+  workChanged?: (id: string) => void
   logger: () => StructuredAgentSessionLogger
   now: () => number
   observeRows: () => StructuredAgentSessionHostDeps['observeCommittedRows']
@@ -34,6 +35,7 @@ export function createStructuredAgentSessionPublicationWiring(input: {
     deliverSettleEdge: (id, journal) => input.delivery().afterSettleEdge(id, journal),
     logger: deferredStructuredAgentSessionLogger(input.logger),
     onOpened: input.opened,
+    workChanged: input.workChanged,
     now: input.now
   })
 }

@@ -92,6 +92,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     )
   }
   const { close } = child
+  session.workChanged?.()
   const quitCuts =
     'quit' in ending && ending.quit ? await runningRootTurnItemId(session.journal) : null
   try {

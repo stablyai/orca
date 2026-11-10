@@ -1,3 +1,9 @@
+import {
+  sameProviderChild,
+  heldProviderChildReader
+} from './structured-agent-session-provider-child'
+import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { createRestartReconciler } from '../recovery/structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionDeliveryOrder } from '../delivery/structured-agent-session-delivery-order'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
@@ -7,14 +13,13 @@ import {
   type DeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionSinkBarrier
 } from '../journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionHostDeps
+} from './structured-agent-session-host-types'
 import { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
-import {
-  heldProviderChildReader,
-  type ProviderChildSessions
-} from './structured-agent-session-provider-child'
 import { resolveStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-resolution'
 import { recordAgentSessionStartup } from '../../../observability/agent-session-instrumentation'
 import { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
@@ -28,8 +33,8 @@ import {
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
   readonly deliveryOrder = new StructuredAgentSessionDeliveryOrder()
-  readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
-  readonly startFlights = new StructuredAgentSessionStartFlights()
+  readonly acquireAborts: StructuredAgentSessionAcquireAborts
+  readonly startFlights: StructuredAgentSessionStartFlights
   readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   readonly startupAttempts: StructuredAgentSessionStartupAttempts
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
@@ -38,11 +43,15 @@ export class StructuredAgentSessionHostRuntimeState {
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
     /** Held children renew without PID probes. */
-    sessions: ProviderChildSessions,
+    private readonly sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>,
     onEventSinkFailure?: (sessionId: string, error: unknown) => void,
     /** Expire published starts; still-acquiring attempts abort here. */
-    onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void
+    onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void,
+    private readonly deliveryActive?: (sessionId: string) => boolean,
+    private readonly childWorkOpen?: (sessionId: string) => boolean
   ) {
+    this.acquireAborts = new StructuredAgentSessionAcquireAborts((id) => this.refreshActivity(id))
+    this.startFlights = new StructuredAgentSessionStartFlights((id) => this.refreshActivity(id))
     this.onEventSinkFailure = onEventSinkFailure
     this.startupAttempts = new StructuredAgentSessionStartupAttempts({
       ...(deps.startupLimits ? { limits: deps.startupLimits } : {}),
@@ -81,8 +90,92 @@ export class StructuredAgentSessionHostRuntimeState {
     })
   }
 
+  hasDeliveryWork(sessionId: string): boolean {
+    return this.startFlights.has(sessionId) || this.deliveryActive?.(sessionId) === true
+  }
+
+  private executing(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    const child = session?.child
+    return (
+      this.hasDeliveryWork(sessionId) ||
+      this.acquireAborts.has(sessionId) ||
+      this.hasPendingIngress(sessionId) ||
+      (!!child &&
+        (child.phase === 'starting' ||
+          !!child.close ||
+          (!!session?.lastEndedChild && sameProviderChild(session.lastEndedChild, child))))
+    )
+  }
+
+  /** Current owners cover ingress synchronously; the named reader covers gaps between turn writes. */
+  refreshActivity(sessionId: string): void {
+    const database = this.deps.journalDatabase
+    if (this.executing(sessionId)) {
+      database.setSessionActive(sessionId, true)
+      return
+    }
+    const session = this.sessions.get(sessionId)
+    const child = session?.child
+    if (!session || !child || database.isClosed) {
+      database.setSessionActive(sessionId, false)
+      return
+    }
+    const release = database.holdActivity()
+    database.setSessionActive(sessionId, false)
+    const cursor = session.journal.cursor()
+    const physical = session.journal.physicalCursor()
+    const revision = session.operationalRevision
+    const current = () =>
+      this.sessions.get(sessionId) === session &&
+      session.child === child &&
+      sameJournalCursor(cursor, session.journal.cursor()) &&
+      sameJournalCursor(physical, session.journal.physicalCursor()) &&
+      revision === session.operationalRevision
+    void readHostStructuredAgentSessionWork(
+      { store: this.deps.store, sessions: this.sessions },
+      sessionId,
+      { kind: 'child-work' }
+    )
+      .then(
+        (work) => {
+          if (!current()) {
+            this.refreshActivity(sessionId)
+            return
+          }
+          database.setSessionActive(
+            sessionId,
+            this.executing(sessionId) ||
+              work.activeTurn ||
+              work.actionablePrompt ||
+              this.childWorkOpen?.(sessionId) === true
+          )
+        },
+        (error: unknown) => {
+          if (!current()) {
+            this.refreshActivity(sessionId)
+            return
+          }
+          database.setSessionActive(sessionId, this.executing(sessionId))
+          if (database.isClosed || session.journal.isClosed) {
+            return
+          }
+          this.deps.logger.warn('reading live chat activity failed', {
+            scope: 'journal-database-activity',
+            sessionId,
+            error
+          })
+        }
+      )
+      .finally(release)
+  }
+
   startLeaseRenewal(): void {
     this.leaseRenewer.start()
+  }
+
+  hasPendingIngress(sessionId: string): boolean {
+    return (this.eventSinks.get(sessionId)?.state().queuedOperations ?? 0) > 0
   }
 
   stopLeaseRenewal(): Promise<void> {
@@ -116,6 +209,7 @@ export class StructuredAgentSessionHostRuntimeState {
       createDeferredStructuredAgentSessionEventSink({
         sessionId,
         logger: this.deps.logger,
+        onWorkChanged: () => this.refreshActivity(sessionId),
         onFailed: (error) => {
           // Attempt sinks cannot force down the session’s adopted provider.
           if (this.eventSinks.get(sessionId) === minted) {
@@ -132,10 +226,12 @@ export class StructuredAgentSessionHostRuntimeState {
       replaced.close()
     }
     this.eventSinks.set(sessionId, sink)
+    this.refreshActivity(sessionId)
   }
 
   discardEventSink(sessionId: string): void {
     this.eventSinks.delete(sessionId)
+    this.refreshActivity(sessionId)
   }
 
   flushEventSink(sessionId: string): Promise<void> {

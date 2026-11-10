@@ -105,6 +105,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
   })
   const loop = new StructuredAgentSessionDeliveryLoop({
+    activityChanged: (id) => sessions.get(id)?.workChanged?.(),
     sessions,
     adapter: deps.adapter,
     agents: deps.agents,

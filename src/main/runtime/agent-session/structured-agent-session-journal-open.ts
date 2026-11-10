@@ -22,7 +22,7 @@ function logOpenFailureOnce(logger: StructuredAgentSessionLogger, error: unknown
 }
 
 /** Record the journal refusal for the gate and throw; the next install retries.
- *  Installation attaches activity before starting maintenance.
+ *  The successful record-store slot starts maintenance after installation and store construction.
  *  A load failure closes the opened owner through `closeFailedOpen` when one retains failed closes. */
 export async function openStructuredAgentSessionSqlJournalDatabase(
   args: {

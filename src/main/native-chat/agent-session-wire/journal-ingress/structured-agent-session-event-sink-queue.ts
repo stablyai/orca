@@ -133,6 +133,7 @@ export class StructuredAgentSessionSinkQueue {
     this.target = target
     this.releaseSettledTurns?.()
     this.releaseSettledTurns = target.observeSettledTurns?.((turnItemIds) => {
+      this.deps.onWorkChanged?.()
       for (const listener of this.settledTurnListeners) {
         listener(turnItemIds)
       }
@@ -204,11 +205,7 @@ export class StructuredAgentSessionSinkQueue {
       this.queuedOperations +
       (operation.operations ?? 1) -
       (replaceAt >= 0 ? (replaced?.operations ?? 1) : 0)
-    if (
-      !this.hasBoundReadingControl &&
-      (queuedBytes > drain.MAX_PRE_CONTROL_BYTES ||
-        queuedOperations > drain.MAX_PRE_CONTROL_OPERATIONS)
-    ) {
+    if (drain.exceedsStartupCapacity(this.hasBoundReadingControl, queuedBytes, queuedOperations)) {
       this.fail(new Error('Agent journal queue capacity exceeded before reading control bound'))
       return { accepted: false, reason: 'failed' }
     }
@@ -219,6 +216,7 @@ export class StructuredAgentSessionSinkQueue {
     this.dispatch.coalesce(accepted)
     this.queuedBytes = queuedBytes
     this.queuedOperations = queuedOperations
+    this.deps.onWorkChanged?.()
     if (this.target) {
       this.stage(accepted, this.target)
     } else {
@@ -268,6 +266,7 @@ export class StructuredAgentSessionSinkQueue {
     this.dispatch.forget(operation)
     this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
     this.queuedOperations = Math.max(0, this.queuedOperations - (operation.operations ?? 1))
+    this.deps.onWorkChanged?.()
   }
 
   /** Buffered drops settle only after earlier handed-over writes so barriers cannot overtake them. */

@@ -125,6 +125,7 @@ export class StructuredAgentSessionEventRecovery {
           reason,
           failure
         }
+        session.workChanged?.()
         const stopped = stop && (await stopAgentSessionProviderRoot(() => stop(sessionId)))
         if (!stopped) {
           return
@@ -175,6 +176,7 @@ export class StructuredAgentSessionEventRecovery {
           recorded: Promise.resolve(null),
           requestedAt: session.journal.cursor()
         }
+        session.workChanged?.()
       }
       return
     }

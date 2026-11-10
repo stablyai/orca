@@ -48,6 +48,7 @@ export class StructuredAgentSessionConversations extends Map<
       logger: StructuredAgentSessionLogger
       /** Opening makes waiting state re-derive. */
       onOpened?: (sessionId: string) => void
+      workChanged?: (sessionId: string) => void
       now: () => number
     }
   ) {
@@ -60,12 +61,15 @@ export class StructuredAgentSessionConversations extends Map<
     [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
+    session.workChanged = () => this.delivery.workChanged?.(sessionId)
     const { journal } = session
     if (this.get(sessionId)?.journal === journal) {
       this.touch(sessionId)
       this.delivery.observe?.(sessionId, journal)
       this.delivery.onOpened?.(sessionId)
-      return super.set(sessionId, session)
+      super.set(sessionId, session)
+      session.workChanged()
+      return this
     }
     this.attachments.get(sessionId)?.release()
     let queued = false
@@ -84,6 +88,7 @@ export class StructuredAgentSessionConversations extends Map<
         return
       }
       this.publish(sessionId, 'commit', commit)
+      session.workChanged?.()
       this.settledTurns.deliver(sessionId, journal, commit)
       try {
         this.delivery.observe?.(sessionId, journal, commit)
@@ -145,6 +150,7 @@ export class StructuredAgentSessionConversations extends Map<
     this.attachments.set(sessionId, source)
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
+    session.workChanged()
     this.publish(sessionId, 'reset')
     this.delivery.observe?.(sessionId, journal)
     this.delivery.onOpened?.(sessionId)
@@ -195,6 +201,9 @@ export class StructuredAgentSessionConversations extends Map<
   }
 
   publish(sessionId: string, kind: JournalPublication['kind'], commit?: JournalWriterCommit): void {
+    if (kind === 'operational') {
+      this.delivery.workChanged?.(sessionId)
+    }
     const observers = this.observers.get(sessionId)
     if (!observers?.size) {
       return
@@ -256,6 +265,7 @@ export class StructuredAgentSessionConversations extends Map<
     this.delivery.forget?.(sessionId)
     this.activity.delete(sessionId)
     const removed = super.delete(sessionId)
+    this.delivery.workChanged?.(sessionId)
     if (removed) {
       this.publish(sessionId, 'detach')
     }

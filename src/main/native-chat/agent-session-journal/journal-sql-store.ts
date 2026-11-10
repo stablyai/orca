@@ -242,7 +242,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
   async abortFork(installation: JournalForkInstall): Promise<void> {
     await this.admit((writer) => writer.maintain({ kind: 'fork-abort', token: installation.token }))
-    await this.database.requestSweep()
+    this.database.requestSweep()
   }
 
   keepGoalAttachments(identity: AgentJournalItemIdentity): Promise<void> {

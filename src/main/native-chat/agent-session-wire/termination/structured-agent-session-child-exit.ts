@@ -37,7 +37,7 @@ import type { StructuredAgentSessionStartupAttempts } from '../startup/structure
 
 export type StructuredAgentSessionChildExitSession = Pick<
   StructuredAgentSessionHostSession,
-  'child' | 'lastEndedChild'
+  'child' | 'lastEndedChild' | 'workChanged'
 > & { journal: StructuredAgentSessionLeftoverSettlementInput['journal'] }
 
 export type StructuredAgentSessionGenerationEnded = (
@@ -177,6 +177,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     })
     if (session.child === child) {
       session.child = null
+      session.workChanged?.()
     }
     context.publishStatus?.(sessionId)
   }

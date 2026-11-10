@@ -50,7 +50,9 @@ export class StructuredAgentSessionDeliveryLoop {
 
   dispose(): void {
     this.disposed = true
+    const ids = [...this.running.keys()]
     this.running.clear()
+    ids.forEach((id) => this.deps.activityChanged?.(id))
     this.deps.deliveryOrder.dispose()
   }
 
@@ -65,6 +67,7 @@ export class StructuredAgentSessionDeliveryLoop {
     }
     const progress = new DeliveryProgress()
     this.running.set(sessionId, progress)
+    this.deps.activityChanged?.(sessionId)
     const run = this.run(sessionId, progress).finally(() => {
       if (this.runs.get(sessionId) === run) {
         this.runs.delete(sessionId)
@@ -308,6 +311,7 @@ export class StructuredAgentSessionDeliveryLoop {
   /** Clear under serialization so the next accept can wake a new loop. */
   private stop(sessionId: string): 'stop' {
     this.running.delete(sessionId)
+    this.deps.activityChanged?.(sessionId)
     this.deps.deliveryOrder.parkSends(sessionId)
     return 'stop'
   }

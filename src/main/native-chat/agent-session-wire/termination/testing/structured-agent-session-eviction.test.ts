@@ -7,19 +7,27 @@ import { codexProviderHandle } from '../../../../../shared/agent-session/lifecyc
 import { evictStructuredAgentSession } from '../structured-agent-session-eviction'
 import { StructuredAgentSessionHostRuntimeState } from '../../host/structured-agent-session-host-runtime-state'
 import { recordingStructuredAgentSessionLogger } from '../../host/testing/structured-agent-session-logger.test-fixture'
+import {
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 const journals = createTrackedJournalOpener()
 const roots: string[] = []
 afterEach(async () => {
   await journals.closeAll()
+  await closeTestAgentSessionRecordStores()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-function runtimeState(): StructuredAgentSessionHostRuntimeState {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
+async function runtimeState(): Promise<StructuredAgentSessionHostRuntimeState> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-eviction-activity-'))
+  roots.push(root)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the empty conversation map never reaches store or adapter; activity uses the real database.
   const deps = {
     store: {},
     adapter: {},
+    journalDatabase: await openTestAgentSessionDatabase(root),
     logger: recordingStructuredAgentSessionLogger().logger
   } as never
   return new StructuredAgentSessionHostRuntimeState(deps, new Map())
@@ -28,7 +36,7 @@ function runtimeState(): StructuredAgentSessionHostRuntimeState {
 // Cached sinks must be discarded after close so reopened chats can publish through fresh sinks.
 describe('eviction against the real sink cache', () => {
   it('lets the session publish again after it is evicted and reattached', async () => {
-    const state = runtimeState()
+    const state = await runtimeState()
     const sessionId = 'session-reattach'
     await evictStructuredAgentSession({
       sessionId,

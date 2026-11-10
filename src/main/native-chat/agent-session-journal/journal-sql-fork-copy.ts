@@ -12,13 +12,15 @@ export class JournalSqlForkCopy {
   private constructor(
     private readonly reader: JournalSqlForkReader,
     readonly input: JournalForkPreparationInput,
-    private readonly releaseSource: () => Promise<void>
+    private readonly releaseSource: () => Promise<void>,
+    private readonly requestSweep: () => void
   ) {}
 
   static async capture(
     readers: JournalSqlReaderPool,
     input: JournalForkPreparationInput,
     releaseSource: () => Promise<void>,
+    requestSweep: () => void,
     signal?: AbortSignal
   ): Promise<JournalSqlForkCopy> {
     let reader: JournalSqlForkReader
@@ -28,7 +30,7 @@ export class JournalSqlForkCopy {
       await releaseSource()
       throw error
     }
-    const copy = new JournalSqlForkCopy(reader, input, releaseSource)
+    const copy = new JournalSqlForkCopy(reader, input, releaseSource, requestSweep)
     try {
       for (;;) {
         throwIfSignalAborted(signal)
@@ -94,6 +96,7 @@ export class JournalSqlForkCopy {
     } catch (error) {
       await this.close()
       await writer.maintain({ kind: 'fork-abort', token })
+      this.requestSweep()
       throw error
     }
   }

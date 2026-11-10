@@ -92,19 +92,27 @@ export class JournalSqlDatabase {
     this.writer.fault(error)
   }
 
-  /** Start after runtime activity has been installed, so startup work never outruns live chats. */
+  /** The installed record-store slot owns maintenance, including before chat-host construction. */
   startMaintenance(): Promise<void> {
-    this.assertOpen()
-    return this.readOnly ? Promise.resolve() : this.maintenance.start()
+    return this.readOnly || this.closed ? Promise.resolve() : this.maintenance.start()
+  }
+
+  stopMaintenance(): void {
+    this.maintenance.stop()
+  }
+
+  holdActivity(): () => void {
+    return this.activity.hold()
   }
 
   setSessionActive(sessionId: string, active: boolean): void {
     this.activity.setSessionActive(sessionId, active)
   }
 
-  requestSweep(): Promise<void> {
-    this.assertOpen()
-    return this.readOnly ? Promise.resolve() : this.maintenance.requestSweep()
+  requestSweep(): void {
+    if (!this.readOnly && !this.closed) {
+      void this.maintenance.requestSweep()
+    }
   }
 
   /** Source attachment custody starts before the WAL snapshot and ends with disposable preparation. */
@@ -125,8 +133,9 @@ export class JournalSqlDatabase {
       input,
       async () => {
         await this.writer.maintain({ kind: 'fork-source-release', token: held.token })
-        await this.requestSweep()
+        this.requestSweep()
       },
+      () => this.requestSweep(),
       signal
     )
   }
@@ -261,7 +270,8 @@ export class JournalSqlDatabase {
 
   effects(effects: readonly JournalWriterEffect[]): Promise<JournalWriterEffectResult[]> {
     this.assertOpen()
-    return this.writer.effects(effects)
+    const release = this.activity.hold()
+    return this.writer.effects(effects).finally(release)
   }
 
   /** Planning and ordered reads share the chat's lane; ordinary readers see the last COMMIT. */

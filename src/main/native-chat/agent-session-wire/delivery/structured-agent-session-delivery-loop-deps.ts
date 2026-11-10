@@ -22,6 +22,7 @@ import type {
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
+  activityChanged?: (sessionId: string) => void
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   adapter: StructuredAgentSessionAdapter

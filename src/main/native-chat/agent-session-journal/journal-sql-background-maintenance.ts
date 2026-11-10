@@ -31,12 +31,18 @@ export class JournalSqlBackgroundMaintenance {
   ) {}
 
   start(): Promise<void> {
+    if (this.stopped.signal.aborted) {
+      return Promise.resolve()
+    }
     this.discover = true
     this.armPeriodic()
     return this.requestSweep()
   }
 
   requestSweep(): Promise<void> {
+    if (this.stopped.signal.aborted) {
+      return Promise.resolve()
+    }
     this.sweep = true
     return this.requestRun()
   }

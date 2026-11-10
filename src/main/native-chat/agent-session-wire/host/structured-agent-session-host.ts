@@ -34,6 +34,7 @@ export class StructuredAgentSessionHost {
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
     opened: (id) => usageLimit.opened(this.usageLimitContinue, this.queued, id),
+    workChanged: (id) => this.runtimeState.refreshActivity(id),
     logger: () => this.deps.logger,
     now: () => this.now(),
     observeRows: () => this.deps.observeCommittedRows
@@ -82,7 +83,9 @@ export class StructuredAgentSessionHost {
       deps,
       this.sessions,
       (id, e) => this.eventRecovery.recoverAfterSinkFailure(id, e),
-      (expired) => this.lifetime.expireStartup(expired)
+      (expired) => this.lifetime.expireStartup(expired),
+      (id) => this.conversationDelivery?.loop.isRunning(id) ?? false,
+      this.clientDelivery.childWorkOpen
     )
     this.conversationDelivery = conversation.createStructuredAgentSessionConversationDelivery({
       deps,
@@ -127,8 +130,7 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       open: (sessionId) => this.conversationDelivery.open(sessionId),
       // In-flight starts count as execution before a child is indexed.
-      deliveryActive: (id) =>
-        this.conversationDelivery.loop.isRunning(id) || this.runtimeState.startFlights.has(id),
+      deliveryActive: (id) => this.runtimeState.hasDeliveryWork(id),
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options),
       childWorkOpen: this.clientDelivery.childWorkOpen
     })
@@ -181,8 +183,7 @@ export class StructuredAgentSessionHost {
     openConversation: this.conversationDelivery.open
   })
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
-  close: typeof this.lifetime.close = (sessionId, cause, admit) =>
-    this.lifetime.close(sessionId, cause, admit)
+  close: typeof this.lifetime.close = (...args) => this.lifetime.close(...args)
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({
@@ -221,10 +222,8 @@ export class StructuredAgentSessionHost {
 
   revealSession = this.reads.revealSession
 
-  withForkSourceAdmission = <T>(sessionId: string, run: () => Promise<T>): Promise<T> =>
-    this.serialize(sessionId, run)
-
   private serialize = this.tasks.serialize.bind(this.tasks)
+  withForkSourceAdmission = this.serialize
 
   private readonly entry = structuredAgentSessionEntryDelegates(() => this.attachContext())
   attach = this.entry.attach

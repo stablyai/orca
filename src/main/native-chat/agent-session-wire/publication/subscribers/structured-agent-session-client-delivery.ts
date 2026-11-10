@@ -169,6 +169,7 @@ export class StructuredAgentSessionClientDelivery {
     this.statusFeed.publishChildWork(sessionId, evidence, producer, (projection) =>
       this.turnCompletionFeed.observeProjection(sessionId, projection)
     )
+    this.sessions.get(sessionId)?.workChanged?.()
   }
 
   readStopping = async (sessionId: string): Promise<boolean> => {

@@ -141,6 +141,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
 
 /** Conversation state outlives its provider children. */
 export type StructuredAgentSessionHostSession = {
+  workChanged?: () => void
   switchCommand?: {
     invocationId: string
     completion: Promise<AgentSessionSwitchResult>

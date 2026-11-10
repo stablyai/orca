@@ -195,6 +195,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   logger: StructuredAgentSessionLogger
   /** Permanent failure; owner decides whether the provider can continue. */
   onFailed?: (error: unknown) => void
+  onWorkChanged?: () => void
   watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
   readingControl?: StructuredAgentSessionReadingControl
   onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
@@ -211,10 +212,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     deps.onFailed?.(error)
   }
   const queue = new StructuredAgentSessionSinkQueue({
+    ...deps,
     watermarks,
-    onFailed: failed,
-    ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
-    ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})
+    onFailed: failed
   })
   const resolvedAppend = createStructuredAgentSessionResolvedAppend(queue)
 
