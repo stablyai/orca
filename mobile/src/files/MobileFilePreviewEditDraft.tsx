@@ -6,9 +6,11 @@ import {
 } from '../drafts/use-document-edit-draft'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { spacing } from '../theme/mobile-theme'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { MobileFilePreviewSource } from './mobile-file-preview-request'
+import { resolveMarkdownFloatingActionsBottom } from './session-documents/markdown-floating-actions-layout'
 
 /** Only terminal artifacts are editable in the file preview. */
 export function filePreviewEditDraftKey(
@@ -43,10 +45,15 @@ function OfferBar(props: {
 }) {
   const clipboard = useClipboardWriter()
   const insets = useSafeAreaInsets()
+  const keyboardHeight = useKeyboardOcclusion()
   return (
     <DocumentEditDraftOfferBar
       {...props}
-      bottom={insets.bottom + spacing.lg}
+      bottom={resolveMarkdownFloatingActionsBottom({
+        keyboardLift: keyboardHeight,
+        restingBottom: insets.bottom + spacing.lg,
+        liftedClearance: spacing.md
+      })}
       onCopy={() =>
         void clipboard.writeText(props.offer.content).then(triggerSuccess, triggerError)
       }

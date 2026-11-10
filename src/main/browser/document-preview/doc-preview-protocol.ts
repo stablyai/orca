@@ -4,7 +4,7 @@ import {
   DOC_PREVIEW_SCHEME,
   parseDocPreviewUrl
 } from '../../../shared/document-preview/doc-preview-scheme'
-import { installBrowserSessionPartitionPolicies } from '../sessions/browser-session-partition-policies'
+import { installBrowserSessionPartitionPolicies } from '../sessions/partition-policies/browser-session-partition-policies'
 import { readDocPreviewFile } from './doc-preview-file-reader'
 import { publishDocPreviewFailure } from './doc-preview-failure-notice'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'

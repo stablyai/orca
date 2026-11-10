@@ -24,7 +24,7 @@ import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/pl
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'

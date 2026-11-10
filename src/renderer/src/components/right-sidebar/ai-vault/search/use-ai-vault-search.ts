@@ -18,7 +18,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSearchScopeIdentity } from '../../../../../../shared/ai-vault/search/ai-vault-search-scope'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { useAiVaultAssociationObservation } from '../scanning/ai-vault-association-observation'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
@@ -29,6 +29,9 @@ type SearchIdentity = {
   policyKey: string
   revision: number
 }
+
+// One shared empty list, so "no hits" keeps the same identity across renders.
+const NO_HITS: readonly AiVaultSearchHit[] = Object.freeze([])
 
 type SearchPage = {
   identity: SearchIdentity
@@ -61,7 +64,7 @@ export function useAiVaultSearch(
     let pending = false
     let followUp = false
     let started = false
-    async function run(cursor?: string, revalidate = false) {
+    async function run(cursor?: string) {
       if (pending || cancelled || !request || !scope) {
         return
       }
@@ -69,13 +72,10 @@ export function useAiVaultSearch(
       started = true
       const revision = associations.getSnapshot()
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
-      setPage((previous) => ({
-        identity,
-        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
-        response: null,
-        error: false,
-        loading: true
-      }))
+      // Only a rerun of the same request touches its page, keeping its reply so its cursor survives revalidation.
+      setPage((previous) =>
+        previous?.identity === identity ? { ...previous, error: false, loading: true } : previous
+      )
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
         let append = Boolean(cursor)
@@ -104,13 +104,19 @@ export function useAiVaultSearch(
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          setPage((previous) => ({
+            identity,
+            hits: previous?.identity === identity ? previous.hits : [],
+            response: previous?.identity === identity ? previous.response : null,
+            error: true,
+            loading: false
+          }))
         }
       } finally {
         pending = false
         if (followUp && !cancelled) {
           followUp = false
-          void run(undefined, true)
+          void run()
         }
       }
     }
@@ -122,10 +128,10 @@ export function useAiVaultSearch(
       if (pending) {
         followUp = true
       } else {
-        void run(undefined, true)
+        void run()
       }
     })
-    const timer = setTimeout(() => void run(undefined, true), 250)
+    const timer = setTimeout(() => void run(), 250)
     return () => {
       cancelled = true
       followUp = false
@@ -135,17 +141,26 @@ export function useAiVaultSearch(
     }
   }, [identity, associations])
 
+  // Leaving search drops its hits so returning cannot revive another request's results or cursor.
+  if (page && !(request && scope)) {
+    setPage(null)
+  }
   const current = page?.identity === identity ? page : null
+  // Same-host hits stay visible while a newer request is debounced or in flight.
+  const shown = current ?? (page?.identity.scope === scope ? page : null)
   return {
-    hits: current?.hits ?? [],
+    hits: shown?.hits ?? NO_HITS,
+    /** The hits answer this request; until then they are an older request's, or none. */
+    answered: current !== null,
+    /** Changes when hits for a different request land, never while one is pending. */
+    resultsKey: JSON.stringify(shown ? [shown.identity.scope, shown.identity.request] : null),
     response: current?.response ?? null,
     error: current?.error ?? false,
     loading: Boolean(request && scope && (!current || current.loading)),
     removeHit: (hit: AiVaultSearchHit) =>
-      setPage((previous) =>
-        previous?.identity === identity
-          ? { ...previous, hits: previous.hits.filter((entry) => entry !== hit) }
-          : previous
+      setPage(
+        (previous) =>
+          previous && { ...previous, hits: previous.hits.filter((entry) => entry !== hit) }
       ),
     retry: () => setRevision((value) => value + 1),
     loadMore: () => {
@@ -235,7 +250,6 @@ export function useAiVaultPanelSearch(
     hasQuery,
     needsLocalConsent,
     titleOnly: hasQuery && titleOnly,
-    host,
-    resetKey: JSON.stringify([scope, request])
+    host
   }
 }

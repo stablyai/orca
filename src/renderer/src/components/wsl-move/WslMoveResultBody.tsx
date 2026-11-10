@@ -4,7 +4,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import type { WslMoveResult } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import type { LazyChunkRecoveryReloadOutcome } from '@/lib/lazy-chunk-recovery-reload'
+import type { LazyChunkRecoveryReloadOutcome } from '@/app-shell/startup/lazy-chunk-recovery-reload'
 import { wslMoveBrowserLoginsNotCopied, wslMoveRefusalMessage } from './wsl-move-copy'
 import { WslMoveBlockerList, type WslMoveBlockerView } from './WslMoveBlockerList'
 

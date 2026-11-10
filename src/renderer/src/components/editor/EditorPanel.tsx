@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
-import { canShowWorkspaceFileBrowserAction } from '@/lib/file-preview'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
+import { canShowWorkspaceFileBrowserAction } from '@/lib/browser/documents/file-preview'
 import { openEditorHtmlPreview } from './open-editor-html-preview'
 import { getEditorHeaderCopyState } from './editor-header'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
@@ -30,7 +30,7 @@ import {
   editorArtifactContentType
 } from './editor-artifact-upload'
 import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
-import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
+import { isMarkdownReviewNotesEnabled } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { editorPanelFileActions } from './editor-panel-file-actions'
@@ -89,6 +89,7 @@ function EditorPanelInner({
   )
   const editorDrafts = useAppStore(editorDraftSelector)
   const diffDefaultView = useAppStore((s) => s.settings?.diffDefaultView)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const customEditors = useFileCustomEditors(activeFileId, activeFile?.filePath)
   const markdownReviewNotesEnabled = useAppStore((s) => isMarkdownReviewNotesEnabled(s.settings))
   const panelRef = useRef<HTMLDivElement>(null)
@@ -115,15 +116,7 @@ function EditorPanelInner({
     },
     [clearCopiedPathToastResetTimer]
   )
-  const [sideBySide, setSideBySide] = useState(diffDefaultView === 'side-by-side')
-  const [prevDiffView, setPrevDiffView] = useState(diffDefaultView)
-
-  if (diffDefaultView !== prevDiffView) {
-    setPrevDiffView(diffDefaultView)
-    if (diffDefaultView !== undefined) {
-      setSideBySide(diffDefaultView === 'side-by-side')
-    }
-  }
+  const sideBySide = diffDefaultView === 'side-by-side'
 
   const requestedChangesMode =
     !!activeFile &&
@@ -345,7 +338,9 @@ function EditorPanelInner({
           onOpenDiffTargetFile={handleOpenDiffTargetFile}
           onOpenPreview={handleOpenPreview}
           onOpenMarkdownPreview={handleOpenMarkdownPreview}
-          onToggleSideBySide={() => setSideBySide((prev) => !prev)}
+          onToggleSideBySide={() =>
+            void updateSettings({ diffDefaultView: sideBySide ? 'inline' : 'side-by-side' })
+          }
           onEditorToggleChange={handleEditorToggleChange}
           onToggleMarkdownTableOfContents={() =>
             setMarkdownTableOfContentsVisible(

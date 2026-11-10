@@ -1,3 +1,4 @@
+import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -10,16 +11,16 @@ import { translateMain } from '../i18n/main-i18n'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
-import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
-import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
+import { agentHookRuntimeDeps } from '../agent-hooks/runtime/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
@@ -34,9 +35,14 @@ import {
   resumeEphemeralVmWorkspace
 } from '../ephemeral-vm/workspace-resume'
 import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
+import { setSshHostAsleepCheck } from '../ssh/connection/ssh-host-sleep-hold'
+import {
+  isRecipeVmSshTargetAsleep,
+  setRecipeVmAsleepStoreRoot
+} from '../ephemeral-vm/recipe-vm-asleep'
 import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -152,6 +158,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
+  wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({
@@ -164,6 +171,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
     }
   })
+  // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
+  setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
+  setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(app.getPath('userData'), targetId))
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useCloneFolderOverride } from '../sidebar/project-admission/clone-folder/use-clone-folder-override'
+import { getProjectCloneCheckTarget } from '../../store/projects/project-host-routing'
 import { Download, FolderOpen } from 'lucide-react'
 import {
   Dialog,
@@ -13,7 +15,7 @@ import { CreateProjectParentBrowser } from '@/components/sidebar/project-admissi
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoKind } from '../../../../shared/repo-types'
 import { pickLocalProjectLocationFolder } from './pick-local-project-folder'
@@ -108,6 +110,8 @@ function SetProjectLocationDialogBody({
   const [setupKind, setSetupKind] = useState<RepoKind>(projectKind)
   const [cloneUrl, setCloneUrl] = useState(defaultCloneUrl)
   const [cloneDestination, setCloneDestination] = useState('')
+  const { cloneFolder, cloneArgs, setCloneFolderName, checkCloneFolderTaken } =
+    useCloneFolderOverride(cloneUrl, cloneDestination)
   const [isSubmitting, setIsSubmitting] = useState(false)
   // Clones may finish long after dismissal; do not retarget a composer the user has since moved to another host.
   const abandoned = useRef(false)
@@ -176,11 +180,13 @@ function SetProjectLocationDialogBody({
     }
     setIsSubmitting(true)
     try {
+      if (await checkCloneFolderTaken(getProjectCloneCheckTarget(option.hostId))) {
+        return
+      }
       const result = await setupProjectClone({
         projectId: option.projectId,
         hostId: option.hostId,
-        url: cloneUrl.trim(),
-        destination: cloneDestination.trim(),
+        ...cloneArgs,
         displayName: projectName
       })
       if (result && !abandoned.current) {
@@ -277,6 +283,8 @@ function SetProjectLocationDialogBody({
           onBack={() => setView('choose')}
           onCloneUrlChange={setCloneUrl}
           onCloneDestinationChange={setCloneDestination}
+          cloneFolder={cloneFolder}
+          onCloneFolderNameChange={setCloneFolderName}
           onBrowse={() => openHostBrowser('clone')}
           onSubmit={() => void handleCloneSubmit()}
         />

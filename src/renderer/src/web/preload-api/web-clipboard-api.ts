@@ -1,4 +1,4 @@
-import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   agentSessionPastedImageName,
@@ -18,7 +18,7 @@ import {
   type ClipboardImageThumbnail
 } from '../../../../shared/clipboard-image'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
-import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
+import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
 import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'
 

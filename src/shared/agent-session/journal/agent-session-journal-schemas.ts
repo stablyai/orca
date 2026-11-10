@@ -116,7 +116,8 @@ const Block = openDiscriminatedUnion(
 const PromptOption = z.object({
   id: z.string(),
   label: z.string(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  preview: z.string().optional()
 })
 
 const FreeTextInput = z.object({

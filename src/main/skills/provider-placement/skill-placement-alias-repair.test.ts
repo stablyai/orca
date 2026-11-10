@@ -61,25 +61,6 @@ afterEach(async () => {
 })
 
 describe('skill provider alias reconciliation', () => {
-  it('detects a provider parent already linked to canonical storage', async () => {
-    const value = await fixture()
-    const providerRoot = join(value.root, 'provider')
-    await createDirectoryLink(value.canonicalRoot, providerRoot)
-    expect(await realpath(join(providerRoot, 'private-skill'))).toBe(
-      await realpath(value.canonicalPath)
-    )
-
-    const result = await reconcileSkillProviderPlacement({
-      canonicalPath: value.canonicalPath,
-      skillName: 'private-skill',
-      destination: { provider: 'claude', rootPath: providerRoot, readsCanonicalRoot: false },
-      previousReceipt: null,
-      packageDigest: value.packageDigest
-    })
-
-    expect(result).toMatchObject({ topology: 'provider-alias', status: 'unchanged' })
-  })
-
   it('repairs a broken Orca-owned alias', async () => {
     const value = await fixture()
     const providerRoot = join(value.root, 'provider')

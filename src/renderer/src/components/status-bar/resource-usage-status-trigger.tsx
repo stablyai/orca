@@ -2,7 +2,7 @@ import React from 'react'
 import { AlertTriangle, MemoryStick, Terminal } from 'lucide-react'
 import { PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
@@ -32,7 +32,7 @@ export function renderResourceUsageStatusTrigger(
   t: Translate = translate
 ): React.JSX.Element {
   return (
-    <Tooltip delayDuration={150}>
+    <Tooltip>
       <TooltipTrigger asChild>
         <PopoverTrigger asChild>
           <button

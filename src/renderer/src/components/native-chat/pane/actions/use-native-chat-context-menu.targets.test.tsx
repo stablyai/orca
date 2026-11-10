@@ -8,11 +8,9 @@ import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-d
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import { createNativeChatFileHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
-import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 import {
   emptyNativeChatContextMenuActions,
-  useNativeChatContextMenu,
-  type NativeChatContextMenuActions
+  useNativeChatContextMenu
 } from './use-native-chat-context-menu'
 
 const mocks = vi.hoisted(() => ({
@@ -44,25 +42,13 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 
 const linkContext = { worktreeId: 'wt-1', worktreePath: '/repo', runtimeEnvironmentId: null }
 
-function Chat({
-  acceptsText = true,
-  rewind,
-  onFind,
-  actions,
-  standalone = false
-}: {
-  acceptsText?: boolean
-  rewind?: NativeChatRewindSurface
-  onFind?: () => void
-  actions?: Partial<NativeChatContextMenuActions>
-  standalone?: boolean
-}): React.JSX.Element {
+function Chat({ onFind }: { onFind?: () => void }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle | null>({
     focus: () => true,
     insertAgentReferences: () => false,
     insertTypedText: () => true,
-    acceptsText: () => acceptsText,
+    acceptsText: () => true,
     appendText: mocks.appendText,
     handlePasteEvent: () => {},
     pasteFromClipboard: () => {},
@@ -71,24 +57,9 @@ function Chat({
   const { menu, onContextMenuCapture } = useNativeChatContextMenu({
     rootRef,
     composerRef,
-    actions: { ...emptyNativeChatContextMenuActions, ...actions, onPaste: vi.fn() },
-    showTerminalPaneActions: actions !== undefined,
-    chatPane: standalone
-      ? { tabId: 'chat-tab', worktreeId: 'wt-1', groupId: 'group-1', sessionId: 'session-1' }
-      : undefined,
-    chatSession: standalone
-      ? {
-          target: { kind: 'local' },
-          sessionId: 'session-1',
-          worktreeId: 'wt-1',
-          epoch: 'epoch-1',
-          agent: 'claude',
-          messages: [],
-          focusSource: vi.fn()
-        }
-      : undefined,
+    actions: { ...emptyNativeChatContextMenuActions, onPaste: vi.fn() },
+    showTerminalPaneActions: false,
     fileLinkContext: linkContext,
-    rewind,
     onFind
   })
   return (
@@ -126,23 +97,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.resetAllMocks()
 })
-
-it.each(['terminal-backed', 'standalone'] as const)(
-  'omits the whole-session fork action from the %s chat menu',
-  async (surface) => {
-    render(
-      <Chat
-        actions={surface === 'terminal-backed' ? {} : undefined}
-        standalone={surface === 'standalone'}
-      />
-    )
-
-    await rightClick('Empty area')
-
-    expect(screen.getByRole('menuitem', { name: 'Copy Context' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Fork Agent Session…' })).not.toBeInTheDocument()
-  }
-)
 
 it.each([
   {

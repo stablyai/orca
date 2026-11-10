@@ -268,7 +268,7 @@ export async function refreshPRNow(
     plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
     broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
   }
-  events.observe(candidate, outcome)
+  events.observe(candidate, outcome, aliases)
   retry.noteManualGate(key, broadcastOutcome)
   events.broadcast(
     { aliases, reason, outcome: broadcastOutcome, requestStartedAt },

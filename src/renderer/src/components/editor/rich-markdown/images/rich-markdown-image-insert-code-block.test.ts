@@ -13,7 +13,7 @@ vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
   })
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 

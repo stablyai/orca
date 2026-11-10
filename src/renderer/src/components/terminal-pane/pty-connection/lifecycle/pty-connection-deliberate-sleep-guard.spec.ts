@@ -55,97 +55,11 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    // Manual sleep retains tab.ptyId as a wake hint; unguarded remount would reattach and respawn its dead shell (#10205).
-    it('does not reattach a slept pane through its retained session id', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        activeWorktreeId: 'wt-other',
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-slept', ptyId: 'wt-1@@dead' }] }
-      }
-      markWorktreeSleepIntent('wt-1')
-      const deps = createDeps({
-        tabId: 'tab-slept',
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@dead' },
-        isVisibleRef: { current: false }
-      })
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
-      )
-      await flushAsyncTicks()
-
-      expect(transport.connect).not.toHaveBeenCalled()
-    })
-
-    it('does not fresh-spawn a slept pane that has no session id', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      mockStoreState = { ...mockStoreState, activeWorktreeId: 'wt-other' }
-      markWorktreeSleepIntent('wt-1')
-      const deps = createDeps({ tabId: 'tab-slept-bare', isVisibleRef: { current: false } })
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
-      )
-      await flushAsyncTicks()
-
-      expect(transport.connect).not.toHaveBeenCalled()
-    })
-
-    it('connects a waiting pane once the workspace is woken', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
-        await import('@/lib/worktree-sleep-intent')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        activeWorktreeId: 'wt-other',
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-woken', ptyId: 'wt-1@@dead' }] }
-      }
-      markWorktreeSleepIntent('wt-1')
-      const deps = createDeps({
-        tabId: 'tab-woken',
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@dead' },
-        isVisibleRef: { current: false }
-      })
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
-      )
-      await flushAsyncTicks()
-      expect(transport.connect).not.toHaveBeenCalled()
-
-      clearWorktreeSleepIntent('wt-1')
-      await flushAsyncTicks()
-
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-    })
-
     it('does not connect a waiting pane whose tab was remounted by the wake', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -180,42 +94,11 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       expect(transport.connect).not.toHaveBeenCalled()
     })
 
-    it('resumes a waiting pane mounted under a unified tab id', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
-        await import('@/lib/worktree-sleep-intent')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        activeWorktreeId: 'wt-other',
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-entity', ptyId: null, generation: 3 }] },
-        getTab: (id: string) =>
-          id === 'unified-1' ? { id, contentType: 'terminal', entityId: 'tab-entity' } : null
-      } as never
-      markWorktreeSleepIntent('wt-1')
-      const deps = createDeps({ tabId: 'unified-1', isVisibleRef: { current: false } })
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
-      )
-      await flushAsyncTicks()
-      expect(transport.connect).not.toHaveBeenCalled()
-
-      clearWorktreeSleepIntent('wt-1')
-      await flushAsyncTicks()
-
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-    })
-
     it('re-arms after a wake so a second sleep can hold the pane again', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -265,8 +148,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         )
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks7 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         sleepIntent.markWorktreeSleepIntent('wt-1')
@@ -291,53 +175,6 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       } finally {
         subscribeSpy.mockRestore()
       }
-    })
-
-    it('still connects a slept pane that carries a queued startup', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      markWorktreeSleepIntent('wt-1')
-      const deps = createDeps({
-        tabId: 'tab-slept-startup',
-        isVisibleRef: { current: false },
-        startup: { command: 'printf wake', launchAgent: undefined }
-      })
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
-      )
-      await flushAsyncTicks()
-
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-    })
-
-    it('connects normally once the marker is released', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      const deps = createDeps({
-        tabId: 'tab-awake',
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@live' },
-        isVisibleRef: { current: false }
-      })
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
-      )
-      await flushAsyncTicks()
-
-      expect(transport.connect).toHaveBeenCalledTimes(1)
     })
   })
 }

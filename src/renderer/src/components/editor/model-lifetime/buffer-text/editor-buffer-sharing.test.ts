@@ -20,7 +20,9 @@ import { registerPendingEditorFlush } from '../../save/flush/editor-pending-flus
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 vi.mock('@/store/index', () => {
   const getState = () => storeRef.current!.getState()
   return {
@@ -29,7 +31,7 @@ vi.mock('@/store/index', () => {
     })
   }
 })
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
 

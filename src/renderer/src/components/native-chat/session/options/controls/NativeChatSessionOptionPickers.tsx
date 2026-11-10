@@ -261,8 +261,14 @@ function SessionOptionPopover(props: {
         onInteractOutside={focusReturn.onInteractOutside}
         onCloseAutoFocus={focusReturn.onCloseAutoFocus}
         // Close through a level tooltip’s first Escape; let Radix handle search Escape after IME.
+        // Escape from a portaled child (the speed list) closes only that child.
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) {
+          if (
+            event.key === 'Escape' &&
+            !(event.target instanceof HTMLInputElement) &&
+            event.target instanceof Node &&
+            event.currentTarget.contains(event.target)
+          ) {
             setOpen(false)
           }
         }}

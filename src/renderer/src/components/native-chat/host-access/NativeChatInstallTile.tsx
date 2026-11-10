@@ -1,7 +1,7 @@
 import { TriangleAlert } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 export function NativeChatInstallTile(props: {

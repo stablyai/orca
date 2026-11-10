@@ -6,6 +6,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { suggestCreatureNameForPaths } from '../../../../../../shared/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { resolveUnattendedSetupDecision } from '../../../../../workspace-hooks/effective-hook-config'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
@@ -121,7 +122,10 @@ export async function createWorkerWorktree(args: {
   setupReceipt: WorkerSetupReceipt
 }> {
   const { runtime, db, dispatchId, requestedWorktree, target, params, effects } = args
-  const setupDecision = params.setup ?? 'run'
+  const setupDecision = resolveUnattendedSetupDecision(
+    await runtime.showRepo(target.repoSelector),
+    params.setup
+  )
   let terminalCreation: RuntimeTerminalCreate | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
@@ -173,7 +177,7 @@ export async function createWorkerWorktree(args: {
     residualResources: effects
   })
   const setupReceipt = {
-    requested: setupDecision,
+    requested: params.setup ?? 'inherit',
     effective: setupDecision,
     source: params.setup ? 'explicit_request' : 'orchestration_default',
     hookFound: created.setupReceipt?.hookFound ?? false,

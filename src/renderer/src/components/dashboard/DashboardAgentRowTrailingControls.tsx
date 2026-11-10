@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react'
 import { ChevronDown, Send, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 
 type DashboardAgentRowTrailingControlsProps = {

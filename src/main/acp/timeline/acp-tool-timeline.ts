@@ -100,7 +100,11 @@ export class AcpToolTimeline {
   ): ProviderTimelineEvent[] {
     join = join.turn === undefined ? { ...join, ...this.join(raw.toolCallId) } : join
     const turn = join.turn
-    const retain = turn === undefined ? join.scope === undefined : this.owners.isLive(turn)
+    // Thread-scoped calls have no owning turn to end them, so they keep context until completion.
+    const retain =
+      turn === undefined
+        ? join.scope === undefined || join.scope.kind === 'thread'
+        : this.owners.isLive(turn)
     const update = dialect.normalizeToolUpdate?.(raw) ?? raw
     const previous = this.tools.get(update.toolCallId)
     const held = this.whole.get(update.toolCallId)

@@ -1,4 +1,6 @@
 import { CircleAlert, Inbox } from 'lucide-react-native'
+import { StyleSheet, View } from 'react-native'
+import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
 import {
   MobileLoadErrorState,
   MobileNoMatchState,
@@ -6,9 +8,15 @@ import {
   MobileStateView
 } from '../components/MobileStateView'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { isConnectionOutage } from '../transport/connection/connection-health'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
+import { useHostProfile } from '../host-catalog/use-host-profile'
+import { spacing } from '../theme/mobile-theme'
 import { translate } from '../i18n/mobile-i18n'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { clearMobileTasksSearch } from './mobile-tasks-search-control'
+
+export function ignoreKeptRowPress(): void {}
 
 /** True when the list body itself shows the load failure, so the banner above must not repeat it. */
 export function mobileTasksListShowsError(model: ConnectionPresentationModel): boolean {
@@ -117,3 +125,36 @@ function MobileTasksOfflineState({ hostId, bottomInset }: { hostId: string; bott
     />
   )
 }
+
+/** Over the last list while the desktop can't be reached, with when those rows were read. */
+export function MobileTasksOfflineBanner({ model }: { model: ConnectionPresentationModel }) {
+  const { hostId } = model
+  const forceReconnect = useForceReconnect()
+  const hostName = useHostDisplay(useHostProfile(hostId)).title
+  const banner = useHostOfflineBanner({
+    client: model.client,
+    connState: model.connState,
+    lastConnectedAt: model.lastConnectedAt,
+    outage: isConnectionOutage(model.headerVerdict),
+    forceReconnect: forceReconnect && hostId ? () => void forceReconnect(hostId) : null,
+    hasData: model.showsKeptRows,
+    asOf: model.rowsReadAt
+  })
+  if (!banner) {
+    return null
+  }
+  return (
+    <View style={bannerStyles.inset}>
+      <HostOfflineBanner
+        hostName={hostName}
+        offline={banner.offline}
+        asOf={banner.asOf}
+        onRetry={banner.retry}
+      />
+    </View>
+  )
+}
+
+const bannerStyles = StyleSheet.create({
+  inset: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }
+})

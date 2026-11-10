@@ -2,13 +2,11 @@ import type {
   AgentChoicePatch,
   AgentDedicatedChoices
 } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
-
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
-
 import {
   sourceControlActionAgentPicksModel,
   sourceControlActionOptions
@@ -16,7 +14,7 @@ import {
 import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
-import { sourceControlActionRouteHint } from './AgentChoiceOptionField'
+import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'

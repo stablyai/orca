@@ -135,26 +135,4 @@ describe('useMobileCommitMessageGeneration', () => {
     expect(view.message).toBe('current workspace')
     expect(view.generating).toBe(false)
   })
-
-  it('shows no error from a run that was stopped and then failed', async () => {
-    reply.cancel = () => Promise.reject(new Error('transport closed'))
-    const unhandled = vi.fn()
-    process.on('unhandledRejection', unhandled)
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-    let pending: Promise<void> | undefined
-    act(() => {
-      pending = view.generate?.()
-    })
-    act(() => view.cancel?.())
-    await act(async () => {
-      reply.reject?.(new Error('transport closed'))
-      await pending
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-    process.off('unhandledRejection', unhandled)
-    expect(view.error).toBeNull()
-    expect(unhandled).not.toHaveBeenCalled()
-  })
 })

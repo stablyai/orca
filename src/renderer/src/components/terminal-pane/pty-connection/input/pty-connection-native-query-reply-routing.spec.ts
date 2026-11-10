@@ -65,8 +65,9 @@ export function registerPtyConnectionNativeQueryReplyRoutingTests(): void {
 
     it('answers cursor queries while an account notice blocks user input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
       mockStoreState.codexRestartNoticeByPtyId = {
@@ -91,8 +92,9 @@ export function registerPtyConnectionNativeQueryReplyRoutingTests(): void {
     it('routes native onData query replies through sendInputImmediate, typed input through sendInput (#7329)', async () => {
       // Why this test: the mock aliases sendInputImmediate to sendInput, so other tests can't tell them apart; this pins the routing decision.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const transport = createMockTransport('remote:web-env-1@@pty-7329')

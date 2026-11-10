@@ -7,13 +7,12 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft
 } from 'lucide-react'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   dashboardCardDisplayState,
   type DashboardCard
@@ -22,6 +21,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 
 function formatStartedAgo(startedAt: number, now: number, t: Translate = translate): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
@@ -245,25 +245,8 @@ export const AgentKanbanCard = memo(
             {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
-          {card.lastUserMessage || card.lastAgentMessage ? (
-            <div className="flex w-full flex-col gap-0.5">
-              {card.lastUserMessage ? (
-                <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
-                  <span className="font-medium text-foreground/45">
-                    {t('dashboardPopout.card.you', 'You')}
-                  </span>{' '}
-                  {card.lastUserMessage}
-                </div>
-              ) : null}
-              {card.lastAgentMessage ? (
-                <div className="line-clamp-2 text-xs leading-snug text-foreground/90">
-                  <span className="font-medium text-foreground/45">
-                    {formatAgentTypeLabel(card.agentType)}
-                  </span>{' '}
-                  {card.lastAgentMessage}
-                </div>
-              ) : null}
-            </div>
+          {hasAgentCardLastMessages(card) ? (
+            <AgentCardLastMessages card={card} clamp />
           ) : card.task ? (
             <div className="line-clamp-2 w-full text-xs leading-snug text-foreground/90">
               {card.task}
