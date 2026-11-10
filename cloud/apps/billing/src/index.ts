@@ -74,7 +74,7 @@ import {
   setupGithubInstall,
   setupSessionView
 } from './cloud-setup'
-import { noTrialPort, type TrialPort } from './cloud-setup-trial'
+import { billingTrialPort, type TrialPort } from './cloud-setup-trial'
 import { grantTrial, isTeamAccount, recordTrialGithub, trialOffer, type TrialInput } from './trial'
 import type { BillingCaller } from './auth'
 
@@ -286,7 +286,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
       const handled = await handleCloudSetup(request, env, url, now, {
         stripe,
         membership,
-        trial: deps.trial ?? noTrialPort,
+        trial: deps.trial ?? billingTrialPort,
         fetch: deps.fetch ?? fetch
       })
       if (handled) {
