@@ -4,6 +4,10 @@ import { normalizeRepoBadgeColor } from '../../../../../../shared/repo-badge-col
 const PROJECT_GROUP_HEADER_KEY_PREFIX = 'repo:'
 const PROVIDER_PROJECT_HEADER_KEY_PREFIX = 'project:'
 
+export function resolveSectionHeaderColor(color: string | null | undefined): string | undefined {
+  return normalizeRepoBadgeColor(color) ?? undefined
+}
+
 export function resolveRepoHeaderColor(badgeColor: string | null | undefined): string {
   const normalizedBadgeColor = normalizeRepoBadgeColor(badgeColor)
   if (!normalizedBadgeColor) {

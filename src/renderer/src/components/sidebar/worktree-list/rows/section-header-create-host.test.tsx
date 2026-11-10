@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { createProjectGroup } from '../../../../../../shared/project-groups'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
@@ -144,6 +145,50 @@ function clickCreate(row: GroupHeaderRow): void {
   )
   fireEvent.click(view.getByRole('button', { name: /Create new worktree for/ }))
 }
+
+it('fills colored section folders and colors the label only while name coloring is enabled', () => {
+  const group = {
+    ...createProjectGroup({ name: 'Projects', createdFrom: 'manual', tabOrder: 0 }),
+    color: '#ef4444',
+    colorName: false
+  }
+  const row: GroupHeaderRow = {
+    type: 'header',
+    key: 'project-group:group-1',
+    label: 'Projects',
+    count: 0,
+    icon: { kind: 'project' },
+    projectGroup: group
+  }
+  const header = () =>
+    renderWorktreeSectionHeaderRow({
+      ctx: headerContext(),
+      row,
+      vItem: { key: 'header', index: 0, start: 0, size: 35, end: 35, lane: 0 },
+      isActiveStickyHeader: false,
+      hasStickyHost: false,
+      hasHeaderTopSpacing: false,
+      measureVirtualRowElement: vi.fn()
+    })
+  const view = render(<TooltipProvider>{header()}</TooltipProvider>)
+  const folder = view.container.querySelector('svg.lucide-folder')
+  expect(folder?.getAttribute('fill')).toBe('#ef4444')
+  expect(folder?.getAttribute('stroke')).toBe('#ef4444')
+  expect(view.container.querySelector('svg.lucide-folder-tree')).toBeNull()
+  expect(view.getByText('Projects').style.color).toBe('')
+  group.colorName = true
+  view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.getByText('Projects').style.color).toBe('#ef4444')
+  group.colorName = false
+  view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.getByText('Projects').style.color).toBe('')
+  row.projectGroup = { ...group, color: null }
+  view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.container.querySelector('svg.lucide-folder')).toBeNull()
+  const folderTree = view.container.querySelector('svg.lucide-folder-tree')
+  expect(folderTree?.getAttribute('fill')).toBe('none')
+  expect(folderTree?.getAttribute('stroke')).toBe('currentColor')
+})
 
 it("opens Create on a same-id twin's own host in a view that shows only that host", () => {
   clickCreate(

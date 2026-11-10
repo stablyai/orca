@@ -4,18 +4,26 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { REPO_COLORS } from '../../../../../../shared/repo-badge-color'
 import { getFolderWorkspacePathStatusDescription } from '@/lib/workspace/paths/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
+import { resolveSectionHeaderColor } from './project-header-color'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -32,7 +40,7 @@ export function ProjectGroupHeaderMenu({
   onDelete
 }: {
   groupId: string
-  /** Owner host of the group row, so rename/delete route to the host that holds it. */
+  /** Owner host of the group row, so actions route to the host that holds it. */
   hostId?: ExecutionHostId
   label: string
   projectGroup: ProjectGroup | null
@@ -41,6 +49,18 @@ export function ProjectGroupHeaderMenu({
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const updateProjectGroup = useAppStore((state) => state.updateProjectGroup)
+  const selectedColor = resolveSectionHeaderColor(projectGroup?.color)
+  const colorNames = [
+    t('auto.components.sidebar.WorktreeList.groupColorGray', 'Gray'),
+    t('auto.components.sidebar.WorktreeList.groupColorRed', 'Red'),
+    t('auto.components.sidebar.WorktreeList.groupColorOrange', 'Orange'),
+    t('auto.components.sidebar.WorktreeList.groupColorYellow', 'Yellow'),
+    t('auto.components.sidebar.WorktreeList.groupColorGreen', 'Green'),
+    t('auto.components.sidebar.WorktreeList.groupColorTeal', 'Teal'),
+    t('auto.components.sidebar.WorktreeList.groupColorPurple', 'Purple'),
+    t('auto.components.sidebar.WorktreeList.groupColorPink', 'Pink')
+  ]
   const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
   return (
     <DropdownMenu modal={false}>
@@ -84,6 +104,46 @@ export function ProjectGroupHeaderMenu({
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            {t('auto.components.sidebar.WorktreeList.groupColor', 'Color')}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {REPO_COLORS.map((color, index) => (
+              <DropdownMenuCheckboxItem
+                key={color}
+                checked={selectedColor === color}
+                onSelect={() => void updateProjectGroup(groupId, { color }, { hostId })}
+              >
+                <span className="size-3.5 rounded-sm" style={{ backgroundColor: color }} />
+                {colorNames[index]}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuCheckboxItem
+              checked={!selectedColor}
+              onSelect={() => void updateProjectGroup(groupId, { color: null }, { hostId })}
+            >
+              {t('auto.components.sidebar.WorktreeList.noGroupColor', 'No color')}
+            </DropdownMenuCheckboxItem>
+            {selectedColor ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={projectGroup?.colorName === true}
+                  onSelect={() =>
+                    void updateProjectGroup(
+                      groupId,
+                      { colorName: !projectGroup?.colorName },
+                      { hostId }
+                    )
+                  }
+                >
+                  {t('auto.components.sidebar.WorktreeList.colorGroupName', 'Color the name too')}
+                </DropdownMenuCheckboxItem>
+              </>
+            ) : null}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>

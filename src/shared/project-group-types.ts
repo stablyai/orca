@@ -14,12 +14,13 @@ export type ProjectGroup = {
   rootProjectOrder?: number
   isCollapsed: boolean
   color: string | null
+  colorName?: boolean
   createdAt: number
   updatedAt: number
 }
 
 export type ProjectGroupUpdate = Partial<
-  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'colorName'>
 > & { rootProjectOrder?: number | null }
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
