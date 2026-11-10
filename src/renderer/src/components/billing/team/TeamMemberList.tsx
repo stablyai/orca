@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/select'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
 import type { OrcaOrgMember, OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { PersonAvatar } from './TeamAvatar'
 import { invitedAsCopy, memberStatusLabel, roleDescription } from './team-copy'
@@ -226,10 +225,8 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
             key={row.key}
             data-team-row={row.key}
             aria-busy={state.busy || undefined}
-            className={cn(
-              'group/row flex min-h-12 flex-col justify-center bg-card px-3 py-2 transition-colors animate-in fade-in-0 duration-200 motion-reduce:animate-none',
-              state.busy && 'opacity-70'
-            )}
+            // Busy rows keep full contrast; the spinner and aria-busy say a change is pending.
+            className="group/row flex min-h-12 flex-col justify-center bg-card px-3 py-2 transition-colors animate-in fade-in-0 duration-200 motion-reduce:animate-none"
           >
             <div className="flex items-center gap-3">
               <PersonAvatar name={name} pending={row.status !== 'active'} />

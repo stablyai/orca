@@ -11,13 +11,13 @@ import {
   useCloudShares,
   type CloudSharesController
 } from '@/lib/cloud-shares/cloud-shares-store'
-import { useAppStore } from '@/store'
 import {
   SHARE_RESERVED_PORTS,
   type CloudShareFailureCode,
   type ShareLink
 } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 import { shareErrorMessage } from './share-link-status'
+import { signInAgainToastAction } from '@/lib/orca-cloud/orca-sign-in-again-action'
 import { SharePortDialog } from './share-port-dialog'
 
 const MENU_ITEM_CLASS =
@@ -30,12 +30,7 @@ function signInAction(code: CloudShareFailureCode): {
   if (code !== 'unauthorized') {
     return {}
   }
-  return {
-    action: {
-      label: translate('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca'),
-      onClick: () => void useAppStore.getState().connectCurrentOrcaProfile()
-    }
-  }
+  return { action: signInAgainToastAction() }
 }
 
 export type SharePortAction = {

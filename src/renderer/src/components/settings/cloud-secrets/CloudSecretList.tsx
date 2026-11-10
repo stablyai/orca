@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ClipboardPaste, KeyRound, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
+import { useAppStore } from '@/store/index'
 import type {
   CloudSecretView,
   CloudSecretsErrorCode
@@ -262,10 +264,15 @@ export function CloudSecretList({
   }
 
   if (model.list.status === 'failed') {
+    if (model.list.error === 'unauthorized') {
+      const signIn = (): void =>
+        void useAppStore.getState().connectCurrentOrcaProfile().then(model.reload)
+      return <SignInAgainNotice onSignIn={signIn} />
+    }
     return (
       <InlineError
         title={
-          model.list.error === 'unauthorized' || model.list.error === 'not_configured'
+          model.list.error === 'not_configured'
             ? cloudSecretsErrorCopy(model.list.error, t)
             : t('cloudSecrets.list.loadFailed', 'Couldn’t load secrets.')
         }

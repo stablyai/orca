@@ -1580,6 +1580,12 @@
     }
   },
   "components": {
+    "confirmation": {
+      "itemList": {
+        "showMore_one": "Show {{count}} more",
+        "showMore_other": "Show {{count}} more"
+      }
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -2136,12 +2142,6 @@
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
           "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
         }
-      }
-    },
-    "confirmation": {
-      "itemList": {
-        "showMore_one": "Show {{count}} more",
-        "showMore_other": "Show {{count}} more"
       }
     }
   },
