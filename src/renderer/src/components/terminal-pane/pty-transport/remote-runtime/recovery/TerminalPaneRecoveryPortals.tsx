@@ -18,6 +18,7 @@ import { WslHostStoppedCard } from '../../recovery/wsl/WslHostStoppedCard'
 import { useRetryPanesWhenWslHostReturns } from '../../recovery/wsl/use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
+import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-context'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
@@ -106,6 +107,9 @@ export function TerminalPaneRecoveryPortals({
     clearStoppedHostErrors
   )
   const retryingOutageEnvironmentId = useRetryingOutageEnvironmentId(controller.worktreeId)
+  // An Orca Cloud workspace mid-wake already shows its waking pill; "Reconnecting" would be noise.
+  const cloud = useCloudRecoveryContext(controller.worktreeId)
+  const cloudWaking = cloud?.waking === true
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
   const awaitingSignInHere = managedPanes.some(
@@ -120,7 +124,8 @@ export function TerminalPaneRecoveryPortals({
     !wslHostUnavailable &&
     // Why: "retrying automatically" would be false; each pane offers Start instead.
     stoppedWslDistro === null &&
-    pairingRefusedEnvironmentId === null
+    pairingRefusedEnvironmentId === null &&
+    !cloudWaking
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
   const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
@@ -150,6 +155,7 @@ export function TerminalPaneRecoveryPortals({
           key={noticeEnvironmentId}
           environmentId={noticeEnvironmentId}
           reveal={noticeReveal}
+          cloudWorkspaceName={cloud?.workspaceName ?? null}
         />
       ) : null}
       {managedPanes.map((pane) => {
@@ -195,13 +201,15 @@ export function TerminalPaneRecoveryPortals({
             environmentId={paneEnvironmentId}
             // Why stopped panes too: a card flashing over the notice's hold is the overlap this avoids.
             heldByServer={
-              !isolated &&
-              !awaitingSignIn &&
-              !wslHostUnavailable &&
-              pairingRefusedEnvironmentId === null &&
-              notice.quiet &&
-              paneEnvironmentId === ownerEnvironmentId
+              cloudWaking ||
+              (!isolated &&
+                !awaitingSignIn &&
+                !wslHostUnavailable &&
+                pairingRefusedEnvironmentId === null &&
+                notice.quiet &&
+                paneEnvironmentId === ownerEnvironmentId)
             }
+            cloudWorkspaceName={cloud?.workspaceName ?? null}
             onReconnect={onReconnect}
             wslHostUnavailable={wslHostUnavailable}
             pairingRefused={pairingRefusedEnvironmentId !== null}

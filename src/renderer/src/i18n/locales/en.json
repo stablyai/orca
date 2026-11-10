@@ -26479,6 +26479,7 @@
       "unarchiving": "Restoring from archive…",
       "waking": "Waking…",
       "connecting": "Connecting…",
+      "terminalStalledTitle": "Couldn’t reconnect the terminal",
       "stuck": "This is taking much longer than usual.",
       "slow": "Taking longer than usual. Your files and chats are safe.",
       "messageQueued": "Your message sends as soon as it’s up.",
@@ -26579,7 +26580,11 @@
     "moveHere": "Move here",
     "openLocal": "Open local workspace",
     "copiedOn": "Moved to this computer · {{date}}",
-    "moveAgain": "Move again"
+    "moveAgain": "Move again",
+    "recovery": {
+      "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
+      "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

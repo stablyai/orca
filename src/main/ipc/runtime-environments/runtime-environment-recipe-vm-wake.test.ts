@@ -142,13 +142,14 @@ describe('a request to a recipe VM environment', () => {
       awaitWake,
       openEnvironment: async () => 'up'
     })
-    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000)
-    expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 5_000, undefined)
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list')
+    // Not bounded by the call's own timeout (that starts once dispatched): the in-flight maximum.
+    expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 60_000, undefined)
     // Bounded by the caller's hold (0 = never wait) and never for an open (that wakes in its slot).
-    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000, {
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', {
       preparation: { recipeVmHoldMs: 0 }
     })
-    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'worktree.activate', 5_000)
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'worktree.activate')
     expect(awaitWake).toHaveBeenCalledTimes(1)
     expect(holdOpen).not.toHaveBeenCalled()
     // Inside the slot the request is still answered at once from the owner's state.
@@ -165,10 +166,10 @@ describe('a request to a recipe VM environment', () => {
       awaitWake,
       openEnvironment: async () => 'up'
     })
-    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 600_000)
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list')
     expect(awaitWake).not.toHaveBeenCalled()
     ownerState = 'waking'
-    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 600_000)
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list')
     expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 60_000, undefined)
   })
 
@@ -186,7 +187,7 @@ describe('a request to a recipe VM environment', () => {
       openEnvironment: async () => 'up'
     })
     await expect(
-      holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000)
+      holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list')
     ).resolves.toEqual({ before: VM_ENVIRONMENT, wokenPairingRevision: 9 })
   })
 
