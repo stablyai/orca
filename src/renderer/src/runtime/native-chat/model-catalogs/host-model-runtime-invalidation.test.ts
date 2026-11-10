@@ -1,4 +1,9 @@
+// @vitest-environment happy-dom
 import { expect, it, vi } from 'vitest'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { createElement } from 'react'
+import { useAgentModelMenu } from '@/components/agent/launch-settings/use-agent-model-menu'
+import { AgentChoiceControls } from '@/components/agent/launch-settings/AgentChoiceControls'
 import type { AppState } from '@/store/types'
 const store = vi.hoisted(() => ({
   subscribe: vi.fn().mockReturnValue(() => {}),
@@ -16,7 +21,10 @@ vi.mock('../../hosts/capabilities/local-runtime-capabilities', () => ({
 }))
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
 import { hostModelMenuCatalog } from './host-model-menu-catalog'
-import { resetHostModelCatalogSnapshotsForTests } from './host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  resetHostModelCatalogSnapshotsForTests
+} from './host-model-catalog-snapshots'
 
 it('switching PowerShell to WSL invalidates a fresh native list and its in-flight request', async () => {
   resetHostModelCatalogSnapshotsForTests()
@@ -70,4 +78,91 @@ it('switching PowerShell to WSL invalidates a fresh native list and its in-fligh
   expect(request).toHaveBeenCalledTimes(3)
   stop()
   cleanup()
+})
+
+it('keeps closed Settings labels through a full settings fetch and a saved model choice', () => {
+  resetHostModelCatalogSnapshotsForTests()
+  store.subscribe.mockClear()
+  const initial = {
+    settings: {
+      agentDefaultEnv: { codex: {} },
+      agentCmdOverrides: {},
+      codexManagedAccounts: [],
+      claudeManagedAccounts: []
+    },
+    runtimeStatusByEnvironmentId: new Map(),
+    removedRuntimeEnvironmentIds: new Set<string>()
+  }
+  store.getState.mockReturnValue(initial)
+  const stop = installHostModelCatalogSnapshotsSync()
+  const changed = store.subscribe.mock.calls[0][0]
+  const request = vi.fn()
+  const source = {
+    scope: { target: { kind: 'local' as const }, agent: 'codex', request },
+    coherentCatalog: true
+  }
+  function Editor({ model }: { model?: string }) {
+    const value = model ? { model } : undefined
+    const modelMenu = useAgentModelMenu('codex', value, source, false)
+    return createElement(AgentChoiceControls, {
+      agent: 'codex',
+      value,
+      modelMenu,
+      layout: 'rows',
+      onChange: () => {}
+    })
+  }
+  const view = render(createElement(Editor))
+  try {
+    expect(screen.getByRole('button', { name: 'Model: Model' }).getAttribute('aria-busy')).toBe(
+      'true'
+    )
+    act(() =>
+      recordHostModelCatalogSnapshot(source.scope.target, 'codex', null, { origin: 'unknown' })
+    )
+    expect(
+      screen.getByRole('button', { name: 'Model: Agent default' }).getAttribute('aria-busy')
+    ).toBe('false')
+    expect(screen.queryByRole('note')).toBeNull()
+    act(() => {
+      recordHostModelCatalogSnapshot(source.scope.target, 'codex', null, {
+        origin: 'probe',
+        fetchedAt: 1,
+        modelsDifferByWorkspace: true,
+        models: [{ id: 'gpt-6-luna', label: 'GPT-6-Luna', isDefault: false, efforts: [] }]
+      })
+    })
+    expect(
+      screen.getByRole('button', { name: 'Model: Agent default' }).getAttribute('aria-busy')
+    ).toBe('false')
+    const fetched = structuredClone(initial)
+    act(() => changed(fetched, initial))
+    expect(
+      screen.getByRole('button', { name: 'Model: Agent default' }).getAttribute('aria-busy')
+    ).toBe('false')
+    const saved = {
+      ...structuredClone(fetched),
+      settings: {
+        ...structuredClone(fetched.settings),
+        agentLaunchChoices: { codex: { model: 'gpt-6-luna' } }
+      }
+    }
+    act(() => changed(saved, fetched))
+    view.rerender(createElement(Editor, { model: 'gpt-6-luna' }))
+    expect(
+      screen.getByRole('button', { name: 'Model: GPT-6-Luna' }).getAttribute('aria-busy')
+    ).toBe('false')
+    view.unmount()
+    for (let i = 0; i < 2; i++) {
+      const reopened = render(createElement(Editor, { model: 'gpt-6-luna' }))
+      expect(
+        screen.getByRole('button', { name: 'Model: GPT-6-Luna' }).getAttribute('aria-busy')
+      ).toBe('false')
+      reopened.unmount()
+    }
+    expect(request).not.toHaveBeenCalled()
+  } finally {
+    cleanup()
+    stop()
+  }
 })

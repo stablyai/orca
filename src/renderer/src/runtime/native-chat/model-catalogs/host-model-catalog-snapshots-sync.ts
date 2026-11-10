@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
@@ -112,7 +113,7 @@ function accountSettingsChanged(state: AppState, previous: AppState): boolean {
   return (
     state.settings !== previous.settings &&
     HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.some(
-      (key) => state.settings?.[key] !== previous.settings?.[key]
+      (key) => !structuralValuesEqual(state.settings?.[key], previous.settings?.[key])
     )
   )
 }
