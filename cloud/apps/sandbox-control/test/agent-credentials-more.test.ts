@@ -196,7 +196,11 @@ describe('egress swap on a sandbox with the new keys', () => {
     const { h, id, send, upstream } = await setup()
     const mia = await h.token('mia', undefined, 'sandbox')
     expect((await h.call('PUT', '/v1/secrets/personal/COPILOT_GITHUB_TOKEN', { body: { value: COPILOT_KEY }, bearer: mia })).status).toBe(200)
-    const ph = `orca-ph-copilot-github-token-${id}`
+    // Copilot CLI ignores a token that doesn't look like a GitHub token, so the stand-in looks like one.
+    const ph = `github_pat_orcaph_${id}`
+    const vmEnv = h.vercel.commands.filter((c) => c.env.ORCA_SECRET_ENV).at(-1)!.env.ORCA_SECRET_ENV!
+    const line = vmEnv.split('\n').find((l) => l.startsWith('COPILOT_GITHUB_TOKEN='))!
+    expect(Buffer.from(line.slice(line.indexOf('=') + 1), 'base64').toString('utf8')).toBe(ph)
     const policy = [...h.vercel.boxes.values()][0]!.policy
     const values = policy.allow['api.github.com']!.flatMap((rule) => ('match' in rule && rule.match?.headers ? [rule.match.headers[0]!.value.exact] : []))
     expect(values).toEqual(expect.arrayContaining([`Bearer ${ph}`, `token ${ph}`, `Bearer orca-ph-${id}`]))
