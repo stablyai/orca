@@ -123,6 +123,12 @@ function QuickTabBody({
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const recordCreatedRef = useRef<(() => void) | null>(null)
+  // Stable, like onClose was: composer state keys effects on it. Only a start that happened
+  // becomes the project's remembered Run on target.
+  const onCreated = useCallback(() => {
+    recordCreatedRef.current?.()
+    onClose()
+  }, [onClose])
   const {
     cardProps,
     composerRef,
@@ -148,11 +154,7 @@ function QuickTabBody({
     initialParentWorktreeId: modalData.initialParentWorktreeId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
-    onCreated: () => {
-      // Only a start that happened becomes the project's remembered Run on target.
-      recordCreatedRef.current?.()
-      onClose()
-    },
+    onCreated,
     isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
     enableIssueAutomation: modalData.enableIssueAutomation === true

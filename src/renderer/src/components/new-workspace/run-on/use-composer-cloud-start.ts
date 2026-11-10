@@ -1,6 +1,6 @@
 // The composer modal's side of "Start in Orca Cloud": feeds the composer state into
 // useCloudStartComposer and returns what the primary button and ⌘↵ do.
-import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
+import { useCallback, useEffect, type MutableRefObject } from 'react'
 import type { ComposerModalData } from '../composer-modal-data'
 import type { NewWorkspaceComposerCardProps } from '../new-workspace-composer-card-props'
 import { useCloudStartComposer } from './use-cloud-start-composer'
@@ -34,11 +34,9 @@ export function useComposerCloudStart({
   /** The composer's onCreated calls this: only a start that happened is remembered. */
   recordCreatedRef: MutableRefObject<(() => void) | null>
 }) {
-  const handleCreateRef = useRef(handleCreate)
-  useEffect(() => {
-    handleCreateRef.current = handleCreate
-  }, [handleCreate])
-  const runCreate = useCallback(() => void handleCreateRef.current(), [])
+  // The latest handleCreate, never a ref copied after render: a submit right after an edit must
+  // see that edit.
+  const runCreate = useCallback(() => void handleCreate(), [handleCreate])
   const cloudStart = useCloudStartComposer({
     active,
     availability: cardProps.orcaCloudAvailability ?? 'unavailable',
@@ -50,9 +48,7 @@ export function useComposerCloudStart({
     prompt: cardProps.name,
     agent: quickAgent,
     initialTargetFixed: Boolean(
-      modalData.initialEphemeralVmRecipeId ||
-      modalData.initialWorkspaceTarget ||
-      modalData.recovery
+      modalData.initialEphemeralVmRecipeId || modalData.initialWorkspaceTarget || modalData.recovery
     ),
     onCreate: runCreate
   })
