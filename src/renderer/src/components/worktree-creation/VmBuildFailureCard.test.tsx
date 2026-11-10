@@ -101,14 +101,14 @@ it.each(['plan', 'hoursUsed', 'spendCap', 'payment'] as const)(
     expect(
       screen.queryByRole('button', { name: /See plans|Raise spend cap|Turn on overage/ })
     ).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Create on this computer instead/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Use this computer instead/ }))
     expect(handlers.onCreateLocally).toHaveBeenCalledOnce()
   }
 )
 
-it("keeps Create on this computer instead beside an owner's billing fix", () => {
+it("keeps Use this computer instead beside an owner's billing fix", () => {
   const handlers = actions()
   render(<Sheet failure={{ kind: 'spendCap' }} handlers={handlers} />)
   const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
-  expect(buttons.slice(0, 2)).toEqual(['Raise spend cap', 'Create on this computer instead'])
+  expect(buttons.slice(0, 2)).toEqual(['Raise spend cap', 'Use this computer instead'])
 })

@@ -32,7 +32,7 @@ describe('composer data for a create billing refused', () => {
     })
   })
 
-  it('drops the sandbox for Create on this computer instead', () => {
+  it('drops the sandbox for Use this computer instead', () => {
     const data = composerDataFromRefusedCreate({ request }, { local: true })
     expect(data.initialEphemeralVmRecipeId).toBeUndefined()
     expect(data.recovery?.note).toBe('Fix the login redirect')

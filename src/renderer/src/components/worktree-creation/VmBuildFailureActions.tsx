@@ -87,8 +87,8 @@ function failureActions(
   const createLocally: Action = {
     key: 'local',
     label: t(
-      'auto.components.worktree.creation.VmBuildFailureCard.createOnThisComputer',
-      'Create on this computer instead'
+      'auto.components.worktree.creation.VmBuildFailureCard.useThisComputer',
+      'Use this computer instead'
     ),
     icon: <Monitor />,
     onClick: actions.onCreateLocally,
