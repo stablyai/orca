@@ -252,19 +252,21 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     identity,
     body,
     options
-  ) =>
-    queue.submit({
-      bytes: estimateStructuredAgentSessionItemBytes(identity, body),
+  ) => {
+    const reservedBytes = estimateStructuredAgentSessionItemBytes(identity, body)
+    return queue.submit({
+      bytes: reservedBytes,
       steps: (bound) => [
         {
           kind: 'item',
           identity,
           body,
-          reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body),
+          reservedBytes,
           options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
         }
       ]
     })
+  }
 
   const appendTombstone = (
     identity: AgentJournalItemIdentity

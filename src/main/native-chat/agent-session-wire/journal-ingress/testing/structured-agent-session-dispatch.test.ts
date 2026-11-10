@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import type { AgentSessionTurnActivity } from '../../../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -12,6 +13,44 @@ import {
 } from './structured-agent-session-transition-contract.test-fixture'
 
 const options = { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+
+it('delivers the latest queued activity without superseded activities while every durable dispatch lands', async () => {
+  const { journal, deferred, sink } = await rig()
+  const received: AgentSessionTurnActivity[] = []
+  deferred.bind({
+    journal,
+    fence: 1,
+    publish: (activity) => {
+      if (activity) {
+        received.push(activity)
+      }
+    }
+  })
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const held = journal.readInOrder(async () => {
+    entered.resolve()
+    await release.promise
+  })
+  await entered.promise
+  try {
+    for (const text of ['first', 'second', 'latest']) {
+      sink.appendItem(identity(text), tool(text, 'completed'), options)
+      sink.setActivity?.({ turnId: 'turn-1', text })
+      await Promise.resolve()
+    }
+  } finally {
+    release.resolve()
+  }
+  await held
+  await expect(deferred.drained()).resolves.toEqual({ ok: true })
+  expect(received).toEqual([{ turnId: 'turn-1', text: 'latest' }])
+  expect((await readTestJournalItems(journal)).map((item) => item.body)).toEqual([
+    tool('first', 'completed'),
+    tool('second', 'completed'),
+    tool('latest', 'completed')
+  ])
+})
 
 it.each(['step threshold', 'byte threshold'] as const)(
   'publishes a terminal turn and trailing output together across the %s despite two publish calls',

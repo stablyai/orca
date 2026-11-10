@@ -207,6 +207,7 @@ export class StructuredAgentSessionSinkQueue {
     if (replaceAt >= 0) {
       this.buffered.splice(replaceAt, 1)
     }
+    this.dispatch.coalesce(accepted)
     this.queuedBytes = queuedBytes
     this.queuedOperations = queuedOperations
     if (this.target) {
@@ -255,6 +256,7 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   private release(operation: Admitted): void {
+    this.dispatch.forget(operation)
     this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
     this.queuedOperations = Math.max(0, this.queuedOperations - (operation.operations ?? 1))
   }

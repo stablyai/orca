@@ -22,10 +22,29 @@ export type Admitted = StructuredAgentSessionSinkOperation & { superseded?: bool
 /** Capture a complete synchronous source unit; ready-batch caps never divide its dependencies. */
 export class StructuredAgentSessionDispatch {
   private pending: Admitted[] = []
+  private readonly waitingPublications = new Map<string, Admitted>()
   constructor(
     private readonly flush: () => void,
     private readonly canPublish: () => boolean
   ) {}
+
+  coalesce(operation: Admitted): void {
+    const key = operation.publicationKey
+    if (key !== undefined) {
+      const prior = this.waitingPublications.get(key)
+      if (prior) {
+        prior.superseded = true
+      }
+      this.waitingPublications.set(key, operation)
+    }
+  }
+
+  forget(operation: Admitted): void {
+    const key = operation.publicationKey
+    if (key !== undefined && this.waitingPublications.get(key) === operation) {
+      this.waitingPublications.delete(key)
+    }
+  }
 
   push(operation: Admitted): void {
     if (this.pending.length === 0) {
@@ -35,13 +54,6 @@ export class StructuredAgentSessionDispatch {
           this.flush()
         }
       })
-    }
-    const key = operation.publicationKey
-    if (key !== undefined) {
-      const prior = this.pending.findLast((queued) => queued.publicationKey === key)
-      if (prior) {
-        prior.superseded = true
-      }
     }
     this.pending.push(operation)
   }
@@ -89,7 +101,12 @@ export class StructuredAgentSessionDispatch {
       sequence: dispatch.at(-1)!.sequence,
       bytes: dispatch.reduce((total, operation) => total + operation.bytes, 0),
       operations: dispatch.reduce((total, operation) => total + (operation.operations ?? 1), 0),
-      run
+      run: () =>
+        run().finally(() => {
+          for (const operation of dispatch) {
+            this.forget(operation)
+          }
+        })
     }
   }
 }
