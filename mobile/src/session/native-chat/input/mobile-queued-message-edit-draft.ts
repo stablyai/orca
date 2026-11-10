@@ -1,4 +1,7 @@
-import type { QueuedEditLeaseLoss } from '../../../../../src/shared/queued-message-edit-lease'
+import type {
+  QueuedEditLease,
+  QueuedEditLeaseLoss
+} from '../../../../../src/shared/queued-message-edit-lease'
 import type { MobileStructuredAgentMutate } from '../agent-session/use-mobile-structured-agent-mutation'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import {
@@ -15,7 +18,6 @@ import {
 import type { AgentSessionQueuedMessage } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentJournalSubmission } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import type { QueuedEditLease } from '../../../../../src/shared/queued-message-edit-lease'
 import { pickedSkillsInText } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   queuedEditKeptImages,
