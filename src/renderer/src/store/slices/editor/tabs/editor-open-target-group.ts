@@ -10,7 +10,6 @@ import type { LinkPlacementState } from '@/lib/link-open-intent'
 import { collectTabGroupLayoutGroupIds } from '../../../../../../shared/workspace-layout/tab-group-moves'
 import { resolveLinkOpenSidePlacement } from '@/lib/adjacent-link-open-group'
 import type { TabSplitTarget } from '../../tabs/tabs-slice-contract'
-import '@/lib/link-open-intent'
 
 export function captureEditorOpenLinkIntent(
   state: Pick<AppState, 'unifiedTabsByWorktree'>,
