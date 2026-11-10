@@ -9,6 +9,8 @@ import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in
 import { SettingsDisabledControlTooltip } from '../settings/form-controls/SettingsDisabledControlTooltip'
 import { LoadingRows, PanelSection } from './cloud-sections/PanelSection'
 import type { HostAgentPanelRow, HostAgentPanelState } from './host-agents-panel-model'
+import type { SshAgentSignInFlow } from '../../../../shared/ssh-agent-sign-in-types'
+import { SshCodeSignIn, type SshCodeSignInActions } from './ssh-classic/SshCodeSignIn'
 
 export type HostAgentsPanelSectionProps = {
   title: string
@@ -24,7 +26,21 @@ export type HostAgentsPanelSectionProps = {
   actionsDisabledReason: string | null
   onSignOut: (agent: HostAgentSignInAgent) => void
   onCheckAgain: () => void
+  /** Classic SSH: code sign-in over remote exec, inline under the agent's row. */
+  codeSignIn?: {
+    flows: Partial<Record<HostAgentSignInAgent, SshAgentSignInFlow>>
+    start: (agent: HostAgentSignInAgent) => void
+    actions: SshCodeSignInActions
+  }
 }
+
+const RUNNING: ReadonlySet<SshAgentSignInFlow['phase']> = new Set([
+  'starting',
+  'needsCode',
+  'submitting',
+  'device',
+  'failed'
+])
 
 function stateLabel(state: HostAgentPanelState, t: Translate): string {
   switch (state) {
@@ -77,6 +93,41 @@ function SignOutButton({
   )
 }
 
+/** One action that needs the host; disabled with its reason (keyboard-reachable) while it can't. */
+function ActionButton({
+  label,
+  ariaLabel,
+  reason,
+  onClick
+}: {
+  label: string
+  ariaLabel: string
+  reason: string | null
+  onClick: () => void
+}): React.JSX.Element {
+  const reasonId = React.useId()
+  return (
+    <SettingsDisabledControlTooltip reason={reason ?? undefined}>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        aria-label={ariaLabel}
+        aria-disabled={reason ? 'true' : undefined}
+        aria-describedby={reason ? reasonId : undefined}
+        onClick={() => (reason ? undefined : onClick())}
+      >
+        {label}
+        {reason ? (
+          <span id={reasonId} className="sr-only">
+            {reason}
+          </span>
+        ) : null}
+      </Button>
+    </SettingsDisabledControlTooltip>
+  )
+}
+
 export function HostAgentsPanelSection(props: HostAgentsPanelSectionProps): React.JSX.Element {
   const t = useTranslate()
   const { rows, checking, failed, lastChecked, host } = props
@@ -114,6 +165,7 @@ export function HostAgentsPanelSection(props: HostAgentsPanelSectionProps): Reac
           ) : null}
           <ul className="flex flex-col divide-y divide-border/60">
             {rows.map((row) => {
+              const flow = props.codeSignIn?.flows[row.agent]
               const muted = checking
                 ? t('agentHostPanel.host.checking', 'Checking…')
                 : lastChecked
@@ -134,7 +186,7 @@ export function HostAgentsPanelSection(props: HostAgentsPanelSectionProps): Reac
                     <span className="text-sm text-foreground">
                       {[stateLabel(row.state, t), muted].filter(Boolean).join(' · ')}
                     </span>
-                    {row.state === 'signedOut' ? (
+                    {row.state === 'signedOut' && !props.codeSignIn ? (
                       <span className="text-xs text-muted-foreground">
                         {t(
                           'agentHostPanel.host.signInHint',
@@ -150,9 +202,30 @@ export function HostAgentsPanelSection(props: HostAgentsPanelSectionProps): Reac
                       reason={props.actionsDisabledReason}
                       onSignOut={props.onSignOut}
                     />
+                  ) : props.codeSignIn &&
+                    row.state === 'signedOut' &&
+                    !(flow && RUNNING.has(flow.phase)) ? (
+                    <ActionButton
+                      label={t('agentHostPanel.ssh.signIn', 'Sign in')}
+                      ariaLabel={t(
+                        'agentHostPanel.ssh.signInTo',
+                        'Sign in to {{agent}} on {{host}}',
+                        {
+                          agent: HOST_AGENT_SIGN_IN_AGENT_NAME[row.agent],
+                          host
+                        }
+                      )}
+                      reason={props.actionsDisabledReason}
+                      onClick={() => props.codeSignIn?.start(row.agent)}
+                    />
                   ) : (
                     <span />
                   )}
+                  {props.codeSignIn && flow && RUNNING.has(flow.phase) ? (
+                    <div className="col-span-3 pt-2">
+                      <SshCodeSignIn flow={flow} host={host} actions={props.codeSignIn.actions} />
+                    </div>
+                  ) : null}
                 </li>
               )
             })}

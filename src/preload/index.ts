@@ -96,6 +96,7 @@ import { agentApiKeysApi } from './api/agent-api-keys-bridge'
 import { cloudApiBridge } from './api/cloud-api-bridge'
 import { cloudSecretsApi } from './api/cloud-secrets-bridge'
 import { orcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
+import { sshAgentSignInApi } from './api/ssh-agent-sign-in-bridge'
 import { legacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import { automationsApi } from './api/automations-bridge'
 import { e2eApi } from './api/e2e-bridge'
@@ -212,6 +213,7 @@ const api = {
   cloudApi: cloudApiBridge,
   cloudSecrets: cloudSecretsApi,
   orcaCloudAgents: orcaCloudAgentsApi,
+  sshAgentSignIn: sshAgentSignInApi,
   legacyRelayBridge: legacyRelayBridgeApi,
   automations: automationsApi,
   e2e: e2eApi,

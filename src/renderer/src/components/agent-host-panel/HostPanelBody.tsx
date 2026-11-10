@@ -2,7 +2,6 @@
 // answer; sections 2–3 read only this computer (Agent API keys, the recipe env summary).
 import React, { useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '@/components/ui/button'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { AgentApiKeySummary } from '../../../../shared/agent-api-keys/agent-api-key-catalog'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -17,6 +16,13 @@ import { agentApiKeysForHost, hostAgentPanelRows } from './host-agents-panel-mod
 import { openAgentHostSettings } from './open-agent-host-settings'
 import type { ResolvedAgentHost } from './use-agent-host'
 import { useHostAgentReport } from './use-host-agent-report'
+import { useSshClassicAgents } from './ssh-classic/use-ssh-classic-agents'
+import { SshSignOutDialog } from './ssh-classic/SshSignOutDialog'
+import {
+  cancelSshAgentSignIn,
+  startSshAgentSignIn,
+  submitSshAgentSignInCode
+} from '@/lib/ssh-agent-sign-in/ssh-agent-sign-in-store'
 
 function useHostKeys(hostId: ExecutionHostId): AgentApiKeySummary[] | null {
   const [keys, setKeys] = useState<AgentApiKeySummary[] | null>(null)
@@ -62,14 +68,14 @@ export function HostKeysRows({ keys }: { keys: AgentApiKeySummary[] | null }): R
     return (
       <p className="text-xs text-muted-foreground">
         {t('agentHostPanel.keys.noneHere', 'No keys apply to this host.')}{' '}
-        <Button
+        {/* The footer's link style, so it reads as a link. */}
+        <button
           type="button"
-          variant="link"
-          size="xs"
+          className="text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-[var(--focus-ring)]"
           onClick={() => openAgentHostSettings('agentApiKeys')}
         >
           {t('agentHostPanel.keys.addOne', 'Add one in Agent API keys')}
-        </Button>
+        </button>
       </p>
     )
   }
@@ -100,12 +106,15 @@ export function useHostPanelBody(
   generation: number,
   onCheckAgain: () => void
 ): { agents: React.ReactNode; keys: React.ReactNode; environment: React.ReactNode } {
-  const report = useHostAgentReport({
+  const runtimeReport = useHostAgentReport({
     kind: host.kind,
     availability: host.availability,
     environmentId: host.environmentId,
     generation
   })
+  // Classic SSH has no Orca server: status and code sign-in run over SSH exec (Q8).
+  const ssh = useSshClassicAgents(host, generation)
+  const report = host.kind === 'sshClassic' ? ssh : runtimeReport
   const keys = useHostKeys(host.hostId)
   const recipeSummary = useRecipeEnvSummary(host.kind === 'recipe')
   const [signOutAgent, setSignOutAgent] = useState<HostAgentSignInAgent | null>(null)
@@ -116,15 +125,43 @@ export function useHostPanelBody(
         title={capabilities.agents.title}
         help={capabilities.agents.help}
         host={host.label}
-        rows={host.kind === 'sshClassic' ? null : hostAgentPanelRows(report.report)}
+        rows={hostAgentPanelRows(report.report)}
         checking={report.checking}
         failed={report.failed}
         lastChecked={unavailable && report.report ? formatDate(report.report.checkedAt) : null}
-        signOut={capabilities.signOut && host.environmentId !== null}
+        signOut={capabilities.signOut && (host.environmentId !== null || ssh.targetId !== null)}
         actionsDisabledReason={capabilities.actionsDisabledReason}
         onSignOut={setSignOutAgent}
         onCheckAgain={onCheckAgain}
+        {...(ssh.targetId
+          ? {
+              codeSignIn: {
+                flows: ssh.flows,
+                start: (agent: HostAgentSignInAgent) =>
+                  void startSshAgentSignIn(ssh.targetId ?? '', agent),
+                actions: {
+                  submit: (flowId: string, code: string) =>
+                    void submitSshAgentSignInCode(flowId, code),
+                  cancel: cancelSshAgentSignIn,
+                  retry: (flow) => void startSshAgentSignIn(flow.targetId, flow.agent),
+                  openLink: (url: string) => void window.api.shell.openUrl(url),
+                  copyAndOpen: (code: string, url: string) => {
+                    void window.api.ui.writeClipboardText(code)
+                    void window.api.shell.openUrl(url)
+                  }
+                }
+              }
+            }
+          : {})}
       />
+      {ssh.targetId ? (
+        <SshSignOutDialog
+          targetId={ssh.targetId}
+          hostLabel={host.label}
+          agent={signOutAgent}
+          onClose={() => setSignOutAgent(null)}
+        />
+      ) : null}
       {host.environmentId ? (
         <HostAgentSignOutDialog
           environmentId={host.environmentId}

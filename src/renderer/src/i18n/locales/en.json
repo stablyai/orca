@@ -27451,7 +27451,7 @@
       "keysLocal": "From Agent API keys. Sealed in your keychain and passed to the agent when it starts.",
       "envLocal": "Agents here get this computer’s environment. Orca doesn’t add variables.",
       "keysSsh": "Sent over SSH when the agent starts. Not stored on {{host}}.",
-      "envSsh": "Agents on {{host}} get its shell profile. Orca doesn’t add variables on SSH hosts.",
+      "envSsh": "Agents on {{host}} use its shell profile. Orca doesn’t add variables on SSH hosts.",
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
@@ -27547,6 +27547,24 @@
       "checking": "Checking…",
       "lastChecked": "last checked {{date}}",
       "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in."
+    },
+    "ssh": {
+      "signIn": "Sign in",
+      "signInTo": "Sign in to {{agent}} on {{host}}",
+      "errorDisconnected": "{{host}} disconnected during sign-in.",
+      "errorNotInstalled": "{{agent}} isn’t installed on {{host}}.",
+      "errorTimeout": "Sign-in timed out. Nothing was changed.",
+      "errorRejected": "{{agent}} didn’t accept that code. Start again.",
+      "errorFailed": "{{agent}} couldn’t finish signing in. Nothing was changed.",
+      "cancel": "Cancel",
+      "starting": "Starting the {{agent}} sign-in on {{host}}…",
+      "submitting": "Checking the code on {{host}}…",
+      "pasteLabel": "Sign in to {{agent}} on {{host}}",
+      "pasteStep": "Approve on claude.ai, then paste the code it shows. The sign-in is saved on {{host}}.",
+      "openClaude": "Open claude.ai",
+      "codeLabel": "Code from claude.ai",
+      "deviceStep": "Enter this code on auth.openai.com. The sign-in is saved on {{host}}.",
+      "codePlaceholder": "Paste the code"
     }
   },
   "cloudSecretsAsk": {
@@ -27889,7 +27907,6 @@
       "notConnected": "Not connected",
       "checking": "Checking…",
       "couldntCheck": "Couldn’t check",
-      "notChecked": "Not checked",
       "cloudAccount": "Your Orca account",
       "cloudKeyMember": "{{key}} · set by your team",
       "cloudNotSetUp": "Not set up",

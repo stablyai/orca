@@ -129,12 +129,25 @@ describe('overviewRows', () => {
     ])
   })
 
-  it('never lists classic SSH as checked', () => {
-    const [row] = overviewRows({
+  it('reads classic SSH like any host: its report while connected, not connected otherwise', () => {
+    const [live] = overviewRows({
       hosts: [host({ hostId: 'ssh:old', kind: 'sshClassic', environmentId: null })],
-      probes: {},
+      probes: { 'ssh:old': probe() },
       cloud: null
     })
-    expect(row?.cells.claude.kind).toBe('notChecked')
+    expect(live?.cells.claude.kind).toBe('signedIn')
+    const [away] = overviewRows({
+      hosts: [
+        host({
+          hostId: 'ssh:old',
+          kind: 'sshClassic',
+          environmentId: null,
+          availability: 'disconnected'
+        })
+      ],
+      probes: { 'ssh:old': probe({ report: null }) },
+      cloud: null
+    })
+    expect(away?.cells.claude.kind).toBe('notConnected')
   })
 })

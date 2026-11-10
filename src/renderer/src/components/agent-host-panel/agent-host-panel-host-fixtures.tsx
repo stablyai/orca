@@ -35,7 +35,7 @@ const SIGNED_IN: HostAgentPanelRow[] = [
   { agent: 'codex', state: 'signedOut', canSignOut: false }
 ]
 
-function HostFixture({
+export function HostFixture({
   kind,
   host,
   availability = 'available',
@@ -43,7 +43,8 @@ function HostFixture({
   keys = KEYS,
   failed = false,
   lastChecked = null,
-  dot = null
+  dot = null,
+  codeSignIn
 }: {
   kind: AgentHostKind
   host: string
@@ -53,6 +54,7 @@ function HostFixture({
   failed?: boolean
   lastChecked?: string | null
   dot?: CloudDotState | null
+  codeSignIn?: React.ComponentProps<typeof HostAgentsPanelSection>['codeSignIn']
 }): React.JSX.Element {
   const capabilities = hostCapabilities(kind, availability, { host, date: lastChecked }, translate)
   return (
@@ -75,6 +77,7 @@ function HostFixture({
               actionsDisabledReason={capabilities.actionsDisabledReason}
               onSignOut={noop}
               onCheckAgain={noop}
+              codeSignIn={codeSignIn}
             />
           }
           keys={<HostKeysRows keys={keys} />}
@@ -107,11 +110,6 @@ export const local = defineFixture({
 export const sshOrcad = defineFixture({
   width: 1000,
   render: () => <HostFixture kind="sshOrcad" host="devbox" />
-})
-
-export const sshClassic = defineFixture({
-  width: 1000,
-  render: () => <HostFixture kind="sshClassic" host="build-01" rows={null} keys={NO_KEYS} />
 })
 
 export const wsl = defineFixture({

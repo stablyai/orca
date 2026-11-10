@@ -8,6 +8,11 @@ import {
   refreshHostAgentSignInReport
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import type { HostAgentSignInReport } from '../../../../../../shared/host-agent-sign-in-status'
+import {
+  readSshAgentState,
+  refreshSshAgentReport
+} from '@/lib/ssh-agent-sign-in/ssh-agent-sign-in-store'
+import { sshTargetIdOf } from '../../../agent-host-panel/ssh-classic/use-ssh-classic-agents'
 import type { OverviewAgent, OverviewHost, OverviewProbe } from './agent-accounts-overview-model'
 
 const MAX_IN_FLIGHT = 4
@@ -19,8 +24,9 @@ export function overviewProbeTargets(hosts: readonly OverviewHost[]): OverviewHo
   return hosts.filter(
     (host) =>
       host.availability === 'available' &&
-      host.kind !== 'sshClassic' &&
-      (host.kind === 'local' || host.environmentId !== null)
+      (host.kind === 'local' ||
+        host.environmentId !== null ||
+        (host.kind === 'sshClassic' && sshTargetIdOf(host.hostId) !== null))
   )
 }
 
@@ -51,6 +57,13 @@ async function ask(host: OverviewHost, force: boolean): Promise<Answer> {
       force ? { force: true } : {}
     ).catch(() => null)
     return { report, expired: [] }
+  }
+  if (host.kind === 'sshClassic') {
+    // No Orca server: main runs the CLIs' status commands over SSH (connected hosts only).
+    const targetId = sshTargetIdOf(host.hostId) ?? ''
+    const before = readSshAgentState(targetId).report
+    const report = await refreshSshAgentReport(targetId, force)
+    return { report, expired: expiredAgents(before, report) }
   }
   const environmentId = host.environmentId ?? ''
   const before = readHostAgentSignInReport(environmentId)
@@ -126,8 +139,13 @@ export function useOverviewProbes(hosts: readonly OverviewHost[]): {
   const probes: Record<string, OverviewProbe> = {}
   for (const host of hosts) {
     const answer = answers[host.hostId]
+    const sshTarget = host.kind === 'sshClassic' ? sshTargetIdOf(host.hostId) : null
     const cached =
-      host.environmentId !== null ? readHostAgentSignInReport(host.environmentId) : null
+      host.environmentId !== null
+        ? readHostAgentSignInReport(host.environmentId)
+        : sshTarget
+          ? readSshAgentState(sshTarget).report
+          : null
     probes[host.hostId] = {
       report: answer?.report ?? cached,
       checking: askable.has(host.hostId) && (answer === undefined || asking.has(host.hostId)),

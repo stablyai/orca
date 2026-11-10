@@ -265,3 +265,4 @@ export const hostMenu = defineFixture({
   )
 })
 export * from './agent-host-panel-host-fixtures'
+export * from './agent-host-panel-ssh-fixtures'
