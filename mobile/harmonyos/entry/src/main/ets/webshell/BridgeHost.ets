@@ -520,9 +520,18 @@ export class BridgeHost {
   }
 
   ownsHostArea(pathname: string = this.routePathname): boolean {
-    if (this.overlayNavigation || pathname !== `/h/${this.meta.id}`) { return false; }
+    return pathname === `/h/${this.meta.id}` && this.hostAreaAvailable(this.wideLayout);
+  }
+
+  layoutChangesRouteView(wide: boolean): boolean {
+    return wide !== this.wideLayout && !this.desktopListBack
+      && this.hostAreaAvailable(wide) !== this.hostAreaAvailable(this.wideLayout);
+  }
+
+  private hostAreaAvailable(wide: boolean): boolean {
+    if (this.overlayNavigation) { return false; }
     return this.servedRoutes().some((route: BundleRoute): boolean => route.canOwnHostArea
-      && (this.wideLayout || route.canOwnHostAreaAcrossLayouts === true) && BridgeHost.routeMatches(route.pathname, pathname));
+      && (wide || route.canOwnHostAreaAcrossLayouts === true) && BridgeHost.routeMatches(route.pathname, `/h/${this.meta.id}`));
   }
 
   /**

@@ -117,7 +117,7 @@ export struct ShellSurface {
   private attachingClient: SpikeRpcClient | null = null;
   private activationFallback: BundleActivationFallback | null = null;
   private foregroundListener: () => void = (): void => {
-    this.foreground = true; this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing();
+    this.foreground = true; this.publishWindowLayout(); this.updateViewing();
     this.flushDrawerRoute();
     this.openPendingNativeSession();
   };
@@ -241,6 +241,7 @@ export struct ShellSurface {
     this.navigation.visit();
     if (this.pageVisible) {
       this.captureNativePage();
+      this.reconcileDocumentLayout();
       if (this.returningFromTerminalSettings) {
         this.returningFromTerminalSettings = false;
         try { this.bridge?.refreshTerminalSettings(readPagePreferencesSync(getContext(this))); }
@@ -283,7 +284,32 @@ export struct ShellSurface {
     this.bridge.setKeyboardInset(Math.max(0, Math.min(this.viewport.height, covered)));
   }
 
-  private publishWindowLayout(): void { this.publishKeyboardInset(); this.publishPageRegions(); }
+  private publishWindowLayout(): void {
+    this.reconcileDocumentLayout(); this.publishKeyboardInset(); this.publishPageRegions();
+  }
+
+  private isWideSurface(): boolean { return this.surface.width >= 700 && this.surface.height >= 600; }
+
+  private reconcileDocumentLayout(): void {
+    let document = this.document;
+    let connection = this.desktop?.connection;
+    let meta = connection?.getPairedMeta();
+    if (!document || !meta || this.disposed || !this.pageVisible || !this.foreground || this.navigation.isPending()
+      || this.keyboardTop >= 0 || !this.bridge?.layoutChangesRouteView(this.isWideSurface())) { return; }
+    let client = this.client;
+    let cacheOnly = this.cacheOnly;
+    let fallback = this.activationFallback;
+    let updateFailed = this.updateFailed;
+    let generation = ++this.generation;
+    this.releaseBridge();
+    this.client = client; this.cacheOnly = cacheOnly; this.activationFallback = fallback; this.updateFailed = updateFailed;
+    this.painted = false; this.startupGeneration = this.startup.begin();
+    try {
+      this.mountBundle(client, meta, document.manifest, document.baseDir, generation);
+      let ready = client ? null : connection?.getClient();
+      if (ready && this.document) { this.reattachDocument(ready, meta, this.document).catch(() => {}); }
+    } catch (e) { this.handleStartupFailure(e as Error); }
+  }
 
   private publishPageRegions(): void {
     let bridge = this.bridge;
@@ -646,7 +672,7 @@ export struct ShellSurface {
       bridge.suspendTransport(connection?.getReconnectAttempt() ?? 0,
         connection?.getPendingPath(), connection?.getRelayHostReachability());
     }
-    bridge.setWideLayout(this.surface.width >= 700 && this.surface.height >= 600);
+    bridge.setWideLayout(this.isWideSurface());
     bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale);
     if (!this.asDrawer) {
       bridge.setTerminalRailClaimSink((claim: TerminalRailClaim | null): void => {
@@ -828,6 +854,7 @@ export struct ShellSurface {
         .onAreaChange((_previous: Area, area: Area): void => {
           this.surface = { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
             width: Number(area.width), height: Number(area.height) };
+          this.reconcileDocumentLayout();
           this.publishPageRegions();
         })
       if (this.sideRail && this.railKeys.length > 0 && this.railClaim) {
