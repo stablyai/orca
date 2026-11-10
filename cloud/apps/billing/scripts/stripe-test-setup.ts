@@ -8,7 +8,7 @@
 // Prices (cents) default to the agreed Team pricing; override with
 //   STRIPE_SETUP_PRICES='{"teamMonthly":5000,"teamAnnual":48000,"overagePerHour":100}'
 // Idempotency keys include the prices, so a re-run within 24h returns the same objects.
-import { DEFAULT_PLANS } from '../src/plans'
+import { DEFAULT_PLANS, OVERAGE_SECONDS_PER_BILLED_UNIT, overageUnitAmountDecimal } from '../src/plans'
 import { encodeForm } from '../src/stripe'
 
 const key = process.env.STRIPE_SECRET_KEY ?? ''
@@ -82,20 +82,22 @@ const meter = await post<StripeObject & { event_name: string }>(
   'meter'
 )
 const overageProduct = await post('/v1/products', { name: 'Orca sandbox overage', unit_label: 'std hour' }, 'product:overage')
-// Per sandbox hour (one size, 1x; see MACHINE_SIZE_WEIGHT); the meter counts seconds and the
-// invoice divides by 3600, rounding up.
+// Per sandbox hour (one size, 1x; see MACHINE_SIZE_WEIGHT), billed by the minute: the meter counts
+// seconds, the invoice divides the period's total by 60 (rounding up) and charges the hourly rate
+// / 60 per minute (unit_amount_decimal, 12 decimals; overageUnitAmountDecimal in plans.ts).
 const overage = await post(
   '/v1/prices',
   {
     product: overageProduct.id,
     currency: 'usd',
-    unit_amount: prices.overagePerHour,
+    unit_amount_decimal: overageUnitAmountDecimal(prices.overagePerHour),
     recurring: { interval: 'month', usage_type: 'metered', meter: meter.id },
-    transform_quantity: { divide_by: 3600, round: 'up' },
-    lookup_key: 'orca_sandbox_overage_hourly',
-    transfer_lookup_key: true
+    transform_quantity: { divide_by: OVERAGE_SECONDS_PER_BILLED_UNIT, round: 'up' },
+    lookup_key: 'orca_sandbox_overage_per_minute',
+    transfer_lookup_key: true,
+    nickname: 'Sandbox overage, billed by the minute'
   },
-  `price:overage:${suffix}`
+  `price:overage:minute:${suffix}`
 )
 
 const portal = await post(

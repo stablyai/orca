@@ -6,6 +6,7 @@ import {
   allowanceWindow,
   capSeconds,
   includedSeconds,
+  overageCents,
   planCatalog,
   type BillingInterval,
   type MachineSize,
@@ -44,7 +45,7 @@ export type Entitlement = {
   includedSeconds: number
   usedSeconds: number
   remainingIncludedSeconds: number
-  /** Highest configured warning level reached (e.g. 80, 100), or null. */
+  /** Highest configured warning level reached (75, 90 or 100), or null. */
   usageWarningPercent: number | null
   overageSeconds: number
   overage: {
@@ -64,6 +65,12 @@ export type Entitlement = {
   }
   /** Failed payment: new starts stop at once; running sandboxes must be suspended after the grace. */
   payment: { pastDueSince: number | null; graceEndsAt: number | null; suspendRunning: boolean }
+  /**
+   * The account's running sandboxes must go to sleep now (snapshot kept, never deleted): payment
+   * grace expired, or the account is at its limit (out of included hours with overage off, or at
+   * its overage spend cap). The control plane acts on it from the start check and usage reports.
+   */
+  suspendRunning: boolean
   canStartSandbox: boolean
   reason: DenyReason | null
 }
@@ -110,6 +117,7 @@ export async function computeEntitlement(
         idleSleepMinutes: team.idleSleepMinutes
       },
       payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
+      suspendRunning: false,
       canStartSandbox: false,
       reason: 'no_subscription'
     }
@@ -166,7 +174,8 @@ export async function computeEntitlement(
     overage: {
       ...overageBase,
       active: overageActive,
-      spentCents: Math.round((metered / 3600) * team.overageCentsPerHour)
+      // What Stripe will invoice: whole minutes at the per-minute price.
+      spentCents: overageCents(team, metered)
     },
     limits: {
       maxConcurrentSandboxes: team.concurrentSandboxesPerSeat * Math.max(1, subscription.seats),
@@ -175,6 +184,7 @@ export async function computeEntitlement(
       idleSleepMinutes: team.idleSleepMinutes
     },
     payment: { pastDueSince, graceEndsAt, suspendRunning: graceExpired },
+    suspendRunning: graceExpired || reason === 'included_hours_exhausted' || reason === 'overage_cap_reached',
     canStartSandbox: reason === null,
     reason
   }
@@ -189,7 +199,7 @@ export function checkStart(
   entitlement: Entitlement,
   request: { machineSize: MachineSize; runningSandboxes: number; runningSandboxesForUser?: number }
 ): { allow: boolean; reason: DenyReason | null; suspendRunning: boolean } {
-  const suspendRunning = entitlement.payment.suspendRunning
+  const suspendRunning = entitlement.suspendRunning
   if (!entitlement.canStartSandbox) {
     return { allow: false, reason: entitlement.reason, suspendRunning }
   }

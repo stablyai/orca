@@ -2,6 +2,7 @@ import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
+import { toastCloudSleepFailure } from '@/lib/orca-cloud/cloud-sleep-failure-toast'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -184,7 +185,10 @@ export async function suspendEphemeralVmWorkspace(worktreeId: string): Promise<v
   const result = await settleLifecycleCall(
     window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
   )
-  if (!result.ok) {
+  if (
+    !result.ok &&
+    !toastCloudSleepFailure([worktreeId], (ids) => void suspendEphemeralVmWorkspace(ids[0]!))
+  ) {
     toast.error(translate('workspace.vm.suspendFailed', 'Failed to suspend VM workspace'), {
       description: ephemeralVmErrorText(result)
     })

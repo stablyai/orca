@@ -11,7 +11,15 @@ export type FakeSubscription = {
   cancel_at_period_end: boolean
   livemode: boolean
   metadata: Record<string, string>
-  items: { object: 'list'; data: Array<{ id: string; quantity?: number; current_period_start: number; current_period_end: number; price: { id: string } }> }
+  items: { object: 'list'; data: FakeItem[] }
+}
+
+type FakeItem = {
+  id: string
+  quantity?: number
+  current_period_start: number
+  current_period_end: number
+  price: { id: string; recurring: { usage_type: 'licensed' | 'metered' } }
 }
 
 export type RecordedCall = { method: string; path: string; form: URLSearchParams; headers: Headers }
@@ -88,9 +96,24 @@ export function createFakeStripe() {
       const itemId = decodeURIComponent(url.pathname.slice('/v1/subscription_items/'.length))
       for (const subscription of subscriptions.values()) {
         const item = subscription.items.data.find((entry) => entry.id === itemId)
+        if (item && form.has('price')) {
+          item.price = { id: form.get('price')!, recurring: { usage_type: 'metered' } }
+          return respond({ id: item.id, price: item.price })
+        }
         if (item) {
           item.quantity = Number(form.get('quantity'))
           return respond({ id: item.id, quantity: item.quantity })
+        }
+      }
+      return Response.json({ error: { code: 'resource_missing', message: 'No such item' } }, { status: 404 })
+    }
+    if (method === 'DELETE' && url.pathname.startsWith('/v1/subscription_items/')) {
+      const itemId = decodeURIComponent(url.pathname.slice('/v1/subscription_items/'.length))
+      for (const subscription of subscriptions.values()) {
+        const index = subscription.items.data.findIndex((entry) => entry.id === itemId)
+        if (index >= 0) {
+          subscription.items.data.splice(index, 1)
+          return Response.json({ id: itemId, object: 'subscription_item', deleted: true })
         }
       }
       return Response.json({ error: { code: 'resource_missing', message: 'No such item' } }, { status: 404 })
@@ -101,9 +124,9 @@ export function createFakeStripe() {
         return Response.json({ error: { code: 'resource_missing', message: 'No such subscription' } }, { status: 404 })
       }
       const base = subscription.items.data[0]!
-      const item = {
+      const item: FakeItem = {
         id: `si_test_${nextId++}`,
-        price: { id: form.get('price') ?? '' },
+        price: { id: form.get('price') ?? '', recurring: { usage_type: 'metered' } },
         current_period_start: base.current_period_start,
         current_period_end: base.current_period_end
       }
@@ -135,7 +158,8 @@ export function createFakeStripe() {
       customer: string
       accountId: string
       basePrice: string
-      overagePrice?: string
+      /** Metered overage items already on the subscription (e.g. an older overage price). */
+      overagePrice?: string | string[]
       quantity?: number
       status?: string
       periodStart: number
@@ -145,10 +169,10 @@ export function createFakeStripe() {
       const id = `sub_test_${nextId++}`
       const period = { current_period_start: args.periodStart, current_period_end: args.periodEnd }
       const data: FakeSubscription['items']['data'] = [
-        { id: `si_test_${nextId++}`, quantity: args.quantity ?? 1, price: { id: args.basePrice }, ...period }
+        { id: `si_test_${nextId++}`, quantity: args.quantity ?? 1, price: { id: args.basePrice, recurring: { usage_type: 'licensed' } }, ...period }
       ]
-      if (args.overagePrice) {
-        data.push({ id: `si_test_${nextId++}`, price: { id: args.overagePrice }, ...period })
+      for (const price of [args.overagePrice ?? []].flat()) {
+        data.push({ id: `si_test_${nextId++}`, price: { id: price, recurring: { usage_type: 'metered' } }, ...period })
       }
       const subscription: FakeSubscription = {
         id,

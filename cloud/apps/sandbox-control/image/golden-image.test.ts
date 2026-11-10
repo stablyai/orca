@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -230,5 +230,32 @@ describe('copilot wrapper', () => {
     expect(run({ GH_TOKEN: 'orca-ph-sbx1', GITHUB_TOKEN: 'orca-ph-sbx1' })).toBe('||-i a b')
     expect(run({ GH_TOKEN: 'github_pat_user' })).toBe('github_pat_user||-i a b')
     expect(run({ GH_TOKEN: 'orca-ph-sbx1', COPILOT_PROVIDER_BASE_URL: 'https://llm.example.com/v1' })).toBe('orca-ph-sbx1||-i a b')
+  })
+})
+
+describe('first-run seeding (orca-sandbox-env)', () => {
+  const env = readFileSync(fileURLToPath(new URL('./vm/orca-sandbox-env', import.meta.url).href), 'utf8')
+  const start = env.indexOf(`"$node_bin" -e '`) + `"$node_bin" -e '`.length
+  const script = env.slice(start, env.indexOf(`' || echo 'agent first-run state not seeded'`))
+  const seed = (home: string) =>
+    spawnSync(process.execPath, ['-e', script], { env: { HOME: home, ORCA_PROJECT: '/vercel/sandbox/project' }, encoding: 'utf8' })
+  const opencodeConfig = (home: string) =>
+    JSON.parse(readFileSync(join(home, '.config/opencode/opencode.json'), 'utf8')) as { disabled_providers?: string[] }
+
+  it('keeps OpenCode off the providers that cannot work in Orca Cloud, so it shows "Connect a provider"', () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-seed-'))
+    expect(seed(home).status).toBe(0)
+    expect(opencodeConfig(home).disabled_providers).toEqual(['github-copilot', 'opencode'])
+  })
+
+  it('leaves a provider the user connected in OpenCode, and the user own list, alone', () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-seed-'))
+    seed(home)
+    spawnSync('mkdir', ['-p', join(home, '.local/share/opencode')])
+    writeFileSync(join(home, '.local/share/opencode/auth.json'), JSON.stringify({ 'github-copilot': { type: 'oauth' } }))
+    const config = opencodeConfig(home)
+    writeFileSync(join(home, '.config/opencode/opencode.json'), JSON.stringify({ ...config, disabled_providers: [...(config.disabled_providers ?? []), 'groq'] }))
+    seed(home)
+    expect(opencodeConfig(home).disabled_providers).toEqual(['groq', 'opencode'])
   })
 })

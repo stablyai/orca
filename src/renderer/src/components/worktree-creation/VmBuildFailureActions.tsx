@@ -161,7 +161,10 @@ function failureActions(
     case 'checks': {
       const retryChecks: Action = {
         key: 'retry',
-        label: t('auto.components.worktree.creation.VmBuildSheet.retryChecks', 'Retry checks'),
+        label: t(
+          'auto.components.worktree.creation.VmBuildSheet.runChecksAgain',
+          'Run checks again'
+        ),
         icon: <RotateCcw />,
         onClick: actions.onRetry
       }
@@ -180,16 +183,7 @@ function failureActions(
       return cloud
         ? { primary: [tryAgain], more: [] }
         : {
-            primary: [
-              fix,
-              {
-                ...tryAgain,
-                label: t(
-                  'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                  'Retry'
-                )
-              }
-            ],
+            primary: [fix, tryAgain],
             more: [editRecipe]
           }
     case 'concurrency':

@@ -99,7 +99,7 @@ export type OrcaBillingEntitlement = {
   includedSeconds: number
   usedSeconds: number
   remainingIncludedSeconds: number
-  /** Highest included-hours warning level reached (80, 100), or null. */
+  /** Highest included-hours warning level reached (75, 90 or 100), or null. */
   usageWarningPercent: number | null
   overageSeconds: number
   overage: {

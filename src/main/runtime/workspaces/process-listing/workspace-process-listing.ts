@@ -10,6 +10,10 @@ import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktre
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import {
+  cloudWorkspaceStatusById,
+  markCloudWorkspaceRows
+} from '../../../hosted-sandbox/cloud-workspace-ps-status'
+import {
   buildRuntimeWorktreeSummaryPathIndex,
   createRuntimeWorktreePsSummaryLookup
 } from './runtime-worktree-summary-paths'
@@ -86,6 +90,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       resolvedWorktrees,
       platformByRepoId
     })
+    markCloudWorkspaceRows(summaries.values(), cloudWorkspaceStatusById(getProfileUserDataPath()))
 
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,

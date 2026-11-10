@@ -70,3 +70,23 @@ export function applySecretPlaceholders(
   }
   return { env: next, targets }
 }
+
+/**
+ * `account:<agent>:<owner>@<host>` entries: hosts where an agent's Orca-account placeholder is swapped (D10).
+ * The owner (URI-encoded user id) is recorded so a workspace handed to someone else never starts using
+ * the new owner's account behind the old session.
+ */
+export function encodeAccountRoute(agent: 'claude' | 'codex', ownerUserId: string, host: string): string {
+  return `account:${agent}:${encodeURIComponent(ownerUserId)}@${host}`
+}
+
+export function egressAccountRoutes(row: Pick<SandboxRow, 'egress_secret_hosts'>): { agent: 'claude' | 'codex'; owner: string; host: string }[] {
+  const out: { agent: 'claude' | 'codex'; owner: string; host: string }[] = []
+  for (const entry of (row.egress_secret_hosts ?? '').split(',')) {
+    const match = /^account:(claude|codex):([^@,]+)@([a-z0-9.-]+)$/.exec(entry)
+    if (match) {
+      out.push({ agent: match[1] as 'claude' | 'codex', owner: decodeURIComponent(match[2]!), host: match[3]! })
+    }
+  }
+  return out
+}

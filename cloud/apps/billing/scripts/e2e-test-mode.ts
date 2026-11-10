@@ -5,22 +5,24 @@
 //   tsx scripts/e2e-test-mode.ts run               # drive the flows below
 //
 // Env for `run`: BILLING_URL, STRIPE_SECRET_KEY (sk_test_/rk_test_ only), CONTROL_PLANE_TOKEN,
-// E2E_JWK_PRIVATE (path), E2E_CATALOG (path to the stripe-test-setup.ts JSON), E2E_ISSUER,
+// E2E_JWK_PRIVATE (path), E2E_CATALOG (path to the stripe-test-setup.ts JSON; an optional
+// STRIPE_PRICE_OVERAGE_PREVIOUS, an older metered overage price, checks opt-in re-prices it), E2E_ISSUER,
 // E2E_D1_ARGS (wrangler d1 execute target, e.g. "BILLING_DB --local").
 //
 // E2E_MEMBERSHIP_TOKEN (optional) enables the peak-seat checks; E2E_GRACE_SECONDS (default 96 h)
 // is the Worker's payment grace (short: watched expiring; long: past_due_since backdated in D1).
 //
-// Flows: Checkout (2 seats, test card, headless browser) -> overage opt-in -> usage past the
-// included hours -> meter events in Stripe -> spend cap blocks starts -> peak seats (add charged
-// now, removal deferred, re-add free) -> annual plan + overage -> seat true-down + test-clock
+// Flows: Checkout (2 seats, test card, headless browser) -> overage opt-in (per-minute price) ->
+// 75/90/100% warnings -> usage past the included hours -> meter events in Stripe -> spend cap
+// blocks starts and puts running sandboxes to sleep -> peak seats (add charged
+// now, removal deferred, re-add free) -> annual plan + overage (an older overage item is re-priced, not doubled) -> seat true-down + test-clock
 // renewal -> invoice.payment_failed -> grace -> suspend -> pay -> resume -> cancel -> 3DS Checkout
 // (challenge passed; 3DS-then-decline and insufficient funds create nothing) -> cleanup.
 // Prints PASS/FAIL per check and the ids.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { SignJWT, exportJWK, generateKeyPair, importJWK } from 'jose'
-import { DEFAULT_PLANS } from '../src/plans'
+import { DEFAULT_PLANS, OVERAGE_SECONDS_PER_BILLED_UNIT, capSeconds, overageUnitAmountDecimal } from '../src/plans'
 import { encodeForm } from '../src/stripe'
 
 const HOUR = 3600
@@ -250,13 +252,26 @@ const subA = await stripe<{ items: { data: Array<{ price: { id: string } }> } }>
 check('overage opt-in adds the metered item ($25 default cap)', optIn.status === 200 && optIn.body.overage?.active === true &&
   optIn.body.overage?.spendCapCents === 2500 && subA.items.data.some((item) => item.price.id === catalog.STRIPE_PRICE_OVERAGE), optIn.body)
 
-// ---- 3. Usage past included hours -> meter events --------------------------------------------
+const overagePrice = await stripe<{ unit_amount_decimal: string; transform_quantity: { divide_by: number; round: string }; recurring: { usage_type: string; meter: string } }>(
+  'GET', `/v1/prices/${catalog.STRIPE_PRICE_OVERAGE}`)
+check(`overage price is billed by the minute (${overageUnitAmountDecimal(DEFAULT_PLANS.team.overageCentsPerHour)} cents per minute, divide_by 60, round up)`,
+  overagePrice.unit_amount_decimal === overageUnitAmountDecimal(DEFAULT_PLANS.team.overageCentsPerHour) &&
+  overagePrice.transform_quantity?.divide_by === OVERAGE_SECONDS_PER_BILLED_UNIT && overagePrice.transform_quantity.round === 'up' &&
+  overagePrice.recurring.usage_type === 'metered' && overagePrice.recurring.meter === catalog.meter, overagePrice)
+
+// ---- 3. Usage past included hours -> warnings -> meter events --------------------------------
 const meterStart = Math.floor(Date.now() / 1000 / 60) * 60 - 2 * 24 * HOUR
-for (let i = 0; i < 5; i++) {
+for (let i = 0; i < 4; i++) {
   await reportUsage(accountA, 24)
 }
+// 96 of 120 h (80%), then 108 h (90%), then 120 h: alerts at 75%, 90% and 100%.
+check('75% included-hours warning', (await entitlement(orgA)).usageWarningPercent === 75)
+await reportUsage(accountA, 12)
+check('90% included-hours warning', (await entitlement(orgA)).usageWarningPercent === 90)
+await reportUsage(accountA, 12)
 const crossing = await reportUsage(accountA, 4)
-check('usage past 120 h: 4 h overage recorded, starts still allowed', crossing.overageSeconds === 4 * HOUR && crossing.canStartSandbox === true, crossing)
+check('usage past 120 h: 4 h overage recorded, starts still allowed, nothing put to sleep', crossing.overageSeconds === 4 * HOUR &&
+  crossing.canStartSandbox === true && crossing.suspendRunning === false, crossing)
 const warned = await entitlement(orgA)
 check('100% included-hours warning', warned.usageWarningPercent === 100, warned.usageWarningPercent)
 
@@ -264,13 +279,17 @@ check('100% included-hours warning', warned.usageWarningPercent === 100, warned.
 await reportUsage(accountA, 20)
 await reportUsage(accountA, 20)
 const capped = await startCheck(accountA)
-check(`spend cap ($25 = ${(2500 / DEFAULT_PLANS.team.overageCentsPerHour).toFixed(1)} overage h) reached -> new starts blocked`, capped.allow === false && capped.reason === 'overage_cap_reached', capped)
+check(`spend cap ($25 = ${(2500 / DEFAULT_PLANS.team.overageCentsPerHour).toFixed(1)} overage h) reached -> new starts blocked, running sandboxes put to sleep`,
+  capped.allow === false && capped.reason === 'overage_cap_reached' && capped.suspendRunning === true, capped)
 const spent = await entitlement(orgA)
-check('metered spend stops at the cap', spent.overage?.spentCents <= 2500 && spent.overage?.spentCents >= 2490, spent.overage)
+check('metered spend stops at the cap (whole minutes, never over it)', spent.overage?.spentCents <= 2500 && spent.overage?.spentCents >= 2490 &&
+  spent.suspendRunning === true && spent.payment?.suspendRunning === false, { overage: spent.overage, suspendRunning: spent.suspendRunning })
+const capSuspensions = await billing('GET', '/v1/internal/suspensions', null).then((r) => r.body)
+check('a spend cap is not a payment suspension (no data-retention clock)', !capSuspensions.accounts?.some((a: any) => a.accountId === accountA), capSuspensions)
 
 const meterEnd = Math.ceil(Date.now() / 1000 / 60) * 60 + 60
 // The $25 default cap in overage seconds at the plan's overage rate (single source: plans.ts).
-const CAP_SECONDS = Math.floor((2500 / DEFAULT_PLANS.team.overageCentsPerHour) * HOUR)
+const CAP_SECONDS = capSeconds(DEFAULT_PLANS.team, 2500)
 const summaries = await until(
   'meter event summaries',
   () => stripe<{ data: Array<{ aggregated_value: number }> }>('GET', `/v1/billing/meters/${catalog.meter}/event_summaries`, {
@@ -328,8 +347,12 @@ ids.annualCustomer = customerB.id
 linkAccount(`org:${orgB}`, customerB.id)
 await stripe('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customerB.id })
   .then((pm: any) => stripe('POST', `/v1/customers/${customerB.id}`, { invoice_settings: { default_payment_method: pm.id } }))
-const annualSub = await stripe<{ id: string }>('POST', '/v1/subscriptions', {
-  customer: customerB.id, items: [{ price: catalog.STRIPE_PRICE_TEAM_ANNUAL, quantity: 3 }], metadata: { account_id: `org:${orgB}` }
+// An older overage price already on the subscription (opted in before the price changed).
+const previousOverage = catalog.STRIPE_PRICE_OVERAGE_PREVIOUS
+const annualSub = await stripe<{ id: string; items: { data: Array<{ id: string; price: { id: string } }> } }>('POST', '/v1/subscriptions', {
+  customer: customerB.id,
+  items: [{ price: catalog.STRIPE_PRICE_TEAM_ANNUAL, quantity: 3 }, ...(previousOverage ? [{ price: previousOverage }] : [])],
+  metadata: { account_id: `org:${orgB}` }
 })
 ids.annualSubscription = annualSub.id
 const annualEnt = await until('annual active', () => entitlement(orgB), (e) => e.status === 'active')
@@ -337,6 +360,13 @@ check('annual Team: 3 seats, 180 h monthly allowance window', annualEnt.interval
   annualEnt.usageWindow && annualEnt.usageWindow.end - annualEnt.usageWindow.start <= 31 * 24 * HOUR * 1000, annualEnt)
 const annualOptIn = await billing('POST', '/v1/billing/overage', orgB, { enabled: true })
 check('annual plan accepts the monthly metered overage item', annualOptIn.status === 200 && annualOptIn.body.overage?.active === true, annualOptIn)
+if (previousOverage) {
+  const oldItem = annualSub.items.data.find((item) => item.price.id === previousOverage)?.id
+  const items = (await stripe<{ items: { data: Array<{ id: string; price: { id: string } }> } }>('GET', `/v1/subscriptions/${annualSub.id}`)).items.data
+  const metered = items.filter((item) => item.price.id !== catalog.STRIPE_PRICE_TEAM_ANNUAL)
+  check('opt-in moves the older overage item to the current price (no second item)', metered.length === 1 &&
+    metered[0]!.id === oldItem && metered[0]!.price.id === catalog.STRIPE_PRICE_OVERAGE, metered)
+}
 
 // ---- 7. Test clock: renewal, then invoice.payment_failed --------------------------------------
 const orgC = `e2e-${runId}-c`

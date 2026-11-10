@@ -11,6 +11,7 @@ import {
   runUnarchiveCloudWorkspace
 } from '../orca-cloud/cloud-workspace-actions'
 import { describeError } from './cloud-workspace-errors'
+export { usePendingHomeFilters } from './cloud-workspaces-home-nav'
 import type { Translate } from '@/i18n/use-translate'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
 

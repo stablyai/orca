@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router'
+import { Cloud } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -279,7 +280,12 @@ export function CloudWorkspaceScreen({
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <SettingsNavBar title={workspace.title} onBack={() => router.back()} />
+        <SettingsNavBar
+          title={workspace.title}
+          // The cloud-icon rule: a bare, muted Cloud that never changes with state (the card says it).
+          titleIcon={<Cloud size={14} strokeWidth={2} color={colors.textMuted} />}
+          onBack={() => router.back()}
+        />
         <ScrollView
           contentContainerStyle={[
             styles.scroll,

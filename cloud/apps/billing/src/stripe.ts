@@ -73,7 +73,7 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
   const base = env.STRIPE_API_BASE ?? 'https://api.stripe.com'
   const version = env.STRIPE_API_VERSION ?? DEFAULT_STRIPE_API_VERSION
 
-  async function request<T>(method: 'GET' | 'POST', path: string, params?: FormRecord, idempotencyKey?: string) {
+  async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, params?: FormRecord, idempotencyKey?: string) {
     assertKeyMode(env)
     const headers: Record<string, string> = {
       authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
@@ -152,6 +152,23 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
         `overage-item:${args.subscription}:${args.price}`
       )
     },
+    /** Moves an item to another price in place (an older overage price to the current one). */
+    setSubscriptionItemPrice(args: { item: string; price: string }) {
+      return request<{ id: string; price: { id: string } }>(
+        'POST',
+        `/v1/subscription_items/${encodeURIComponent(args.item)}`,
+        { price: args.price, proration_behavior: 'none' },
+        `overage-item-price:${args.item}:${args.price}`
+      )
+    },
+    /** DELETE is idempotent in Stripe, so no idempotency key (Stripe ignores one there). */
+    deleteSubscriptionItem(item: string) {
+      return request<{ id: string; deleted: boolean }>(
+        'DELETE',
+        `/v1/subscription_items/${encodeURIComponent(item)}`,
+        { proration_behavior: 'none' }
+      )
+    },
     setSubscriptionItemQuantity(args: {
       item: string
       quantity: number
@@ -202,7 +219,7 @@ export type StripeSubscription = {
       quantity?: number
       current_period_start?: number
       current_period_end?: number
-      price: { id: string }
+      price: { id: string; recurring?: { usage_type?: string } | null }
     }>
   }
 }

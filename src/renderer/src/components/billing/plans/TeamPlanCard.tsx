@@ -70,8 +70,8 @@ export function TeamPlanCard({
     ),
     t('auto.components.billing.plans.featureReady', 'Ready in seconds, nothing to set up or host'),
     t(
-      'auto.components.billing.plans.featureOverage6',
-      'Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default)',
+      'auto.components.billing.plans.featureOverage7',
+      'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default)',
       {
         rate: formatRateCents(team.overageCentsPerHour, locale),
         cap: formatCents(team.defaultSpendCapCents, locale)

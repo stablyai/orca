@@ -21,13 +21,15 @@ describe('entitlementDeniedMessage', () => {
     expect(
       entitlementDeniedMessage(denied('included_hours_exhausted'), 'admin', 'existing', t)
     ).toBe(
-      'Out of sandbox hours. Your files are safe. Turn on overage in Orca on your computer, then try again.'
+      'Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Turn on overage in Orca on your computer, then try again.'
     )
     expect(
       entitlementDeniedMessage(denied('included_hours_exhausted'), 'member', 'existing', t)
-    ).toBe('Out of sandbox hours. Your files are safe. Ask an owner or admin to add hours.')
+    ).toBe(
+      'Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to add hours.'
+    )
     expect(entitlementDeniedMessage(denied('overage_cap_reached'), 'owner', 'create', t)).toBe(
-      'Spend cap reached. Nothing was created, and you weren’t charged. Raise the spend cap in Orca on your computer, then try again.'
+      'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Raise the spend cap in Orca on your computer, then try again.'
     )
     expect(entitlementDeniedMessage(denied('payment_grace_expired'), 'member', 'create', t)).toBe(
       'Payment failed, so new sandboxes can’t start. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method.'

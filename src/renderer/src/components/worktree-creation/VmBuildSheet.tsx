@@ -1,4 +1,5 @@
 import React from 'react'
+import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
 import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -300,7 +301,8 @@ export function VmBuildSheet({
                 store.openSettingsPage()
               },
               onSignIn: signIn,
-              onShowWorkspaces: () => useAppStore.getState().setSidebarOpen(true),
+              // Your workspaces on Home, where you can put one to sleep or delete it.
+              onShowWorkspaces: () => openCloudWorkspacesHome(),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

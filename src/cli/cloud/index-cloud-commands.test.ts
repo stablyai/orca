@@ -209,7 +209,7 @@ describe('orca cloud via main()', () => {
     )
     await main(['cloud', 'workspace', 'create', '--name', 'x'], home)
     expect(err.join('\n')).toContain(
-      "Your team is out of sandbox hours. Nothing was created, and you weren't charged."
+      "Your team is out of sandbox hours. Running sandboxes go to sleep and new ones can't start. Nothing was created, and you weren't charged."
     )
     expect(err.join('\n')).toContain('Ask an owner or admin to add hours.')
     expect(err.join('\n')).not.toMatch(/entitlement_denied|included_hours_exhausted|files are safe/)

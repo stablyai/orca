@@ -1,6 +1,9 @@
 // User actions on an Orca Cloud workspace, with their toasts. Archive reuses the ordinary Sleep
 // flow (terminals and chats saved first) after a short undo window; unarchive and Wake reuse the
 // ordinary open-and-wake path, so every wake shows the same "Waking…" overlay.
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
+import { getBillingSummary } from '../billing/billing-summary-store'
+import { describeError } from '../cloud-workspaces/cloud-workspace-errors'
 import { RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -27,15 +30,21 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
     return
   }
   if (result.code === 'entitlement_denied') {
+    // The shared classifier: the actual reason (plan, hours, spend cap, payment, limits), and
+    // "See plans" only where buying fixes it and only for people who can (owner or admin).
+    const denial = classifyEntitlementDenial(result.reason)
+    const canFixWithPlans =
+      (denial === 'plan' || denial === 'hours') && getBillingSummary().canManageBilling
     toast.error(title, {
-      description: translate(
-        'orcaCloudWorkspace.error.noHours',
-        'You’re out of sandbox hours. Your files are safe.'
-      ),
-      action: {
-        label: translate('orcaCloudWorkspace.error.seePlans', 'See plans'),
-        onClick: () => openPlansPage('sandbox')
-      }
+      description: describeError('entitlement_denied', result.reason ?? undefined),
+      ...(canFixWithPlans
+        ? {
+            action: {
+              label: translate('orcaCloudWorkspace.error.seePlans', 'See plans'),
+              onClick: () => openPlansPage('sandbox')
+            }
+          }
+        : {})
     })
     return
   }

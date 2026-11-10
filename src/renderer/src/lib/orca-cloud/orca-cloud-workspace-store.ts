@@ -2,6 +2,7 @@
 // status from the control plane, in-flight wakes and OOM notices. The one source of cloud ids and
 // wake state for every cloud surface. A tiny external store (not an app-store slice) so the
 // hundreds of sidebar rows that are not cloud workspaces subscribe to nothing.
+import { createFollowUpCoalescer } from './coalesce-with-follow-up'
 import {
   armInterruptedTurnsForHostRestart,
   continueInterruptedTurns,
@@ -98,42 +99,37 @@ export function isCloudWorkspaceArchived(workspaceId: string): boolean {
   return entry?.state === 'archived' || Boolean(entry?.archive)
 }
 
-const inflight = new Map<string, Promise<void>>()
+const statusReads = createFollowUpCoalescer()
 
-/** Fetches status once (coalesced); keeps the last good status visible on error. */
+/** Fetches status (coalesced, re-read once if asked mid-read); keeps the last good status on error. */
 export function refreshCloudWorkspaceStatus(workspaceId: string): Promise<void> {
-  const existing = inflight.get(workspaceId)
-  if (existing) {
-    return existing
-  }
   const bridge = cloudWorkspaceApi()
   if (!bridge) {
     return Promise.resolve()
   }
-  updateCloudWorkspaceSnapshot((s) => ({
-    status: {
-      ...s.status,
-      [workspaceId]: {
-        status: s.status[workspaceId]?.status ?? null,
-        error: s.status[workspaceId]?.error ?? null,
-        fetchedAt: s.status[workspaceId]?.fetchedAt ?? null,
-        loading: true
+  return statusReads.run(workspaceId, () => {
+    updateCloudWorkspaceSnapshot((s) => ({
+      status: {
+        ...s.status,
+        [workspaceId]: {
+          status: s.status[workspaceId]?.status ?? null,
+          error: s.status[workspaceId]?.error ?? null,
+          fetchedAt: s.status[workspaceId]?.fetchedAt ?? null,
+          loading: true
+        }
       }
-    }
-  }))
-  const run = bridge
-    .getStatus({ workspaceId })
-    .then((result) => applyStatus(workspaceId, result))
-    .catch((error: unknown) =>
-      applyStatus(workspaceId, {
-        ok: false,
-        code: 'failed',
-        message: error instanceof Error ? error.message : String(error)
-      })
-    )
-    .finally(() => inflight.delete(workspaceId))
-  inflight.set(workspaceId, run)
-  return run
+    }))
+    return bridge
+      .getStatus({ workspaceId })
+      .then((result) => applyStatus(workspaceId, result))
+      .catch((error: unknown) =>
+        applyStatus(workspaceId, {
+          ok: false,
+          code: 'failed',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      )
+  })
 }
 
 /** Mount-time refresh that skips a status read in the last `maxAgeMs` (sidebar rows remount often). */
@@ -319,7 +315,7 @@ export function noteCloudOom(event: CloudOomEvent): void {
 
 /** Test/fixture seam: replace the whole snapshot. */
 export function seedCloudWorkspaceSnapshot(next: Partial<CloudWorkspaceSnapshot>): void {
-  inflight.clear()
+  statusReads.clear()
   updateCloudWorkspaceSnapshot(() => ({ ...EMPTY, ...next }))
 }
 
