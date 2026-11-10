@@ -111,6 +111,10 @@ export function agentsNeedingYou(hosts: AgentDesktop[]): AgentListRow[] {
   return model.selectAgentsNeedingYou(toInput(hosts, Date.now())) as AgentListRow[];
 }
 
+export function activeAgents(hosts: AgentDesktop[]): AgentListRow[] {
+  return model.selectActiveAgents(toInput(hosts, Date.now())) as AgentListRow[];
+}
+
 export function summarizeAgentDesktops(hosts: AgentDesktop[]): AgentDesktopSummary[] {
   return model.summarizeAgentListHosts(toInput(hosts, Date.now())) as AgentDesktopSummary[];
 }

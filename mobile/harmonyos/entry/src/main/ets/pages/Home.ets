@@ -15,7 +15,7 @@ import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcCl
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection, refreshDesktopConnection } from '../transport/DesktopConnections';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
-import { AgentDesktop, AgentListRow, HomeAgentEntry, agentPreview, agentRowRevision, agentTimeAgo, agentsNeedingYou } from '../home/AgentListModel';
+import { AgentDesktop, AgentListRow, HomeAgentEntry, activeAgents, agentPreview, agentRowRevision, agentTimeAgo, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
 import { AgentActivityWrites } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
@@ -160,7 +160,8 @@ struct Home {
   @State agentSheetOpen: boolean = false;
   private agentAction: string = '';
   @State connecting: boolean = false;
-  @State agentRows: AgentListRow[] = [];
+  @State activeAgentRows: AgentListRow[] = [];
+  @State agentsNeedingYouCount: number = 0;
   @State agentDesktops: AgentDesktop[] = [];
   @State summaries: Record<string, string> = {};
   @State desktopMachines: Record<string, LiveDesktopMachine> = {};
@@ -834,9 +835,11 @@ struct Home {
       };
     });
     this.agentDesktops = desktops;
-    this.agentRows = agentsNeedingYou(desktops);
+    this.activeAgentRows = activeAgents(desktops);
+    let needsYou = agentsNeedingYou(desktops);
+    this.agentsNeedingYouCount = needsYou.length;
     let counts: Record<string, number> = {};
-    this.agentRows.forEach((row: AgentListRow): void => { counts[row.hostId] = (counts[row.hostId] ?? 0) + 1; });
+    needsYou.forEach((row: AgentListRow): void => { counts[row.hostId] = (counts[row.hostId] ?? 0) + 1; });
     this.needsYouByDesktop = counts;
     this.refreshSummaries();
   }
@@ -1249,17 +1252,21 @@ struct Home {
       } else {
         Scroll() {
           Column() {
-            if (this.agentRows.length > 0) {
+            if (this.activeAgentRows.length > 0) {
               Row({ space: 6 }) {
-                Text(uiText('需要处理', this.uiLocale)).fontFamily('Geist').fontSize(15)
-                  .fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary)
-                Text(String(this.agentRows.length)).fontFamily('Geist').fontSize(13).fontColor(this.pal().textMuted)
+                Text() {
+                  Span(uiText('home.activeAgents.heading', this.uiLocale)).fontWeight(600).fontColor(this.pal().textPrimary)
+                  Span(`  ${this.activeAgentRows.length}`).fontWeight(FontWeight.Medium).fontColor(this.pal().textMuted)
+                }.fontFamily('Geist').fontSize(15).maxLines(1)
                 Blank()
-                Text(uiText('查看所有智能体', this.uiLocale)).fontFamily('Geist').fontSize(13)
-                  .fontColor(this.pal().accentBlue).padding({ top: 8, bottom: 8 })
+                Text(uiText('查看所有智能体', this.uiLocale)).fontFamily('Geist').fontSize(14)
+                  .fontWeight(FontWeight.Medium).fontColor(this.pal().accentBlue)
+                  .accessibilityRole(AccessibilityRoleType.HYPERLINK)
+                  .padding({ top: 8, bottom: 8 })
                   .onClick(() => { this.activeTab = 'agents'; })
-              }.width('100%').padding({ left: 4, right: 4 })
-              ForEach([this.agentRows.slice(0, 3)], (rows: AgentListRow[]) => {
+              }.width('100%').alignItems(VerticalAlign.Bottom).padding({ left: 4, right: 4 })
+                .margin({ top: 4, bottom: 7 })
+              ForEach([this.activeAgentRows.slice(0, 3)], (rows: AgentListRow[]) => {
                 AgentListRows({ rows: rows, desktops: this.agentDesktops,
                   nameDesktop: this.hosts.length > 1, now: this.homeNow,
                   onOpen: (row: AgentListRow): void => this.openAgent(row),
@@ -1270,7 +1277,7 @@ struct Home {
                 JSON.stringify(rows.map((row: AgentListRow): string => agentRowRevision(row, agentPreview(row)))))
             }
 
-            this.sectionHeading({ title: uiText('已配对桌面', this.uiLocale), aside: '', first: this.agentRows.length === 0 })
+            this.sectionHeading({ title: uiText('已配对桌面', this.uiLocale), aside: '', first: this.activeAgentRows.length === 0 })
             Column() {
               ForEach(this.hosts, (host: HostMeta, index: number) => {
                 Column() {
@@ -1891,8 +1898,8 @@ struct Home {
             Image(tab.icon).supportSvg2(true)
               .width(25).height(25)
               .colorFilter(lucideColorFilter(this.activeTab === tab.id ? this.pal().textPrimary : this.pal().textMuted))
-            if (['feed', 'agents'].includes(tab.id) && this.agentRows.length > 0) {
-              Text(`${this.agentRows.length}`)
+            if (tab.id === 'agents' && this.agentsNeedingYouCount > 0) {
+              Text(this.agentsNeedingYouCount > 99 ? '99+' : String(this.agentsNeedingYouCount))
                 .fontFamily('Geist').fontSize(11)
                 .fontWeight(FontWeight.Bold)
                 .fontColor('#000000')
@@ -1917,7 +1924,10 @@ struct Home {
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .padding({ top: 2 })
-        .accessibilityText(uiText(tab.label, this.uiLocale))
+        .accessibilityGroup(true)
+        .accessibilitySelected(this.activeTab === tab.id)
+        .accessibilityText(tab.id === 'agents' && this.agentsNeedingYouCount > 0
+          ? `${uiText(tab.label, this.uiLocale)}, ${this.agentsNeedingYouCount}` : uiText(tab.label, this.uiLocale))
         .onClick(() => {
           this.activeTab = tab.id;
           this.updateTabClock();

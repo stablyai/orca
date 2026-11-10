@@ -3,9 +3,9 @@ const { test } = require('node:test')
 const { loadArkts } = require('./arkts-source.cjs')
 const { readHomeCatalog } = loadArkts('home/HomeCatalog.ets', ['readHomeCatalog'])
 const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
-const { buildAgentList, agentsNeedingYou, listedAgents } = loadArkts(
+const { activeAgents, buildAgentList, agentsNeedingYou, listedAgents } = loadArkts(
   'home/AgentListModel.ets',
-  ['buildAgentList', 'agentsNeedingYou', 'listedAgents'],
+  ['activeAgents', 'buildAgentList', 'agentsNeedingYou', 'listedAgents'],
   { upstream: require('../../entry/src/main/ets/vendor/agent-list.js') }
 )
 
@@ -176,6 +176,10 @@ test('the desktop catalog keeps every listed pane and the workspace runtime targ
     Array.from(needsYou, (row) => row.title),
     ['Fix issue']
   )
+  assert.deepEqual(
+    Array.from(activeAgents([host]), (row) => row.title),
+    ['Fix issue', 'Coordinator']
+  )
   const list = buildAgentList([host], view, '', '')
   assert.deepEqual(
     Array.from(listedAgents(list.sections), (row) => [row.title, row.entry.executionHost]).sort(),
@@ -191,6 +195,7 @@ test('the desktop catalog keeps every listed pane and the workspace runtime targ
   )
   const offline = { ...host, connection: 'disconnected', live: false }
   assert.equal(agentsNeedingYou([offline]).length, 0)
+  assert.equal(activeAgents([offline]).length, 0)
   const remembered = listedAgents(buildAgentList([offline], view, '', '').sections)
   assert.equal(remembered.length, 2)
   assert.ok(remembered.every((row) => row.offline && row.unread === undefined && !row.clearable))

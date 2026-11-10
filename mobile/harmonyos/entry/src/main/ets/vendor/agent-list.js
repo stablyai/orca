@@ -24,6 +24,7 @@ __export(orca_agent_list_entry_exports, {
   agentStatusGroup: () => agentStatusGroup,
   buildAgentList: () => buildAgentList,
   formatAgentTypeLabel: () => formatAgentTypeLabel,
+  selectActiveAgents: () => selectActiveAgents,
   selectAgentsNeedingYou: () => selectAgentsNeedingYou,
   summarizeAgentListHosts: () => summarizeAgentListHosts
 });
@@ -636,6 +637,12 @@ function rowNeedsYou(row) {
 }
 function selectAgentsNeedingYou(input) {
   return input.hosts.flatMap((host) => everyRow(hostAgents(input, host.id).roots)).filter(rowNeedsYou).map(asTopLevel).sort(byStatusThenRecent);
+}
+function selectActiveAgents(input) {
+  return input.hosts.flatMap((host) => everyRow(hostAgents(input, host.id).roots)).filter((row) => {
+    const group = agentStatusGroup(row.dotState);
+    return !row.stale && (group === "needs-you" || group === "working");
+  }).map(asTopLevel).sort(byStatusThenRecent);
 }
 function summarizeAgentListHosts(input) {
   return input.hosts.map((host) => {

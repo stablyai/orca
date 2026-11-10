@@ -103,8 +103,7 @@ struct MobileOnboarding {
     if (this.busyChoice || this.disposed || !this.visible || this.step !== 'online-notifications') { return; }
     this.busyChoice = enable ? 'enable' : 'skip'; this.error = '';
     try {
-      let granted = enable && await requestNotificationPermission(getContext(this) as common.UIAbilityContext)
-        .then((permission): boolean => permission === 'granted').catch((): boolean => false);
+      const granted = enable && (await requestNotificationPermission(getContext(this) as common.UIAbilityContext)) === 'granted';
       if (this.disposed) { return; }
       await saveOnboardingOnlineNotifications(getContext(this), granted);
       if (!this.disposed) { this.advance(); }

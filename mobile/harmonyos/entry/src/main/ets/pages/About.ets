@@ -1,189 +1,90 @@
+import { bundleManager, common } from '@kit.AbilityKit';
+import { lucideColorFilter } from '../settings/LucideColor';
 import { uiText } from '../settings/NativeUi';
-import { router } from '@kit.ArkUI';
-import { bundleManager } from '@kit.AbilityKit';
+import { SettingsNavBar } from '../settings/SettingsNavBar';
 
-/**
- * 关于页：版本信息（bundleManager.getBundleInfoForSelfSync 读取 versionName）、
- * 上游项目致谢（stablyai/orca，MIT）、开源许可列表（tweetnacl / fflate / xterm，
- * 均 MIT），以及跳转连接事件日志的诊断入口。
- */
-
-interface LicenseEntry {
-  name: string;
-  usage: string;
-  license: string;
-}
+const LABEL = 'settings.aboutScreen.';
 
 @Entry
 @Component
 struct About {
   @StorageProp('uiLocale') uiLocale: string = 'en';
+  @StorageProp('themeScheme') scheme: string = 'dark';
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
-  @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeRaised') themeRaised: string = '#262626';
   @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
-  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
-  @StorageProp('themeLink') themeLink: string = '#3276f2';
-  @StorageProp('themeWarning') themeWarning: string = '#eab308';
-  @State versionName: string = '';
-
-  private licenses: LicenseEntry[] = [
-    { name: 'tweetnacl', usage: '配对密钥协商与报文签名（与上游一致）', license: 'MIT' },
-    { name: 'fflate', usage: 'Spike 包解压', license: 'MIT' },
-    { name: 'xterm', usage: '上游桌面端终端渲染组件', license: 'MIT' }
-  ];
+  @StorageProp('themeStatusRed') themeStatusRed: string = '#ff6568';
+  @State version: string = 'v?.?.?';
+  @State linkFailed: boolean = false;
 
   aboutToAppear(): void {
     try {
-      let info: bundleManager.BundleInfo =
-        bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
-      this.versionName = info.versionName;
-    } catch (e) {
-      this.versionName = '';
-    }
+      let info = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      this.version = info.versionCode > 0 ? `v${info.versionName} (${info.versionCode})` : `v${info.versionName}`;
+    } catch (e) {}
   }
 
-  versionText(): string {
-    return this.versionName.length > 0 ? `版本 ${this.versionName}` : '版本信息不可用';
+  private async openLink(uri: string): Promise<void> {
+    this.linkFailed = false;
+    try {
+      let context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      await context.startAbility({ action: 'ohos.want.action.viewData', uri: uri });
+    } catch (e) { this.linkFailed = true; }
+  }
+
+  @Builder
+  private link(title: string, label: string, icon: Resource, uri: string) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        Row() {
+          Image(icon).supportSvg2(true).width(18).height(18)
+            .colorFilter(lucideColorFilter(this.themeSecondary)).accessibilityLevel('no')
+        }.width(24).justifyContent(FlexAlign.Center)
+        Text(title).fontFamily('Geist').fontSize(15).fontColor(this.themeText)
+          .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    }.width('100%').constraintSize({ minHeight: 48 }).padding(0).backgroundColor(Color.Transparent)
+      .accessibilityText(uiText(LABEL + label, this.uiLocale)).onClick((): void => { this.openLink(uri).catch(() => {}); })
+  }
+
+  @Builder
+  private separator() {
+    Divider().strokeWidth(0.5).color(this.themeBorder).margin({ left: 52 })
   }
 
   build() {
-    Column({ space: 10 }) {
-      Row({ space: 10 }) {
-        Text('‹')
-          .fontFamily('Geist').fontSize(22)
-          .fontColor(this.themeAccent)
-          .width(32)
-          .height(32)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            router.back();
-          })
-        Text(uiText('关于', this.uiLocale))
-          .fontFamily('Geist').fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeText)
-          .layoutWeight(1)
-      }
-      .width('100%')
-      .padding({ left: 10, right: 14, top: 10 })
-
+    Column() {
+      SettingsNavBar({ title: uiText(LABEL + 'title', this.uiLocale) })
       Scroll() {
-        Column({ space: 14 }) {
-          // 应用卡片
-          Column({ space: 6 }) {
-            Text('Orca')
-              .fontFamily('Geist').fontSize(28)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.themeAccent)
-            Text(uiText('Orca Mobile · 鸿蒙版', this.uiLocale))
-              .fontFamily('Geist').fontSize(13)
-              .fontColor(this.themeSecondary)
-            Text(this.versionText())
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeLink)
+        Column() {
+          Column() {
+            Image($r('app.media.orca_mark')).supportSvg2(true).width(44).height(28)
+              .colorFilter(lucideColorFilter(this.themeText)).accessibilityLevel('no')
+            Text('Orca').fontFamily('Geist').fontSize(22).fontWeight(800)
+              .fontColor(this.themeText).margin({ top: 8 })
+            Text(uiText(LABEL + 'tagline', this.uiLocale)).fontFamily('Geist').fontSize(13)
+              .fontColor(this.themeMuted).textAlign(TextAlign.Center).margin({ top: 4 })
+          }.width('100%').padding({ top: 24, bottom: 24 })
+
+          Column() {
+            this.link('onOrca.dev', 'website', $r('app.media.lucide_globe'), 'https://onOrca.dev')
+            this.separator()
+            this.link('stablyai/orca', 'sourceCode', $r('app.media.github_mark'), 'https://github.com/stablyai/orca')
+            this.separator()
+            this.link('@orca_build', 'socialProfile', $r('app.media.x_mark'), 'https://x.com/orca_build')
+          }.width('100%').borderRadius(16).backgroundColor(this.scheme === 'light' ? this.themeBg : this.themeRaised).clip(true)
+
+          Text(this.version).fontFamily('Geist').fontSize(12).fontColor(this.themeMuted)
+            .textAlign(TextAlign.Center).margin({ top: 16 })
+          if (this.linkFailed) {
+            Text(uiText(LABEL + 'openLinkFailed', this.uiLocale)).fontFamily('Geist').fontSize(12)
+              .fontColor(this.themeStatusRed).textAlign(TextAlign.Center).margin({ top: 8 })
           }
-          .width('100%')
-          .padding(20)
-          .borderRadius(12)
-          .backgroundColor(this.themeSurface)
-          .border({ width: 1, color: this.themeBorder })
-          .alignItems(HorizontalAlign.Center)
-
-          // 上游致谢
-          Column({ space: 8 }) {
-            Text(uiText('上游致谢', this.uiLocale))
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeMuted)
-              .width('100%')
-            Text(uiText('Orca Mobile 是 stablyai/orca 的鸿蒙客户端移植。上游项目以 MIT 协议开源，感谢上游所有贡献者。', this.uiLocale))
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeSecondary)
-              .lineHeight(18)
-              .width('100%')
-            Text(uiText('上游仓库：github.com/stablyai/orca（MIT）', this.uiLocale))
-              .fontFamily('Geist').fontSize(11)
-              .fontColor(this.themeLink)
-              .width('100%')
-          }
-          .width('100%')
-          .padding(14)
-          .borderRadius(12)
-          .backgroundColor(this.themeSurface)
-          .border({ width: 1, color: this.themeBorder })
-          .alignItems(HorizontalAlign.Start)
-
-          // 开源许可
-          Column({ space: 4 }) {
-            Text(uiText('开源许可', this.uiLocale))
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ bottom: 4 })
-            ForEach(this.licenses, (item: LicenseEntry, index: number) => {
-              Column() {
-                Row({ space: 10 }) {
-                  Column({ space: 3 }) {
-                    Text(item.name)
-                      .fontFamily('Geist').fontSize(14)
-                      .fontColor(this.themeText)
-                    Text(item.usage)
-                      .fontFamily('Geist').fontSize(11)
-                      .fontColor(this.themeMuted)
-                  }
-                  .alignItems(HorizontalAlign.Start)
-                  .layoutWeight(1)
-
-                  Text(item.license)
-                    .fontFamily('Geist').fontSize(11)
-                    .fontColor(this.themeAccent)
-                }
-                .width('100%')
-                .padding({ top: 10, bottom: 10, left: 2, right: 2 })
-
-                if (index < this.licenses.length - 1) {
-                  Divider()
-                    .color(this.themeBorder)
-                    .strokeWidth(1)
-                }
-              }
-            }, (item: LicenseEntry, index: number) => `${index}-${item.name}`)
-          }
-          .width('100%')
-          .padding(14)
-          .borderRadius(12)
-          .backgroundColor(this.themeSurface)
-          .border({ width: 1, color: this.themeBorder })
-
-          // 诊断入口
-          Button(uiText('打开连接事件日志', this.uiLocale))
-            .fontFamily('Geist').fontSize(13)
-            .width('100%')
-            .height(40)
-            .backgroundColor('#2a6a5a')
-            .onClick(() => {
-              router.pushUrl({ url: 'pages/ConnectionLog' });
-            })
-
-          Text(uiText('本应用按 MIT 协议开源', this.uiLocale))
-            .fontFamily('Geist').fontSize(11)
-            .fontColor(this.themeMuted)
-            .width('100%')
-            .textAlign(TextAlign.Center)
-            .padding(8)
-        }
-        .width('100%')
-      }
-      .layoutWeight(1)
-      .width('100%')
-      .padding({ left: 12, right: 12 })
-      .scrollBar(BarState.Off)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.themeBg)
+        }.width('100%').padding({ top: 8, left: 16, right: 16, bottom: 24 })
+      }.width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Off)
+    }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 }

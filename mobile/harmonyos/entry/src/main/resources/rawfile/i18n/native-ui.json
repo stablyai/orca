@@ -7892,5 +7892,86 @@
     "tr": "Ağ tanılaması",
     "zh-Hant": "網路診斷",
     "zh": "网络诊断"
+  },
+  "settings.aboutScreen.title": {
+    "de": "Über Orca",
+    "en": "About",
+    "es": "Acerca de",
+    "fr": "À propos",
+    "ja": "Orca について",
+    "ko": "정보",
+    "pt": "Sobre",
+    "ru": "О приложении",
+    "tr": "Hakkında",
+    "zh-Hant": "關於",
+    "zh": "关于"
+  },
+  "settings.aboutScreen.tagline": {
+    "de": "Open-Source-Agenten-IDE für 100-mal produktivere Entwickler",
+    "en": "Open-source agent IDE for 100x builders",
+    "es": "IDE de código abierto con agentes para creadores 100x",
+    "fr": "IDE open source avec agents pour les développeurs 100x",
+    "ja": "100 倍の生産性を目指す開発者向けのオープンソース Agent IDE",
+    "ko": "100배의 성과를 내는 개발자를 위한 오픈 소스 에이전트 IDE",
+    "pt": "IDE de código aberto com agentes para quem cria 100x mais",
+    "ru": "IDE с открытым кодом и агентами: разработка в 100 раз быстрее",
+    "tr": "100 kat daha üretken geliştiriciler için açık kaynaklı ajan IDE'si",
+    "zh-Hant": "助開發者發揮 100 倍效率的開源代理程式 IDE",
+    "zh": "助力开发者百倍提效的开源智能体 IDE"
+  },
+  "settings.aboutScreen.website": {
+    "de": "Orca-Website",
+    "en": "Orca website",
+    "es": "Sitio web de Orca",
+    "fr": "Site web d'Orca",
+    "ja": "Orca のウェブサイト",
+    "ko": "Orca 웹사이트",
+    "pt": "Site do Orca",
+    "ru": "Сайт Orca",
+    "tr": "Orca web sitesi",
+    "zh-Hant": "Orca 網站",
+    "zh": "Orca 网站"
+  },
+  "settings.aboutScreen.sourceCode": {
+    "de": "Orca-Quellcode",
+    "en": "Orca source code",
+    "es": "Código fuente de Orca",
+    "fr": "Code source d'Orca",
+    "ja": "Orca のソースコード",
+    "ko": "Orca 소스 코드",
+    "pt": "Código-fonte do Orca",
+    "ru": "Исходный код Orca",
+    "tr": "Orca kaynak kodu",
+    "zh-Hant": "Orca 原始碼",
+    "zh": "Orca 源代码"
+  },
+  "settings.aboutScreen.socialProfile": {
+    "de": "Orca auf X",
+    "en": "Orca on X",
+    "es": "Orca en X",
+    "fr": "Orca sur X",
+    "ja": "Orca の X アカウント",
+    "ko": "Orca X 프로필",
+    "pt": "Orca no X",
+    "ru": "Orca в X",
+    "tr": "X'te Orca",
+    "zh-Hant": "Orca 的 X 帳號",
+    "zh": "Orca 的 X 主页"
+  },
+  "settings.aboutScreen.openLinkFailed": {
+    "de": "Der Link konnte nicht geöffnet werden. Erneut versuchen.",
+    "en": "Could not open the link. Try again.",
+    "es": "No se pudo abrir el enlace. Vuelve a intentarlo.",
+    "fr": "Impossible d'ouvrir le lien. Réessayez.",
+    "ja": "リンクを開けませんでした。再試行してください。",
+    "ko": "링크를 열지 못했습니다. 다시 시도하세요.",
+    "pt": "Não foi possível abrir o link. Tente novamente.",
+    "ru": "Не удалось открыть ссылку. Повторите попытку.",
+    "tr": "Bağlantı açılamadı. Yeniden deneyin.",
+    "zh-Hant": "無法開啟連結，請再試一次。",
+    "zh": "无法打开链接。请重试。"
+  },
+  "home.activeAgents.heading": {
+    "en": "Active"
   }
 }

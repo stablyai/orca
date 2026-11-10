@@ -63,7 +63,7 @@ const models = [
     provenance: 'orcaAgentList',
     contents: `
       export { buildAgentList, agentListRowsIn } from './mobile/src/agents/agent-list-model'
-      export { selectAgentsNeedingYou, summarizeAgentListHosts, agentStatusGroup } from './mobile/src/agents/agent-list-rows'
+      export { selectActiveAgents, selectAgentsNeedingYou, summarizeAgentListHosts, agentStatusGroup } from './mobile/src/agents/agent-list-rows'
       export { agentListPreview } from './mobile/src/agents/agent-list-row-text'
       export { formatAgentTypeLabel } from './src/shared/agent-status/presentation/agent-type-label'
     `

@@ -254,5 +254,21 @@
       "mobile/src/i18n/locales/zh-Hant.json": "99ac5bb842c477deb57560a2d3a917f82c2046866fba031fe079bc99bbb98e48",
       "mobile/src/i18n/locales/zh.json": "959a0b3190cd16dc8413cbc4d0d3c9ab846e07221850acd53de40ab6fc310296"
     }
+  },
+  "aboutAndActiveFeedSources": {
+    "revision": "71c57818fb572220ce29164a4afa9c7ee7eb8784",
+    "catalogs": {
+      "mobile/src/i18n/locales/de.json": "f80be27ea271b042bff20f217d6149c0e1cbd4130584fcf3e5fcb15a3a0e7b62",
+      "mobile/src/i18n/locales/en.json": "819c4f6d6b7d6898b57d7cb2d56756b17deebae22fcbb06df3deedcab26baca0",
+      "mobile/src/i18n/locales/es.json": "f35c4b9f90936c6526f0a6571e4a91ce0d21635580c3be2b3ceaca8d43742ee1",
+      "mobile/src/i18n/locales/fr.json": "5d47ffaad8cbcad50529c8f1fe84bea47c87c8ba16e43f9810fd4eb75c09b368",
+      "mobile/src/i18n/locales/ja.json": "df55bc675a6c536be817edeb10af44a0a1582200fcadcd82385650184a9356c8",
+      "mobile/src/i18n/locales/ko.json": "8c797aa80553fb748372562fdd344b7f5c99655c500f1e288dce7a6b530ed7fd",
+      "mobile/src/i18n/locales/pt.json": "b04ff070c824b81a91789d67283c98beadc986a7cd98b0ef157fbafd7b4af8f3",
+      "mobile/src/i18n/locales/ru.json": "53e58d3d959927aa4d56efdb6f0f8d249a4a1402222d6608f8dd93dd0c620e03",
+      "mobile/src/i18n/locales/tr.json": "f35ab87d267d9049212e0708912e1a5c99d1374d777057a39d0f680a1fa7be17",
+      "mobile/src/i18n/locales/zh-Hant.json": "69487f3e5e3bb3eb229f818045caf9e10b8bde7b946958bbf981509f6c5232c3",
+      "mobile/src/i18n/locales/zh.json": "3925c7f7a4541d4ee514a3cc90bf9ac5a2ffa92e62b93f511fe96a0908ba9276"
+    }
   }
 }
