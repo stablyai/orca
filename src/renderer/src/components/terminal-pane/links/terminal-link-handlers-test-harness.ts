@@ -58,6 +58,7 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     vi.mocked(getConnectionId).mockReturnValue(null)
     openFilePathMock.mockResolvedValue(true)
     storeState.settings = undefined
+    storeState.activeWorktreeId = null
     storeState.activeFileIdByWorktree = {}
     storeState.openFiles = []
     storeState.unifiedTabsByWorktree = {}

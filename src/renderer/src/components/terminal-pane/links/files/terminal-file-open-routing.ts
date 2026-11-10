@@ -24,9 +24,7 @@ import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
   hostGrantedEditorFields,
-  isHostWorkspaceRoot,
   resolveHostWorkspaceFile,
-  revealHostWorkspaceRoot,
   type HostWorkspaceFile
 } from '../../host-files/terminal-host-workspace-file'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
@@ -43,6 +41,7 @@ import {
   type HttpLinkDestination
 } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
+import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -211,25 +210,16 @@ export function openDetectedFilePath(
       if (refuseExplicitNonEditorRoute()) {
         return
       }
-      if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
-      } else if (hostWorkspaceFile) {
-        // Why: only the workspace root switches workspace; a folder below it must still reveal somewhere visible.
-        if (isHostWorkspaceRoot(hostWorkspaceFile)) {
-          revealHostWorkspaceRoot(hostWorkspaceFile)
-        } else {
-          useAppStore.getState().revealInExplorer(worktreeId, mappedFilePath)
-        }
-      } else if (fileContext.target.kind === 'environment') {
-        // Why: a paired workspace's folder is not a local path; reveal it in that worktree's explorer.
-        useAppStore.getState().revealInExplorer(worktreeId, mappedFilePath)
-      } else {
-        // Why: no local OS and no owning workspace left the click silent; name the folder instead.
-        deps.onOpenFailure?.({
-          verdict: 'unverifiable',
-          error: new Error(`This computer cannot open the folder ${mappedFilePath}`)
-        })
-      }
+      await openDetectedFolder({
+        folderPath: mappedFilePath,
+        worktreeId,
+        worktreePath,
+        hostWorkspaceFile,
+        environmentOwned: fileContext.target.kind === 'environment',
+        sourceHostId: sourceFileHostId,
+        openWithSystemDefault: canOpenWithSystemDefault,
+        onFailure: (failure) => deps.onOpenFailure?.(failure)
+      })
       return
     }
 
