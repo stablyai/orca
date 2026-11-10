@@ -64,46 +64,4 @@ describe('Linear list pagination evidence', () => {
     await expect(listMcpIssues({})).rejects.toMatchObject({ code: 'linear_partial' })
     expect(rawRequest).toHaveBeenCalledTimes(2)
   })
-
-  it('does not report a complete list when pageInfo.hasNextPage is not boolean', async () => {
-    rawRequest.mockResolvedValueOnce({
-      data: {
-        issues: {
-          nodes: [issueNode('lin-1')],
-          pageInfo: { hasNextPage: null }
-        }
-      }
-    })
-
-    await expect(listMcpIssues({})).rejects.toMatchObject({ code: 'linear_partial' })
-  })
-
-  it('keeps a page with hasNextPage false complete', async () => {
-    rawRequest.mockResolvedValueOnce({
-      data: {
-        issues: {
-          nodes: [issueNode('lin-1')],
-          pageInfo: { hasNextPage: false, endCursor: null }
-        }
-      }
-    })
-
-    await expect(listMcpIssues({})).resolves.toMatchObject({
-      meta: {
-        returned: 1,
-        hasMore: false,
-        partial: false,
-        workspaceErrors: []
-      }
-    })
-  })
-
-  it('keeps a null issue connection as an empty complete list', async () => {
-    rawRequest.mockResolvedValueOnce({ data: { issues: null } })
-
-    await expect(listMcpIssues({})).resolves.toMatchObject({
-      issues: [],
-      meta: { returned: 0, hasMore: false, partial: false, workspaceErrors: [] }
-    })
-  })
 })

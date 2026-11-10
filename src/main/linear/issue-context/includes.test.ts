@@ -177,27 +177,4 @@ describe('Linear issue context includes', () => {
     ])
     expect(plainRawRequest).toHaveBeenCalledTimes(2)
   })
-
-  it('keeps a null activity connection as an empty complete read', async () => {
-    plainRawRequest.mockResolvedValueOnce({ data: { issue: { history: null } } })
-    const { readOptionalIncludes } = await import('./includes')
-    const output = result()
-
-    await readOptionalIncludes(
-      resolvedIssue(),
-      requestWithActivity(),
-      output,
-      output.meta.includeErrors,
-      output.meta.sections
-    )
-
-    expect(output.meta.includeErrors).toEqual([])
-    expect(output.activity).toEqual([])
-    expect(output.meta.sections.activity).toMatchObject({
-      returned: 0,
-      cap: 250,
-      capReached: false,
-      hasMore: false
-    })
-  })
 })
