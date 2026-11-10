@@ -53,7 +53,7 @@
                 { "el": "RepoChip", "when": "vars.pinnedRepo" },
                 {
                   "el": "HostMark",
-                  "props": { "sshIconOnly": "=!vars.classic", "runtime": "=host.kind == 'runtime'" }
+                  "props": { "runtime": "=host.kind == 'runtime'" }
                 },
                 { "el": "RepoChip", "when": "vars.inlineRepo" },
                 {
@@ -118,6 +118,7 @@
                   "when": "vars.hostBadge",
                   "props": { "label": "=vars.hostLabel" }
                 },
+                { "el": "SshConnect", "when": "vars.classic && host.kind == 'ssh'" },
                 { "el": "HostStateWord" },
                 {
                   "el": "IdentityLabel",

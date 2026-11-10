@@ -78,7 +78,7 @@ export function WorktreeCardHeader({
                 status={sshStatus}
                 targetRemoved={sshTargetRemoved}
                 sshOwnerEnvironmentId={sshOwnerEnvironmentId}
-                iconOnly={compactCards || newCardStyle}
+                iconOnly
                 onPointerDown={stopQuickActionPointerPropagation}
               />
             ) : undefined

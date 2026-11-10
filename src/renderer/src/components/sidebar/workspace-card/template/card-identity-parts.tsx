@@ -56,7 +56,11 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
   )
 }
 
-function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React.ReactNode {
+function sshControl(
+  props: Readonly<Record<string, unknown>>,
+  card: Card,
+  actionOnly = false
+): React.ReactNode {
   const { repo } = card
   if (!repo?.connectionId) {
     return null
@@ -69,6 +73,7 @@ function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React
       targetRemoved={card.sshTargetRemoved}
       sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
       iconOnly={props.iconOnly === true}
+      actionOnly={actionOnly}
       onPointerDown={card.stopQuickActionPointerPropagation}
     />
   )
@@ -96,11 +101,12 @@ export const CARD_IDENTITY_PARTS = {
     repo ? <WorktreeCardRepoChip repo={repo} /> : null
   ),
   // The one host mark (SSH, Orca server, recipe VM, Orca Cloud or this computer) in a 12px slot.
-  HostMark: part(['sshIconOnly', 'runtime'], (props, _children, card) => (
+  HostMark: part(['runtime'], (props, _children, card) => (
     <WorktreeCardHostMark
       worktreeId={card.worktree.id}
       onPointerDown={card.stopQuickActionPointerPropagation}
-      sshControl={sshControl({ iconOnly: props.sshIconOnly }, card)}
+      // Always icon-only in the 12px slot; classic cards show Connect on line 2 (SshConnect).
+      sshControl={sshControl({ iconOnly: true }, card)}
       runtimeMark={
         props.runtime === true ? (
           <WorktreeCardRuntimeHostMark
@@ -111,6 +117,7 @@ export const CARD_IDENTITY_PARTS = {
       }
     />
   )),
+  SshConnect: part([], (_props, _children, card) => sshControl({ iconOnly: false }, card, true)),
   HostStateWord: part([], (_props, _children, card) => (
     <WorktreeCardHostStateWord worktreeId={card.worktree.id} />
   )),

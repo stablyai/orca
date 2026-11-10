@@ -32,6 +32,8 @@ type WorktreeCardSshHostControlProps = {
   sshOwnerEnvironmentId: string | null
   /** Use only the accessible label when dense rows cannot fit visible text. */
   iconOnly: boolean
+  /** Line 2 of a classic card: only the Connect / Retry action, nothing while connected or removed. */
+  actionOnly?: boolean
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
 }
 
@@ -76,6 +78,7 @@ export function WorktreeCardSshHostControl({
   targetRemoved,
   sshOwnerEnvironmentId,
   iconOnly,
+  actionOnly = false,
   onPointerDown
 }: WorktreeCardSshHostControlProps): React.JSX.Element | null {
   const t = useTranslate()
@@ -130,7 +133,7 @@ export function WorktreeCardSshHostControl({
 
   // Live connection outranks stale removal; runtime-owned null status stays passive without claiming disconnection.
   if (status === null || status === 'connected') {
-    return (
+    return actionOnly ? null : (
       <PassiveGlyph
         targetLabel={targetLabel}
         icon={<Server className="size-3 text-muted-foreground" />}
@@ -149,7 +152,7 @@ export function WorktreeCardSshHostControl({
 
   // Removed hosts cannot reconnect; suppress failing Connect actions and treat removal as settled, not actionable error.
   if (targetRemoved) {
-    return (
+    return actionOnly ? null : (
       <PassiveGlyph
         targetLabel={targetLabel}
         icon={<ServerOff className="size-3 text-muted-foreground" />}
@@ -223,7 +226,8 @@ export function WorktreeCardSshHostControl({
           className={cn(
             PILL_BASE,
             failed ? PILL_FAILED : PILL_QUIET,
-            iconOnly && 'w-4 justify-center !px-0 has-[>svg]:!px-0'
+            // The host slot is a fixed 12px column so titles line up across host kinds.
+            iconOnly && 'w-3 justify-center !px-0 has-[>svg]:!px-0'
           )}
           aria-label={accessibleName}
           data-ssh-target-label={targetLabel}
