@@ -96,7 +96,7 @@ it.each(['load', 'resume'] as const)(
     setActiveSink(sink)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const rig = await openAcpAdapterRig({
-      spec: { ...GROK, resumePreference: method },
+      spec: { ...GROK, resumePreference: method === 'resume' ? 'resume' : undefined },
       initialize: {
         agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} } }
       },
@@ -120,7 +120,7 @@ it.each(['load', 'resume'] as const)(
     })
     await rig.acquire()
     expect(rig.openVerdict()).toBeUndefined()
-    expect(rig.started().link.origin).toBe('created')
+    expect(rig.started().link?.origin).toBe('created')
     await sink.flushAsync()
     const bundle = collectBundle({
       traceFilePath: traceFile,
