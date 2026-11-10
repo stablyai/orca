@@ -26,7 +26,10 @@ import { main } from '../index'
 let home: string
 let out: string[]
 let err: string[]
-const fetchMock = vi.fn()
+let stdoutSpy: { mock: { calls: unknown[][] }; mockClear: () => void }
+/** Everything the CLI printed: console.log lines plus raw stdout writes. */
+const printed = () => out.join('') + stdoutSpy.mock.calls.map((call) => String(call[0])).join('')
+const fetchMock = vi.fn<typeof fetch>()
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-cloud-main-'))
@@ -34,10 +37,7 @@ beforeEach(() => {
   err = []
   vi.spyOn(console, 'log').mockImplementation((line: unknown) => void out.push(String(line)))
   vi.spyOn(console, 'error').mockImplementation((line: unknown) => void err.push(String(line)))
-  vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
-    out.push(String(chunk))
-    return true
-  }) as typeof process.stdout.write)
+  stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
   vi.stubEnv('ORCA_CLOUD_CREDENTIALS_FILE', join(home, 'credentials.json'))
   vi.stubEnv('ORCA_CLOUD_TOKEN', 'orca_ws_test')
   vi.stubEnv('ORCA_CLOUD_API_URL', 'https://cloud.test')
@@ -82,14 +82,14 @@ describe('orca worktree create --on cloud via main()', () => {
       home
     )
     expect(process.exitCode).toBeUndefined()
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe('https://cloud.test/v1/workspaces')
-    expect(JSON.parse(String(init.body))).toEqual({
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toBe('https://cloud.test/v1/workspaces')
+    expect(JSON.parse(String(init?.body))).toEqual({
       name: 'fix',
       repo: { url: 'https://github.com/acme/app' },
       message: { text: 'hi', agent: 'claude' }
     })
-    expect(JSON.parse(out.join(''))).toMatchObject({
+    expect(JSON.parse(printed())).toMatchObject({
       ok: true,
       schemaVersion: 1,
       result: { host: { id: 'sbx_on1', origin: { target: 'cloud' } } }
@@ -119,13 +119,14 @@ describe('orca worktree create --on cloud via main()', () => {
       home
     )
     expect(process.exitCode).toBeUndefined()
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(JSON.parse(String(init.body))).toMatchObject({ environment: 'env_abcd1234' })
+    const [, init] = fetchMock.mock.calls[0]!
+    expect(JSON.parse(String(init?.body))).toMatchObject({ environment: 'env_abcd1234' })
     fetchMock.mockReset()
     out = []
+    stdoutSpy.mockClear()
     await main(['worktree', 'create', '--on', 'cloud', '--env', 'prod', '--json'], home)
     expect(process.exitCode).not.toBeUndefined()
-    expect(JSON.parse(out.join(''))).toMatchObject({
+    expect(JSON.parse(printed())).toMatchObject({
       ok: false,
       error: { code: 'invalid_argument' }
     })
@@ -155,7 +156,7 @@ describe('orca worktree create --on cloud via main()', () => {
       home
     )
     expect(process.exitCode).not.toBeUndefined()
-    const payload = JSON.parse(out.join(''))
+    const payload = JSON.parse(printed())
     expect(payload).toMatchObject({ ok: false, error: { code } })
     expect(payload.error.message).toContain(text)
   })
@@ -167,7 +168,7 @@ describe('orca worktree create --on cloud via main()', () => {
       ['worktree', 'create', '--on', 'cloud', '--repo', 'https://github.com/acme/app', '--json'],
       home
     )
-    expect(JSON.parse(out.join(''))).toMatchObject({
+    expect(JSON.parse(printed())).toMatchObject({
       ok: false,
       error: { code: 'cloud_not_signed_in' }
     })
@@ -176,7 +177,7 @@ describe('orca worktree create --on cloud via main()', () => {
 
   it('refuses other --on targets in this build, before any request', async () => {
     await main(['worktree', 'create', '--on', 'recipe:dev', '--name', 'x', '--json'], home)
-    expect(JSON.parse(out.join(''))).toMatchObject({
+    expect(JSON.parse(printed())).toMatchObject({
       ok: false,
       error: { code: 'invalid_argument' }
     })
