@@ -1,5 +1,5 @@
 import './session-search-worker.test-fixture'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { FakeWatcherChild } from '../ipc/filesystem/watcher-process/parcel-watcher-process-test-child'
@@ -12,6 +12,9 @@ import {
 } from './session-search-indexer-test-fixture'
 
 const { fork } = vi.hoisted(() => ({ fork: vi.fn() }))
+vi.mock('./session-search-watcher.test-fixture', () => ({
+  notifySessionSearchFileChange: () => undefined
+}))
 vi.mock('node:child_process', async (original) => ({ ...(await original<object>()), fork }))
 vi.mock('./session-search-filesystem', () => ({
   sessionSearchRequiresPolling: async () => false
@@ -22,6 +25,8 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
   const path = join(harness.claudeProjectDir, 'pending.jsonl')
   const clock = new FakeSessionSearchClock()
   let crawling = false
+  let nativeRoot: string
+  let stalledChild: FakeWatcherChild | undefined
   const children: FakeWatcherChild[] = []
   fork.mockImplementation(() => {
     const child = new FakeWatcherChild()
@@ -30,10 +35,17 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
       child.sent.push(message)
       queueMicrotask(() => {
         if (message.op === 'subscribe') {
-          crawling = true
-          child.emit('message', { op: 'subscribe-started', id: message.id })
+          if (message.dir === nativeRoot) {
+            crawling = true
+            stalledChild = child
+            child.emit('message', { op: 'subscribe-started', id: message.id })
+          } else {
+            child.emit('message', { op: 'subscribed', id: message.id })
+          }
         } else if (message.op === 'cancel-subscribe') {
           child.emit('message', { op: 'cancel-requires-restart', id: message.id })
+        } else if (message.op === 'unsubscribe') {
+          child.emit('message', { op: 'unsubscribed', id: message.id })
         }
       })
       return true
@@ -46,7 +58,7 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
     return child
   })
   vi.stubEnv('VITEST', '')
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   const subject = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,
@@ -56,12 +68,13 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
   })
   try {
     await writeClaudeTranscript(path, ['beforepressure'], 'pending')
+    nativeRoot = await realpath(harness.roots.claudeProjectsDir)
     const start = subject.start()
     await vi.waitFor(() => expect(crawling).toBe(true))
     await vi.advanceTimersByTimeAsync(60_000)
     await start
     expect(subject.status().filesIndexed).toBe(1)
-    expect(children.every((child) => !child.connected)).toBe(true)
+    expect(stalledChild?.connected).toBe(false)
 
     await appendFile(path, `${claudeLines(['afterpressure'], 'pending', 10).join('\n')}\n`)
     clock.advance(20_000)
@@ -77,6 +90,7 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
     ).toEqual({ n: 2 })
   } finally {
     await subject.close()
+    expect(children.every((child) => !child.connected)).toBe(true)
     vi.useRealTimers()
     vi.unstubAllEnvs()
     fork.mockReset()

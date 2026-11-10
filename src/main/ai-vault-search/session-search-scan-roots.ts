@@ -70,7 +70,7 @@ export function sessionSearchRootListings(
 function constituentRoots(
   roots: SessionSearchScanRoots,
   wslHomeDirs: readonly string[],
-  discovery: SessionFileDiscovery
+  discovery: Pick<SessionFileDiscovery, 'agent' | 'rootDir'>
 ): string[] {
   const declared = AI_VAULT_AGENT_SOURCES[discovery.agent]?.rootDirs(roots, wslHomeDirs) ?? []
   if (declared.includes(discovery.rootDir)) {
@@ -78,6 +78,17 @@ function constituentRoots(
   }
   // Merged discoveries use declared roots; custom sources without declarations report real directories.
   return declared.length > 0 ? declared : [discovery.rootDir]
+}
+
+export function sessionSearchPhysicalRoot(
+  roots: SessionSearchScanRoots,
+  discovery: Pick<SessionFileDiscovery, 'agent' | 'rootDir'>,
+  path: string
+): string | null {
+  return owningRoot(
+    constituentRoots(roots, normalizedWslHomeDirs(roots.wslHomeDirs), discovery),
+    path
+  )
 }
 
 function owningRoot(constituents: readonly string[], path: string): string | null {

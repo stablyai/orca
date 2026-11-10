@@ -3,7 +3,9 @@ import { SessionSearchRootWatchers } from './session-search-root-watchers'
 import { SessionSearchContainerInventory } from './session-search-container-inventory'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
-import type { SessionFileDiscovery } from '../ai-vault/session-scanner-types'
+import type { SessionFileCandidate, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
+import { sessionSearchPhysicalRoot, type SessionSearchScanRoots } from './session-search-scan-roots'
 import type { SessionDiscoveryContext } from '../ai-vault/session-discovery-context'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 
@@ -90,11 +92,25 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     return map
   }
 
-  async observeForRead(agent: string, rootDir: string, path: string) {
-    const root = this.roots.get(`${agent}:${rootDir}`)
-    // Container rows retain their source-owned admission and are never filesystem paths.
-    if (!root) {
+  async observeForRead(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots
+  ) {
+    const {
+      agent,
+      file: { path }
+    } = candidate
+    if (
+      (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') &&
+      splitOpenCodeSqliteCandidate(path, agent === 'zcode' ? 'zcode' : 'opencode')
+    ) {
       return null
+    }
+    const rootDir = sessionSearchPhysicalRoot(roots, { agent, rootDir: logicalRoot }, path)
+    const root = rootDir === null ? undefined : this.roots.get(`${agent}:${rootDir}`)
+    if (!root?.inventory.files.has(path)) {
+      throw new Error('Session search read has no physical inventory owner')
     }
     const change = await root.inventory.observeForRead(path, root.args, this.recentLimit)
     if (change) {

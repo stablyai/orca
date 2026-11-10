@@ -26,6 +26,12 @@ export class SessionObservationRetries {
   force(path: string): boolean {
     return this.debts.get(path)?.force ?? false
   }
+  requireRead(path: string): void {
+    const debt = this.debts.get(path)
+    if (debt) {
+      debt.force = true
+    }
+  }
   get pending(): boolean {
     return [...this.debts.values()].some(
       (debt) => debt.failures < SESSION_INPUT_FAILURES_BEFORE_HELD_OUT

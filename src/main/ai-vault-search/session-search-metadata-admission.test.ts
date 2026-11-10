@@ -14,7 +14,8 @@ import SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
   FakeSessionSearchClock,
-  openSessionSearchIndexerHarness
+  openSessionSearchIndexerHarness,
+  writeClaudeTranscript
 } from './session-search-indexer-test-fixture'
 
 it('does not add a database-only Devin search wake and still enriches an admitted transcript read', async () => {
@@ -135,6 +136,72 @@ it('does not fan out search reads for history metadata outside the Antigravity s
   } finally {
     reads.mockRestore()
     await subject.close()
+    await harness.cleanup()
+  }
+})
+
+it('refreshes a deferred physical transcript beneath a merged Devin discovery', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-devin-deferred')
+  const clock = new FakeSessionSearchClock()
+  clock.costPerNowMs = 1000
+  const primary = join(harness.roots.devinTranscriptsDir!, 'owed.json')
+  const later = join(harness.claudeProjectDir, 'newer.jsonl')
+  const roots = { ...harness.roots, wslHomeDirs: [join(harness.root, 'alternate-home')] }
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots,
+    historyDays: null,
+    clock,
+    passDeadlineMs: 1000,
+    discoveryDeadlineMs: Infinity
+  })
+  try {
+    await mkdir(dirname(primary), { recursive: true })
+    await writeFile(
+      primary,
+      JSON.stringify({ session_id: 'owed', steps: [{ source: 'user', message: 'beforedeferred' }] })
+    )
+    await utimes(primary, new Date('2024-01-01'), new Date('2024-01-01'))
+    await writeClaudeTranscript(later, ['newerbody'], 'newer')
+    await subject.start()
+    expect(
+      harness.read((db) => db.prepare('SELECT state FROM files WHERE path=?').get(primary))
+    ).toBeUndefined()
+    await writeFile(
+      primary,
+      JSON.stringify({
+        session_id: 'owed',
+        steps: [
+          { source: 'user', message: 'beforedeferred' },
+          { source: 'agent', message: 'mergeddeferredneedle' }
+        ]
+      })
+    )
+    // The existing obligation must refresh its constituent input without a later notice.
+    await subject.reconcile()
+    expect(
+      harness.read((db) =>
+        db
+          .prepare(
+            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'mergeddeferredneedle'"
+          )
+          .get()
+      )
+    ).toEqual({ n: 1 })
+    const current = await stat(primary)
+    expect(
+      harness.read((db) =>
+        db.prepare('SELECT mtime_ms, size_bytes, dev, ino FROM files WHERE path=?').get(primary)
+      )
+    ).toEqual({
+      mtime_ms: current.mtimeMs,
+      size_bytes: current.size,
+      dev: current.dev,
+      ino: current.ino
+    })
+  } finally {
+    await subject.close()
+    resetDevinSessionsIndexCacheForTests()
     await harness.cleanup()
   }
 })

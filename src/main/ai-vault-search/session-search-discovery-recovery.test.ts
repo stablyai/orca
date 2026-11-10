@@ -3,7 +3,7 @@ import {
   notifySessionSearchFileChange,
   notifySessionSearchOverflow
 } from './session-search-watcher.test-fixture'
-import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
@@ -593,6 +593,94 @@ it.each([40, 400])(
       expect(result.changes.map((change) => change.file.path)).toContain(recovered)
     } finally {
       reads.mockRestore()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([
+  { input: 'primary', failures: 1 },
+  { input: 'sidecar', failures: 1 },
+  { input: 'primary', failures: 3 }
+])(
+  'retains a deferred read through $failures refused $input observations',
+  async ({ input, failures }) => {
+    const harness = await openSessionSearchIndexerHarness('ss-admission-debt')
+    const clock = new FakeSessionSearchClock()
+    clock.costPerNowMs = 1000
+    const directory = join(harness.roots.clineSessionsDir!, 'owed')
+    const primary = join(directory, 'owed.json')
+    const sidecar = join(directory, 'owed.messages.json')
+    const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
+    const actualStat = filesystem.wslGatedStat
+    let refusing = false
+    const probe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((path, ...rest) => {
+      if (refusing && path === (input === 'primary' ? primary : sidecar)) {
+        return Promise.reject(
+          Object.assign(new Error('fixture observation refusal'), { code: 'EIO' })
+        )
+      }
+      return actualStat(path, ...rest)
+    })
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock,
+      passDeadlineMs: 1000,
+      discoveryDeadlineMs: Infinity
+    })
+    const matching = () =>
+      harness.read((db) =>
+        db
+          .prepare(
+            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'owedreadneedle'"
+          )
+          .get()
+      )
+    try {
+      await mkdir(directory, { recursive: true })
+      await writeFile(primary, JSON.stringify({ session_id: 'owed', cwd: '/repo' }))
+      await writeFile(
+        sidecar,
+        JSON.stringify({
+          sessionId: 'owed',
+          messages: [{ role: 'user', content: [{ type: 'text', text: 'owedreadneedle' }] }]
+        })
+      )
+      await utimes(primary, new Date('2024-01-01'), new Date('2024-01-01'))
+      await writeClaudeTranscript(
+        join(harness.claudeProjectDir, 'newer.jsonl'),
+        ['newerbody'],
+        'newer'
+      )
+      await subject.start()
+      expect(matching()).toEqual({ n: 0 })
+      expect(subject.status().filesDue).toBe(1)
+      const accepted = await stat(primary)
+      refusing = true
+      for (let cycle = 0; cycle < failures; cycle++) {
+        await subject.reconcile()
+      }
+      expect(matching()).toEqual({ n: 0 })
+      refusing = false
+      await subject.reconcile()
+      if (failures === 3) {
+        expect(matching()).toEqual({ n: 0 })
+        expect(subject.status().filesDue).toBe(0)
+        expect(subject.status().phase).not.toBe('indexing')
+        await subject.reconcile({ full: true })
+      }
+      expect(matching()).toEqual({ n: 1 })
+      expect(
+        harness.read((db) =>
+          db.prepare('SELECT mtime_ms, size_bytes FROM files WHERE path=?').get(primary)
+        )
+      ).toMatchObject({ mtime_ms: accepted.mtimeMs, size_bytes: accepted.size })
+    } finally {
+      probe.mockRestore()
+      polling.mockRestore()
+      await subject.close()
       await harness.cleanup()
     }
   }

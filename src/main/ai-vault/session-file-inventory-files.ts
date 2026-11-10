@@ -31,6 +31,9 @@ export class SessionInventoryFiles {
     readOwed = false
   ) {
     if (!this.failures.mayAttempt(path)) {
+      if (force || readOwed) {
+        this.failures.requireRead(path)
+      }
       return
     }
     force ||= this.failures.force(path)

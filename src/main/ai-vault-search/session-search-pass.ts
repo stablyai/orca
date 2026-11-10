@@ -153,9 +153,10 @@ export async function runSessionSearchPass(
         const path = candidate.file.path
         const rootDir = state.candidates.rootFor(candidate)
         if (rootDir === undefined) {
+          state.queue.acknowledge(work, false)
           return undefined
         }
-        const observation = await state.discovery.observeForRead(candidate.agent, rootDir, path)
+        const observation = await state.discovery.observeForRead(candidate, rootDir, args.roots)
         if (observation === null) {
           return work
         }
