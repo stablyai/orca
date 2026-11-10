@@ -243,8 +243,12 @@ export function createTerminalPtyMembershipOwner() {
         replaceTab(state, tabId)
       }
       for (const workspace of affectedRoutes) {
+        const tabs = unscopedTabsByWorkspace.get(workspace)
+        if (!tabs) {
+          continue
+        }
         const owner = routes.owner(state, workspace)
-        for (const tabId of unscopedTabsByWorkspace.get(workspace) ?? []) {
+        for (const tabId of tabs) {
           if (changedTabs.has(tabId)) {
             continue
           }
