@@ -79,7 +79,7 @@ export function NewWorkspaceComposerFooter({
             type="button"
             variant="ghost"
             size="sm"
-            className="ml-auto text-xs"
+            className="ml-auto"
             onClick={cloudStart.onUseThisComputer}
           >
             {t('components.newWorkspace.cloudStart.useThisComputer', 'Use this computer instead')}

@@ -73,7 +73,14 @@ function planDetail(step: CloudSetupStep, t: Translate): string | null {
       return t('components.newWorkspace.cloudSetup.spendCap', 'Spend cap reached.') + memberSuffix
     case 'payment':
       return t('components.newWorkspace.cloudSetup.paymentFailed', 'Payment failed.') + memberSuffix
-    default:
+    case 'github':
+      return t(
+        'components.newWorkspace.cloudSetup.githubNeeded',
+        'Orca Cloud clones your code from GitHub. Give access to this repository once.'
+      )
+    case 'sign-in':
+    case 'plan':
+    case undefined:
       return step.canFix === false
         ? t(
             'components.newWorkspace.cloudSetup.planMember',

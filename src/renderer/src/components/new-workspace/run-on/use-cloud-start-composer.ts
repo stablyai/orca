@@ -2,9 +2,11 @@
 // setup instead of a build that billing would refuse, starts by itself once setup finishes, keeps
 // the draft on disk, and remembers where each project last started.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import type { ReadyProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import type {
+  ProjectHostSetupOption,
+  ReadyProjectHostSetupOption
+} from '@/lib/project-host-setup-options'
 import {
   clearCloudStartDraft,
   readCloudStartDraft,
@@ -15,15 +17,16 @@ import {
   CLOUD_SETUP_AUTO_START,
   getCloudSetupStarter,
   readCloudSetupSession,
-  subscribeCloudSetupSession
+  getCloudSetupSessionRevision,
+  subscribeCloudSetupSessionRevision
 } from '@/lib/orca-cloud/cloud-setup-session-seam'
 import { readRunOnMemory, recordSuccessfulRunOn } from '@/lib/orca-cloud/run-on-memory'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import { useOrcaCloudRunTargetAccess } from '../orca-cloud-billing-cache'
-import { getOrcaCloudPick, type OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+import { getCloudPrimaryLabel, setupActionFor } from './cloud-start-actions'
 import {
   deriveCloudSetupSteps,
   getCloudPrimaryAction,
@@ -31,7 +34,6 @@ import {
   getOrcaCloudSegmentState,
   isCloudSetupPanelVisible,
   resolveDefaultRunOn,
-  type CloudPrimaryAction,
   type CloudSetupStep
 } from './cloud-start-model'
 
@@ -46,68 +48,11 @@ export type CloudStartView = {
   onUseThisComputer?: () => void
 }
 
-export function getCloudPrimaryLabel(action: CloudPrimaryAction): string {
-  switch (action) {
-    case 'start':
-      return translate('components.newWorkspace.cloudStart.start', 'Start in Orca Cloud')
-    case 'setUpAndStart':
-      return translate('components.newWorkspace.cloudStart.setUpAndStart', 'Set up and start')
-    case 'choosePlanAndStart':
-      return translate(
-        'components.newWorkspace.cloudStart.choosePlanAndStart',
-        'Choose plan and start'
-      )
-    case 'renewAndStart':
-      return translate('components.newWorkspace.cloudStart.renewAndStart', 'Renew and start')
-    case 'giveAccessAndStart':
-      return translate(
-        'components.newWorkspace.cloudStart.giveAccessAndStart',
-        'Give access and start'
-      )
-    case 'useThisComputer':
-      return translate(
-        'components.newWorkspace.cloudStart.useThisComputer',
-        'Use this computer instead'
-      )
-    case 'checking':
-      return translate('components.newWorkspace.cloudStart.checking', 'Checking Orca Cloud…')
-  }
-}
-
-/** The fix one click on the primary button runs: sign in first, else the plan/billing action. */
-function setupActionFor(
-  steps: readonly CloudSetupStep[],
-  access: OrcaCloudRunTargetAccess,
-  availability: OrcaCloudAvailability
-): (() => void) | null {
-  if (steps.some((step) => step.id === 'account' && step.state === 'needed')) {
-    const pick = getOrcaCloudPick({ state: 'signed-out' })
-    return pick.kind === 'act' ? pick.run : null
-  }
-  const effective: OrcaCloudRunTargetAccess =
-    availability === 'needs-capability' && access.state !== 'no-plan'
-      ? { state: 'no-plan', lapsed: false, canManageBilling: true }
-      : access
-  const pick = getOrcaCloudPick(effective)
-  return pick.kind === 'act' ? pick.run : null
-}
-
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' &&
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
   )
-}
-
-let sessionRevision = 0
-function subscribeSessionRevision(listener: () => void): () => void {
-  return subscribeCloudSetupSession(() => {
-    sessionRevision += 1
-    listener()
-  })
-}
-function getSessionRevision(): number {
-  return sessionRevision
 }
 
 export function useCloudStartComposer({
@@ -154,10 +99,18 @@ export function useCloudStartComposer({
   const cloudSelected = selectedRecipeId === ORCA_CLOUD_RECIPE_ID
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
-  const [setupSessionId, setSetupSessionId] = useState<string | null>(null)
-  // Re-read the session after each poll; the poller notifies through the seam.
+  const [startedSessionId, setSetupSessionId] = useState<string | null>(null)
+  // A composer reopened after setup (e.g. the Checkout return) resumes its saved draft: derived,
+  // not copied into state, so it is right on the first render.
+  const restoredDraft = useMemo(
+    () => (active && cloudSelected ? readCloudStartDraft(profileId) : null),
+    [active, cloudSelected, profileId]
+  )
+  const [restoreDone, setRestoreDone] = useState(false)
+  const restored = restoredDraft !== null && restoredDraft.repoId === repoId && !restoreDone
+  const setupSessionId = startedSessionId ?? (restored ? restoredDraft.setupSessionId : null)
   // Subscribing re-renders on each poll; the read itself is a cheap synchronous lookup.
-  useSyncExternalStore(subscribeSessionRevision, getSessionRevision)
+  useSyncExternalStore(subscribeCloudSetupSessionRevision, getCloudSetupSessionRevision)
   const session = readCloudSetupSession(setupSessionId)
   const steps = useMemo(
     () => session?.steps ?? deriveCloudSetupSteps({ availability, access }),
@@ -206,25 +159,26 @@ export function useCloudStartComposer({
   }, [setRecipeId])
 
   // "Use this computer instead": switch, then submit once the switch has rendered.
-  const [localSubmitPending, setLocalSubmitPending] = useState(false)
+  const localSubmitPendingRef = useRef(false)
   const useThisComputer = useCallback(() => {
     if (!localOption) {
       return
     }
     touchedRef.current = true
+    localSubmitPendingRef.current = true
     setRecipeId?.(null)
     onHostChange?.(localOption.id)
-    setLocalSubmitPending(true)
   }, [localOption, onHostChange, setRecipeId])
   useEffect(() => {
-    if (localSubmitPending && !cloudSelected) {
-      setLocalSubmitPending(false)
+    if (localSubmitPendingRef.current && !cloudSelected) {
+      localSubmitPendingRef.current = false
       onCreate()
     }
-  }, [cloudSelected, localSubmitPending, onCreate])
+  }, [cloudSelected, onCreate])
 
   // Setup started from this composer: when every required row is done, say "All set" and start.
-  const [setupStarted, setSetupStarted] = useState(false)
+  const [startedHere, setSetupStarted] = useState(false)
+  const setupStarted = startedHere || restored
   const [allSet, setAllSet] = useState(false)
   useEffect(() => {
     const done = action === 'start' || session?.finished === true
@@ -235,6 +189,7 @@ export function useCloudStartComposer({
     const timer = window.setTimeout(
       () => {
         setSetupStarted(false)
+        setRestoreDone(true)
         setAllSet(false)
         onCreate()
       },
@@ -274,20 +229,6 @@ export function useCloudStartComposer({
       })
       .catch(() => fallback?.())
   }, [access, agent, availability, profileId, prompt, repoId, setupSessionId, steps])
-
-  // A composer reopened after setup (e.g. the Checkout return) gets its prompt back.
-  const restoredRef = useRef(false)
-  useEffect(() => {
-    if (restoredRef.current || !active || !cloudSelected) {
-      return
-    }
-    restoredRef.current = true
-    const draft = readCloudStartDraft(profileId)
-    if (draft && draft.repoId === repoId) {
-      setSetupSessionId(draft.setupSessionId)
-      setSetupStarted(true)
-    }
-  }, [active, cloudSelected, profileId, repoId])
 
   const recordCreated = useCallback(() => {
     if (!repoId) {

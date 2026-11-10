@@ -32,10 +32,10 @@ export function NewWorkspaceMoreMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
+          variant="quiet"
           size="icon-xs"
           type="button"
-          className="-ml-1 w-4 text-muted-foreground"
+          className="-ml-1 w-4"
           aria-label={t('components.sidebar.newWorkspaceMore', 'More ways to create')}
           data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
         >

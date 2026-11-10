@@ -57,8 +57,19 @@ describe('Run on segment', () => {
   })
 
   it('matches ⌥⌘1 / ⌥⌘2 on mac and Ctrl+Alt elsewhere', () => {
-    const key = (init: Partial<KeyboardEvent>): KeyboardEvent =>
-      ({ metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...init }) as KeyboardEvent
+    const key = (init: {
+      code: string
+      metaKey?: boolean
+      ctrlKey?: boolean
+      altKey?: boolean
+      shiftKey?: boolean
+    }) => ({
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      ...init
+    })
     expect(matchRunOnShortcut(key({ code: 'Digit1', metaKey: true, altKey: true }), true)).toBe(
       'local'
     )

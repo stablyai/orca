@@ -160,7 +160,7 @@ export function EmptyState({
         : [
             t('auto.components.cloudWorkspaces.emptyMineTitle', 'No cloud workspaces yet'),
             t(
-              'auto.components.cloudWorkspaces.emptyMineBody',
+              'components.cloudWorkspaces.emptyMineStartBody',
               'Start one and it keeps running while your laptop sleeps.'
             )
           ]
@@ -174,7 +174,7 @@ export function EmptyState({
         <Button
           type="button"
           size="sm"
-          className="mt-3 text-xs"
+          className="mt-3"
           onClick={() => openNewCloudWorkspace(useAppStore.getState(), 'unknown')}
         >
           <Cloud className="size-3.5" />

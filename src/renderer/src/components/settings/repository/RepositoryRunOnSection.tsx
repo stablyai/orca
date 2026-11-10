@@ -18,7 +18,12 @@ export function getRepositoryRunOnSearchEntry(): SettingsSearchEntry {
       'components.settings.repository.runOn.description',
       'Where new workspaces in this project start. Orca Cloud is used only when it can start.'
     ),
-    keywords: ['run on', 'orca cloud', 'this computer', 'default']
+    keywords: [
+      translate('components.settings.repository.runOn.keywordRunOn', 'run on'),
+      translate('components.settings.repository.runOn.keywordCloud', 'orca cloud'),
+      translate('components.settings.repository.runOn.keywordThisComputer', 'this computer'),
+      translate('components.settings.repository.runOn.keywordDefault', 'default')
+    ]
   }
 }
 
@@ -67,7 +72,10 @@ export function RepositoryRunOnSection({
             value: 'local',
             label: translate('components.newWorkspace.runOn.thisComputer', 'This computer')
           },
-          { value: 'orca-cloud', label: 'Orca Cloud' }
+          {
+            value: 'orca-cloud',
+            label: translate('components.newWorkspace.runOn.orcaCloud', 'Orca Cloud')
+          }
         ]}
       />
     </SearchableSetting>

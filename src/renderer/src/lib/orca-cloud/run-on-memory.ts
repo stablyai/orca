@@ -28,25 +28,33 @@ const isTarget = (value: unknown): value is RunOnTarget =>
 const isPreference = (value: unknown): value is RunOnPreference =>
   value === 'last' || isTarget(value)
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? { ...value } : {}
+}
+
 function read(profileId: string | null, storage: Storage | undefined): RunOnMemory {
   try {
     const raw = storage?.getItem(storageKey(profileId))
     if (!raw) {
       return empty()
     }
-    const parsed = JSON.parse(raw) as Partial<RunOnMemory>
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) {
+      return empty()
+    }
+    const record: Partial<Record<keyof RunOnMemory, unknown>> = parsed
     const memory = empty()
-    for (const [repoId, target] of Object.entries(parsed.lastByRepo ?? {})) {
+    for (const [repoId, target] of Object.entries(asRecord(record.lastByRepo))) {
       if (isTarget(target)) {
         memory.lastByRepo[repoId] = target
       }
     }
-    for (const [repoId, preference] of Object.entries(parsed.preferenceByRepo ?? {})) {
+    for (const [repoId, preference] of Object.entries(asRecord(record.preferenceByRepo))) {
       if (isPreference(preference)) {
         memory.preferenceByRepo[repoId] = preference
       }
     }
-    memory.globalLast = isTarget(parsed.globalLast) ? parsed.globalLast : null
+    memory.globalLast = isTarget(record.globalLast) ? record.globalLast : null
     return memory
   } catch {
     return empty()

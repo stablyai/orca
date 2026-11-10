@@ -46,7 +46,11 @@ export function readCloudStartDraft(
     if (!raw) {
       return null
     }
-    const draft = JSON.parse(raw) as Partial<CloudStartDraft>
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) {
+      return null
+    }
+    const draft: Partial<Record<keyof CloudStartDraft, unknown>> = parsed
     if (
       typeof draft.prompt !== 'string' ||
       typeof draft.repoId !== 'string' ||

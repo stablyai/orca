@@ -1376,7 +1376,8 @@
     "copy": "Copy",
     "selectAll": "Select All",
     "quitAndStopAllSessions": "Quit Completely...",
-    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch."
+    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.",
+    "newCloudWorkspace": "New cloud workspace"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -20765,7 +20766,6 @@
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
         "emptyFilteredTitle": "Nothing matches these filters",
-        "emptyMineBody": "Create one with Orca Cloud from New workspace. It keeps running while your laptop sleeps.",
         "emptyMineTitle": "No cloud workspaces yet",
         "emptyTeamBody": "Share a cloud workspace from its menu and everyone on your team can open it here.",
         "emptyTeamTitle": "No team workspaces yet",
@@ -22893,6 +22893,17 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "repository": {
+        "runOn": {
+          "title": "Default run on",
+          "description": "Where new workspaces in this project start. Orca Cloud is used only when it can start.",
+          "keywordRunOn": "run on",
+          "keywordCloud": "orca cloud",
+          "keywordThisComputer": "this computer",
+          "keywordDefault": "default",
+          "last": "Last used"
+        }
       }
     },
     "agentChildRow": {
@@ -22944,6 +22955,54 @@
         "yamlSource": "orca.yaml",
         "bothSources": "orca.yaml + local",
         "localSource": "local settings"
+      },
+      "cloudStart": {
+        "useThisComputer": "Use this computer instead",
+        "start": "Start in Orca Cloud",
+        "setUpAndStart": "Set up and start",
+        "choosePlanAndStart": "Choose plan and start",
+        "renewAndStart": "Renew and start",
+        "giveAccessAndStart": "Give access and start",
+        "checking": "Checking Orca Cloud…"
+      },
+      "cloudSetup": {
+        "account": "Orca account",
+        "accountNeeded": "Sign in or create one",
+        "team": "Team",
+        "plan": "Team plan",
+        "github": "GitHub access",
+        "githubNeeded": "Orca Cloud clones your code from GitHub. Give access to this repository once.",
+        "agent": "Agent",
+        "agentLater": "Sign in once the workspace starts",
+        "planAfterSignIn": "Checked after you sign in",
+        "askOwner": "Ask an owner or admin to fix it.",
+        "planEnded": "Your Team plan ended.",
+        "outOfHours": "Out of sandbox hours.",
+        "spendCap": "Spend cap reached.",
+        "paymentFailed": "Payment failed.",
+        "planMember": "Orca Cloud needs a Team plan. Only owners and admins can choose one.",
+        "planNeeded": "Orca Cloud needs a Team plan.",
+        "stateDone": "Done",
+        "stateOptional": "Optional",
+        "stateNext": "Next",
+        "stateInBrowser": "In browser",
+        "stateFailed": "Didn't finish",
+        "stateChecking": "Checking",
+        "stateNeeded": "Needed",
+        "allSet": "All set",
+        "title": "Set up Orca Cloud",
+        "starting": "Starting your cloud workspace…",
+        "subtitle": "One visit to your browser. Your prompt stays here and starts when you’re done."
+      },
+      "runOn": {
+        "cloudUnreachable": "Can't reach Orca Cloud right now. Check your connection.",
+        "thisComputer": "This computer",
+        "thisComputerTooltip": "{{machine}} · {{shortcut}}",
+        "noLocalCheckout": "This project has no location on this computer.",
+        "orcaCloud": "Orca Cloud",
+        "cloudTooltip": "Hosted sandbox · {{shortcut}}",
+        "moreWithTarget": "More places to run: {{name}}",
+        "more": "More places to run"
       }
     },
     "JiraIssueWorkspace": {
@@ -23296,6 +23355,30 @@
         "showMore_one": "Show {{count}} more",
         "showMore_other": "Show {{count}} more"
       }
+    },
+    "landing": {
+      "cloudCard": {
+        "title": "Run agents in Orca Cloud",
+        "body": "Hosted sandboxes keep running while your laptop sleeps. Start one from any project.",
+        "notNow": "Not now"
+      }
+    },
+    "cmdJ": {
+      "newCloudWorkspace": {
+        "description": "Start a workspace in Orca Cloud.",
+        "verbs": {
+          "newCloud": "new cloud workspace",
+          "orcaCloud": "orca cloud",
+          "sandbox": "sandbox"
+        }
+      }
+    },
+    "sidebar": {
+      "newWorkspaceMore": "More ways to create",
+      "newWorkspaceLocal": "New workspace on this computer"
+    },
+    "cloudWorkspaces": {
+      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps."
     }
   },
   "dashboardPopout": {
@@ -25297,7 +25380,8 @@
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
       "cloudWorkspaceCopyLink": "Copy cloud workspace link",
-      "workspaceRun": "Run or restart the run action"
+      "workspaceRun": "Run or restart the run action",
+      "workspaceCreateCloud": "New cloud workspace"
     },
     "group": {
       "global": "Global",

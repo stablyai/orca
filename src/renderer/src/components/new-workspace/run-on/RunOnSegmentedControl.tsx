@@ -26,7 +26,7 @@ export type RunOnSegmentedControlProps = RunTargetComboboxProps & {
 
 /** ⌥⌘1 / ⌥⌘2 (Ctrl+Alt on Windows/Linux) while the composer is open (spec D1, N8). */
 export function matchRunOnShortcut(
-  event: KeyboardEvent,
+  event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'code'>,
   mac: boolean
 ): 'local' | 'orca-cloud' | null {
   const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
@@ -153,7 +153,7 @@ export default function RunOnSegmentedControl(
             label: (
               <span className="flex items-center gap-1.5">
                 <Cloud className="size-3.5" aria-hidden />
-                Orca Cloud
+                {t('components.newWorkspace.runOn.orcaCloud', 'Orca Cloud')}
               </span>
             ),
             disabled: cloudState === 'unreachable',
@@ -216,7 +216,7 @@ export default function RunOnSegmentedControl(
           />
         </div>
       </PopoverAnchor>
-      <PopoverContent align="end" className="w-80 p-2" data-run-on-more="true">
+      <PopoverContent align="end" className="w-80" data-run-on-more="true">
         <RunTargetCombobox
           {...props}
           recipes={otherRecipes}

@@ -14,7 +14,8 @@ import {
   isCloudSetupPanelVisible,
   type CloudSetupStep
 } from './cloud-start-model'
-import { getCloudPrimaryLabel, type CloudStartView } from './use-cloud-start-composer'
+import type { CloudStartView } from './use-cloud-start-composer'
+import { getCloudPrimaryLabel } from './cloud-start-actions'
 import { NewWorkspaceMoreMenu } from '../../sidebar/NewWorkspaceMoreMenu'
 import { LandingCloudCard } from '../../landing/LandingCloudCard'
 import { EmptyState } from '../../cloud-workspaces/CloudWorkspacesStates'

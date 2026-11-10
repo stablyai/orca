@@ -73,7 +73,6 @@ export function LandingCloudCard({
             <Button
               type="button"
               size="sm"
-              className="text-xs"
               onClick={() => openNewCloudWorkspace(useAppStore.getState(), 'unknown')}
             >
               {t('keybindings.title.workspaceCreateCloud', 'New cloud workspace')}
@@ -81,7 +80,7 @@ export function LandingCloudCard({
                 <span className="ml-1 text-primary-foreground/70">{shortcut}</span>
               ) : null}
             </Button>
-            <Button type="button" size="sm" variant="ghost" className="text-xs" onClick={dismiss}>
+            <Button type="button" size="sm" variant="ghost" onClick={dismiss}>
               {t('components.landing.cloudCard.notNow', 'Not now')}
             </Button>
           </div>

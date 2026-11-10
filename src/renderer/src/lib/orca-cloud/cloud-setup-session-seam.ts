@@ -65,3 +65,15 @@ export function subscribeCloudSetupSession(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
+
+let revision = 0
+/** useSyncExternalStore pair: each poll bumps the revision so composers re-read their session. */
+export function subscribeCloudSetupSessionRevision(listener: () => void): () => void {
+  return subscribeCloudSetupSession(() => {
+    revision += 1
+    listener()
+  })
+}
+export function getCloudSetupSessionRevision(): number {
+  return revision
+}
