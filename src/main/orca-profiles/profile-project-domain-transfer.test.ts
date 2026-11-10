@@ -82,7 +82,8 @@ beforeAll(() => {
   crashScript = join(crashRoot, 'crash.cjs')
   buildSync({
     stdin: {
-      contents: "export { transferOrcaProfileProject } from './profile-project-transfer'",
+      contents:
+        "export { transferOrcaProfileProject } from './src/main/orca-profiles/profile-project-transfer'",
       loader: 'ts',
       resolveDir: process.cwd()
     },
