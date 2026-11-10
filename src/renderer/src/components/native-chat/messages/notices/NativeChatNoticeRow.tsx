@@ -16,7 +16,7 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation

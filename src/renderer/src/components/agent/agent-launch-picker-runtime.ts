@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'

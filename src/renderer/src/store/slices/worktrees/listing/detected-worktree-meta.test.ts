@@ -8,7 +8,7 @@ import {
 } from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { selectWorkspaceByHostTarget } from '../../../workspaces/selection/workspace-host-target'
-import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
+import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { findIndexedFolderWorkspaceOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'

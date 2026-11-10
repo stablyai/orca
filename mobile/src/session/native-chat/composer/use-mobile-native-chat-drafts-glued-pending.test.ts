@@ -1,13 +1,21 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
-  resetMobileNativeChatDraftStoreForTests,
+  closeMobileNativeChatTabDraft,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
+
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
+
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { createInMemoryAsyncStorage } =
+    await import('../../../test-support/in-memory-async-storage')
+  return { default: createInMemoryAsyncStorage() }
+})
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 type TestRenderer = {
@@ -39,9 +47,11 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
   let renderer: TestRenderer | null = null
   let state: DraftState | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
-    resetMobileNativeChatDraftStoreForTests()
+    await loadMobileNativeChatDrafts('host', 'worktree')
+    closeMobileNativeChatTabDraft('host\0worktree\0tab')
+    await loadMobileNativeChatDrafts('host', 'worktree')
     renderer = null
     state = null
   })

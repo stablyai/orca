@@ -299,7 +299,7 @@ function renderEvents({ events, eventContribution, typeText }, { services, frame
   const { REFERENCE_TYPE_TEXT, zodTypeText } = typeText
   const workerEvents = eventContribution.PLUGIN_EVENT_NAMES.map(
     (name) =>
-      `- ${code(name)} (capability ${code(eventContribution.PLUGIN_EVENT_CAPABILITY[name])}; since ${eventContribution.PLUGIN_EVENT_SINCE[name]}): ${events.PLUGIN_EVENT_SUMMARIES[name]}\n  ${code(zodTypeText(events.PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT))}`
+      `- ${code(name)} (${eventContribution.PLUGIN_EVENT_CAPABILITY[name] ? `capability ${code(eventContribution.PLUGIN_EVENT_CAPABILITY[name])}` : 'no capability'}; since ${eventContribution.PLUGIN_EVENT_SINCE[name]}): ${events.PLUGIN_EVENT_SUMMARIES[name]}\n  ${code(zodTypeText(events.PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT))}`
   )
   return document(
     'Events',

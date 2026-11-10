@@ -12,9 +12,9 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall

@@ -1,4 +1,3 @@
-import '../../lib/sha256'
 import { sha256 } from '../../../../shared/sha256'
 
 export async function hashOrcaHookScript(content: string): Promise<string> {

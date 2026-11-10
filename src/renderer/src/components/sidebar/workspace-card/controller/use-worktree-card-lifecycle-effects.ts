@@ -1,9 +1,13 @@
-import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useEffect } from 'react'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 
-import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
+import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from '../details/use-worktree-card-review-details'
