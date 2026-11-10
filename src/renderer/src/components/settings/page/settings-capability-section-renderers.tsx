@@ -2,6 +2,7 @@ import { AccountsPane } from '../accounts/AccountsPane'
 import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
 import { AgentApiKeysSection } from '../agent-api-keys/AgentApiKeysSection'
+import { OrcaCloudAccountsSection } from '../agent-accounts/OrcaCloudAccountsSection'
 import { AgentApiKeysCloudDescription } from '../agent-api-keys/AgentApiKeysCloudDescription'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'
@@ -108,6 +109,26 @@ export function renderAccountsSettingsSection(
       )}
     </SettingsSection>
   )
+}
+
+export function renderAgentAccountsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.showDesktopOnlySettings && model.orcaCloudApiAvailable ? (
+    <SettingsSection
+      id="agent-accounts"
+      title={t('settings.agentAccounts.title', 'Agent accounts')}
+      description={t(
+        'settings.agentAccounts.description',
+        'Use your Claude and ChatGPT accounts in every cloud workspace. Set up once on this computer.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('agent-accounts')}
+    >
+      {view.isSectionMounted('agent-accounts') ? <OrcaCloudAccountsSection /> : null}
+    </SettingsSection>
+  ) : null
 }
 
 export function renderAgentApiKeysSettingsSection(

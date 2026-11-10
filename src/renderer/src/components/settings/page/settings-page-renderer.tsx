@@ -12,6 +12,7 @@ import type { SettingsInteractionController } from './use-settings-interaction-c
 import type { SettingsRenderContext } from './settings-render-context'
 import {
   renderAccountsSettingsSection,
+  renderAgentAccountsSettingsSection,
   renderAgentApiKeysSettingsSection,
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
@@ -170,6 +171,7 @@ export function renderSettingsPage(
                   >
                     {renderAgentsSettingsSection(context, t)}
                     {renderAccountsSettingsSection(context, t)}
+                    {renderAgentAccountsSettingsSection(context, t)}
                     {renderAgentApiKeysSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}
                     {renderLinearSettingsSection(context, t)}

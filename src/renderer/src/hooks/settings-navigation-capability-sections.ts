@@ -2,6 +2,7 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
 import { getAgentApiKeysSearchEntries } from '@/components/settings/agent-api-keys/agent-api-keys-search'
+import { getAgentAccountsSearchEntries } from '@/components/settings/agent-accounts/agent-accounts-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
@@ -15,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import {
+  BadgeCheck,
   Blocks,
   Bot,
   CircleUserRound,
@@ -68,6 +70,22 @@ export function buildCapabilitySettingsSections(
       group: 'capabilities',
       badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
     },
+    // S0: connecting a Claude or ChatGPT account to Orca Cloud runs on this computer (desktop only).
+    ...(showDesktopOnlySettings && isOrcaCloudApiAvailable
+      ? [
+          {
+            id: 'agent-accounts',
+            title: t('settings.agentAccounts.title', 'Agent accounts'),
+            description: t(
+              'settings.agentAccounts.description',
+              'Use your Claude and ChatGPT accounts in every cloud workspace. Set up once on this computer.'
+            ),
+            icon: BadgeCheck,
+            searchEntries: getAgentAccountsSearchEntries(),
+            group: 'capabilities' as const
+          }
+        ]
+      : []),
     // Desktop-owned vault: a web client can neither read nor fill it.
     ...(showDesktopOnlySettings
       ? [

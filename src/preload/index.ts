@@ -95,6 +95,7 @@ import { runtimeDownloadsApi } from './api/runtime-downloads-bridge'
 import { agentApiKeysApi } from './api/agent-api-keys-bridge'
 import { cloudApiBridge } from './api/cloud-api-bridge'
 import { cloudSecretsApi } from './api/cloud-secrets-bridge'
+import { orcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
 import { legacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import { automationsApi } from './api/automations-bridge'
 import { e2eApi } from './api/e2e-bridge'
@@ -210,6 +211,7 @@ const api = {
   agentApiKeys: agentApiKeysApi,
   cloudApi: cloudApiBridge,
   cloudSecrets: cloudSecretsApi,
+  orcaCloudAgents: orcaCloudAgentsApi,
   legacyRelayBridge: legacyRelayBridgeApi,
   automations: automationsApi,
   e2e: e2eApi,
