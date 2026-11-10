@@ -1,3 +1,4 @@
+// @protected-copy: copy consumed by destructive automation confirmations.
 import type {
   ExternalAutomationJob,
   ExternalAutomationManager
