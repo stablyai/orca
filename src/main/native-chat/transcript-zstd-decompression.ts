@@ -1,4 +1,4 @@
-import { Readable } from 'node:stream'
+import { Readable, pipeline } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { createZstdDecompress } from 'node:zlib'
 
@@ -9,8 +9,9 @@ export function isZstdTranscriptPath(path: string): boolean {
 /** Pipes raw compressed bytes through the zstd decoder; errors on the raw stream surface on the output. */
 export function zstdTranscriptStream(raw: Readable, encoding?: BufferEncoding): Readable {
   const decoder = createZstdDecompress()
-  raw.on('error', (error) => decoder.destroy(error))
-  const decoded = raw.pipe(decoder)
+  // pipeline links lifetimes so an early close of the decoded stream releases the raw stream's fd.
+  pipeline(raw, decoder, () => undefined)
+  const decoded = decoder
   if (!encoding) {
     return decoded
   }
