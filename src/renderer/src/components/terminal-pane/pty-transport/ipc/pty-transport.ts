@@ -185,6 +185,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       dropPreconnectInput('its pending connection was abandoned')
     },
 
+    holdsInputUntilConnect() {
+      return preconnectInputBuffer?.isBuffering() === true
+    },
+
+    holdPasteAheadOfLaterKeys() {
+      return preconnectInputBuffer?.openPasteGate() ?? null
+    },
+
     disconnect() {
       advancePtyLifecycle()
       preconnectInputBuffer?.clear()

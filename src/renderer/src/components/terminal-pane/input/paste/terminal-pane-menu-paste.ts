@@ -13,7 +13,11 @@ import {
   resolveTerminalPasteRuntimeEnvironmentId
 } from './terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
-import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
+import {
+  openUnboundTerminalPasteHold,
+  pasteTextIntoTerminalPane
+} from './terminal-pane-paste-dispatch'
+import type { PtyPreconnectPasteHold } from '../../pty-transport/input/pty-preconnect-input-buffer'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { useAppStore } from '@/store/index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
@@ -51,7 +55,8 @@ export const executeTerminalPaneMenuPasteText = async (
   pane: ManagedPane,
   source: TerminalPasteSource,
   text: string,
-  options?: TerminalPasteTextOptions
+  options?: TerminalPasteTextOptions,
+  holdPaste?: PtyPreconnectPasteHold | null
 ): Promise<boolean> => {
   const transport = context.paneTransportsRef.current.get(pane.id)
   const ptyId = transport?.getPtyId() ?? null
@@ -71,7 +76,8 @@ export const executeTerminalPaneMenuPasteText = async (
     inputKind: 'driving',
     isTargetCurrent: isTargetMounted,
     canContinue: isTargetMounted,
-    planOptions: options
+    planOptions: options,
+    holdPaste
   })
   if (execution.status !== 'pasted') {
     context.onPasteError(formatTerminalPasteExecutionError(execution.reason))
@@ -101,47 +107,53 @@ export const pasteTerminalPaneMenuClipboard = async (
   const connectionId = getConnectionId(worktreeId) ?? null
   const state = useAppStore.getState()
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
+  const holdPaste = openUnboundTerminalPasteHold(transport)
   const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
     state,
     worktreeId,
     transport
   )
-  const result = await pasteTerminalClipboard({
-    readClipboardText: window.api.ui.readClipboardText,
-    saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
-    copiedFiles: createTerminalClipboardCopiedFiles({
-      managerRef: context.managerRef,
-      paneTransportsRef: context.paneTransportsRef,
-      worktreeId,
-      tabId,
-      cwd: context.cwd,
-      pane
-    }),
-    connectionId,
-    runtimeEnvironmentId,
-    protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({
-      isWindowsClient: forceBracketedMultilineTextPaste,
-      hostPlatform: resolveTerminalInputHostPlatform({
-        clientPlatform: getShortcutPlatform(),
-        state,
+  let result: Awaited<ReturnType<typeof pasteTerminalClipboard>> | undefined
+  try {
+    result = await pasteTerminalClipboard({
+      readClipboardText: window.api.ui.readClipboardText,
+      saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      copiedFiles: createTerminalClipboardCopiedFiles({
+        managerRef: context.managerRef,
+        paneTransportsRef: context.paneTransportsRef,
         worktreeId,
-        transport
+        tabId,
+        cwd: context.cwd,
+        pane
       }),
-      agentStatusByPaneKey: state.agentStatusByPaneKey,
-      paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
-      tabId,
-      leafId: pane.leafId
-    }),
-    pasteText: (text, options) =>
-      executeTerminalPaneMenuPasteText(context, pane, source, text, options),
-    onTextPasteError: () =>
-      onPasteError('Paste failed: clipboard text is too large for a safe terminal paste.'),
-    onImagePasteError: (error) => {
-      const detail = error instanceof Error ? error.message : String(error)
-      onPasteError(`Image paste failed: ${detail}`)
-    }
-  })
-  if (result.status !== 'pasted') {
+      connectionId,
+      runtimeEnvironmentId,
+      protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({
+        isWindowsClient: forceBracketedMultilineTextPaste,
+        hostPlatform: resolveTerminalInputHostPlatform({
+          clientPlatform: getShortcutPlatform(),
+          state,
+          worktreeId,
+          transport
+        }),
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+        tabId,
+        leafId: pane.leafId
+      }),
+      pasteText: (text, options) =>
+        executeTerminalPaneMenuPasteText(context, pane, source, text, options, holdPaste),
+      onTextPasteError: () =>
+        onPasteError('Paste failed: clipboard text is too large for a safe terminal paste.'),
+      onImagePasteError: (error) => {
+        const detail = error instanceof Error ? error.message : String(error)
+        onPasteError(`Image paste failed: ${detail}`)
+      }
+    })
+  } finally {
+    holdPaste?.close()
+  }
+  if (result?.status !== 'pasted') {
     return
   }
   // Refocus after completed paste only; a rejected async target must not steal focus from a newer control.

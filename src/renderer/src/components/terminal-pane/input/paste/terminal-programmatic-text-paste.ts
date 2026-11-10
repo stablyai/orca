@@ -3,7 +3,10 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
-import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
+import {
+  openUnboundTerminalPasteHold,
+  pasteTextIntoTerminalPane
+} from './terminal-pane-paste-dispatch'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 
@@ -49,27 +52,33 @@ export async function handleTerminalProgrammaticTextPaste({
       transport,
       ptyId
     })
-  const result = await pasteTextIntoTerminalPane({
-    pane,
-    text: detail.text,
-    source: 'programmatic',
-    ptyId,
-    runtime: resolveTerminalPasteRuntime({
-      platform: getShortcutPlatform(),
+  const holdPaste = openUnboundTerminalPasteHold(transport)
+  try {
+    const result = await pasteTextIntoTerminalPane({
+      pane,
+      text: detail.text,
+      source: 'programmatic',
       ptyId,
-      transport
-    }),
-    transport,
-    inputKind: 'driving',
-    isTargetCurrent,
-    canContinue: isTargetCurrent
-  })
-  if (result.status !== 'pasted') {
-    return false
+      runtime: resolveTerminalPasteRuntime({
+        platform: getShortcutPlatform(),
+        ptyId,
+        transport
+      }),
+      transport,
+      inputKind: 'driving',
+      isTargetCurrent,
+      canContinue: isTargetCurrent,
+      holdPaste
+    })
+    if (result.status !== 'pasted') {
+      return false
+    }
+    recordTerminalUserInputForLeaf(tabId, pane.leafId)
+    if (focusAfterPaste()) {
+      pane.terminal.focus()
+    }
+    return true
+  } finally {
+    holdPaste?.close()
   }
-  recordTerminalUserInputForLeaf(tabId, pane.leafId)
-  if (focusAfterPaste()) {
-    pane.terminal.focus()
-  }
-  return true
 }

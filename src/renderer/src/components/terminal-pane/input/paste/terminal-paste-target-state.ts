@@ -12,6 +12,7 @@ type TerminalPastePaneManager = {
 type TerminalPasteTransport = {
   getPtyId: () => string | null
   isConnected: () => boolean
+  holdsInputUntilConnect?: () => boolean
 }
 
 export type TerminalPasteTargetState = {
@@ -31,13 +32,24 @@ export function isTerminalPanePasteTargetCurrent({
   transport,
   ptyId
 }: TerminalPasteTargetState): boolean {
-  return Boolean(
+  const mounted = Boolean(
     manager?.getPanes().some((pane) => pane.id === paneId && pane.leafId === leafId) &&
     transport &&
-    paneTransports.get(paneId) === transport &&
-    transport.isConnected() &&
-    transport.getPtyId() === ptyId
+    paneTransports.get(paneId) === transport
   )
+  if (!mounted || !transport) {
+    return false
+  }
+  const livePtyId = transport.getPtyId()
+  if (transport.isConnected()) {
+    if (livePtyId === ptyId) {
+      return true
+    }
+    // Paste began before the PTY existed; remaining chunks may still join the pre-connect queue.
+    return ptyId === null && transport.holdsInputUntilConnect?.() === true
+  }
+  // A pane that already had a PTY stays stale while disconnected. Only unbound held input can accept paste.
+  return ptyId === null && livePtyId === null && transport.holdsInputUntilConnect?.() === true
 }
 
 export type TerminalPanePasteFocusState = {

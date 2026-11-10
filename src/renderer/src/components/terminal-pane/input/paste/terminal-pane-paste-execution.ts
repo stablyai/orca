@@ -11,7 +11,11 @@ import {
   isTerminalPanePasteFocusCurrent,
   isTerminalPanePasteTargetCurrent
 } from './terminal-paste-target-state'
-import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
+import {
+  openUnboundTerminalPasteHold,
+  pasteTextIntoTerminalPane
+} from './terminal-pane-paste-dispatch'
+import type { PtyPreconnectPasteHold } from '../../pty-transport/input/pty-preconnect-input-buffer'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
@@ -61,7 +65,8 @@ export function createTerminalPanePasteExecution(
     source: TerminalPasteSource,
     activeElementAtDispatch: Element | null,
     text: string,
-    options?: TerminalPasteTextOptions
+    options?: TerminalPasteTextOptions,
+    holdPaste?: PtyPreconnectPasteHold | null
   ): Promise<void> => {
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
@@ -91,7 +96,8 @@ export function createTerminalPanePasteExecution(
         })
       },
       canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId),
-      planOptions: options
+      planOptions: options,
+      holdPaste
     })
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))
@@ -145,11 +151,13 @@ export function createTerminalPanePasteExecution(
     readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string> = window.api.ui
       .readClipboardText
   ): void => {
+    const transport = paneTransportsRef.current.get(pane.id)
+    const holdPaste = openUnboundTerminalPasteHold(transport)
     const connectionId = getConnectionId(worktreeId) ?? null
     const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
       useAppStore.getState(),
       worktreeId,
-      paneTransportsRef.current.get(pane.id)
+      transport
     )
     const activeElementAtDispatch = document.activeElement
     void pasteTerminalClipboard({
@@ -160,13 +168,17 @@ export function createTerminalPanePasteExecution(
       runtimeEnvironmentId,
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
-        executePanePasteText(pane, source, activeElementAtDispatch, text, options),
+        executePanePasteText(pane, source, activeElementAtDispatch, text, options, holdPaste),
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-    }).catch(() => {
-      setTerminalError('Paste failed.')
     })
+      .catch(() => {
+        setTerminalError('Paste failed.')
+      })
+      .finally(() => {
+        holdPaste?.close()
+      })
   }
 
   return {

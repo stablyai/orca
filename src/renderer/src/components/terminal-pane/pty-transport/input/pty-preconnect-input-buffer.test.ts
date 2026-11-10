@@ -84,4 +84,92 @@ describe('createPtyPreconnectInputBuffer', () => {
       await expect(accepted).resolves.toBe(false)
     }
   )
+
+  it('places paste bytes ahead of keys typed while the clipboard is read', async () => {
+    const buffer = createPtyPreconnectInputBuffer()
+    const delivered: string[] = []
+    const gate = buffer.openPasteGate()
+    expect(gate).not.toBeNull()
+    expect(buffer.hasPendingInput()).toBe(false)
+    expect(buffer.enqueue('\r', 'ordinary', 'driving')).toBe(true)
+
+    const flushing = buffer.flush(deliveringWriter(delivered))
+    await flushAsyncTicks()
+    expect(delivered).toEqual([])
+    expect(buffer.isBuffering()).toBe(true)
+
+    gate!.insertIncoming(() => {
+      expect(buffer.enqueue('echo hi', 'ordinary', 'driving')).toBe(true)
+    })
+    gate!.close()
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['echo hi', '\r'])
+    expect(buffer.isBuffering()).toBe(false)
+    await flushing
+  })
+
+  it('keeps that order when the paste closes before flush starts', async () => {
+    const buffer = createPtyPreconnectInputBuffer()
+    const delivered: string[] = []
+    const gate = buffer.openPasteGate()
+    expect(buffer.enqueue('\r', 'ordinary', 'driving')).toBe(true)
+    gate!.insertIncoming(() => {
+      buffer.enqueue('echo hi', 'ordinary', 'driving')
+    })
+    gate!.close()
+
+    await buffer.flush(deliveringWriter(delivered))
+    expect(delivered).toEqual(['echo hi', '\r'])
+  })
+
+  it('does not coalesce a recovery keystroke into the paste gate', async () => {
+    const buffer = createPtyPreconnectInputBuffer([], { recoveryHold: true })
+    const delivered: string[] = []
+    const gate = buffer.openPasteGate()
+    expect(buffer.enqueue('a', 'ordinary', 'driving')).toBe(true)
+    expect(buffer.enqueue('b', 'ordinary', 'driving')).toBe(true)
+    gate!.insertIncoming(() => {
+      expect(buffer.enqueue('PASTE', 'ordinary', 'driving')).toBe(true)
+    })
+    gate!.close()
+
+    await buffer.flush(deliveringWriter(delivered))
+    expect(delivered).toEqual(['PASTE', 'ab'])
+  })
+
+  it('drops a parked paste gate on clear without delivering it', async () => {
+    const buffer = createPtyPreconnectInputBuffer()
+    const delivered: string[] = []
+    const gate = buffer.openPasteGate()
+    expect(buffer.enqueue('\r', 'ordinary', 'driving')).toBe(true)
+    const flushing = buffer.flush(deliveringWriter(delivered))
+    await flushAsyncTicks()
+
+    buffer.clear()
+    gate!.close()
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual([])
+    expect(buffer.isBuffering()).toBe(false)
+    await flushing
+  })
 })
+
+function deliveringWriter(delivered: string[]): {
+  isCurrent: () => boolean
+  sendInput: (data: string) => boolean
+  sendInputImmediate: (data: string) => boolean
+} {
+  return {
+    isCurrent: () => true,
+    sendInput: (data) => {
+      delivered.push(data)
+      return true
+    },
+    sendInputImmediate: (data) => {
+      delivered.push(data)
+      return true
+    }
+  }
+}

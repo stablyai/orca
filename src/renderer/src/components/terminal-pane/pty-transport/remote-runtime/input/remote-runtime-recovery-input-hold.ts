@@ -3,7 +3,8 @@ import {
   createPtyPreconnectInputBuffer,
   type AcceptedInputOptions,
   type PreconnectInputWriter,
-  type PtyPreconnectInputBuffer
+  type PtyPreconnectInputBuffer,
+  type PtyPreconnectPasteHold
 } from '../../input/pty-preconnect-input-buffer'
 
 /** The remote terminal a held keystroke was typed into. */
@@ -59,6 +60,8 @@ export type RemoteRuntimeRecoveryInputHold = {
     bound: boolean,
     createdEndpoint?: RemoteRuntimeInputEndpoint | null
   ) => void
+  /** Reserve a paste slot on the current hold. Null when input is not being retained. */
+  openPasteGate: () => PtyPreconnectPasteHold | null
   /** Delivers held input to the endpoint it was typed into, or drops it if the pane rebound elsewhere. */
   release: (
     bound: RemoteRuntimeInputEndpoint,
@@ -140,6 +143,12 @@ export function createRemoteRuntimeRecoveryInputHold(
       bufferFor(endpoint, inputKind).enqueue(data, 'ordinary', inputKind),
     enqueueAccepted: (endpoint, data, inputKind, acceptedOptions) =>
       bufferFor(endpoint, inputKind).enqueueAccepted(data, inputKind, undefined, acceptedOptions),
+    openPasteGate() {
+      if (held?.buffer.isBuffering() !== true) {
+        return null
+      }
+      return held.buffer.openPasteGate()
+    },
     expect(endpoint) {
       const expectation: RestoredInputExpectation = { endpoint }
       latestExpectation = endpoint ? expectation : null

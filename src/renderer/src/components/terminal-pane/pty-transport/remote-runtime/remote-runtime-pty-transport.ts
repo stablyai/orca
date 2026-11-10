@@ -4146,6 +4146,14 @@ export function createRemoteRuntimePtyTransport(
       return sendInputAcceptedToRuntime(data, inputKind, options)
     },
 
+    holdsInputUntilConnect() {
+      return recoveryInputHold.isHolding()
+    },
+
+    holdPasteAheadOfLaterKeys() {
+      return recoveryInputHold.openPasteGate()
+    },
+
     // Why: a transport with an armed retry or a parked one owns this pane's recovery; a remount would race it (#21195).
     ownsRecovery() {
       return !destroyed && !terminalEnded && recoveryBlocksIo()

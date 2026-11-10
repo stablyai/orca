@@ -31,7 +31,8 @@ import type {
 } from '../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
 import type {
   AcceptedInputOptions,
-  PtyPreconnectInputEntry
+  PtyPreconnectInputEntry,
+  PtyPreconnectPasteHold
 } from './input/pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
@@ -223,6 +224,13 @@ export type PtyTransport = {
   ) => Promise<boolean>
   /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
   abandonPreconnectInput?: () => void
+  /** True while ordinary input is retained until this pane's PTY is connected. */
+  holdsInputUntilConnect?: () => boolean
+  /**
+   * While input is held and this pane has no PTY yet, reserve the next queue slot so a paste
+   * lands ahead of keys typed while its clipboard read is still in flight.
+   */
+  holdPasteAheadOfLaterKeys?: () => PtyPreconnectPasteHold | null
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
   setOutputPaused?: (paused: boolean) => boolean

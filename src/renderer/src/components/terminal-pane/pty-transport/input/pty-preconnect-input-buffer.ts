@@ -1,5 +1,17 @@
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../../../shared/clipboard-text'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
+import {
+  closePasteGates,
+  notifyRetainedPreconnectInput,
+  openPasteGateOn,
+  placeBeforeOpenPasteGate,
+  takePasteGateHead,
+  type PasteGate,
+  type PasteGateSlots,
+  type PtyPreconnectPasteHold
+} from './pty-preconnect-paste-gate'
+
+export type { PtyPreconnectPasteHold }
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
 // Budget retained paste across transport/handoff copies and up to 64 deferred splits, independently of the single-write ceiling.
@@ -20,6 +32,7 @@ export type AcceptedInputOptions = { signal?: AbortSignal }
 type BufferedInput = PtyPreconnectInputEntry & {
   resolve?: (accepted: boolean) => void
   signal?: AbortSignal
+  pasteGate?: PasteGate
 }
 
 export type PreconnectInputWriter = {
@@ -55,6 +68,11 @@ export type PtyPreconnectInputBuffer = {
   ) => Promise<boolean>
   flush: (writer: PreconnectInputWriter) => Promise<void>
   clear: () => void
+  /**
+   * Reserve the next queue slot while this buffer is still holding unbound input.
+   * Null when not buffering or the entry limit is already full.
+   */
+  openPasteGate: () => PtyPreconnectPasteHold | null
 }
 
 export type PtyPreconnectInputBufferOptions = {
@@ -66,7 +84,7 @@ export function createPtyPreconnectInputBuffer(
   initialEntries: readonly PtyPreconnectInputEntry[] = [],
   options: PtyPreconnectInputBufferOptions = {}
 ): PtyPreconnectInputBuffer {
-  let pending: BufferedInput[] = []
+  const slots: PasteGateSlots<BufferedInput> = { pending: [], insertGate: null }
   let pendingCodeUnits = 0
   let buffering = true
   let activeAcceptedInput: BufferedInput | null = null
@@ -76,33 +94,43 @@ export function createPtyPreconnectInputBuffer(
     stopFlush = resolve
   })
 
-  const retain = (input: BufferedInput): boolean => {
+  const activeCodeUnits = (): number => activeAcceptedInput?.data.length ?? 0
+  const withinLimits = (dataLength: number): boolean => {
     const activeEntries = activeAcceptedInput ? 1 : 0
-    const activeCodeUnits = activeAcceptedInput?.data.length ?? 0
-    const tail = pending.at(-1)
+    return (
+      buffering &&
+      slots.pending.length + activeEntries < PTY_PRECONNECT_INPUT_MAX_ENTRIES &&
+      dataLength <= PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - pendingCodeUnits - activeCodeUnits()
+    )
+  }
+  const retain = (input: BufferedInput): boolean => {
+    const tail = slots.pending.at(-1)
     if (
       options.recoveryHold &&
       buffering &&
       input.kind === 'ordinary' &&
       tail?.kind === 'ordinary' &&
+      !tail.pasteGate &&
       tail.inputKind === input.inputKind &&
-      input.data.length <= PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - pendingCodeUnits - activeCodeUnits
+      input.data.length <=
+        PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - pendingCodeUnits - activeCodeUnits()
     ) {
       tail.data += input.data
       pendingCodeUnits += input.data.length
       return true
     }
-    if (
-      !buffering ||
-      pending.length + activeEntries >= PTY_PRECONNECT_INPUT_MAX_ENTRIES ||
-      input.data.length > PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - pendingCodeUnits - activeCodeUnits
-    ) {
+    if (!withinLimits(input.data.length)) {
       return false
     }
-    pending.push(input)
+    slots.pending.push(input)
     pendingCodeUnits += input.data.length
     return true
   }
+  const account = (dataLength: number): void => {
+    pendingCodeUnits += dataLength
+  }
+  const place = (input: BufferedInput): boolean =>
+    placeBeforeOpenPasteGate(slots, input, input.data.length, withinLimits, retain, account)
   const createInput = (
     data: string,
     kind: PtyPreconnectInputKind,
@@ -118,47 +146,56 @@ export function createPtyPreconnectInputBuffer(
   })
   // Why: a caller that timed out already reported the write failed; delivering it later would land a stray fragment.
   const withdraw = (input: BufferedInput): void => {
-    const index = pending.indexOf(input)
+    const index = slots.pending.indexOf(input)
     if (index === -1) {
       return
     }
-    pending.splice(index, 1)
+    slots.pending.splice(index, 1)
     pendingCodeUnits -= input.data.length
     input.resolve?.(false)
   }
-  const notifyRetained = (
-    onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
-    input: BufferedInput
-  ): void => {
-    try {
-      onRetained?.({ data: input.data, kind: input.kind, inputKind: input.inputKind })
-    } catch {
-      // Handoff capture is advisory; a callback failure must not reject input admission.
-    }
-  }
-
   // Seeded entries already belong to predecessor handoff; do not report them back as newly typed.
   for (const entry of initialEntries) {
     retain(createInput(entry.data, entry.kind, entry.inputKind))
   }
   const clear = (): void => {
-    const dropped = pending
-    pending = []
+    const dropped = slots.pending
+    slots.pending = []
     pendingCodeUnits = 0
     buffering = false
+    slots.insertGate = null
     const inFlight = activeAcceptedInput
     activeAcceptedInput = null
     inFlight?.resolve?.(false)
+    closePasteGates(dropped)
     for (const input of dropped) {
       input.resolve?.(false)
     }
     stopFlush()
   }
 
+  const resumeFlush = (writer: PreconnectInputWriter): void => {
+    const start = (): void => {
+      void flush(writer)
+    }
+    if (activeFlush) {
+      void activeFlush.then(start, start)
+      return
+    }
+    start()
+  }
+
   const runFlush = async (writer: PreconnectInputWriter): Promise<void> => {
     try {
-      while (buffering && pending.length > 0) {
-        const input = pending.shift()
+      while (buffering && slots.pending.length > 0) {
+        const parked = takePasteGateHead(slots.pending, () => resumeFlush(writer))
+        if (parked === 'parked') {
+          return
+        }
+        if (parked === 'skipped') {
+          continue
+        }
+        const input = slots.pending.shift()
         if (!input) {
           continue
         }
@@ -167,7 +204,7 @@ export function createPtyPreconnectInputBuffer(
           activeAcceptedInput = input
         }
         if (buffering && options.recoveryHold && !writer.isCurrent()) {
-          pending.unshift(input)
+          slots.pending.unshift(input)
           pendingCodeUnits += input.data.length
           activeAcceptedInput = null
           return
@@ -248,14 +285,18 @@ export function createPtyPreconnectInputBuffer(
     return flushPromise
   }
 
+  const openPasteGate = (): PtyPreconnectPasteHold | null =>
+    openPasteGateOn(slots, withinLimits, () => createInput('', 'ordinary', 'driving'))
+
   return {
     isBuffering: () => buffering,
-    hasPendingInput: () => pending.length > 0 || activeAcceptedInput !== null,
+    hasPendingInput: () =>
+      slots.pending.some((input) => !input.pasteGate) || activeAcceptedInput !== null,
     enqueue(data, kind, inputKind, onRetained) {
       const input = createInput(data, kind, inputKind)
-      const retained = retain(input)
+      const retained = place(input)
       if (retained) {
-        notifyRetained(onRetained, input)
+        notifyRetainedPreconnectInput(onRetained, input)
       }
       return retained
     },
@@ -273,15 +314,16 @@ export function createPtyPreconnectInputBuffer(
           resolve(accepted)
         }
         const input = createInput(data, 'accepted', inputKind, settle, signal)
-        if (!retain(input)) {
+        if (!place(input)) {
           resolve(false)
           return
         }
         signal?.addEventListener('abort', onAbort, { once: true })
-        notifyRetained(onRetained, input)
+        notifyRetainedPreconnectInput(onRetained, input)
       })
     },
     flush,
-    clear
+    clear,
+    openPasteGate
   }
 }
