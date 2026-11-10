@@ -69,6 +69,9 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           )
           setRecipes(nextRecipes)
           setOrcaCloud(result.orcaCloud ?? 'unavailable')
+          // Why outside the updater: StrictMode runs updaters twice and keeps the second result, so
+          // consuming the one-time intent inside it would always lose the selection.
+          const afterSignIn = resetSelection ? null : takeOrcaCloudSelectionAfterSignIn(nextRecipes)
           setSelectedRecipeId((current) => {
             if (resetSelection) {
               return args.initialRecipeId &&
@@ -76,7 +79,6 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
                 ? args.initialRecipeId
                 : null
             }
-            const afterSignIn = takeOrcaCloudSelectionAfterSignIn(nextRecipes)
             if (afterSignIn) {
               return afterSignIn
             }

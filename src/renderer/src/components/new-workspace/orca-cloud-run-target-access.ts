@@ -8,16 +8,16 @@ import {
 
 /** Signing in from the row selects Orca Cloud once main offers it (the recipe list reloads). */
 function signInThenSelectOrcaCloud(): void {
-  requestOrcaCloudSelectionAfterSignIn()
+  const token = requestOrcaCloudSelectionAfterSignIn()
   void useAppStore
     .getState()
     .connectCurrentOrcaProfile()
     .then((result) => {
       if (result?.status !== 'connected') {
-        cancelOrcaCloudSelectionAfterSignIn()
+        cancelOrcaCloudSelectionAfterSignIn(token)
       }
     })
-    .catch(cancelOrcaCloudSelectionAfterSignIn)
+    .catch(() => cancelOrcaCloudSelectionAfterSignIn(token))
 }
 
 /**

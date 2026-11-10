@@ -14,6 +14,10 @@ import {
   unarchiveCloudWorkspace
 } from '@/lib/orca-cloud/orca-cloud-workspace-actions'
 import type { CloudWorkspaceResult } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+import {
+  isCloudWorkspaceDeleting,
+  registerQueuedCloudArchive
+} from '@/lib/orca-cloud/pending-cloud-archive'
 
 /** Codes map to plain copy; raw control-plane messages never reach a toast. */
 function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
@@ -93,20 +97,35 @@ export function runArchiveCloudWorkspace(
   return new Promise((resolve) => {
     let undone = false
     const toastId = `orca-cloud-archive:${workspaceId}`
+    const cancel = (): void => {
+      undone = true
+      clearTimeout(commit)
+      toast.dismiss(toastId)
+      unregister()
+      resolve()
+    }
     const commit = setTimeout(() => {
+      unregister()
       toast.dismiss(toastId)
       if (undone) {
         resolve()
         return
       }
-      void archiveCloudWorkspace(workspaceId, { sleep: runSleepWorktree }).then((result) => {
-        failureToast(
-          translate('orcaCloudWorkspace.archiveFailed', 'Couldn’t archive the workspace'),
-          result
-        )
+      // A Delete that starts while this runs destroys the sandbox; its sleep and archive then fail
+      // for a workspace that is going away, which is not worth an error toast.
+      const sleep = (id: string): Promise<unknown> =>
+        isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
+      void archiveCloudWorkspace(workspaceId, { sleep }).then((result) => {
+        if (!isCloudWorkspaceDeleting(workspaceId)) {
+          failureToast(
+            translate('orcaCloudWorkspace.archiveFailed', 'Couldn’t archive the workspace'),
+            result
+          )
+        }
         resolve()
       })
     }, options.undoMs ?? ARCHIVE_UNDO_MS)
+    const unregister = registerQueuedCloudArchive(workspaceId, cancel)
     toast(
       options.name
         ? translate('orcaCloudWorkspace.archivingNamed', 'Archiving {{name}}…', {
@@ -122,11 +141,7 @@ export function runArchiveCloudWorkspace(
         ),
         action: {
           label: translate('orcaCloudWorkspace.undo', 'Undo'),
-          onClick: () => {
-            undone = true
-            clearTimeout(commit)
-            resolve()
-          }
+          onClick: cancel
         }
       }
     )
