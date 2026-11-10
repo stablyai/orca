@@ -19,7 +19,8 @@ import {
   worktreeMetaHostFor
 } from '../../../shared/worktree/local-only-worktree-meta-ids'
 
-type MetadataRuntime = Pick<StoreRuntimeState, 'state'>
+type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
+  Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>
 type WorktreeMetaState = Pick<
   PersistedState,
   'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
@@ -265,5 +266,8 @@ export function setWorktreeMetaForHost(
     state.worktreeMeta[worktreeId] = updated
   }
   scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+  for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
+    listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })
+  }
   return updated
 }

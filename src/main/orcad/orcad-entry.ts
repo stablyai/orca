@@ -226,6 +226,12 @@ async function startOrcadRuntime(
   paneGridsForShutdown = runtime
 
   accountLaunch?.attachToRuntime(runtime)
+  const { wireGitHubIssueLinkTitleFill } = await import('../github/github-issue-link-title-wiring')
+  registerCleanup(
+    wireGitHubIssueLinkTitleFill(profileStore, (repoId, options) =>
+      runtime.notifyWorktreesChanged(repoId, options)
+    )
+  )
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 
