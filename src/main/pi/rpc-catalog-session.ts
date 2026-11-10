@@ -25,6 +25,7 @@ export type PiRpcCatalogSessionDeps = {
   connect?: (launch: ProviderProcessLaunch) => PiCatalogConnection
 }
 
+/** Cancel startup dialogs because a disposable probe has no chat UI to answer them. */
 function connectPiCatalog(launch: ProviderProcessLaunch): PiCatalogConnection {
   const connection: JsonlRpcAgentConnection = new JsonlRpcAgentConnection(launch, {
     // Pi cannot read replies to session_start dialogs before binding.
@@ -42,6 +43,7 @@ function connectPiCatalog(launch: ProviderProcessLaunch): PiCatalogConnection {
   return connection
 }
 
+/** Read a catalog in a caller-isolated, unsaved Pi process and await cleanup on every outcome. */
 export async function runPiRpcCatalogSession<T>(
   deps: PiRpcCatalogSessionDeps,
   input: {

@@ -14,6 +14,7 @@ import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 import { PiAtRestCommandCatalog } from './rpc-at-rest-commands'
 import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 
+/** Bind command discovery and chat launches to the same host environment and workspace resolvers. */
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({

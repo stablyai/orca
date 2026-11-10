@@ -17,6 +17,7 @@ const discoveryStateSchema = z.object({
 
 export type PiModelCatalogProbeDeps = PiRpcCatalogSessionDeps & { homePath?: string }
 
+/** Discover available models and configured defaults without creating a Pi conversation. */
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
     const operation = options?.operation ?? { signal: options?.signal }
