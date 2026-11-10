@@ -128,7 +128,7 @@ it('expires replay during continuous activity even while conversion and sweeps w
 })
 
 it('resets old cursors at the replay count and metadata budgets while preserving current content', async () => {
-  const { db, commit, item, seedItem } = fixture()
+  const { db, commit, item } = fixture()
   await commit(message('first'))
   db.exec(`WITH RECURSIVE positions(seq) AS (
     SELECT 12 UNION ALL SELECT seq+1 FROM positions WHERE seq<4106
@@ -153,14 +153,13 @@ it('resets old cursors at the replay count and metadata budgets while preserving
     page: { items: [{ body: { blocks: [{ text: 'latest' }] } }] }
   })
   expect(after(11).ok).toBe(true)
-  seedItem({
-    itemId: 'orca:command',
-    revision: 1,
-    sequence: 1,
-    observedAt: 1,
-    body: { kind: 'turn', turnId: 'command', state: 'completed' },
-    turnScope: { kind: 'thread' }
-  })
+  const commandTurn = {
+    kind: 'item' as const,
+    identity: { provider: 'orca' as const, clientMessageId: 'command' },
+    body: { kind: 'turn' as const, turnId: 'command', state: 'completed' as const },
+    options: { fence: 1, turnScope: { kind: 'thread' as const } }
+  }
+  await commit(commandTurn)
   for (let index = 0; index < 300; index++) {
     const messageId = `returned-command-${index}`.padEnd(64, 'x')
     const card = {
@@ -176,7 +175,10 @@ it('resets old cursors at the replay count and metadata budgets while preserving
         VALUES('chat','epoch',?,1,'returned',?,'orca:command',?)`
     ).run(messageId, index, JSON.stringify(card))
   }
-  await commit(message('wide withdrawal remains saved'))
+  await commit(message('wide withdrawal remains saved'), {
+    ...commandTurn,
+    body: { ...commandTurn.body, completedAt: 100 }
+  })
   expect(after(4107)).toMatchObject({ ok: false, reset: 'cursor_compacted' })
   expect(item('orca:assistant')).toMatchObject({
     body: { blocks: [{ text: 'wide withdrawal remains saved' }] }
