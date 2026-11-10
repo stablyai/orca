@@ -48,8 +48,11 @@ export type BuildAgentsRowModel =
   | { kind: 'failed'; agent: OrcaCloudAccountAgent; error: OrcaCloudAgentSetupFailure }
   /** R10 / R1b: the account credential expired or was revoked and no key covers the agent. */
   | { kind: 'expired'; agent: OrcaCloudAccountAgent }
-  /** R12 (§5c): the provider's Orca-account path is off and no key covers the agent. */
-  | { kind: 'killSwitch'; agent: OrcaCloudAccountAgent }
+  /**
+   * R12 (§5c): no Orca-account path for the agent and no key covers it, so it signs in inside this
+   * workspace. `paused` = the kill switch; `notOffered` = this server never offered it (flag off).
+   */
+  | { kind: 'killSwitch'; agent: OrcaCloudAccountAgent; reason: 'paused' | 'notOffered' }
   /** S1-c (A5/A6): a key only in this computer's vault; it never reaches the sandbox unasked. */
   | { kind: 'desktopKey'; key: CloudOfferableDesktopKey }
   /** Couldn't read the Orca account; the workspace still opens. */
@@ -64,6 +67,7 @@ function covered(coverage: OrcaCloudAgentCoverage): BuildAgentVia | null {
     case 'notSetUp':
     case 'expired':
     case 'killSwitch':
+    case 'unavailable':
       return null
   }
 }
@@ -109,7 +113,12 @@ export function buildAgentsRow(args: {
   }))
   const paused = coverage.find((entry) => entry.coverage.kind === 'killSwitch')
   if (paused) {
-    return { kind: 'killSwitch', agent: paused.agent }
+    return { kind: 'killSwitch', agent: paused.agent, reason: 'paused' }
+  }
+  // Never offered: no Set up to show, so the agent signs in inside the workspace like the kill switch.
+  const notOffered = coverage.find((entry) => entry.coverage.kind === 'unavailable')
+  if (notOffered) {
+    return { kind: 'killSwitch', agent: notOffered.agent, reason: 'notOffered' }
   }
   const expired = coverage.find((entry) => entry.coverage.kind === 'expired')
   if (expired) {

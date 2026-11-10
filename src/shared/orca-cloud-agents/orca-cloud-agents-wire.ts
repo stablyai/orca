@@ -29,13 +29,35 @@ const CredentialView = z.object({
 })
 export type AgentCredentialView = z.infer<typeof CredentialView>
 
+// An unknown future state reads as the kill switch: unusable, and worded as temporary.
+const ProviderState = z.enum(['on', 'off', 'disabled']).catch('disabled')
+export type OrcaCloudProviderState = z.infer<typeof ProviderState>
+
 export const AgentCredentialsResponseSchema = z.object({
   claude: CredentialView,
   codex: CredentialView,
-  /** false is the per-provider kill switch (spec §5c). */
-  providerEnabled: z.object({ claude: z.boolean(), codex: z.boolean() })
+  /** false: the provider's Orca-account path is unusable (flag off or kill switch; see providerState). */
+  providerEnabled: z.object({ claude: z.boolean(), codex: z.boolean() }),
+  /**
+   * Why: `off` = never offered on this server (flag S1/S2 off), `disabled` = the kill switch (spec §5c).
+   * Older servers omit it; read it through `orcaCloudProviderState`.
+   */
+  providerState: z.object({ claude: ProviderState, codex: ProviderState }).optional()
 })
 export type AgentCredentialsView = z.infer<typeof AgentCredentialsResponseSchema>
+
+/** The provider's state; without `providerState` (older server) a disabled provider reads as the kill switch. */
+export function orcaCloudProviderState(
+  view: AgentCredentialsView,
+  agent: OrcaCloudAccountAgent
+): OrcaCloudProviderState {
+  const state = view.providerState?.[agent]
+  if (state) {
+    // Never trust a state that contradicts providerEnabled.
+    return view.providerEnabled[agent] ? 'on' : state === 'on' ? 'disabled' : state
+  }
+  return view.providerEnabled[agent] ? 'on' : 'disabled'
+}
 
 const Source = z.enum(['sign-in', 'key']).nullable()
 export type AgentSource = z.infer<typeof Source>

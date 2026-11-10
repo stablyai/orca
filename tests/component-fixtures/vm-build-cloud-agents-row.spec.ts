@@ -44,7 +44,8 @@ const LATER: readonly Model[] = [
   { kind: 'setup', agent: 'claude', setup: { phase: 'saving' }, step: 1, of: 1 },
   { kind: 'failed', agent: 'claude', error: 'denied' },
   { kind: 'expired', agent: 'claude' },
-  { kind: 'killSwitch', agent: 'claude' },
+  { kind: 'killSwitch', agent: 'claude', reason: 'paused' },
+  { kind: 'killSwitch', agent: 'claude', reason: 'notOffered' },
   {
     kind: 'desktopKey',
     key: { id: 'k1', agent: 'claude', envName: 'ANTHROPIC_API_KEY', hint: 'x4Qa' }

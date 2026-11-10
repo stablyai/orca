@@ -50,6 +50,18 @@ describe('orcaCloudAgentSetupRow', () => {
     expect(row('claude', { kind: 'ready', status: paused }).kind).toBe('killSwitch')
   })
 
+  it('is hidden when this server never offered the provider (flag off)', () => {
+    const off: OrcaCloudAgentsStatus = {
+      ...READY,
+      credentials: {
+        ...READY.credentials,
+        providerEnabled: { claude: false, codex: true },
+        providerState: { claude: 'off', codex: 'on' }
+      }
+    }
+    expect(row('claude', { kind: 'ready', status: off }).kind).toBe('hidden')
+  })
+
   it('is hidden for agents without an account path, members blocked by billing, and GitHub blocks', () => {
     expect(row('cursor').kind).toBe('hidden')
     expect(row(null).kind).toBe('hidden')

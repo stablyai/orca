@@ -156,6 +156,18 @@ export const killSwitch = fixture({
   codex: { kind: 'killSwitch' }
 })
 
+/** Flag off on this server: never offered, so nothing reads as paused. */
+export const unavailable = fixture({
+  claude: CLAUDE_ACTIVE,
+  codex: { kind: 'unavailable' }
+})
+
+/** Neither provider offered: the section collapses to one muted line. */
+export const allUnavailable = fixture({
+  claude: { kind: 'unavailable' },
+  codex: { kind: 'unavailable' }
+})
+
 export const setupFailed = fixture({
   claude: { kind: 'failed', error: 'denied' },
   codex: { kind: 'failed', error: 'code_expired' }

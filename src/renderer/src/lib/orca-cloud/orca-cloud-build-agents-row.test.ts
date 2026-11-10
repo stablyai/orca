@@ -76,9 +76,31 @@ describe('buildAgentsRow', () => {
     expect(buildAgentsToSetUp(model)).toEqual(['claude'])
   })
 
+  it('signs a never-offered provider in for this workspace, not paused and never Set up', () => {
+    const off = withClaude('none', {
+      providerEnabled: { claude: false, codex: true },
+      providerState: { claude: 'off', codex: 'on' }
+    })
+    const model = row(accounts(off))
+    expect(model).toEqual({ kind: 'killSwitch', agent: 'claude', reason: 'notOffered' })
+    expect(buildAgentsToSetUp(model)).toEqual([])
+    // Both off: still one sign-in-here row, never an offer.
+    const bothOff = withClaude('none', {
+      providerEnabled: { claude: false, codex: false },
+      providerState: { claude: 'off', codex: 'off' }
+    })
+    expect(row(accounts(bothOff)).kind).toBe('killSwitch')
+    // The kill switch on one agent wins over the other never being offered.
+    const mixed = withClaude('active', {
+      providerEnabled: { claude: false, codex: false },
+      providerState: { claude: 'off', codex: 'disabled' }
+    })
+    expect(row(accounts(mixed))).toEqual({ kind: 'killSwitch', agent: 'codex', reason: 'paused' })
+  })
+
   it('puts the kill switch first, then an expiry, both only when no key covers the agent', () => {
     const paused = withClaude('active', { providerEnabled: { claude: false, codex: true } })
-    expect(row(accounts(paused))).toEqual({ kind: 'killSwitch', agent: 'claude' })
+    expect(row(accounts(paused))).toEqual({ kind: 'killSwitch', agent: 'claude', reason: 'paused' })
     expect(row(accounts(withClaude('revoked')))).toEqual({ kind: 'expired', agent: 'claude' })
     const keyed = {
       ...paused,

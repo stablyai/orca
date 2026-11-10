@@ -148,6 +148,20 @@ export function AccountRow({
         />
       )
       break
+    case 'unavailable':
+      content = (
+        <RowShell
+          agent={agent}
+          tone="info"
+          title={t('orcaCloudAccounts.unavailable', 'Signs in for each cloud workspace')}
+          detail={t(
+            'orcaCloudAccounts.unavailableDetail',
+            'Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.',
+            { product }
+          )}
+        />
+      )
+      break
   }
   if (!rowError) {
     return content

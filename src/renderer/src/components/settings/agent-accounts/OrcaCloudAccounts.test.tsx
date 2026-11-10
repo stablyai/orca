@@ -121,6 +121,20 @@ describe('OrcaCloudAccountsView', () => {
   it('shows the kill switch as info with no action, and signed out with Sign in', () => {
     view({ claude: { kind: 'killSwitch' }, codex: NOT_SET_UP })
     expect(screen.getByText('Signs in for each cloud workspace')).toBeTruthy()
+    expect(screen.getByText(/right now/)).toBeTruthy()
+    cleanup()
+    // Flag off: same title, but never worded as paused ("right now", "until it’s back").
+    view({ claude: { kind: 'unavailable' }, codex: NOT_SET_UP })
+    expect(screen.getByText(/isn’t available in Orca Cloud yet/)).toBeTruthy()
+    expect(screen.queryByText(/right now|until it’s back/)).toBeNull()
+    cleanup()
+    // Both off: one muted line under the heading, no rows and no actions.
+    view({ claude: { kind: 'unavailable' }, codex: { kind: 'unavailable' } })
+    expect(
+      screen.getByText('Claude and Codex sign in for each cloud workspace for now.')
+    ).toBeTruthy()
+    expect(screen.queryByText(/isn’t available in Orca Cloud yet/)).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
     cleanup()
     const handlers = actions()
     render(

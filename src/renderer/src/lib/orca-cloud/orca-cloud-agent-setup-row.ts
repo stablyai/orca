@@ -78,5 +78,8 @@ export function orcaCloudAgentSetupRow({
       return { kind: 'expired', agent }
     case 'killSwitch':
       return { kind: 'killSwitch', agent }
+    case 'unavailable':
+      // Never offered here: like an agent without an account path, the composer shows no row.
+      return { kind: 'hidden' }
   }
 }

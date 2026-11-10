@@ -27689,7 +27689,10 @@
       "repository": "repository key",
       "personal": "your API key"
     },
-    "copyAndOpen": "Copy code and open"
+    "copyAndOpen": "Copy code and open",
+    "unavailable": "Signs in for each cloud workspace",
+    "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.",
+    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now."
   },
   "vmBuildAgents": {
     "menu": {
@@ -27743,6 +27746,7 @@
     "error": "Couldn’t check agent sign-in",
     "errorDetail": "The workspace still opens. Agents can sign in later.",
     "groupAccount": "{{agents}} from your Orca account",
-    "groupKey": "{{agents}} with {{key}}"
+    "groupKey": "{{agents}} with {{key}}",
+    "notOffered": "Signs in for each cloud workspace for now"
   }
 }

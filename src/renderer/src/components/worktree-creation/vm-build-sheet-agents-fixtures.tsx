@@ -135,9 +135,15 @@ export const agentsDesktopKeyFailed = agents(
   },
   { desktopKeySave: { kind: 'failed', error: 'unavailable' } }
 )
-export const agentsKillSwitch = agents({ kind: 'killSwitch', agent: 'claude' })
+export const agentsKillSwitch = agents({ kind: 'killSwitch', agent: 'claude', reason: 'paused' })
+/** Flag off on this server: same sign-in-here action, never worded as paused. */
+export const agentsNotOffered = agents({
+  kind: 'killSwitch',
+  agent: 'claude',
+  reason: 'notOffered'
+})
 export const agentsKillSwitchQueued = agents(
-  { kind: 'killSwitch', agent: 'claude' },
+  { kind: 'killSwitch', agent: 'claude', reason: 'paused' },
   { queued: true }
 )
 export const agentsLoading = agents({ kind: 'loading' })
