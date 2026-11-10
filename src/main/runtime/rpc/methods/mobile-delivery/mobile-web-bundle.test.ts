@@ -173,6 +173,20 @@ describe('an install that carries a mobile web bundle', () => {
     expect(errorMessage(response)).toBeUndefined()
   })
 
+  // A package install writes the manifest and assets one file at a time; a mismatch mid-install must not stick.
+  it('serves an asset once its bytes match again, after a mismatch for the same build', async () => {
+    const original = mobileWebBundleFiller(640, 3)
+    writeFileSync(join(bundle.root, 'index.html'), mobileWebBundleFiller(640, 99))
+    expect(
+      errorMessage(await chunk({ buildId: bundle.buildId, path: 'index.html', offset: 0 }))
+    ).toBe('mobile_web_bundle_asset_changed')
+
+    writeFileSync(join(bundle.root, 'index.html'), original)
+    const response = await chunk({ buildId: bundle.buildId, path: 'index.html', offset: 0 })
+
+    expect(errorMessage(response)).toBeUndefined()
+  })
+
   // Map post-verification filesystem failure to a contract code without exposing the host install path.
   it('answers a changed asset, not the filesystem error, when the asset is gone after its verdict', async () => {
     const script = bundle.assets.find((asset) => asset.path.endsWith('.js'))!

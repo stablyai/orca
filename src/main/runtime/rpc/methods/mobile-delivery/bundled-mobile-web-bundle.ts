@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
 import {
@@ -20,6 +21,9 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
     return undefined
   }
   const appPath = getAppEnvironment().getAppPath()
+  if (probedRoot?.appPath === appPath) {
+    return probedRoot.root
+  }
   // Electron reads app.asar paths through the header it parsed at launch, which misses files an in-place update wrote.
   const filesPath = appPath.endsWith('.asar') ? `${appPath}.unpacked` : appPath
   const roots = [
@@ -27,19 +31,31 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
     // Unpacked electron-vite sets appPath to out/main.
     join(filesPath, '..', 'mobile-web')
   ]
-  return roots.find((root) => existsSync(join(root, MANIFEST_FILENAME)))
+  const root = roots.find((candidate) => existsSync(join(candidate, MANIFEST_FILENAME)))
+  // An install keeps its layout, so only a miss is probed again (a dev build may produce the bundle later).
+  if (root) {
+    probedRoot = { appPath, root }
+  }
+  return root
+}
+
+let probedRoot: { appPath: string; root: string } | undefined
+
+/** Whether this install ships a bundle, without reading it. */
+export function hasBundledMobileWebBundle(): boolean {
+  return getBundledMobileWebBundleRoot() !== undefined
 }
 
 // Linux package managers replace the install under a running app, so trust the cache only while manifest.json is unchanged.
-let cached: { identity: string; bundle: BundledMobileWebBundle | null } | undefined
+let cached: { identity: string; bundle: Promise<BundledMobileWebBundle | null> } | undefined
 
-export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
+export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBundle | null> {
   const root = getBundledMobileWebBundleRoot()
   if (!root) {
     return null
   }
   const manifestPath = join(root, MANIFEST_FILENAME)
-  const stats = statSync(manifestPath, { throwIfNoEntry: false })
+  const stats = await stat(manifestPath).catch(() => null)
   const identity = stats
     ? `${manifestPath}:${String(stats.ino)}:${String(stats.size)}:${String(stats.mtimeMs)}`
     : manifestPath
@@ -49,13 +65,13 @@ export function loadBundledMobileWebBundle(): BundledMobileWebBundle | null {
   return cached.bundle
 }
 
-function readBundledMobileWebBundle(
+async function readBundledMobileWebBundle(
   root: string,
   manifestPath: string
-): BundledMobileWebBundle | null {
+): Promise<BundledMobileWebBundle | null> {
   let raw: string
   try {
-    raw = readFileSync(manifestPath, 'utf8')
+    raw = await readFile(manifestPath, 'utf8')
   } catch (error) {
     console.warn(`[mobile-web-bundle] cannot read ${manifestPath}:`, error)
     return null
