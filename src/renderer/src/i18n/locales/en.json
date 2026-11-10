@@ -20821,7 +20821,6 @@
         "reassignOwner": "Reassign owner",
         "reassignTitle": "Make {{name}} the owner?",
         "refresh": "Refresh cloud workspaces",
-        "restored": "Restored",
         "retry": "Retry",
         "rowActions": "Actions for {{value0}}",
         "rowDescription2": "{{usage}}. Last active {{lastActive}}. {{visibility}}.",
@@ -26570,9 +26569,6 @@
     "restarted": "Sandbox restarted",
     "restartedDetail": "Orca resumes your agents after the restart.",
     "archiveFailed": "Couldn’t archive the workspace",
-    "archivingNamed": "Archiving {{name}}…",
-    "archiving": "Archiving workspace…",
-    "archivingDetail": "It stops and stays browsable: PRs, last changes and files.",
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
@@ -26612,7 +26608,8 @@
     "unarchivedAsleep": "It’s asleep. Opening it wakes it.",
     "archiveFailedNamed": "Couldn’t archive {{name}}",
     "archivedNamed": "Archived {{name}}",
-    "archivedWorkspace": "Archived the workspace"
+    "archivedWorkspace": "Archived the workspace",
+    "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

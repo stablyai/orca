@@ -140,7 +140,7 @@ export function runArchiveWithUndo(
         id: toastId,
         duration: options.undoMs ?? ARCHIVE_UNDO_MS,
         description: translate(
-          'orcaCloudWorkspace.archivingDetail',
+          'orcaCloudWorkspace.archivedDetail',
           'It goes to sleep and stays browsable: PRs, last changes and files.'
         ),
         action: {
