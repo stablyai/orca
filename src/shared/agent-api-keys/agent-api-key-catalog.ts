@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { ExecutionHostId } from '../execution-host'
+import type { AgentApiKeyCloudOutcome, AgentApiKeysCloudState } from './agent-api-key-cloud'
 
 /** Where a stored key is injected. `hosts` lists execution host ids (`local`, `ssh:…`, `runtime:…`). */
 export type AgentApiKeyHostScope = { kind: 'all' } | { kind: 'hosts'; hostIds: ExecutionHostId[] }
@@ -21,11 +22,13 @@ export type AgentApiKeyProtection = { available: true } | { available: false; re
 export type AgentApiKeysState = {
   keys: AgentApiKeySummary[]
   protection: AgentApiKeyProtection
+  /** Desktop with Orca Cloud: which keys are also in the user's Orca account. */
+  cloud?: AgentApiKeysCloudState
 }
 
 export type AgentApiKeysMutationResult =
-  | { ok: true; state: AgentApiKeysState }
-  | { ok: false; error: string; state: AgentApiKeysState }
+  | { ok: true; state: AgentApiKeysState; cloud?: AgentApiKeyCloudOutcome }
+  | { ok: false; error: string; state: AgentApiKeysState; cloud?: AgentApiKeyCloudOutcome }
 
 export type AgentApiKeySaveRequest = {
   /** Present when editing; an edit without `value` keeps the stored value. */

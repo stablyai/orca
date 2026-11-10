@@ -14288,7 +14288,6 @@
           "confirmRemove": "Remove key",
           "edit": "Edit key",
           "remove": "Remove key",
-          "promise": "Keys are sealed in your OS keychain. When an agent starts, here, on an SSH host or on a paired machine, Orca passes it the key for that run only and never writes it to that machine.",
           "unavailableTitle": "Orca won't store API keys on this computer",
           "noKey": "No key. The agent uses its own sign-in.",
           "addKey": "Add key",
@@ -27027,7 +27026,8 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again.",
-      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that."
+      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that.",
+      "desktopKeyConflict": "Another agent’s key is saved in your Orca account under this name. Save this one to replace it."
     },
     "vm": {
       "badge": "Stored on workspace",
@@ -27381,5 +27381,53 @@
     "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
     "openWorkspace": "Open",
     "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}."
+  },
+  "agentApiKeys": {
+    "cloud": {
+      "synced": "Saved in your Orca account · cached on this computer",
+      "notSwappable": "Only on this computer · not used in Orca Cloud",
+      "local": "Only on this computer",
+      "saveLabel": "Save {{name}} to your Orca account",
+      "save": "Save to your Orca account",
+      "updateFailed": "Saved on this computer. Couldn’t update your Orca account, so cloud workspaces still use the older copy.",
+      "saveFailedLocal": "Saved on this computer. Couldn’t save it to your Orca account.",
+      "retry": "Try again",
+      "staleCopy": "Your Orca account has an older copy. Cloud workspaces still use it.",
+      "updateLabel": "Update {{name}} in your Orca account",
+      "update": "Update your Orca account"
+    },
+    "remove": {
+      "confirmLabel": "Remove {{name}}",
+      "fromAccountQuestion": "Also remove it from your Orca account? Cloud workspaces will stop using it.",
+      "thisComputerOnly": "Remove from this computer only",
+      "both": "Remove from both",
+      "cancel": "Cancel",
+      "stillInAccount": "Still in your Orca account. Manage it in Settings → Orca Cloud → Cloud secrets."
+    },
+    "import": {
+      "title": "Keys found on this computer",
+      "detailSignedIn": "Orca shows names only. Imported keys are sealed on this computer, used on every host, and saved in your Orca account.",
+      "detailSignedOut": "Orca shows names only. Imported keys are sealed on this computer and used on every host.",
+      "scanning": "Looking for keys…",
+      "scanFailed": "Couldn’t look for keys on this computer.",
+      "retry": "Try again",
+      "empty": "No agent API keys found in your shell environment, OpenCode or ~/.gemini/.env.",
+      "alreadySaved": "Already saved for {{agent}}",
+      "signIn": "{{agent}} is signed in with {{provider}}. Sign in once in Settings → Agent accounts.",
+      "failed": "Couldn’t import. Nothing was changed.",
+      "cancel": "Cancel",
+      "submitOne": "Import 1 key",
+      "submit": "Import {{count}} keys",
+      "doneOne": "Imported 1 key.",
+      "done": "Imported {{count}} keys.",
+      "cloudFailed": "{{name}} is saved on this computer, but not in your Orca account.",
+      "openComputer": "Import from this computer",
+      "source": {
+        "opencode": "OpenCode sign-in file",
+        "geminiEnv": "~/.gemini/.env",
+        "shell": "Shell environment"
+      }
+    },
+    "promiseAccount": "Keys are sealed on this computer. When you’re signed in to Orca, they’re also saved in your Orca account for cloud workspaces. On SSH hosts and paired machines, Orca passes a key for that run only and never writes it there."
   }
 }
