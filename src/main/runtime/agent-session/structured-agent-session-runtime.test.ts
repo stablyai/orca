@@ -84,33 +84,30 @@ describe('structured agent-session runtime install', () => {
     })
   }
 
-  it.each([false, true])(
-    'backfills before the host is readable and keeps startup nonfatal on a failed write (%s)',
-    async (failWrite) => {
-      stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
-      await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
-      if (failWrite) {
-        await withTestAgentSessionDatabase(stateDirectory, (db) =>
-          db.exec(
-            "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
-          )
-        )
-      }
-      const logged = recordingStructuredAgentSessionLogger()
-      const host = await installOver(['codex'], logged.logger)
-      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(
-        failWrite ? undefined : 'full-access'
-      )
-      expect((await host.readOptions('old-codex')).current.permissionMode).toBe(
-        failWrite ? 'ask' : 'full-access'
-      )
-      if (failWrite) {
-        expect(logged.scopes()).toContain('permission-mode-backfill')
-      } else {
-        expect(logged.scopes()).not.toContain('permission-mode-backfill')
-      }
-    }
-  )
+  it('backfills before the host is readable', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
+    await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+    const logged = recordingStructuredAgentSessionLogger()
+    const host = await installOver(['codex'], logged.logger)
+    expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe('full-access')
+    expect((await host.readOptions('old-codex')).current.permissionMode).toBe('full-access')
+    expect(logged.scopes()).not.toContain('permission-mode-backfill')
+  })
+
+  it('keeps startup and option reads available when optional permission backfill fails', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
+    await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+    await withTestAgentSessionDatabase(stateDirectory, (db) =>
+      db.exec(`CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records
+        WHEN json_extract(NEW.record_json,'$.permissionMode') IS NOT json_extract(OLD.record_json,'$.permissionMode')
+        BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+    )
+    const logged = recordingStructuredAgentSessionLogger()
+    const host = await installOver(['codex'], logged.logger)
+    expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBeUndefined()
+    expect((await host.readOptions('old-codex')).current.permissionMode).toBe('ask')
+    expect(logged.scopes()).toContain('permission-mode-backfill')
+  })
 
   it('moves pre-rename chat visuals under the current root before the host is readable', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-visuals-'))
