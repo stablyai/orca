@@ -23374,6 +23374,10 @@
     "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
   },
   "speechModelUpdate": {
+    "downloadingTitle": "{{model}} をダウンロード中",
+    "progress": "{{done}} / {{total}} MB",
+    "updateTitle": "音声モデルを更新してください",
+    "updateDescription": "音声入力がより高速なエンジンで動作するようになりました。再び音声入力するには、{{model}} を一度だけダウンロードする必要があります（{{size}} MB）。",
     "update": "更新",
     "cancel": "キャンセル",
     "pill": {

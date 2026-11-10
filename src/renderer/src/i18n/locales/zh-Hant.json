@@ -23322,6 +23322,10 @@
     "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
   },
   "speechModelUpdate": {
+    "downloadingTitle": "正在下載 {{model}}",
+    "progress": "{{done}} / {{total}} MB",
+    "updateTitle": "更新你的語音模型",
+    "updateDescription": "聽寫現在使用更快的引擎。{{model}} 需要下載一次（{{size}} MB）才能再次聽寫。",
     "update": "更新",
     "cancel": "取消",
     "pill": {

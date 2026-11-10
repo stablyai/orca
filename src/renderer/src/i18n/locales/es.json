@@ -24064,6 +24064,10 @@
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
   },
   "speechModelUpdate": {
+    "downloadingTitle": "Descargando {{model}}",
+    "progress": "{{done}} de {{total}} MB",
+    "updateTitle": "Actualiza tu modelo de voz",
+    "updateDescription": "El dictado ahora usa un motor más rápido. {{model}} necesita una descarga única ({{size}} MB) antes de que puedas volver a dictar.",
     "update": "Actualizar",
     "cancel": "Cancelar",
     "pill": {

@@ -24712,6 +24712,10 @@
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
   },
   "speechModelUpdate": {
+    "downloadingTitle": "Downloading {{model}}",
+    "progress": "{{done}} of {{total}} MB",
+    "updateTitle": "Update your speech model",
+    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
     "update": "Update",
     "cancel": "Cancel",
     "pill": {

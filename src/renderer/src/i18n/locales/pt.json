@@ -24019,6 +24019,10 @@
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
   },
   "speechModelUpdate": {
+    "downloadingTitle": "Baixando {{model}}",
+    "progress": "{{done}} de {{total}} MB",
+    "updateTitle": "Atualize seu modelo de voz",
+    "updateDescription": "O ditado agora usa um mecanismo mais rápido. {{model}} precisa de um download único ({{size}} MB) antes que você possa ditar novamente.",
     "update": "Atualizar",
     "cancel": "Cancelar",
     "pill": {

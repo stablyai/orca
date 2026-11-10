@@ -23374,6 +23374,10 @@
     "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
   },
   "speechModelUpdate": {
+    "downloadingTitle": "{{model}} 다운로드 중",
+    "progress": "{{done}} / {{total}} MB",
+    "updateTitle": "음성 모델을 업데이트하세요",
+    "updateDescription": "이제 받아쓰기가 더 빠른 엔진에서 실행됩니다. 다시 받아쓰려면 {{model}}을(를) 한 번 다운로드해야 합니다({{size}} MB).",
     "update": "업데이트",
     "cancel": "취소",
     "pill": {

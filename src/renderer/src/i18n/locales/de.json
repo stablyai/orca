@@ -23660,6 +23660,10 @@
     "gitlabAllowedFailure": "Fehlschlag erlaubt"
   },
   "speechModelUpdate": {
+    "downloadingTitle": "{{model}} wird heruntergeladen",
+    "progress": "{{done}} von {{total}} MB",
+    "updateTitle": "Sprachmodell aktualisieren",
+    "updateDescription": "Die Diktierfunktion läuft jetzt mit einer schnelleren Engine. {{model}} muss einmalig heruntergeladen werden ({{size}} MB), bevor Sie wieder diktieren können.",
     "update": "Aktualisieren",
     "cancel": "Abbrechen",
     "pill": {

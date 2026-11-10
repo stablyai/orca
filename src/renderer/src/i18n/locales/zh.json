@@ -23373,6 +23373,10 @@
     "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
   },
   "speechModelUpdate": {
+    "downloadingTitle": "正在下载 {{model}}",
+    "progress": "{{done}} / {{total}} MB",
+    "updateTitle": "更新你的语音模型",
+    "updateDescription": "听写现在使用更快的引擎。{{model}} 需要下载一次（{{size}} MB）才能再次听写。",
     "update": "更新",
     "cancel": "取消",
     "pill": {

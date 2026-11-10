@@ -23638,6 +23638,10 @@
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   },
   "speechModelUpdate": {
+    "downloadingTitle": "{{model}} indiriliyor",
+    "progress": "{{done}} / {{total}} MB",
+    "updateTitle": "Konuşma modelinizi güncelleyin",
+    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
     "update": "Güncelle",
     "cancel": "İptal",
     "pill": {

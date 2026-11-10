@@ -24067,6 +24067,10 @@
     "gitlabAllowedFailure": "Échec autorisé"
   },
   "speechModelUpdate": {
+    "downloadingTitle": "Téléchargement de {{model}}",
+    "progress": "{{done}} sur {{total}} Mo",
+    "updateTitle": "Mettez à jour votre modèle vocal",
+    "updateDescription": "La dictée utilise désormais un moteur plus rapide. {{model}} doit être téléchargé une seule fois ({{size}} Mo) avant que vous puissiez dicter à nouveau.",
     "update": "Mettre à jour",
     "cancel": "Annuler",
     "pill": {
