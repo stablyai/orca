@@ -14298,11 +14298,9 @@
             "apiKey": "api key",
             "secret": "secret",
             "env": "environment",
-            "bedrock": "bedrock",
-            "title": "Agent API Keys"
+            "bedrock": "bedrock"
           },
-          "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine.",
-          "title": "Agent API Keys"
+          "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."
         },
         "ports": {
           "autoForward": "Auto-forward ports",
@@ -26596,8 +26594,7 @@
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",
     "failedNoActive": "New workspaces start without a prebuilt environment until a build succeeds.",
-    "failedStillActive": "New workspaces still start from build #{{active}}.",
-    "title": "Cloud environment"
+    "failedStillActive": "New workspaces still start from build #{{active}}."
   },
   "cloudShare": {
     "openFailed": {
@@ -26881,9 +26878,7 @@
       "scopeNote": "Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces."
     },
     "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
-    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets.",
-    "gatewayModelHint": "Free gateway accounts can’t use anthropic/* models; try moonshotai/kimi-k2.",
-    "skippedDetail": "Set it up any time from Settings › Orca Account › Cloud secrets."
+    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets."
   },
   "cloudSecrets": {
     "editor": {
