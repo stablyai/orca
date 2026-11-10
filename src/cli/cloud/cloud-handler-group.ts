@@ -13,11 +13,14 @@ export const CLOUD_HANDLER_GROUP: HandlerGroup = {
     'cloud workspace sleep',
     'cloud workspace wake',
     'cloud workspace archive',
+    'cloud workspace delete',
     'cloud workspace destroy',
     'cloud message',
     'cloud messages',
     'cloud sessions',
-    'cloud projects list'
+    'cloud projects list',
+    'cloud routine list',
+    'cloud routine run'
   ],
   load: async () => (await import('./cloud-handlers.js')).CLOUD_HANDLERS
 }

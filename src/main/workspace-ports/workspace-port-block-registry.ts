@@ -5,6 +5,7 @@ import {
   WORKSPACE_PORT_BLOCK_SIZE,
   WORKSPACE_PORT_RANGE_END,
   WORKSPACE_PORT_RANGE_START,
+  hostLauncherPortBase,
   type WorkspacePortBlock
 } from '../../shared/workspace-port-block'
 import { splitWorktreeId } from '../../shared/worktree/id'
@@ -32,11 +33,14 @@ function slotBase(slot: number): number {
   return WORKSPACE_PORT_RANGE_START + slot * WORKSPACE_PORT_BLOCK_SIZE
 }
 
-function readBlock(value: unknown): PersistedBlock | null {
+function readBlock(value: unknown, pinnedBase: number | null): PersistedBlock | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
   const { base, allocatedAt }: Record<string, unknown> = { ...value }
+  if (typeof base === 'number' && base === pinnedBase && typeof allocatedAt === 'number') {
+    return { base, allocatedAt }
+  }
   if (
     typeof base !== 'number' ||
     !Number.isInteger(base) ||
@@ -50,7 +54,7 @@ function readBlock(value: unknown): PersistedBlock | null {
   return { base, allocatedAt }
 }
 
-function parseRegistry(text: string): Map<string, PersistedBlock> {
+function parseRegistry(text: string, pinnedBase: number | null): Map<string, PersistedBlock> {
   const blocks = new Map<string, PersistedBlock>()
   const parsed: unknown = JSON.parse(text)
   const entries =
@@ -60,7 +64,7 @@ function parseRegistry(text: string): Map<string, PersistedBlock> {
   }
   const seenBases = new Set<number>()
   for (const [key, value] of Object.entries(entries)) {
-    const block = readBlock(value)
+    const block = readBlock(value, pinnedBase)
     // A hand-edited duplicate keeps its first owner; the second re-allocates on next use.
     if (block && !seenBases.has(block.base)) {
       seenBases.add(block.base)
@@ -85,7 +89,13 @@ export class WorkspacePortBlockRegistry {
 
   constructor(
     private readonly filePath: string,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    /**
+     * A host launcher's own block (a VM's launcher sets ORCA_PORT=3000 for everything it starts).
+     * The first workspace to ask keeps it, so its agents, terminals and setup agree; every later
+     * workspace gets a registry block, so none collide.
+     */
+    private readonly pinnedBase: number | null = null
   ) {}
 
   /** The block already known in memory, without touching disk (null until first allocation). */
@@ -119,10 +129,18 @@ export class WorkspacePortBlockRegistry {
 
   private allocate(key: string, blocks: Map<string, PersistedBlock>): number {
     const taken = new Set([...blocks.values()].map((block) => block.base))
+    const pinned = this.pinnedBase
+    if (pinned !== null && !taken.has(pinned)) {
+      return pinned
+    }
     const preferred = hashKey(key) % SLOT_COUNT
     for (let offset = 0; offset < SLOT_COUNT; offset++) {
       const base = slotBase((preferred + offset) % SLOT_COUNT)
-      if (!taken.has(base)) {
+      const overlapsPinned =
+        pinned !== null &&
+        base < pinned + WORKSPACE_PORT_BLOCK_SIZE &&
+        pinned < base + WORKSPACE_PORT_BLOCK_SIZE
+      if (!taken.has(base) && !overlapsPinned) {
         return base
       }
     }
@@ -141,7 +159,7 @@ export class WorkspacePortBlockRegistry {
 
   private async load(): Promise<Map<string, PersistedBlock>> {
     try {
-      return parseRegistry(await readFile(this.filePath, 'utf8'))
+      return parseRegistry(await readFile(this.filePath, 'utf8'), this.pinnedBase)
     } catch {
       // Missing or unreadable: keep what this process knows; allocations re-derive from the hash.
       return new Map(this.blocks ?? [])
@@ -167,7 +185,9 @@ function getDefaultRegistry(): WorkspacePortBlockRegistry | null {
   if (!defaultRegistry) {
     try {
       defaultRegistry = new WorkspacePortBlockRegistry(
-        join(getCanonicalUserDataPath(), 'workspace-port-blocks.json')
+        join(getCanonicalUserDataPath(), 'workspace-port-blocks.json'),
+        Date.now,
+        hostLauncherPortBase(process.env)
       )
     } catch {
       return null
@@ -183,6 +203,14 @@ export async function getWorkspacePortBlockForWorktreeId(
   const path = splitWorktreeId(worktreeId)?.worktreePath
   const registry = path ? getDefaultRegistry() : null
   return registry && path ? registry.getBlock(path) : null
+}
+
+/** The block for a checkout path (setup and archive hooks run before any terminal may exist). */
+export async function getWorkspacePortBlockForPath(
+  worktreePath: string
+): Promise<WorkspacePortBlock | null> {
+  const registry = worktreePath ? getDefaultRegistry() : null
+  return registry ? registry.getBlock(worktreePath) : null
 }
 
 /** For synchronous callers (setup/archive env): known once any terminal in the workspace opened. */

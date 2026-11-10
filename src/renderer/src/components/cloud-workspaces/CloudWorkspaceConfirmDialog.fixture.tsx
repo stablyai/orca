@@ -92,3 +92,26 @@ export const reassignAsAdmin = defineFixture({
       />
     )
 })
+
+/** Archiving a teammate's running workspace from the team list stops their agents (DS-01). */
+export const archiveTeammateRunning = defineFixture({
+  width: 640,
+  render: () =>
+    frame(
+      <CloudWorkspaceConfirmDialog
+        pending={{
+          kind: 'archive',
+          workspace: workspace({
+            title: 'Checkout retries',
+            ownerUserId: 'user_grace',
+            status: 'running'
+          })
+        }}
+        directory={DIRECTORY}
+        selfId={SELF_ID}
+        canAdmin
+        onCancel={() => {}}
+        onConfirm={() => {}}
+      />
+    )
+})

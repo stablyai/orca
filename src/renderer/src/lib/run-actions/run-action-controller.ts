@@ -124,12 +124,14 @@ async function stopConflictingRuns(
   if (effectiveRunMode(action, scripts) !== 'nonconcurrent') {
     return
   }
-  // nonconcurrent: the project shares one port/database/stack, so any other live action must stop first.
+  // nonconcurrent (Conductor's run_mode): the same action can't run in two workspaces of the project
+  // at once (one fixed port, database or stack). Other actions keep running.
   const conflicting = listRunActionRuns().filter(
     (run) =>
       run.repoId === target.repoId &&
-      (run.status === 'running' || run.status === 'stopping') &&
-      !(run.worktreeId === target.worktreeId && run.actionId === action.id)
+      run.actionId === action.id &&
+      run.worktreeId !== target.worktreeId &&
+      (run.status === 'running' || run.status === 'stopping')
   )
   await Promise.all(conflicting.map((run) => stopRunAction(run.worktreeId, run.actionId)))
 }

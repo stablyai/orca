@@ -3,21 +3,20 @@
 //                        [--agent claude|codex --prompt <text>] [--json]
 //   --on cloud:<project>  uses an Orca Cloud project's repo and environment defaults.
 // It creates an Orca Cloud workspace through the public API with the same credentials as
-// `orca cloud …`, so it works on a desktop and inside a VM (no Orca runtime involved).
+// `orca cloud …`, so it works on a desktop and inside a sandbox (no Orca runtime involved).
 import { runProcessSync } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import type { HandlerContext } from '../dispatch'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError } from '../runtime/types'
-import { formatCloudWorkspace, printCloudResult } from './cloud-format'
+import { cloudWorkspaceStateLabel, formatCloudWorkspace, printCloudResult } from './cloud-format'
 import { cloudProgress, readCloudProgressMode } from './cloud-progress'
 import {
   CLOUD_AGENTS,
   cloudClient,
   createCloudWorkspace,
   defaultCloudHandlerDeps,
-  getSizeFlag,
   isCloudAgent,
   normalizeCloudRepoUrl,
   resolveCloudProjectId,
@@ -33,7 +32,6 @@ const SUPPORTED = new Set([
   'name',
   'repo',
   'base-branch',
-  'size',
   'agent',
   'prompt',
   'env',
@@ -137,7 +135,7 @@ export async function createWorktreeOnCloud(
   if (unsupported.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `--${unsupported[0]} doesn't apply to --on cloud. Supported: --name, --repo, --base-branch, --env, --size, --agent/--prompt.`,
+      `--${unsupported[0]} doesn't apply to --on cloud. Supported: --name, --repo, --base-branch, --env, --agent/--prompt.`,
       { field: unsupported[0] }
     )
   }
@@ -157,7 +155,6 @@ export async function createWorktreeOnCloud(
   }
   const progress = readCloudProgressMode(flags, json)
   const deps = getDeps()
-  const machineSize = getSizeFlag(flags)
   const ref = getOptionalStringFlag(flags, 'base-branch')
   const repo = target.project ? null : resolveCloudRepo(flags, cwd, deps.originUrl)
   if (ref && !repo && !target.project) {
@@ -184,21 +181,20 @@ export async function createWorktreeOnCloud(
     ...(environment ? { environment } : {}),
     ...(target.project ? { projectId: await resolveCloudProjectId(api, target.project) } : {}),
     ...(repo ? { repo: { url: repo.url, ...(ref ? { ref } : {}) } } : {}),
-    ...(machineSize ? { machineSize } : {}),
     ...(prompt && agent ? { message: { text: prompt, agent } } : {})
   }
   const progressLines = cloudProgress(progress)
   progressLines.phase(
     'create',
-    `Creating an Orca Cloud workspace${repo ? ` from ${repo.url}` : ''}...`
+    `Starting your cloud workspace${repo ? ` from ${repo.url}` : ''}...`
   )
   const created = await progressLines.track(
     createCloudWorkspace(api, input, deps.now),
-    (s) => `Still starting (${s}s). This is taking longer than usual; your files are safe.`
+    (s) => `Still starting (${s}s). This is taking longer than usual.`
   )
   progressLines.phase(
     'ready',
-    `Workspace ${created.workspace.id} is ${created.workspace.status} (took ${progressLines.elapsedSeconds()}s).`,
+    `Workspace ${created.workspace.id} is ${cloudWorkspaceStateLabel(created.workspace).toLowerCase()} (took ${progressLines.elapsedSeconds()}s).`,
     { workspaceId: created.workspace.id }
   )
   printCloudResult(
@@ -224,7 +220,7 @@ export async function maybeCreateWorktreeOnCloud(
   context: Pick<HandlerContext, 'flags' | 'cwd' | 'json'>
 ): Promise<boolean> {
   const { flags } = context
-  if (!flags.has('on') && !flags.has('env') && !flags.has('size') && !flags.has('progress')) {
+  if (!flags.has('on') && !flags.has('env') && !flags.has('progress')) {
     return false
   }
   if (!readCloudOnTarget(flags)) {
@@ -232,7 +228,7 @@ export async function maybeCreateWorktreeOnCloud(
       'invalid_argument',
       flags.has('on')
         ? '--on supports `cloud` or `cloud:<project>` in this build.'
-        : '--env, --size and --progress apply to `--on cloud`.',
+        : '--env and --progress apply to `--on cloud`.',
       { field: flags.has('on') ? 'on' : 'env' }
     )
   }

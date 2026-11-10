@@ -69,6 +69,13 @@ function canManage(caller: SandboxCaller, row: SandboxRow): boolean {
   return row.account_id === caller.accountId && (row.user_id === caller.userId || isOrgAdmin(caller))
 }
 
+/** Owner or a team admin; anyone else gets forbidden (or not_found when they can't see it). */
+export function assertCanManageWorkspace(caller: SandboxCaller, row: SandboxRow): void {
+  if (!canManage(caller, row)) {
+    throw new WorkspaceError(canSee(caller, row) ? 'forbidden' : 'not_found', 'owner_or_admin_only')
+  }
+}
+
 /** A row the caller may address by id; anything else is indistinguishable from a missing one. */
 export async function requireVisible(db: D1Database, caller: SandboxCaller, id: string): Promise<SandboxRow> {
   const row = await getSandbox(db, id)
@@ -285,6 +292,9 @@ export async function patchWorkspace(
   } else if (!canManage(caller, row)) {
     throw new WorkspaceError(canSee(caller, row) ? 'forbidden' : 'not_found', 'owner_or_admin_only')
   }
+  if (patch.archived === true) {
+    throw new WorkspaceError('invalid_request', 'archive_via_lifecycle')
+  }
   if (patch.visibility === 'team' && !row.account_id.includes('org:')) {
     // A personal account has no team to share with.
     throw new WorkspaceError('invalid_request', 'personal_account')
@@ -303,7 +313,9 @@ export async function patchWorkspace(
     ...(patch.branch !== undefined ? { repo_branch: patch.branch } : {}),
     ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
     ...(patch.section !== undefined ? { section: patch.section } : {}),
-    ...(patch.archived !== undefined ? { archived_at: patch.archived ? (row.archived_at ?? now) : null } : {}),
+    // Archiving is a lifecycle change (archiveSandbox stops the VM, then sets archived_at); this edit
+    // can only clear a label left by an older label-only archive.
+    ...(patch.archived === false ? { archived_at: null } : {}),
     ...(patch.ownerUserId !== undefined ? { user_id: patch.ownerUserId } : {}),
     ...(patch.tokenUsdMicros !== undefined ? { token_usd_micros: patch.tokenUsdMicros } : {})
   })

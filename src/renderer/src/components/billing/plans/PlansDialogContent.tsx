@@ -30,10 +30,12 @@ export function PlansDialogContent(
           : 'top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-4xl [@media(max-height:800px)]:top-4 [@media(max-height:800px)]:max-h-[calc(100vh-2rem)]'
       }
       onOpenAutoFocus={(event) => {
-        // The dialog itself first; PlansView moves focus to the primary action once plans load.
+        // The heading, not the first button: Enter on "Continue" would start a monthly Checkout,
+        // and Tab from here reaches the interval toggle before the plan cards.
         event.preventDefault()
         if (event.currentTarget instanceof HTMLElement) {
-          event.currentTarget.focus()
+          const heading = event.currentTarget.querySelector<HTMLElement>('[data-plans-heading]')
+          ;(heading ?? event.currentTarget).focus()
         }
       }}
     >
@@ -41,7 +43,7 @@ export function PlansDialogContent(
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {t('auto.components.billing.plans.eyebrow', 'Orca Cloud')}
         </p>
-        <DialogTitle size="display">
+        <DialogTitle size="display" tabIndex={-1} data-plans-heading="">
           {checkout
             ? checkoutState === 'paid'
               ? t('auto.components.billing.checkout.titlePaid', 'Welcome to Orca Cloud')

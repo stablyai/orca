@@ -129,11 +129,11 @@ scripts:
 - Ids may use letters, numbers, spaces, dots, underscores, and hyphens. Hyphens show as spaces when `name` is omitted.
 - `cwd` is relative to the worktree. Absolute paths and `..` are ignored.
 - **Stop** sends an interrupt (Ctrl+C). If the command is still running after 5 seconds, Orca closes its terminal, which ends every process the shell started. **Restart** stops the action and starts it again in a fresh terminal.
-- `runMode: concurrent` lets the same action run in several worktrees at once. `nonconcurrent` stops every other running action of the project first; use it when worktrees share one fixed port, database, or container stack. An action's own `runMode` overrides the project setting.
+- `runMode: concurrent` lets the same action run in several worktrees at once. `nonconcurrent` first stops that action in the project's other worktrees (the project's other actions keep running); use it when worktrees share one fixed port, database, or container stack. An action's own `runMode` overrides the project setting.
 - `autoRunAfterSetup` starts the action once the Setup terminal's script succeeds.
 - Shared `orca.yaml` actions go through the same approval prompt as setup scripts. Actions imported into local settings are treated as your own.
 
-Every terminal in a worktree gets a stable block of 10 ports: `ORCA_PORT` through `ORCA_PORT+9` (`ORCA_PORT_COUNT` is `10`). Two worktrees on the same host never share a block, so the same dev server can run in each without port collisions. `CONDUCTOR_PORT` is set to the same value, so imported Conductor scripts work unchanged. Ports a run opens appear in the Run menu and the **Ports** panel.
+Every terminal in a worktree gets a stable block of 10 ports: `ORCA_PORT` through `ORCA_PORT+9` (`ORCA_PORT_COUNT` is `10`). Two worktrees on the same host never share a block (when a host launcher already sets `ORCA_PORT`, the first workspace keeps that block), so the same dev server can run in each without port collisions. `CONDUCTOR_PORT` is set to the same value, so imported Conductor scripts work unchanged. Ports a run opens appear in the Run menu and the **Ports** panel.
 
 ### Terminal defaults and issue commands
 

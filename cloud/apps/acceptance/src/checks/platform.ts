@@ -5,7 +5,8 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SignJWT } from 'jose'
-import { control } from '../clients'
+import { control, vercelRest } from '../clients'
+import { d1Control } from './billing'
 import { config, secrets } from '../env'
 import { log, type Check, type Ctx } from '../context'
 import { orca } from '../orca-cli'
@@ -117,6 +118,24 @@ function openGrant(sealed: any, grantId: string, pair: ReturnType<typeof x25519P
   d.setAAD(Buffer.from(`orca-cloud-grant-v1:${grantId}`))
   d.setAuthTag(ct.subarray(ct.length - 16))
   return JSON.parse(Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()]).toString('utf8'))
+}
+
+/** Opens a read snapshot (src/shared/cloud-workspaces/read-snapshot.ts construction) with node:crypto. */
+function openReadSnapshot(s: any, pair: ReturnType<typeof x25519Pair>): any {
+  const aesOpen = (key: Buffer, nonceB64: string, ctB64: string, aad: string) => {
+    const ct = Buffer.from(ctB64, 'base64')
+    const d = createDecipheriv('aes-256-gcm', key, Buffer.from(nonceB64, 'base64'))
+    d.setAAD(Buffer.from(aad))
+    d.setAuthTag(ct.subarray(ct.length - 16))
+    return Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()])
+  }
+  const r = s.recipient
+  const eph = Buffer.from(r.ephemeralPublicKeyB64, 'base64')
+  const ephKey = createPublicKey({ key: { kty: 'OKP', crv: 'X25519', x: eph.toString('base64url') }, format: 'jwk' })
+  const shared = diffieHellman({ privateKey: pair.privateKey, publicKey: ephKey })
+  const kek = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([eph, pair.publicRaw]), Buffer.from('orca-cloud-read-wrap-v1'), 32))
+  const dek = aesOpen(kek, r.nonceB64, r.wrappedKeyB64, `orca-cloud-read-wrap-v1:${s.workspaceId}:${s.snapshotId}:${r.keyId}`)
+  return JSON.parse(aesOpen(dek, s.nonceB64, s.ciphertextB64, `orca-cloud-read-v1:${s.workspaceId}:${s.snapshotId}`).toString('utf8'))
 }
 
 let teamWs: Promise<{ shared: string; priv: string }> | null = null
@@ -340,6 +359,170 @@ export const platformChecks: Record<string, Check> = {
     return { status: ok ? 'pass' : 'fail', detail: `cost in list: compute ${w?.cost?.computeMs} ms, $${((w?.cost?.totalUsdMicros ?? 0) / 1e6).toFixed(4)}` }
   },
 
+
+  'life.read-asleep': async (ctx) => {
+    // Gap 5: a teammate's device reads a SLEEPING team workspace (git state, agents, chats) without
+    // waking it; end-to-end encrypted to the device's X25519 reader key. Also checks that an outsider
+    // is refused and that the control-plane DB holds no plaintext (a marker file name never appears).
+    const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
+    const marker = `w9readmarker${tag}`
+    const pair = x25519Pair()
+    const reg = await control.as(ctx.member, 'PUT', '/v1/reader-keys', { publicKeyB64: pair.publicRaw.toString('base64'), deviceLabel: 'w9 reader', deviceKind: 'desktop' })
+    const keyId = reg.body?.key?.id ?? reg.body?.readerKey?.id ?? reg.body?.id
+    if (!keyId) {
+      return { status: 'fail', detail: `reader key ${reg.status} ${JSON.stringify(reg.body).slice(0, 200)}` }
+    }
+    const box = await ctx.sandboxes.create(ctx.owner, { workspaceId: `w9-read-${tag}`, title: 'W9 read asleep', visibility: 'team', repo: { url: config.testRepo }, useEnvironment: false })
+    try {
+      if (box.status !== 200) {
+        return { status: 'fail', detail: `create ${box.status} ${JSON.stringify(box.body).slice(0, 200)}` }
+      }
+      const id = box.body.sandbox.id
+      await ctx.exec(box.body.sandbox.session!.id, `cd ${box.body.connection.projectRoot} && echo hi > ${marker}.txt`)
+      const sus = await ctx.sandboxes.suspend(id)
+      const provider = async () => (await vercelRest('GET', `/v2/sandboxes/orca-dev-${id}`, { projectId: config.vercelProjectId })).json
+      const before = await provider()
+      const samples: number[] = []
+      let payload: any = null
+      let err = ''
+      for (let i = 0; i < 20; i++) {
+        const t0 = performance.now()
+        const r = await control.as(ctx.member, 'GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`)
+        const s = r.body?.snapshot
+        if (!s) {
+          err = `${r.status} ${JSON.stringify(r.body).slice(0, 160)}`
+          break
+        }
+        payload = openReadSnapshot(s, pair)
+        samples.push(Math.round(performance.now() - t0))
+      }
+      const after = await provider()
+      const stillStopped = !['running', 'pending'].includes(after?.session?.status ?? after?.sandbox?.status ?? '')
+      const outsider = await control.as(ctx.outsider, 'GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`)
+      const text = JSON.stringify(payload ?? '')
+      const sawMarker = text.includes(marker)
+      const dbRows = d1Control(`SELECT COUNT(*) AS n FROM read_snapshots WHERE sandbox_id = '${id}' AND (ciphertext LIKE '%${marker}%')`)
+      const plaintextInDb = Number(dbRows[0]?.n ?? 0) > 0
+      if (samples.length) {
+        ctx.run.bench('read.asleep', samples, 'teammate fetch + decrypt of a sleeping workspace snapshot, from this Mac')
+      }
+      const sorted = [...samples].sort((a, b) => a - b)
+      const ok = sus.status === 200 && samples.length === 20 && payload?.workspaceId === id && sawMarker && stillStopped && outsider.status >= 400 && !plaintextInDb
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: err
+          ? `read-snapshot: ${err}`
+          : `teammate decrypted the sleeping workspace's snapshot (sections: ${Object.keys(payload ?? {}).join(', ')}; git shows the new file: ${sawMarker}); 20 reads p50 ${sorted[9]} ms, max ${sorted.at(-1)} ms; Vercel session ${before?.session?.status ?? before?.sandbox?.status} -> ${after?.session?.status ?? after?.sandbox?.status} (no wake: ${stillStopped}); outsider -> ${outsider.status}; plaintext marker in D1: ${plaintextInDb}`,
+        ...(sorted.length ? { timingsMs: { readP50: sorted[9]!, readMax: sorted.at(-1)! } } : {})
+      }
+    } finally {
+      await control.as(ctx.member, 'DELETE', `/v1/reader-keys/${keyId}`)
+      if (box.status === 200) {
+        await ctx.sandboxes.destroy(box.body.sandbox.id)
+      }
+    }
+  },
+
+  'life.read-asleep-access': async (ctx) => {
+    // Access control for reading a sleeping workspace, triggered by W9 itself on dev: the operator
+    // member-removed route (what auth calls) revokes a member at once; making the workspace private
+    // prunes the other teammate. Checks the API answer and the wrapped keys left in D1.
+    const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
+    const org = `w9-rm-${tag}`
+    const owner = { sub: `w9-rm-owner-${tag}`, org, orgRole: 'owner' as const }
+    const m1 = { sub: `w9-rm-m1-${tag}`, org, orgRole: 'member' as const }
+    const m2 = { sub: `w9-rm-m2-${tag}`, org, orgRole: 'member' as const }
+    const k1 = x25519Pair()
+    const k2 = x25519Pair()
+    const reg = async (who: typeof m1, k: ReturnType<typeof x25519Pair>) => {
+      const r = await control.as(who, 'PUT', '/v1/reader-keys', { publicKeyB64: k.publicRaw.toString('base64'), deviceLabel: 'w9', deviceKind: 'desktop' })
+      return (r.body?.key?.id ?? r.body?.readerKey?.id ?? r.body?.id) as string
+    }
+    const id1 = await reg(m1, k1)
+    const id2 = await reg(m2, k2)
+    const box = await ctx.sandboxes.create(owner, { workspaceId: `w9-rm-${tag}`, title: 'W9 access', visibility: 'team', useEnvironment: false })
+    try {
+      if (box.status !== 200 || !id1 || !id2) {
+        return { status: 'fail', detail: `setup: create ${box.status}, keys ${id1}/${id2}` }
+      }
+      const id = box.body.sandbox.id
+      await ctx.sandboxes.suspend(id)
+      const read = async (who: typeof m1, keyId: string, token?: string) =>
+        token ? control.raw('GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`, token) : control.as(who, 'GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`)
+      const wrappedFor = (keyId: string) => Number(d1Control(`SELECT COUNT(*) AS n FROM read_snapshot_keys WHERE key_id = '${keyId}'`)[0]?.n ?? 0)
+      const before1 = (await read(m1, id1)).status
+      const before2 = (await read(m2, id2)).status
+      const m1Token = await sandboxToken(m1) // minted before the removal, like a device's live token
+      const wrapped1Before = wrappedFor(id1)
+      const removed = await control.operator('POST', '/v1/internal/members/removed', { accountId: `dev:org:${org}`, userId: m1.sub })
+      const after1Old = (await read(m1, id1, m1Token)).status
+      const after1New = (await read(m1, id1)).status
+      const wrapped1After = wrappedFor(id1)
+      const after2 = (await read(m2, id2)).status
+      // Private: only the owner may read; the remaining teammate is pruned at once.
+      const priv = await control.as(owner, 'PATCH', `/v1/team/workspaces/${id}`, { visibility: 'private' })
+      const after2Private = (await read(m2, id2)).status
+      const wrapped2After = wrappedFor(id2)
+      const ok =
+        before1 === 200 && before2 === 200 && wrapped1Before > 0 && removed.status === 200 && after1Old === 401 && after1New >= 400 &&
+        wrapped1After === 0 && after2 === 200 && priv.status === 200 && after2Private >= 400 && wrapped2After === 0
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `team workspace asleep: m1 ${before1}, m2 ${before2}; operator members/removed(m1) -> ${removed.status} ${JSON.stringify(removed.body).slice(0, 80)}; m1 with pre-removal token -> ${after1Old}, fresh token -> ${after1New}; m1 wrapped keys ${wrapped1Before} -> ${wrapped1After}; m2 still reads -> ${after2}; made private (${priv.status}) -> m2 ${after2Private}, m2 wrapped keys -> ${wrapped2After}`
+      }
+    } finally {
+      await control.as(m1, 'DELETE', `/v1/reader-keys/${id1}`).catch(() => null)
+      await control.as(m2, 'DELETE', `/v1/reader-keys/${id2}`).catch(() => null)
+      if (box.status === 200) {
+        await ctx.sandboxes.destroy(box.body.sandbox.id)
+      }
+    }
+  },
+
+  'life.read-asleep-phone': async (ctx) => {
+    // The phone's path, headless: a device session (Ed25519, like the app enrolls), a mobile reader
+    // key registered WITH the device token, then the sleeping workspace's snapshot fetched with the
+    // device token and decrypted. The phone UI rendering is a separate simulator run.
+    const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+    const pub = Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64')
+    const enroll = await control.as(ctx.owner, 'POST', '/v1/device-sessions', { label: 'w9 phone', platform: 'ios', publicKeyB64: pub.toString('base64') })
+    const ds = enroll.body?.deviceSession?.id
+    if (!ds) {
+      return { status: 'fail', detail: `enroll ${enroll.status} ${JSON.stringify(enroll.body).slice(0, 160)}` }
+    }
+    const deviceToken = async () =>
+      new SignJWT({}).setProtectedHeader({ alg: 'EdDSA', kid: ds }).setIssuer('orca-device').setSubject(ds).setAudience('orca-sandbox').setIssuedAt().setExpirationTime('4m').sign(createPrivateKey(privateKey.export({ format: 'pem', type: 'pkcs8' })))
+    const pair = x25519Pair()
+    const reg = await control.raw('PUT', '/v1/reader-keys', await deviceToken(), { publicKeyB64: pair.publicRaw.toString('base64'), deviceLabel: 'w9 phone', deviceKind: 'mobile' })
+    const keyId = (reg.body?.key?.id ?? reg.body?.readerKey?.id ?? reg.body?.id) as string | undefined
+    const box = await ctx.sandboxes.create(ctx.owner, { workspaceId: `w9-phone-${tag}`, title: 'W9 phone read', visibility: 'private', useEnvironment: false })
+    try {
+      if (!keyId || box.status !== 200) {
+        return { status: 'fail', detail: `reader key ${reg.status} ${JSON.stringify(reg.body).slice(0, 120)}; create ${box.status}` }
+      }
+      const id = box.body.sandbox.id
+      await ctx.sandboxes.suspend(id)
+      const t0 = performance.now()
+      const r = await control.raw('GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`, await deviceToken())
+      const payload = r.body?.snapshot ? openReadSnapshot(r.body.snapshot, pair) : null
+      const ms = Math.round(performance.now() - t0)
+      const after = (await vercelRest('GET', `/v2/sandboxes/orca-dev-${id}`, { projectId: config.vercelProjectId })).json
+      const stopped = !['running', 'pending'].includes(after?.session?.status ?? after?.sandbox?.status ?? '')
+      await control.as(ctx.owner, 'DELETE', `/v1/device-sessions/${ds}`)
+      const revoked = await control.raw('GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`, await deviceToken())
+      const ok = reg.status < 300 && payload?.workspaceId === id && stopped && revoked.status >= 400
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `phone path headless: device session ${enroll.status}; mobile reader key registered with the device token -> ${reg.status}; private sleeping workspace read with the device token + decrypted in ${ms} ms (sections ${Object.keys(payload ?? {}).join(', ')}); no wake=${stopped}; after unpairing the phone -> ${revoked.status}. The phone UI ("Latest from this workspace") is the simulator run.`,
+        timingsMs: { phoneRead: ms }
+      }
+    } finally {
+      if (box.status === 200) {
+        await ctx.sandboxes.destroy(box.body.sandbox.id)
+      }
+    }
+  },
   // ---------------- W5 ----------------
   'api.rest': async (ctx) => {
     const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-api-${tag(ctx)}`, repo: { url: config.testRepo } })

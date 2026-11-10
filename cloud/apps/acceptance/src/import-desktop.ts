@@ -27,7 +27,11 @@ const MAP: Record<string, string> = {
   'life.auto-resume': 'life.auto-resume',
   'acc.download': 'acc.download',
   'acc.remote-desktop': 'acc.remote-desktop',
-  'local.core-workflow': 'local.core-workflow'
+  'local.core-workflow': 'local.core-workflow',
+  'local.run-actions': 'local.run-actions',
+  'run.ports': 'run.ports',
+  'run.nonconcurrent': 'run.nonconcurrent',
+  'run.cloud-resume': 'run.cloud-resume'
 }
 const checks: CheckResult[] = []
 const benchmarks: RunFile['benchmarks'] = []

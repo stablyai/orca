@@ -24,7 +24,8 @@ import {
 const TRANSITIONAL: ReadonlySet<CloudWorkspace['status']> = new Set([
   'creating',
   'waking',
-  'stopping'
+  'stopping',
+  'deleting'
 ])
 
 export const cloudWorkspacesQueryKey = (sessionId: string | null) =>
