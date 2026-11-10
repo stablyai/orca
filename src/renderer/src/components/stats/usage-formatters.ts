@@ -20,11 +20,15 @@ export function formatTokens(value: number, intlLocale: string = getIntlLocale()
   return value.toLocaleString(intlLocale)
 }
 
-export function formatCost(value: number | null): string {
+export function formatCost(
+  value: number | null,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (value === null) {
-    return translate('stats.usage.format.notAvailable', 'n/a')
+    return t('stats.usage.format.notAvailable', 'n/a')
   }
-  const locale = getIntlLocale()
+  const locale = intlLocale
   if (locale.startsWith('ru')) {
     const digits = value < 0.01 ? 4 : 2
     return new Intl.NumberFormat(locale, {

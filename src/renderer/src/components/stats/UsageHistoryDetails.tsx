@@ -8,7 +8,8 @@ import {
   type UsageHistoryGroup
 } from './usage-history-model'
 import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { usageHistoryAccountLabel } from './usage-history-accounts'
 import { USAGE_PROVIDER_COLORS } from './usage-history-chart-model'
 import { getAgentLabel } from '@/lib/agent-catalog'
@@ -24,17 +25,19 @@ function HistoryTotalsList({
   rows: UsageHistoryGroup[]
   onSelect: (value: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const totalTokens = rows.reduce((sum, row) => sum + row.totalTokens, 0)
   return (
     <section className="min-w-0 rounded-lg border border-border bg-card p-4">
       <h4 className="text-sm font-medium text-foreground">{title}</h4>
       <p className="mb-3 mt-1 text-xs text-muted-foreground">
-        {translate('stats.usage.breakdown.share', 'Share of selected tokens')}
+        {t('stats.usage.breakdown.share', 'Share of selected tokens')}
       </p>
-      <div className="max-h-64 space-y-1 overflow-y-auto scrollbar-sleek">
+      <div className="max-h-80 space-y-2 overflow-y-auto scrollbar-sleek">
         {rows.map((row) => {
           const share = totalTokens > 0 ? (row.totalTokens / totalTokens) * 100 : 0
-          const shareLabel = `${share.toLocaleString(getIntlLocale(), { maximumFractionDigits: 1 })}%`
+          const shareLabel = `${share.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%`
           const providers = new Map<string, { tokens: number; color: string }>()
           for (const entry of row.rows) {
             const provider = providers.get(entry.provider) ?? {
@@ -52,15 +55,15 @@ function HistoryTotalsList({
               onClick={() => onSelect(row.key)}
               className="h-auto w-full flex-col items-stretch"
             >
-              <span className="flex items-start justify-between gap-3">
-                <span className="min-w-0 flex-1 break-all whitespace-normal text-left text-xs">
+              <span className="flex flex-col items-stretch gap-2 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4">
+                <span className="min-w-0 flex-1 break-words whitespace-normal text-left text-sm">
                   {row.label}
                 </span>
-                <span className="shrink-0 text-right text-xs tabular-nums">
-                  {formatUsageTokens(row.totalTokens)}
-                  <span className="ml-2 text-muted-foreground">{shareLabel}</span>
-                  <span className="block text-muted-foreground">
-                    {formatUsageCost(row.apiEquivalentCostUsd)}
+                <span className="grid shrink-0 grid-cols-3 gap-3 text-right text-xs tabular-nums @lg:w-72">
+                  <span>{formatUsageTokens(row.totalTokens, intlLocale)}</span>
+                  <span className="text-muted-foreground">{shareLabel}</span>
+                  <span className="text-muted-foreground">
+                    {formatUsageCost(row.apiEquivalentCostUsd, t, intlLocale)}
                     {row.hasPartialCost ? ' *' : ''}
                   </span>
                 </span>
@@ -107,24 +110,25 @@ export function UsageHistoryBreakdowns({
   onAccount: (account: string) => void
   accountLabels: ReadonlyMap<string, string>
 }): React.JSX.Element {
-  const unknown = translate('stats.usage.unknown', 'Unknown')
+  const t = useTranslate()
+  const unknown = t('stats.usage.unknown', 'Unknown')
   return (
-    <div className="grid gap-3 @xl:grid-cols-3">
+    <div className="space-y-4">
       <HistoryTotalsList
-        title={translate('stats.usage.accounts.title', 'By account · tokens / API estimate')}
+        title={t('stats.usage.accounts.title', 'By account · tokens / API estimate')}
         rows={groupUsageHistory(rows, 'account', unknown).map((group) => ({
           ...group,
-          label: group.rows[0] ? usageHistoryAccountLabel(group.rows[0], accountLabels) : unknown
+          label: group.rows[0] ? usageHistoryAccountLabel(group.rows[0], accountLabels, t) : unknown
         }))}
         onSelect={onAccount}
       />
       <HistoryTotalsList
-        title={translate('stats.usage.models.title', 'By model · tokens / API estimate')}
+        title={t('stats.usage.models.title', 'By model · tokens / API estimate')}
         rows={groupUsageHistory(rows, 'model', unknown)}
         onSelect={onModel}
       />
       <HistoryTotalsList
-        title={translate('stats.usage.projects.title', 'By project · tokens / API estimate')}
+        title={t('stats.usage.projects.title', 'By project · tokens / API estimate')}
         rows={groupUsageHistory(rows, 'project', unknown)}
         onSelect={onProject}
       />
@@ -139,12 +143,13 @@ export function UsageHistorySessions({
   rows: readonly UsageHistoryRow[]
   accountLabels: ReadonlyMap<string, string>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [limit, setLimit] = useState(20)
-  const unknown = translate('stats.usage.unknown', 'Unknown')
+  const unknown = t('stats.usage.unknown', 'Unknown')
   const groups = groupUsageHistory(
     rows,
     'session',
-    translate('stats.usage.session.unavailable', 'Session attribution unavailable')
+    t('stats.usage.session.unavailable', 'Session attribution unavailable')
   )
   const sessions = groups
     .map((group) => {
@@ -159,17 +164,17 @@ export function UsageHistorySessions({
         provider: group.rows[0]?.provider,
         accountLabel:
           accounts.size === 1 && first
-            ? `${first.accountId ? '' : `${getAgentLabel(first.provider)} · `}${usageHistoryAccountLabel(first, accountLabels)}`
-            : translate('stats.usage.account.multiple', 'Multiple accounts'),
+            ? `${first.accountId ? '' : `${getAgentLabel(first.provider)} · `}${usageHistoryAccountLabel(first, accountLabels, t)}`
+            : t('stats.usage.account.multiple', 'Multiple accounts'),
         lastActiveAt: days.at(-1) ?? '',
         projectLabel:
           projects.size === 1
             ? (group.rows[0]?.projectLabel ?? unknown)
-            : translate('stats.usage.session.multipleProjects', 'Multiple projects'),
+            : t('stats.usage.session.multipleProjects', 'Multiple projects'),
         model:
           models.size === 1
             ? (group.rows[0]?.model ?? unknown)
-            : translate('stats.usage.session.multipleModels', 'Multiple models'),
+            : t('stats.usage.session.multipleModels', 'Multiple models'),
         inputTokens: group.newInputTokens + group.cacheReadTokens + group.cacheWriteTokens,
         outputTokens: group.outputTokens,
         group
@@ -179,19 +184,19 @@ export function UsageHistorySessions({
   return (
     <div className="space-y-2">
       <UsageRecentSessionsTable
-        title={translate('stats.usage.session.title', 'Session drilldown')}
-        description={translate(
+        title={t('stats.usage.session.title', 'Session drilldown')}
+        description={t(
           'stats.usage.session.description',
           'Tokens match the selected period, account, provider, model, project and day. Select the last recorded day to inspect a session.'
         )}
         headings={[
-          translate('stats.usage.session.lastDay', 'Last recorded day'),
-          translate('stats.usage.filter.project', 'Project'),
-          translate('stats.usage.filter.model', 'Model'),
-          translate('stats.usage.session.activity', 'Events / turns'),
-          translate('stats.usage.session.input', 'All input'),
-          translate('stats.usage.session.output', 'Output'),
-          translate('stats.usage.tokens', 'Tokens')
+          t('stats.usage.session.lastDay', 'Last recorded day'),
+          t('stats.usage.filter.project', 'Project'),
+          t('stats.usage.filter.model', 'Model'),
+          t('stats.usage.session.activity', 'Events / turns'),
+          t('stats.usage.session.input', 'All input'),
+          t('stats.usage.session.output', 'Output'),
+          t('stats.usage.tokens', 'Tokens')
         ]}
         unknownModel={unknown}
         rows={sessions.slice(0, limit)}
@@ -205,7 +210,7 @@ export function UsageHistorySessions({
       />
       {sessions.length > limit ? (
         <Button variant="outline" size="sm" onClick={() => setLimit((current) => current + 20)}>
-          {translate('stats.usage.session.showMore', 'Show more sessions')}
+          {t('stats.usage.session.showMore', 'Show more sessions')}
         </Button>
       ) : null}
     </div>

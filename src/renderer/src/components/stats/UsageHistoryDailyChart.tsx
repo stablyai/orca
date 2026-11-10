@@ -1,4 +1,6 @@
-import { useMemo, useState, type KeyboardEvent } from 'react'
+import { HoverCard, HoverCardTrigger } from '../ui/hover-card'
+import { UsageHistoryDayHoverCard } from './UsageHistoryDayHoverCard'
+import { useId, useMemo, useState, type KeyboardEvent } from 'react'
 import { area as svgArea, curveMonotoneX, line as svgLine } from 'd3-shape'
 import type { UsageHistoryRange, UsageHistoryRow } from '../../../../shared/usage-history-types'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
@@ -11,7 +13,7 @@ import {
 } from './usage-history-chart-model'
 import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { formatUsageDayLabel } from './usage-formatters'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog'
 
 export function UsageHistoryDailyChart({
@@ -27,6 +29,11 @@ export function UsageHistoryDailyChart({
   onDay: (day: string) => void
   today?: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const [chartBoundary, setChartBoundary] = useState<HTMLElement | null>(null)
+  const readoutId = useId()
+  const [hoverOffset, setHoverOffset] = useState(0)
   const [metric, setMetric] = useState<'tokens' | 'cost'>('tokens')
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
   const [focusedDay, setFocusedDay] = useState<string | null>(null)
@@ -54,11 +61,6 @@ export function UsageHistoryDailyChart({
     .y1((point) => y(point.amount ?? 0))
     .curve(curveMonotoneX)
   const hoveredIndex = days.findIndex((day) => day.day === activeDay)
-  const activeIndex = Math.max(
-    0,
-    hoveredIndex !== -1 ? hoveredIndex : days.findLastIndex((day) => day.usage !== null)
-  )
-  const active = days[activeIndex]
   const partialCost =
     metric === 'cost' &&
     days.some(
@@ -68,8 +70,8 @@ export function UsageHistoryDailyChart({
     metric === 'tokens'
       ? amount === null
         ? '—'
-        : formatUsageTokens(amount)
-      : formatUsageCost(amount)
+        : formatUsageTokens(amount, intlLocale)
+      : formatUsageCost(amount, t, intlLocale)
   const tickIndices = [
     ...new Set([
       0,
@@ -99,33 +101,34 @@ export function UsageHistoryDailyChart({
   }
   return (
     <section
+      ref={setChartBoundary}
       className="space-y-3 rounded-lg border border-border bg-card p-4"
       data-testid="usage-history-daily"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-medium text-foreground">
-          {translate('stats.usage.daily.title', 'Daily usage')}
+          {t('stats.usage.daily.title', 'Daily usage')}
         </h4>
         <SettingsSegmentedControl<'tokens' | 'cost'>
           value={metric}
           onChange={setMetric}
-          ariaLabel={translate('stats.usage.daily.metric', 'Chart metric')}
+          ariaLabel={t('stats.usage.daily.metric', 'Chart metric')}
           options={[
-            { value: 'tokens', label: translate('stats.usage.tokens', 'Tokens') },
-            { value: 'cost', label: translate('stats.usage.daily.cost', 'API estimate') }
+            { value: 'tokens', label: t('stats.usage.tokens', 'Tokens') },
+            { value: 'cost', label: t('stats.usage.daily.cost', 'API estimate') }
           ]}
           size="sm"
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'stats.usage.daily.description',
           'Select a day to inspect its usage. Days without recorded usage are shown at zero.'
         )}
       </p>
       <div
         className="flex flex-wrap gap-x-5 gap-y-2 text-xs"
-        aria-label={translate('stats.usage.daily.providers', 'Provider series')}
+        aria-label={t('stats.usage.daily.providers', 'Provider series')}
       >
         {series.map(({ provider }) => (
           <span key={provider} className="inline-flex items-center gap-2">
@@ -136,7 +139,7 @@ export function UsageHistoryDailyChart({
                 x2="20"
                 y2="4"
                 stroke={USAGE_PROVIDER_COLORS[provider].color}
-                strokeWidth="2"
+                strokeWidth="3"
               />
             </svg>
             {getAgentLabel(provider)}
@@ -192,7 +195,7 @@ export function UsageHistoryDailyChart({
                               d={lineCurve(segment) ?? undefined}
                               fill="none"
                               stroke={color}
-                              strokeWidth="2"
+                              strokeWidth="3"
                               vectorEffect="non-scaling-stroke"
                               strokeLinejoin="round"
                               strokeLinecap="round"
@@ -218,8 +221,8 @@ export function UsageHistoryDailyChart({
               ))}
               {hoveredIndex !== -1 ? (
                 <line
-                  x1={x(activeIndex)}
-                  x2={x(activeIndex)}
+                  x1={x(hoveredIndex)}
+                  x2={x(hoveredIndex)}
                   y1="8"
                   y2="192"
                   className="stroke-muted-foreground"
@@ -229,37 +232,72 @@ export function UsageHistoryDailyChart({
             </svg>
             <div className="absolute inset-0 flex">
               {days.map(({ day, usage }) => (
-                <button
+                <HoverCard
                   key={day}
-                  type="button"
-                  onClick={() => onDay(day)}
-                  onMouseEnter={() => setHoveredDay(day)}
-                  onFocus={(event) => {
-                    if (event.currentTarget.matches(':focus-visible')) {
-                      setHoveredDay(null)
-                      setFocusedDay(day)
+                  open={activeDay === day}
+                  openDelay={0}
+                  closeDelay={0}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setHoveredDay((current) => (current === day ? null : current))
+                      setFocusedDay((current) => (current === day ? null : current))
                     }
                   }}
-                  onBlur={() => setFocusedDay(null)}
-                  onKeyDown={onDayKey}
-                  aria-pressed={selectedDay === day}
-                  aria-label={
-                    metric === 'tokens'
-                      ? translate('stats.usage.daily.inspect', '{{day}}: {{tokens}} tokens', {
-                          day,
-                          tokens: (usage?.totalTokens ?? 0).toLocaleString(getIntlLocale())
-                        })
-                      : translate(
-                          'stats.usage.daily.inspectCost',
-                          '{{day}}: {{cost}} API-equivalent estimate',
-                          {
-                            day,
-                            cost: `${formatUsageCost(usage ? usage.apiEquivalentCostUsd : 0)}${usage?.hasPartialCost ? ' *' : ''}`
-                          }
+                >
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHoveredDay(day)
+                        onDay(day)
+                      }}
+                      aria-describedby={activeDay === day ? readoutId : undefined}
+                      onMouseMove={(event) =>
+                        setHoverOffset(
+                          event.clientY - event.currentTarget.getBoundingClientRect().top
                         )
-                  }
-                  className="min-w-0 flex-1 rounded-sm outline-none hover:bg-accent/20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                />
+                      }
+                      onMouseEnter={() => setHoveredDay(day)}
+                      onFocus={(event) => {
+                        if (event.currentTarget.matches(':focus-visible')) {
+                          setHoveredDay(null)
+                          setFocusedDay(day)
+                        }
+                      }}
+                      onBlur={() => setFocusedDay(null)}
+                      onKeyDown={onDayKey}
+                      aria-pressed={selectedDay === day}
+                      aria-label={
+                        metric === 'tokens'
+                          ? t('stats.usage.daily.inspect', '{{day}}: {{tokens}} tokens', {
+                              day,
+                              tokens: (usage?.totalTokens ?? 0).toLocaleString(intlLocale)
+                            })
+                          : t(
+                              'stats.usage.daily.inspectCost',
+                              '{{day}}: {{cost}} API-equivalent estimate',
+                              {
+                                day,
+                                cost: `${formatUsageCost(usage ? usage.apiEquivalentCostUsd : 0, t, intlLocale)}${usage?.hasPartialCost ? ' *' : ''}`
+                              }
+                            )
+                      }
+                      className="min-w-0 flex-1 rounded-sm outline-none hover:bg-accent/20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    />
+                  </HoverCardTrigger>
+                  {activeDay === day ? (
+                    <UsageHistoryDayHoverCard
+                      boundary={chartBoundary}
+                      id={readoutId}
+                      day={day}
+                      usage={usage}
+                      series={series}
+                      dayIndex={days.findIndex((entry) => entry.day === day)}
+                      metric={metric}
+                      offset={hoveredDay ? hoverOffset : 0}
+                    />
+                  ) : null}
+                </HoverCard>
               ))}
             </div>
           </div>
@@ -269,56 +307,17 @@ export function UsageHistoryDailyChart({
           >
             {tickIndices.map((index) =>
               days[index] ? (
-                <span key={index}>{formatUsageDayLabel(days[index].day, range === 'all')}</span>
+                <span key={index}>
+                  {formatUsageDayLabel(days[index].day, range === 'all', intlLocale)}
+                </span>
               ) : null
             )}
           </div>
         </div>
       </div>
-      {active ? (
-        <div
-          className="space-y-2 rounded-md bg-muted/40 p-3 text-xs"
-          data-testid="usage-history-readout"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-medium">{formatUsageDayLabel(active.day, true)}</span>
-            <span className="tabular-nums">
-              {formatAmount(
-                metric === 'tokens'
-                  ? (active.usage?.totalTokens ?? 0)
-                  : active.usage
-                    ? active.usage.apiEquivalentCostUsd
-                    : 0
-              )}
-              {metric === 'cost' && active.usage?.hasPartialCost ? ' *' : ''}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-2 @sm:grid-cols-2 @3xl:grid-cols-4">
-            {series.map(({ provider, points }) => {
-              const point = points[activeIndex]
-              return (
-                <span key={provider} className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      className="size-2 rounded-full"
-                      style={{ backgroundColor: USAGE_PROVIDER_COLORS[provider].color }}
-                    />
-                    {getAgentLabel(provider)}
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {point?.amount === null
-                      ? translate('stats.usage.daily.unpriced', 'Price unavailable')
-                      : `${metric === 'tokens' ? (point?.amount ?? 0).toLocaleString(getIntlLocale()) : formatUsageCost(point?.amount ?? 0)}${metric === 'cost' && point?.usage?.hasPartialCost ? ' *' : ''}`}
-                  </span>
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
       {partialCost ? (
         <p role="status" className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'stats.usage.daily.partialCost',
             'Some usage has no recorded price. The chart shows the priced portion; * marks a partial estimate. This is not a billing statement.'
           )}

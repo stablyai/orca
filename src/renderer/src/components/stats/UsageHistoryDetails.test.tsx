@@ -60,7 +60,7 @@ it('paginates sessions by the latest recorded day even when snapshots arrive out
   expect(first.parentElement).toHaveTextContent('recent')
 })
 
-it('connects inactive provider days at zero and exposes exact hover and keyboard day values', () => {
+it('connects inactive provider days at zero and exposes exact hover and keyboard day values', async () => {
   const onDay = vi.fn()
   const rows = [
     row('codex-1', '2026-10-23'),
@@ -80,17 +80,18 @@ it('connects inactive provider days at zero and exposes exact hover and keyboard
   expect(
     view.container.querySelectorAll('[data-provider-series="codex"] path[fill="none"]')
   ).toHaveLength(1)
+  expect(screen.queryByTestId('usage-history-readout')).not.toBeInTheDocument()
   expect(view.container.querySelectorAll('[data-provider-series] ellipse')).toHaveLength(0)
   const day = screen.getByRole('button', { name: '2026-10-24: 330 tokens' })
   fireEvent.mouseEnter(day)
   expect(view.container.querySelectorAll('[data-provider-series] ellipse')).toHaveLength(2)
-  expect(screen.getByTestId('usage-history-readout')).toHaveTextContent('Claude')
-  expect(screen.getByTestId('usage-history-readout')).toHaveTextContent('330')
-  expect(screen.getByTestId('usage-history-readout')).toHaveTextContent('Codex0')
+  expect(await screen.findByTestId('usage-history-readout')).toHaveTextContent('Claude')
+  expect(await screen.findByTestId('usage-history-readout')).toHaveTextContent('330')
+  expect(await screen.findByTestId('usage-history-readout')).toHaveTextContent('Codex0')
   const inactive = screen.getByRole('button', { name: '2026-10-22: 0 tokens' })
   fireEvent.mouseEnter(inactive)
-  expect(screen.getByTestId('usage-history-readout')).toHaveTextContent('Claude0')
-  expect(screen.getByTestId('usage-history-readout')).toHaveTextContent('Codex0')
+  expect(await screen.findByTestId('usage-history-readout')).toHaveTextContent('Claude0')
+  expect(await screen.findByTestId('usage-history-readout')).toHaveTextContent('Codex0')
   fireEvent.mouseLeave(screen.getByTestId('usage-history-plot'))
   expect(view.container.querySelectorAll('[data-provider-series] ellipse')).toHaveLength(0)
   fireEvent.mouseEnter(day)
@@ -101,7 +102,7 @@ it('connects inactive provider days at zero and exposes exact hover and keyboard
   expect(onDay).toHaveBeenCalledWith('2026-10-24')
 })
 
-it('keeps unpriced days inspectable in cost mode and explicitly labels partial estimates', () => {
+it('keeps unpriced days inspectable in cost mode and explicitly labels partial estimates', async () => {
   const rows = [
     row('unpriced', '2026-10-24'),
     { ...row('priced', '2026-10-25'), apiEquivalentCostUsd: 0.02 },
@@ -121,7 +122,7 @@ it('keeps unpriced days inspectable in cost mode and explicitly labels partial e
   const unpriced = screen.getByRole('button', { name: '2026-10-24: n/a API-equivalent estimate' })
   expect(unpriced).toBeEnabled()
   fireEvent.mouseEnter(unpriced)
-  expect(screen.getByTestId('usage-history-readout')).toHaveTextContent('Price unavailable')
+  expect(await screen.findByTestId('usage-history-readout')).toHaveTextContent('Price unavailable')
   expect(
     screen.getByRole('button', { name: '2026-10-25: $0.02 * API-equivalent estimate' })
   ).toBeEnabled()

@@ -269,7 +269,7 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
-  --chart-provider-claude: var(--color-orange-600);
+  --chart-provider-claude: var(--color-orange-500);
   --chart-provider-opencode: var(--color-teal-600);
   --chart-provider-muse: var(--color-violet-600);
   --worktree-sidebar: #f5f5f5;
