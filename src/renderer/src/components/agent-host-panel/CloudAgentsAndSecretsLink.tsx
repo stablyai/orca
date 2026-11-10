@@ -10,25 +10,62 @@ import {
   orcaCloudAgentCoverage,
   type OrcaCloudAgentCoverage
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
-import { ORCA_CLOUD_ACCOUNT_AGENTS } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import {
+  ORCA_CLOUD_ACCOUNT_AGENTS,
+  type AgentKeyKind,
+  type OrcaCloudAccountAgent
+} from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { agentList } from '../worktree-creation/cloud-agents-row/build-agents-row-copy'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
-import { agentName, keyOptionLabel } from '../settings/agent-accounts/orca-cloud-accounts-copy'
+import { agentName, keyPhrase } from '../settings/agent-accounts/orca-cloud-accounts-copy'
 import { openAgentHostPanel } from './agent-host-panel-store'
 
-function coverageWord(coverage: OrcaCloudAgentCoverage, t: Translate): string {
-  switch (coverage.kind) {
-    case 'account':
-      return t('agentHostPanel.summary.account', 'your account')
-    case 'key':
-      return keyOptionLabel(coverage.keyKind, t).toLocaleLowerCase()
-    case 'notSetUp':
-      return t('agentHostPanel.summary.notSetUp', 'not set up')
-    case 'expired':
-      return t('agentHostPanel.summary.expired', 'expired')
-    case 'killSwitch':
-    case 'unavailable':
-      return t('agentHostPanel.summary.signsInHere', 'signs in here')
+/**
+ * The NP-3 ready-line wording, grouped by source: "Claude from your Orca account · Codex with the
+ * team key"; agents nothing covers say so after the groups.
+ */
+export function agentsSummary(
+  coverage: readonly { agent: OrcaCloudAccountAgent; coverage: OrcaCloudAgentCoverage }[],
+  t: Translate
+): string {
+  const groups = new Map<'account' | AgentKeyKind, OrcaCloudAccountAgent[]>()
+  const rest: string[] = []
+  for (const entry of coverage) {
+    const agent = agentName(entry.agent, t)
+    switch (entry.coverage.kind) {
+      case 'account':
+      case 'key': {
+        const via = entry.coverage.kind === 'key' ? entry.coverage.keyKind : 'account'
+        groups.set(via, [...(groups.get(via) ?? []), entry.agent])
+        break
+      }
+      case 'notSetUp':
+        rest.push(t('agentHostPanel.summary.agentNotSetUp', '{{agent}} not set up', { agent }))
+        break
+      case 'expired':
+        rest.push(t('agentHostPanel.summary.agentExpired', '{{agent}} sign-in expired', { agent }))
+        break
+      case 'killSwitch':
+      case 'unavailable':
+        rest.push(
+          t('agentHostPanel.summary.agentSignsInHere', '{{agent}} signs in for this workspace', {
+            agent
+          })
+        )
+        break
+    }
   }
+  const parts = [...groups].map(([via, agents]) =>
+    via === 'account'
+      ? t('vmBuildAgents.groupAccount', '{{agents}} from your Orca account', {
+          agents: agentList(agents, t)
+        })
+      : t('vmBuildAgents.groupKey', '{{agents}} with {{key}}', {
+          agents: agentList(agents, t),
+          key: keyPhrase(via, t)
+        })
+  )
+  return [...parts, ...rest].join(t('vmBuildAgents.separator', ' · '))
 }
 
 export function CloudAgentsAndSecretsLink({
@@ -54,12 +91,13 @@ export function CloudAgentsAndSecretsLink({
   }
   const status = accounts.load.kind === 'ready' ? accounts.load.status : null
   const summary = status
-    ? ORCA_CLOUD_ACCOUNT_AGENTS.map((agent) =>
-        t('agentHostPanel.summary.agent', '{{agent}} · {{source}}', {
-          agent: agentName(agent, t),
-          source: coverageWord(orcaCloudAgentCoverage(agent, status, accounts.keyKinds[agent]), t)
-        })
-      ).join(', ')
+    ? agentsSummary(
+        ORCA_CLOUD_ACCOUNT_AGENTS.map((agent) => ({
+          agent,
+          coverage: orcaCloudAgentCoverage(agent, status, accounts.keyKinds[agent])
+        })),
+        t
+      )
     : null
   return (
     <button

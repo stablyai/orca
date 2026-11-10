@@ -33,7 +33,7 @@ export type AgentHostPanelViewProps = {
   dot?: CloudDotState | null
   /** Section 1's body (the agents section renders its own frame). */
   agents: React.ReactNode
-  /** Orca Cloud: sections 2–3 from Cloud secrets, numbered by their owner. */
+  /** Orca Cloud: sections 2–3 from Cloud secrets (W6). */
   cloudSections?: React.ReactNode
   /** Other kinds: section 2's rows. */
   keys?: React.ReactNode
@@ -54,14 +54,33 @@ export function AgentHostPanelView({
   onFooterLink
 }: AgentHostPanelViewProps): React.JSX.Element {
   const t = useTranslate()
+  const titleId = React.useId()
+  const headerId = React.useId()
   const subline = [subject, capabilities.kindLabel, capabilities.stateLabel]
     .filter((part): part is string => Boolean(part))
     .join(' · ')
   return (
-    <SheetContent side="right" className="w-[460px] sm:max-w-[460px]">
-      <div className="border-b border-border pe-8">
+    <SheetContent
+      side="right"
+      className="w-[460px] sm:max-w-[460px]"
+      // Start on the labelled title, never on a control (a disabled one would pop its tooltip).
+      onOpenAutoFocus={(event) => {
+        event.preventDefault()
+        document.getElementById(headerId)?.focus()
+      }}
+    >
+      {/* The labelled header takes first focus; it has no ring because no control is focused. */}
+      <div
+        id={headerId}
+        tabIndex={-1}
+        role="group"
+        aria-labelledby={titleId}
+        className="border-b border-border pe-8 outline-none"
+      >
         <SheetHeader>
-          <SheetTitle>{t('agentHostPanel.title', 'Agent accounts & secrets')}</SheetTitle>
+          <SheetTitle id={titleId}>
+            {t('agentHostPanel.title', 'Agent accounts & secrets')}
+          </SheetTitle>
           <SheetDescription>
             <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-xs">
               {dot ? <CloudStateDot state={dot} size="md" /> : null}
@@ -84,11 +103,10 @@ export function AgentHostPanelView({
           cloudSections
         ) : (
           <>
-            <PanelSection number={2} title={capabilities.keys.title} help={capabilities.keys.help}>
+            <PanelSection title={capabilities.keys.title} help={capabilities.keys.help}>
               {keys}
             </PanelSection>
             <PanelSection
-              number={3}
               title={t('agentHostPanel.section.env', 'Environment')}
               help={capabilities.environmentHelp ?? undefined}
             >

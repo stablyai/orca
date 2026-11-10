@@ -27468,11 +27468,9 @@
     },
     "title": "Agent accounts & secrets",
     "summary": {
-      "account": "your account",
-      "notSetUp": "not set up",
-      "expired": "expired",
-      "signsInHere": "signs in here",
-      "agent": "{{agent}} · {{source}}"
+      "agentNotSetUp": "{{agent}} not set up",
+      "agentExpired": "{{agent}} sign-in expired",
+      "agentSignsInHere": "{{agent}} signs in for this workspace"
     },
     "entry": {
       "statusPanel": "Agents and secrets · {{summary}}",
@@ -27493,7 +27491,9 @@
       "setUp": "Set up once",
       "signedOut": "Sign in to Orca to manage this workspace’s agents.",
       "signIn": "Sign in",
-      "failed": "Couldn’t load your agent accounts."
+      "failed": "Couldn’t load your agent accounts.",
+      "sharedUnavailable": "Not available in shared workspaces",
+      "sharedUnavailableDetail": "Personal accounts aren’t used in shared workspaces. Ask an owner or admin to add a team key."
     },
     "kind": {
       "local": "This computer",
@@ -27504,14 +27504,14 @@
       "cloud": "Orca Cloud"
     },
     "state": {
-      "running": "running",
-      "connected": "connected",
-      "disconnected": "not connected",
-      "stopped": "stopped",
-      "suspended": "suspended",
-      "unreachable": "unreachable",
-      "asleep": "asleep",
-      "archived": "archived"
+      "running": "Running",
+      "connected": "Connected",
+      "disconnected": "Not connected",
+      "stopped": "Stopped",
+      "suspended": "Suspended",
+      "unreachable": "Unreachable",
+      "asleep": "Asleep",
+      "archived": "Archived"
     },
     "notice": {
       "wslStopped": "{{distro}} is stopped. Showing its last check, {{date}}. Opening a workspace on it starts it as usual.",

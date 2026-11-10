@@ -78,20 +78,20 @@ function stateLabel(
       return kind === 'local'
         ? null
         : kind === 'cloud' || kind === 'recipe'
-          ? t('agentHostPanel.state.running', 'running')
-          : t('agentHostPanel.state.connected', 'connected')
+          ? t('agentHostPanel.state.running', 'Running')
+          : t('agentHostPanel.state.connected', 'Connected')
     case 'disconnected':
-      return t('agentHostPanel.state.disconnected', 'not connected')
+      return t('agentHostPanel.state.disconnected', 'Not connected')
     case 'stopped':
-      return t('agentHostPanel.state.stopped', 'stopped')
+      return t('agentHostPanel.state.stopped', 'Stopped')
     case 'suspended':
-      return t('agentHostPanel.state.suspended', 'suspended')
+      return t('agentHostPanel.state.suspended', 'Suspended')
     case 'unreachable':
-      return t('agentHostPanel.state.unreachable', 'unreachable')
+      return t('agentHostPanel.state.unreachable', 'Unreachable')
     case 'asleep':
-      return t('agentHostPanel.state.asleep', 'asleep')
+      return t('agentHostPanel.state.asleep', 'Asleep')
     case 'archived':
-      return t('agentHostPanel.state.archived', 'archived')
+      return t('agentHostPanel.state.archived', 'Archived')
   }
 }
 

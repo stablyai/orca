@@ -92,3 +92,26 @@ describe('cloudAgentPanelRows', () => {
     expect(cloudAgentPanelRows(expired, KEYS, null)[0]?.status).toEqual({ kind: 'expired' })
   })
 })
+
+describe('shared workspaces (D13)', () => {
+  const shared = (covered: boolean): AgentSourcesView => ({
+    defaults: { claude: 'sign-in' },
+    coveredByKey: { claude: covered, codex: false },
+    sharedWorkspace: true
+  })
+
+  it('never shows the personal account; the team key applies, and the control shows it', () => {
+    const [claude] = cloudAgentPanelRows(status(), { claude: 'team', codex: null }, shared(true))
+    expect(claude).toEqual({
+      agent: 'claude',
+      status: { kind: 'key', keyKind: 'team' },
+      source: { value: 'key', keyKind: 'team' }
+    })
+  })
+
+  it('says not available when only a personal key or account would cover it', () => {
+    const rows = cloudAgentPanelRows(status(), { claude: 'personal', codex: null }, shared(true))
+    expect(rows.map((row) => row.status.kind)).toEqual(['sharedUnavailable', 'sharedUnavailable'])
+    expect(rows.every((row) => row.source === null)).toBe(true)
+  })
+})

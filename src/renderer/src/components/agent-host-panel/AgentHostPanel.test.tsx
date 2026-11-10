@@ -80,7 +80,7 @@ describe('AgentHostPanel on Orca Cloud', () => {
     expect(await screen.findByText('From your Orca account · a@acme.dev')).toBeTruthy()
     await waitFor(() => expect(calls).toContain('orcaCloudAgents.workspaceSources'))
     expect(screen.getByText('Agent accounts & secrets')).toBeTruthy()
-    expect(screen.getByText(/acme\/web · fix-auth · Orca Cloud · asleep/)).toBeTruthy()
+    expect(screen.getByText(/acme\/web · fix-auth · Orca Cloud · Asleep/)).toBeTruthy()
     // Section 1 rows are lists inside a labelled section.
     expect(screen.getAllByRole('region').length).toBeGreaterThanOrEqual(1)
     const forbidden = calls.filter((call) =>

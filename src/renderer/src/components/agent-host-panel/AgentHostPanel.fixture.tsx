@@ -128,7 +128,6 @@ function CloudPanel({
             load ? (
               <>
                 <CloudAgentKeysSection
-                  number={2}
                   load={load}
                   onRetry={noop}
                   onEdit={noop}
@@ -152,7 +151,6 @@ function CloudPanel({
                   }
                 />
                 <CloudEnvironmentPanelSection
-                  number={3}
                   load={load}
                   onRetry={noop}
                   onAdd={saved}
@@ -173,15 +171,45 @@ export const cloudAdmin = defineFixture({
   render: () => <CloudPanel load={secrets('admin')} desktopKey />
 })
 
+const SHARED_REASON = 'Personal accounts aren’t used in shared workspaces.'
+const SHARED_ROWS: CloudAgentsPanelLoad = {
+  kind: 'ready',
+  rows: [
+    {
+      agent: 'claude',
+      status: { kind: 'key', keyKind: 'team' },
+      source: { value: 'key', keyKind: 'team' }
+    },
+    { agent: 'codex', status: { kind: 'key', keyKind: 'team' }, source: null }
+  ]
+}
+const SHARED_NO_KEY: CloudAgentsPanelLoad = {
+  kind: 'ready',
+  rows: [
+    { agent: 'claude', status: { kind: 'sharedUnavailable' }, source: null },
+    { agent: 'codex', status: { kind: 'key', keyKind: 'team' }, source: null }
+  ]
+}
+
+/** D13: a member in a shared workspace; the team key applies and the Source can't change. */
 export const cloudMember = defineFixture({
   width: 1000,
   render: () => (
     <CloudPanel
       load={secrets('member')}
-      sourceDisabledReason={translate(
-        'agentSources.shared',
-        'Personal accounts aren’t used in shared workspaces.'
-      )}
+      agents={SHARED_ROWS}
+      sourceDisabledReason={translate('agentSources.shared', SHARED_REASON)}
+    />
+  )
+})
+
+export const cloudSharedNoTeamKey = defineFixture({
+  width: 1000,
+  render: () => (
+    <CloudPanel
+      load={secrets('member')}
+      agents={SHARED_NO_KEY}
+      sourceDisabledReason={translate('agentSources.shared', SHARED_REASON)}
     />
   )
 })

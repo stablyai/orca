@@ -158,12 +158,11 @@ export function useCloudHostPanelBody(
     />
   )
   // Signed out of Orca: one notice in section 1; Cloud secrets can't be read either.
-  // W6's two sections, numbered 2 and 3 under section 1 (CloudPanelSections leaves them unnumbered).
+  // W6's two sections under section 1.
   const cloudSections =
     load.kind === 'signedOut' ? null : (
       <>
         <CloudAgentKeysSection
-          number={2}
           load={sections.load}
           onEdit={() => openAgentHostSettings('cloudSecrets')}
           onManage={() => openAgentHostSettings('cloudSecrets')}
@@ -177,7 +176,6 @@ export function useCloudHostPanelBody(
           }
         />
         <CloudEnvironmentPanelSection
-          number={3}
           load={sections.load}
           onRetry={sections.reload}
           onAdd={sections.addSecret}

@@ -20,6 +20,8 @@ export type CloudAgentPanelStatus =
   | { kind: 'expired' }
   /** No account path and no key: the agent signs in inside this workspace (§5c). */
   | { kind: 'signsInHere'; reason: 'paused' | 'notOffered' }
+  /** D13: a shared workspace never uses personal accounts or keys, and no team key covers it. */
+  | { kind: 'sharedUnavailable' }
 
 /** The two-way Source (Your account / the winning key); present only when both are possible. */
 export type CloudAgentPanelSource = { value: AgentSource; keyKind: AgentKeyKind }
@@ -35,6 +37,26 @@ function chosenSource(view: AgentSourcesView, agent: OrcaCloudAccountAgent): Age
 }
 
 /**
+ * D13: in a shared workspace only a team or repository key applies; personal accounts and keys
+ * never do. The Source shows what applies and can't be changed there.
+ */
+function sharedRow(
+  agent: OrcaCloudAccountAgent,
+  here: OrcaCloudAgentsStatus,
+  keyKind: AgentKeyKind | null
+): CloudAgentPanelRow {
+  const shared = here.sources.coveredByKey[agent] ? (keyKind ?? 'team') : null
+  if (!shared || shared === 'personal') {
+    return { agent, status: { kind: 'sharedUnavailable' }, source: null }
+  }
+  return {
+    agent,
+    status: { kind: 'key', keyKind: shared },
+    source: { value: 'key', keyKind: shared }
+  }
+}
+
+/**
  * `workspace` is this workspace's Sources (with its override); null until read, when the account-wide
  * default stands in.
  */
@@ -44,6 +66,9 @@ export function cloudAgentPanelRows(
   workspace: AgentSourcesView | null
 ): CloudAgentPanelRow[] {
   const here: OrcaCloudAgentsStatus = workspace ? { ...status, sources: workspace } : status
+  if (workspace?.sharedWorkspace === true) {
+    return ORCA_CLOUD_ACCOUNT_AGENTS.map((agent) => sharedRow(agent, here, keyKinds[agent]))
+  }
   return ORCA_CLOUD_ACCOUNT_AGENTS.map((agent) => {
     const coverage = orcaCloudAgentCoverage(agent, here, keyKinds[agent])
     const credential = here.credentials[agent]

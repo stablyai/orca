@@ -65,6 +65,14 @@ function statusCopy(row: CloudAgentPanelRow, t: Translate): { line: string; deta
         }),
         detail: t('agentHostPanel.cloud.expiredDetail', 'Renew it once in Agent accounts.')
       }
+    case 'sharedUnavailable':
+      return {
+        line: t('agentHostPanel.cloud.sharedUnavailable', 'Not available in shared workspaces'),
+        detail: t(
+          'agentHostPanel.cloud.sharedUnavailableDetail',
+          'Personal accounts aren’t used in shared workspaces. Ask an owner or admin to add a team key.'
+        )
+      }
     case 'signsInHere':
       return {
         line: t('agentHostPanel.cloud.signsInHere', '{{agent}} signs in for this workspace', {
@@ -186,7 +194,7 @@ export function CloudAgentsPanelSection({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <PanelSection number={1} title={title} help={help}>
+    <PanelSection title={title} help={help}>
       {load.kind === 'loading' ? (
         <LoadingRows />
       ) : load.kind === 'signedOut' ? (
