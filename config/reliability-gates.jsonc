@@ -2425,7 +2425,7 @@
           "result": "failed",
           "durationSeconds": 1.8,
           "summary": "The first review-round oracle failed 4/40: browser and simulator dropped the SSH worktree's paired-runtime-owned tab, generic workspace rows attributed the remote tab to local, and active local tab creation left ownership unstamped. Historical command and result are preserved after the test-value audit removed the tab-store assertions this run included. currentCommand is only an administrative link to the remaining gate command; the historical run has not validated that command or equivalent coverage.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/workspace/search/palette/cmd-j-host-qualified-candidate-ownership.test.ts"
         },
         {
           "date": "2026-08-20",
