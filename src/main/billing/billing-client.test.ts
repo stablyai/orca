@@ -3,6 +3,7 @@ import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import {
   BillingServiceError,
   assertStripeHostedUrl,
+  claimTrial,
   createCheckoutUrl,
   createPortalUrl,
   fetchEntitlement,
@@ -203,6 +204,61 @@ describe('billing client', () => {
     expect(
       (await fetchEntitlement(endpoints, 'bt', response({ plan: 'pro', offers: undefined }))).plan
     ).toBeNull()
+  })
+
+  it('reads the trial and the trial offer, and claims the trial with a POST', async () => {
+    const trial = {
+      includedSeconds: 7200,
+      usedSeconds: 2160,
+      remainingSeconds: 5040,
+      exhausted: false,
+      grantedAt: 5
+    }
+    const body = {
+      plan: null,
+      status: 'trial',
+      trial,
+      includedSeconds: 7200,
+      usedSeconds: 2160,
+      remainingIncludedSeconds: 5040,
+      canStartSandbox: false,
+      reason: 'trial_used_up',
+      canManageBilling: true
+    }
+    const seen: Seen[] = []
+    const entitlement = await claimTrial(
+      endpoints,
+      'bt',
+      fakeFetch({ 'https://billing.example.test/v1/billing/trial': Response.json(body) }, seen)
+    )
+    expect(seen[0]?.init?.method).toBe('POST')
+    expect(entitlement).toMatchObject({ status: 'trial', trial, reason: 'trial_used_up' })
+    // Older services: no trial fields at all.
+    const older = await fetchEntitlement(
+      endpoints,
+      'bt',
+      fakeFetch({
+        'https://billing.example.test/v1/billing/entitlements': Response.json({
+          ...body,
+          trial: undefined,
+          reason: 'trial_unavailable'
+        })
+      })
+    )
+    expect(older.trial).toBeNull()
+    expect(older.reason).toBe('trial_unavailable')
+    await expect(
+      claimTrial(
+        endpoints,
+        'bt',
+        fakeFetch({
+          'https://billing.example.test/v1/billing/trial': Response.json(
+            { error: 'trial_unavailable' },
+            { status: 403 }
+          )
+        })
+      )
+    ).rejects.toMatchObject({ statusCode: 403, errorCode: 'trial_unavailable' })
   })
 })
 

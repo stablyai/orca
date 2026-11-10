@@ -46,7 +46,9 @@ describe('config: tax and plan catalog', () => {
         defaultSpendCapCents: 5000,
         maxSpendCapCents: 500_000
       },
-      enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
+      enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' },
+      // No email on this token: no trial on offer.
+      trial: null
     })
     expect(entitlement.body.overage.spendCapCents).toBe(5000)
   })

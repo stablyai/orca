@@ -1,9 +1,10 @@
 // Sandbox-hours lines shared by Plan & billing, the plans page and the account menu, so every
 // surface counts, pluralizes and warns the same way.
 import type { Translate } from '@/i18n/use-translate'
-import type {
-  OrcaBillingEntitlement,
-  OrcaBillingStatusResult
+import {
+  isOrcaCloudTrial,
+  type OrcaBillingEntitlement,
+  type OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import { usageAlertSentence } from '../../../../shared/orca-billing-usage-alerts'
 import { includedUsagePercent } from './plan-billing-format'
@@ -80,5 +81,44 @@ export function accountMenuUsageLines(
   return {
     hoursLeft: sandboxHoursLeftLine(result.entitlement, t),
     warning: usageWarningLine(result.entitlement, t, locale)
+  }
+}
+
+/** "0.6 of 2 sandbox hours used": the trial's hours never reset, so no "this month". */
+export function trialHoursUsedLine(entitlement: OrcaBillingEntitlement, t: Translate): string {
+  return t('auto.components.billing.trialHoursUsed', '{{used}} of {{count}} sandbox hours used', {
+    used: String(sandboxHoursCount(Math.min(entitlement.usedSeconds, entitlement.includedSeconds))),
+    count: sandboxHoursCount(entitlement.includedSeconds),
+    defaultValue_one: '{{used}} of {{count}} sandbox hour used'
+  })
+}
+
+/** "Trial · 1.4 sandbox hours left" (glossary hint), for the account menu and the composer. */
+export function trialHoursLeftHint(entitlement: OrcaBillingEntitlement, t: Translate): string {
+  return t('auto.components.billing.trialHoursLeft', 'Trial · {{count}} sandbox hours left', {
+    count: sandboxHoursCount(entitlement.remainingIncludedSeconds),
+    defaultValue_one: 'Trial · {{count}} sandbox hour left'
+  })
+}
+
+/**
+ * The account menu's trial row (spec T1): every member sees it while the team is on its trial;
+ * owners and admins also get Choose plan. Gone once a plan starts (the entitlement has no trial).
+ */
+export function accountMenuTrialRow(
+  result: OrcaBillingStatusResult | null,
+  t: Translate
+): { label: string; usedUp: boolean; canChoosePlan: boolean } | null {
+  if (result?.status !== 'ok' || !isOrcaCloudTrial(result.entitlement)) {
+    return null
+  }
+  const entitlement = result.entitlement
+  const usedUp = entitlement.trial?.exhausted === true
+  return {
+    label: usedUp
+      ? t('auto.components.billing.trialUsedUpTitle', 'Your trial is used up')
+      : trialHoursLeftHint(entitlement, t),
+    usedUp,
+    canChoosePlan: entitlement.canManageBilling
   }
 }

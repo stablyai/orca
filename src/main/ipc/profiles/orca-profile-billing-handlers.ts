@@ -6,7 +6,8 @@ import type {
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult,
-  OrcaBillingTeamPlansResult
+  OrcaBillingTeamPlansResult,
+  OrcaBillingTrialClaimResult
 } from '../../../shared/orca-billing'
 import {
   ORCA_BILLING_INTERVALS,
@@ -15,6 +16,7 @@ import {
   ORCA_BILLING_TEAM_PLANS_MAX_ORGS
 } from '../../../shared/orca-billing'
 import {
+  claimOrcaBillingTrial,
   getOrcaBillingStatus,
   getOrcaBillingTeamPlans,
   openOrcaBillingCheckout,
@@ -176,6 +178,9 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
         ? getCloudSetupLink(getProfileUserDataPath(), parsed.data.sessionId)
         : { status: 'not-found' }
     }
+  )
+  ipcMain.handle('orcaProfiles:billingClaimTrial', async (): Promise<OrcaBillingTrialClaimResult> =>
+    claimOrcaBillingTrial(getProfileUserDataPath())
   )
   ipcMain.handle('orcaProfiles:billingOpenPortal', async (): Promise<OrcaBillingOpenResult> =>
     openOrcaBillingPortal(getProfileUserDataPath())

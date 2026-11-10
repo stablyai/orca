@@ -41,6 +41,7 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
+  OrcaBillingTrialClaimResult,
   OrcaBillingReturn,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult
@@ -113,4 +114,6 @@ export type OrcaProfileApi = {
   billingTeamPlans: (args: { orgIds: string[] }) => Promise<OrcaBillingTeamPlansResult>
   /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */
   billingSetOverage: (args: OrcaBillingOverageArgs) => Promise<OrcaBillingOverageResult>
+  /** Starts the team's one-time Orca Cloud trial (idempotent; no card). */
+  billingClaimTrial: () => Promise<OrcaBillingTrialClaimResult>
 }

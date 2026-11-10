@@ -10,13 +10,15 @@ import type {
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult,
-  OrcaBillingTeamPlansResult
+  OrcaBillingTeamPlansResult,
+  OrcaBillingTrialClaimResult
 } from '../../shared/orca-billing'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   BillingServiceError,
+  claimTrial,
   createCheckoutUrl,
   createPortalUrl,
   fetchEntitlement,
@@ -248,6 +250,30 @@ export async function setOrcaBillingOverage(
       }
       if (error.errorCode === 'spend_cap_too_high') {
         return { status: 'cap-too-high' }
+      }
+    }
+    return { status: 'failed', error: message(error) }
+  }
+}
+
+/** Starts the team's one-time trial (the first time someone on it picks Orca Cloud). Idempotent. */
+export async function claimOrcaBillingTrial(
+  userDataPath: string
+): Promise<OrcaBillingTrialClaimResult> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  try {
+    const entitlement = await ready.run((token, endpoints) => claimTrial(endpoints, token))
+    return entitlement === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', entitlement }
+  } catch (error) {
+    if (error instanceof BillingServiceError) {
+      if (error.errorCode === 'trial_unavailable') {
+        return { status: 'unavailable' }
+      }
+      if (error.errorCode === 'team_required') {
+        return { status: 'team-required' }
       }
     }
     return { status: 'failed', error: message(error) }
