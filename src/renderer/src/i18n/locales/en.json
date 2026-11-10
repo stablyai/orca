@@ -20221,6 +20221,8 @@
         "shellTimedOut": "timed out",
         "shellStopped": "stopped",
         "shellNoOutput": "No output",
+        "shellNeedsNewerServer": "Running ! commands requires a newer Orca server. Update the server and try again.",
+        "shellConnectionClosed": "The connection to the host closed.",
         "shellStop": "Stop",
         "shellDirectory": "in {{directory}}",
         "shellOutputTruncated": "Showing the last {{size}} KB of output.",

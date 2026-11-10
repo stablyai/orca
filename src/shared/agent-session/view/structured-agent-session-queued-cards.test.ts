@@ -101,6 +101,12 @@ describe('queued message cards', () => {
 })
 
 describe('queuedMessageCardLine', () => {
+  it('drops fence lines that carry an info string', () => {
+    expect(queuedMessageCardLine({ text: 'see\n```ts title="a.ts"\nconst a = 1\n```  ' })).toBe(
+      'see\n\nconst a = 1\n'
+    )
+  })
+
   it('previews a fenced block without its fence lines', () => {
     expect(queuedMessageCardLine({ text: 'explain\n\n```console\n$ pwd\n/repo\n```' })).toBe(
       'explain\n\n\n$ pwd\n/repo\n'

@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { AGENT_SESSION_SHELL_COMMAND_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
@@ -35,7 +36,10 @@ export function subscribeNativeChatShellCommand(
       ))
     ) {
       throw new Error(
-        'Running ! commands requires a newer Orca server. Update the server and try again.'
+        translate(
+          'components.native-chat.composer.shellNeedsNewerServer',
+          'Running ! commands requires a newer Orca server. Update the server and try again.'
+        )
       )
     }
     if (cancelled) {
@@ -52,7 +56,15 @@ export function subscribeNativeChatShellCommand(
           }
         },
         onError: sink.fail,
-        onClose: () => sink.fail(new Error('The connection to the host closed.'))
+        onClose: () =>
+          sink.fail(
+            new Error(
+              translate(
+                'components.native-chat.composer.shellConnectionClosed',
+                'The connection to the host closed.'
+              )
+            )
+          )
       }
     )
     if (cancelled) {

@@ -35,7 +35,7 @@ type NativeChatShellHost = {
 }
 
 let runs: readonly NativeChatShellRun[] = []
-const hosts = new Map<string, NativeChatShellHost>()
+const hosts = new Map<string, readonly NativeChatShellHost[]>()
 const cancels = new Map<string, () => void>()
 const listeners = new Set<() => void>()
 let nextId = 0
@@ -110,16 +110,19 @@ export function nativeChatShellRunOutput(run: NativeChatShellRun): string {
 }
 
 export function registerNativeChatShellHost(scope: string, host: NativeChatShellHost): () => void {
-  hosts.set(scope, host)
+  hosts.set(scope, [...(hosts.get(scope) ?? []), host])
   return () => {
-    if (hosts.get(scope) === host) {
+    const remaining = (hosts.get(scope) ?? []).filter((registered) => registered !== host)
+    if (remaining.length > 0) {
+      hosts.set(scope, remaining)
+    } else {
       hosts.delete(scope)
     }
   }
 }
 
 export function runNativeChatShellCommand(scope: string, command: string): void {
-  const host = hosts.get(scope)
+  const host = hosts.get(scope)?.at(-1)
   if (!host) {
     return
   }
@@ -178,6 +181,18 @@ export function anchorNativeChatShellRunsAfterTurn(scope: string, anchorId: stri
         run.scope === scope && run.awaitingTurn ? { ...run, anchorId, awaitingTurn: false } : run
       )
     )
+  }
+}
+
+export function reanchorOrphanedNativeChatShellRuns(
+  scope: string,
+  liveIds: ReadonlySet<string>,
+  anchorId: string | null
+): void {
+  const orphaned = (run: NativeChatShellRun): boolean =>
+    run.scope === scope && run.anchorId !== null && !liveIds.has(run.anchorId)
+  if (runs.some(orphaned)) {
+    write(runs.map((run) => (orphaned(run) ? { ...run, anchorId } : run)))
   }
 }
 

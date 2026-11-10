@@ -191,7 +191,7 @@ export function queuedMessageCardLine(
   copy: NativeChatImageLabelCopy = NATIVE_CHAT_IMAGE_LABEL_ENGLISH
 ): string {
   const images = card.images ?? []
-  const text = (card.displayText ?? card.text).replace(/^`{3,}[\w-]*$/gm, '')
+  const text = (card.displayText ?? card.text).replace(/^ {0,3}`{3,}[^`\n]*$/gm, '')
   if (text.trim() || images.length === 0) {
     return text
   }

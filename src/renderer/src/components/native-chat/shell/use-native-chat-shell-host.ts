@@ -4,6 +4,7 @@ import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft
 import {
   anchorNativeChatShellRunsAfterTurn,
   isSendableNativeChatShellRun,
+  reanchorOrphanedNativeChatShellRuns,
   registerNativeChatShellHost,
   runNativeChatShellCommand,
   useNativeChatShellRuns
@@ -19,9 +20,10 @@ export function useNativeChatShellHost(args: {
   target: RuntimeClientTarget
   sessionId: string
   isWorking: boolean
-  lastMessageId: string | undefined
+  messages: readonly { id: string }[]
 }): NativeChatShellTransport {
-  const { target, sessionId, isWorking, lastMessageId } = args
+  const { target, sessionId, isWorking, messages } = args
+  const lastMessageId = messages.at(-1)?.id
   const scope = structuredAgentSessionDraftScopeKey(sessionId)
   useEffect(
     () =>
@@ -39,6 +41,13 @@ export function useNativeChatShellHost(args: {
       anchorNativeChatShellRunsAfterTurn(scope, lastMessageId)
     }
   }, [isWorking, lastMessageId, scope])
+  useEffect(() => {
+    reanchorOrphanedNativeChatShellRuns(
+      scope,
+      new Set(messages.map(({ id }) => id)),
+      messages.at(-1)?.id ?? null
+    )
+  }, [messages, scope])
   const hasAddedShellResults =
     useNativeChatShellRuns((run) => isSendableNativeChatShellRun(run, scope)).length > 0
   return useMemo(

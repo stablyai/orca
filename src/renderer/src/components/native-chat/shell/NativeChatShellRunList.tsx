@@ -1,18 +1,11 @@
 import { useMemo, useState } from 'react'
-import {
-  Check,
-  ChevronDown,
-  Loader2,
-  Plus,
-  RotateCw,
-  Square,
-  SquareTerminal,
-  X
-} from 'lucide-react'
+import { Check, ChevronDown, Plus, RotateCw, Square, SquareTerminal, X } from 'lucide-react'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft-scope'
+import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-owner'
 import { NativeChatCopyButton } from '../messages/actions/NativeChatCopyButton'
 import {
   dismissNativeChatShellRun,
@@ -34,7 +27,7 @@ function RunStatus({ run }: { run: NativeChatShellRun }): React.JSX.Element {
   if (run.finishedAt === undefined) {
     return (
       <span className="flex items-center gap-1 text-chat-foreground-faint">
-        <Loader2 className="size-3 animate-spin" />
+        <LoadingSpinner className="size-3" />
         {t('components.native-chat.composer.shellRunning', 'running')}
       </span>
     )
@@ -170,8 +163,13 @@ export function NativeChatShellRunCards({
 }: {
   anchorIds: readonly string[]
 }): React.JSX.Element | null {
+  const owner = useNativeChatVisualOwner()
+  const scope = owner ? structuredAgentSessionDraftScopeKey(owner.sessionId) : null
   const runs = useNativeChatShellRuns(
-    (run) => run.anchorId !== null && anchorIds.includes(run.anchorId)
+    (run) =>
+      (scope === null || run.scope === scope) &&
+      run.anchorId !== null &&
+      anchorIds.includes(run.anchorId)
   )
   if (runs.length === 0) {
     return null
