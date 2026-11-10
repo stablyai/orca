@@ -1,6 +1,6 @@
 import { canShowRightSidebarForView, canToggleRightSidebar } from '@/lib/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
@@ -16,10 +16,10 @@ import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import { openPluginsSettings } from '@/lib/open-plugins-settings'
+import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {

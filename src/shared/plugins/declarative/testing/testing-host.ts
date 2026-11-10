@@ -8,6 +8,7 @@ import {
 import { PLUGIN_HOST_API_MAJOR } from '../../workers/plugin-host-api-major'
 
 import { hostError } from './testing-host-error'
+import { resolvePluginEditorTypography } from '../../workers/plugin-host-api-editor-typography'
 import {
   createMockPluginData,
   type MockPluginDataOptions,
@@ -57,7 +58,9 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
   'notifications.show': { delivered: true },
   'shell.openExternal': { opened: true },
   'files.saveAs': { status: 'saved' },
-  'agents.list': { agents: [] }
+  'agents.list': { agents: [] },
+  // Orca's default size: the editor follows a 14 px terminal font, unzoomed (the family is platform-specific).
+  'editor.readTypography': resolvePluginEditorTypography({ terminalFontSize: 14 }, 0)
 }
 
 type MockHostSurface = {

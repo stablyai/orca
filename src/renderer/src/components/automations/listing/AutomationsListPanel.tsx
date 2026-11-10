@@ -1,7 +1,7 @@
 import type { SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
 import type { RuntimeEnvironmentSshBucket } from '../../../store/slices/ssh/runtime-environment-ssh'
 import React, { useRef } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type {
   ExternalAutomationAction,
@@ -51,7 +51,7 @@ import type { AutomationHostCatalogView } from '../hosts/use-automation-host-cat
 import type { AutomationHostRecoveryAction } from '../hosts/automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { useAutomationListFocusRecovery } from './use-automation-list-focus-recovery'
-import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
+import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-interaction/list-table-layout'
 import { useTranslate } from '@/i18n/use-translate'
 import { AutomationTemplateEmptyState } from '../authoring/AutomationTemplateEmptyState'
 import { AutomationListTableHeader } from './AutomationListTableHeader'

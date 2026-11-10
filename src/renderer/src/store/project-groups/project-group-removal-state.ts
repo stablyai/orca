@@ -1,7 +1,7 @@
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { catalogOwnsHost, getProjectGroupHostId } from './project-group-owner-routing'
+import { catalogOwnsHost } from './project-group-owner-routing'
 import type { RepoSlice } from '../repos/repo-state'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
@@ -15,11 +15,11 @@ export function applyProjectGroupDeleteCascade(
   const ownsRowHost = (rowHostId: string): boolean =>
     ownerHostId ? catalogOwnsHost(ownerHostId, rowHostId) : true
   const ownerGroups = state.projectGroups.filter((group) =>
-    ownsRowHost(getProjectGroupHostId(group))
+    ownsRowHost(getRepoExecutionHostId(group))
   )
   const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
   const isDeletedGroup = (group: ProjectGroup): boolean =>
-    deletedGroupIds.has(group.id) && ownsRowHost(getProjectGroupHostId(group))
+    deletedGroupIds.has(group.id) && ownsRowHost(getRepoExecutionHostId(group))
   return {
     projectGroups: state.projectGroups.filter((group) => !isDeletedGroup(group)),
     folderWorkspaces: state.folderWorkspaces.filter(

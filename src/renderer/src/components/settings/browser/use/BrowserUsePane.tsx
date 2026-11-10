@@ -6,7 +6,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'

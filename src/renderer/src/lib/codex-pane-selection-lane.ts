@@ -18,12 +18,12 @@ import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
-import { getRendererAppPlatform } from './renderer-app-platform'
+import { getRendererAppPlatform } from '../app-shell/platform/renderer-app-platform'
 import { wslHostDistroForTarget } from '../runtime/provider-accounts/ownership/wsl-host-account-owner'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from './windows-terminal-capabilities'
+} from '../runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

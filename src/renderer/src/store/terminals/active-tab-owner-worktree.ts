@@ -1,5 +1,5 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { recordRendererCrashBreadcrumb } from '../../lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 const reportedDuplicateTabVerdicts = new Set<string>()
 // Bound never-pruned verdict keys: 256 covers evidence for 128–256 duplicate tab IDs.
