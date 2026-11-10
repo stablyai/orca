@@ -102,7 +102,6 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
   await readTestHostJournal(rig.host, SESSION)
   let journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
-  const receipt = { write: () => {}, committed: () => {} }
   let ordinal = 100
   const append = (text: string | AgentJournalItemBody, itemOrdinal = ordinal++) =>
     journal.appendItem(
@@ -114,13 +113,10 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
       }
     )
   await append('PRE_CLEAR_SECRET')
-  await journal.write(
-    {
-      kind: 'context-clear',
-      boundary: { operationId: 'pr-31782-clear', afterFence: fence, clearedAt: rig.clock.now }
-    },
-    () => ({ receipt: receipt })
-  )
+  await journal.write({
+    kind: 'context-clear',
+    boundary: { operationId: 'pr-31782-clear', afterFence: fence, clearedAt: rig.clock.now }
+  })
   await append('EARLY_SAVED_MARKER')
   for (let index = 0; index < 205; index++) {
     await append(`saved ${index} ${'context '.repeat(60)}`)

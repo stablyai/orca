@@ -236,6 +236,33 @@ async function forkHost() {
     seedJournalForkSource(db, test.snapshot, test.record)
     seedJournalForkSource(db, childSnapshot, child)
   })
+  const syncSource = () =>
+    withTestAgentSessionDatabase(rig.root, (db) => {
+      if (records.has('source-chat')) {
+        seedJournalForkSource(db, test.snapshot, test.record)
+      } else {
+        db.prepare('DELETE FROM agent_session_records WHERE session_id=?').run('source-chat')
+      }
+    })
+  const boundary = rig.host.forkBoundary.bind(rig.host)
+  vi.spyOn(rig.host, 'forkBoundary').mockImplementation(async (id, itemId, anchor, compare) => {
+    if (!records.has(id)) {
+      return boundary(id, itemId, anchor, compare)
+    }
+    const read = await rig.host.deps.journalDatabase.readers.point({
+      sessionId: id,
+      operation: {
+        kind: 'fork-boundary',
+        itemId,
+        inheritedAnchor: anchor,
+        compareSubmissions: compare
+      }
+    })
+    if (read.kind !== 'fork-boundary') {
+      throw new Error('missing source boundary')
+    }
+    return read.boundary
+  })
   const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
   vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {
     const supported = capabilities(agent)
@@ -272,13 +299,14 @@ async function forkHost() {
         now: 1800000000000
       })
     )
-  return { rig, test, records, createFork }
+  return { rig, test, records, createFork, syncSource }
 }
 
 it('preserves source-admission proof through real fork create without publishing a destination', async () => {
-  const { rig, test, records, createFork } = await forkHost()
+  const { rig, test, records, createFork, syncSource } = await forkHost()
   try {
     records.delete('source-chat')
+    await syncSource()
     expect(refusalOf(await createFork('codex_missing_original'))).toMatchObject({
       code: 'agent_session_identity_required',
       details: { reason: 'recordMissing' },
@@ -287,6 +315,7 @@ it('preserves source-admission proof through real fork create without publishing
     expect(rig.store.getRecord('codex_missing_original')).toBeNull()
     records.set('source-chat', test.record)
     test.snapshot.items = test.snapshot.items.slice(0, 1)
+    await syncSource()
     expect(refusalOf(await createFork('codex_removed_original_reply'))).toMatchObject({
       code: 'agent_session_operation_invalid',
       details: { reason: 'savedConversationMissing' },
@@ -300,12 +329,13 @@ it('preserves source-admission proof through real fork create without publishing
 })
 
 it('does not prove no copy when source revalidation fails after the native copy', async () => {
-  const { rig, test, createFork } = await forkHost()
+  const { rig, test, createFork, syncSource } = await forkHost()
   try {
     const nativeCopy = test.copy.getMockImplementation()!
     test.copy.mockImplementationOnce(async (input) => {
       const copy = await nativeCopy(input)
       test.snapshot.items = test.snapshot.items.slice(0, 1)
+      await syncSource()
       return copy
     })
     const refusal = refusalOf(await createFork('codex_changed_after_copy'))
@@ -322,8 +352,9 @@ it('does not prove no copy when source revalidation fails after the native copy'
 })
 
 it('settles a redirected Codex preparation refusal but not a dispatched child-read failure', async () => {
-  const { rig, test, createFork } = await forkHost()
+  const { rig, test, createFork, syncSource } = await forkHost()
   test.record.conversationName = '  Release notes  '
+  await syncSource()
   try {
     test.copy.mockImplementation((input) =>
       copyCodexConversation(input, {
