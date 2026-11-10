@@ -63,6 +63,23 @@ async function failedStart(
     resolveEnvironment: async () => ({ PATH: '' }),
     ...script.deps
   })
+  const expectedAttempts = unanswered || agent === 'grok' || agent === 'claude' ? 5 : 1
+  const identities = Array.from({ length: expectedAttempts }, () => ({
+    entered: Promise.withResolvers<void>(),
+    released: Promise.withResolvers<void>()
+  }))
+  let recording = 0
+  const commitProcessIdentity = host.deps.store.commitProcessIdentity.bind(host.deps.store)
+  vi.spyOn(host.deps.store, 'commitProcessIdentity').mockImplementation(async (input) => {
+    const identity = identities[recording++]
+    if (!identity) {
+      throw new Error('an unexpected child tried to record its identity')
+    }
+    const recorded = commitProcessIdentity(input)
+    identity.entered.resolve()
+    await identity.released.promise
+    return await recorded
+  })
   const params = hostTestAttachParams(
     null,
     agent === 'codex'
@@ -107,7 +124,6 @@ async function failedStart(
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
   }
-  const expectedAttempts = unanswered || agent === 'grok' || agent === 'claude' ? 5 : 1
   for (let attempt = 1; attempt <= expectedAttempts; attempt++) {
     // Retries back off 100·2^n ms (800 ms before the fifth spawn); each poll jumps 100 ms.
     await vi.waitFor(
@@ -121,7 +137,13 @@ async function failedStart(
     if (!fail) {
       throw new Error('fixture has no unanswered exit')
     }
-    fail('provider config is invalid: bad key')
+    const identity = identities[attempt - 1]!
+    await identity.entered.promise
+    try {
+      fail('provider config is invalid: bad key')
+    } finally {
+      identity.released.resolve()
+    }
   }
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)

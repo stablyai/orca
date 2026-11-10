@@ -25,7 +25,11 @@ import {
   registerStructuredAgentSessionStart,
   structuredAgentSessionStartStillQueued
 } from './structured-agent-session-start-attempts'
-import { retryableAgentSessionAcquisition } from './structured-agent-session-start-failure'
+import {
+  provenAgentSessionStartFailure,
+  retryableAgentSessionAcquisition
+} from './structured-agent-session-start-failure'
+import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
 import { failedCreateRefusal } from '../acquisition/structured-agent-session-failed-create-refusal'
 import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {
@@ -230,6 +234,18 @@ function withDiagnostic(
 ): StructuredAgentSessionResumeOutcome {
   const diagnostic = startFailureDiagnosticOf(error)
   const argumentProblem = argumentProblemOf(error)
+  const failure =
+    !aborted &&
+    !expired &&
+    !argumentProblem &&
+    !agentCliInstallationProblemOf(error) &&
+    refusal.code === 'agent_session_operation_invalid' &&
+    (refusal.details?.reason === undefined ||
+      refusal.details.reason === 'attachFailed' ||
+      refusal.details.reason === 'providerStartFailed') &&
+    Object.keys(refusal.details ?? {}).every((key) => key === 'reason' || key === 'ownerVerdict')
+      ? provenAgentSessionStartFailure(error)
+      : undefined
   return {
     ok: false,
     refusal,
@@ -237,6 +253,7 @@ function withDiagnostic(
     ...(aborted ? { aborted: true as const } : {}),
     ...(expired ? { expired: true as const } : {}),
     ...(argumentProblem ? { argumentProblem } : {}),
+    ...(failure ? { failure: failure.fact } : {}),
     retry: retryableAgentSessionAcquisition(error)
   }
 }
