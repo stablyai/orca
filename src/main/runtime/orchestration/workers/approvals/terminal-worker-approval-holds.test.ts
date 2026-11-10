@@ -66,7 +66,7 @@ function setup(options: { canAnswer?: boolean } = {}) {
     canAnswerPane: () => options.canAnswer ?? true,
     processIncarnation: () => screen.incarnation,
     readScreen: () => screen.lines,
-    readToolResult: ({ transcriptPath, toolUseId }) =>
+    readToolResult: async ({ transcriptPath, toolUseId }) =>
       transcriptPath === '/t/session.jsonl' && toolUseId === 'tool-1' ? screen.result : null,
     setTimer: (run) => {
       const timer = { run, cancelled: false }
@@ -243,6 +243,26 @@ describe('terminal worker approval holds', () => {
     await ctx.tick(3)
 
     expect(asked.replies).toEqual([null])
+    expect(ctx.closing()).toEqual([expect.stringContaining("Denied in the worker's terminal")])
+  })
+
+  it("names a close from a tool_result written only by the lead's Stop", async () => {
+    const ctx = setup()
+    await opened(ctx, hook('tool-1'))
+    ctx.screen.lines = AFTER
+    // Only until it closes awaiting a result: further ticks would fire its 10-minute fallback.
+    for (let i = 0; i < 80 && ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id); i++) {
+      await ctx.tick()
+    }
+    ctx.screen.result = USER_NO
+    ctx.holds.observe({
+      paneKey: PANE,
+      connectionId: null,
+      hookEventName: 'Stop',
+      payload: { state: 'done', prompt: '', agentType: 'claude' }
+    })
+    await vi.waitFor(() => expect(ctx.closing()).toHaveLength(1))
+
     expect(ctx.closing()).toEqual([expect.stringContaining("Denied in the worker's terminal")])
   })
 
