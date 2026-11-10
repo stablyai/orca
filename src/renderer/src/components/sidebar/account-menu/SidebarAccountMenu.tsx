@@ -18,6 +18,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useBillingState } from '../../billing/billing-summary-store'
 import { accountMenuUsageLines } from '../../billing/plan-billing-usage-copy'
+import { AccountMenuTrialRow } from '../../billing/AccountMenuTrialRow'
 import { SidebarTeamSubmenu } from './SidebarTeamSubmenu'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { getAccountMenuIdentity, type AccountMenuIdentity } from './account-menu-identity'
@@ -71,7 +72,8 @@ export function SidebarAccountMenu(): React.JSX.Element {
 
   const identity = getAccountMenuIdentity(authStatus)
   // The team is named once, on the switcher below; the header carries the plan's hours instead.
-  const usage = accountMenuUsageLines(useBillingState().result, t, locale)
+  const billingResult = useBillingState().result
+  const usage = accountMenuUsageLines(billingResult, t, locale)
   const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
   // Freeze the item list while the menu is open: a billing answer arriving mid-read must not
   // swap rows under the pointer (e.g. Upgrade replacing Plan & billing).
@@ -211,6 +213,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {identity.signedIn ? <AccountMenuTrialRow result={billingResult} /> : null}
             </>
           ) : null}
           <SidebarTeamSubmenu authStatus={authStatus} />

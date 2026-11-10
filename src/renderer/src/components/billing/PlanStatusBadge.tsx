@@ -32,6 +32,10 @@ export function planHealth(entitlement: OrcaBillingEntitlement, t: Translate): P
       dot: 'warning'
     }
   }
+  if (entitlement.reason === 'trial_used_up') {
+    // Still the trial; the dot says it's used up and the line below says what to do.
+    return { label: t('auto.components.billing.statusTrial', 'Trial'), dot: 'warning' }
+  }
   if (entitlement.cancelAtPeriodEnd) {
     return { label: t('auto.components.billing.health.ending', 'Ending'), dot: 'warning' }
   }

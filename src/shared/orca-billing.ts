@@ -15,6 +15,10 @@ export type OrcaBillingDenyReason =
   | 'payment_grace_expired'
   | 'included_hours_exhausted'
   | 'overage_cap_reached'
+  /** The team's one-time trial hours are used up (no plan yet). */
+  | 'trial_used_up'
+  /** The team never had a plan and can't get a trial (one was already used by this account or team). */
+  | 'trial_unavailable'
 
 /**
  * What a plan refusal means, whatever surface shows it. Billing's account reasons plus the control
@@ -34,11 +38,14 @@ export type OrcaEntitlementDenialKind =
 export function classifyEntitlementDenial(
   reason: string | null | undefined
 ): OrcaEntitlementDenialKind {
-  // 'no plan' is the hosted provider's older log line for a missing plan.
+  // 'no plan' is the hosted provider's older log line for a missing plan. Both trial reasons are
+  // fixed by choosing a plan, so they read as "needs a plan" everywhere.
   switch (reason) {
     case 'no_subscription':
     case 'subscription_inactive':
     case 'no plan':
+    case 'trial_used_up':
+    case 'trial_unavailable':
       return 'plan'
     case 'included_hours_exhausted':
       return 'hours'
@@ -81,6 +88,17 @@ export type OrcaBillingOffers = {
     maxSpendCapCents: number | null
   }
   enterprise: { label: string; priceLabel: string; contactUrl: string }
+  /** The one-time trial this caller could still start for the team; null when none is on offer. */
+  trial?: { includedSeconds: number } | null
+}
+
+/** The team's one-time trial (no card, no Stripe). Hours don't reset; a plan ends it. */
+export type OrcaBillingTrial = {
+  includedSeconds: number
+  usedSeconds: number
+  remainingSeconds: number
+  exhausted: boolean
+  grantedAt: number
 }
 
 export type OrcaBillingEntitlement = {
@@ -96,6 +114,11 @@ export type OrcaBillingEntitlement = {
   /** Monthly window the hours count against (a slice of the year on annual plans). */
   usageWindow: { start: number; end: number } | null
   cancelAtPeriodEnd: boolean
+  /**
+   * The trial while it is the team's plan (status 'trial'); null otherwise. During a trial,
+   * includedSeconds/usedSeconds/remainingIncludedSeconds mirror it and concurrency is 1.
+   */
+  trial?: OrcaBillingTrial | null
   includedSeconds: number
   usedSeconds: number
   remainingIncludedSeconds: number
@@ -174,6 +197,23 @@ export type OrcaBillingTeamPlansResult =
 
 /** At most this many teams per lookup (the billing Worker's bound). */
 export const ORCA_BILLING_TEAM_PLANS_MAX_ORGS = 10
+
+/** The team is on its one-time trial (used up or not), with no plan. */
+export function isOrcaCloudTrial(
+  entitlement: Pick<OrcaBillingEntitlement, 'trial' | 'status'> | null | undefined
+): boolean {
+  return entitlement?.trial != null && entitlement.status === 'trial'
+}
+
+export type OrcaBillingTrialClaimResult =
+  | { status: 'ok'; entitlement: OrcaBillingEntitlement }
+  | { status: 'unconfigured' }
+  | { status: 'signed-out' }
+  /** The trial can't be granted (abuse limits, already used, or the team had a plan). */
+  | { status: 'unavailable' }
+  /** A personal account: setup creates a team first (O1). */
+  | { status: 'team-required' }
+  | { status: 'failed'; error: string }
 
 export function isOrcaBillingPlanId(value: unknown): value is OrcaBillingPlanId {
   return ORCA_BILLING_PLAN_IDS.some((plan) => plan === value)

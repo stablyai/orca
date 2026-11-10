@@ -247,7 +247,11 @@
         },
         "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
         "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
-        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours."
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
+        "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
+        "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
+        "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used"
       },
       "browser-pane": {
         "markup": {

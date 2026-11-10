@@ -15,6 +15,11 @@ describe('classifyEntitlementDenial', () => {
     expect(classifyEntitlementDenial('machine_size_not_in_plan')).toBe('machineSize')
   })
 
+  it('treats both trial reasons as needing a plan', () => {
+    expect(classifyEntitlementDenial('trial_used_up')).toBe('plan')
+    expect(classifyEntitlementDenial('trial_unavailable')).toBe('plan')
+  })
+
   it('falls back to other for unknown or missing reasons', () => {
     expect(classifyEntitlementDenial('something_new')).toBe('other')
     expect(classifyEntitlementDenial(undefined)).toBe('other')

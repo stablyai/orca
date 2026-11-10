@@ -7,17 +7,19 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
 import { cn } from '@/lib/utils'
-import type {
-  OrcaBillingOpenResult,
-  OrcaBillingOverageArgs,
-  OrcaBillingOverageResult,
-  OrcaBillingStatusResult
+import {
+  isOrcaCloudTrial,
+  type OrcaBillingOpenResult,
+  type OrcaBillingOverageArgs,
+  type OrcaBillingOverageResult,
+  type OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import { openPlansPage } from './plans/plans-page-store'
 import { PaymentIssueNotice } from './PaymentIssueNotice'
 import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
 import { PlanStatusBadge } from './PlanStatusBadge'
+import { TrialPlanSummary } from './TrialPlanSummary'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
 import { useAppStore } from '@/store/index'
 import { usageAlertLevel } from '../../../../shared/orca-billing-usage-alerts'
@@ -175,6 +177,9 @@ export function PlanBillingView({
 
   const entitlement = result.entitlement
   const hasPlan = entitlement.plan !== null && entitlement.status !== 'canceled'
+  // The one-time trial stands in for a plan until one starts (spec T1).
+  const onTrial = !hasPlan && isOrcaCloudTrial(entitlement)
+  const trialUsedUp = onTrial && entitlement.trial?.exhausted === true
   const monthlyCents = entitlement.offers?.team.monthlyPriceCentsPerSeat ?? null
   const teamPrice = monthlyCents === null ? null : formatCents(monthlyCents, locale)
 
@@ -213,9 +218,11 @@ export function PlanBillingView({
         </div>
       ) : null}
 
+      {onTrial ? <TrialPlanSummary entitlement={entitlement} onChoosePlan={onSeePlans} /> : null}
+
       {/* Admins already read these above: the overage card's cap-reached hint, and the usage
           alert's out-of-hours sentence. */}
-      {hasPlan &&
+      {(hasPlan || entitlement.reason === 'trial_unavailable') &&
       entitlement.reason &&
       entitlement.payment.pastDueSince === null &&
       !(
@@ -229,7 +236,7 @@ export function PlanBillingView({
         </p>
       ) : null}
 
-      {!hasPlan ? (
+      {!hasPlan && !onTrial ? (
         <p className="text-sm text-muted-foreground text-pretty">
           {teamPrice
             ? t(
@@ -245,7 +252,7 @@ export function PlanBillingView({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {hasPlan ? null : (
+        {hasPlan || onTrial ? null : (
           <Button type="button" size="sm" onClick={onSeePlans}>
             {t('auto.components.billing.upgrade.cta', 'See plans')}
           </Button>
@@ -270,7 +277,9 @@ export function PlanBillingView({
       </div>
 
       {/* The payment alert already says who to ask; don't ask twice. */}
-      {!entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
+      {!entitlement.canManageBilling &&
+      entitlement.payment.pastDueSince === null &&
+      !trialUsedUp ? (
         <p className="text-xs text-muted-foreground">
           {t('auto.components.billing.askAdmin2', 'Ask an owner or admin to change the plan.')}
         </p>

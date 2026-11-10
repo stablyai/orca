@@ -183,6 +183,20 @@ export function cloudApiError(
         data(['Ask an owner or admin to raise the spend cap.'])
       )
     }
+    if (reason === 'trial_used_up') {
+      return new RuntimeClientError(
+        'cloud_trial_used_up',
+        `Your trial is used up. ${GO_TO_SLEEP} ${safety}`,
+        data(['Ask an owner or admin to choose a plan in Orca → Settings → Plan & billing.'])
+      )
+    }
+    if (reason === 'trial_unavailable') {
+      return new RuntimeClientError(
+        'cloud_plan_required',
+        `This account or team already used its trial. ${creating ? NOTHING_CREATED : FILES_SAFE}`,
+        data(['Ask an owner or admin to choose a plan in Orca → Settings → Plan & billing.'])
+      )
+    }
     return new RuntimeClientError(
       'cloud_plan_required',
       `Orca Cloud needs a Team plan. ${creating ? NOTHING_CREATED : FILES_SAFE}`,

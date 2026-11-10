@@ -120,7 +120,14 @@ const OffersSchema = z
       priceLabel: z.string().max(40),
       // Opened in the browser: https only.
       contactUrl: z.string().url().startsWith('https://')
-    })
+    }),
+    // Absent from older services: no trial on offer.
+    trial: z
+      .object({ includedSeconds: z.number().nonnegative() })
+      .nullable()
+      .optional()
+      .catch(null)
+      .transform((value) => value ?? null)
   })
   .nullable()
   .catch(null)
@@ -140,6 +147,18 @@ const EntitlementSchema = z.object({
   period: window,
   usageWindow: window,
   cancelAtPeriodEnd: z.boolean().catch(false),
+  trial: z
+    .object({
+      includedSeconds: z.number().nonnegative(),
+      usedSeconds: z.number().nonnegative(),
+      remainingSeconds: z.number().nonnegative(),
+      exhausted: z.boolean(),
+      grantedAt: z.number()
+    })
+    .nullable()
+    .optional()
+    .catch(null)
+    .transform((value) => value ?? null),
   includedSeconds: seconds,
   usedSeconds: seconds,
   remainingIncludedSeconds: seconds,
@@ -169,7 +188,9 @@ const EntitlementSchema = z.object({
       'payment_past_due',
       'payment_grace_expired',
       'included_hours_exhausted',
-      'overage_cap_reached'
+      'overage_cap_reached',
+      'trial_used_up',
+      'trial_unavailable'
     ])
     .nullable()
     .catch(null),
@@ -288,4 +309,15 @@ export async function fetchTeamPlans(
     throw new Error('invalid_billing_response')
   }
   return body.data.teams
+}
+
+/** POST /v1/billing/trial: starts the team's one-time trial (idempotent) and returns the entitlement. */
+export async function claimTrial(
+  endpoints: BillingEndpoints,
+  token: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<OrcaBillingEntitlement> {
+  return normalizeEntitlement(
+    await billingRequest(endpoints, token, 'POST', 'v1/billing/trial', {}, fetchImpl)
+  )
 }
