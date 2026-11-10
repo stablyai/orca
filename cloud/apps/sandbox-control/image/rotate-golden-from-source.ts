@@ -112,7 +112,10 @@ async function main(): Promise<void> {
     ).stdout
     log(`build+provision exit ${exitCode} in ${Math.round((Date.now() - started) / 1000)} s`)
     if (exitCode !== 0) {
-      throw new Error(`source build failed:\n${logs.slice(-3000)}`)
+      // The command has ended, so its log stream ends too; bounded in case the provider still holds it.
+      const stream = await api.streamCommandLogs(sid, commandId, AbortSignal.timeout(20_000)).catch(() => null)
+      const tail = stream ? await new Response(stream).text().catch(() => '') : ''
+      throw new Error(`source build failed:\n${logs.slice(-1500)}\n${tail.slice(-4000)}`)
     }
     if (manifest.desktop && !/"desktop":\s*true/.test(logs)) {
       throw new Error('manifest pins a remote desktop but the provision report says it is missing')
