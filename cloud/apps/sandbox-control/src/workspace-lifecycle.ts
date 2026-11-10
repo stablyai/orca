@@ -332,6 +332,21 @@ export async function unarchiveSandbox(deps: LifecycleDeps, row: SandboxRow): Pr
   return resumeSandbox(deps, suspended)
 }
 
+/**
+ * Unarchive without waking (the team list): the snapshot backstop is restored and the workspace is
+ * asleep again; opening it later runs the ordinary billed, capped wake.
+ */
+export async function restoreArchivedToSleeping(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
+  if (row.status !== 'archived') {
+    return row
+  }
+  await deps.provider.updateSnapshotExpiration(
+    row.provider_name,
+    deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS
+  )
+  return claim(deps, row, { status: 'suspended', archived_at: null, archive_expires_at: null })
+}
+
 /** Cron: archives past their TTL are destroyed (snapshots included). */
 export async function expiredArchives(db: D1Database, now: number): Promise<SandboxRow[]> {
   const { results } = await db

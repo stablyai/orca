@@ -111,6 +111,7 @@ import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
+  restoreArchivedToSleeping,
   archiveSandbox,
   readArchive,
   restartSandbox,
@@ -1372,7 +1373,17 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       if (!body.success) {
         return fail('invalid_request', 400)
       }
-      const patched = await patchWorkspace(db, caller, row, body.data, now)
+      const { archived, ...rest } = body.data
+      // Archive/unarchive are lifecycle changes, not labels: the sandbox really stops (snapshot kept
+      // with a TTL) or comes back asleep. Permissions are checked by patchWorkspace first.
+      let patched = await patchWorkspace(db, caller, row, archived === undefined ? body.data : { ...rest, archived }, now)
+      if (archived === true && (patched.row.status === 'running' || patched.row.status === 'suspended')) {
+        const stopped = await archiveSandbox(life, patched.row, {}, workspaceConfig(env, deps))
+        patched = { ...patched, row: (await getSandbox(env.SANDBOX_DB, stopped.id)) ?? patched.row }
+      } else if (archived === false && patched.row.status === 'archived') {
+        const restored = await restoreArchivedToSleeping(life, patched.row)
+        patched = { ...patched, row: (await getSandbox(env.SANDBOX_DB, restored.id)) ?? patched.row }
+      }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
       return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })

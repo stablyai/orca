@@ -44,6 +44,9 @@ export type RowActions = {
   /** One-time jump: open the workspace on the chat this teammate has in front. */
   goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
   patch: (w: CloudWorkspace, patch: CloudWorkspacePatch) => void
+  /** Sleep and archive with a snapshot (Undo for 5 s); never just a label. */
+  archive: (w: CloudWorkspace) => void
+  unarchive: (w: CloudWorkspace) => void
 }
 
 /** Placeholder replaced by the inline section editor in CloudWorkspacesHome. */
@@ -238,12 +241,12 @@ export function CloudWorkspaceRowMenu({
             )}
             <DropdownMenuSeparator />
             {w.archivedAt === null ? (
-              <DropdownMenuItem onSelect={() => actions.patch(w, { archived: true })}>
+              <DropdownMenuItem onSelect={() => actions.archive(w)}>
                 <Archive />
                 {t('auto.components.cloudWorkspaces.archive', 'Archive')}
               </DropdownMenuItem>
             ) : (
-              <DropdownMenuItem onSelect={() => actions.patch(w, { archived: false })}>
+              <DropdownMenuItem onSelect={() => actions.unarchive(w)}>
                 <ArchiveRestore />
                 {t('auto.components.cloudWorkspaces.unarchive', 'Unarchive')}
               </DropdownMenuItem>

@@ -9,6 +9,7 @@ import {
   showOrcaCloudRestartWarningToast,
   showOrcaCloudRestartingToast
 } from '@/lib/orca-cloud-session-toasts'
+import { runArchiveWithUndo } from './cloud-workspace-actions'
 import type { HostedSessionWarningEvent } from '../../../../shared/hosted-sandbox/hosted-session-events'
 
 const workspace = { workspaceId: 'wt-cloud', workspaceName: 'fix-login-flake' }
@@ -82,3 +83,13 @@ export const restartedAfterRestartNow = defineFixture({
 export const cleanupInProgress = toastFixture(() => showOrcaCloudCleanupStartedToast('c-1'))
 export const cleanupDone = toastFixture(() => showOrcaCloudCleanupDoneToast('c-1'))
 export const cleanupFailed = toastFixture(() => showOrcaCloudCleanupFailedToast('c-1', noop))
+
+/** Archive from the sidebar or the team list: the same toast with Undo for 5 s (DS-01). */
+export const archivedWithUndo = toastFixture(
+  () =>
+    void runArchiveWithUndo('fixture-archive', {
+      name: workspace.workspaceName,
+      undoMs: 60_000,
+      commit: async () => ({ ok: true, value: null })
+    })
+)

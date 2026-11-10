@@ -58,7 +58,8 @@ export function restartCloudWorkspace(workspaceId: string): Promise<CloudWorkspa
 export function archiveCloudWorkspace(
   workspaceId: string,
   deps: {
-    sleep: (workspaceId: string) => Promise<unknown>
+    /** The ordinary Sleep; a result whose workspaces did not all sleep stops the archive. */
+    sleep: (workspaceId: string) => Promise<readonly { completed: boolean }[] | void>
     pullRequests?: HostedArchivePullRequest[]
   }
 ): Promise<CloudWorkspaceResult<null>> {
@@ -67,7 +68,18 @@ export function archiveCloudWorkspace(
     return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'archive', async () => {
-    await deps.sleep(workspaceId)
+    const slept = await deps.sleep(workspaceId)
+    if (slept && !slept.every((result) => result.completed)) {
+      // Never archive a sandbox that is still running: it would keep using hours behind an "Archived" label.
+      return {
+        ok: false,
+        code: 'failed',
+        message: translate(
+          'auto.lib.orcaCloud.workspaceActions.archiveSleepFailed',
+          'It’s still running. Your files are safe.'
+        )
+      }
+    }
     return bridge.archive({
       workspaceId,
       ...(deps.pullRequests?.length ? { pullRequests: deps.pullRequests } : {})

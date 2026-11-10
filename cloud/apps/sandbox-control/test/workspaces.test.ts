@@ -81,6 +81,26 @@ describe('workspace registry', () => {
     expect((await t.req(t.admin, 'POST', `/v1/sandboxes/${t.id}/resume`)).status).toBe(404)
   })
 
+  it('archives for real from the team list: the sandbox stops with a snapshot TTL; unarchive leaves it asleep', async () => {
+    const t = await team()
+    const name = `orca-test-${t.id}`
+    expect(t.h.vercel.boxes.get(name)!.status).toBe('running')
+    const archived = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(archived.status).toBe(200)
+    expect(archived.body.workspace.archivedAt).toBe(t.h.now())
+    expect(t.h.vercel.boxes.get(name)!.status).toBe('stopped')
+    expect(t.h.raw.prepare('SELECT status, archive_expires_at FROM sandboxes WHERE id = ?').get(t.id)).toMatchObject({
+      status: 'archived'
+    })
+    expect(t.h.vercel.snapshotExpirations.get(name)).toBe(37 * 24 * 60 * MIN)
+    const restored = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: false })
+    expect(restored.body.workspace.archivedAt).toBeNull()
+    expect(t.h.raw.prepare('SELECT status FROM sandboxes WHERE id = ?').get(t.id)).toEqual({ status: 'suspended' })
+    // Restoring does not start (or bill) the sandbox; opening it wakes it as usual.
+    expect(t.h.vercel.boxes.get(name)!.status).toBe('stopped')
+    expect(t.h.vercel.snapshotExpirations.get(name)).toBe(104 * 24 * 60 * MIN)
+  })
+
   it('reports cost from metered compute at the billing rate, plus reported token spend', async () => {
     const t = await team()
     t.h.advance(90 * MIN)
