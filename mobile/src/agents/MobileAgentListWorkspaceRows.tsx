@@ -4,8 +4,8 @@ import { homeListStyles as styles } from '../home/home-list-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { HostProfile } from '../transport/hosts/host-profile'
-import { useHostDisplay } from '../transport/hosts/use-host-display'
+import type { HostProfile } from '../host-catalog/host-profile'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
 import type { AgentListWorkspaceMatch } from './agent-list-workspace-matches'
 
 /** Workspaces with no agent that a search found; a tap opens the workspace. */
