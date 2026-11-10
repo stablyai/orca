@@ -97,6 +97,11 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
         'auto.components.billing.openAlreadySubscribed',
         'This account already has a plan. Use Manage billing to change it.'
       )
+    case 'team-required':
+      return t(
+        'auto.components.billing.openTeamRequired',
+        'Plans belong to a team. Create a team, then choose a plan.'
+      )
     case 'no-billing-account':
       return t(
         'auto.components.billing.openNoAccount',

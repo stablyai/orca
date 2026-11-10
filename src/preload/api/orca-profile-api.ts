@@ -1,4 +1,10 @@
 import type {
+  CloudSetupGetResult,
+  CloudSetupLinkResult,
+  CloudSetupStartArgs,
+  CloudSetupStartResult
+} from '../../shared/orca-cloud-setup'
+import type {
   OrcaProfileOrgCreateArgs,
   OrcaProfileOrgCreateResult,
   OrcaProfileOrgLeaveArgs
@@ -95,6 +101,12 @@ export type OrcaProfileApi = {
   billingStatus: () => Promise<OrcaBillingStatusResult>
   /** Opens hosted Stripe Checkout in the browser. */
   billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
+  /** Starts Orca Cloud setup: one browser tab for sign-in, team, plan and GitHub. */
+  cloudSetupStart: (args: CloudSetupStartArgs) => Promise<CloudSetupStartResult>
+  /** The setup session's steps, for the composer's setup panel. */
+  cloudSetupGet: (args: { sessionId: string }) => Promise<CloudSetupGetResult>
+  /** "Copy setup link": a fresh one-time link to the same setup session. */
+  cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
   /** Plan state for other teams the user is on ("Switch to <team>"); never switches teams. */

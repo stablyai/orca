@@ -26,12 +26,26 @@ import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store
 import { notifyUsageAlertIfDue } from '../../billing/usage-alert-notifier'
 import { showUsageAlertNotification, usageAlertBody } from '../../billing/usage-alert-desktop'
 import type { Store } from '../../persistence/loading-store/store'
+import {
+  CLOUD_SETUP_NEEDS,
+  CLOUD_SETUP_SESSION_ID,
+  type CloudSetupGetResult,
+  type CloudSetupLinkResult,
+  type CloudSetupStartArgs,
+  type CloudSetupStartResult
+} from '../../../shared/orca-cloud-setup'
+import {
+  getCloudSetupLink,
+  getCloudSetupSession,
+  startCloudSetup
+} from '../../billing/cloud-setup-service'
 
 const CheckoutArgs = z
   .object({
     plan: z.enum(ORCA_BILLING_PLAN_IDS),
     interval: z.enum(ORCA_BILLING_INTERVALS),
-    seats: z.number().int().min(1).max(ORCA_BILLING_MAX_SEATS)
+    seats: z.number().int().min(1).max(ORCA_BILLING_MAX_SEATS),
+    setupSessionId: z.string().regex(CLOUD_SETUP_SESSION_ID).optional()
   })
   .strict()
 
@@ -63,6 +77,24 @@ export function billingTeamPlansArgsFromUnknown(args: unknown): { orgIds: string
     throw new Error('invalid_orca_billing_team_plans')
   }
   return { orgIds: [...new Set(parsed.data.orgIds)] }
+}
+
+const CloudSetupStart = z
+  .object({
+    repo: z.string().url().startsWith('https://github.com/').max(300).optional(),
+    needs: z.array(z.enum(CLOUD_SETUP_NEEDS)).max(3),
+    chooseTeam: z.boolean().optional()
+  })
+  .strict()
+
+const CloudSetupGet = z.object({ sessionId: z.string().regex(CLOUD_SETUP_SESSION_ID) }).strict()
+
+export function cloudSetupStartArgsFromUnknown(args: unknown): CloudSetupStartArgs {
+  const parsed = CloudSetupStart.safeParse(args)
+  if (!parsed.success) {
+    throw new Error('invalid_cloud_setup_start')
+  }
+  return parsed.data
 }
 
 export function billingCheckoutArgsFromUnknown(args: unknown): OrcaBillingCheckoutArgs {
@@ -121,6 +153,29 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
         getProfileUserDataPath(),
         billingTeamPlansArgsFromUnknown(rawArgs).orgIds
       )
+  )
+  ipcMain.handle(
+    'orcaProfiles:cloudSetupStart',
+    async (_event, rawArgs: unknown): Promise<CloudSetupStartResult> =>
+      startCloudSetup(getProfileUserDataPath(), cloudSetupStartArgsFromUnknown(rawArgs))
+  )
+  ipcMain.handle(
+    'orcaProfiles:cloudSetupGet',
+    async (_event, rawArgs: unknown): Promise<CloudSetupGetResult> => {
+      const parsed = CloudSetupGet.safeParse(rawArgs)
+      return parsed.success
+        ? getCloudSetupSession(getProfileUserDataPath(), parsed.data.sessionId)
+        : { status: 'not-found' }
+    }
+  )
+  ipcMain.handle(
+    'orcaProfiles:cloudSetupLink',
+    async (_event, rawArgs: unknown): Promise<CloudSetupLinkResult> => {
+      const parsed = CloudSetupGet.safeParse(rawArgs)
+      return parsed.success
+        ? getCloudSetupLink(getProfileUserDataPath(), parsed.data.sessionId)
+        : { status: 'not-found' }
+    }
   )
   ipcMain.handle('orcaProfiles:billingOpenPortal', async (): Promise<OrcaBillingOpenResult> =>
     openOrcaBillingPortal(getProfileUserDataPath())
