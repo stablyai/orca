@@ -65,30 +65,46 @@ export async function phaseSample(
         await new Promise((resolve) => setTimeout(resolve, 100))
         observed = observer.read()
       }
-      if (observed.bytes < threshold || observed.bytes >= stream.bytes || observed.completed) {
-        throw new Error(
-          `live threshold missed: ${observed.bytes} bytes, completed=${observed.completed}`
-        )
+      const liveSize = (operation: string): number => {
+        const current = observer.read()
+        if (current.bytes < threshold || current.bytes >= stream.bytes || current.completed) {
+          throw new Error(
+            `${operation} missed live phase: ${current.bytes} bytes, completed=${current.completed}`
+          )
+        }
+        return current.bytes
       }
       const triggerMs = Date.now() - started
       let sendCurrentTextBytes = Number.NaN
       let stopCurrentTextBytes = Number.NaN
-      const readCurrentTextBytes = observer.read().bytes
+      const readCurrentTextBytes = liveSize('tail read')
       const [competing, read, stop] = await Promise.all([
         competingSend(ctx, other, () => {
-          sendCurrentTextBytes = observer.read().bytes
+          sendCurrentTextBytes = liveSize('competing send')
         }),
         history(page(ctx), sessionId, 'tail', 40),
-        mutate(page(ctx), ctx.arm, 'agentSession.cancel', sessionId, {}, () => {
-          stopCurrentTextBytes = observer.read().bytes
-        })
+        (async () => {
+          const requestedAt = Date.now()
+          const answer = await mutate(
+            page(ctx),
+            ctx.arm,
+            'agentSession.cancel',
+            sessionId,
+            {},
+            () => {
+              stopCurrentTextBytes = liveSize('Stop')
+            }
+          )
+          const actionMs = Date.now() - requestedAt
+          const doneAt = await waitForWorking(page(ctx), false, 600_000)
+          await waitForIdle(page(ctx), sessionId, 600_000)
+          return { ...answer, actionMs, doneAt, settledMs: Date.now() - requestedAt }
+        })()
       ])
-      const done = await waitForWorking(page(ctx), false, 600_000)
-      await waitForIdle(page(ctx), sessionId, 600_000)
       const afterStop = observer.read()
       return {
         hostMs: sent.hostMs,
-        e2eMs: done - sent.startedAt,
+        e2eMs: stop.doneAt - sent.startedAt,
         extra: {
           thresholdBytes: threshold,
           currentTextBytesAtTrigger: observed.bytes,
@@ -101,10 +117,16 @@ export async function phaseSample(
           competingDurableMs: competing.durableMs,
           competingTailReadMs: read.hostMs,
           competingTailItems: read.page.items.length,
-          stopHostMs: stop.hostMs
+          stopHostMs: stop.hostMs,
+          stopActionMs: stop.actionMs,
+          stopSettledMs: stop.settledMs
         }
       }
     })
+  } catch (error) {
+    await mutate(page(ctx), ctx.arm, 'agentSession.cancel', sessionId, {}).catch(() => undefined)
+    await waitForIdle(page(ctx), sessionId, 600_000).catch(() => undefined)
+    throw error
   } finally {
     observer.close()
     pressure = await stopPressure()
