@@ -94,6 +94,35 @@ describe('buildUsageFormatValues', () => {
     })
   })
 
+  it('omits duration placeholders and reset fields for nonmatching windows', () => {
+    const values = buildUsageFormatValues(
+      provider({
+        provider: 'kimi',
+        session: win(14, 60, 3600000),
+        weekly: win(20, 1440, 3600000),
+        monthly: win(4, 10080, 3600000)
+      }),
+      { display: 'used', now: NOW, timeZone: 'UTC' }
+    )
+    expect(
+      renderUsageFormatTemplate(
+        '{provider}[ {5h} {5h.reset} {5h.resetAt}][ {7d} {7d.reset} {7d.resetAt}][ {30d} {30d.reset} {30d.resetAt}]',
+        values
+      )
+    ).toBe('Kimi')
+    expect(values).toMatchObject({
+      '5h': '',
+      '5h.reset': '',
+      '5h.resetAt': '',
+      '7d': '',
+      '7d.reset': '',
+      '7d.resetAt': '',
+      '30d': '',
+      '30d.reset': '',
+      '30d.resetAt': ''
+    })
+  })
+
   it('shows remaining percentages when the display setting says so', () => {
     const values = buildUsageFormatValues(provider({ session: win(14, 300, null) }), {
       display: 'remaining',

@@ -3450,6 +3450,12 @@
       "openView": "在 GitHub 中打开视图"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "合并 PR #{{number}}？",
+      "confirmGitHubSquash": "压缩提交并合并 PR #{{number}}？",
+      "confirmGitHubRebase": "变基并合并 PR #{{number}}？",
+      "confirmGitLabMerge": "要将合并请求 #{{number}} 合并吗？",
+      "confirmGitLabSquash": "要将合并请求 #{{number}} 的提交压缩后合并吗？",
+      "confirmGitLabRebase": "要将合并请求 #{{number}} 变基后合并吗？",
       "merged": "已合并",
       "closed": "已关闭",
       "conflicts": "有冲突",

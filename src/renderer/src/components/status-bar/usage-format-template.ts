@@ -44,12 +44,13 @@ export type UsageFormatValueOptions = {
 
 const WINDOW_KEYS: readonly [
   key: string,
+  minutes: number | null,
   pick: (p: ProviderRateLimits) => RateLimitWindow | null | undefined
 ][] = [
-  ['5h', (p) => p.session],
-  ['7d', (p) => p.weekly],
-  ['fable', (p) => p.fableWeekly],
-  ['30d', (p) => p.monthly]
+  ['5h', 300, (p) => p.session],
+  ['7d', 10080, (p) => p.weekly],
+  ['fable', null, (p) => p.fableWeekly],
+  ['30d', 43200, (p) => p.monthly]
 ]
 
 // Same subset and order the built-in Gemini rendering shows.
@@ -79,8 +80,9 @@ export function buildUsageFormatValues(
     provider: getProviderDisplayName(p.provider),
     plan: formatPlanLabel(p.planType) ?? ''
   }
-  for (const [key, pick] of WINDOW_KEYS) {
-    const window = pick(p)
+  for (const [key, minutes, pick] of WINDOW_KEYS) {
+    const candidate = pick(p)
+    const window = minutes === null || candidate?.windowMinutes === minutes ? candidate : null
     values[key] = window ? percent(window, options.display) : ''
     values[`${key}.reset`] =
       window?.resetsAt != null ? formatResetDuration(window.resetsAt - options.now) : ''

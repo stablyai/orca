@@ -1759,7 +1759,6 @@
       "permissionOwnDescription": "Terminais e chats seguem as configurações de permissão próprias do agente.",
       "permissionOwnShort": "Configurações próprias",
       "permissionWithoutAuto": "Agentes sem Aprovar por mim",
-      "permissionMixed": "Misto",
       "permissionSurfaceDifference": "Os terminais usam as configurações próprias do agente; novos chats usam {{mode}}.",
       "permissionSameAsAll": "Igual a todos os agentes",
       "permissionChipRemove": "Remover {{flag}} e usar as configurações próprias de {{agent}}",
