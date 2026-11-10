@@ -93,6 +93,66 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     }
   })
 
+  it('shows the editor path token hint in the toolbar for terminal commands', async () => {
+    await renderDialog({
+      id: 'qc-toolbar-tokens',
+      label: 'Start dev server',
+      action: 'terminal-command',
+      command: 'npm run dev',
+      appendEnter: true,
+      scope: { type: 'global' }
+    })
+
+    expect(document.body.textContent).toContain('Supports ${file} and other editor path tokens')
+  })
+
+  it('does not show the editor path token hint in the toolbar for agent prompts', async () => {
+    await renderDialog({
+      id: 'qc-agent-toolbar-tokens',
+      label: 'Investigate',
+      action: 'agent-prompt',
+      agent: 'claude',
+      prompt: 'Look into the build',
+      scope: { type: 'global' }
+    })
+
+    expect(document.body.textContent).not.toContain('Supports ${file} and other editor path tokens')
+  })
+
+  it('lists editor path tokens in Advanced for terminal commands', async () => {
+    await renderDialog(
+      {
+        id: 'qc-file-tokens',
+        label: 'Run file',
+        action: 'terminal-command',
+        command: 'python "${file}"',
+        appendEnter: true,
+        scope: { type: 'global' }
+      },
+      { defaultAdvancedOpen: true }
+    )
+
+    expect(document.body.textContent).toContain('${fileBasename}')
+    expect(document.body.textContent).toContain('${workspaceFolder}')
+  })
+
+  it('does not list editor path tokens in Advanced for agent prompts', async () => {
+    await renderDialog(
+      {
+        id: 'qc-agent-tokens',
+        label: 'Investigate',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt: 'Look into the build',
+        scope: { type: 'global' }
+      },
+      { defaultAdvancedOpen: true }
+    )
+
+    expect(document.body.textContent).not.toContain('${fileBasename}')
+    expect(document.body.textContent).not.toContain('${workspaceFolder}')
+  })
+
   it('refuses to save a prompt over an older host cap instead of truncating it', async () => {
     const onSave = vi.fn()
     await renderDialog(

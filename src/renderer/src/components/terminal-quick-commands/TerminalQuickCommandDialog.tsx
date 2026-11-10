@@ -297,6 +297,7 @@ export function TerminalQuickCommandDialog({
             selectedRepo={selectedRepo}
             selectedRepoId={selectedRepoId}
             selectedRepoMissing={selectedRepoMissing}
+            showFilePlaceholders={!isAgentAction}
             lastRepoScopeIdRef={lastRepoScopeIdRef}
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}

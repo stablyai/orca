@@ -29,6 +29,7 @@ export function createTerminalPaneMenuQuickCommand({
       command,
       pane,
       tabId,
+      worktreeId,
       transport: paneTransportsRef.current.get(pane.id)
     })
   }
