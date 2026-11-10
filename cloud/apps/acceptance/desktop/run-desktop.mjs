@@ -1487,11 +1487,88 @@ async function autoResumeStep() {
 }
 
 /**
+ * cli.desktop-delete-asleep-moved: create, Move to this computer, Sleep from the UI, wait until the
+ * control plane says asleep, then Delete: no wake, destroyed, no misleading toasts, local copy gone.
+ */
+async function asleepMovedStep() {
+  await runStep('life.delete-asleep-after-move', 'Move to this computer, Sleep, then Delete while asleep: no wake, destroyed, no misleading toasts', async (step) => {
+    const ws = await createExtraWorkspace(step, `${wsName}-mv`)
+    step.sandboxId = ws.sandboxId
+    // Move to this computer. Archive afterwards off: the explicit Sleep below is what sleeps it.
+    await openRowMenu(ws.name)
+    const tMove = Date.now()
+    await page.getByRole('menuitem', { name: 'Move to this computer' }).click()
+    const dlg = page.getByRole('dialog').filter({ hasText: 'Archive the cloud workspace afterwards' })
+    await dlg.waitFor({ timeout: 15_000 })
+    const box = dlg.getByRole('checkbox').first()
+    const isOn = async () => (await box.getAttribute('aria-checked')) === 'true' || (await box.getAttribute('data-state')) === 'checked'
+    step.archiveAfterDefault = await isOn()
+    if (step.archiveAfterDefault) await box.click()
+    step.archiveAfter = await isOn()
+    await shot(step, 'move-confirm')
+    await dlg.getByRole('button', { name: /Move to this computer/ }).click()
+    let local = null
+    while (Date.now() - tMove < 180_000) {
+      local = await store((n) => Object.values(window.__store.getState().worktreesByRepo ?? {}).flat().find((w) => !w.path.startsWith('/vercel') && w.path.includes(n)), ws.name)
+      if (local) break
+      await sleep(250)
+    }
+    if (!local) throw new Error('no local worktree within 180s of Move')
+    created.localPaths.push(local.path)
+    step.timings.moveMs = Date.now() - tMove
+    await sleep(1500)
+    await page.getByRole('dialog').getByRole('button', { name: /^(Close|Done)$/ }).first().click({ timeout: 1500 }).catch(() => {})
+    await shot(step, 'moved')
+    step.statusAfterMove = await sandboxStatus(ws.sandboxId)
+    // Sleep from the UI.
+    await clearToasts()
+    await openRowMenu(ws.name)
+    const tSleep = Date.now()
+    await page.getByRole('menuitem', { name: /^(Suspend VM|Sleep)$/ }).first().click()
+    await page.getByRole('dialog').getByRole('button', { name: /^(Sleep|Suspend)/ }).click({ timeout: 1500 }).catch(() => {})
+    const w = await waitSandboxStatus(ws.sandboxId, ['suspended', 'sleeping', 'stopped'], 180_000)
+    step.timings.sleepToAsleepMs = w.ms
+    if (w.timedOut) throw new Error(`not asleep 180s after Sleep (control plane ${w.status})`)
+    await sleep(2000)
+    await shot(step, 'asleep')
+    const sleepToasts = (await toasts()).map(redact)
+    // Delete while asleep (records no-wake states and destroyed).
+    await asleepDeleteCheck(step, ws.name, ws.sandboxId)
+    const all = [...sleepToasts, ...(step.firstDelete?.toasts ?? []), ...(step.forceDelete?.toasts ?? [])]
+    step.toastsSinceSleep = all
+    const misleading = all.filter((t) => /couldn.t be suspended|still running|Couldn.t archive|Couldn.t delete/i.test(t))
+    step.misleadingToasts = misleading
+    // The local copy: delete it through the UI when its row is found (cleanup removes it otherwise).
+    for (const n of [local.displayName, path.basename(local.path), ws.name]) {
+      if (await rowShown(n, 'local')) {
+        await openRowMenu(n, 'local')
+        await page.getByRole('menuitem', { name: /^Delete/ }).click()
+        await page.getByRole('dialog').getByRole('button', { name: /^Delete( Workspace)?$/ }).click()
+        await waitRowGone(n, 'local', 60_000).catch(() => {})
+        step.localDeletedVia = 'UI'
+        break
+      }
+    }
+    if (misleading.length && step.status === 'pass') {
+      step.status = 'fail'
+      bug('life.delete-asleep-after-move', { title: 'Misleading toasts when deleting an asleep cloud workspace after Move to this computer', expected: 'no suspend/archive/delete error toasts', actual: JSON.stringify(misleading), repro: 'Cloud workspace -> Move to this computer -> Sleep -> Delete', screenshot: step.screenshots.at(-1) })
+    }
+    step.detail = `move ${step.timings.moveMs}ms (archive afterwards ${step.archiveAfter}, default ${step.archiveAfterDefault}); after move ${step.statusAfterMove.status}; Sleep -> ${w.status} in ${w.ms}ms; ${step.detail}; misleading toasts ${JSON.stringify(misleading)}; local copy ${step.localDeletedVia ?? 'left for cleanup'}`
+  })
+}
+
+/**
  * W9D_MODE=targeted: picker sign-in (twice per process: fresh profile, then after a sign-out),
  * create + keystroke, Move to this computer (Archive afterwards on) then Delete within seconds,
  * and a normal Delete.
  */
 async function targetedFlow() {
+  if (process.env.W9D_ONLY === 'asleep-moved') {
+    await store(() => window.__store.getState().connectCurrentOrcaProfile())
+    await sleep(1500)
+    await asleepMovedStep()
+    return
+  }
   if (process.env.W9D_ONLY === 'auto-resume') {
     await store(() => window.__store.getState().connectCurrentOrcaProfile())
     await sleep(1500)

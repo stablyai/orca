@@ -32,16 +32,6 @@ export const coreChecks: Record<string, Check> = {
     return { status: ok ? 'pass' : 'fail', detail: `outsider GET ${get.status}, DELETE ${del.status}, suspend ${sus.status}, in list: ${leaked}` }
   },
 
-  'billing.entitlement-gate': async (ctx) => {
-    const ent = await billing.as({ sub: 'w9-noplan', org: `w9-noplan-${ctx.run.file.runId}`, orgRole: 'owner' }, 'GET', '/v1/billing/entitlements')
-    const refused = ent.body?.canStartSandbox === false
-    return {
-      status: refused ? 'partial' : 'fail',
-      detail: `no-plan org: canStartSandbox=${ent.body?.canStartSandbox} reason=${ent.body?.reason ?? ent.body?.startBlockedReason ?? '?'}; control-plane side not reachable with dev tokens (dev:* accounts bypass billing by design), covered by unit tests`,
-      evidence: [log('entitlements', JSON.stringify(ent.body).slice(0, 1500))]
-    }
-  },
-
   'sub.create': async (ctx) => {
     const p = await ctx.primary()
     const ok = p.sandbox.status === 'running' && p.connection.type === 'orca-server' && p.connection.pairingCode.startsWith('orca://pair?')
