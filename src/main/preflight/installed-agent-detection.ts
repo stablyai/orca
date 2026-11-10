@@ -15,6 +15,7 @@ import {
 } from '../ipc/preflight/preflight-runtime-target'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
@@ -43,6 +44,23 @@ export function agentCommandOverrideDetectionOptions(
 ): InstalledAgentDetectionOptions | undefined {
   return overrides && Object.values(overrides).some((command) => command?.trim())
     ? { agentCmdOverrides: overrides }
+    : undefined
+}
+
+/** Settings shape the background detection options need; GlobalSettings satisfies it. */
+export type AgentDetectionSettings = Partial<
+  Pick<GlobalSettings, 'disabledTuiAgents' | 'agentCmdOverrides'>
+>
+
+/** Background inventories (launch pickers, project launch, skill installs): disabled agents are not probed (#40636). */
+export function backgroundAgentDetectionOptions(
+  settings: AgentDetectionSettings | undefined
+): InstalledAgentDetectionOptions | undefined {
+  return settings
+    ? {
+        disabledTuiAgents: settings.disabledTuiAgents,
+        ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
+      }
     : undefined
 }
 

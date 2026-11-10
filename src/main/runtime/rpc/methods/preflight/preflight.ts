@@ -2,6 +2,7 @@ import { defineMethod } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   agentCommandOverrideDetectionOptions,
+  backgroundAgentDetectionOptions,
   type InstalledAgentDetectionOptions
 } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
@@ -23,12 +24,15 @@ import {
 
 /** This host's command overrides, so a configured CLI outside PATH is listed like a detected one. */
 function hostDetectionOptions(
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  enabledOnly?: boolean
 ): InstalledAgentDetectionOptions | undefined {
   try {
-    return agentCommandOverrideDetectionOptions(
-      runtime.requireStore().getSettings().agentCmdOverrides
-    )
+    const settings = runtime.requireStore().getSettings()
+    // enabledOnly background inventories also skip agents disabled in this host's settings (#40636).
+    return enabledOnly
+      ? backgroundAgentDetectionOptions(settings)
+      : agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
   } catch {
     // A runtime without its store still lists PATH-detected agents.
     return undefined
@@ -55,7 +59,7 @@ export const PREFLIGHT_METHODS = [
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
       await assertAgentDetectionHostRunning(host)
-      return detectAgentsOnHost(host, hostDetectionOptions(runtime))
+      return detectAgentsOnHost(host, hostDetectionOptions(runtime, params.enabledOnly))
     }
   }),
   defineMethod({
@@ -78,7 +82,11 @@ export const PREFLIGHT_METHODS = [
     handler: async (params, { runtime }) => {
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
-      return refreshAgentsOnHost(host, hostDetectionOptions(runtime), params.userInitiated)
+      return refreshAgentsOnHost(
+        host,
+        hostDetectionOptions(runtime, params.enabledOnly),
+        params.userInitiated
+      )
     }
   })
 ]

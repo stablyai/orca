@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/skills/sharing/agent-skill-sharing-contract'
 import type { DiscoveredSkill } from '../../../../shared/skills/discovery/skills'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type {
   SkillBundleInstallPreview,
   SkillBundleInstallPreviewRequest,
@@ -152,7 +153,12 @@ export type RuntimeSkillCommandHost = {
   getRuntimeId(): string
   getUserDataPath(): string
   isPackaged(): boolean
-  getSettings(): { agentSkillSharingEnabled?: boolean }
+  /** Detection options come from the same settings the sharing gate reads (#40636). */
+  getSettings(): {
+    agentSkillSharingEnabled?: boolean
+    disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
+    agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+  }
   listRepos(): {
     id: string
     path: string

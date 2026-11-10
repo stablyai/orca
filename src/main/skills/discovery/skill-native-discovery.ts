@@ -3,6 +3,7 @@ import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
 import type { Repo } from '../../../shared/repository/repo-types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -34,6 +35,7 @@ import {
 } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
+import { runInWindowsBulkFsSlot } from '../../filesystem/windows-bulk-fs-slot'
 import {
   isSkillRootUnavailableError,
   SkillScanCoalescer,
@@ -162,10 +164,12 @@ async function scanRootShared(
     const outcome = await rootScans.run(
       key,
       { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
-      async (signal) => {
-        const exists = await pathExists(root.path)
-        return { exists, skills: exists ? await scanRoot(root, signal) : [] }
-      }
+      async (signal) =>
+        // One slot per root walk: many concurrent root scans pile libuv workers into DLP hooks (#40636).
+        await runInWindowsBulkFsSlot(async () => {
+          const exists = await pathExists(root.path)
+          return { exists, skills: exists ? await scanRoot(root, signal) : [] }
+        })
     )
     recordLastKnownRootScan(key, outcome.value)
     return outcome
@@ -224,6 +228,8 @@ export async function discoverSkills(args: {
   refresh?: boolean
   names?: string[]
   sourceKinds?: SkillSourceKind[]
+  /** Roots owned by a disabled agent are not scanned; its skills never appear (#40636). */
+  disabledTuiAgents?: readonly TuiAgent[]
   /**
    * A user act (Share) may read stopped WSL distros' folders: 'all', those on named distros, or only
    * the roots holding these skill directories. Every other stopped root is reported unavailable, so
@@ -260,7 +266,7 @@ export async function discoverSkills(args: {
           args.signal
         )
       : [])
-  ]
+  ].filter((root) => !(root.owner && args.disabledTuiAgents?.includes(root.owner as TuiAgent)))
   // Host-only root sets never await the WSL gate.
   const { readable, unavailable } =
     gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))

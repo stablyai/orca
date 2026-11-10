@@ -26,7 +26,7 @@ import {
   nameLocalTypedLineShell
 } from '../../terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../../../preflight/workspace-agent-detection'
-import { agentCommandOverrideDetectionOptions } from '../../../preflight/installed-agent-detection'
+import { backgroundAgentDetectionOptions } from '../../../preflight/installed-agent-detection'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 
@@ -75,10 +75,7 @@ export async function resolveWorktreeStartupDraftAgent(
     // Disabled agents cannot be picked here, so background detection never probes them (#34635).
     detected = await detectAgentsOnHost(
       sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
-      {
-        disabledTuiAgents: settings.disabledTuiAgents,
-        ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
-      }
+      backgroundAgentDetectionOptions(settings)
     )
   } catch {
     detected = []

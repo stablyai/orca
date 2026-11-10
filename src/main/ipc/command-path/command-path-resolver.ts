@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import { runInWindowsBulkFsSlot } from '../../filesystem/windows-bulk-fs-slot'
 import { directoryNameKey } from './command-path-directory'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
 
@@ -157,22 +158,26 @@ export function resolveSelectedLocalCommand(
 }
 
 async function isExecutableFile(candidate: string, isWin: boolean): Promise<boolean> {
-  try {
-    // Follow symlinked CLIs to their real targets.
-    const stats = await stat(candidate)
-    if (stats.isDirectory()) {
-      // PATH directories are not executable files despite their search bit.
+  // Every PATH × PATHEXT candidate stat flows through here, including the degraded per-candidate
+  // fallback when directory listings are unavailable; the slot keeps libuv out of DLP hooks (#40636).
+  return runInWindowsBulkFsSlot(async () => {
+    try {
+      // Follow symlinked CLIs to their real targets.
+      const stats = await stat(candidate)
+      if (stats.isDirectory()) {
+        // PATH directories are not executable files despite their search bit.
+        return false
+      }
+      if (isWin) {
+        // Extension membership already enforced by the PATHEXT permutation.
+        return stats.isFile()
+      }
+      await access(candidate, fsConstants.X_OK)
+      return true
+    } catch {
       return false
     }
-    if (isWin) {
-      // Extension membership already enforced by the PATHEXT permutation.
-      return stats.isFile()
-    }
-    await access(candidate, fsConstants.X_OK)
-    return true
-  } catch {
-    return false
-  }
+  })
 }
 
 /** Filesystem-only PATH lookup preserving the preflight absolute-path filter; use listLocalCommandPaths for shadowed candidates. */

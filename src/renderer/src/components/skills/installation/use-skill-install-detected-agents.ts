@@ -22,7 +22,10 @@ export function useSkillInstallDetectedAgents(target: {
       if (environmentId !== 'local') {
         return null
       }
-      return window.api.preflight.detectAgents(wslDistro ? { wslDistro } : undefined)
+      // Installs target enabled agents; disabled ones are not probed (#40636).
+      return window.api.preflight.detectAgents(
+        wslDistro ? { wslDistro, enabledOnly: true } : { enabledOnly: true }
+      )
     }
     void probe()
       .then((agents) => {

@@ -16,24 +16,25 @@ export type NestedSshAgentDetection<T> = {
 }
 
 /** Old hosts can supply workspace agents via host defaults only on known non-Windows platforms; host-default requests remain synchronous. */
+// Every caller is a launch inventory: ask the host to skip probing agents disabled in its Settings (#40636).
 export function callRuntimeAgentDetection<T>(
   environmentId: string,
   worktreeId: string | null | undefined,
-  call: (params: { worktreeId: string } | undefined) => Promise<T>,
+  call: (params: { worktreeId?: string; enabledOnly: boolean }) => Promise<T>,
   nestedSsh?: NestedSshAgentDetection<T>
 ): Promise<T> {
   if (!worktreeId) {
-    return call(undefined)
+    return call({ enabledOnly: true })
   }
   const capability = PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
   return runtimeEnvironmentSupportsCapability(environmentId, capability).then(async (supported) => {
     if (supported) {
-      return call({ worktreeId })
+      return call({ worktreeId, enabledOnly: true })
     }
     // Why: a fresh status both reports the platform and catches an in-place upgrade.
     const status = await getRuntimeEnvironmentStatus(environmentId)
     if (status.capabilities?.includes(capability)) {
-      return call({ worktreeId })
+      return call({ worktreeId, enabledOnly: true })
     }
     // Why: the host's SSH workspace runs on its SSH target, which old hosts already probe by id.
     if (nestedSsh) {
@@ -43,6 +44,6 @@ export function callRuntimeAgentDetection<T>(
     if (!status.hostPlatform || status.hostPlatform === 'win32') {
       throw new RuntimeAgentDetectionNeedsServerUpdateError()
     }
-    return call(undefined)
+    return call({ enabledOnly: true })
   })
 }

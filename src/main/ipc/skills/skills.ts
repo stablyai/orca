@@ -30,6 +30,8 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
     discoverSkillsOnTarget(resolvedTarget, store.getRepos(), {
       providerRootOverrides: await runtime?.resolveSkillDiscoveryProviderRoots(resolvedTarget),
       refresh,
+      // A disabled agent's skill roots are never scanned (#40636).
+      disabledTuiAgents: store.getSettings().disabledTuiAgents,
       ...(readStoppedWslRootsFor ? { readStoppedWslRootsFor } : {})
     })
   // Passive UI mounts discovery, so it must not start a stopped WSL distro.

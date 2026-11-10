@@ -38,7 +38,10 @@ export type ProjectRuntimeResolutionStore = {
   getSettings?: () => Partial<
     Pick<
       GlobalSettings,
-      'localWindowsRuntimeDefault' | 'experimentalWslHosts' | 'agentCmdOverrides'
+      | 'localWindowsRuntimeDefault'
+      | 'experimentalWslHosts'
+      | 'agentCmdOverrides'
+      | 'disabledTuiAgents'
     >
   >
 }

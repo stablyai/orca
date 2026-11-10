@@ -24,7 +24,9 @@ export const PreflightAgentDetection = z
   .object({
     worktreeId: z.string().min(1).optional(),
     repoId: z.string().min(1).optional(),
-    worktreeHostId: OptionalExecutionHostId
+    worktreeHostId: OptionalExecutionHostId,
+    /** Skip agents disabled in the host's Settings → Agents; older hosts strip it and probe all. */
+    enabledOnly: z.boolean().optional()
   })
   .superRefine((params, ctx) => {
     if (

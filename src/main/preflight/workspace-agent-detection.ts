@@ -33,7 +33,7 @@ import {
   type RefreshAgentsResult
 } from './agent-detection'
 import {
-  agentCommandOverrideDetectionOptions,
+  backgroundAgentDetectionOptions,
   type InstalledAgentDetectionOptions
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
@@ -192,7 +192,8 @@ export async function detectProjectLaunchContext(
   }
   const agents = await detectAgentsOnHost(
     ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
-    agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
+    // A create-workspace picker never offers disabled agents, so it must not probe them (#40636).
+    backgroundAgentDetectionOptions(store.getSettings?.())
   )
   return {
     agents: agents.filter(isTuiAgent),

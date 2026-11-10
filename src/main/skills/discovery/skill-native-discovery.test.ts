@@ -105,6 +105,30 @@ describe('skill discovery', () => {
     expect(result.skills.map((skill) => skill.name)).toEqual([])
   })
 
+  it('does not scan skill roots owned by a disabled agent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const codexSkill = join(home, '.codex', 'skills', 'review')
+    const ompSkill = join(home, '.omp', 'agent', 'skills', 'planning')
+    await mkdir(codexSkill, { recursive: true })
+    await mkdir(ompSkill, { recursive: true })
+    await writeFile(
+      join(codexSkill, 'SKILL.md'),
+      ['---', 'name: code-review', 'description: Review code changes.', '---', ''].join('\n')
+    )
+    await writeFile(join(ompSkill, 'SKILL.md'), '# Planning\n\nPlan OMP work.')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      repos: [],
+      disabledTuiAgents: ['omp']
+    })
+
+    expect(result.skills.map((skill) => skill.name)).toEqual(['code-review'])
+    expect(result.sources.map((source) => source.id)).not.toContain('home-omp')
+  })
+
   it('filters discovery by requested directory name and source kind', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

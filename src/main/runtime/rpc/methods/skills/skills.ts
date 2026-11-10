@@ -1,6 +1,7 @@
 import { defineMethod } from '../../core'
 import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { SkillDeleteRequestSchema } from '../../../../../shared/skills/deletion/skill-delete-contract'
 import {
   BundledSkillAutoUpdateRequestSchema,
@@ -62,6 +63,17 @@ export function resolveDiscoveryTarget(
   return resolveSkillDiscoveryTarget(target, options)
 }
 
+/** A disabled agent's skill roots are never scanned on this host (#40636). */
+function disabledTuiAgentsForDiscovery(
+  runtime: Pick<OrcaRuntimeService, 'requireStore'>
+): GlobalSettings['disabledTuiAgents'] | undefined {
+  try {
+    return runtime.requireStore().getSettings().disabledTuiAgents
+  } catch {
+    return undefined
+  }
+}
+
 // A caller naming only the workspace gets its folder from the host, which refuses SSH workspaces like desktop.
 async function withWorkspaceCwd(
   params: z.infer<typeof SkillsDiscoverParams>,
@@ -100,9 +112,11 @@ export const SKILL_METHODS = [
           runtime,
           { refuseStoppedWslDistro: true }
         )
+        const disabledTuiAgents = disabledTuiAgentsForDiscovery(runtime)
         return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
           providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
-          refresh: params.refresh === true
+          refresh: params.refresh === true,
+          ...(disabledTuiAgents ? { disabledTuiAgents } : {})
         })
       }, params.sourceKinds)
   }),
@@ -167,17 +181,20 @@ export const SKILL_METHODS = [
         )
       }
       // Sharing named skills is a user act: it may start the workspace's distro.
-      const discover = async (readStoppedWslRootsFor?: { distros: readonly string[] }) =>
-        runAsWslUserAct(
+      const discover = async (readStoppedWslRootsFor?: { distros: readonly string[] }) => {
+        const disabledTuiAgents = disabledTuiAgentsForDiscovery(runtime)
+        return runAsWslUserAct(
           resolvedTarget.cwd ? wslDistroForPath(resolvedTarget.cwd) : null,
           async () =>
             discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
               providerRootOverrides:
                 await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
               refresh: true,
+              ...(disabledTuiAgents ? { disabledTuiAgents } : {}),
               ...(readStoppedWslRootsFor ? { readStoppedWslRootsFor } : {})
             })
         )
+      }
       // Selectors name skills, not folders: when one is missing, start only the distros left unread.
       let discovered = await discover()
       const unreadDistros = [

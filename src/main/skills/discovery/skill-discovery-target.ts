@@ -3,6 +3,7 @@ import {
   type WslSkillDiscoveryObservation
 } from './skill-discovery-wsl-observation'
 import type { Repo } from '../../../shared/repository/repo-types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SkillDiscoveryResult,
   SkillDiscoveryTarget
@@ -133,11 +134,14 @@ function repoDigest(repos: readonly Repo[]): string {
 function scanKey(
   target: ResolvedSkillDiscoveryTarget,
   repos: readonly Repo[],
-  providerRootOverrides: SkillProviderRootOverrides | undefined
+  providerRootOverrides: SkillProviderRootOverrides | undefined,
+  disabledTuiAgents: readonly TuiAgent[] | undefined
 ): string {
   const providerRoots = Object.entries(providerRootOverrides ?? {}).sort(([left], [right]) =>
     left.localeCompare(right)
   )
+  // The disabled set selects a different root list, so it must select a different cache entry.
+  const disabled = disabledTuiAgents?.slice().sort() ?? null
   const names = target.names?.slice().sort() ?? null
   const sourceKinds = target.sourceKinds?.slice().sort() ?? null
   return target.kind === 'wsl'
@@ -154,6 +158,7 @@ function scanKey(
         target.cwd ?? null,
         target.cwd ? null : repoDigest(repos),
         providerRoots,
+        disabled,
         names,
         sourceKinds
       ])
@@ -167,6 +172,8 @@ export async function discoverSkillsOnTarget(
     providerRootOverrides?: SkillProviderRootOverrides
     /** A user act (Share) may read stopped distros' folders; see `StoppedWslRootsReadScope`. */
     readStoppedWslRootsFor?: StoppedWslRootsReadScope
+    /** Roots owned by a disabled agent are not scanned (#40636). */
+    disabledTuiAgents?: readonly TuiAgent[]
   } = {}
 ): Promise<SkillDiscoveryResult> {
   const refresh = options.refresh === true
@@ -177,7 +184,7 @@ export async function discoverSkillsOnTarget(
   try {
     const outcome = await targetScans.run(
       // A gated and an ungated scan of one target must not answer for each other.
-      `${scanKey(target, repos, options.providerRootOverrides)}${userActKey}`,
+      `${scanKey(target, repos, options.providerRootOverrides, options.disabledTuiAgents)}${userActKey}`,
       { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
       async (): Promise<TargetScanObservation> => {
         if (target.kind === 'wsl') {
@@ -200,6 +207,9 @@ export async function discoverSkillsOnTarget(
               ...(target.names ? { names: target.names } : {}),
               ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
               providerRootOverrides: options.providerRootOverrides,
+              ...(options.disabledTuiAgents
+                ? { disabledTuiAgents: options.disabledTuiAgents }
+                : {}),
               ...gate
             })
           : discoverSkills({
@@ -208,6 +218,9 @@ export async function discoverSkillsOnTarget(
               ...(target.names ? { names: target.names } : {}),
               ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
               providerRootOverrides: options.providerRootOverrides,
+              ...(options.disabledTuiAgents
+                ? { disabledTuiAgents: options.disabledTuiAgents }
+                : {}),
               ...gate
             }))
         return { kind: 'native', result }

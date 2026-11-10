@@ -17,6 +17,7 @@ import {
 } from '../../../skills/bundled-skill-install/bundled-skill-installation'
 import { clearSkillDiscoveryCaches } from '../../../skills/discovery/skill-discovery-target'
 import { resolveSkillInstallDestination } from '../../../skills/install/skill-install-destinations'
+import { backgroundAgentDetectionOptions } from '../../../preflight/installed-agent-detection'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import { createSkillInstallAuthority } from './runtime-skill-install-authority'
 
@@ -42,6 +43,8 @@ async function appInput(
   return localBundledSkillInput({
     userDataPath: host.getUserDataPath(),
     destination,
+    // Bundled installs target enabled agents; disabled ones are not probed (#40636).
+    detectionOptions: backgroundAgentDetectionOptions(host.getSettings()),
     ...(request.agent ? { agents: [request.agent] } : {}),
     claudeConfigDirectory: host.getClaudeConfigDirectory?.({ runtime: 'host' }),
     selection: bundledSkillSelection(request)

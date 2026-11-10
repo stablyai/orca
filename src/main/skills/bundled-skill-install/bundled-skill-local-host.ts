@@ -3,7 +3,10 @@ import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
 } from '../../../shared/skills/installation/skill-install-providers'
-import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/installed-agent-detection'
+import {
+  detectInstalledAgentsWithShellPathHydration,
+  type InstalledAgentDetectionOptions
+} from '../../preflight/installed-agent-detection'
 import {
   readUserClaudeConfigDir,
   resolveClaudeDefaultHome
@@ -27,6 +30,8 @@ export async function localBundledSkillInput(options: {
   destination: BundledSkillTargetRequest['destination']
   /** `--agent`; detected on this host when omitted. */
   agents?: readonly SkillInstallProviderId[]
+  /** App callers skip disabled agents; the CLI has no settings and probes all. */
+  detectionOptions?: InstalledAgentDetectionOptions
   /** Use the app account router when supplied; otherwise ignore CLAUDE_CONFIG_DIR injected by Orca managed-account terminals. */
   claudeConfigDirectory?: string | null
   selection: BundledSkillSelection
@@ -34,7 +39,9 @@ export async function localBundledSkillInput(options: {
   const { destination, selection } = options
   const agents =
     options.agents ??
-    (await detectInstalledAgentsWithShellPathHydration()).filter(isSkillInstallProviderId)
+    (await detectInstalledAgentsWithShellPathHydration(undefined, options.detectionOptions)).filter(
+      isSkillInstallProviderId
+    )
   return {
     destination,
     agents,

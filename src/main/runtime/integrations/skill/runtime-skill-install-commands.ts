@@ -1,7 +1,11 @@
 import '../../../../shared/git/admission/git-admission-state'
 import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { join } from 'node:path'
-import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
+import {
+  backgroundAgentDetectionOptions,
+  detectInstalledAgentsWithShellPathHydration,
+  type InstalledAgentDetectionOptions
+} from '../../../preflight/installed-agent-detection'
 import { executeSkillInstallRequest } from '../../../skills/install/skill-install-request'
 import { executeSkillBundleInstallRequest } from '../../../skills/install/skill-bundle-install-request'
 import { SkillUploadSessionService } from '../../../skills/runtime-upload/skill-upload-session-service'
@@ -48,6 +52,15 @@ export class RuntimeSkillInstallCommands {
   protected userDataPath(): string {
     return this.host.getUserDataPath()
   }
+  /** Skills install into enabled agents; disabled ones are not probed (#40636). */
+  protected detectProviders = (
+    context?: Parameters<typeof detectInstalledAgentsWithShellPathHydration>[0],
+    options?: InstalledAgentDetectionOptions
+  ): ReturnType<typeof detectInstalledAgentsWithShellPathHydration> =>
+    detectInstalledAgentsWithShellPathHydration(context, {
+      ...options,
+      ...backgroundAgentDetectionOptions(this.host.getSettings())
+    })
   protected requireUploads(): SkillUploadSessionService {
     if (this.skillUploadSessionsDisposed) {
       throw new Error('skill-upload-service-disposed')
@@ -100,7 +113,7 @@ export class RuntimeSkillInstallCommands {
       allowedDownloadOrigins: [...new Set(origins)],
       requireHttps: this.host.isPackaged(),
       resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
+      detectProviders: this.detectProviders,
       resolveProviderRootOverrides: (destination) => this.roots(destination),
       signal
     })
@@ -168,7 +181,7 @@ export class RuntimeSkillInstallCommands {
         allowedDownloadOrigins: [...new Set(origins)],
         requireHttps: this.host.isPackaged(),
         resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
-        detectProviders: detectInstalledAgentsWithShellPathHydration,
+        detectProviders: this.detectProviders,
         resolveProviderRootOverrides: (destination) => this.roots(destination),
         signal: controller.signal,
         onProgress: report
