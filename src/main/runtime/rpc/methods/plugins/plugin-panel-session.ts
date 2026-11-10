@@ -38,8 +38,13 @@ export const PLUGIN_PANEL_SESSION_METHODS = [
       if (
         service.findValidPlugin(params.pluginKey)?.consentFingerprint !== params.consentFingerprint
       ) {
+        throw new Error(`this host does not have the same ${params.pluginKey} installed`)
+      }
+      // Why: the same plugin still waiting for approval, or disabled, on the host would otherwise
+      // read as a missing panel and send the person away from the approval it needs there.
+      if (!service.findApprovedPlugin(params.pluginKey)) {
         throw new Error(
-          `this host does not have the same ${params.pluginKey} installed and approved`
+          `${params.pluginKey} is installed on this host but is not approved and enabled there`
         )
       }
       const ownerKey = bindRpcPanelOwner(service, context)

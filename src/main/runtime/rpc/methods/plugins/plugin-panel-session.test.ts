@@ -26,6 +26,7 @@ describe('plugins.panelSession', () => {
     const service = {
       whenReady: vi.fn().mockResolvedValue(undefined),
       findValidPlugin: vi.fn().mockReturnValue({ consentFingerprint }),
+      findApprovedPlugin: vi.fn().mockReturnValue({ consentFingerprint }),
       panels: {
         bindOwnerSignal: vi.fn(),
         open: vi.fn().mockResolvedValue({ html: '', sessionToken: HOST_TOKEN }),
@@ -120,6 +121,15 @@ describe('plugins.panelSession', () => {
     const { service, context } = host('fp-other')
     await expect(panelSession().handler(params, context, vi.fn())).rejects.toThrow(
       'does not have the same acme.notes'
+    )
+    expect(service.panels.open).not.toHaveBeenCalled()
+  })
+
+  it('says the host plugin needs approval rather than that the panel is missing', async () => {
+    const { service, context } = host('fp-1')
+    service.findApprovedPlugin.mockReturnValue(null)
+    await expect(panelSession().handler(params, context, vi.fn())).rejects.toThrow(
+      'acme.notes is installed on this host but is not approved and enabled there'
     )
     expect(service.panels.open).not.toHaveBeenCalled()
   })
