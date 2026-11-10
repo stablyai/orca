@@ -11,31 +11,31 @@ afterEach(() => {
 })
 
 describe('client-hosted retained host paint', () => {
-  it('stays transparent and click-through over a pane hidden by an ancestor opacity', async () => {
+  it('goes transparent and click-through while its tab is switched away, then returns', async () => {
     const rig = createRetainedHostFixture()
-    // Inactive tabs kept paintable for agents or viewers are hidden by opacity, not display.
-    const inactiveSlot = document.createElement('div')
-    inactiveSlot.style.opacity = '0'
-    document.body.appendChild(inactiveSlot)
-    inactiveSlot.appendChild(rig.container)
+    // Inactive tabs kept paintable for agents or viewers are hidden by slot opacity, not display.
+    const slot = document.createElement('div')
+    document.body.appendChild(slot)
+    slot.appendChild(rig.container)
     await rig.mount()
-
     rig.attach()
+    const host = rig.host()
+    expect(host.style.opacity).toBe('')
+    expect(host.style.pointerEvents).toBe('auto')
 
-    expect(rig.host().style.opacity).toBe('0')
-    expect(rig.host().style.pointerEvents).toBe('none')
-    expect(rig.host().inert).toBe(true)
-  })
+    slot.style.opacity = '0'
+    window.dispatchEvent(new Event('resize'))
 
-  it('paints and accepts input over a shown pane', async () => {
-    const rig = createRetainedHostFixture()
-    await rig.mount()
+    expect(host.style.opacity).toBe('0')
+    expect(host.style.pointerEvents).toBe('none')
+    expect(host.inert).toBe(true)
+    expect(host.style.width).toBe('800px')
 
-    rig.attach()
+    slot.style.opacity = '1'
+    window.dispatchEvent(new Event('resize'))
 
-    expect(rig.host().style.opacity).toBe('')
-    expect(rig.host().style.pointerEvents).toBe('auto')
-    expect(rig.host().style.left).toBe('0px')
-    expect(rig.host().style.width).toBe('800px')
+    expect(host.style.opacity).toBe('')
+    expect(host.style.pointerEvents).toBe('auto')
+    expect(host.inert).toBe(false)
   })
 })
