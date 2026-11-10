@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -28,10 +29,14 @@ export function applyRemoveWorktreeSuccessState(
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
     const omitByTabId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, tabIds)
-    const nextWorktreesByRepo = { ...s.worktreesByRepo }
-    for (const repoId of Object.keys(nextWorktreesByRepo)) {
-      nextWorktreesByRepo[repoId] = nextWorktreesByRepo[repoId].filter((w) => w.id !== worktreeId)
+    const worktreesDraft = recordDraft(s.worktreesByRepo)
+    for (const [repoId, rows] of Object.entries(s.worktreesByRepo)) {
+      const after = rows.filter((w) => w.id !== worktreeId)
+      if (after.length !== rows.length) {
+        worktreesDraft.set(repoId, after)
+      }
     }
+    const nextWorktreesByRepo = worktreesDraft.finish()
     // Why: clean up per-file editor state for the removed worktree so stale drafts/view modes don't accumulate.
     const removedFileIds = new Set<string>()
     for (const file of s.openFiles) {

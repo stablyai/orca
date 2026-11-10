@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -75,5 +76,5 @@ export function applyWorktreeUpdates(
     return worktreesByRepo
   }
 
-  return { ...worktreesByRepo, [repoId]: nextWorktrees }
+  return replaceRecordEntries(worktreesByRepo, [[repoId, nextWorktrees]])
 }

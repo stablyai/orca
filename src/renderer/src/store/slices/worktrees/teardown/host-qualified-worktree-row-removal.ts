@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { getWorktreeOperationOwnerHostIds } from '@/lib/workspace/ownership/worktree-operation-route'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -81,16 +82,20 @@ export function dropConfirmedHostRow(
         scanSurvivingHostId ??
         fallbackSurvivingHostId)
       : null
-    const nextWorktreesByRepo = { ...state.worktreesByRepo }
-    for (const [candidateRepoId, worktrees] of Object.entries(nextWorktreesByRepo)) {
+    const knownDraft = recordDraft(state.worktreesByRepo)
+    for (const [candidateRepoId, worktrees] of Object.entries(state.worktreesByRepo)) {
       const matchOptions = worktreeHostMatchOptions(state, candidateRepoId, requiredExecutionHostId)
-      nextWorktreesByRepo[candidateRepoId] = worktrees.filter(
+      const survivors = worktrees.filter(
         (worktree) =>
           worktree.id !== worktreeId ||
           !worktreeMatchesHost(worktree, requiredExecutionHostId, matchOptions)
       )
+      if (survivors.length !== worktrees.length) {
+        knownDraft.set(candidateRepoId, survivors)
+      }
     }
-    let nextDetectedWorktreesByRepo = state.detectedWorktreesByRepo
+    const nextWorktreesByRepo = knownDraft.finish()
+    const detectedDraft = recordDraft(state.detectedWorktreesByRepo)
     for (const [candidateRepoId, result] of Object.entries(state.detectedWorktreesByRepo)) {
       const matchOptions = worktreeHostMatchOptions(state, candidateRepoId, requiredExecutionHostId)
       const worktrees = result.worktrees.filter(
@@ -101,11 +106,9 @@ export function dropConfirmedHostRow(
       if (worktrees.length === result.worktrees.length) {
         continue
       }
-      if (nextDetectedWorktreesByRepo === state.detectedWorktreesByRepo) {
-        nextDetectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
-      }
-      nextDetectedWorktreesByRepo[candidateRepoId] = { ...result, worktrees }
+      detectedDraft.set(candidateRepoId, { ...result, worktrees })
     }
+    const nextDetectedWorktreesByRepo = detectedDraft.finish()
     sameIdSurvives =
       resolveSameIdSurvivingHostId(
         {

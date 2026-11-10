@@ -1,32 +1,27 @@
+import { terminalPtyMembership } from './terminal-pty-membership'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '../types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import {
-  resolveTerminalHostOwnership,
-  resolveTerminalPtyOwner
-} from '@/lib/terminal-worktree-route'
+import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { locateTerminalTab } from './terminal-tab-location'
+import {
+  collectPtyIdsForTab,
+  getTerminalPtyOwnershipIdentity,
+  type TerminalTabRetirementState
+} from './terminal-tab-pty-ownership'
+export {
+  collectPtyIdsForTab,
+  getTerminalPtyOwnershipIdentity,
+  type TerminalTabRetirementState
+} from './terminal-tab-pty-ownership'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
-
-export type TerminalTabRetirementState = WorktreeRuntimeOwnerState &
-  Pick<
-    AppState,
-    | 'tabsByWorktree'
-    | 'unifiedTabsByWorktree'
-    | 'ptyIdsByTabId'
-    | 'terminalLayoutsByTabId'
-    | 'lastKnownRelayPtyIdByTabId'
-    | 'deferredSshSessionIdsByTabId'
-    | 'pendingReconnectPtyIdByTabId'
-  >
 
 export type TerminalTabRetirementPlan = {
   tabId: string
@@ -41,54 +36,6 @@ export type TerminalTabRetirementPlan = {
   cleanupOnlyPtyIds: string[]
   sharedPtyIds: string[]
   unroutablePtyIds: string[]
-}
-
-function appendPtyId(ids: Set<string>, ptyId: string | null | undefined): void {
-  if (ptyId) {
-    ids.add(ptyId)
-  }
-}
-
-export function getTerminalPtyOwnershipIdentity(
-  state: TerminalTabRetirementState,
-  ptyId: string,
-  worktreeId: string | null
-): string {
-  const remote = parseRemoteRuntimePtyId(ptyId)
-  if (!remote?.handle) {
-    return `pty:${ptyId}`
-  }
-  const scopedEnvironmentId = remote.environmentId?.trim()
-  if (scopedEnvironmentId) {
-    return JSON.stringify(['runtime', scopedEnvironmentId, remote.handle])
-  }
-  // Resolve legacy/scoped PTY aliases on the owner used by spawn/close so identity and retirement agree.
-  const owner = resolveTerminalPtyOwner(state, worktreeId, 'spawn')
-  // Why: a twin's legacy id can't be pinned to either host, so it matches only its own exact id.
-  if (owner.kind === 'ambiguous') {
-    return `pty:${ptyId}`
-  }
-  const environmentId = owner.kind === 'runtime' ? owner.environmentId : ''
-  return JSON.stringify(['runtime', environmentId, remote.handle])
-}
-
-export function collectPtyIdsForTab(
-  state: TerminalTabRetirementState,
-  tabId: string,
-  rowPtyId: string | null | undefined
-): string[] {
-  const ids = new Set<string>()
-  for (const ptyId of state.ptyIdsByTabId[tabId] ?? []) {
-    appendPtyId(ids, ptyId)
-  }
-  appendPtyId(ids, rowPtyId)
-  for (const ptyId of Object.values(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})) {
-    appendPtyId(ids, ptyId)
-  }
-  appendPtyId(ids, state.lastKnownRelayPtyIdByTabId[tabId])
-  appendPtyId(ids, state.deferredSshSessionIdsByTabId[tabId])
-  appendPtyId(ids, state.pendingReconnectPtyIdByTabId[tabId])
-  return [...ids]
 }
 
 function collectLiveTerminalTabs(
@@ -151,29 +98,33 @@ export function hasTerminalPtyOwnerOutsidePane(
   tabId: string,
   excludedLeafId?: string
 ): boolean {
-  for (const [ownerTabId, owner] of collectLiveTerminalTabs(state)) {
-    const ids =
-      ownerTabId === tabId
-        ? Object.entries(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})
-            .filter(([leafId]) => leafId !== excludedLeafId)
-            .map(([, ptyId]) => ptyId)
-        : collectPtyIdsForTab(state, ownerTabId, owner.rowPtyId)
-    if (
-      ids.some(
-        (ptyId) => getTerminalPtyOwnershipIdentity(state, ptyId, owner.worktreeId) === identity
-      )
-    ) {
-      return true
-    }
+  const membership = terminalPtyMembership(state)
+  if (membership.hasCanonicalOwnerOutside(identity, tabId)) {
+    return true
   }
-  return false
+  const owner = membership.view(tabId)
+  return (
+    owner !== undefined &&
+    Object.entries(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}).some(
+      ([leafId, ptyId]) =>
+        leafId !== excludedLeafId &&
+        getTerminalPtyOwnershipIdentity(state, ptyId, owner.worktreeId) === identity
+    )
+  )
 }
 
 export function buildTerminalTabRetirementPlan(
   state: TerminalTabRetirementState,
   tabId: string
 ): TerminalTabRetirementPlan {
-  return buildTerminalTabRetirementPlans(state, [tabId]).get(tabId)!
+  const membership = terminalPtyMembership(state)
+  return buildRetirementPlan(
+    state,
+    tabId,
+    membership.view(tabId),
+    (identity) => membership.hasCanonicalOwnerOutside(identity, tabId),
+    new Set()
+  )
 }
 
 export function buildTerminalTabRetirementPlans(
@@ -203,63 +154,85 @@ export function buildTerminalTabRetirementPlans(
   const scheduledPtyOwners = new Set<string>()
   for (const tabId of targetIds) {
     const owner = liveTabs.get(tabId)
-    const worktreeId = owner?.worktreeId ?? null
-    const ptyIds =
-      ptyIdsByLiveTab.get(tabId) ?? collectPtyIdsForTab(state, tabId, owner?.rowPtyId ?? null)
-    const sharedPtyIds: string[] = []
-    const localOrSshPtyIds: string[] = []
-    const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
-    const cleanupOnlyPtyIds: string[] = []
-    const unroutablePtyIds: string[] = []
-    const providerOwnership = resolveTerminalHostOwnership(state, worktreeId, 'teardown')
-
-    for (const ptyId of ptyIds) {
-      const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)
-      const ownerTabIds = ownerTabIdsByIdentity.get(ownerIdentity)
-      if (hasOwnerOutsideTargets(ownerTabIds, targetIdSet)) {
-        sharedPtyIds.push(ptyId)
-        continue
-      }
-      if (scheduledPtyOwners.has(ownerIdentity)) {
-        // Why: another closing tab already owns provider teardown, but this
-        // tab can still hold alias-keyed snapshots that must be discarded.
-        cleanupOnlyPtyIds.push(ptyId)
-        continue
-      }
-      scheduledPtyOwners.add(ownerIdentity)
-      const remote = parseRemoteRuntimePtyId(ptyId)
-      if (remote) {
-        if (!remote.handle) {
-          unroutablePtyIds.push(ptyId)
-          continue
-        }
-        runtimeTerminals.push({
-          ptyId,
-          environmentId: remote.environmentId?.trim() || null,
-          handle: remote.handle
-        })
-      } else if (isRemoteRuntimePtyId(ptyId)) {
-        unroutablePtyIds.push(ptyId)
-      } else if (providerOwnership.kind !== 'local-or-ssh') {
-        // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.
-        unroutablePtyIds.push(ptyId)
-      } else {
-        localOrSshPtyIds.push(ptyId)
-      }
-    }
-
-    plans.set(tabId, {
+    plans.set(
       tabId,
-      worktreeId,
-      ptyIds,
-      localOrSshPtyIds,
-      runtimeTerminals,
-      cleanupOnlyPtyIds,
-      sharedPtyIds,
-      unroutablePtyIds
-    })
+      buildRetirementPlan(
+        state,
+        tabId,
+        owner
+          ? {
+              worktreeId: owner.worktreeId,
+              ptyIds: ptyIdsByLiveTab.get(tabId)!
+            }
+          : undefined,
+        (identity) => hasOwnerOutsideTargets(ownerTabIdsByIdentity.get(identity), targetIdSet),
+        scheduledPtyOwners
+      )
+    )
   }
   return plans
+}
+
+function buildRetirementPlan(
+  state: TerminalTabRetirementState,
+  tabId: string,
+  owner: { worktreeId: string; ptyIds: string[] } | undefined,
+  shared: (identity: string) => boolean,
+  scheduledPtyOwners: Set<string>
+): TerminalTabRetirementPlan {
+  const worktreeId = owner?.worktreeId ?? null
+  const ptyIds = owner?.ptyIds ?? collectPtyIdsForTab(state, tabId, null)
+  const sharedPtyIds: string[] = []
+  const localOrSshPtyIds: string[] = []
+  const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
+  const cleanupOnlyPtyIds: string[] = []
+  const unroutablePtyIds: string[] = []
+  const providerOwnership = resolveTerminalHostOwnership(state, worktreeId, 'teardown')
+
+  for (const ptyId of ptyIds) {
+    const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)
+    if (shared(ownerIdentity)) {
+      sharedPtyIds.push(ptyId)
+      continue
+    }
+    if (scheduledPtyOwners.has(ownerIdentity)) {
+      // Why: another closing tab already owns provider teardown, but this
+      // tab can still hold alias-keyed snapshots that must be discarded.
+      cleanupOnlyPtyIds.push(ptyId)
+      continue
+    }
+    scheduledPtyOwners.add(ownerIdentity)
+    const remote = parseRemoteRuntimePtyId(ptyId)
+    if (remote) {
+      if (!remote.handle) {
+        unroutablePtyIds.push(ptyId)
+        continue
+      }
+      runtimeTerminals.push({
+        ptyId,
+        environmentId: remote.environmentId?.trim() || null,
+        handle: remote.handle
+      })
+    } else if (isRemoteRuntimePtyId(ptyId)) {
+      unroutablePtyIds.push(ptyId)
+    } else if (providerOwnership.kind !== 'local-or-ssh') {
+      // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.
+      unroutablePtyIds.push(ptyId)
+    } else {
+      localOrSshPtyIds.push(ptyId)
+    }
+  }
+
+  return {
+    tabId,
+    worktreeId,
+    ptyIds,
+    localOrSshPtyIds,
+    runtimeTerminals,
+    cleanupOnlyPtyIds,
+    sharedPtyIds,
+    unroutablePtyIds
+  }
 }
 
 export function removeSleepingAgentSessionsForTab(

@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import { isRemovedRuntimeHostId } from '../../../host-catalog/removed-runtime-host-rows'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
@@ -17,9 +18,8 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   if (removedEnvironmentIds.size === 0) {
     return { rowsByRepo, removedRows: [] }
   }
-  let changed = false
   const removedRows: T[] = []
-  const next: Record<string, T[]> = {}
+  const draft = recordDraft(rowsByRepo)
   for (const [repoId, rows] of Object.entries(rowsByRepo)) {
     const survivors = rows.filter((row) => {
       if (
@@ -33,10 +33,9 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
       }
       return true
     })
-    next[repoId] = survivors.length === rows.length ? rows : survivors
     if (survivors.length !== rows.length) {
-      changed = true
+      draft.set(repoId, survivors)
     }
   }
-  return changed ? { rowsByRepo: next, removedRows } : { rowsByRepo, removedRows: [] }
+  return { rowsByRepo: draft.finish(), removedRows }
 }

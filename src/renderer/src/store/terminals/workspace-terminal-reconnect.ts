@@ -122,7 +122,10 @@ export function createWorkspaceTerminalReconnectActions(
         pendingReconnectTabByWorktree: {},
         // Cold path: the whole reconnect inventory is consumed.
         pendingReconnectPtyIdByTabId: markFullResync({}, 'reconnect-inventory'),
-        deferredSshSessionIdsByTabId
+        deferredSshSessionIdsByTabId: markFullResync(
+          deferredSshSessionIdsByTabId,
+          'reconnect-inventory'
+        )
       })
     }
   }

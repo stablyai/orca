@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
@@ -153,12 +154,16 @@ export async function runKnownSshWorktreeFetch(
     return {
       ...(worktreesChanged
         ? {
-            worktreesByRepo: { ...state.worktreesByRepo, [repoId]: worktrees },
+            worktreesByRepo: replaceRecordEntries(state.worktreesByRepo, [[repoId, worktrees]]),
             sortEpoch: state.sortEpoch + 1
           }
         : {}),
       ...(detectedChanged
-        ? { detectedWorktreesByRepo: { ...state.detectedWorktreesByRepo, [repoId]: detected } }
+        ? {
+            detectedWorktreesByRepo: replaceRecordEntries(state.detectedWorktreesByRepo, [
+              [repoId, detected]
+            ])
+          }
         : {})
     }
   })

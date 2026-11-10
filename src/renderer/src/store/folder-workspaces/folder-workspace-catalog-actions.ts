@@ -1,3 +1,4 @@
+import { markFullResync } from '@/store/keyed-record-transitions'
 import { continueFolderLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -107,7 +108,12 @@ export function createFolderWorkspaceCatalogActions(
           return restoredRuntimeHostIdByWorkspaceSessionKey ===
             s.restoredRuntimeHostIdByWorkspaceSessionKey
             ? s
-            : { restoredRuntimeHostIdByWorkspaceSessionKey }
+            : {
+                restoredRuntimeHostIdByWorkspaceSessionKey: markFullResync(
+                  restoredRuntimeHostIdByWorkspaceSessionKey,
+                  'hydration'
+                )
+              }
         })
       }
       try {

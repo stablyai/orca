@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -57,7 +58,7 @@ export function clearCopyReviewLinks(
       ...normalizeWorkspaceAttachmentUpdate(row, updates)
     }
   })
-  return changed && next ? { ...byRepo, [repoId]: next } : byRepo
+  return changed && next ? replaceRecordEntries(byRepo, [[repoId, next]]) : byRepo
 }
 
 export function reviewClearTombstoneKey(worktreeId: string, owner: string): string {

@@ -51,7 +51,7 @@ export function createTerminalTabCloseActions(
         })
         if (opts?.localPtyTeardownOwnedExternally !== true) {
           // Why regardless of a host-owned close: the managed server never ran a relay-era shell.
-          void stopLegacyRelayBridgedShellsForTab(get(), tabId, retirementPlan)
+          void stopLegacyRelayBridgedShellsForTab(get, tabId, retirementPlan)
         }
       }
       settleAttentionRemovedBy(set, get, () =>

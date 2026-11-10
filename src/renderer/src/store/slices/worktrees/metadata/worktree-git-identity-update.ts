@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -218,7 +219,7 @@ export function createUpdateWorktreeGitIdentity(
       }
 
       return {
-        worktreesByRepo: { ...s.worktreesByRepo, [repoId]: next },
+        worktreesByRepo: replaceRecordEntries(s.worktreesByRepo, [[repoId, next]]),
         sortEpoch: s.sortEpoch + 1
       }
     })

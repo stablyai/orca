@@ -152,8 +152,10 @@ export function createWorkspaceTerminalHydrationActions(
           activeWorkspaceExecutionHostId,
           activeTabId,
           activeTabIdByWorktree,
-          restoredRuntimeHostIdByWorkspaceSessionKey:
+          restoredRuntimeHostIdByWorkspaceSessionKey: markFullResync(
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+            'hydration'
+          ),
           // Mid-session SSH pulls omit the shadow; clearing it would lose co-claimant rows needed by the next write.
           ...(options?.contestedHostWorkspaceSessions
             ? { contestedHostWorkspaceSessions: options.contestedHostWorkspaceSessions }

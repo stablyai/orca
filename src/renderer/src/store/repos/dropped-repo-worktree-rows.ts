@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -30,7 +31,7 @@ function dropHostRows<T extends HostedRow>(
   dropped: ReadonlyMap<string, readonly ExecutionHostId[]>,
   survivingRepoIds: ReadonlySet<string>
 ): Record<string, T[]> {
-  let next: Record<string, T[]> | null = null
+  const draft = recordDraft(rowsByRepo)
   for (const [repoId, hostIds] of dropped) {
     const rows = rowsByRepo[repoId]
     if (!rows) {
@@ -43,11 +44,10 @@ function dropHostRows<T extends HostedRow>(
         !hostIds.some((hostId) => worktreeMatchesHost(row, hostId, { unhostedWorktreesMatchHost }))
     )
     if (kept.length !== rows.length) {
-      next ??= { ...rowsByRepo }
-      next[repoId] = kept
+      draft.set(repoId, kept)
     }
   }
-  return next ?? rowsByRepo
+  return draft.finish()
 }
 
 /** Relisted checkouts under new project IDs must not leave orphan rows beside their replacements.
@@ -65,9 +65,9 @@ export function dropWorktreeRowsOfDroppedRepos(
   const previousWorktrees = selectWorktreesByRepo(state)
   const previousDetected = selectDetectedWorktreesByRepo(state)
   const worktreesByRepo = dropHostRows(previousWorktrees, dropped, survivingRepoIds)
-  let detectedWorktreesByRepo = previousDetected
+  const detectedDraft = recordDraft(previousDetected)
   for (const repoId of dropped.keys()) {
-    const detected = detectedWorktreesByRepo[repoId]
+    const detected = previousDetected[repoId]
     if (!detected) {
       continue
     }
@@ -75,12 +75,10 @@ export function dropWorktreeRowsOfDroppedRepos(
       repoId
     ]
     if (worktrees !== detected.worktrees) {
-      if (detectedWorktreesByRepo === previousDetected) {
-        detectedWorktreesByRepo = { ...detectedWorktreesByRepo }
-      }
-      detectedWorktreesByRepo[repoId] = { ...detected, worktrees }
+      detectedDraft.set(repoId, { ...detected, worktrees })
     }
   }
+  const detectedWorktreesByRepo = detectedDraft.finish()
   const changed =
     worktreesByRepo !== previousWorktrees || detectedWorktreesByRepo !== previousDetected
   return {

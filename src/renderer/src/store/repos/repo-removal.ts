@@ -1,3 +1,6 @@
+import { getKnownRepoWorktreeIds } from './repo-removal-worktree-queries'
+export { getKnownRepoWorktreeIds, countOpenRepoTerminalTabs } from './repo-removal-worktree-queries'
+import { recordDraft } from '@/store/keyed-record-transitions'
 import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
@@ -35,54 +38,6 @@ import {
 import { toastProjectRemovalFailure } from './repo-removal-failure-toast'
 import { replayPendingRuntimeRepoRemovalsIfReady } from './pending-runtime-repo-removal-replay'
 import { isRuntimeEnvironmentRegistered } from './runtime-environment-registration'
-
-type HostScopedWorktreeRef = { id: string; hostId?: string }
-
-type RepoWorktreeCatalog = {
-  worktreesByRepo: Readonly<Record<string, readonly HostScopedWorktreeRef[] | undefined>>
-  detectedWorktreesByRepo: Readonly<
-    Record<string, { worktrees: readonly HostScopedWorktreeRef[] } | undefined>
-  >
-}
-
-export function getKnownRepoWorktreeIds(
-  state: RepoWorktreeCatalog,
-  projectId: string,
-  hostId?: string
-): string[] {
-  const ids = new Set<string>()
-  for (const worktree of state.worktreesByRepo[projectId] ?? []) {
-    if (!hostId || worktreeBelongsToHost(worktree, hostId)) {
-      ids.add(worktree.id)
-    }
-  }
-  for (const worktree of state.detectedWorktreesByRepo[projectId]?.worktrees ?? []) {
-    if (!hostId || worktreeBelongsToHost(worktree, hostId)) {
-      ids.add(worktree.id)
-    }
-  }
-  return [...ids]
-}
-
-/** Terminal tabs that removing this project's host row will close. */
-export function countOpenRepoTerminalTabs(
-  state: RepoWorktreeCatalog & {
-    tabsByWorktree: Readonly<Record<string, readonly { id: string }[] | undefined>>
-    ptyIdsByTabId: Readonly<Record<string, readonly string[] | undefined>>
-  },
-  projectId: string,
-  hostId: string
-): number {
-  let count = 0
-  for (const worktreeId of getKnownRepoWorktreeIds(state, projectId, hostId)) {
-    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-      if ((state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0) {
-        count += 1
-      }
-    }
-  }
-  return count
-}
 
 export function createRepoRemovalActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -230,25 +185,29 @@ export function createRepoRemovalActions(
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
 
         set((s) => {
-          const nextWorktrees = { ...s.worktreesByRepo }
-          const remainingWorktrees = (nextWorktrees[projectId] ?? []).filter(
+          const worktreesDraft = recordDraft(s.worktreesByRepo)
+          const remainingWorktrees = (s.worktreesByRepo[projectId] ?? []).filter(
             (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
           )
           if (remainingWorktrees.length > 0) {
-            nextWorktrees[projectId] = remainingWorktrees
+            if (remainingWorktrees.length !== s.worktreesByRepo[projectId]?.length) {
+              worktreesDraft.set(projectId, remainingWorktrees)
+            }
           } else {
-            delete nextWorktrees[projectId]
+            worktreesDraft.delete(projectId)
           }
-          const nextDetectedWorktrees = { ...s.detectedWorktreesByRepo }
-          const detected = nextDetectedWorktrees[projectId]
+          const detectedDraft = recordDraft(s.detectedWorktreesByRepo)
+          const detected = s.detectedWorktreesByRepo[projectId]
           if (detected) {
             const remainingDetected = detected.worktrees.filter(
               (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
             )
             if (remainingDetected.length > 0) {
-              nextDetectedWorktrees[projectId] = { ...detected, worktrees: remainingDetected }
+              if (remainingDetected.length !== detected.worktrees.length) {
+                detectedDraft.set(projectId, { ...detected, worktrees: remainingDetected })
+              }
             } else {
-              delete nextDetectedWorktrees[projectId]
+              detectedDraft.delete(projectId)
             }
           }
           // Why no tab/layout/editor writes here: purgeWorktreeTerminalState above already dropped them.
@@ -289,8 +248,8 @@ export function createRepoRemovalActions(
             activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
             ...twinSelectionPatch(s, twins.twinHostIds, ownerHostId),
             filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
-            worktreesByRepo: nextWorktrees,
-            detectedWorktreesByRepo: nextDetectedWorktrees,
+            worktreesByRepo: worktreesDraft.finish(),
+            detectedWorktreesByRepo: detectedDraft.finish(),
             lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
             folderWorkspacePathStatuses: {},
             sortEpoch: s.sortEpoch + 1,

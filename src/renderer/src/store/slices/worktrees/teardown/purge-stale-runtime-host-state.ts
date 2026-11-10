@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import { beginEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import type { WorktreePurgeTarget } from './worktree-purge-target'
 import type { WorktreeSlice } from '../worktree-slice-contract'
@@ -109,7 +110,7 @@ export function createPurgeStaleRuntimeHostState(
           const removedWorktreeTargets: WorktreePurgeTarget[] = []
           const seenRemovedWorktreeTargets = new Set<string>()
           const sessionWorktreeIdsOwnedByRemovedHosts = new Set<string>()
-          let survivingRestoredSessionOwners = s.restoredRuntimeHostIdByWorkspaceSessionKey
+          const restoredOwnersDraft = recordDraft(s.restoredRuntimeHostIdByWorkspaceSessionKey)
           for (const [workspaceKey, hostId] of Object.entries(
             s.restoredRuntimeHostIdByWorkspaceSessionKey
           )) {
@@ -132,10 +133,7 @@ export function createPurgeStaleRuntimeHostState(
               removedWorktreeTargets.push({ id: worktreeId, hostId })
             }
             repoIdsWithRemovedOwners.add(repoId)
-            if (survivingRestoredSessionOwners === s.restoredRuntimeHostIdByWorkspaceSessionKey) {
-              survivingRestoredSessionOwners = { ...survivingRestoredSessionOwners }
-            }
-            delete survivingRestoredSessionOwners[workspaceKey]
+            restoredOwnersDraft.delete(workspaceKey)
           }
 
           // Why: legacy rows predate host stamps; every owner record must agree no host survives before an unhosted row is retired.
@@ -156,6 +154,7 @@ export function createPurgeStaleRuntimeHostState(
             seenRemovedWorktreeTargets.add(identity)
             removedWorktreeTargets.push(hostId ? { id: worktreeId, hostId } : { id: worktreeId })
           }
+          const survivingRestoredSessionOwners = restoredOwnersDraft.finish()
           const worktreeDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
             s.worktreesByRepo,
             removed,
@@ -268,14 +267,15 @@ export function createPurgeStaleRuntimeHostState(
             return s
           }
 
-          const detectedWorktreesByRepo = detectedChanged
-            ? Object.fromEntries(
-                Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
-                  repoId,
-                  { ...result, worktrees: detectedDrop.rowsByRepo[repoId] }
-                ])
-              )
-            : s.detectedWorktreesByRepo
+          const detectedDraft = recordDraft(s.detectedWorktreesByRepo)
+          if (detectedChanged) {
+            for (const [repoId, result] of Object.entries(s.detectedWorktreesByRepo)) {
+              const worktrees = detectedDrop.rowsByRepo[repoId]
+              if (worktrees !== result.worktrees) {
+                detectedDraft.set(repoId, { ...result, worktrees })
+              }
+            }
+          }
 
           const rowsChanged = worktreesChanged || detectedChanged
           return {
@@ -284,7 +284,7 @@ export function createPurgeStaleRuntimeHostState(
             ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
             ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
             ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
-            ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
+            ...(detectedChanged ? { detectedWorktreesByRepo: detectedDraft.finish() } : {}),
             ...(restoredSessionOwnersChanged
               ? { restoredRuntimeHostIdByWorkspaceSessionKey: survivingRestoredSessionOwners }
               : {}),

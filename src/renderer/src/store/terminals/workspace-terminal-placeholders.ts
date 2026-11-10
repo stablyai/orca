@@ -1,3 +1,4 @@
+import { markFullResync } from '@/store/keyed-record-transitions'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
@@ -102,5 +103,11 @@ export function buildRuntimeSessionPlaceholders({
       nextWorktreesByRepo === worktreesByRepo ? { ...worktreesByRepo } : nextWorktreesByRepo
     nextWorktreesByRepo[parsed.repoId] = [...current, placeholder]
   }
-  return { repos: nextRepos, worktreesByRepo: nextWorktreesByRepo }
+  return {
+    repos: nextRepos,
+    worktreesByRepo:
+      nextWorktreesByRepo === worktreesByRepo
+        ? worktreesByRepo
+        : markFullResync(nextWorktreesByRepo, 'hydration')
+  }
 }

@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import {
   appliedWorktreeCatalogVersionPatch,
@@ -89,10 +90,9 @@ export function createFetchDetectedWorktrees(
             : { ...s, ...versionPatch }
           : {
               ...versionPatch,
-              detectedWorktreesByRepo: {
-                ...s.detectedWorktreesByRepo,
-                [repoId]: mergedDetected
-              }
+              detectedWorktreesByRepo: replaceRecordEntries(s.detectedWorktreesByRepo, [
+                [repoId, mergedDetected]
+              ])
             }
       })
       return admitted ? refresh.result : null

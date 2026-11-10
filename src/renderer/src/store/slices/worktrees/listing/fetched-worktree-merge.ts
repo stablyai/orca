@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -219,10 +220,9 @@ export function mergeFetchedWorktrees(
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
         : {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
-            }
+            detectedWorktreesByRepo: replaceRecordEntries(s.detectedWorktreesByRepo, [
+              [args.repoId, mergedDetected]
+            ])
           }
     }
     const mergedWorktrees = mergeWorktreesForHost(
@@ -267,10 +267,9 @@ export function mergeFetchedWorktrees(
       ...versionPatch,
       ...(worktreesChanged
         ? {
-            worktreesByRepo: {
-              ...s.worktreesByRepo,
-              [args.repoId]: mergedWorktrees
-            },
+            worktreesByRepo: replaceRecordEntries(s.worktreesByRepo, [
+              [args.repoId, mergedWorktrees]
+            ]),
             // Why: an order save re-reads as a sortOrder-only change; re-sorting on it would schedule the next save (#27268).
             ...(worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
               ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
@@ -279,10 +278,9 @@ export function mergeFetchedWorktrees(
         : {}),
       ...(detectedChanged
         ? {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
-            }
+            detectedWorktreesByRepo: replaceRecordEntries(s.detectedWorktreesByRepo, [
+              [args.repoId, mergedDetected]
+            ])
           }
         : {}),
       ...(removedIds.length > 0

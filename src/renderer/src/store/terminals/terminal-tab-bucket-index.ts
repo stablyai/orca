@@ -4,18 +4,51 @@ export type TerminalTabOwnerBuckets<T extends { id: string } = { id: string }> =
   Record<string, readonly T[]>
 >
 
+export type TerminalTabOwnerRow = { id: string; contentType?: string; entityId?: string }
+
 export type IndexedTerminalTabBucket = {
   source: readonly { id: string }[]
   tabIds: ReadonlySet<string>
-  firstPositions?: ReadonlyMap<string, number>
+  positions?: ReadonlyMap<string, readonly number[]>
+  tabIdOf: (row: TerminalTabOwnerRow) => string | null
 }
 
-export function indexTerminalTabBucket(tabs: readonly { id: string }[]): IndexedTerminalTabBucket {
+export function indexTerminalTabBucket(
+  tabs: readonly { id: string }[],
+  tabIdOf: (row: TerminalTabOwnerRow) => string | null = (row) => row.id
+): IndexedTerminalTabBucket {
   const tabIds = new Set<string>()
   for (const tab of tabs) {
-    tabIds.add(tab.id)
+    const id = tabIdOf(tab)
+    if (id !== null) {
+      tabIds.add(id)
+    }
   }
-  return { source: tabs, tabIds }
+  return { source: tabs, tabIds, tabIdOf }
+}
+
+export function terminalTabPositionsInBucket(
+  bucket: IndexedTerminalTabBucket | undefined,
+  tabs: readonly { id: string }[] | undefined,
+  tabId: string
+): readonly number[] {
+  if (!bucket || !tabs) {
+    return []
+  }
+  if (!bucket.positions) {
+    const positions = new Map<string, number[]>()
+    tabs.forEach((tab, position) => {
+      const id = bucket.tabIdOf(tab)
+      if (id === null) {
+        return
+      }
+      const prior = positions.get(id) ?? []
+      prior.push(position)
+      positions.set(id, prior)
+    })
+    bucket.positions = positions
+  }
+  return bucket.positions.get(tabId) ?? []
 }
 
 export function firstTerminalTabInBucket<T extends { id: string }>(
@@ -23,20 +56,17 @@ export function firstTerminalTabInBucket<T extends { id: string }>(
   tabs: readonly T[] | undefined,
   tabId: string
 ): T | undefined {
-  if (!bucket || !tabs) {
-    return undefined
-  }
-  if (!bucket.firstPositions) {
-    const firstPositions = new Map<string, number>()
-    tabs.forEach((tab, position) => {
-      if (!firstPositions.has(tab.id)) {
-        firstPositions.set(tab.id, position)
-      }
-    })
-    bucket.firstPositions = firstPositions
-  }
-  const position = bucket.firstPositions.get(tabId)
-  return position === undefined ? undefined : tabs[position]
+  const position = terminalTabPositionsInBucket(bucket, tabs, tabId)[0]
+  return position === undefined ? undefined : tabs?.[position]
+}
+
+export function lastTerminalTabInBucket<T extends { id: string }>(
+  bucket: IndexedTerminalTabBucket | undefined,
+  tabs: readonly T[] | undefined,
+  tabId: string
+): T | undefined {
+  const position = terminalTabPositionsInBucket(bucket, tabs, tabId).at(-1)
+  return position === undefined ? undefined : tabs?.[position]
 }
 
 export function compareTerminalTabBucketOrder(

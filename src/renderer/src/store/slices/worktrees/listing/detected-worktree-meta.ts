@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -47,8 +48,7 @@ export function applyDetectedWorktreeUpdates(
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
-  let changed = false
-  const nextByRepo: AppState['detectedWorktreesByRepo'] = {}
+  const draft = recordDraft(detectedWorktreesByRepo)
 
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
     let repoChanged = false
@@ -57,7 +57,6 @@ export function applyDetectedWorktreeUpdates(
         return worktree
       }
       repoChanged = true
-      changed = true
       const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
       if (updates.displayNameIsPinned !== undefined) {
         next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
@@ -68,10 +67,12 @@ export function applyDetectedWorktreeUpdates(
       }
       return next
     })
-    nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
+    if (repoChanged) {
+      draft.set(repoId, { ...result, worktrees: nextWorktrees })
+    }
   }
 
-  return changed ? nextByRepo : detectedWorktreesByRepo
+  return draft.finish()
 }
 
 export function folderWorkspaceMatchesHost(

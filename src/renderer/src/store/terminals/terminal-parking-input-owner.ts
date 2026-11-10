@@ -15,7 +15,6 @@ import {
 } from './terminal-parking-input-equality'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
 import {
-  getTerminalTab,
   getTerminalTabOwnerWorktreeIds,
   getTerminalTabOwnerWorktreeId,
   getTerminalTabOwners
@@ -25,14 +24,11 @@ import {
   invalidateTerminalParkingInputs,
   retireTerminalParkingInputs
 } from '@/components/terminal-pane/parking/terminal-parking-input-events'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { terminalPtyMembership } from './terminal-pty-membership'
 import {
   SEAM_PARKING_TAB_FIELDS,
   SEAM_PARKING_WORKSPACE_FIELDS
 } from './terminal-parking-input-fields'
-const tabIdsByPtyId = new Map<string, Set<string>>()
-const ptyIdsByTabId = new Map<string, Set<string>>()
-const tabIdsByEnvironmentId = new Map<string, Set<string>>()
 let accepted: AppState | null = null
 
 function diffUnknownParkingRecordKeys(
@@ -54,56 +50,12 @@ function resyncTerminalParkingWorkspaceIds(tabsByWorktree: AppState['tabsByWorkt
   return Object.keys(tabsByWorktree)
 }
 
-function replacePtyMembership(state: AppState, tabId: string): void {
-  for (const ptyId of ptyIdsByTabId.get(tabId) ?? []) {
-    const tabs = tabIdsByPtyId.get(ptyId)
-    tabs?.delete(tabId)
-    if (tabs?.size === 0) {
-      tabIdsByPtyId.delete(ptyId)
-    }
-    const environmentId = parseRemoteRuntimePtyId(ptyId)?.environmentId
-    if (environmentId) {
-      const environmentTabs = tabIdsByEnvironmentId.get(environmentId)
-      environmentTabs?.delete(tabId)
-      if (environmentTabs?.size === 0) {
-        tabIdsByEnvironmentId.delete(environmentId)
-      }
-    }
-  }
-  const tab = getTerminalTab(state.tabsByWorktree, tabId)
-  if (!tab) {
-    ptyIdsByTabId.delete(tabId)
-    return
-  }
-  const ptyIds = new Set([
-    ...(tab.ptyId ? [tab.ptyId] : []),
-    ...(state.ptyIdsByTabId[tabId] ?? []),
-    ...Object.values(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}),
-    ...(state.lastKnownRelayPtyIdByTabId[tabId] ? [state.lastKnownRelayPtyIdByTabId[tabId]] : [])
-  ])
-  ptyIdsByTabId.set(tabId, ptyIds)
-  for (const ptyId of ptyIds) {
-    let tabs = tabIdsByPtyId.get(ptyId)
-    if (!tabs) {
-      tabIdsByPtyId.set(ptyId, (tabs = new Set()))
-    }
-    tabs.add(tabId)
-    const environmentId = parseRemoteRuntimePtyId(ptyId)?.environmentId
-    if (environmentId) {
-      let environmentTabs = tabIdsByEnvironmentId.get(environmentId)
-      if (!environmentTabs) {
-        tabIdsByEnvironmentId.set(environmentId, (environmentTabs = new Set()))
-      }
-      environmentTabs.add(tabId)
-    }
-  }
-}
-
 /** Accepted source ownership makes retirement synchronous without starting watchers inside a store write. */
 export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string> {
   if (accepted === state) {
     return new Set()
   }
+  const membership = terminalPtyMembership(state)
   const previous = accepted
   const dirty = new Set<string>()
   const changedTabs = new Set<string>()
@@ -207,7 +159,6 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     for (const id of getTerminalTabOwnerWorktreeIds(state.tabsByWorktree, tabId)) {
       dirty.add(id)
     }
-    replacePtyMembership(state, tabId)
   }
   if (previous?.runtimeStatusByEnvironmentId !== state.runtimeStatusByEnvironmentId) {
     const changes = previous
@@ -234,7 +185,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
       for (const id of capturedTerminalWorkspacesForEnvironmentIds([environmentId])) {
         dirty.add(id)
       }
-      for (const tabId of tabIdsByEnvironmentId.get(environmentId) ?? []) {
+      for (const tabId of membership.parkingTabsForEnvironment(environmentId)) {
         const owner = owners.get(tabId)
         if (owner) {
           dirty.add(owner)
@@ -290,7 +241,7 @@ export function invalidateTerminalParkingPtyInputs(ptyIds?: Iterable<string>): v
       dirty.add(id)
     }
     for (const ptyId of changedPtyIds) {
-      for (const tabId of tabIdsByPtyId.get(ptyId) ?? []) {
+      for (const tabId of terminalPtyMembership(accepted).parkingTabsForPty(ptyId)) {
         const worktreeId = getTerminalTabOwnerWorktreeId(accepted.tabsByWorktree, tabId)
         if (worktreeId) {
           dirty.add(worktreeId)

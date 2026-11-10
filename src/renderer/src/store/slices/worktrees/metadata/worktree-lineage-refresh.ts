@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type {
@@ -137,7 +138,7 @@ export function projectLocalWorktreeLineageUpdate(
   lineage: WorktreeLineage | null
 ): Record<string, Worktree[]> {
   const { worktreesByRepo } = state
-  let nextByRepo = worktreesByRepo
+  const draft = recordDraft(worktreesByRepo)
   for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
     const options = worktreeHostMatchOptions(state, repoId, hostId)
     let repoChanged = false
@@ -172,13 +173,10 @@ export function projectLocalWorktreeLineageUpdate(
       return worktree
     })
     if (repoChanged) {
-      if (nextByRepo === worktreesByRepo) {
-        nextByRepo = { ...worktreesByRepo }
-      }
-      nextByRepo[repoId] = projected
+      draft.set(repoId, projected)
     }
   }
-  return nextByRepo
+  return draft.finish()
 }
 
 export function applyWorktreeLineageUpdate(

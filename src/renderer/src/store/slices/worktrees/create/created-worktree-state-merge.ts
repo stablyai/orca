@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
@@ -46,10 +47,7 @@ export function applyCreatedWorktree(
     return {
       // Why: a listing scanned before this create must not be applied after it.
       ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
-      worktreesByRepo: {
-        ...s.worktreesByRepo,
-        [repoId]: nextWorktrees
-      },
+      worktreesByRepo: replaceRecordEntries(s.worktreesByRepo, [[repoId, nextWorktrees]]),
       ...(result.workspaceLineage
         ? {
             workspaceLineageByChildKey: {

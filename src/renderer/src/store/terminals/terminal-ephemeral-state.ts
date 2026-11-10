@@ -1,3 +1,4 @@
+import { recordDraft } from '../keyed-record-transitions'
 import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
@@ -229,9 +230,9 @@ export function createTerminalEphemeralActions(
         if (!s.deferredSshSessionIdsByTabId[tabId]) {
           return s
         }
-        const next = { ...s.deferredSshSessionIdsByTabId }
-        delete next[tabId]
-        return { deferredSshSessionIdsByTabId: next }
+        const draft = recordDraft(s.deferredSshSessionIdsByTabId)
+        draft.delete(tabId)
+        return { deferredSshSessionIdsByTabId: draft.finish() }
       })
   }
 }

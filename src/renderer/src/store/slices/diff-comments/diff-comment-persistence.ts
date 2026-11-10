@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
@@ -213,7 +214,7 @@ export function mutateDiffComments(
     const nextList: Worktree[] = repoList.map((w) =>
       rows.includes(w) ? { ...w, diffComments: computed } : w
     )
-    return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
+    return { worktreesByRepo: replaceRecordEntries(s.worktreesByRepo, [[repoId, nextList]]) }
   })
   if (next === null) {
     return null
@@ -263,6 +264,6 @@ function rollback(
     const nextList: Worktree[] = repoList.map((w) =>
       targets.includes(w) ? { ...w, diffComments: previous } : w
     )
-    return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
+    return { worktreesByRepo: replaceRecordEntries(s.worktreesByRepo, [[repoId, nextList]]) }
   })
 }

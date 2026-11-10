@@ -54,7 +54,7 @@ function qualifiedFolderCacheOf(
   folders: readonly FolderHostWorkspace[]
 ) {
   let cache = qualifiedFolderOwnerCache.get(folders)
-  if (!cache || cache.groups !== state.projectGroups || cache.repos !== state.repos) {
+  if (!cache) {
     const rows = new Map<string, FolderHostWorkspace[]>()
     const positions = new Map<FolderHostWorkspace, number>()
     for (const [index, folder] of folders.entries()) {
@@ -65,6 +65,9 @@ function qualifiedFolderCacheOf(
       rows.set(id, copies)
     }
     cache = { groups: state.projectGroups, repos: state.repos, rows, positions, results: new Map() }
+    qualifiedFolderOwnerCache.set(folders, cache)
+  } else if (cache.groups !== state.projectGroups || cache.repos !== state.repos) {
+    cache = { ...cache, groups: state.projectGroups, repos: state.repos, results: new Map() }
     qualifiedFolderOwnerCache.set(folders, cache)
   }
   return cache
