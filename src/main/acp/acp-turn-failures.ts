@@ -11,7 +11,12 @@ import type {
   ProviderTimelineJoin
 } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect, AcpDialectNotification, AcpTurnEnding } from './acp-dialects/acp-dialect'
-import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from './acp-errors'
+import {
+  AcpAgentError,
+  AcpAuthRequiredError,
+  AcpSignInPromptError,
+  acpErrorDataWords
+} from './acp-errors'
 
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 
@@ -81,17 +86,6 @@ export function acpPromptErrorDetail(dialect: AcpDialect, error: AcpAgentError):
     return ''
   }
   return dialect.promptErrorDetail?.(error) ?? acpErrorDataWords(error.data) ?? error.message
-}
-
-// Structured metadata is not user-facing diagnostic text.
-function acpErrorDataWords(data: unknown): string | undefined {
-  const words =
-    typeof data === 'string'
-      ? data
-      : typeof data === 'object' && data !== null && 'details' in data
-        ? data.details
-        : undefined
-  return typeof words === 'string' && words.trim() ? words : undefined
 }
 
 export function acpAuthenticationRequired(dialect: AcpDialect, error: unknown): boolean {
