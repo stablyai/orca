@@ -254,6 +254,17 @@ export function checkHookOwnerPresence(
   }
   // A suspended owner may have resumed without emitting another hook.
   if (hasOtherAgentProcessOwner(hook.owner && { ...hook.owner, suspended: undefined }, sender)) {
+    if (hook.owner?.fallback && !hook.owner.suspended) {
+      const checkUnproved = (): Promise<unknown> | undefined =>
+        readHookProcessVerdict(state, hook.previous, {
+          paneKey: envelope.paneKey,
+          process: sender.process
+        }) === 'root'
+          ? undefined
+          : check(envelope.paneKey)
+      const acquired = acquire()
+      return acquired ? acquired.then(checkUnproved) : checkUnproved()
+    }
     return check(envelope.paneKey).then(acquire)
   }
   return acquire()
