@@ -6,7 +6,7 @@ import { resolveStructuredAgentSessionAdoptionForCreateOrFresh } from './structu
 
 it('starts a new chat when the resumed conversation has no saved transcript', async () => {
   const root = join(tmpdir(), 'orca-adoption-absence')
-  const importer = CLAUDE_CLI_CONVERSATIONS.transcriptImport
+  const importer = CLAUDE_CLI_CONVERSATIONS.transcriptImport!
   const selectedAccountHome = { variable: 'CLAUDE_CONFIG_DIR', path: root }
   vi.spyOn(importer, 'accountHomeCandidates').mockReturnValue([selectedAccountHome])
   const find = vi.spyOn(importer, 'findTranscript').mockResolvedValue(null)
