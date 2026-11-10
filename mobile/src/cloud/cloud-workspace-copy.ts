@@ -81,6 +81,10 @@ export function readSnapshotRefusedMessage(
         'Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.'
       )
     case 'signer_changed':
+      return t(
+        'cloud.snapshot.signerChanged',
+        'This workspace’s copy is signed by a different key than before, so it isn’t shown. Wake it to see it as it is now.'
+      )
     case 'unsigned':
     case 'bad_signature':
       return t(

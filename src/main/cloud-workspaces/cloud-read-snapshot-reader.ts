@@ -13,7 +13,9 @@ import { CloudWorkspacesError, type CloudWorkspacesClient } from './cloud-worksp
 import type { CloudReaderKey, ReaderKeyLoad } from './cloud-reader-key-store'
 import {
   checkReadSnapshotPin,
+  mergeReadSnapshotPin,
   pinFromGrant,
+  repinAfterPairing,
   ReadSnapshotSignatureError,
   verifyReadSnapshotSigner,
   type ReadSnapshotPin
@@ -34,7 +36,12 @@ export type ReaderKeyAccess = {
 /** Where the per-workspace signer and rollback pins live (persisted per profile in the app). */
 export type ReadPinAccess = {
   get: (identity: string, sandboxId: string) => Promise<ReadSnapshotPin | null>
-  set: (identity: string, sandboxId: string, pin: ReadSnapshotPin) => Promise<void>
+  /** One atomic read-modify-write against the pin stored now (null removes it). */
+  update: (
+    identity: string,
+    sandboxId: string,
+    change: (stored: ReadSnapshotPin | null) => ReadSnapshotPin | null
+  ) => Promise<ReadSnapshotPin | null>
 }
 
 /** In-memory pins (tests, or a build without a profile directory). */
@@ -42,8 +49,15 @@ export function memoryReadPins(): ReadPinAccess {
   const pins = new Map<string, ReadSnapshotPin>()
   return {
     get: async (identity, sandboxId) => pins.get(`${identity}\0${sandboxId}`) ?? null,
-    set: async (identity, sandboxId, pin) => {
-      pins.set(`${identity}\0${sandboxId}`, pin)
+    update: async (identity, sandboxId, change) => {
+      const key = `${identity}\0${sandboxId}`
+      const next = change(pins.get(key) ?? null)
+      if (next) {
+        pins.set(key, next)
+      } else {
+        pins.delete(key)
+      }
+      return next
     }
   }
 }
@@ -175,18 +189,33 @@ export function createReadSnapshotReader(deps: {
     },
 
     /**
-     * Pairing (a sealed grant) names the workspace's signer: pin it, replacing any earlier one. This
-     * is the trusted way back after the VM's disk (and so its signing key) was replaced.
+     * An opened grant names the workspace's signer: it only fills an empty pin. Replacing a pinned
+     * signer waits for the pairing to complete (repinAfterPairing).
      */
     async pinSigner(sandboxId: string, signerPublicKeyB64: string): Promise<void> {
       const identity = deps.readerKey.identity()
       if (!identity) {
         return
       }
-      await pins.set(
-        identity,
-        sandboxId,
-        pinFromGrant(await pins.get(identity, sandboxId), signerPublicKeyB64)
+      // Only fills an empty pin: a grant is relayed like a snapshot and never replaces a signer.
+      await pins.update(identity, sandboxId, (stored) => pinFromGrant(stored, signerPublicKeyB64))
+    },
+
+    /**
+     * The grant's pairing completed (this device finished the E2EE handshake with the workspace's
+     * orcad using that grant's offer): only now may its signer replace a pinned one, keeping the
+     * rollback floor. There is no other way to replace a pinned signer.
+     */
+    async repinAfterPairing(
+      identity: string,
+      sandboxId: string,
+      signerPublicKeyB64: string
+    ): Promise<void> {
+      if (deps.readerKey.identity() !== identity) {
+        return
+      }
+      await pins.update(identity, sandboxId, (stored) =>
+        repinAfterPairing(stored, signerPublicKeyB64)
       )
     },
 
@@ -219,6 +248,16 @@ export function createReadSnapshotReader(deps: {
         }
         throw error
       }
+      // A signer mismatch (or an unsigned copy once one is pinned) is refused before decrypting;
+      // only the rollback check needs the payload.
+      const checkedAgainst = await pins.get(first.identity, sandboxId)
+      const pinnedSigner = checkedAgainst?.signerPublicKeyB64 ?? null
+      if (pinnedSigner !== null && signer === null) {
+        return { state: 'unverified', reason: 'unsigned' }
+      }
+      if (pinnedSigner !== null && signer !== pinnedSigner) {
+        return { state: 'unverified', reason: 'signer_changed' }
+      }
       let snapshot: ReadSnapshot
       try {
         snapshot = await openReadSnapshot(
@@ -234,17 +273,17 @@ export function createReadSnapshotReader(deps: {
         throw error
       }
       // Pins: only the signer this device trusts for the workspace, never an older copy.
-      const verdict = checkReadSnapshotPin(
-        await pins.get(first.identity, sandboxId),
-        signer,
-        snapshot.capturedAt
-      )
+      const verdict = checkReadSnapshotPin(checkedAgainst, signer, snapshot.capturedAt)
       if (!verdict.ok) {
         return verdict.reason === 'rollback'
           ? { state: 'stale' }
           : { state: 'unverified', reason: verdict.reason }
       }
-      await pins.set(first.identity, sandboxId, verdict.pin)
+      // Merged against what is stored now: the floor only moves forward, and a grant pin or a
+      // forget that landed while this read was in flight wins over it.
+      await pins.update(first.identity, sandboxId, (stored) =>
+        mergeReadSnapshotPin(stored, checkedAgainst, verdict.pin)
+      )
       return { state: 'ready', snapshot, storedAt: fetched.sealed.storedAt }
     }
   }

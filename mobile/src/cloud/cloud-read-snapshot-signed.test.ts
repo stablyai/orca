@@ -87,7 +87,10 @@ describe('signed read snapshots', () => {
       ).state
     ).toBe('ready')
     const stored = JSON.parse(local.get('orca.cloud-read-pins.v1:ds_1') ?? '{}')
-    expect(stored[SBX]).toEqual({ signerPublicKeyB64: vm.publicKeyB64, newestCapturedAt: 1_000 })
+    expect(stored[SBX]).toMatchObject({
+      signerPublicKeyB64: vm.publicKeyB64,
+      newestCapturedAt: 1_000
+    })
   })
 
   it('refuses a tampered body or a signature from another key over the same bytes', async () => {
@@ -148,21 +151,42 @@ describe('signed read snapshots', () => {
     })
   })
 
-  it('a grant re-pins the signer (new disk) and keeps the capture floor', async () => {
-    const oldVm = vmSigner()
-    const newVm = vmSigner()
-    let next = signLikeVm(await seal('snap_1', 1_000), oldVm)
+  it('a grant fills an empty pin but never replaces a pinned signer', async () => {
+    const vm = vmSigner()
+    const forged = vmSigner()
+    const pins = await import('./cloud-read-snapshot-pins')
+    await pins.recordCloudReadSignerFromGrant('ds_1', SBX, vm.publicKeyB64)
+    let next = signLikeVm(await seal('snap_1', 1_000), vm)
     const plane = serving(() => next)
     const read = await freshReader()
     expect((await read(plane, SBX)).state).toBe('ready')
-    const pins = await import('./cloud-read-snapshot-pins')
-    await pins.recordCloudReadSignerFromGrant('ds_1', SBX, newVm.publicKeyB64)
-    next = signLikeVm(await seal('snap_2', 2_000), newVm)
-    expect((await read(plane, SBX)).state).toBe('ready')
-    next = signLikeVm(await seal('snap_3', 3_000), oldVm)
+    // A control plane forging a grant with its own key cannot re-pin.
+    const fresh = await import('./cloud-read-snapshot-pins')
+    await fresh.recordCloudReadSignerFromGrant('ds_1', SBX, forged.publicKeyB64)
+    next = signLikeVm(await seal('snap_2', 2_000), forged)
     expect(await read(plane, SBX)).toMatchObject({ error: { reason: 'signer_changed' } })
-    next = signLikeVm(await seal('snap_0', 500), newVm)
-    expect(await read(plane, SBX)).toMatchObject({ error: { reason: 'rollback' } })
+    next = signLikeVm(await seal('snap_3', 3_000), vm)
+    expect((await read(plane, SBX)).state).toBe('ready')
+  })
+
+  it('refuses a mismatched signer before decrypting (no reader secret is used on it)', async () => {
+    const vm = vmSigner()
+    let next = signLikeVm(await seal('snap_1', 1_000), vm)
+    const plane = serving(() => next)
+    const read = await freshReader()
+    expect((await read(plane, SBX)).state).toBe('ready')
+    // Undecryptable for this phone, but signed by another key: the signer check answers first.
+    const other = await seal('snap_2', 2_000)
+    next = signLikeVm(
+      {
+        ...other,
+        recipient: { ...other.recipient, wrappedKeyB64: Buffer.alloc(48).toString('base64') }
+      },
+      vmSigner()
+    )
+    expect(await read(plane, SBX)).toMatchObject({ error: { reason: 'signer_changed' } })
+    next = { ...next, signature: undefined }
+    expect(await read(plane, SBX)).toMatchObject({ error: { reason: 'unsigned' } })
   })
 
   it('accepts unsigned copies while nothing is pinned (VMs from before signing)', async () => {

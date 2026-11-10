@@ -17,6 +17,7 @@ import {
 } from '../cloud-workspaces/cloud-reader-key-store'
 import type { ReaderKeyAccess, ReadPinAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
 import { getCloudReadPinStore } from '../cloud-workspaces/cloud-read-pin-store'
+import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
@@ -74,6 +75,7 @@ function getService(): Promise<CloudWorkspacesService | null> {
     })
     const started = service
     setCloudReaderKeyRevoker((timeoutMs) => started.revokeReaderKey(timeoutMs))
+    setCloudPairingVerifiedListener((pairingCode) => started.confirmPairing(pairingCode))
     return service
   })()
   servicePromise = starting
@@ -109,7 +111,8 @@ function profileReadPins(userDataPath: string): ReadPinAccess {
   const profileId = () => ensureActiveOrcaProfile(userDataPath).profile.id
   return {
     get: (identity, sandboxId) => store.get(profileId(), `${identity}\0${sandboxId}`),
-    set: (identity, sandboxId, pin) => store.set(profileId(), `${identity}\0${sandboxId}`, pin)
+    update: (identity, sandboxId, change) =>
+      store.update(profileId(), `${identity}\0${sandboxId}`, change)
   }
 }
 

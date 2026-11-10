@@ -113,11 +113,14 @@ export function checkReadSnapshotPin(
 }
 
 /**
- * A sealed grant (the pairing path) can carry the signer too. It only fills an empty pin: a grant is
- * relayed by the control plane like a snapshot, so it must never replace a signer already pinned.
- * Replacing one takes the person's explicit "trust the new copy" (forgetReadSnapshotSigner).
+ * A sealed grant (the pairing path) can carry the signer too. Opening a grant only fills an empty
+ * pin: a grant is relayed by the control plane like a snapshot, so on its own it never replaces a
+ * signer already pinned.
  */
-export function pinFromGrant(pin: ReadSnapshotPin | null, signerPublicKeyB64: string): ReadSnapshotPin {
+export function pinFromGrant(
+  pin: ReadSnapshotPin | null,
+  signerPublicKeyB64: string
+): ReadSnapshotPin {
   if (pin?.signerPublicKeyB64) {
     return pin
   }
@@ -125,11 +128,15 @@ export function pinFromGrant(pin: ReadSnapshotPin | null, signerPublicKeyB64: st
 }
 
 /**
- * The person chose to trust a workspace whose signer changed (its VM disk was replaced): the next
- * signed copy pins again (trust on first use), and the rollback floor stays.
+ * The grant's pairing then succeeded: this device completed the end-to-end encrypted handshake
+ * with the workspace's orcad using that grant's offer. Only then may its signer replace a pinned
+ * one (the VM's disk was replaced and the person woke it). There is no "trust anyway" path.
  */
-export function forgetReadSnapshotSigner(pin: ReadSnapshotPin | null): ReadSnapshotPin | null {
-  return pin ? { signerPublicKeyB64: null, newestCapturedAt: pin.newestCapturedAt } : null
+export function repinAfterPairing(
+  pin: ReadSnapshotPin | null,
+  signerPublicKeyB64: string
+): ReadSnapshotPin {
+  return { signerPublicKeyB64, newestCapturedAt: pin?.newestCapturedAt ?? 0 }
 }
 
 /**
@@ -144,7 +151,9 @@ export function mergeReadSnapshotPin(
 ): ReadSnapshotPin {
   const storedSigner = stored?.signerPublicKeyB64 ?? null
   const signer =
-    storedSigner === (checkedAgainst?.signerPublicKeyB64 ?? null) ? next.signerPublicKeyB64 : storedSigner
+    storedSigner === (checkedAgainst?.signerPublicKeyB64 ?? null)
+      ? next.signerPublicKeyB64
+      : storedSigner
   return {
     signerPublicKeyB64: signer,
     newestCapturedAt: Math.max(stored?.newestCapturedAt ?? 0, next.newestCapturedAt)

@@ -221,3 +221,9 @@ export const wakeFailedServerError = defineFixture({
   render: () =>
     view({ kind: 'ready', snapshot }, { wake: { phase: 'failed', unknownServerError: true } })
 })
+
+/** Signed by a different key than before: not shown; the only way on is "Wake to continue". */
+export const signerChanged = defineFixture({
+  width: WIDTH,
+  render: () => view({ kind: 'signer_changed' })
+})

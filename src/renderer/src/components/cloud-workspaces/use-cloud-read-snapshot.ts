@@ -57,7 +57,9 @@ export function useCloudReadSnapshot(id: string | null): {
             ? { kind: 'ready', snapshot: value.snapshot }
             : value.state === 'unavailable'
               ? { kind: 'unavailable', message: value.message }
-              : { kind: value.state }
+              : value.state === 'unverified'
+                ? { kind: value.reason === 'signer_changed' ? 'signer_changed' : 'unverified' }
+                : { kind: value.state }
         )
       })
     return () => {

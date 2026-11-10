@@ -55,8 +55,9 @@ export function createReadPinStore(deps: {
 }) {
   const now = deps.now ?? Date.now
   const files = new Map<string, Promise<PinFile['pins']>>()
-  // Writes per file run one at a time, each from the latest in-memory state.
-  const writes = new Map<string, Promise<void>>()
+  // Every update of a file is one read-modify-write in this queue: the change is decided against
+  // the pin stored at that moment (never one read earlier), then written before the next runs.
+  const queues = new Map<string, Promise<unknown>>()
 
   function pinsOf(path: string): Promise<PinFile['pins']> {
     let loaded = files.get(path)
@@ -67,47 +68,66 @@ export function createReadPinStore(deps: {
     return loaded
   }
 
-  function persist(path: string, pins: PinFile['pins']): Promise<void> {
-    const previous = writes.get(path) ?? Promise.resolve()
-    const next = previous
-      .catch(() => undefined)
-      .then(async () => {
-        const body: PinFile = { version: 1, pins }
-        const temp = `${path}.${process.pid}.tmp`
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(temp, JSON.stringify(body), { mode: 0o600 })
-        await rename(temp, path)
-      })
-    writes.set(path, next)
-    return next
+  function serialized<T>(path: string, run: () => Promise<T>): Promise<T> {
+    const result = (queues.get(path) ?? Promise.resolve()).catch(() => undefined).then(run)
+    queues.set(path, result)
+    return result
   }
+
+  async function write(path: string, pins: PinFile['pins']): Promise<void> {
+    const body: PinFile = { version: 1, pins }
+    const temp = `${path}.${process.pid}.tmp`
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(temp, JSON.stringify(body), { mode: 0o600 })
+    await rename(temp, path)
+  }
+
+  const plain = (pin: PinFile['pins'][string] | undefined): ReadSnapshotPin | null =>
+    pin
+      ? { signerPublicKeyB64: pin.signerPublicKeyB64, newestCapturedAt: pin.newestCapturedAt }
+      : null
 
   return {
     async get(profileId: string, key: string): Promise<ReadSnapshotPin | null> {
-      const pin = (await pinsOf(deps.pathFor(profileId)))[key]
-      return pin
-        ? { signerPublicKeyB64: pin.signerPublicKeyB64, newestCapturedAt: pin.newestCapturedAt }
-        : null
+      return plain((await pinsOf(deps.pathFor(profileId)))[key])
     },
-    async set(profileId: string, key: string, pin: ReadSnapshotPin): Promise<void> {
+    /**
+     * Atomic read-modify-write of one pin: `change` sees the pin stored now and returns the one to
+     * keep (null removes it). Resolves with what was stored.
+     */
+    update(
+      profileId: string,
+      key: string,
+      change: (stored: ReadSnapshotPin | null) => ReadSnapshotPin | null
+    ): Promise<ReadSnapshotPin | null> {
       const path = deps.pathFor(profileId)
-      const pins = await pinsOf(path)
-      pins[key] = { ...pin, touchedAt: now() }
-      const keys = Object.keys(pins)
-      if (keys.length > MAX_PINS) {
-        keys
-          .sort((a, b) => pins[a]!.touchedAt - pins[b]!.touchedAt)
-          .slice(0, keys.length - MAX_PINS)
-          .forEach((old) => delete pins[old])
-      }
-      await persist(path, pins)
+      return serialized(path, async () => {
+        const pins = await pinsOf(path)
+        const next = change(plain(pins[key]))
+        if (next) {
+          pins[key] = { ...next, touchedAt: now() }
+        } else {
+          delete pins[key]
+        }
+        // Least recently used go first; a dropped pin falls back to trust on first use.
+        const keys = Object.keys(pins)
+        if (keys.length > MAX_PINS) {
+          keys
+            .sort((a, b) => pins[a]!.touchedAt - pins[b]!.touchedAt)
+            .slice(0, keys.length - MAX_PINS)
+            .forEach((old) => delete pins[old])
+        }
+        await write(path, pins)
+        return next
+      })
     },
     /** Sign-out: the next account on this profile starts with no pins. */
-    async clear(profileId: string): Promise<void> {
+    clear(profileId: string): Promise<void> {
       const path = deps.pathFor(profileId)
-      await writes.get(path)?.catch(() => undefined)
-      files.set(path, Promise.resolve({}))
-      await rm(path, { force: true })
+      return serialized(path, async () => {
+        files.set(path, Promise.resolve({}))
+        await rm(path, { force: true })
+      })
     }
   }
 }

@@ -29,6 +29,9 @@ const PRESENCE_BEAT_MS = 20_000
 const LEASE_BEAT_MS = 10 * 60_000
 const LEASE_EXTEND_MS = 30 * 60_000
 const TYPING_HOLD_MS = 6_000
+/** An opened grant's signer waits this long for its pairing to complete before it is dropped. */
+const PAIRING_REPIN_TTL_MS = 15 * 60_000
+const MAX_PENDING_REPINS = 16
 
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
@@ -81,6 +84,26 @@ export function createCloudWorkspacesService(deps: {
   const reader = deps.readerKey
     ? createReadSnapshotReader({ client, readerKey: deps.readerKey, pins: deps.readPins })
     : null
+  // Grants whose pairing has not completed yet, by pairing code: their signer may re-pin only once
+  // main verifies that pairing (confirmPairing). Bounded and short-lived.
+  const pendingRepins = new Map<
+    string,
+    { sandboxId: string; signer: string; identity: string; at: number }
+  >()
+  function rememberPendingRepin(
+    pairingCode: string,
+    entry: { sandboxId: string; signer: string; identity: string }
+  ): void {
+    pendingRepins.delete(pairingCode)
+    pendingRepins.set(pairingCode, { ...entry, at: Date.now() })
+    while (pendingRepins.size > MAX_PENDING_REPINS) {
+      const oldest = pendingRepins.keys().next()
+      if (oldest.done) {
+        break
+      }
+      pendingRepins.delete(oldest.value)
+    }
+  }
   // Register the key up front: a workspace seals its snapshot to the keys known when it sleeps.
   void reader?.register()
 
@@ -149,6 +172,19 @@ export function createCloudWorkspacesService(deps: {
       }),
     /** Sign-out: revoke this device's reader key server-side (callers bound the wait). */
     revokeReaderKey: (timeoutMs: number) => reader?.revoke(timeoutMs) ?? Promise.resolve(),
+    /**
+     * Main's runtime-environment pairing verified this pairing code end to end (E2EE handshake with
+     * the workspace's orcad). If an opened grant carried that code and a signer, re-pin it now. A
+     * grant that was opened but never paired changes nothing beyond filling an empty pin.
+     */
+    async confirmPairing(pairingCode: string): Promise<void> {
+      const entry = pendingRepins.get(pairingCode)
+      pendingRepins.delete(pairingCode)
+      if (!entry || !reader || Date.now() - entry.at > PAIRING_REPIN_TTL_MS) {
+        return
+      }
+      await reader.repinAfterPairing(entry.identity, entry.sandboxId, entry.signer)
+    },
     /** A sleeping workspace's sealed snapshot, opened on this device; never wakes it. */
     readSnapshot: (id: string) =>
       wrap(async () => {
@@ -196,8 +232,11 @@ export function createCloudWorkspacesService(deps: {
             )
             // Pairing names the workspace's snapshot signer: the trusted (re-)pin, e.g. after the
             // VM's disk was replaced. Best effort; the pairing itself must not fail on it.
-            if (opened.readSignerPublicKeyB64 && reader) {
-              await reader.pinSigner(id, opened.readSignerPublicKeyB64).catch(() => undefined)
+            const signer = opened.readSignerPublicKeyB64
+            const identity = deps.readerKey?.identity() ?? null
+            if (signer && reader && identity) {
+              await reader.pinSigner(id, signer).catch(() => undefined)
+              rememberPendingRepin(opened.pairingUrl, { sandboxId: id, signer, identity })
             }
             return { grantId: issued.grant.id, pairingCode: opened.pairingUrl }
           } catch (error) {

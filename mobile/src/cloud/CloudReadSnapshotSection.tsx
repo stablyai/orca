@@ -94,7 +94,7 @@ export function CloudReadSnapshotSection(props: {
           )}
         />
       ) : result.state === 'error' && result.error instanceof CloudReadSnapshotRefusedError ? (
-        // Trying again cannot help: the real copy only comes back from the workspace itself.
+        // Trying again cannot help: the real copy only comes back from waking the workspace.
         <CloudErrorBanner
           message={readSnapshotRefusedMessage(result.error.reason, t)}
           onRetry={null}

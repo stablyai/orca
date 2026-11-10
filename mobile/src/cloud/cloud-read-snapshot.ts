@@ -19,7 +19,7 @@ import {
   type CloudControlPlane
 } from './cloud-control-plane-request'
 import { loadCloudDeviceIdentity } from './cloud-device-identity'
-import { loadCloudReadSnapshotPin, saveCloudReadSnapshotPin } from './cloud-read-snapshot-pins'
+import { commitCloudReadSnapshotPin, loadCloudReadSnapshotPin } from './cloud-read-snapshot-pins'
 import { loadCloudReaderKey, saveCloudReaderKeyRegistration } from './cloud-reader-key'
 import { CLOUD_SEALED_PRIMITIVES } from './cloud-sealed-grant'
 
@@ -179,6 +179,13 @@ export async function readCloudWorkspaceSnapshot(
       }
       throw error
     }
+    // A pinned signer that doesn't match (or a missing signature) is refused before decrypting;
+    // only the rollback check needs the payload's capturedAt.
+    const pin = await loadCloudReadSnapshotPin(reader.deviceSessionId, sandboxId)
+    const early = checkReadSnapshotPin(pin, signer, Number.POSITIVE_INFINITY)
+    if (!early.ok) {
+      return { state: 'error', error: new CloudReadSnapshotRefusedError(early.reason) }
+    }
     // The AAD binds exactly the sandbox row id this phone asked for.
     const snapshot = await openReadSnapshot(
       sealed,
@@ -187,12 +194,11 @@ export async function readCloudWorkspaceSnapshot(
       CLOUD_SEALED_PRIMITIVES
     )
     // Persisted per device session and workspace: pinned signer, never an older capture.
-    const pin = await loadCloudReadSnapshotPin(reader.deviceSessionId, sandboxId)
     const verdict = checkReadSnapshotPin(pin, signer, snapshot.capturedAt)
     if (!verdict.ok) {
       return { state: 'error', error: new CloudReadSnapshotRefusedError(verdict.reason) }
     }
-    await saveCloudReadSnapshotPin(reader.deviceSessionId, sandboxId, verdict.pin)
+    await commitCloudReadSnapshotPin(reader.deviceSessionId, sandboxId, pin, verdict.pin)
     return { state: 'ready', snapshot }
   } catch (error) {
     // not_sealed_for_key only means the snapshot predates this key: nothing to renew here.

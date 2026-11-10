@@ -23,8 +23,10 @@ export type CloudReadViewState =
   | { kind: 'not_found' }
   /** Older than a copy already shown here (a rollback); refused. */
   | { kind: 'stale' }
-  /** The workspace did not sign it (forged, another signer, or unsigned after one was pinned). */
+  /** The workspace did not sign it (forged, or unsigned after a signer was pinned). */
   | { kind: 'unverified' }
+  /** Signed by a different key than the one pinned (e.g. its sandbox was rebuilt). */
+  | { kind: 'signer_changed' }
   /** This computer cannot hold a reader key (no OS keychain). */
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
@@ -251,6 +253,15 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           title={t(
             'components.orcaCloud.read.unverified',
             'Orca Cloud sent a copy this workspace didn’t sign, so it isn’t shown. Wake the workspace to see it as it is now.'
+          )}
+        />
+      ) : null}
+      {state.kind === 'signer_changed' ? (
+        <InlineError
+          tone="neutral"
+          title={t(
+            'components.orcaCloud.read.signerChangedHidden',
+            'This workspace’s copy is signed by a different key than before, so it isn’t shown. Wake it to see it as it is now.'
           )}
         />
       ) : null}

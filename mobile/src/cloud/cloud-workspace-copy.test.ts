@@ -33,7 +33,9 @@ describe('cloud workspace copy', () => {
     )
     const unsigned =
       'Orca Cloud sent a copy this workspace didn’t sign, so it isn’t shown. Wake the workspace to see it as it is now.'
-    expect(readSnapshotRefusedMessage('signer_changed', t)).toBe(unsigned)
+    expect(readSnapshotRefusedMessage('signer_changed', t)).toBe(
+      'This workspace’s copy is signed by a different key than before, so it isn’t shown. Wake it to see it as it is now.'
+    )
     expect(readSnapshotRefusedMessage('unsigned', t)).toBe(unsigned)
     expect(readSnapshotRefusedMessage('bad_signature', t)).toBe(unsigned)
   })

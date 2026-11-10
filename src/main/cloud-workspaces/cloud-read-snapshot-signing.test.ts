@@ -46,7 +46,7 @@ function filePins(): ReadPinAccess {
   const store = createReadPinStore({ pathFor: (profileId) => join(dir, profileId, 'pins.json') })
   return {
     get: (identity, sandboxId) => store.get('p1', `${identity}\0${sandboxId}`),
-    set: (identity, sandboxId, pin) => store.set('p1', `${identity}\0${sandboxId}`, pin)
+    update: (identity, sandboxId, change) => store.update('p1', `${identity}\0${sandboxId}`, change)
   }
 }
 
@@ -56,15 +56,19 @@ function setup(pins: ReadPinAccess = filePins()) {
     identity: () => 'me',
     load: async () => ({ ok: true, key })
   }
-  let next: { capturedAt: number; signer?: TestSigner; tamper?: boolean } = { capturedAt: NOW }
+  type Serve = { capturedAt: number; signer?: TestSigner; tamper?: boolean }
+  let next: Serve = { capturedAt: NOW }
+  // Served first, one per read, before falling back to `next` (concurrent reads).
+  const queued: Serve[] = []
   const getReadSnapshot = vi.fn(async (): Promise<ReadSnapshotFetch> => {
+    const serving = queued.shift() ?? next
     const sealed = sealReadSnapshotForTest({
-      payload: payload(next.capturedAt),
+      payload: payload(serving.capturedAt),
       workspaceId: SBX,
-      snapshotId: `snap_${next.capturedAt}`,
+      snapshotId: `snap_${serving.capturedAt}`,
       readerPublicKeyB64: key.publicKeyB64,
       keyId: KEY_ID,
-      signer: next.signer
+      signer: serving.signer
     })
     return { kind: 'sealed', sealed: next.tamper ? tamper(sealed) : sealed }
   })
@@ -86,8 +90,12 @@ function setup(pins: ReadPinAccess = filePins()) {
   })
   return {
     reader,
-    serve: (value: typeof next) => {
+    pins,
+    serve: (value: Serve) => {
       next = value
+    },
+    queue: (...values: Serve[]) => {
+      queued.push(...values)
     }
   }
 }
@@ -145,17 +153,24 @@ describe('signed read snapshots', () => {
     expect((await after.reader.read(SBX)).state).toBe('ready')
   })
 
-  it('a pairing (grant) pin replaces the signer, e.g. after the VM disk was replaced', async () => {
+  it('a grant cannot replace a signer already pinned (it only fills an empty pin)', async () => {
     const t = setup()
-    t.serve({ capturedAt: NOW, signer: generateTestSigner() })
+    const first = generateTestSigner()
+    t.serve({ capturedAt: NOW, signer: first })
     expect((await t.reader.read(SBX)).state).toBe('ready')
-    const replaced = generateTestSigner()
-    await t.reader.pinSigner(SBX, replaced.publicKeyB64)
-    t.serve({ capturedAt: NOW + 1, signer: replaced })
+    await t.reader.pinSigner(SBX, generateTestSigner().publicKeyB64)
+    expect((await t.pins.get('me', SBX))?.signerPublicKeyB64).toBe(first.publicKeyB64)
+    t.serve({ capturedAt: NOW + 1, signer: first })
     expect((await t.reader.read(SBX)).state).toBe('ready')
-    // The rollback floor survives the re-pin.
-    t.serve({ capturedAt: NOW - 1, signer: replaced })
-    expect(await t.reader.read(SBX)).toEqual({ state: 'stale' })
+  })
+
+  it('concurrent reads cannot move the rollback floor back', async () => {
+    const t = setup()
+    const signer = generateTestSigner()
+    t.queue({ capturedAt: NOW + 20, signer }, { capturedAt: NOW + 10, signer })
+    const results = await Promise.all([t.reader.read(SBX), t.reader.read(SBX)])
+    expect(results.map((r) => r.state)).toEqual(['ready', 'ready'])
+    expect((await t.pins.get('me', SBX))?.newestCapturedAt).toBe(NOW + 20)
   })
 
   it('a grant pin before the first read means only that signer is accepted', async () => {
@@ -168,6 +183,76 @@ describe('signed read snapshots', () => {
     expect(await t.reader.read(SBX)).toEqual({ state: 'unverified', reason: 'unsigned' })
     t.serve({ capturedAt: NOW, signer })
     expect((await t.reader.read(SBX)).state).toBe('ready')
+  })
+})
+
+/** Holds the first pin update (a read's merge) until released, so another change lands first. */
+function gatedPins(): { pins: ReadPinAccess; release: () => void; held: Promise<void> } {
+  const inner = filePins()
+  let release: () => void = () => {}
+  let markHeld: () => void = () => {}
+  const held = new Promise<void>((resolve) => {
+    markHeld = resolve
+  })
+  let gate: Promise<void> | null = new Promise((resolve) => {
+    release = resolve
+  })
+  return {
+    release: () => release(),
+    held,
+    pins: {
+      get: inner.get,
+      update: async (identity, sandboxId, change) => {
+        const waiting = gate
+        gate = null
+        if (waiting) {
+          markHeld()
+          await waiting
+        }
+        return inner.update(identity, sandboxId, change)
+      }
+    }
+  }
+}
+
+describe('a stale read never overwrites a concurrent grant pin or forget', () => {
+  it('keeps a grant pin that landed while a read was in flight', async () => {
+    const gated = gatedPins()
+    const t = setup(gated.pins)
+    const fromRead = generateTestSigner()
+    const fromGrant = generateTestSigner()
+    t.serve({ capturedAt: NOW, signer: fromRead })
+    const reading = t.reader.read(SBX)
+    // The read checked against "no pin" and is now held at its merge; the grant fills the pin.
+    await gated.held
+    await t.reader.pinSigner(SBX, fromGrant.publicKeyB64)
+    gated.release()
+    await reading
+    expect(await t.pins.get('me', SBX)).toEqual({
+      signerPublicKeyB64: fromGrant.publicKeyB64,
+      newestCapturedAt: NOW
+    })
+  })
+
+  it('keeps a pairing re-pin that landed while a read was in flight', async () => {
+    const t0 = setup()
+    const old = generateTestSigner()
+    t0.serve({ capturedAt: NOW, signer: old })
+    expect((await t0.reader.read(SBX)).state).toBe('ready')
+
+    const gated = gatedPins()
+    const t = setup(gated.pins)
+    t.serve({ capturedAt: NOW + 1, signer: old })
+    const reading = t.reader.read(SBX)
+    await gated.held
+    const rebuilt = generateTestSigner()
+    await t.reader.repinAfterPairing('me', SBX, rebuilt.publicKeyB64)
+    gated.release()
+    await reading
+    expect(await t.pins.get('me', SBX)).toEqual({
+      signerPublicKeyB64: rebuilt.publicKeyB64,
+      newestCapturedAt: NOW + 1
+    })
   })
 })
 
@@ -198,7 +283,7 @@ describe('the client keeps the signature', () => {
 describe('createReadPinStore', () => {
   it('clear drops every pin for the profile (sign-out)', async () => {
     const store = createReadPinStore({ pathFor: (profileId) => join(dir, profileId, 'pins.json') })
-    await store.set('p1', 'k', { signerPublicKeyB64: 'x', newestCapturedAt: 1 })
+    await store.update('p1', 'k', () => ({ signerPublicKeyB64: 'x', newestCapturedAt: 1 }))
     await store.clear('p1')
     expect(await store.get('p1', 'k')).toBeNull()
     const reopened = createReadPinStore({
