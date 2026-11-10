@@ -1489,7 +1489,6 @@
       "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin."
     },
     "emptyState": {
-      "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
       "connectedTitle": "Bağlandınız",
       "description": "Ajanlarınızı takip etmek, istediğiniz terminale erişmek ve işlerinizi telefonunuzdan yönetmek için bilgisayarınızdaki Orca ile eşleştirin.",
       "openDesktopDescription": "Ayarlar → Mobil bölümüne gidin ve eşleştirme için bir QR kodu oluşturun.",

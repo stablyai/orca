@@ -83,6 +83,8 @@ export type RuntimeStatus = {
   /** Absent on older hosts; missing degradation reports never prove all optional features work. */
   degradations?: RuntimeDegradation[]
   appVersion?: string
+  /** Full source commit of the answering build; orcad only (Orca Cloud golden builds stamp it). */
+  buildCommit?: string
   remoteUpdateSupport?: RemoteServerUpdateSupport
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
@@ -119,6 +121,9 @@ export type CliStatusResult = {
     connectionState?: RuntimeHostConnectionState
     runtimeId: string | null
     appVersion?: string
+    buildCommit?: string
+    runtimeProtocolVersion?: number
+    minCompatibleRuntimeClientVersion?: number
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]

@@ -21,6 +21,7 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 import { CloudArchivedWorkspaceView, type ArchiveLoad } from './CloudArchivedWorkspaceView'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
 import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
+import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
@@ -298,6 +299,8 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
     return () => cancelAnimationFrame(frame)
   }, [layer])
 
+  // Checked once the sandbox answers; inside the protocol range nothing shows.
+  const versionSkewNotice = useCloudVersionSkewNotice(workspaceId, view.state === 'running')
   const restart = useCallback(() => void runRestartCloudWorkspace(workspaceId), [workspaceId])
   const wake = useCallback(() => {
     dismissCloudWake(workspaceId)
@@ -332,6 +335,9 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
         onRestart={restart}
       />
     )
+  }
+  if (layer === null && versionSkewNotice) {
+    notices.push(versionSkewNotice)
   }
   if (layer === null && view.oom) {
     notices.push(
