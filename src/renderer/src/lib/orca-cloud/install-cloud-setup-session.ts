@@ -13,6 +13,7 @@ import {
 } from './cloud-setup-session'
 import {
   notifyCloudSetupSessionChanged,
+  setCloudSetupLinkProvider,
   setCloudSetupSessionSource,
   setCloudSetupStarter
 } from './cloud-setup-session-seam'
@@ -44,8 +45,14 @@ export function installCloudSetupSession(): () => void {
     return {
       steps: snapshot.steps,
       finished: snapshot.finished,
-      ...(snapshot.error ? { error: snapshot.error } : {})
+      ...(snapshot.error ? { error: snapshot.error } : {}),
+      ...(snapshot.team?.name ? { teamName: snapshot.team.name } : {})
     }
+  })
+  // Copy setup link / Reopen browser: a fresh one-time link to the same session.
+  setCloudSetupLinkProvider(async (sessionId) => {
+    const result = await window.api.orcaProfiles.cloudSetupLink({ sessionId }).catch(() => null)
+    return result?.status === 'ok' ? result.url : null
   })
   setCloudSetupStarter(async (request) => {
     const repo = getIndexedRepoMap(useAppStore.getState().repos).get(request.repoId)
@@ -61,6 +68,7 @@ export function installCloudSetupSession(): () => void {
   return () => {
     unsubscribe()
     setCloudSetupStarter(null)
+    setCloudSetupLinkProvider(null)
     setCloudSetupSessionSource(null)
   }
 }
