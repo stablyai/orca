@@ -27,6 +27,16 @@ export type OrcaCloudAgentsApi = {
     agent: OrcaCloudAccountAgent
     source: AgentSource
   }) => Promise<OrcaCloudAgentsResult<AgentSourcesView>>
+  /** One workspace's Sources; not_found until the sandbox exists. */
+  workspaceSources: (request: {
+    runtimeEnvironmentId: string
+  }) => Promise<OrcaCloudAgentsResult<AgentSourcesView>>
+  /** The per-workspace override (S1-b); the reply describes that workspace. */
+  setWorkspaceSource: (request: {
+    agent: OrcaCloudAccountAgent
+    source: AgentSource
+    runtimeEnvironmentId: string
+  }) => Promise<OrcaCloudAgentsResult<AgentSourcesView>>
   onSetupChanged: (listener: (setups: OrcaCloudAgentSetups) => void) => () => void
 }
 
@@ -41,6 +51,9 @@ export const orcaCloudAgentsApi: OrcaCloudAgentsApi = {
   acknowledge: (request) => ipcRenderer.invoke('orcaCloudAgents:acknowledge', request),
   remove: (request) => ipcRenderer.invoke('orcaCloudAgents:remove', request),
   setDefaultSource: (request) => ipcRenderer.invoke('orcaCloudAgents:setDefaultSource', request),
+  workspaceSources: (request) => ipcRenderer.invoke('orcaCloudAgents:workspaceSources', request),
+  setWorkspaceSource: (request) =>
+    ipcRenderer.invoke('orcaCloudAgents:setWorkspaceSource', request),
   onSetupChanged: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, setups: OrcaCloudAgentSetups): void =>
       listener(setups)

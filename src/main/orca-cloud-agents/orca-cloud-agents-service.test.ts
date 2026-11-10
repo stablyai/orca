@@ -46,6 +46,11 @@ function fakeClient(overrides: Partial<AgentCredentialsClient> = {}): AgentCrede
       defaults: { claude: 'sign-in' as const },
       coveredByKey: { claude: true, codex: false }
     })),
+    setWorkspaceSource: vi.fn(async () => ({
+      defaults: {},
+      effective: { claude: { source: 'key' as const } },
+      coveredByKey: { claude: true, codex: false }
+    })),
     startCodexBroker: vi.fn(),
     codexBrokerStatus: vi.fn(),
     cancelCodexBroker: vi.fn(async () => {}),

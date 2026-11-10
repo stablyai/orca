@@ -25,15 +25,22 @@ export type OrcaCloudAgentAccountsState = {
   load: OrcaCloudAgentAccountsLoad
   setups: OrcaCloudAgentSetups
   keyKinds: Record<OrcaCloudAccountAgent, AgentKeyKind | null>
+  /** The build sheet's R2 Set up: agents set up in turn; `index` is the one running now. */
+  queue: { agents: readonly OrcaCloudAccountAgent[]; index: number }
 }
+
+const NO_QUEUE: OrcaCloudAgentAccountsState['queue'] = { agents: [], index: 0 }
 
 const NO_KEYS: OrcaCloudAgentAccountsState['keyKinds'] = { claude: null, codex: null }
 
 let state: OrcaCloudAgentAccountsState = {
   load: { kind: 'loading' },
   setups: IDLE_ORCA_CLOUD_AGENT_SETUPS,
-  keyKinds: NO_KEYS
+  keyKinds: NO_KEYS,
+  queue: NO_QUEUE
 }
+// Set once the queued agent's setup has left idle, so idle afterwards means it finished.
+let queuedStarted = false
 const listeners = new Set<() => void>()
 let started = false
 let generation = 0
@@ -97,6 +104,7 @@ function start(): void {
   )
   api.onSetupChanged((setups) => {
     set({ setups })
+    advanceQueue(setups)
     // A finished setup changes the stored credential: read it, then let main go back to idle.
     for (const agent of ORCA_CLOUD_ACCOUNT_AGENTS) {
       if (setups[agent].phase === 'saved') {
@@ -104,6 +112,55 @@ function start(): void {
       }
     }
   })
+}
+
+function startQueued(agent: OrcaCloudAccountAgent): void {
+  queuedStarted = false
+  void bridge()?.start({ agent })
+}
+
+/** Moves R2's queue on when the running agent's setup finishes; a failure holds it for Try again. */
+function advanceQueue(setups: OrcaCloudAgentSetups): void {
+  const { agents, index } = state.queue
+  const current = agents[index]
+  if (!current) {
+    return
+  }
+  const phase = setups[current].phase
+  if (phase !== 'idle') {
+    queuedStarted = phase !== 'failed' || queuedStarted
+    return
+  }
+  if (!queuedStarted) {
+    return
+  }
+  const next = agents[index + 1]
+  set({ queue: next ? { agents, index: index + 1 } : NO_QUEUE })
+  if (next) {
+    startQueued(next)
+  }
+}
+
+/** R2's Set up (and Try again): S0's setup for each agent in turn, inside the build sheet's row. */
+export function runOrcaCloudAgentSetups(agents: readonly OrcaCloudAccountAgent[]): void {
+  const { agents: queued, index } = state.queue
+  // Try again after a failure resumes the queue at the failed agent.
+  const resume = queued[index] !== undefined && queued[index] === agents[0]
+  const queue = resume ? state.queue : { agents, index: 0 }
+  const first = queue.agents[queue.index]
+  if (!first) {
+    return
+  }
+  set({ queue })
+  startQueued(first)
+}
+
+/** Cancel stops the agent running now and drops the rest; a dismissed failure only drops them. */
+export function stopOrcaCloudAgentSetups(cancel?: OrcaCloudAccountAgent): void {
+  set({ queue: NO_QUEUE })
+  if (cancel) {
+    void bridge()?.cancel({ agent: cancel })
+  }
 }
 
 function subscribe(listener: () => void): () => void {

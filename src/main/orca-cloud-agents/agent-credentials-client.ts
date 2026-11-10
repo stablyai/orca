@@ -23,11 +23,18 @@ import {
 
 export type AgentCredentialsClient = {
   credentials(signal?: AbortSignal): Promise<AgentCredentialsView>
-  sources(signal?: AbortSignal): Promise<AgentSourcesView>
+  /** With a workspaceId (sandbox id), `effective` and `sharedWorkspace` describe that workspace. */
+  sources(signal?: AbortSignal, workspaceId?: string): Promise<AgentSourcesView>
   /** Main only, right after setup-token on this computer or a paste. */
   putClaude(token: string, label?: string): Promise<AgentCredentialsView>
   remove(agent: OrcaCloudAccountAgent): Promise<AgentCredentialsView>
   setDefaultSource(agent: OrcaCloudAccountAgent, source: AgentSource): Promise<AgentSourcesView>
+  /** The Source for one workspace (sandbox id); the reply describes that workspace. */
+  setWorkspaceSource(
+    agent: OrcaCloudAccountAgent,
+    source: AgentSource,
+    workspaceId: string
+  ): Promise<AgentSourcesView>
   startCodexBroker(): Promise<CodexBrokerStart>
   codexBrokerStatus(brokerId: string): Promise<CodexBrokerStatus>
   cancelCodexBroker(brokerId: string): Promise<void>
@@ -54,8 +61,15 @@ export function createAgentCredentialsClient(
         kind: 'control',
         signal
       }),
-    sources: (signal) =>
-      call('GET', 'v1/agent-sources', AgentSourcesResponseSchema, { kind: 'control', signal }),
+    sources: (signal, workspaceId) =>
+      call(
+        'GET',
+        workspaceId
+          ? `v1/agent-sources?${new URLSearchParams({ workspaceId })}`
+          : 'v1/agent-sources',
+        AgentSourcesResponseSchema,
+        { kind: 'control', signal }
+      ),
     putClaude: (token, label) =>
       call('PUT', 'v1/agent-credentials/claude', AgentCredentialsResponseSchema, {
         body: label ? { token, label } : { token },
@@ -68,6 +82,11 @@ export function createAgentCredentialsClient(
     setDefaultSource: (agent, source) =>
       call('PUT', 'v1/agent-sources', AgentSourcesResponseSchema, {
         body: { agent, source },
+        kind: 'control'
+      }),
+    setWorkspaceSource: (agent, source, workspaceId) =>
+      call('PUT', 'v1/agent-sources', AgentSourcesResponseSchema, {
+        body: { agent, source, workspaceId },
         kind: 'control'
       }),
     startCodexBroker: () =>
