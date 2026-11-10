@@ -1,7 +1,3 @@
-const transport = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../requests/structured-agent-session-call', () => ({
-  callStructuredAgentSession: transport.call
-}))
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import { hostModelMenuCatalog } from './host-model-menu-catalog'
@@ -28,10 +24,7 @@ function transportReply() {
     }
   }
 }
-beforeEach(() => {
-  resetHostModelCatalogSnapshotsForTests()
-  transport.call.mockReset()
-})
+beforeEach(() => resetHostModelCatalogSnapshotsForTests())
 
 it('withdraws abandoned queued upgrades and shares the surviving upgrade across reopen without listeners', async () => {
   const first = transportReply(),
@@ -47,10 +40,7 @@ it('withdraws abandoned queued upgrades and shares the surviving upgrade across 
         ? Promise.resolve(models('unwanted-orphan'))
         : first.request()
   )
-  transport.call.mockImplementation((_target, _method, params) =>
-    request(params.waitForListing === true)
-  )
-  const scope = { target, agent: 'codex', worktree: 'id:queued-lifetime' }
+  const scope = { target, agent: 'codex', worktree: 'id:queued-lifetime', request }
   const owner = hostModelMenuCatalog(scope)
   const a = new AbortController(),
     b = new AbortController()
@@ -61,10 +51,10 @@ it('withdraws abandoned queued upgrades and shares the surviving upgrade across 
   const display = vi.fn()
   stops.push(owner.subscribe(display))
   try {
-    const plain = owner.read(false, a.signal)
+    const plain = owner.read(false, false, a.signal)
     reads.push(plain)
     await first.started
-    const queued = owner.read(true, b.signal)
+    const queued = owner.read(false, true, b.signal)
     reads.push(queued)
     expect(request.mock.calls).toEqual([[false]])
     // The mounted display subscription owns no permission to continue either ended request.
@@ -79,13 +69,13 @@ it('withdraws abandoned queued upgrades and shares the surviving upgrade across 
     reopening = true
     const successor = hostModelMenuCatalog(scope)
     stops.push(successor.subscribe(display))
-    const plainA = successor.read(false, nextA.signal)
-    const plainB = successor.read(false, nextB.signal)
+    const plainA = successor.read(false, false, nextA.signal)
+    const plainB = successor.read(false, false, nextB.signal)
     reads.push(plainA, plainB)
     await reopened.started
     expect(request.mock.calls).toEqual([[false], [false]])
-    const waitA = successor.read(true, nextA.signal)
-    const waitB = successor.read(true, nextB.signal)
+    const waitA = successor.read(false, true, nextA.signal)
+    const waitB = successor.read(false, true, nextB.signal)
     reads.push(waitA, waitB)
     nextA.abort()
     stops[1]()
@@ -95,7 +85,7 @@ it('withdraws abandoned queued upgrades and shares the surviving upgrade across 
     expect(request.mock.calls).toEqual([[false], [false], [true]])
     // The remaining request signal alone retains the registered owner and physical wait.
     expect(hostModelMenuCatalog(scope)).toBe(successor)
-    expect(await successor.read(false, nextB.signal)).toEqual(listing)
+    expect(await successor.read(false, false, nextB.signal)).toEqual(listing)
     expect(request.mock.calls).toEqual([[false], [false], [true]])
     stops.push(successor.subscribe(display))
     wait.resolve(models('fresh-after-reopen'))
@@ -139,10 +129,7 @@ it('shares actual waits, stops after failure, follows open Settings to completio
   for (const port of ports) {
     request.mockImplementationOnce(port.request)
   }
-  transport.call.mockImplementation((_target, _method, params) =>
-    request(params.waitForListing === true)
-  )
-  const scope = { target, agent: 'codex', worktree: 'id:phase-outcomes' }
+  const scope = { target, agent: 'codex', worktree: 'id:phase-outcomes', request }
   const owner = hostModelMenuCatalog(scope)
   const settings = new AbortController(),
     picker = new AbortController()
@@ -154,21 +141,21 @@ it('shares actual waits, stops after failure, follows open Settings to completio
   const reads: Promise<AgentSessionModelCatalogResult | undefined>[] = []
   const stop = owner.subscribe(() => {})
   try {
-    const automatic = owner.read(undefined, settings.signal)
-    const pickerPlain = owner.read(false, picker.signal)
-    const pickerWait = owner.read(true, picker.signal)
+    const automatic = owner.read(false, undefined, settings.signal)
+    const pickerPlain = owner.read(false, false, picker.signal)
+    const pickerWait = owner.read(false, true, picker.signal)
     reads.push(automatic, pickerPlain, pickerWait)
     await plain.started
     plain.resolve(listing)
     expect(await pickerPlain).toEqual(listing)
     await firstWait.started
-    const provisional = owner.read(false, picker.signal)
+    const provisional = owner.read(false, false, picker.signal)
     reads.push(provisional)
     firstWait.resolve({ ...models('gpt-6.1-sol'), listingInProgress: true, waitExpired: true })
     expect(await provisional).toEqual(listing)
     expect(await pickerWait).toMatchObject({ models: [{ id: 'gpt-6.1-sol' }], waitExpired: true })
     await failure.started
-    const failedPicker = owner.read(true, picker.signal)
+    const failedPicker = owner.read(false, true, picker.signal)
     reads.push(failedPicker)
     failure.reject(new Error('host offline'))
     for (const answer of await Promise.all([automatic, failedPicker])) {
@@ -180,8 +167,8 @@ it('shares actual waits, stops after failure, follows open Settings to completio
     settings.abort()
     picker.abort()
 
-    const follow = owner.read(undefined, reopened.signal)
-    const sharedWait = owner.read(true, explicit.signal)
+    const follow = owner.read(false, undefined, reopened.signal)
+    const sharedWait = owner.read(false, true, explicit.signal)
     reads.push(follow, sharedWait)
     await reopenPlain.started
     reopenPlain.resolve(listing)
@@ -196,7 +183,7 @@ it('shares actual waits, stops after failure, follows open Settings to completio
     reopened.abort()
     explicit.abort()
 
-    const ended = owner.read(undefined, closing.signal)
+    const ended = owner.read(false, undefined, closing.signal)
     reads.push(ended)
     await closingPlain.started
     closingPlain.resolve(listing)
@@ -204,7 +191,7 @@ it('shares actual waits, stops after failure, follows open Settings to completio
     closing.abort()
     stop()
     expect(hostModelMenuCatalog(scope)).toBe(owner)
-    const stillShared = hostModelMenuCatalog(scope).read(true, survivor.signal)
+    const stillShared = hostModelMenuCatalog(scope).read(false, true, survivor.signal)
     reads.push(stillShared)
     closingWait.resolve(expired)
     await Promise.all([ended, stillShared])

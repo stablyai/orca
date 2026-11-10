@@ -1,3 +1,6 @@
+import { discoverTerminalModels } from '../terminal/catalog/runtime-terminal-model-discovery'
+import type { ResolvedTerminalWorkspaceLaunchTarget } from '../terminal/launch/terminal-workspace-launch-target'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
@@ -36,6 +39,22 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
     OrcaRuntimeWithTransitionGraphReloadToTerminalState['resolveFolderWorkspaceLaunchScope']
   >
 
+  abstract resolveTerminalWorkspaceReadTarget(
+    selector: string
+  ): Promise<ResolvedTerminalWorkspaceLaunchTarget>
+
+  async discoverTerminalModels(worktree?: string, agentId = '') {
+    return discoverTerminalModels(
+      {
+        store: this.requireStore(),
+        resolveTarget: () => this.resolveTerminalWorkspaceReadTarget(worktree ?? 'floating'),
+        ...(worktree ? {} : { hostGlobal: true }),
+        environment: this.accounts.getCommitMessageAgentEnvironment()
+      },
+      agentId
+    )
+  }
+
   // Route by worktree host before repo id: same-id host twins and runtime-nested targets cannot use this client's arbitrary repo row (#11163).
   protected async resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
@@ -58,6 +77,19 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
         ? getLocalProjectWorktreeGitOptions(store, repo)
         : {}
     return { worktree, repo, executionHostId, localGitOptions }
+  }
+
+  protected async resolveRuntimeModelDiscoveryTarget(worktreeSelector: string) {
+    const scope = await this.resolveFolderWorkspaceLaunchScope(worktreeSelector)
+    if (!scope?.folderWorkspace) {
+      return this.resolveRuntimeGitTarget(worktreeSelector)
+    }
+    const wsl = parseWslUncPath(scope.path)
+    return {
+      worktree: this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace),
+      executionHostId: getConnectionExecutionHostId(scope.connectionId),
+      ...(wsl ? { localGitOptions: { wslDistro: wsl.distro } } : {})
+    }
   }
 
   // Resolve the worktree's filesystem host; getRepo(id) conflates host twins, runtime targets, unresolved owners and local paths (#11163).

@@ -1,3 +1,4 @@
+import { isProjectRuntimeRepairRefusal } from '../../../shared/project-runtime-repair-message'
 import { ipcMain } from 'electron'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
@@ -35,37 +36,50 @@ export function registerFilesystemGitModelDiscoveryHandlers(
           error: `No git provider for connection "${args.connectionId}"`
         }
       }
-      let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
-      let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
-      if (args.worktreePath) {
-        const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
-        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-          store,
-          args.worktreePath,
-          worktreePath
-        )
-        const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
-        localRuntimeTarget = wslDistro
-          ? { runtime: 'wsl', wslDistro }
-          : getLocalAgentRuntimeTarget(gitOptions)
-        localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
-      }
-      const localEnv = await prepareLocalCommitMessageAgentEnv(
-        agentId,
-        commitMessageAgentEnv,
-        localRuntimeTarget
-      )
-      if (!localEnv.ok) {
-        return { success: false, error: localEnv.error }
-      }
-      return localDiscoveryOptions
-        ? discoverCommitMessageModelsLocal(
-            agentId as TuiAgent,
-            localEnv.env,
-            agentCommandOverride,
-            localDiscoveryOptions
+      try {
+        let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
+        let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
+        if (args.worktreePath) {
+          const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
+          const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+            store,
+            args.worktreePath,
+            worktreePath
           )
-        : discoverCommitMessageModelsLocal(agentId as TuiAgent, localEnv.env, agentCommandOverride)
+          const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
+          localRuntimeTarget = wslDistro
+            ? { runtime: 'wsl', wslDistro }
+            : getLocalAgentRuntimeTarget(gitOptions)
+          localDiscoveryOptions = wslDistro
+            ? { cwd: worktreePath, wslDistro }
+            : { cwd: worktreePath }
+        }
+        const localEnv = await prepareLocalCommitMessageAgentEnv(
+          agentId,
+          commitMessageAgentEnv,
+          localRuntimeTarget
+        )
+        if (!localEnv.ok) {
+          return { success: false, error: localEnv.error }
+        }
+        return localDiscoveryOptions
+          ? await discoverCommitMessageModelsLocal(
+              agentId as TuiAgent,
+              localEnv.env,
+              agentCommandOverride,
+              localDiscoveryOptions
+            )
+          : await discoverCommitMessageModelsLocal(
+              agentId as TuiAgent,
+              localEnv.env,
+              agentCommandOverride
+            )
+      } catch (error) {
+        if (isProjectRuntimeRepairRefusal(error)) {
+          return { success: false, error: error.message }
+        }
+        throw error
+      }
     }
   )
 }

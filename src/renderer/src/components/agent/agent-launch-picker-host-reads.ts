@@ -1,4 +1,6 @@
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { ModelCatalogSource } from '../../../../shared/agent-session/options/model-catalog-source'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
+import { cliModelMenuScope } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -14,12 +16,15 @@ import {
 export function agentPickerModelCatalogReads(input: {
   target: RuntimeClientTarget
   selector?: string
+  cliContext?: RuntimeGitContext
+  cliRuntime?: boolean
+  invocationKey?: string
   nativeRuntime: boolean
   platform?: NodeJS.Platform
   settings: AgentPickerDefaultSettings | null | undefined
   serverSettings?: () => Promise<AgentPickerDefaultSettings | undefined>
 }) {
-  const resolveScope = async (entry: AgentPickerEntry) => {
+  const resolveScope = async (entry: AgentPickerEntry, source: ModelCatalogSource) => {
     const server = input.serverSettings ? await input.serverSettings() : input.settings
     if (input.serverSettings && !server) {
       return undefined
@@ -28,8 +33,8 @@ export function agentPickerModelCatalogReads(input: {
       input.settings?.agentCmdOverrides?.[entry.agent] ?? server?.agentCmdOverrides?.[entry.agent]
     if (
       !modelMenuUsesHostCatalog({
-        nativeRuntime: input.nativeRuntime,
-        registered: entry.catalogRead !== 'unsupported',
+        nativeRuntime: source === 'cli' ? input.cliRuntime === true : input.nativeRuntime,
+        registered: source === 'cli' ? !!input.cliContext : entry.catalogRead !== 'unsupported',
         commandOverride: command,
         serverCommandOverride: server?.agentCmdOverrides?.[entry.agent],
         paired: input.target.kind === 'environment',
@@ -38,45 +43,41 @@ export function agentPickerModelCatalogReads(input: {
     ) {
       return undefined
     }
-    return {
-      target: input.target,
-      agent: entry.agent,
-      ...(input.selector ? { worktree: input.selector } : {})
-    }
+    return source === 'cli' && input.cliContext
+      ? cliModelMenuScope(input.cliContext, entry.agent, command ?? '', input.invocationKey)
+      : {
+          target: input.target,
+          agent: entry.agent,
+          ...(input.selector ? { worktree: input.selector } : {})
+        }
   }
   return {
-    catalog: async (entry: AgentPickerEntry, waitForListing = false, signal: AbortSignal) => {
-      if (signal.aborted) {
-        return undefined
-      }
-      if (entry.agent === 'antigravity') {
-        return callStructuredAgentSession<AgentSessionModelCatalogResult>(
-          input.target,
-          'agentSession.modelCatalog',
-          {
-            ...(input.selector ? { worktree: input.selector } : {}),
-            agent: entry.agent,
-            ...(waitForListing ? { waitForListing } : {})
-          }
-        )
-      }
-      const scope = await resolveScope(entry)
-      return signal.aborted
-        ? undefined
-        : scope
-          ? hostModelMenuCatalog(scope).read(waitForListing, signal)
-          : { origin: 'unknown' as const }
-    },
+    catalog: async (
+      entry: AgentPickerEntry,
+      waitForListing = false,
+      source: ModelCatalogSource = 'structured',
+      signal: AbortSignal
+    ) =>
+      signal.aborted
+        ? Promise.resolve(undefined)
+        : resolveScope(entry, source).then((scope) =>
+            signal.aborted
+              ? undefined
+              : scope
+                ? hostModelMenuCatalog(scope).read(source === 'cli', waitForListing, signal)
+                : { origin: 'unknown' as const }
+          ),
     observeCatalog: (
       entry: AgentPickerEntry,
-      publish: (snapshot: HostModelMenuSnapshot & { invalidated?: boolean }) => void
+      publish: (snapshot: HostModelMenuSnapshot & { invalidated?: boolean }) => void,
+      source: ModelCatalogSource = 'structured'
     ) => {
-      if (entry.agent === 'antigravity' || entry.catalogRead === 'unsupported') {
+      if (source === 'structured' && entry.catalogRead === 'unsupported') {
         return () => {}
       }
       let disposed = false
       let unsubscribe = () => {}
-      void resolveScope(entry).then((scope) => {
+      void resolveScope(entry, source).then((scope) => {
         if (!scope || disposed) {
           return
         }

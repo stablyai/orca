@@ -111,29 +111,46 @@ export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
   return cwd
 }
 
+async function selectFloatingTerminalCwd(
+  store: { getSettings(): FloatingTerminalSettings },
+  args?: FloatingTerminalCwdRequest
+): Promise<{ path: string; prepare: boolean }> {
+  const fallback = { path: getDefaultFloatingWorkspacePath(), prepare: true }
+  const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
+  if (!configuredPath) {
+    return args?.requireTrusted === true
+      ? fallback
+      : { path: resolveFloatingWorkspaceInput('~'), prepare: false }
+  }
+  const cwd = resolveFloatingWorkspaceInput(configuredPath)
+  const canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
+  if (!canonicalCwd) {
+    return fallback
+  }
+  if (isTrustedFloatingWorkspaceDirectory(canonicalCwd, store.getSettings())) {
+    return { path: canonicalCwd, prepare: false }
+  }
+  return args?.requireTrusted === true ? fallback : { path: cwd, prepare: false }
+}
+
+export async function readFloatingTerminalCwd(
+  store: { getSettings(): FloatingTerminalSettings },
+  args?: FloatingTerminalCwdRequest
+): Promise<string> {
+  const selected = await selectFloatingTerminalCwd(store, args)
+  const accessible = await canonicalizeAccessibleDirectory(selected.path)
+  if (!accessible) {
+    throw new Error('floating_workspace_path_unavailable')
+  }
+  return selected.path
+}
+
 export async function resolveFloatingTerminalCwd(
   store: { getSettings(): FloatingTerminalSettings },
   args?: FloatingTerminalCwdRequest
 ): Promise<string> {
-  const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
-  if (!configuredPath) {
-    return args?.requireTrusted === true
-      ? ensureDefaultFloatingWorkspacePath()
-      : resolveFloatingWorkspaceInput('~')
-  }
-
-  const cwd = resolveFloatingWorkspaceInput(configuredPath)
-  const canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
-  if (!canonicalCwd) {
-    return ensureDefaultFloatingWorkspacePath()
-  }
-
-  // Only picker-approved directories may become terminal cwd.
-  if (isTrustedFloatingWorkspaceDirectory(canonicalCwd, store.getSettings())) {
-    return canonicalCwd
-  }
-
-  return args?.requireTrusted === true ? ensureDefaultFloatingWorkspacePath() : cwd
+  const selected = await selectFloatingTerminalCwd(store, args)
+  return selected.prepare ? ensureDefaultFloatingWorkspacePath() : selected.path
 }
 
 export async function trustFloatingWorkspaceDirectory(

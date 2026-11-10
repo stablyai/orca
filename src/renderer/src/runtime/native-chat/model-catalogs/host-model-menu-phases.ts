@@ -29,6 +29,7 @@ export class HostModelMenuPhases {
   constructor(
     private readonly perform: (waited: boolean, current: () => boolean) => Promise<PhaseResult>,
     private readonly provisional: () => AgentSessionModelCatalogResult,
+    private readonly reuse: () => PhaseResult | undefined,
     private readonly changed: () => void
   ) {}
   get pending() {
@@ -50,7 +51,7 @@ export class HostModelMenuPhases {
       claim.end()
     }
   }
-  async read(waitForListing: boolean | undefined, signal: AbortSignal) {
+  async read(reuseHeld: boolean, waitForListing: boolean | undefined, signal: AbortSignal) {
     if (signal.aborted) {
       return undefined
     }
@@ -69,7 +70,7 @@ export class HostModelMenuPhases {
     this.claims.add(claim)
     signal.addEventListener('abort', claim.end, { once: true })
     try {
-      const initial = this.phase(claim, waitForListing ?? false)
+      const initial = this.phase(claim, waitForListing ?? false, reuseHeld)
       let result = await (waitForListing === undefined && 'waiting' in initial && initial.waiting
         ? this.join(initial.waiting, claim)
         : initial)
@@ -79,7 +80,7 @@ export class HostModelMenuPhases {
         result.reply?.listingInProgress &&
         (!result.waited || result.reply.waitExpired)
       ) {
-        result = await this.phase(claim, true)
+        result = await this.phase(claim, true, false)
       }
       return this.live(claim) ? result.answer : undefined
     } finally {
@@ -89,7 +90,11 @@ export class HostModelMenuPhases {
   private live(claim: Claim) {
     return !claim.signal.aborted && claim.generation === this.generation && this.claims.has(claim)
   }
-  private phase(claim: Claim, waited: boolean): PhaseResult | Promise<PhaseResult> {
+  private phase(
+    claim: Claim,
+    waited: boolean,
+    reuseHeld: boolean
+  ): PhaseResult | Promise<PhaseResult> {
     if (!this.live(claim)) {
       return {}
     }
@@ -102,6 +107,10 @@ export class HostModelMenuPhases {
         return this.join(this.queued, claim)
       }
       return this.join(this.active, claim)
+    }
+    const held = reuseHeld && !waited ? this.reuse() : undefined
+    if (held) {
+      return held
     }
     const phase = this.create(waited)
     const result = this.join(phase, claim)

@@ -1,10 +1,21 @@
 import { shallow } from 'zustand/shallow'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { ModelCatalogSource } from '../../../../shared/agent-session/options/model-catalog-source'
+import type {
+  AgentPickerEntry,
+  AgentPickerCatalogView
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import {
+  agentPickerCatalogSources,
+  agentPickerSourceView,
+  withAgentPickerSourceView
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
 
-export type AgentPickerCatalogJob = { index: number }
+export type AgentPickerCatalogJob = { index: number; source: ModelCatalogSource }
 export function agentPickerCatalogJobs(entries: AgentPickerEntry[]): AgentPickerCatalogJob[] {
   return entries.flatMap((entry, index) =>
-    entry.surfaces.length && entry.catalogRead !== 'unsupported' ? [{ index }] : []
+    agentPickerCatalogSources(entry).flatMap((source) =>
+      agentPickerSourceView(entry, source).catalogRead === 'unsupported' ? [] : [{ index, source }]
+    )
   )
 }
 export function agentPickerCatalogFailure(error: unknown): 'unsupported' | 'failed' {
@@ -20,11 +31,35 @@ export function agentPickerCatalogFailure(error: unknown): 'unsupported' | 'fail
 export function updateAgentPickerCatalog(
   entries: AgentPickerEntry[],
   job: AgentPickerCatalogJob,
-  patch: Partial<Pick<AgentPickerEntry, 'catalog' | 'catalogRead'>>
+  patch: Partial<AgentPickerCatalogView>
 ) {
-  const before = entries[job.index]
+  const entry = entries[job.index]
+  const before = agentPickerSourceView(entry, job.source)
   const next = { ...before, ...patch }
   return shallow(before, next)
     ? entries
-    : entries.map((row, index) => (index === job.index ? next : row))
+    : entries.map((row, index) =>
+        index === job.index ? withAgentPickerSourceView(row, job.source, next) : row
+      )
+}
+export { agentPickerSourceView }
+
+export function withAgentPickerCatalogAvailability(
+  entry: AgentPickerEntry,
+  available: Record<ModelCatalogSource, boolean>,
+  registeredAgents?: readonly { agent: string }[] | null
+) {
+  for (const source of agentPickerCatalogSources(entry)) {
+    entry = withAgentPickerSourceView(entry, source, {
+      ...agentPickerSourceView(entry, source),
+      catalogRead:
+        available[source] &&
+        (source !== 'structured' ||
+          !registeredAgents ||
+          registeredAgents.some(({ agent }) => agent === entry.agent))
+          ? 'pending'
+          : 'unsupported'
+    })
+  }
+  return entry
 }

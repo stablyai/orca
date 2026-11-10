@@ -2,6 +2,7 @@ import {
   agentPickerCatalogJobs,
   agentPickerCatalogFailure,
   updateAgentPickerCatalog,
+  agentPickerSourceView,
   type AgentPickerCatalogJob
 } from './agent-picker-catalog-jobs'
 export {
@@ -9,6 +10,7 @@ export {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './agent-picker-inventory-source'
+import { AgentPickerSourceDemand, agentPickerCatalogDemanded } from './agent-picker-source-demand'
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type {
@@ -28,7 +30,7 @@ class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
   settingsPending = false
-  private demand?: AbortController
+  private demand = new AgentPickerSourceDemand()
   private outstanding = { catalog: 0, refresh: 0, support: 0 }
   private queued: Record<ReadKind, Set<number>>
   private supports = new Map<number, SupportRead>()
@@ -63,7 +65,6 @@ class AgentPickerAcquisition {
     const first = this.observers.size === 0
     this.observers.add(observer)
     if (first) {
-      this.demand = new AbortController()
       this.catalogSubscriptions = this.jobs.map(
         (job, index) =>
           this.reads.observeCatalog?.(
@@ -80,11 +81,12 @@ class AgentPickerAcquisition {
               }
               this.publish()
               this.admit('catalog')
-            }
+            },
+            job.source
           ) ?? (() => {})
       )
       for (const [index, job] of this.jobs.entries()) {
-        const view = this.entries[job.index]
+        const view = agentPickerSourceView(this.entries[job.index], job.source)
         if (
           view.catalogRead !== 'pending' &&
           (view.catalog.origin === 'unknown' ||
@@ -109,14 +111,20 @@ class AgentPickerAcquisition {
       }
       this.entries = this.project()
     }
+    const stopDemand = observer.subscribeDemand?.(() => {
+      this.demand.reconcile((index) => this.usesSource(index))
+      this.admit('catalog')
+      this.admit('refresh')
+    })
     observer.publish(this.entries)
     this.admit('catalog')
     this.admit('refresh')
     this.admit('support')
     return () => {
+      stopDemand?.()
       this.observers.delete(observer)
+      this.demand.reconcile((index) => this.usesSource(index))
       if (!this.observers.size) {
-        this.demand?.abort()
         this.catalogSubscriptions.forEach((stop) => stop())
         this.catalogSubscriptions = []
       }
@@ -140,6 +148,9 @@ class AgentPickerAcquisition {
         ...entry,
         catalog: this.entries[i].catalog,
         catalogRead: this.entries[i].catalogRead,
+        ...(this.entries[i].sourceCatalogs
+          ? { sourceCatalogs: this.entries[i].sourceCatalogs }
+          : {}),
         ...(read
           ? {
               structured: (current && read.value) || entry.structured,
@@ -176,8 +187,8 @@ class AgentPickerAcquisition {
 
   private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
     const job = this.jobs[index]
-    const signal = this.demand!.signal
-    const catalog = await this.reads.catalog(entry, waitForListing, signal)
+    const signal = this.demand.signal(index)
+    const catalog = await this.reads.catalog(entry, waitForListing, job.source, signal)
     if (job !== this.jobs[index]) {
       return
     }
@@ -190,7 +201,7 @@ class AgentPickerAcquisition {
     // An open picker waits on a running listing, and again when a wait used its whole budget.
     const refresh =
       !signal.aborted &&
-      this.observers.size > 0 &&
+      this.usesSource(index) &&
       (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
     if (refresh) {
       this.queued.refresh.add(index)
@@ -201,9 +212,22 @@ class AgentPickerAcquisition {
     })
   }
 
+  private usesSource(index: number) {
+    const job = this.jobs[index]
+    return agentPickerCatalogDemanded(this.entries[job.index], job.source, this.observers)
+  }
+
   private admit(kind: ReadKind) {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
-      const usable = [...this.queued[kind]]
+      const usable = [...this.queued[kind]].filter((index) => {
+        if (kind === 'support') {
+          return true
+        }
+        return this.usesSource(index)
+      })
+      if (!usable.length) {
+        break
+      }
       const priorities = [...this.observers].map((o) => o.selected())
       const index =
         usable.find((index) =>

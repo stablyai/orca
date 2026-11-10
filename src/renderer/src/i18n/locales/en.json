@@ -24760,6 +24760,13 @@
     "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
   },
+  "agents": {
+    "terminalModels": {
+      "connectionUnavailable": "Terminal model discovery is unavailable on this connection.",
+      "workspaceRequired": "Terminal model discovery requires a workspace on this host.",
+      "hostRequired": "Terminal model discovery requires a connected host."
+    }
+  },
   "speechModelUpdate": {
     "update": "Update",
     "cancel": "Cancel",

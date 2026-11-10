@@ -1,8 +1,12 @@
-import type { AgentPickerEntry, AgentPickerDraft } from './agent-launch-picker'
+import type {
+  AgentPickerEntry,
+  AgentPickerDraft,
+  AgentPickerCatalogView
+} from './agent-launch-picker'
 
 export function agentPickerCatalogAuthoritative(
-  entry: AgentPickerEntry
-): entry is AgentPickerEntry & {
+  entry: AgentPickerCatalogView
+): entry is AgentPickerCatalogView & {
   catalog: Exclude<AgentPickerEntry['catalog'], { origin: 'unknown' }>
 } {
   return (

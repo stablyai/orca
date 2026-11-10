@@ -1,4 +1,4 @@
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import { withAgentPickerCatalogAvailability } from './agent-picker-catalog-jobs'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
@@ -27,7 +27,9 @@ import {
 } from './agent-launch-picker-host-reads'
 import {
   agentPickerUsesNativeRuntime,
-  agentPickerHostPlatform
+  agentPickerCatalogAvailability,
+  agentPickerHostPlatform,
+  agentPickerCliReadOptions
 } from './agent-launch-picker-runtime'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -196,20 +198,13 @@ export function useAgentLaunchPickerInventorySource(
           (agent) => agentPickerChoiceSeeds(agent, defaults),
           formatAgentTypeLabel,
           model.defaultTuiAgent
-        ).map((entry) => ({
-          ...entry,
-          coherentCatalog,
-          ...(!target ||
-          !entry.surfaces.length ||
-          (entry.agent === 'antigravity'
-            ? registeredAgents &&
-              !registeredAgents.some(({ agent }) => agent === entry.agent) &&
-              !getAgentSessionOptionLaunchCatalog(entry.agent)
-            : !nativeRuntime ||
-              (registeredAgents && !registeredAgents.some(({ agent }) => agent === entry.agent)))
-            ? { catalogRead: 'unsupported' as const }
-            : {})
-        }))
+        ).map((entry) =>
+          withAgentPickerCatalogAvailability(
+            { ...entry, coherentCatalog },
+            agentPickerCatalogAvailability(target, route, workspaceId, nativeRuntime),
+            registeredAgents
+          )
+        )
       : []
   const fallback = useMemo(
     () =>
@@ -277,6 +272,13 @@ export function useAgentLaunchPickerInventorySource(
           target,
           selector,
           nativeRuntime,
+          ...agentPickerCliReadOptions(
+            target,
+            workspaceId,
+            context?.launchCwd ?? (selectedWorkspace ? selectedWorkspace.path : repo?.path) ?? '',
+            route,
+            [context?.runtimeId, context?.pairingRevision]
+          ),
           platform,
           settings,
           serverSettings:
@@ -286,6 +288,8 @@ export function useAgentLaunchPickerInventorySource(
       },
       {
         selected: () => selectedRef.current,
+        usesSource: source.usesSource,
+        subscribeDemand: source.subscribeDemand,
         publish: source.publish
       }
     )

@@ -63,8 +63,9 @@ export function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
   env: Record<string, string>
 ): PtyShellLaunchPlan {
-  const resolvedWslContext = resolveWslSessionContext(opts)
-  let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
+  const effectiveShell = opts.shellOverride || resolvePtyShellPath(env)
+  const resolvedWslContext = resolveWslSessionContext({ ...opts, shellOverride: effectiveShell })
+  let shellPath = resolvedWslContext ? 'wsl.exe' : effectiveShell
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []

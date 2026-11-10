@@ -73,6 +73,7 @@ import { AgentActivityClearParams, AgentActivitySetReadParams } from './agent-ac
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
+import { AgentDiscoverTerminalModels } from './agent-model-discovery-params'
 import {
   AttachmentReadParams,
   AttachmentTextReadParams,
@@ -818,6 +819,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanClearApiKey': null,
   'accounts.zcodePlanCredentialsStatus': null,
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
+  'agent.discoverTerminalModels': AgentDiscoverTerminalModels,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentActivity.clear': AgentActivityClearParams,

@@ -4,11 +4,8 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
 import { useAgentModelMenu } from '@/components/agent/launch-settings/use-agent-model-menu'
 import { AgentChoiceControls } from '@/components/agent/launch-settings/AgentChoiceControls'
+import type { AppState } from '@/store/types'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
-const transport = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../requests/structured-agent-session-call', () => ({
-  callStructuredAgentSession: transport.call
-}))
 const store = vi.hoisted(() => ({
   subscribe: vi.fn().mockReturnValue(() => {}),
   getState: vi.fn()
@@ -24,10 +21,65 @@ vi.mock('../../hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {}
 }))
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
+import { hostModelMenuCatalog } from './host-model-menu-catalog'
 import {
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
+
+it('switching PowerShell to WSL invalidates a fresh native list and its in-flight request', async () => {
+  resetHostModelCatalogSnapshotsForTests()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscription only reads these fields; state transport is the external port.
+  const previous = {
+    settings: { terminalWindowsShell: 'powershell.exe', terminalWindowsWslDistro: 'Ubuntu' },
+    runtimeStatusByEnvironmentId: new Map(),
+    removedRuntimeEnvironmentIds: new Set()
+  } as unknown as AppState
+  store.getState.mockReturnValue(previous)
+  const cleanup = installHostModelCatalogSnapshotsSync()
+  const change = store.subscribe.mock.calls[0][0]
+  const native = {
+    origin: 'probe',
+    fetchedAt: 0,
+    models: [{ id: 'native-model', label: 'Native', isDefault: false, efforts: [] }]
+  } as const
+  const guest = {
+    ...native,
+    models: [{ id: 'ubuntu-model', label: 'Ubuntu', isDefault: false, efforts: [] }]
+  }
+  const late = Promise.withResolvers<unknown>()
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(native)
+    .mockReturnValueOnce(late.promise)
+    .mockResolvedValueOnce(guest)
+  const scope = {
+    target: { kind: 'local' } as const,
+    agent: 'antigravity',
+    sourceKey: 'cli-shell',
+    request
+  }
+  const owner = hostModelMenuCatalog(scope)
+  const stop = owner.subscribe(() => {})
+  await owner.read(true, undefined, new AbortController().signal)
+  const pending = owner.read(false, undefined, new AbortController().signal)
+  await Promise.resolve()
+  const successor = {
+    ...previous,
+    settings: { ...previous.settings, terminalWindowsShell: 'wsl.exe' }
+  }
+  store.getState.mockReturnValue(successor)
+  change(successor, previous)
+  expect(await owner.read(true, undefined, new AbortController().signal)).toMatchObject({
+    models: [{ id: 'ubuntu-model' }]
+  })
+  late.resolve(native)
+  await pending
+  expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'ubuntu-model' }] })
+  expect(request).toHaveBeenCalledTimes(3)
+  stop()
+  cleanup()
+})
 
 it('keeps closed Settings labels through a full settings fetch and a saved model choice', async () => {
   resetHostModelCatalogSnapshotsForTests()
@@ -47,7 +99,7 @@ it('keeps closed Settings labels through a full settings fetch and a saved model
   const changed = store.subscribe.mock.calls[0][0]
   const request = vi.fn()
   const source = {
-    scope: { target: { kind: 'local' as const }, agent: 'codex' },
+    scope: { target: { kind: 'local' as const }, agent: 'codex', request },
     coherentCatalog: true
   }
   function Editor({ model }: { model?: string }) {
@@ -66,7 +118,8 @@ it('keeps closed Settings labels through a full settings fetch and a saved model
   const coldSource = {
     scope: {
       target: { kind: 'environment' as const, environmentId: 'without-preload' },
-      agent: 'codex'
+      agent: 'codex',
+      request: coldRequest
     },
     coherentCatalog: true
   }
@@ -81,9 +134,6 @@ it('keeps closed Settings labels through a full settings fetch and a saved model
       onChange: () => {}
     })
   }
-  transport.call.mockImplementation((target) =>
-    target.kind === 'environment' ? coldRequest() : request()
-  )
   const cold = render(createElement(Unpreloaded, { open: false }))
   try {
     expect(

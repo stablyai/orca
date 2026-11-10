@@ -190,6 +190,8 @@ export const gitApi = {
     sourceControlAi?: unknown
     agentCmdOverrides?: Record<string, string>
   }) => ipcRenderer.invoke('git:generateCommitMessage', args),
+  discoverTerminalModels: (args: { agentId: string; worktree?: string }) =>
+    ipcRenderer.invoke('agent:discoverTerminalModels', args),
   discoverCommitMessageModels: (args: {
     agentId: string
     worktreePath?: string

@@ -29,6 +29,24 @@ export function agentPickerUsesNativeRuntime(
   )
 }
 
+export function agentPickerCliReadOptions(
+  target: RuntimeClientTarget,
+  worktreeId: string | undefined,
+  worktreePath: string,
+  route: AgentLaunchRoutingInput,
+  generation: readonly unknown[]
+) {
+  return {
+    cliRuntime:
+      route.projectExecutionKind !== 'ssh' && route.projectRuntime?.status !== 'repair-required',
+    invocationKey:
+      target.kind === 'local' && !worktreeId && !worktreePath
+        ? undefined
+        : JSON.stringify([...generation, route.projectRuntime, worktreePath]),
+    cliContext: { target, worktreeId, worktreePath }
+  }
+}
+
 export function agentPickerHostPlatform(
   target: RuntimeClientTarget | null | undefined,
   statuses: AppState['runtimeStatusByEnvironmentId']
@@ -36,4 +54,20 @@ export function agentPickerHostPlatform(
   return target?.kind === 'environment'
     ? lastVerifiedRuntimeStatus(statuses.get(target.environmentId))?.hostPlatform
     : getRendererAppPlatform()
+}
+
+export function agentPickerCatalogAvailability(
+  target: RuntimeClientTarget | null | undefined,
+  route: AgentLaunchRoutingInput,
+  workspaceId: string | undefined,
+  nativeRuntime: boolean
+) {
+  return {
+    structured: !!target && nativeRuntime,
+    cli:
+      !!target &&
+      route.projectExecutionKind !== 'ssh' &&
+      route.projectRuntime?.status !== 'repair-required' &&
+      (target.kind === 'local' || !!workspaceId)
+  }
 }

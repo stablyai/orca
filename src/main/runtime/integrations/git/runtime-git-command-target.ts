@@ -31,6 +31,7 @@ export type RuntimeGitTarget = {
 
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
+  resolveRuntimeModelDiscoveryTarget?(selector: string): Promise<RuntimeGitTarget>
   getRuntimeSettings(): SourceControlAiSettingsInput
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
