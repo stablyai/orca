@@ -236,6 +236,7 @@ describe('resuming a recipe VM server', () => {
     const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve))
     const auth = serverAuth(serverDataPath)
     const repairedA = vi.fn()
+    const firstProbeSettled = Promise.withResolvers<void>()
     // Resume A: its probe is held, so its re-pair would land late.
     await applyResumedRuntimePairing({
       userDataPath: desktopDataPath,
@@ -244,7 +245,11 @@ describe('resuming a recipe VM server', () => {
       invalidateTransport: vi.fn(),
       probeSavedPairing: async (connection) => {
         await firstGate
-        return auth(connection)
+        try {
+          return await auth(connection)
+        } finally {
+          firstProbeSettled.resolve()
+        }
       },
       confirmInBackground: true,
       onRepairedInBackground: repairedA
@@ -259,7 +264,11 @@ describe('resuming a recipe VM server', () => {
     })
     const afterB = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
     releaseFirst()
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await firstProbeSettled.promise
+    // Let A's confirmation chain (catch → guarded repair → then) run to the end.
+    for (let tick = 0; tick < 10; tick++) {
+      await Promise.resolve()
+    }
     expect(repairedA).not.toHaveBeenCalled()
     expect(resolveEnvironmentPairingOffer(desktopDataPath, environmentId)).toEqual(afterB)
     expect(outcomeB.environment.id).toBe(environmentId)
