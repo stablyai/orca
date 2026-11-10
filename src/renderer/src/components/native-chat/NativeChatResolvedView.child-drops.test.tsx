@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
 import {
   NativeChatPaneFileDropSurface,

@@ -23415,29 +23415,23 @@
     "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
   },
   "speechModelUpdate": {
-    "updateTitle": "音声モデルを更新してください",
-    "updateDescription": "音声入力がより高速なエンジンで動作するようになりました。再び音声入力するには、{{model}} を一度だけダウンロードする必要があります（{{size}} MB）。",
     "update": "更新",
-    "replacedTitle": "音声モデルが置き換えられました",
-    "replacedDescription": "{{old}} は新しい音声エンジンでは動作しません。代わりに {{model}} を使用します（{{size}} MB）。",
-    "downloadReplacement": "{{model}} をダウンロード",
-    "later": "後で",
-    "dismiss": "閉じる",
-    "updatingTitle": "{{model}} を更新中",
-    "downloadingTitle": "{{model}} をダウンロード中",
-    "downloadingDescription": "作業を続けられます。完了すると音声入力が使えるようになります。",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "キャンセル",
-    "doneTitle": "音声入力の準備ができました",
-    "doneDescription": "{{model}} を更新しました。古いファイルは削除されました。",
-    "doneRetiredDescription": "{{model}} の準備ができました。{{old}} の古いファイルはまだディスクに残っています。",
-    "keep": "残す",
-    "deleteOld": "古いモデルを削除",
-    "deleteFailed": "{{model}} を削除できませんでした。",
-    "updateFailedTitle": "{{model}} を更新できませんでした",
-    "downloadFailedTitle": "{{model}} をダウンロードできませんでした",
-    "failedAtDescription": "ダウンロードが {{mb}} MB で止まりました。接続を確認して、もう一度お試しください。",
-    "failedDescription": "ダウンロードが止まりました。接続を確認して、もう一度お試しください。",
-    "tryAgain": "再試行"
+    "pill": {
+      "updateNotice": "より高速な音声入力をインストールできます",
+      "retiredNotice": "音声入力はより高速な音声モデルに移行しました",
+      "install": "インストール",
+      "installTooltip": "1 回のみのダウンロード · {{size}} MB",
+      "downloading": "音声入力を準備中",
+      "downloadingTooltip": "{{done}} / {{size}} MB",
+      "ready": "音声入力の準備ができました。<kbd></kbd> を押してください",
+      "readyNoShortcut": "音声入力の準備ができました。",
+      "failed": "ダウンロードが停止しました。接続を確認してください。",
+      "tryAgain": "再試行",
+      "deleteOld": "古いモデルを削除",
+      "deleteFailed": "{{model}} を削除できませんでした。",
+      "dismiss": "閉じる",
+      "cancelDownload": "ダウンロードをキャンセル"
+    }
   }
 }

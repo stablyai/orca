@@ -46,7 +46,7 @@ vi.mock(
   () => import('./local-host-test-fixture')
 )
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 

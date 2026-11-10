@@ -28,7 +28,7 @@ import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
   withoutHiddenVmWorktrees
-} from '@/lib/vm-create-hidden-checkouts'
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 

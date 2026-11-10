@@ -1833,6 +1833,9 @@
             "creation": {
               "f3785eddc2": "New Browser Tab"
             }
+          },
+          "availability": {
+            "web": "The floating workspace runs on your own computer, so it is only available in the Orca desktop app."
           }
         }
       },
@@ -13782,7 +13785,8 @@
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
           "detail": "Background code runs",
-          "workspaceChanged": "When you switch workspace or its terminals change"
+          "workspaceChanged": "When you switch workspace or its terminals change",
+          "editorTypographyChanged": "When the editor font or zoom changes"
         },
         "pluginInstallAction": {
           "installed": "{{value0}} installed",
@@ -24781,29 +24785,23 @@
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
   },
   "speechModelUpdate": {
-    "updateTitle": "Update your speech model",
-    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
     "update": "Update",
-    "replacedTitle": "Your speech model was replaced",
-    "replacedDescription": "{{old}} can't run on the new speech engine. {{model}} replaces it ({{size}} MB).",
-    "downloadReplacement": "Download {{model}}",
-    "later": "Later",
-    "dismiss": "Dismiss",
-    "updatingTitle": "Updating {{model}}",
-    "downloadingTitle": "Downloading {{model}}",
-    "downloadingDescription": "You can keep working. Dictation is back when this finishes.",
-    "progress": "{{done}} of {{total}} MB",
     "cancel": "Cancel",
-    "doneTitle": "Dictation is ready",
-    "doneDescription": "{{model}} is updated. The old files were removed.",
-    "doneRetiredDescription": "{{model}} is set up. The old {{old}} files are still on disk.",
-    "keep": "Keep",
-    "deleteOld": "Delete old model",
-    "deleteFailed": "Failed to delete {{model}}.",
-    "updateFailedTitle": "Couldn't update {{model}}",
-    "downloadFailedTitle": "Couldn't download {{model}}",
-    "failedAtDescription": "The download stopped at {{mb}} MB. Check your connection and try again.",
-    "failedDescription": "The download stopped. Check your connection and try again.",
-    "tryAgain": "Try again"
+    "pill": {
+      "updateNotice": "Faster dictation is ready to install",
+      "retiredNotice": "Dictation moved to a faster speech model",
+      "install": "Install",
+      "installTooltip": "One-time download · {{size}} MB",
+      "downloading": "Setting up dictation",
+      "downloadingTooltip": "{{done}} of {{size}} MB",
+      "ready": "Dictation is ready. Press <kbd></kbd>",
+      "readyNoShortcut": "Dictation is ready.",
+      "failed": "Download stopped. Check your connection.",
+      "tryAgain": "Try again",
+      "deleteOld": "Delete old model",
+      "deleteFailed": "Failed to delete {{model}}.",
+      "dismiss": "Dismiss",
+      "cancelDownload": "Cancel download"
+    }
   }
 }

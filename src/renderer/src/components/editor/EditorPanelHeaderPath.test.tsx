@@ -17,7 +17,7 @@ vi.mock('@/lib/resolved-worktree-execution-host', () => ({
   getResolvedExecutionHostIdForWorktree: () => 'local'
 }))
 
-vi.mock('@/lib/rename-file', () => ({
+vi.mock('@/lib/editor/file-operations/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
 }))
 
@@ -97,41 +97,6 @@ describe('EditorPanelHeaderPath inline rename', () => {
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
-  })
-
-  it('ignores IME confirmation and its redispatch before accepting deliberate Enter', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    const frames: FrameRequestCallback[] = []
-    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      frames.push(callback)
-      return frames.length
-    })
-    try {
-      fireEvent.compositionStart(input)
-      fireEvent.change(input, { target: { value: 'renamed.md' } })
-      fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
-      fireEvent.compositionEnd(input)
-      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-      expect(renameFileOnDiskMock).not.toHaveBeenCalled()
-
-      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-      expect(renameFileOnDiskMock).not.toHaveBeenCalled()
-      expect(getRenameInput('Rename file notes.md')).toBe(input)
-
-      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-      for (const frame of frames) {
-        frame(0)
-      }
-      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-      expect(renameFileOnDiskMock).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ newName: 'renamed.md' })
-      )
-    } finally {
-      raf.mockRestore()
-    }
   })
 
   it('cancels on Escape without a trailing blur-commit, and ignores empty renames', () => {

@@ -8,14 +8,17 @@ import { useWorktreeById } from '@/store/workspaces/selection/use-selected-workt
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
-import { isWindowVisible, windowPollSlowdown } from '@/lib/window-visibility-interval'
+import {
+  isWindowVisible,
+  windowPollSlowdown
+} from '@/lib/window-activity/window-visibility-interval'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 import { useRefreshOnHostContact } from './use-refresh-on-host-contact'
 import { useGitStatusWindowPresence } from './use-git-status-window-presence'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
-} from '@/lib/passive-macos-app-data-access'
+} from '@/app-shell/platform/passive-macos-app-data-access'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'

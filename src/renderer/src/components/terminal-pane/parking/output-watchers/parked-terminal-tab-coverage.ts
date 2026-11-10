@@ -11,8 +11,11 @@ import {
   parkedTerminalCaptureRevision
 } from './terminal-parked-watcher-registry'
 import type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconciliation'
-import { collectLeafIdsInOrder } from '../../layout/terminal-layout-leaf-traversal'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import '../../layout/terminal-layout-leaf-traversal'
+import {
+  collectLayoutLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 import type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 import { launchAgentTabIds } from './parked-tab-agent-owner-index'
 
@@ -114,7 +117,7 @@ function fallbackParkedPaneCandidates(
   state: ParkedPaneFallbackState
 ): ParkedTerminalPaneCapture[] {
   const layout = state.terminalLayoutsByTabId[tab.id]
-  const rootLeafIds = collectLeafIdsInOrder(layout?.root)
+  const rootLeafIds = collectLayoutLeafIdsInOrder(layout?.root)
   const rootlessLeafId = layout ? resolveRootlessTerminalLayoutLeafId(layout) : null
   const leafIds =
     rootLeafIds.length > 0 ? rootLeafIds : rootlessLeafId !== null ? [rootlessLeafId] : []

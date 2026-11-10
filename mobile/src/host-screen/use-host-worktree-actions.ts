@@ -6,8 +6,8 @@ import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/connection/host-client-hooks'
-import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
-import { isPageHostRemovalUnavailable } from '../transport/hosts/page-host-removal-refusal'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
+import { isPageHostRemovalUnavailable } from '../host-catalog/page-host-removal-refusal'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   rpcClientForExecutionHost,

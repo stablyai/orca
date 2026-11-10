@@ -16,7 +16,7 @@ import {
   getConnectionIdFromState
 } from '../../../lib/workspace/ownership/connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from '../../../lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '../../../lib/new-workspace'
+import { CLIENT_PLATFORM } from '../../../lib/workspace/creation/new-workspace'
 import {
   getExecutionHostIdForWorktree,
   getResourceExecutionHostIdForWorktree,

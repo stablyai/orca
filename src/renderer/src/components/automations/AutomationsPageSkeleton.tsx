@@ -1,12 +1,12 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './listing/automations-table-layout'
 import {
   LIST_TABLE_CONTAINER_CLASS,
   LIST_TABLE_HEADER_CLASS,
   LIST_TABLE_STICKY_HEADER_CELL_CLASS,
   LIST_TABLE_STICKY_ROW_CELL_CLASS
-} from '@/lib/list-table-layout'
+} from '@/lib/list-interaction/list-table-layout'
 import { useTranslate } from '@/i18n/use-translate'
 
 function SkeletonBar({ className }: { className?: string }): React.JSX.Element {

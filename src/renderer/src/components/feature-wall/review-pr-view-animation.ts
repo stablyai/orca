@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 function getReviewPrAnimatedStatusCopy(): {
   pendingLabel: string

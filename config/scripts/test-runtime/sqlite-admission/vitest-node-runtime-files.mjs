@@ -27,8 +27,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
-  'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
-  'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
@@ -172,6 +170,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
+  'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
   'src/main/ipc/notifications-subject-retirement.test.ts',
