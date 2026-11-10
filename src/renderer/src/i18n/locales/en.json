@@ -27455,7 +27455,7 @@
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
       "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "From your Orca account. Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
+      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",

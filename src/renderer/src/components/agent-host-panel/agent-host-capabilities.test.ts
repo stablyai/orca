@@ -59,7 +59,7 @@ describe('hostCapabilities', () => {
     )
     expect(hostCapabilities('recipe', 'available', ctx, t).environmentHelp).toBeNull()
     expect(hostCapabilities('cloud', 'available', ctx, t).agents.help).toBe(
-      'From your Orca account. Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.'
+      'Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same.'
     )
   })
 
