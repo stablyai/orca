@@ -29,7 +29,7 @@ import {
   openRuntimePortForward
 } from '../runtime-port-forward/runtime-port-forward-manager'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
-import { CLOUD_SSH_ACTIVE_BYTES_PER_MINUTE, noteCloudSshActivity } from './cloud-ssh-activity'
+import { noteCloudSshActivity } from './cloud-ssh-activity'
 import {
   addCloudSshInclude,
   cloudSshIncludeLine,
@@ -80,7 +80,6 @@ export function detectCloudSshEditors(
   return [...found.values()]
 }
 
-const lastBytes = new Map<string, number>()
 const idleSince = new Map<string, number>()
 let watchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -96,10 +95,10 @@ function watchSshForwards(): void {
     const forwards = (manager?.list() ?? []).filter((forward) => forward.reason === 'ssh')
     const now = Date.now()
     for (const forward of forwards) {
-      const sent = forward.bytesToHost - (lastBytes.get(forward.id) ?? forward.bytesToHost)
-      lastBytes.set(forward.id, forward.bytesToHost)
-      if (sent >= CLOUD_SSH_ACTIVE_BYTES_PER_MINUTE) {
-        noteCloudSshActivity(forward.environmentId, now)
+      // The forward's meter tells typing from keepalives (an idle VS Code window included).
+      const usedAt = manager?.forwardLastUsedAt(forward.id) ?? null
+      if (usedAt !== null && now - usedAt < WATCH_INTERVAL_MS) {
+        noteCloudSshActivity(forward.environmentId, usedAt)
       }
       if (forward.openConnections > 0) {
         idleSince.delete(forward.id)
@@ -110,7 +109,6 @@ function watchSshForwards(): void {
       if (now - since >= SSH_FORWARD_IDLE_CLOSE_MS) {
         manager?.close(forward.id)
         idleSince.delete(forward.id)
-        lastBytes.delete(forward.id)
       }
     }
     if (manager?.list().some((forward) => forward.reason === 'ssh')) {

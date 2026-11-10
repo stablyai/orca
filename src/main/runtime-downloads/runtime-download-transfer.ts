@@ -64,22 +64,35 @@ export async function transferRuntimeFile(
   input: TransferInput & { maxBytes?: number; chunkBytes?: number; concurrency?: number }
 ): Promise<{ bytes: number }> {
   const chunkBytes = input.chunkBytes ?? FILE_CHUNK_BYTES
-  const stat = await input.call<{ size: number; isDirectory: boolean }>(
-    'files.stat',
-    { worktree: input.worktree, relativePath: input.relativePath },
-    { timeoutMs: CHUNK_TIMEOUT_MS, signal: input.signal }
-  )
-  if (stat.isDirectory) {
-    throw new RuntimeDownloadError('not_a_file')
+  // The first pages go out with stat instead of after it: one round trip less per download, most
+  // of a small file's time on a ~65 ms link. A capped download still learns the size first.
+  const statReady = input
+    .call<{ size: number; isDirectory: boolean }>(
+      'files.stat',
+      { worktree: input.worktree, relativePath: input.relativePath },
+      { timeoutMs: CHUNK_TIMEOUT_MS, signal: input.signal }
+    )
+    .then((stat) => {
+      if (stat.isDirectory) {
+        throw new RuntimeDownloadError('not_a_file')
+      }
+      if (input.maxBytes !== undefined && stat.size > input.maxBytes) {
+        throw new RuntimeDownloadError('too_large')
+      }
+      // Hard stop for a host that keeps answering full pages past the size it announced.
+      return {
+        size: stat.size,
+        byteLimit: Math.min(
+          input.maxBytes ?? Number.POSITIVE_INFINITY,
+          stat.size + FILE_GROWTH_ALLOWANCE_BYTES
+        )
+      }
+    })
+  // Workers await it; this only keeps an early stat failure from going unhandled meanwhile.
+  statReady.catch(() => {})
+  if (input.maxBytes !== undefined) {
+    await statReady
   }
-  if (input.maxBytes !== undefined && stat.size > input.maxBytes) {
-    throw new RuntimeDownloadError('too_large')
-  }
-  // Hard stop for a host that keeps answering full pages past the size it announced.
-  const byteLimit = Math.min(
-    input.maxBytes ?? Number.POSITIVE_INFINITY,
-    stat.size + FILE_GROWTH_ALLOWANCE_BYTES
-  )
   let nextOffset = 0
   // The file may change size mid-transfer; the first EOF page fixes the final length.
   let endOffset: number | null = null
@@ -94,16 +107,23 @@ export async function transferRuntimeFile(
       }
       const offset = nextOffset
       nextOffset += chunkBytes
-      const chunk = await input.call<RuntimeFileReadChunkResult>(
-        'files.readChunk',
-        {
-          worktree: input.worktree,
-          relativePath: input.relativePath,
-          offset,
-          length: chunkBytes
-        },
-        { timeoutMs: CHUNK_TIMEOUT_MS, signal: input.signal }
-      )
+      const chunk = await input
+        .call<RuntimeFileReadChunkResult>(
+          'files.readChunk',
+          {
+            worktree: input.worktree,
+            relativePath: input.relativePath,
+            offset,
+            length: chunkBytes
+          },
+          { timeoutMs: CHUNK_TIMEOUT_MS, signal: input.signal }
+        )
+        .catch(async (error: unknown) => {
+          // A page raced ahead of stat: stat's verdict (not a file, too large) explains it better.
+          await statReady
+          throw error
+        })
+      const { size, byteLimit } = await statReady
       if (offset + chunk.bytesRead > byteLimit) {
         throw new RuntimeDownloadError('too_large')
       }
@@ -116,7 +136,7 @@ export async function transferRuntimeFile(
         received += bytes.byteLength
         input.onProgress({
           receivedBytes: received,
-          totalBytes: stat.size,
+          totalBytes: size,
           processedBytes: received
         })
       }
@@ -129,6 +149,8 @@ export async function transferRuntimeFile(
   }
   const concurrency = Math.max(1, input.concurrency ?? FILE_CHUNK_CONCURRENCY)
   await Promise.all(Array.from({ length: concurrency }, worker))
+  // An empty file can finish its pages before stat answers; stat must still pass.
+  await statReady
   const finalLength = endOffset ?? received
   // A page past a shrunken EOF may have landed; cut the file back to the agreed length.
   await input.sink.truncate(finalLength)

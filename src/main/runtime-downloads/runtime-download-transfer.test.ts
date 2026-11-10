@@ -88,6 +88,43 @@ describe('transferRuntimeFile', () => {
     )
   })
 
+  it('sends the first pages with stat instead of after it', async () => {
+    const content = Buffer.from('0123456789abcdefghij')
+    const host = fileHost(content)
+    const statGate = Promise.withResolvers<void>()
+    let pagesBeforeStat = 0
+    let statAnswered = false
+    const call = fakeCall(async (method: string, params: unknown) => {
+      if (method === 'files.stat') {
+        // Stat answers only once every worker has a page in flight.
+        await statGate.promise
+        statAnswered = true
+      } else if (!statAnswered) {
+        pagesBeforeStat += 1
+        if (pagesBeforeStat === 3) {
+          statGate.resolve()
+        }
+      }
+      return host(method, params, { timeoutMs: 1, signal: new AbortController().signal })
+    })
+    const { bytes } = await runFile(call)
+    expect(bytes.equals(content)).toBe(true)
+    expect(pagesBeforeStat).toBe(3)
+  })
+
+  it('reports a folder as not a file even when a racing page failed first', async () => {
+    const pageFailed = Promise.withResolvers<void>()
+    const call = fakeCall(async (method: string) => {
+      if (method === 'files.stat') {
+        await pageFailed.promise
+        return { size: 0, isDirectory: true }
+      }
+      pageFailed.resolve()
+      throw new Error('EISDIR')
+    })
+    await expect(runFile(call)).rejects.toEqual(new RuntimeDownloadError('not_a_file'))
+  })
+
   it('stops a host that keeps sending pages past the limit', async () => {
     const endless = fakeCall(async (method: string, params: { length: number }) =>
       method === 'files.stat'

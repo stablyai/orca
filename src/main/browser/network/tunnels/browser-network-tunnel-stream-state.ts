@@ -1,5 +1,12 @@
 export const BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES = 256 * 1024
 export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
+/**
+ * With early data negotiated, a client may send this much on a new stream before Opened (its
+ * request), and may grant receive credit before Opened, so a request costs one round trip instead
+ * of two. The host holds early bytes until the destination connects, so this also caps what one
+ * connecting stream buffers there; Opened's credit tops the client up to the initial window.
+ */
+export const BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES = 64 * 1024
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
 // Chromium's per-session socket pool; a lower cap refuses a heavy page's own connections.
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 256
@@ -78,6 +85,10 @@ export type BrowserNetworkTunnelStream = {
   pendingToClient: Uint8Array<ArrayBufferLike>[]
   pendingToClientBytes: number
   pendingDestinationWriteReleases: Set<() => void>
+  /** Accepts client data, half-close and credit before the destination connects. */
+  earlyData: boolean
+  /** Client bytes held until the destination connects, in arrival order. */
+  heldDestinationWrites: { bytes: Uint8Array<ArrayBufferLike>; done: () => void }[]
   clientEnded: boolean
   destinationEnded: boolean
   destinationClosed: boolean
@@ -90,6 +101,8 @@ export type BrowserNetworkTunnelSessionOptions = {
   connect: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelSocket
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   flowControl?: BrowserNetworkTunnelFlowControl
+  /** Both sides must agree: see BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES. */
+  earlyData?: boolean
   onClose?: () => void
   now?: () => number
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null

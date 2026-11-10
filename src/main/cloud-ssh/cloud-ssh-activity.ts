@@ -1,9 +1,7 @@
 // An SSH session counts as use of an Orca Cloud workspace, so idle sleep does not stop a VM under
-// someone typing in VS Code. Only client-to-VM traffic above keepalive noise counts: an editor
-// window left open with nobody using it still lets the workspace sleep.
+// someone typing in VS Code. Only client-to-VM traffic that reads as use counts (see
+// ForwardUseMeter): an editor window left open with nobody using it still lets the workspace sleep.
 
-/** ssh keepalives (ServerAliveInterval 30) send ~200 B/min; a few keystrokes exceed this. */
-export const CLOUD_SSH_ACTIVE_BYTES_PER_MINUTE = 2048
 /** Matches the lease policy's PTY quiet window. */
 const ACTIVE_FOR_MS = 2 * 60_000
 

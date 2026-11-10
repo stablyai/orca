@@ -10,7 +10,10 @@ import {
   isBrowserTunnelPolicyDisabled
 } from '../../../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import type { BrowserNetworkTunnelOpen } from '../../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
-import { WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY } from '../../../../../shared/workspace-ports-runtime-capabilities'
+import {
+  WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY,
+  WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY
+} from '../../../../../shared/workspace-ports-runtime-capabilities'
 import { WorkspacePortForwardTunnelParams } from '../../../../../shared/rpc-contract/workspace-ports-params'
 import { defineStreamingMethod } from '../../core'
 
@@ -101,6 +104,10 @@ export function createWorkspacePortForwardTunnelMethod(
       if (signal?.aborted) {
         return
       }
+      // Older clients never send early data, so the host keeps the strict ordering for them.
+      const earlyData = clientCapabilities.includes(
+        WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY
+      )
       const closed = Promise.withResolvers<void>()
       let session: BrowserNetworkTunnelSession | null = null
       let unregisterBinary = (): void => {}
@@ -123,6 +130,7 @@ export function createWorkspacePortForwardTunnelMethod(
         connect,
         sendBinary: (bytes) => sendBinary(bytes) !== false,
         flowControl: BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
+        earlyData,
         onClose: () => {
           try {
             emit({ type: 'closed', tunnelGeneration: TUNNEL_GENERATION })
@@ -137,7 +145,13 @@ export function createWorkspacePortForwardTunnelMethod(
       if (signal?.aborted) {
         close()
       } else {
-        emit({ type: 'ready', tunnelGeneration: TUNNEL_GENERATION })
+        emit({
+          type: 'ready',
+          tunnelGeneration: TUNNEL_GENERATION,
+          ...(earlyData
+            ? { capabilities: [WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY] }
+            : {})
+        })
       }
       try {
         await closed.promise

@@ -11,7 +11,8 @@ import {
   type PortForwardTunnelConnector
 } from './runtime-port-forward-tunnel'
 import { RuntimePortForwardActivity } from './runtime-port-forward-activity'
-import { pipeUpstreamToClient } from '../browser/network/tunnels/remote-browser-socks-upstream'
+import { ForwardUseMeter } from './runtime-port-forward-use-meter'
+import { pipeForwardedConnection } from './runtime-port-forward-pipe'
 import { listenLoopback, type ListenOutcome } from './runtime-port-forward-listen'
 import { forwardKey, isValidRuntimePortForwardRequest } from './runtime-port-forward-request'
 
@@ -21,6 +22,8 @@ const NEARBY_PORT_ATTEMPTS = 10
 class ActiveForward {
   readonly sockets = new Set<Socket>()
   closed = false
+  /** Last new connection or traffic that read as use, not keepalives. */
+  lastUsedAt: number | null = null
 
   constructor(
     readonly state: RuntimePortForward,
@@ -103,6 +106,11 @@ export class RuntimePortForwardManager {
 
   lastActivityAt(environmentId: string): number | null {
     return this.activity.lastAt(environmentId)
+  }
+
+  /** Same signal for one forward, so SSH can tell its own sessions apart from a dev server's. */
+  forwardLastUsedAt(id: string): number | null {
+    return this.forwards.get(id)?.lastUsedAt ?? null
   }
 
   close(id: string): RuntimePortForward | null {
@@ -259,7 +267,8 @@ export class RuntimePortForwardManager {
     forward.sockets.add(socket)
     state.openConnections += 1
     state.totalConnections += 1
-    this.activity.note(state.environmentId, 0, true)
+    forward.lastUsedAt = this.activity.note(state.environmentId)
+    const meter = new ForwardUseMeter()
     socket.setNoDelay(true)
     socket.pause()
     let released = false
@@ -282,23 +291,14 @@ export class RuntimePortForwardManager {
             remote.destroy()
             return
           }
-          if (state.lastError) {
-            delete state.lastError
-          }
-          socket.on('data', (chunk: Buffer) => {
-            state.bytesToHost += chunk.byteLength
-            this.activity.note(state.environmentId, chunk.byteLength, false)
+          pipeForwardedConnection(socket, remote, state, {
+            sent: (bytes) => {
+              if (meter.note((this.options.now ?? Date.now)(), bytes)) {
+                forward.lastUsedAt = this.activity.note(state.environmentId)
+              }
+            },
+            changed: () => this.emitChange()
           })
-          remote.on('data', (chunk: Buffer) => {
-            state.bytesFromHost += chunk.byteLength
-          })
-          socket.pipe(remote)
-          // Settles each chunk once the local socket took it, which returns flow-control credit to the host.
-          pipeUpstreamToClient(remote, socket)
-          remote.on('error', () => socket.destroy())
-          socket.on('close', () => remote.destroy())
-          remote.on('close', () => socket.destroy())
-          socket.resume()
           this.emitChange()
         },
         (error: unknown) => {

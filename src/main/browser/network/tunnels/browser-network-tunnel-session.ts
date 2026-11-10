@@ -1,15 +1,16 @@
 import {
   BrowserNetworkTunnelOpcode,
-  encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
 } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { admitBrowserNetworkTunnelOpen } from './browser-network-tunnel-open-admission'
 import { browserTunnelDestinationFailureCode } from './browser-network-tunnel-destination-policy'
 import {
   BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW,
+  connectBrowserNetworkDestination,
   flushBrowserNetworkDestination,
   grantBrowserNetworkDestinationCredit,
   halfCloseBrowserNetworkDestination,
+  isStreamScopedDestinationFailure,
   queueBrowserNetworkDestinationData,
   writeBrowserNetworkDestination
 } from './browser-network-tunnel-destination-flow'
@@ -35,6 +36,7 @@ export class BrowserNetworkTunnelSession {
   private readonly onClose: BrowserNetworkTunnelSessionOptions['onClose']
   private readonly resourceBudget: ReturnType<typeof createBrowserNetworkTunnelResourceBudget>
   private readonly flowControl: BrowserNetworkTunnelFlowControl
+  private readonly earlyData: boolean
   private readonly frameReceiver: BrowserNetworkTunnelFrameReceiver
   private readonly streams = new Map<number, BrowserNetworkTunnelStream>()
   private readonly openedStreamIds = new Set<number>()
@@ -52,6 +54,7 @@ export class BrowserNetworkTunnelSession {
     this.onClose = options.onClose
     this.resourceBudget = createBrowserNetworkTunnelResourceBudget(options)
     this.flowControl = options.flowControl ?? BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL
+    this.earlyData = options.earlyData === true
     this.frameReceiver = {
       tunnelGeneration: options.tunnelGeneration,
       frameSender: this.frameSender,
@@ -120,6 +123,7 @@ export class BrowserNetworkTunnelSession {
       openedStreamIds: this.openedStreamIds,
       streamCount: this.streams.size,
       windowBytes: this.flowControl.streamWindowBytes,
+      earlyData: this.earlyData,
       resourceBudget: this.resourceBudget,
       connect: this.connect,
       sendError: (streamId, code) => this.frameSender.sendError(streamId, code),
@@ -147,14 +151,15 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream) || stream.connected) {
       return
     }
-    stream.connected = true
-    clearTimeout(stream.connectTimeout)
+    // Held early data reaches the destination before Opened goes out (a synchronous peer's next
+    // bytes cannot overtake it); Opened's credit tops the client up to the initial window.
+    const credit = connectBrowserNetworkDestination(stream)
     this.frameSender.send(BrowserNetworkTunnelOpcode.Opened, stream.id)
-    this.frameSender.send(
-      BrowserNetworkTunnelOpcode.WindowUpdate,
-      stream.id,
-      encodeBrowserNetworkTunnelWindowUpdate(stream.receiveWindowBytes)
-    )
+    this.frameSender.sendWindowUpdate(stream.id, credit)
+    if (this.isCurrent(stream)) {
+      // Credit the client granted before connect resumes the destination, as a later grant would.
+      this.flushDestinationData(stream)
+    }
   }
 
   private writeToDestination(
@@ -183,7 +188,7 @@ export class BrowserNetworkTunnelSession {
 
   // Valid peer credit can exceed the retained pool, so budget exhaustion must only fail its stream.
   private failDestinationFlow(stream: BrowserNetworkTunnelStream, code: string): void {
-    if (code === BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW) {
+    if (isStreamScopedDestinationFailure(code)) {
       this.failStream(stream, code)
       return
     }
@@ -199,7 +204,10 @@ export class BrowserNetworkTunnelSession {
       this.failProtocolStream(stream, error)
       return
     }
-    this.flushDestinationData(stream)
+    // Early credit waits for connect: a connecting socket has nothing to resume yet.
+    if (stream.connected) {
+      this.flushDestinationData(stream)
+    }
   }
 
   private onDestinationData(

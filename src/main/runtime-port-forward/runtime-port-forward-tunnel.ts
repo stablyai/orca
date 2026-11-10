@@ -3,7 +3,10 @@ import { subscribeRemoteRuntimeTransport } from '../../shared/remote-runtime/req
 import type { RemoteRuntimeTransportSubscription } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { BrowserNetworkTunnelEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
-import { WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY } from '../../shared/workspace-ports-runtime-capabilities'
+import {
+  WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY,
+  WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY
+} from '../../shared/workspace-ports-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../browser/network/tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from '../browser/network/tunnels/browser-network-tunnel-duplex'
 import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL } from '../browser/network/tunnels/browser-network-tunnel-stream-state'
@@ -80,6 +83,11 @@ export function createPortForwardConnector(
               tunnelGeneration: event.data.tunnelGeneration,
               sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
               flowControl: BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
+              // Only a host that echoes the capability buffers bytes ahead of its destination connect.
+              earlyData:
+                event.data.capabilities?.includes(
+                  WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY
+                ) === true,
               onClosed: (error) => fail(error)
             })
             ready.resolve(client)
@@ -100,7 +108,8 @@ export function createPortForwardConnector(
         },
         clientCapabilities: [
           ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-          WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY
+          WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY,
+          WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY
         ]
       }
     )
@@ -140,7 +149,10 @@ export class EnvironmentPortForwardTunnel {
     private readonly connector: PortForwardTunnelConnector
   ) {}
 
-  /** A local connection never wakes a sleeping VM; it fails until the user reconnects. */
+  /**
+   * A local connection never wakes a sleeping VM; it fails until the user reconnects. With early
+   * data the stream comes back before the host connects it; a failed connect destroys it.
+   */
   async open(remotePort: number): Promise<BrowserNetworkTunnelDuplex> {
     const session = await this.session(false)
     return session.client.open({ host: '127.0.0.1', port: remotePort })

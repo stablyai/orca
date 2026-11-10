@@ -4,11 +4,15 @@ import {
 } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
 import {
+  BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES,
   browserNetworkTunnelMaxPendingChunks,
   type BrowserNetworkTunnelStream
 } from './browser-network-tunnel-stream-state'
 
 export const BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW = 'route_buffer_overflow'
+export const BROWSER_NETWORK_TUNNEL_EARLY_DATA_CHUNK_OVERFLOW = 'early_data_chunk_overflow'
+// A request arrives in a few frames; a peer slicing its early data finer fails only its stream.
+const MAX_HELD_DESTINATION_WRITES = 256
 
 type BrowserNetworkTunnelDestinationFlowActions = {
   isCurrent: () => boolean
@@ -26,11 +30,14 @@ type BrowserNetworkTunnelDestinationFlowActions = {
 export function halfCloseBrowserNetworkDestination(
   stream: BrowserNetworkTunnelStream
 ): string | null {
-  if (!stream.connected || stream.clientEnded) {
+  if ((!stream.connected && !stream.earlyData) || stream.clientEnded) {
     return 'invalid_client_half_close'
   }
   stream.clientEnded = true
-  stream.socket.end()
+  // Before connect, the end follows the held early data once the destination connects.
+  if (stream.connected) {
+    stream.socket.end()
+  }
   return null
 }
 
@@ -40,7 +47,7 @@ export function writeBrowserNetworkDestination(
   onSettled: (bytes: number) => void,
   claimRetainedBytes: (bytes: number) => (() => void) | null
 ): string | null {
-  if (!stream.connected || stream.clientEnded) {
+  if ((!stream.connected && !stream.earlyData) || stream.clientEnded) {
     return 'invalid_client_data'
   }
   if (payload.byteLength > stream.receiveCredit) {
@@ -48,6 +55,9 @@ export function writeBrowserNetworkDestination(
   }
   if (payload.byteLength === 0) {
     return null
+  }
+  if (!stream.connected && stream.heldDestinationWrites.length >= MAX_HELD_DESTINATION_WRITES) {
+    return BROWSER_NETWORK_TUNNEL_EARLY_DATA_CHUNK_OVERFLOW
   }
   if (
     stream.pendingDestinationWriteReleases.size >=
@@ -71,18 +81,56 @@ export function writeBrowserNetworkDestination(
     releaseClaim()
   }
   stream.pendingDestinationWriteReleases.add(release)
-  stream.socket.write(bytes, () => {
+  const done = (): void => {
     release()
     onSettled(bytes.byteLength)
-  })
+  }
+  // Early data stays retained (and its credit unreturned) until the destination connects.
+  if (stream.connected) {
+    stream.socket.write(bytes, done)
+  } else {
+    stream.heldDestinationWrites.push({ bytes, done })
+  }
   return null
+}
+
+/** Valid peer credit can exceed the retained pool: these failures end only their stream. */
+export function isStreamScopedDestinationFailure(code: string): boolean {
+  return (
+    code === BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW ||
+    code === BROWSER_NETWORK_TUNNEL_EARLY_DATA_CHUNK_OVERFLOW
+  )
+}
+
+/**
+ * Marks the destination connected and returns the credit Opened grants: the whole initial window,
+ * or with early data, writes the held bytes (then a held half-close) in the order the client sent
+ * them and tops its early credit up to the initial window.
+ */
+export function connectBrowserNetworkDestination(stream: BrowserNetworkTunnelStream): number {
+  stream.connected = true
+  clearTimeout(stream.connectTimeout)
+  if (!stream.earlyData) {
+    return stream.receiveWindowBytes
+  }
+  const held = stream.heldDestinationWrites
+  stream.heldDestinationWrites = []
+  for (const write of held) {
+    stream.socket.write(write.bytes, write.done)
+  }
+  if (stream.clientEnded) {
+    stream.socket.end()
+  }
+  const topUp = Math.max(0, stream.receiveWindowBytes - BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES)
+  stream.receiveCredit += topUp
+  return topUp
 }
 
 export function grantBrowserNetworkDestinationCredit(
   stream: BrowserNetworkTunnelStream,
   payload: Uint8Array<ArrayBufferLike>
 ): string | null {
-  if (!stream.connected) {
+  if (!stream.connected && !stream.earlyData) {
     return 'invalid_client_credit'
   }
   const credit = decodeBrowserNetworkTunnelWindowUpdate(payload)

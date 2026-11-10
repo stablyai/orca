@@ -188,6 +188,38 @@ describe('RuntimePortForwardManager', () => {
     expect(manager.lastActivityAt('user-env')).toBe(1_000)
   })
 
+  it('counts a burst of input as use but not an idle keepalive', async () => {
+    let now = 1_000
+    manager = new RuntimePortForwardManager({
+      connector: inProcessConnector({ sessions: 0 }),
+      now: () => now
+    })
+    const server = createServer((socket) => socket.resume())
+    servers.push(server)
+    const remotePort = await listen(server)
+    const result = await manager.open({
+      environmentId: 'e',
+      remotePort,
+      localPort: 0,
+      reason: 'ssh'
+    })
+    if (!result.ok) {
+      throw new Error('expected forward')
+    }
+    const socket = connect({ host: '127.0.0.1', port: result.forward.localPort })
+    await new Promise((resolve) => socket.once('connect', resolve))
+    await vi.waitFor(() => expect(manager?.forwardLastUsedAt(result.forward.id)).toBe(1_000))
+    now = 60_000
+    socket.write(Buffer.alloc(52))
+    await vi.waitFor(() => expect(manager?.list()[0]?.bytesToHost).toBe(52))
+    expect(manager.lastActivityAt('e')).toBe(1_000)
+    now = 120_000
+    socket.write(Buffer.alloc(2048, 1))
+    await vi.waitFor(() => expect(manager?.forwardLastUsedAt(result.forward.id)).toBe(120_000))
+    expect(manager.lastActivityAt('e')).toBe(120_000)
+    socket.destroy()
+  })
+
   it('fails without binding when the host cannot forward', async () => {
     manager = new RuntimePortForwardManager({
       connector: async () => {
