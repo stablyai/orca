@@ -1,152 +1,10 @@
-// "Start in Orca Cloud" frames from the cloud-start-onboarding spec: E1–E4, A1, A7, A8, E, X2.
-import React, { useState } from 'react'
+// "Start in Orca Cloud" composer frames from cloud-start-onboarding spec v2: E1, A1, A6, A7, T1,
+// T2, E, X2 and the panel's GitHub rows D1–D3. Entry points and T4 are in CloudStartSurfaces.
+import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
-import { NewWorkspaceComposerProjectSection } from '../NewWorkspaceComposerProjectSection'
-import { NewWorkspaceComposerFooter } from '../NewWorkspaceComposerFooter'
-import type { EphemeralVmRecipeOption } from '../run-target-options'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
-import {
-  deriveCloudSetupSteps,
-  getCloudPrimaryAction,
-  isCloudSetupPanelVisible,
-  type CloudSetupStep
-} from './cloud-start-model'
-import type { CloudStartView } from './use-cloud-start-composer'
-import { getCloudPrimaryLabel } from './cloud-start-actions'
-import { NewWorkspaceMoreMenu } from '../../sidebar/NewWorkspaceMoreMenu'
-import { LandingCloudCard } from '../../landing/LandingCloudCard'
-import { EmptyState } from '../../cloud-workspaces/CloudWorkspacesStates'
-
-const projects: NewWorkspaceProjectOption[] = [
-  {
-    kind: 'project',
-    id: 'web',
-    projectId: 'web',
-    displayName: 'acme/web',
-    badgeColor: 'var(--muted-foreground)',
-    detail: 'acme/web'
-  }
-]
-const hosts: ProjectHostSetupOption[] = [
-  {
-    kind: 'ready',
-    id: 'local',
-    projectId: 'web',
-    repoId: 'web',
-    hostId: 'local',
-    label: 'MacBook Pro',
-    detail: '~/code/acme-web',
-    path: '/Users/neil/code/acme-web'
-  },
-  {
-    kind: 'ready',
-    id: 'devbox',
-    projectId: 'web',
-    repoId: 'web-devbox',
-    hostId: 'ssh:devbox',
-    label: 'devbox',
-    detail: 'SSH',
-    path: '/home/neil/acme-web'
-  }
-]
-const orcaCloudRecipe: EphemeralVmRecipeOption = {
-  id: 'cloud',
-  name: 'Orca Cloud',
-  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
-  provider: 'orca-cloud',
-  create: 'orca-cloud create'
-}
-
-function ComposerPreview({
-  availability,
-  access,
-  cloudSelected,
-  steps: pinnedSteps,
-  allSet = false,
-  tracker = false
-}: {
-  availability: OrcaCloudAvailability
-  access: OrcaCloudRunTargetAccess
-  cloudSelected: boolean
-  steps?: CloudSetupStep[]
-  allSet?: boolean
-  /** A7: the setup session is open in the browser. */
-  tracker?: boolean
-}): React.JSX.Element {
-  const [host, setHost] = useState('local')
-  const [recipe, setRecipe] = useState<string | null>(cloudSelected ? 'cloud' : null)
-  const steps = pinnedSteps ?? deriveCloudSetupSteps({ availability, access })
-  const selected = recipe === 'cloud'
-  const panelVisible = selected && (isCloudSetupPanelVisible(steps) || allSet)
-  const action = getCloudPrimaryAction(steps)
-  const cloudStart: CloudStartView = {
-    steps,
-    panelVisible,
-    allSet,
-    onSelectOrcaCloud: () => setRecipe('cloud'),
-    onUserPick: () => {},
-    ...(panelVisible && !allSet && action !== 'useThisComputer'
-      ? { onUseThisComputer: () => setRecipe(null) }
-      : {})
-  }
-  return (
-    <div className="space-y-4 rounded-xl border border-border bg-background p-4">
-      <h1 className="text-base font-semibold">Create workspace</h1>
-      <p className="text-sm text-muted-foreground">Fix the flaky login test in e2e/auth.spec.ts.</p>
-      <NewWorkspaceComposerProjectSection
-        projectError={null}
-        selectedRepoConnectionId={null}
-        selectedRepoRequiresConnection={false}
-        selectedRepoConnectInProgress={false}
-        projectOptions={projects}
-        selectedProjectId="web"
-        onProjectChange={() => {}}
-        projectDescriptionId="fixture-project-description"
-        onAddProject={() => {}}
-        focusNameInput={() => {}}
-        shouldShowRunTargetPicker
-        projectHostSetupOptions={hosts}
-        selectedProjectHostSetupId={host}
-        handleProjectHostSetupChange={(id) => setHost(id)}
-        ephemeralVmRecipes={availability === 'offered' ? [orcaCloudRecipe] : []}
-        selectedEphemeralVmRecipeId={recipe}
-        onEphemeralVmRecipeChange={setRecipe}
-        orcaCloudAvailability={availability}
-        orcaCloudAccess={access}
-        cloudStart={
-          tracker
-            ? {
-                ...cloudStart,
-                steps: steps.map((s) => (s.id === 'plan' ? { ...s, state: 'active' } : s))
-              }
-            : cloudStart
-        }
-        handleAddSshHost={() => {}}
-        handleAddRemoteServer={() => {}}
-        handleConnectRunTargetHost={async () => {}}
-        handleSetLocation={() => {}}
-        onConnectSelectedRepo={async () => {}}
-        sshStatusLabel="Connected"
-        connectButtonLabel="Connect"
-        selectedProjectName="acme/web"
-      />
-      <NewWorkspaceComposerFooter
-        createError={null}
-        onCreate={() => {}}
-        createDisabled={allSet || action === 'checking'}
-        creating={allSet}
-        primaryActionLabel={
-          selected ? getCloudPrimaryLabel(allSet ? 'start' : action) : 'Create worktree'
-        }
-        submitShortcutModifierLabel="⌘"
-        cloudStart={cloudStart}
-      />
-    </div>
-  )
-}
+import type { CloudSetupStep } from './cloud-start-model'
+import { ComposerPreview } from './cloud-start-fixture-preview'
 
 const setup = (): void => {
   window.api.agentApiKeys = undefined
@@ -154,8 +12,31 @@ const setup = (): void => {
   window.api.cloudWorkspaces = { ...window.api.cloudWorkspaces, available: async () => true }
 }
 const entitled: OrcaCloudRunTargetAccess = { state: 'entitled', remainingSeconds: 41 * 3600 }
+const trial = (hours: number, canManageBilling = true): OrcaCloudRunTargetAccess => ({
+  state: 'entitled',
+  remainingSeconds: hours * 3600,
+  trial: true,
+  canManageBilling
+})
+const githubDone: CloudSetupStep = {
+  id: 'github',
+  state: 'done',
+  label: 'GitHub access',
+  status: 'Done',
+  detail: 'acme/web'
+}
+const githubNeeded: CloudSetupStep = {
+  id: 'github',
+  state: 'needed',
+  need: 'github',
+  canFix: true,
+  label: 'GitHub access',
+  status: 'Needed',
+  detail: 'Orca Cloud can’t reach acme/billing yet.',
+  note: 'It clones your code from GitHub. Give access to this repository once.'
+}
 
-/** E1: Run on as segments, this computer picked. */
+/** E1: Run on as segments, this computer picked; the machine moves to the hint line. */
 export const e1RunOnDefault = defineFixture({
   width: 560,
   setup,
@@ -168,16 +49,38 @@ export const e1MorePlaces = defineFixture({
     frame.querySelector<HTMLButtonElement>('[aria-label="More places to run"]')?.click()
   }
 })
-/** A1: Orca Cloud picked while signed out; one setup trip. */
+/** A1: Orca Cloud picked while signed out; trial included, one setup trip. */
 export const a1SignedOut = defineFixture({
   width: 560,
   setup,
   render: () => (
-    <ComposerPreview availability="needs-sign-in" access={{ state: 'signed-out' }} cloudSelected />
+    <ComposerPreview
+      availability="needs-sign-in"
+      access={{ state: 'signed-out' }}
+      cloudSelected
+      github={{
+        ...githubNeeded,
+        detail: 'acme/web is private. Orca Cloud needs access to clone it.',
+        note: undefined
+      }}
+    />
   )
 })
-/** A7: Finish in your browser (the plan step is open in the browser). */
-export const a7FinishInBrowser = defineFixture({
+/** B1: signed in, the team can still get its trial. */
+export const b1TrialAvailable = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={{ state: 'no-plan', lapsed: false, canManageBilling: true, trialOfferSeconds: 7200 }}
+      cloudSelected
+      github={githubDone}
+    />
+  )
+})
+/** A6: Finish in your browser; each step ticks in place. */
+export const a6FinishInBrowser = defineFixture({
   width: 560,
   setup,
   render: () => (
@@ -185,17 +88,79 @@ export const a7FinishInBrowser = defineFixture({
       availability="offered"
       access={entitled}
       cloudSelected
-      tracker
       steps={[
         { id: 'account', state: 'done', detail: 'neil@acme.dev' },
-        { id: 'plan', state: 'active' },
+        { id: 'team', state: 'done', detail: 'acme · 2 sandbox hours to try Orca Cloud' },
+        { id: 'github', state: 'active', status: 'In browser', detail: 'Waiting for GitHub…' },
         { id: 'agent', state: 'optional' }
       ]}
     />
   )
 })
-/** A8: everything done; "All set", then the composer starts by itself. */
-export const a8AllSet = defineFixture({
+/** A7: everything done; "All set", then the composer starts by itself. */
+export const a7AllSet = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={trial(2)}
+      cloudSelected
+      allSet
+      steps={[
+        { id: 'account', state: 'done', detail: 'neil@acme.dev' },
+        { id: 'plan', state: 'done', label: 'Trial', detail: 'acme · 2 sandbox hours left' },
+        { ...githubDone }
+      ]}
+    />
+  )
+})
+/** T1: trial hours in the composer hint. */
+export const t1TrialHint = defineFixture({
+  width: 560,
+  setup,
+  render: () => <ComposerPreview availability="offered" access={trial(1.4)} cloudSelected />
+})
+/** T1 under half an hour: warning, with Choose plan for owners. */
+export const t1TrialLow = defineFixture({
+  width: 560,
+  setup,
+  render: () => <ComposerPreview availability="offered" access={trial(0.3)} cloudSelected />
+})
+/** T1 low, member: who can choose a plan. */
+export const t1TrialLowMember = defineFixture({
+  width: 560,
+  setup,
+  render: () => <ComposerPreview availability="offered" access={trial(0.3, false)} cloudSelected />
+})
+/** T2: the trial is used up at New workspace; the prompt is kept. */
+export const t2TrialUsedUp = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={{ state: 'no-plan', lapsed: false, canManageBilling: true, trialUsedUp: true }}
+      cloudSelected
+      prompt="Upgrade Next.js to 16 and fix the type errors."
+    />
+  )
+})
+/** C1 with the trial used up: a member can't buy, so ⌘↵ runs on this computer. */
+export const t2TrialUsedUpMember = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={{ state: 'no-plan', lapsed: false, canManageBilling: false, trialUsedUp: true }}
+      cloudSelected
+      prompt="Add rate limiting to the public API routes."
+    />
+  )
+})
+/** D1: GitHub checked up front; "Give access and start". */
+export const d1GitHubNeeded = defineFixture({
   width: 560,
   setup,
   render: () => (
@@ -203,12 +168,52 @@ export const a8AllSet = defineFixture({
       availability="offered"
       access={entitled}
       cloudSelected
-      allSet
-      steps={[
-        { id: 'account', state: 'done', detail: 'neil@acme.dev' },
-        { id: 'plan', state: 'done', detail: 'acme · 60 sandbox hours left' },
-        { id: 'agent', state: 'optional' }
-      ]}
+      github={githubNeeded}
+      prompt="Write integration tests for the billing webhooks."
+    />
+  )
+})
+/** D2: waiting for an owner of the GitHub org; ⌘↵ runs on this computer. */
+export const d2GitHubRequested = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={entitled}
+      cloudSelected
+      github={{
+        id: 'github',
+        state: 'pending',
+        need: 'github',
+        blocksStart: true,
+        label: 'GitHub access',
+        status: 'Requested',
+        detail: 'Waiting for an owner of acme on GitHub to approve Orca Cloud.',
+        note: 'GitHub sent them the request. This workspace starts once they approve, if Orca is open.'
+      }}
+    />
+  )
+})
+/** D3: the project isn't on GitHub; outranks account and plan rows. */
+export const d3NotOnGitHub = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={entitled}
+      cloudSelected
+      github={{
+        id: 'github',
+        state: 'failed',
+        need: 'github',
+        blocksStart: true,
+        label: 'GitHub repository',
+        detail: 'Orca Cloud starts from a GitHub repository.',
+        note: 'Push this project to GitHub, or pick a repository Orca Cloud can reach from Project.',
+        action: { label: 'How to push', onClick: () => {} }
+      }}
     />
   )
 })
@@ -216,9 +221,22 @@ export const a8AllSet = defineFixture({
 export const eReturning = defineFixture({
   width: 560,
   setup,
-  render: () => <ComposerPreview availability="offered" access={entitled} cloudSelected />
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={entitled}
+      cloudSelected
+      github={githubDone}
+      steps={[
+        { id: 'account', state: 'done' },
+        { id: 'plan', state: 'done' },
+        githubDone
+      ]}
+      prompt="Bump eslint to v10 and fix the new warnings."
+    />
+  )
 })
-/** X2: Orca Cloud can't be reached; the segment stays, disabled, with a tooltip. */
+/** X2: Orca Cloud can't be reached; the segment stays, disabled, with the reason. */
 export const x2Unreachable = defineFixture({
   width: 560,
   setup,
@@ -235,37 +253,4 @@ export const x2Unreachable = defineFixture({
       ?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
-})
-/** E2: the sidebar New workspace chevron menu. */
-export const e2SidebarMenu = defineFixture({
-  width: 320,
-  setup,
-  render: () => (
-    <div className="flex justify-end p-3">
-      <NewWorkspaceMoreMenu preserveWorkspaceBoardOpen={false} />
-    </div>
-  ),
-  interact: async (frame) => {
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    frame
-      .querySelector<HTMLButtonElement>('[aria-label="More ways to create"]')
-      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-    await new Promise((resolve) => setTimeout(resolve, 200))
-  }
-})
-/** E3: Landing's first-run card. */
-export const e3LandingCard = defineFixture({
-  width: 520,
-  setup,
-  render: () => (
-    <div className="p-4">
-      <LandingCloudCard cloudWorkspacesPresent={false} />
-    </div>
-  )
-})
-/** E4: Cloud workspaces empty (Mine) with a real button. */
-export const e4CloudHomeEmpty = defineFixture({
-  width: 560,
-  setup,
-  render: () => <EmptyState scope="mine" archived={false} filtered={false} />
 })

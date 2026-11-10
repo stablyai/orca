@@ -12,6 +12,7 @@ import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
+import { OrcaCloudHoursChip } from '@/components/new-workspace/run-on/OrcaCloudHoursChip'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
 import { formatEnvironmentDoctorChecks } from '../../../../shared/environment-doctor-types'
 import { VmBuildStepRow } from './VmBuildStepRow'
@@ -206,6 +207,8 @@ export function VmBuildSheet({
             {gated ? null : (
               <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
             )}
+            {/* O4: which sandbox hours this start spends, while it starts. */}
+            <OrcaCloudHoursChip enabled={cloud && building} />
           </div>
           {building ? (
             <Button type="button" variant="ghost" size="xs" onClick={onCancel}>

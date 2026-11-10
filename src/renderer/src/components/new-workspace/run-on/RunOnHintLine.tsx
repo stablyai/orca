@@ -29,8 +29,8 @@ export function RunOnHintLine({
       {orcaCloudAvailability === 'unreachable' ? (
         <p role="status" className="text-[11px] text-muted-foreground">
           {t(
-            'components.newWorkspace.runOn.cloudUnreachable',
-            "Can't reach Orca Cloud right now. Check your connection."
+            'components.newWorkspace.runOn.cloudUnreachableReason',
+            "Orca Cloud: can't reach it right now. Check your connection."
           )}
         </p>
       ) : null}

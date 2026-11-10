@@ -3,7 +3,6 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Cloud } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { openNewCloudWorkspace } from '@/hooks/ipc-events/new-workspace-command'
 import {
   Dialog,
@@ -143,8 +142,6 @@ export function EmptyState({
   filtered: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const keybindings = useAppStore((s) => s.keybindings)
-  const cloudShortcut = formatOptionalPrimaryShortcutLabel('workspace.createCloud', keybindings)
   const [title, body] = filtered
     ? [
         t('auto.components.cloudWorkspaces.emptyFilteredTitle', 'Nothing matches these filters'),
@@ -173,7 +170,7 @@ export function EmptyState({
               'Start one and it keeps running while your laptop sleeps.'
             )
           ]
-  // Spec E4: an empty Mine or Team list offers a real button, not just copy.
+  // Spec E3: an empty Mine or Team list offers a real button, not just copy.
   const offerCreate = !filtered && !archived
   return (
     <div className="flex flex-col items-center gap-1 px-6 py-8 text-center">
@@ -187,10 +184,7 @@ export function EmptyState({
           onClick={() => openNewCloudWorkspace(useAppStore.getState(), 'unknown')}
         >
           <Cloud className="size-3.5" />
-          {t('keybindings.title.workspaceCreateCloud', 'New cloud workspace')}
-          {cloudShortcut ? (
-            <span className="ml-1 text-primary-foreground/70">{cloudShortcut}</span>
-          ) : null}
+          {t('components.cloudWorkspaces.newCloudWorkspace', 'New cloud workspace')}
         </Button>
       ) : null}
     </div>

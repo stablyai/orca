@@ -10,7 +10,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { useAppStore } from '../../store'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
-import { openNewCloudWorkspace, openNewWorkspaceFromShortcut } from './new-workspace-command'
+import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 
 export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -34,14 +34,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       openNewWorkspaceFromShortcut(store)
     })
   )
-
-  if (window.api.ui.onOpenNewCloudWorkspace) {
-    unsubs.push(
-      window.api.ui.onOpenNewCloudWorkspace(() => {
-        openNewCloudWorkspace(useAppStore.getState())
-      })
-    )
-  }
 
   if (window.api.ui.onDeleteCurrentWorkspace) {
     unsubs.push(

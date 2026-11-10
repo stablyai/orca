@@ -22968,7 +22968,8 @@
         "choosePlanAndStart": "Choose plan and start",
         "renewAndStart": "Renew and start",
         "giveAccessAndStart": "Give access and start",
-        "checking": "Checking Orca Cloud…"
+        "checking": "Checking Orca Cloud…",
+        "githubGranted": "GitHub access granted for {{repo}}"
       },
       "cloudSetup": {
         "account": "Orca account",
@@ -22997,7 +22998,24 @@
         "allSet": "All set",
         "title": "Set up Orca Cloud",
         "starting": "Starting your cloud workspace…",
-        "subtitle": "One visit to your browser. Your prompt stays here and starts when you’re done."
+        "subtitle": "One visit to your browser. Your prompt stays here and starts when you’re done.",
+        "agentSetUpAfterSignIn": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
+        "agentSetUpOnce": "{{agent}}: set up once in Settings → Agent accounts",
+        "comparePlans": "Compare plans",
+        "accountNeededTeam": "Sign in or create one. We’ll make a team for you.",
+        "trial": "Trial",
+        "trialNoCard": "No card needed. Nothing is charged until you choose a plan.",
+        "stateIncluded": "Included",
+        "trialUsedUp": "Your trial is used up.",
+        "trialUsedUpMember": "Only owners and admins can choose a plan.",
+        "trialUsedUpOwner": "Choose a plan to keep using Orca Cloud. Your prompt is still here.",
+        "subtitleNoCard": "One visit to your browser, no card. Your prompt stays here and starts when you’re done.",
+        "trialUsedUpTitle": "Your trial is used up",
+        "choosePlan": "Choose plan",
+        "askChoosePlan": "Ask an owner or admin to choose a plan.",
+        "trialUsedUpChoose": "Choose a plan to keep using Orca Cloud.",
+        "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
+        "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud"
       },
       "runOn": {
         "cloudUnreachable": "Can't reach Orca Cloud right now. Check your connection.",
@@ -23007,7 +23025,27 @@
         "orcaCloud": "Orca Cloud",
         "cloudTooltip": "Hosted sandbox · {{shortcut}}",
         "moreWithTarget": "More places to run: {{name}}",
-        "more": "More places to run"
+        "more": "More places to run",
+        "cloudUnreachableReason": "Orca Cloud: can't reach it right now. Check your connection.",
+        "thisComputerUnusable": "This computer, {{reason}}",
+        "locationNotSet": "Project location not set",
+        "cloudUnreachableName": "Orca Cloud, can't reach it right now"
+      },
+      "cloudHours": {
+        "trialChip_one": "Trial · {{hours}} sandbox hour left",
+        "trialChip_other": "Trial · {{hours}} sandbox hours left",
+        "planChip_one": "{{hours}} sandbox hour left",
+        "planChip_other": "{{hours}} sandbox hours left",
+        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
+        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial",
+        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
+        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left"
+      },
+      "trialUsedUp": {
+        "running": "Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe.",
+        "memberTitle": "{{team}}’s trial is used up",
+        "memberTitleNoTeam": "Your team’s trial is used up",
+        "askForPlan": "Ask for a Team plan"
       }
     },
     "JiraIssueWorkspace": {
@@ -23365,7 +23403,11 @@
       "cloudCard": {
         "title": "Run agents in Orca Cloud",
         "body": "Hosted sandboxes keep running while your laptop sleeps. Start one from any project.",
-        "notNow": "Not now"
+        "notNow": "Not now",
+        "tryTitle": "Try Orca Cloud",
+        "planBody": "Agents keep running while your laptop sleeps.",
+        "trialBody": "Agents keep running while your laptop sleeps. No card needed.",
+        "try": "Try Orca Cloud"
       }
     },
     "cmdJ": {
@@ -23383,7 +23425,8 @@
       "newWorkspaceLocal": "New workspace on this computer"
     },
     "cloudWorkspaces": {
-      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps."
+      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
+      "newCloudWorkspace": "New cloud workspace"
     }
   },
   "dashboardPopout": {

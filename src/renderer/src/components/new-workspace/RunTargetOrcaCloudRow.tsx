@@ -77,6 +77,18 @@ export function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string 
     return null
   }
   const count = getOrcaCloudHoursLeft(access.remainingSeconds)
+  if (access.trial) {
+    // T1: trial hours are a one-time allowance, so the line says whose hours these are.
+    return t(
+      'components.newWorkspace.cloudHours.trialChip',
+      'Trial · {{hours}} sandbox hours left',
+      {
+        count,
+        hours: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(count),
+        defaultValue_one: 'Trial · {{hours}} sandbox hour left'
+      }
+    )
+  }
   return t(
     'auto.components.new.workspace.RunTargetCombobox.orcaCloudSandboxHoursLeft',
     '{{hours}} sandbox hours left',

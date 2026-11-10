@@ -64,7 +64,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
-    defaultBindings: platformBindings(['Mod+N'])
+    defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
   },
   {
     id: 'workspace.rename',

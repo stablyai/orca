@@ -7,8 +7,6 @@ import type {
 } from '../../shared/rich-markdown-context-menu'
 
 export type UiWindowApi = {
-  /** ⇧⌘N or File › New cloud workspace: the composer on Orca Cloud. */
-  onOpenNewCloudWorkspace: (callback: () => void) => () => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   /** The clipboard's HTML when it may carry links; empty otherwise. */
   readClipboardLinkHtml: () => Promise<string>

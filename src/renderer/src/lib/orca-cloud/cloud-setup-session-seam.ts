@@ -6,12 +6,7 @@
 // and calls notifyCloudSetupSessionChanged() after each poll so the panel re-renders.
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 
-/**
- * Start the workspace by itself once setup finishes (spec D4 / A8). Open question Q4 for Neil:
- * flip to false to stop at a pre-focused "Start in Orca Cloud" button instead.
- */
-export const CLOUD_SETUP_AUTO_START = true
-/** "All set" holds this long before the composer submits itself (0 with reduced motion). */
+/** "All set" holds this long before the composer submits itself (O4; 0 with reduced motion). */
 export const CLOUD_SETUP_ALL_SET_HOLD_MS = 600
 
 export type CloudSetupSessionSnapshot = {

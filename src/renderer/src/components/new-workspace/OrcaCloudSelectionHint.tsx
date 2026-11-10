@@ -3,8 +3,59 @@ import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { getOrcaCloudPick, type OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 import { invalidateOrcaCloudBilling } from './orca-cloud-billing-cache'
+import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { OrcaCloudSpecs, useOrcaCloudHoursLeft } from './RunTargetOrcaCloudRow'
+import { isOrcaCloudTrialLow } from './run-on/orca-cloud-hours-copy'
+
+/** T1: "Trial · 0.3 sandbox hours left · Choose plan", or who can choose one for members. */
+function TrialLowLine({
+  access,
+  hoursLeft
+}: {
+  access: OrcaCloudRunTargetAccess
+  hoursLeft: string | null
+}): React.JSX.Element {
+  const t = useTranslate()
+  const canChoose = access.state === 'entitled' && access.canManageBilling === true
+  return (
+    <>
+      <p className="flex min-w-0 items-center gap-1.5 font-medium text-status-warning-text">
+        <span className="truncate">{hoursLeft}</span>
+        {canChoose ? (
+          <>
+            <span aria-hidden>·</span>
+            <button
+              type="button"
+              className="shrink-0 font-medium text-foreground underline underline-offset-2 hover:no-underline"
+              onClick={() => {
+                invalidateOrcaCloudBilling({ refetchNow: false })
+                openPlansPage('sandbox')
+              }}
+            >
+              {t('components.newWorkspace.cloudSetup.choosePlan', 'Choose plan')}
+            </button>
+          </>
+        ) : null}
+      </p>
+      <p className="truncate">
+        {canChoose
+          ? t(
+              'auto.components.new.workspace.RunTargetCombobox.orcaCloudIdleSleep',
+              'Sleeps after {{count}} minutes idle',
+              {
+                count: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+                defaultValue_one: 'Sleeps after {{count}} minute idle'
+              }
+            )
+          : t(
+              'components.newWorkspace.cloudSetup.askChoosePlan',
+              'Ask an owner or admin to choose a plan.'
+            )}
+      </p>
+    </>
+  )
+}
 
 type BlockCopy = {
   title: string
@@ -18,6 +69,25 @@ function useBlockCopy(access: OrcaCloudRunTargetAccess): BlockCopy | null {
   const t = useTranslate()
   switch (access.state) {
     case 'no-plan':
+      if (access.trialUsedUp) {
+        // T2: neutral, nothing failed.
+        return {
+          title: t('components.newWorkspace.cloudSetup.trialUsedUpTitle', 'Your trial is used up'),
+          detail: access.canManageBilling
+            ? t(
+                'components.newWorkspace.cloudSetup.trialUsedUpChoose',
+                'Choose a plan to keep using Orca Cloud.'
+              )
+            : t(
+                'components.newWorkspace.cloudSetup.askChoosePlan',
+                'Ask an owner or admin to choose a plan.'
+              ),
+          tone: 'neutral',
+          ...(access.canManageBilling
+            ? { action: t('components.newWorkspace.cloudSetup.choosePlan', 'Choose plan') }
+            : {})
+        }
+      }
       return {
         title: access.lapsed
           ? t(
@@ -134,6 +204,8 @@ export function OrcaCloudSelectionHint({
   const t = useTranslate()
   const block = useBlockCopy(access)
   const hoursLeft = useOrcaCloudHoursLeft(access)
+  // T1: under half an hour of trial left, announced once as it crosses (the live region below).
+  const low = isOrcaCloudTrialLow(access)
   const pick = getOrcaCloudPick(access)
   const action =
     block?.action && pick.kind === 'act' ? (
@@ -152,7 +224,7 @@ export function OrcaCloudSelectionHint({
   return (
     // @container: the specs drop out whole when the column is narrow, instead of ellipsizing.
     <div className="@container h-8 text-2xs leading-4 tabular-nums text-muted-foreground">
-      {visible && !block ? (
+      {visible && !block && !low ? (
         // Outside the live region: hour ticks on refresh are not re-announced.
         <>
           <p className="flex min-w-0">
@@ -182,6 +254,7 @@ export function OrcaCloudSelectionHint({
       ) : null}
       {/* Always mounted, so a block that arrives after the pick (late billing, restored draft) is announced. */}
       <div aria-live="polite">
+        {visible && !block && low ? <TrialLowLine access={access} hoursLeft={hoursLeft} /> : null}
         {visible && block ? (
           <>
             <p

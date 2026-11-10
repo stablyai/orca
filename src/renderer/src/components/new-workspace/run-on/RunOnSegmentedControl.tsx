@@ -1,11 +1,10 @@
 // Run on as one click: "This computer · Orca Cloud · ⋯" (spec D1). ⋯ opens today's host picker
 // without its Orca Cloud row, and a target picked there replaces ⋯ so the choice stays visible.
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Cloud, Ellipsis, Monitor } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsSegmentedControl'
 import { useTranslate } from '@/i18n/use-translate'
-import { isMacUserAgent } from '@/lib/user-agent-platform'
 import type { ReadyProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
@@ -22,21 +21,6 @@ export type RunOnSegmentedControlProps = RunTargetComboboxProps & {
   onSelectOrcaCloud: () => void
   /** Marks the control as touched so a remembered default never overrides a user pick. */
   onUserPick?: () => void
-}
-
-/** ⌥⌘1 / ⌥⌘2 (Ctrl+Alt on Windows/Linux) while the composer is open (spec D1, N8). */
-export function matchRunOnShortcut(
-  event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'code'>,
-  mac: boolean
-): 'local' | 'orca-cloud' | null {
-  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-  if (!mod || !event.altKey || event.shiftKey) {
-    return null
-  }
-  if (event.code === 'Digit1') {
-    return 'local'
-  }
-  return event.code === 'Digit2' ? 'orca-cloud' : null
 }
 
 export default function RunOnSegmentedControl(
@@ -56,7 +40,6 @@ export default function RunOnSegmentedControl(
   } = props
   const t = useTranslate()
   const [moreOpen, setMoreOpen] = useState(false)
-  const mac = isMacUserAgent()
 
   const localOption = useMemo(
     () =>
@@ -98,26 +81,6 @@ export default function RunOnSegmentedControl(
     onSelectOrcaCloud()
   }
 
-  // ⌥⌘1 / ⌥⌘2 only while this composer is mounted; Run on stays the one place they act.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const target = matchRunOnShortcut(event, mac)
-      if (!target) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      if (target === 'local') {
-        pickLocal()
-      } else {
-        pickCloud()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
-  })
-
-  const shortcut = (digit: 1 | 2): string => (mac ? `⌥⌘${digit}` : `Ctrl+Alt+${digit}`)
   const otherLabel =
     segment === 'other'
       ? ((selectedRecipe && !isOrcaCloudRecipe(selectedRecipe)
@@ -135,15 +98,15 @@ export default function RunOnSegmentedControl(
         </span>
       ),
       disabled: !localOption,
+      // A disabled option says why in its accessible name too (spec E1).
+      ariaLabel: localOption
+        ? undefined
+        : t('components.newWorkspace.runOn.thisComputerUnusable', 'This computer, {{reason}}', {
+            reason: t('components.newWorkspace.runOn.locationNotSet', 'Project location not set')
+          }),
       tooltip: localOption
-        ? t('components.newWorkspace.runOn.thisComputerTooltip', '{{machine}} · {{shortcut}}', {
-            machine: localOption.label,
-            shortcut: shortcut(1)
-          })
-        : t(
-            'components.newWorkspace.runOn.noLocalCheckout',
-            'This project has no location on this computer.'
-          )
+        ? localOption.label
+        : t('components.newWorkspace.runOn.locationNotSet', 'Project location not set')
     },
     ...(cloudState === 'hidden'
       ? []
@@ -157,15 +120,20 @@ export default function RunOnSegmentedControl(
               </span>
             ),
             disabled: cloudState === 'unreachable',
+            ariaLabel:
+              cloudState === 'unreachable'
+                ? t(
+                    'components.newWorkspace.runOn.cloudUnreachableName',
+                    "Orca Cloud, can't reach it right now"
+                  )
+                : undefined,
             tooltip:
               cloudState === 'unreachable'
                 ? t(
-                    'components.newWorkspace.runOn.cloudUnreachable',
-                    "Can't reach Orca Cloud right now. Check your connection."
+                    'components.newWorkspace.runOn.cloudUnreachableReason',
+                    "Orca Cloud: can't reach it right now. Check your connection."
                   )
-                : t('components.newWorkspace.runOn.cloudTooltip', 'Hosted sandbox · {{shortcut}}', {
-                    shortcut: shortcut(2)
-                  })
+                : t('components.newWorkspace.runOn.cloudTooltip', 'Hosted sandbox')
           }
         ]),
     {
@@ -196,7 +164,6 @@ export default function RunOnSegmentedControl(
         <div
           className="w-fit max-w-full"
           data-run-on-segmented="true"
-          aria-keyshortcuts={mac ? 'Alt+Meta+1 Alt+Meta+2' : 'Control+Alt+1 Control+Alt+2'}
         >
           <SettingsSegmentedControl<RunOnSegment>
             value={segment ?? 'local'}

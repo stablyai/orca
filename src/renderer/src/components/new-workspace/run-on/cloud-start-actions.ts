@@ -8,6 +8,7 @@ import type { CloudPrimaryAction, CloudSetupStep } from './cloud-start-model'
 export function getCloudPrimaryLabel(action: CloudPrimaryAction): string {
   switch (action) {
     case 'start':
+    case 'startTrial':
       return translate('components.newWorkspace.cloudStart.start', 'Start in Orca Cloud')
     case 'setUpAndStart':
       return translate('components.newWorkspace.cloudStart.setUpAndStart', 'Set up and start')

@@ -52,8 +52,7 @@ export function useComposerCloudStart({
     initialTargetFixed: Boolean(
       modalData.initialEphemeralVmRecipeId ||
       modalData.initialWorkspaceTarget ||
-      modalData.recovery ||
-      modalData.initialRunOnLocal
+      modalData.recovery
     ),
     onCreate: runCreate
   })

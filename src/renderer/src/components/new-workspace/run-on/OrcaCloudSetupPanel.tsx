@@ -3,12 +3,13 @@
 // The rows come from billing today and from the one-trip setup session once it exists.
 import React from 'react'
 import { Check, CircleDashed, CircleDot, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { CloudSetupStep, CloudSetupStepId } from './cloud-start-model'
 
-type RowCopy = { title: string; detail: string | null }
+type RowCopy = { title: string; detail: string | null; note?: string; status?: string }
 
 function rowCopy(step: CloudSetupStep, t: Translate): RowCopy {
   switch (step.id) {
@@ -18,15 +19,15 @@ function rowCopy(step: CloudSetupStep, t: Translate): RowCopy {
         detail:
           step.state === 'done'
             ? null
-            : t('components.newWorkspace.cloudSetup.accountNeeded', 'Sign in or create one')
+            : t(
+                'components.newWorkspace.cloudSetup.accountNeededTeam',
+                'Sign in or create one. We’ll make a team for you.'
+              )
       }
     case 'team':
       return { title: t('components.newWorkspace.cloudSetup.team', 'Team'), detail: null }
     case 'plan':
-      return {
-        title: t('components.newWorkspace.cloudSetup.plan', 'Team plan'),
-        detail: planDetail(step, t)
-      }
+      return step.need === 'trial' ? trialCopy(step, t) : planCopy(step, t)
     case 'github':
       return {
         title: t('components.newWorkspace.cloudSetup.github', 'GitHub access'),
@@ -39,13 +40,57 @@ function rowCopy(step: CloudSetupStep, t: Translate): RowCopy {
               )
       }
     case 'agent':
+      // The composer names the agent in `detail`; it never asks for a per-sandbox sign-in (G).
       return {
         title: t('components.newWorkspace.cloudSetup.agent', 'Agent'),
-        detail: t(
-          'components.newWorkspace.cloudSetup.agentLater',
-          'Sign in once the workspace starts'
-        )
+        detail: null,
+        status: t('components.newWorkspace.cloudSetup.stateOptional', 'Optional')
       }
+  }
+}
+
+/** A1/B1: the one-time trial, counted from billing's offer, never a literal. */
+function trialCopy(step: CloudSetupStep, t: Translate): RowCopy {
+  const hours = step.trialSeconds ? Math.round((step.trialSeconds / 3600) * 10) / 10 : null
+  return {
+    title: t('components.newWorkspace.cloudSetup.trial', 'Trial'),
+    detail:
+      hours === null
+        ? null
+        : t('components.newWorkspace.cloudSetup.trialOffer', '{{hours}} sandbox hours to try Orca Cloud', {
+            count: hours,
+            hours: String(hours),
+            defaultValue_one: '{{hours}} sandbox hour to try Orca Cloud'
+          }),
+    note: t(
+      'components.newWorkspace.cloudSetup.trialNoCard',
+      'No card needed. Nothing is charged until you choose a plan.'
+    ),
+    status: t('components.newWorkspace.cloudSetup.stateIncluded', 'Included')
+  }
+}
+
+function planCopy(step: CloudSetupStep, t: Translate): RowCopy {
+  if (step.need === 'trial-used-up' && step.state === 'needed') {
+    // T2 / C1: neutral, nothing failed. Members read who can fix it.
+    return {
+      title: t('components.newWorkspace.cloudSetup.plan', 'Team plan'),
+      detail: t('components.newWorkspace.cloudSetup.trialUsedUp', 'Your trial is used up.'),
+      note:
+        step.canFix === false
+          ? t(
+              'components.newWorkspace.cloudSetup.trialUsedUpMember',
+              'Only owners and admins can choose a plan.'
+            )
+          : t(
+              'components.newWorkspace.cloudSetup.trialUsedUpOwner',
+              'Choose a plan to keep using Orca Cloud. Your prompt is still here.'
+            )
+    }
+  }
+  return {
+    title: t('components.newWorkspace.cloudSetup.plan', 'Team plan'),
+    detail: planDetail(step, t)
   }
 }
 
@@ -80,6 +125,8 @@ function planDetail(step: CloudSetupStep, t: Translate): string | null {
       )
     case 'sign-in':
     case 'plan':
+    case 'trial':
+    case 'trial-used-up':
     case undefined:
       return step.canFix === false
         ? t(
@@ -165,15 +212,17 @@ export function OrcaCloudSetupPanel({
           ? t('components.newWorkspace.cloudSetup.starting', 'Starting your cloud workspace…')
           : (subtitle ??
             t(
-              'components.newWorkspace.cloudSetup.subtitle',
-              'One visit to your browser. Your prompt stays here and starts when you’re done.'
+              'components.newWorkspace.cloudSetup.subtitleNoCard',
+              'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
             ))}
       </p>
       {/* One polite announcement per row change ("Team plan, done"). */}
       <ul aria-live="polite" className="mt-2 space-y-1.5">
         {steps.map((step) => {
           const copy = rowCopy(step, t)
-          const state = stateLabel(step, t)
+          const title = step.label ?? copy.title
+          const state = step.status ?? copy.status ?? stateLabel(step, t)
+          const note = step.note ?? copy.note
           return (
             <li
               key={step.id}
@@ -185,13 +234,26 @@ export function OrcaCloudSetupPanel({
                 <StateIcon step={step} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-xs text-foreground">{copy.title}</span>
+                <span className="block text-xs text-foreground">{title}</span>
                 {step.state === 'loading' ? (
                   <Skeleton shape="small" className="mt-1 h-2.5 w-40" />
                 ) : (step.detail ?? copy.detail) ? (
                   <span className="block text-[11px] text-muted-foreground">
                     {step.detail ?? copy.detail}
                   </span>
+                ) : null}
+                {note ? (
+                  <span className="block text-[11px] text-muted-foreground">{note}</span>
+                ) : null}
+                {step.action ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="inline"
+                    onClick={step.action.onClick}
+                  >
+                    {step.action.label}
+                  </Button>
                 ) : null}
                 {rowActions?.[step.id] ?? null}
               </span>
@@ -201,7 +263,7 @@ export function OrcaCloudSetupPanel({
                   step.state === 'needed' ? 'text-foreground' : 'text-muted-foreground'
                 )}
               >
-                <span className="sr-only">{`${copy.title}, `}</span>
+                <span className="sr-only">{`${title}, `}</span>
                 {state}
               </span>
             </li>

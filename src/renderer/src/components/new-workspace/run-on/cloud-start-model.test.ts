@@ -7,7 +7,6 @@ import {
   isCloudSetupPanelVisible,
   resolveDefaultRunOn
 } from './cloud-start-model'
-import { matchRunOnShortcut } from './RunOnSegmentedControl'
 
 describe('Run on segment', () => {
   it('maps the committed target to a segment', () => {
@@ -54,35 +53,6 @@ describe('Run on segment', () => {
     expect(getOrcaCloudSegmentState('needs-sign-in')).toBe('enabled')
     expect(getOrcaCloudSegmentState('needs-capability')).toBe('enabled')
     expect(getOrcaCloudSegmentState('offered')).toBe('enabled')
-  })
-
-  it('matches ⌥⌘1 / ⌥⌘2 on mac and Ctrl+Alt elsewhere', () => {
-    const key = (init: {
-      code: string
-      metaKey?: boolean
-      ctrlKey?: boolean
-      altKey?: boolean
-      shiftKey?: boolean
-    }) => ({
-      metaKey: false,
-      ctrlKey: false,
-      altKey: false,
-      shiftKey: false,
-      ...init
-    })
-    expect(matchRunOnShortcut(key({ code: 'Digit1', metaKey: true, altKey: true }), true)).toBe(
-      'local'
-    )
-    expect(matchRunOnShortcut(key({ code: 'Digit2', metaKey: true, altKey: true }), true)).toBe(
-      'orca-cloud'
-    )
-    expect(matchRunOnShortcut(key({ code: 'Digit2', ctrlKey: true, altKey: true }), false)).toBe(
-      'orca-cloud'
-    )
-    expect(matchRunOnShortcut(key({ code: 'Digit2', metaKey: true }), true)).toBeNull()
-    expect(
-      matchRunOnShortcut(key({ code: 'Digit2', metaKey: true, altKey: true, shiftKey: true }), true)
-    ).toBeNull()
   })
 })
 
@@ -146,6 +116,72 @@ describe('setup rows and the primary label', () => {
         { id: 'agent', state: 'optional' }
       ])
     ).toBe('giveAccessAndStart')
+  })
+
+  it('a team that can still get its trial just starts (B1); setup grants it with no card', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'no-plan', lapsed: false, canManageBilling: false, trialOfferSeconds: 7200 }
+    })
+    const plan = steps.find((s) => s.id === 'plan')
+    expect(plan).toMatchObject({ need: 'trial', trialSeconds: 7200, canFix: true })
+    // Members aren't blocked from the trial: the agent row stays.
+    expect(steps.some((s) => s.id === 'agent')).toBe(true)
+    expect(getCloudPrimaryAction(steps)).toBe('startTrial')
+  })
+
+  it('trial used up: owner "Choose plan and start"; member runs on this computer (T2, C1)', () => {
+    const owner = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'no-plan', lapsed: false, canManageBilling: true, trialUsedUp: true }
+    })
+    expect(owner.find((s) => s.id === 'plan')?.need).toBe('trial-used-up')
+    expect(getCloudPrimaryAction(owner)).toBe('choosePlanAndStart')
+    const member = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'no-plan', lapsed: false, canManageBilling: false, trialUsedUp: true }
+    })
+    expect(getCloudPrimaryAction(member)).toBe('useThisComputer')
+  })
+
+  it('signed out: the trial row is included and GitHub is checked up front (A1)', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-sign-in',
+      access: { state: 'signed-out' },
+      github: { id: 'github', state: 'needed', need: 'github', canFix: true }
+    })
+    expect(steps.map((s) => s.id)).toEqual(['account', 'plan', 'github', 'agent'])
+    expect(steps.find((s) => s.id === 'plan')?.need).toBe('trial')
+    expect(getCloudPrimaryAction(steps)).toBe('setUpAndStart')
+  })
+
+  it('GitHub waiting on an owner blocks the start, so ⌘↵ runs locally (D2)', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 },
+      github: { id: 'github', state: 'pending', need: 'github', blocksStart: true }
+    })
+    expect(isCloudSetupPanelVisible(steps)).toBe(true)
+    expect(getCloudPrimaryAction(steps)).toBe('useThisComputer')
+  })
+
+  it('no GitHub remote outranks account and plan rows (D3)', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-sign-in',
+      access: { state: 'signed-out' },
+      github: { id: 'github', state: 'failed', need: 'github', blocksStart: true }
+    })
+    expect(steps.map((s) => s.id)).toEqual(['github'])
+    expect(getCloudPrimaryAction(steps)).toBe('useThisComputer')
+  })
+
+  it('a GitHub check still running holds the start (D1 cache miss)', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 },
+      github: { id: 'github', state: 'loading' }
+    })
+    expect(getCloudPrimaryAction(steps)).toBe('checking')
   })
 
   it('waits while billing is still being read', () => {
