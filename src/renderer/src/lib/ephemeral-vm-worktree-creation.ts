@@ -71,7 +71,13 @@ async function prepareEphemeralVmRecipeRequest(
         : {}),
       provisionId: creationId,
       setupExistingFolder: async (args) => {
-        const setup = await store.setupProjectExistingFolder(args)
+        // The VM's checkout folder is named "project"; register it under the real project's name.
+        const displayName =
+          store.projects.find((project) => project.id === args.projectId)?.displayName ??
+          sourceRepo?.displayName
+        const setup = await store.setupProjectExistingFolder(
+          displayName ? { ...args, displayName } : args
+        )
         if (setup) {
           // Why: until the create adopts it, the VM's primary checkout is not a workspace; the pending row stands for it.
           hideVmCreateCheckout(creationId, { repoId: setup.repo.id, path: setup.repo.path })

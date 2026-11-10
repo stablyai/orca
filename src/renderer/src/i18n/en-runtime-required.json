@@ -2145,6 +2145,7 @@
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "cleanupStopped": "Cleanup stopped by user.",
       "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again.",
+      "cloudDeleteNotConfirmed": "Orca Cloud couldn’t confirm this sandbox was deleted, so it may still be running. Sign in with the Orca account that started it, then try again.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
       "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
       "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",

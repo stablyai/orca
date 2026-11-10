@@ -11,7 +11,11 @@ import {
 } from '../environment-providers/environment-provider-recipe-adapter'
 import { isHostedEntitlementDenied } from './hosted-environment-provider'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
-import { createHostedSandboxDriver, HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import {
+  createHostedSandboxDriver,
+  HOSTED_SANDBOX_DELETE_NOT_CONFIRMED,
+  HOSTED_SANDBOX_DRIVER_ID
+} from './hosted-sandbox-driver'
 import { createFakeHostedControlPlane } from './fake-hosted-control-plane.test-support'
 
 function setup(options: { token?: string; fetch?: typeof fetch } = {}) {
@@ -124,6 +128,26 @@ describe('HostedSandboxDriver', () => {
       driver.capabilities.maxSessionMs!
     )
     await driver.destroy(created.handle)
+  })
+
+  it('never reports a delete the control plane did not confirm (another identity sees not_found)', async () => {
+    const { plane, driver } = setup()
+    const created = await driver.create({ workspaceId: 'ws-other-owner' })
+    // The control plane answers not_found for a sandbox this token can't see, e.g. one created
+    // under a different signed-in user. The VM is still running and billing.
+    plane.sandboxes.delete(created.handle.environmentId)
+    const error = await rejection(driver.destroy(created.handle))
+    expect(isEnvironmentProviderError(error, 'not_found')).toBe(true)
+    expect(isEnvironmentProviderError(error) && error.reason).toBe(
+      HOSTED_SANDBOX_DELETE_NOT_CONFIRMED
+    )
+  })
+
+  it('treats a repeat delete of a destroyed sandbox as done', async () => {
+    const { driver } = setup()
+    const created = await driver.create({ workspaceId: 'ws-repeat-delete' })
+    await driver.destroy(created.handle)
+    await expect(driver.destroy(created.handle)).resolves.toBeUndefined()
   })
 })
 

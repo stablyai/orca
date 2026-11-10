@@ -180,17 +180,23 @@ export async function getOrcaCloudAvailability(): Promise<OrcaCloudAvailability>
   if (!installed) {
     return 'unavailable'
   }
-  if (cloudDevSigningAllowed(app.isPackaged) && process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE) {
-    return 'offered'
-  }
+  const devSigning =
+    cloudDevSigningAllowed(app.isPackaged) && Boolean(process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE)
   const auth = getOrcaCloudAuthConfig(process.env, app.isPackaged)
-  if (!auth.configured) {
+  if (!auth.configured && !devSigning) {
     return 'unavailable'
   }
   const userDataPath = app.getPath('userData')
   const active = ensureActiveOrcaProfile(userDataPath)
+  // The dev key signs as the signed-in user, so it skips the capability check but not sign-in.
   if (!active.profile.cloud) {
-    return 'needs-sign-in'
+    return auth.configured ? 'needs-sign-in' : 'unavailable'
+  }
+  if (devSigning) {
+    return 'offered'
+  }
+  if (!auth.configured) {
+    return 'unavailable'
   }
   const session = await readFreshOrcaCloudSession(auth.config, active, userDataPath).catch(
     () => null

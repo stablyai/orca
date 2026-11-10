@@ -12,7 +12,7 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo, RepoKind } from '../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -50,7 +50,7 @@ import {
 type RuntimeProjectHostSetupDependencies = {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
-  addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
+  addRepo: (path: string, kind: RepoKind, hostId: ExecutionHostId, name?: string) => Promise<Repo>
   cloneRepo: (args: ProjectHostSetupCloneArgs) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
@@ -130,7 +130,7 @@ export class RuntimeProjectHostSetupController {
     if (sshTargetId) {
       throw sshTargetNotServedError(sshTargetId)
     }
-    const repo = await this.deps.addRepo(args.path, kind, args.hostId)
+    const repo = await this.deps.addRepo(args.path, kind, args.hostId, args.displayName)
     const repoWasCreated = !knownRepoIds.has(repo.id)
     // Stored remotes may predate user-added ones; probe current Git state.
     const folderRemote =
