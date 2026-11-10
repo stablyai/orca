@@ -16,6 +16,9 @@ const NONE: CloudAgentReadiness = { claude: null, codex: null }
 const noop = (): void => {}
 const actions = {
   onSave: async () => null,
+  // The Gemini key fails so one sheet shows both row outcomes.
+  onSaveDesktopKey: async (key: { envName: string }) =>
+    key.envName === 'GEMINI_API_KEY' ? ('unavailable' as const) : null,
   onDone: noop,
   onSignIn: noop,
   onCancelSignIn: noop,
@@ -33,7 +36,12 @@ const ENTRY: PendingWorktreeCreation = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only name and ephemeralVmRecipe from the request.
   request: {
     name: 'fix-login',
-    ephemeralVmRecipe: { sourceRepoId: 'repo', recipeId: 'cloud', projectId: 'p' }
+    ephemeralVmRecipe: {
+      sourceRepoId: 'repo',
+      recipeId: 'cloud',
+      projectId: 'p',
+      provider: 'orca-cloud'
+    }
   } as PendingWorktreeCreation['request']
 }
 
@@ -101,6 +109,18 @@ export const buildKeysWithDesktopKeys = sheet(
   { kind: 'keys' }
 )
 
+/** The same step after saving both: Claude's key saved, Gemini's failed and can be tried again. */
+export const buildKeysDesktopKeysSavedAndFailed = sheet(
+  { readiness: NONE, canShare: false, desktopKeys: [...DESKTOP_KEYS] },
+  { kind: 'keys' },
+  async (frame) => {
+    for (const button of frame.querySelectorAll<HTMLButtonElement>('[aria-label^="Save "]')) {
+      button.click()
+      await settle()
+    }
+  }
+)
+
 export const buildReadyTeam = sheet({
   readiness: { claude: 'team', codex: 'team' },
   canShare: false
@@ -141,7 +161,7 @@ function Dialogish({ children }: { children: React.ReactNode }): React.JSX.Eleme
         <div className="space-y-1.5">
           <p className="text-base font-semibold">Add an agent</p>
           <p className="text-sm text-muted-foreground">
-            Choose how Claude Code or Codex gets access in your Orca Cloud workspaces.
+            Choose how your agents get access in your Orca Cloud workspaces.
           </p>
         </div>
         {children}
@@ -171,7 +191,9 @@ function dialog(
           canShare={options.canShare ?? false}
           steadyHeight
           desktopKeys={options.desktopKeys ? [...DESKTOP_KEYS] : []}
-          onSaveDesktopKey={async () => (options.desktopKeyFailure ? 'unavailable' : null)}
+          onSaveDesktopKey={async (key) =>
+            options.desktopKeyFailure && key.envName === 'GEMINI_API_KEY' ? 'unavailable' : null
+          }
           onSave={options.pendingSave ? () => new Promise(() => {}) : async () => null}
           onSaved={noop}
           onCancel={noop}
@@ -195,9 +217,10 @@ export const dialogDesktopKeysSavedAndFailed = dialog('api-key', {
   desktopKeys: true,
   desktopKeyFailure: true,
   interact: async (frame) => {
-    const buttons = frame.querySelectorAll<HTMLButtonElement>('[aria-label^="Save "]')
-    buttons[1]?.click()
-    await settle()
+    for (const button of frame.querySelectorAll<HTMLButtonElement>('[aria-label^="Save "]')) {
+      button.click()
+      await settle()
+    }
   }
 })
 
