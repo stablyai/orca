@@ -3,7 +3,7 @@ import { defineMethod } from '../../../core'
 import {
   releaseFederatedWorker,
   retainFederatedWorker
-} from '../federation/federated-worker-release'
+} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
 import { archiveSummary, exposeWorkerRetainReceipt } from './worker-terminal-resource-presentation'

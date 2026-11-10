@@ -23,10 +23,18 @@ export function useNativeChatTranscriptSlots({
   scopeKey,
   historyHead,
   ...input
-}: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'expandedTurnKeys' | 'turnFold'> & {
+}: Omit<
+  NativeChatTranscriptSlotsInput,
+  'liveReasoningId' | 'expandedTurnKeys' | 'turnFold' | 'tailRowBelow'
+> & {
   scopeKey: string
   historyHead?: string
-  line: { draws: boolean; thinking: boolean; stopping?: boolean; activityText?: string | null }
+  line: {
+    tailRow: 'awaiting-input' | 'activity' | null
+    thinking: boolean
+    stopping?: boolean
+    activityText?: string | null
+  }
 }): {
   slots: NativeChatTranscriptSlot[]
   liveLine: NativeChatLiveLine | null
@@ -79,7 +87,8 @@ export function useNativeChatTranscriptSlots({
     },
     [historyFold.expandedTurnKeys]
   )
-  const { draws, thinking, stopping = false, activityText } = line
+  const { tailRow, thinking, stopping = false, activityText } = line
+  const draws = tailRow === 'activity'
   const liveLine = useMemo(
     () =>
       nativeChatLiveLine({
@@ -110,6 +119,8 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
+  // A boolean, so the line's changing words never rebuild the slots.
+  const tailRowBelow = liveLine !== null || tailRow === 'awaiting-input'
   const { slots, forkPoint } = useMemo(
     () =>
       buildNativeChatTranscript({
@@ -129,6 +140,7 @@ export function useNativeChatTranscriptSlots({
         subagentSections,
         subagentChoices,
         liveReasoningId,
+        tailRowBelow,
         forkOffer
       }),
     [
@@ -143,6 +155,7 @@ export function useNativeChatTranscriptSlots({
       receipts,
       subagentChoices,
       subagentSections,
+      tailRowBelow,
       turnDiffs,
       turnKeys,
       turnStatuses,
