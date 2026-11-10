@@ -189,6 +189,7 @@ export function useCombinedDiffSectionLoader({
           return prev.map((section, i) =>
             i === index &&
             !section.dirty &&
+            section.reviewModifiedTime !== modifiedTime &&
             section.diffResult === (unchanged ? current.diffResult : storedResult)
               ? { ...section, reviewModifiedTime: modifiedTime }
               : section
@@ -206,13 +207,7 @@ export function useCombinedDiffSectionLoader({
             return prev
           }
           return prev.map((section, i) =>
-            i === index && !section.dirty
-              ? {
-                  ...section,
-                  ...(provenanceChanged ? { operation } : {}),
-                  reviewModifiedTime: undefined
-                }
-              : section
+            i === index && !section.dirty && provenanceChanged ? { ...section, operation } : section
           )
         })
         return

@@ -92,8 +92,8 @@ function registerFilteredList(onOpen: (path: string) => void): void {
 describe('single-file diff Viewed', () => {
   it.each([
     ['Macintosh', { ctrlKey: true }],
-    ['Windows', { key: 'F12', altKey: true, shiftKey: true }],
-    ['Linux', { key: 'F12', altKey: true, shiftKey: true }]
+    ['Windows', { key: 'v', altKey: true, shiftKey: true }],
+    ['Linux', { key: 'v', altKey: true, shiftKey: true }]
   ])('toggles Viewed from the focused diff on %s', async (userAgent, modifiers) => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
     const opened: string[] = []
