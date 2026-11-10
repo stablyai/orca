@@ -2,7 +2,11 @@ import { Buffer } from 'node:buffer'
 import type { Debugger, WebContents } from 'electron'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import { runDebuggerCommandWithTimeout } from './browser-screencast-debugger-command'
-import { holdPaintUntilSettled, type CapturePaintHold } from '../debugger/guest-paint-hold'
+import {
+  holdPaintUntilCdpCaptureSettles,
+  holdPaintUntilSettled,
+  type CapturePaintHold
+} from '../debugger/guest-paint-hold'
 import type {
   BrowserScreencastOptions,
   PendingScreencastFrame
@@ -123,7 +127,7 @@ export function createBrowserScreencastSnapshotCapture(
           captureBeyondViewport: false
         }
         const result = await runDebuggerCommandWithTimeout('Page.captureScreenshot', () =>
-          holdPaintUntilSettled(holdPaint, () =>
+          holdPaintUntilCdpCaptureSettles(webContents, holdPaint, () =>
             dbg.sendCommand('Page.captureScreenshot', screenshotParams)
           )
         )

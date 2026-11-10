@@ -1,4 +1,8 @@
-import { holdPaintUntilSettled, type CapturePaintHold } from '../debugger/guest-paint-hold'
+import {
+  holdPaintUntilCdpCaptureSettles,
+  holdPaintUntilSettled,
+  type CapturePaintHold
+} from '../debugger/guest-paint-hold'
 import type { WebContents } from 'electron'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import {
@@ -174,7 +178,7 @@ function captureUntilDrawn(
       } catch {
         // Guest teardown can reject repaint requests; still try CDP.
       }
-      return holdPaintUntilSettled(holdPaint, () =>
+      return holdPaintUntilCdpCaptureSettles(webContents, holdPaint, () =>
         sendGuestCdpCommand(webContents, 'Page.captureScreenshot', requestParams)
       ).then((result) => {
         const data = isRecord(result) ? result.data : undefined

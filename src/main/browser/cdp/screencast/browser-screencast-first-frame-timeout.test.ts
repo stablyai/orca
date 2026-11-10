@@ -71,12 +71,18 @@ describe('browser screencast first-frame deadline', () => {
       )
     })
     let settleScreenshot!: (result: unknown) => void
+    let rejectScreenshot!: (error: Error) => void
     webContents.debugger.sendCommand.mockImplementation(async (method: string) =>
       method === 'Page.captureScreenshot'
-        ? new Promise((resolve) => {
+        ? new Promise((resolve, reject) => {
             settleScreenshot = resolve
+            rejectScreenshot = reject
           })
         : {}
+    )
+    // Electron rejects pending commands on detach, but Chromium keeps the capture.
+    webContents.debugger.detach.mockImplementation(() =>
+      rejectScreenshot(new Error('target closed while handling command'))
     )
     const releasePaint = vi.fn()
     const options = { ...startOptions(true), holdPaint: vi.fn(() => releasePaint) }
@@ -87,12 +93,14 @@ describe('browser screencast first-frame deadline', () => {
     session.stop()
     await session.done
     expect(options.holdPaint).toHaveBeenCalledTimes(2)
+    expect(webContents.debugger.detach).not.toHaveBeenCalled()
     expect(releasePaint).not.toHaveBeenCalled()
 
     settleCapture({ getSize: () => ({ width: 0, height: 0 }) })
     settleScreenshot({})
     await vi.advanceTimersByTimeAsync(0)
     expect(releasePaint).toHaveBeenCalledTimes(2)
+    expect(webContents.debugger.detach).toHaveBeenCalledOnce()
   })
 
   it('drops a capture that settles after the limit', async () => {
