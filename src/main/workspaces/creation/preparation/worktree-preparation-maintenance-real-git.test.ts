@@ -93,8 +93,10 @@ it('retires a parked identity-read lease, then removes only through its fresh na
     await arm()
     expect(removalPermissions).toEqual([])
     readReleased.resolve()
-    await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false))
-    expect(preparationCapacityUsed()).toBe(1)
+    await vi.waitFor(() => {
+      expect(existsSync(entry.preparedPath)).toBe(false)
+      expect(preparationCapacityUsed()).toBe(1)
+    })
     expect(removalPermissions).toEqual([true])
     expect(git(repoPath, 'worktree', 'list', '--porcelain')).not.toContain(entry.lockReason)
     await create('after-read-lease')
