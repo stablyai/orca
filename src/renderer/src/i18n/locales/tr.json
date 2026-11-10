@@ -15521,7 +15521,6 @@
       "feature": {
         "wall": {
           "AgentCapabilitiesSetupAction": {
-            "b8dc9dd8a2": "Kuruldu",
             "1b51644c2d": "Ajanların masaüstünü kontrol etmesine izin verin; herhangi bir uygulamada imleci hareket ettirebilir, tıklayabilir ve yazabilirler.",
             "362a07517d": "Bilgisayar Kullanımı",
             "5e8fe5a72d": "Ajanlara Orca'nın tarayıcısına doğrudan erişim verin; böylece sayfaları test edebilir, ekran görüntüsü alabilir ve gördükleri üzerinde işlem yapabilirler.",

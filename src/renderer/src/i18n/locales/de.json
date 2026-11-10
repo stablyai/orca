@@ -15537,7 +15537,6 @@
       "feature": {
         "wall": {
           "AgentCapabilitiesSetupAction": {
-            "b8dc9dd8a2": "Installiert",
             "1b51644c2d": "Agenten die Steuerung des Desktops ermöglichen: den Cursor bewegen, klicken und in beliebigen Apps tippen.",
             "362a07517d": "Computersteuerung",
             "5e8fe5a72d": "Agenten direkten Zugriff auf Orcas Browser geben, damit sie Seiten testen, Screenshots erstellen und anhand der angezeigten Inhalte handeln können.",
