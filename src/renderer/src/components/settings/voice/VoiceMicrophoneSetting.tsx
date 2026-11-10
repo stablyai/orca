@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import { Mic } from 'lucide-react'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import { useAppStore } from '@/store'
+import { useVoiceMicrophoneTest } from './use-voice-microphone-test'
+import { VoiceMicrophoneTestPanel } from './VoiceMicrophoneTestPanel'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
@@ -17,6 +21,8 @@ import { useVoiceMicrophoneDevices } from './use-voice-microphone-devices'
 
 type VoiceMicrophoneSettingProps = {
   voiceSettings: VoiceSettings
+  /** The selected model when it is ready, so the mic test can show what it heard. */
+  readyModel?: SpeechModelManifest
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
 }
 
@@ -63,9 +69,13 @@ function microphoneAccessErrorMessage(error: unknown): string {
 
 export function VoiceMicrophoneSetting({
   voiceSettings,
+  readyModel,
   onUpdateVoiceSettings
 }: VoiceMicrophoneSettingProps): React.JSX.Element {
   const t = useTranslate()
+  const test = useVoiceMicrophoneTest(voiceSettings, readyModel)
+  // Keeps the test's model load and microphone from competing with a live dictation.
+  const dictationActive = useAppStore((s) => s.dictationState !== 'idle')
   const languageRevision = useUiLanguageRevision()
   // Rescan when dictation enables because permission and real device labels may arrive with that toggle.
   const { devices, devicesKnown, refreshDevices } = useVoiceMicrophoneDevices(voiceSettings.enabled)
@@ -180,80 +190,105 @@ export function VoiceMicrophoneSetting({
 
   const showAccessHint = voiceSettings.enabled && devices.length === 0
 
+  const testBusy = ['starting', 'recording', 'playing'].includes(test.phase.kind)
+
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="min-w-0 space-y-0.5">
-        <Label>{t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}</Label>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.VoiceMicrophoneSetting.description',
-            'Input device used for voice dictation. System default follows the OS microphone setting.'
-          )}
-        </p>
-        {showAccessHint && (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {accessError ? (
-              <p className="text-xs text-destructive" role="alert">
-                {accessError}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'auto.components.settings.VoiceMicrophoneSetting.accessHint',
-                  'Allow microphone access to list input devices.'
-                )}
-              </p>
+    <div data-settings-row="" className="space-y-2 py-2">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 space-y-0.5">
+          <Label>{t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}</Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.VoiceMicrophoneSetting.description',
+              'Input device used for voice dictation. System default follows the OS microphone setting.'
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              disabled={accessPending}
-              onClick={() => void requestMicrophoneAccess()}
-            >
-              {t('auto.components.settings.VoiceMicrophoneSetting.allowAccess', 'Allow access')}
-            </Button>
-          </div>
-        )}
-      </div>
-      <Select
-        value={selectedValue}
-        disabled={!voiceSettings.enabled}
-        onOpenChange={(open) => {
-          if (open) {
-            void refreshDevices()
-          }
-        }}
-        onValueChange={(value) => {
-          const deviceId = microphoneDeviceIdFromSelectValue(value)
-          if (!deviceId) {
+          </p>
+          {showAccessHint && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {accessError ? (
+                <p className="text-xs text-destructive" role="alert">
+                  {accessError}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.VoiceMicrophoneSetting.accessHint',
+                    'Allow microphone access to list input devices.'
+                  )}
+                </p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                disabled={accessPending}
+                onClick={() => void requestMicrophoneAccess()}
+              >
+                {t('auto.components.settings.VoiceMicrophoneSetting.allowAccess', 'Allow access')}
+              </Button>
+            </div>
+          )}
+        </div>
+        <Select
+          value={selectedValue}
+          disabled={!voiceSettings.enabled}
+          onOpenChange={(open) => {
+            if (open) {
+              void refreshDevices()
+            }
+          }}
+          onValueChange={(value) => {
+            const deviceId = microphoneDeviceIdFromSelectValue(value)
+            if (!deviceId) {
+              onUpdateVoiceSettings({
+                microphoneDeviceId: null,
+                microphoneDeviceLabel: null
+              })
+              return
+            }
+            const match = devices.find((device) => device.deviceId === deviceId)
             onUpdateVoiceSettings({
-              microphoneDeviceId: null,
-              microphoneDeviceLabel: null
+              microphoneDeviceId: deviceId,
+              microphoneDeviceLabel: match?.label ?? voiceSettings.microphoneDeviceLabel
             })
-            return
-          }
-          const match = devices.find((device) => device.deviceId === deviceId)
-          onUpdateVoiceSettings({
-            microphoneDeviceId: deviceId,
-            microphoneDeviceLabel: match?.label ?? voiceSettings.microphoneDeviceLabel
-          })
-        }}
-      >
-        <SelectTrigger
-          className={`h-7 w-52 shrink-0 text-xs ${!voiceSettings.enabled ? 'opacity-50' : ''}`}
-          aria-label={t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}
+          }}
         >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value} className="text-xs">
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <SelectTrigger
+            className={`h-7 w-52 shrink-0 text-xs ${!voiceSettings.enabled ? 'opacity-50' : ''}`}
+            aria-label={t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value} className="text-xs">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={testBusy || dictationActive}
+          onClick={() => void test.start()}
+        >
+          <Mic />
+          {t('components.settings.voice.micTest.test', 'Test')}
+        </Button>
+      </div>
+      <VoiceMicrophoneTestPanel
+        phase={test.phase}
+        heard={test.heard}
+        level={test.meter.level}
+        modelLabel={readyModel?.label}
+        microphoneError={microphoneAccessErrorMessage}
+        onStop={test.stopRecording}
+        onSkip={test.skipPlayback}
+        onPlayAgain={test.play}
+        onTestAgain={() => void test.start()}
+      />
     </div>
   )
 }

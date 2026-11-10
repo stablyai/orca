@@ -16,7 +16,7 @@ import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wal
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { useFeatureWallTourSkills } from './use-feature-wall-tour-skills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
 import { useFeatureWallTaskSourcePresentation } from './use-feature-wall-task-source-presentation'

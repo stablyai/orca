@@ -1,7 +1,11 @@
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { getClientWorktreeCreateCandidate } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
+import {
+  createWorktreeWithNameRetry,
+  type WorktreeCreateParent,
+  type WorktreeCreateResult
+} from './worktree-create-retry'
 import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 import {
@@ -22,6 +26,7 @@ export async function createBlankWorkspace(args: {
   nameWasGenerated: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
   const agentLaunch: WorktreeCreateAgentLaunch | undefined = args.createdWithAgentId
     ? { agent: args.createdWithAgentId, supported: args.agentLaunchSupported }
@@ -31,6 +36,7 @@ export async function createBlankWorkspace(args: {
     client: args.client,
     baseName: args.baseName,
     nameWasGenerated: args.nameWasGenerated,
+    parent: args.parent,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     ...(agentLaunch ? { agentLaunch } : {}),
     buildParams: (name, attempt) => {

@@ -110,14 +110,14 @@ export function RepositoryHooksSection({
   return (
     <div ref={flushScriptDraftOnUnmount}>
       <SettingsGroup
-        title={t('auto.components.settings.RepositoryHooksSection.ff082fe7c6', 'Worktree Hooks')}
+        title={t('auto.components.settings.RepositoryHooksSection.01bdba296f', 'Worktree hooks')}
         description={t(
           'auto.components.settings.RepositoryHooksSection.8567127a40',
           'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
         )}
       >
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script')}
+          title={t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script')}
           description={t(
             'auto.components.settings.RepositoryHooksSection.30d555acd2',
             'Local and shared scripts that run after a new worktree is created.'
@@ -148,8 +148,8 @@ export function RepositoryHooksSection({
         </SearchableSetting>
         <SearchableSetting
           title={t(
-            'auto.components.settings.RepositoryHooksSection.fb6bebcf7e',
-            'When to Run Setup'
+            'auto.components.settings.RepositoryHooksSection.1c17e751c4',
+            'When to run setup'
           )}
           description={t(
             'auto.components.settings.RepositoryHooksSection.63e1783173',
@@ -171,7 +171,7 @@ export function RepositoryHooksSection({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script')}
+          title={t('auto.components.settings.RepositoryHooksSection.bfdb1266ce', 'Archive script')}
           description={t(
             'auto.components.settings.RepositoryHooksSection.b91a0f297d',
             'Local and shared scripts that run before a worktree is archived.'
@@ -211,8 +211,8 @@ export function RepositoryHooksSection({
         ) : null}
         <SearchableSetting
           title={t(
-            'auto.components.settings.RepositoryHooksSection.13394103bd',
-            'Custom GitHub Issue Command'
+            'auto.components.settings.RepositoryHooksSection.da00f141c2',
+            'Custom GitHub issue command'
           )}
           description={t(
             'auto.components.settings.RepositoryHooksSection.2cc27dc12b',

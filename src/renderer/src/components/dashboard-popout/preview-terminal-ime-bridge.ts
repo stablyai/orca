@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { installTerminalImeCompositionTracker } from '@/components/terminal-pane/input/ime/terminal-ime-composition-tracker'
 import { installTerminalImeNativeTextForwarder } from '@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder'
 

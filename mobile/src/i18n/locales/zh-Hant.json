@@ -1345,6 +1345,7 @@
       "movedTo": "此手機已停止轉寫。在 {{computer}} 上繼續。",
       "movedToComputer": "此手機已停止轉寫。在電腦上繼續。",
       "stoppedKept": "聽寫已停止。{{reason}}。錄音已保留。",
+      "stoppedKeptGeneric": "聽寫已停止。錄音已保留。",
       "stillListening": "仍在聽。"
     },
     "pill": {
@@ -2563,8 +2564,8 @@
       "insertFailed": "無法插入聽寫內容",
       "insertFailedCopied": "無法插入聽寫內容，已複製到剪貼簿",
       "inserted": "已插入聽寫內容",
-      "stoppedAfterSilence": "靜音一分鐘後已停止",
-      "stoppedAtCloudLimit": "已達 10 分鐘雲端上限。聽寫已停止。"
+      "stoppedAtCloudLimit": "已達 10 分鐘雲端上限。聽寫已停止。",
+      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
     },
     "useNativeChatStop": {
       "stopNotSent": "未送出停止命令",

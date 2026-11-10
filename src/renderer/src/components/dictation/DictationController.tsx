@@ -30,6 +30,7 @@ import {
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { publishDictationMeter } from './dictation-meter-store'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
+import { stopAfterSilenceSeconds } from '../../../../shared/dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import { NO_DICTATION_LIVE_TEXT } from '@/store/slices/dictation/dictation'
 import {
@@ -364,14 +365,7 @@ export function DictationController() {
       isDictationUnderway(sessionRef.current.phase) || sessionRef.current.phase === 'stopping'
   })
 
-  useDictationSilenceStop(
-    dictationState === 'listening',
-    settings?.voice?.dictationMode,
-    getLastSpeechAt,
-    () => void stopDictation()
-  )
-
-  useHoldDictationGesture({
+  const { isHolding } = useHoldDictationGesture({
     canStartDictation: () => canStartDictation(sessionRef.current.phase),
     isDictationUnderway: () => isDictationUnderway(sessionRef.current.phase),
     keybindings,
@@ -379,6 +373,15 @@ export function DictationController() {
     startDictation,
     stopDictation
   })
+
+  useDictationSilenceStop(
+    dictationState === 'listening',
+    settings?.voice?.dictationMode,
+    stopAfterSilenceSeconds(settings?.voice),
+    getLastSpeechAt,
+    isHolding,
+    () => void stopDictation()
+  )
 
   useDictationSpeechEvents({
     currentSessionId: () => sessionRef.current.sessionId,

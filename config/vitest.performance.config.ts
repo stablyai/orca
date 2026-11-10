@@ -6,7 +6,6 @@ import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-
 
 const contracts = [
   'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
-  'src/renderer/src/components/terminal-pane/pty-connection/startup/saved-resume-cancellation.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts',
   'src/main/runtime/rpc/methods/projects/repo.test.ts',

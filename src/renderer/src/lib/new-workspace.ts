@@ -3,7 +3,7 @@ import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-session/messaging/pas
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-followup-delivery'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-session/launch/background/agent-background-session-timeout-toast'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
+import type { LinkedWorkItemContext } from '@/lib/work-items/linked-work-item-context'
 import {
   beginAgentStartupDeliveryAttempt,
   getAgentStartupTabPtyId,
@@ -22,8 +22,6 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
   : navigator.userAgent.includes('Mac')
     ? 'darwin'
     : 'linux'
-
-export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']

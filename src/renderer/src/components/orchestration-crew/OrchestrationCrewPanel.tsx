@@ -11,11 +11,11 @@ import type {
   OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useOrchestrationCrew } from '../native-chat/worker-lifetime/use-orchestration-crew'
+import { useOrchestrationCrew } from './use-orchestration-crew'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { CrewRowView, IconButton } from './CrewRowView'
 import {
   CREW_STATUS_GROUPS,

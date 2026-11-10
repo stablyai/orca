@@ -1,4 +1,4 @@
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
 import {
   dictationShortcutMode,
   dictationShortcutModeSettings,
@@ -15,16 +15,19 @@ import {
   SettingsSubsectionHeader
 } from '../form-controls/SettingsFormControls'
 import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
+import { VoiceSilenceStopSetting } from './VoiceSilenceStopSetting'
 
 export const VOICE_MICROPHONE_ROW_ID = 'voice-microphone'
 
 type VoiceInputSettingsProps = {
   voiceSettings: VoiceSettings
+  readyModel: SpeechModelManifest | undefined
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
 }
 
 export function VoiceInputSettings({
   voiceSettings,
+  readyModel,
   onUpdateVoiceSettings
 }: VoiceInputSettingsProps): React.JSX.Element {
   const t = useTranslate()
@@ -87,9 +90,14 @@ export function VoiceInputSettings({
         <div id={VOICE_MICROPHONE_ROW_ID} className="scroll-mt-8">
           <VoiceMicrophoneSetting
             voiceSettings={voiceSettings}
+            readyModel={readyModel}
             onUpdateVoiceSettings={onUpdateVoiceSettings}
           />
         </div>
+        <VoiceSilenceStopSetting
+          voiceSettings={voiceSettings}
+          onUpdateVoiceSettings={onUpdateVoiceSettings}
+        />
       </div>
     </div>
   )

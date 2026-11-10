@@ -30,7 +30,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 import { getRepoSetupAgentStartupPolicy } from './setup-policy-decisions'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import type {
   SmartGitHubPrStartPointSelection,
   SmartSourceSelection

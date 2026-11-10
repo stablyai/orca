@@ -25,7 +25,7 @@ import { resolvePullRequestRepo } from '@/components/github/github-work-item-ide
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'

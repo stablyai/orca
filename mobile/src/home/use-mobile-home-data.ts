@@ -10,6 +10,7 @@ import {
 import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
 import {
   countAgentsNeedingYouByHost,
+  selectActiveAgents,
   selectAgentsNeedingYou,
   type AgentListInput
 } from '../agents/agent-list-rows'
@@ -253,6 +254,7 @@ export function useMobileHomeData() {
     [sortedHosts, hostStates, worktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
+  const activeAgents = useMemo(() => selectActiveAgents(agentList), [agentList])
   const needsYouByHost = useMemo(
     () => countAgentsNeedingYouByHost(agentsNeedingYou),
     [agentsNeedingYou]
@@ -274,6 +276,7 @@ export function useMobileHomeData() {
     ...connections,
     accountsByHost,
     applyAgentActivity: agentActivity.apply,
+    activeAgents,
     agentList,
     agentsNeedingYou,
     connectedHosts,

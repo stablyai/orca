@@ -1,4 +1,4 @@
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { canShowRightSidebarForView, canToggleRightSidebar } from '@/lib/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
@@ -270,7 +270,7 @@ export function createAppCommandHandlers(
     [
       'sidebar.right.toggle',
       () =>
-        canRevealRightSidebar
+        canToggleRightSidebar(activeView)
           ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
           : false
     ],

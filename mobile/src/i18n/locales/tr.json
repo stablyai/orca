@@ -1349,6 +1349,7 @@
       "movedTo": "Bu telefon yazıya dökmeyi bıraktı. {{computer}} üzerinde devam ediliyor.",
       "movedToComputer": "Bu telefon yazıya dökmeyi bıraktı. Bilgisayarda devam ediliyor.",
       "stoppedKept": "Dikte durdu. {{reason}}. Kaydınız saklandı.",
+      "stoppedKeptGeneric": "Dikte durdu. Kaydınız saklandı.",
       "stillListening": "Dinlemeye devam ediliyor."
     },
     "pill": {
@@ -2567,8 +2568,8 @@
       "insertFailed": "Dikte metni eklenemedi",
       "insertFailedCopied": "Dikte metni eklenemediği için panoya kopyalandı",
       "inserted": "Dikte metni eklendi",
-      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
-      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu."
+      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
     },
     "useNativeChatStop": {
       "stopNotSent": "Durdurma isteği gönderilemedi",

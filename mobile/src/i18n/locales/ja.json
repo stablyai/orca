@@ -1345,6 +1345,7 @@
       "movedTo": "このスマートフォンでの文字起こしが止まりました。{{computer}} で続けます。",
       "movedToComputer": "このスマートフォンでの文字起こしが止まりました。コンピュータで続けます。",
       "stoppedKept": "音声入力が停止しました。{{reason}}。録音は保持されています。",
+      "stoppedKeptGeneric": "音声入力が停止しました。録音は保持されています。",
       "stillListening": "聞き取りを続けています。"
     },
     "pill": {
@@ -2563,8 +2564,8 @@
       "insertFailed": "ディクテーションの結果を挿入できませんでした。",
       "insertFailedCopied": "ディクテーションの結果を挿入できず、クリップボードにコピーしました。",
       "inserted": "ディクテーションの結果を挿入しました。",
-      "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
-      "stoppedAtCloudLimit": "クラウドの10分の上限に達したため、ディクテーションが停止しました。"
+      "stoppedAtCloudLimit": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
+      "stoppedAfterSilenceSeconds": "{{seconds}} 秒間無音だったため停止しました"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止要求を送信できませんでした。",

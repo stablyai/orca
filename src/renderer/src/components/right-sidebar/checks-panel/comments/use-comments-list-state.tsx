@@ -31,7 +31,7 @@ import {
   usePRCommentsListSelection,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
-import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { PRCommentGroupView } from './comment-group'
