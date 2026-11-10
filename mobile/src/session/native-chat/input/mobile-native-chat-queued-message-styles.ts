@@ -175,6 +175,12 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   pressed: {
     backgroundColor: colors.bgRaised
   },
+  litAction: {
+    backgroundColor: colors.surfaceBright
+  },
+  litActionLabel: {
+    color: colors.bgBase
+  },
   disabled: {
     opacity: 0.5
   }

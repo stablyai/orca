@@ -342,22 +342,22 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             type="button"
             data-native-chat-steer-preview={steerPreview}
             aria-label={steerPreviewLabel}
-            className="group-data-[terminal=true]/toolbar:size-8 pointer-coarse:group-data-[terminal=true]/toolbar:size-10"
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => {
-              // As Send: the label can change between a double-click's presses (Steer, then Steer queued).
+              // As Send: the action can change between a double-click's presses (Steer, then Steer queued).
               if (event.detail <= 1) {
                 onSteerPreview?.()
               }
             }}
-            size="pill"
+            variant="default"
+            size="icon"
+            className="size-8 rounded-full pointer-coarse:size-10"
           >
             {steerPreview === 'queue' ? (
-              <ListEnd className="size-3.5" />
+              <ListEnd className="size-4" />
             ) : (
-              <CornerDownRight className="size-3.5" />
+              <CornerDownRight className="size-4" />
             )}
-            <span data-composer-primary-label>{steerPreviewLabel}</span>
           </Button>
         ) : sendHint ? (
           <Tooltip>
