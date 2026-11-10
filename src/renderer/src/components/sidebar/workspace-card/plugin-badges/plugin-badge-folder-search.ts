@@ -45,6 +45,8 @@ async function pathsExist(
   )
 }
 
+/** The searchable subfolders of the relative `folder`, skipping hidden folders, `node_modules`
+ *  and symbolic links; an unreadable folder has none. */
 async function listSubfolders(root: PluginBadgeSearchRoot, folder: string): Promise<string[]> {
   const entries = await window.api.fs
     .readDir({ dirPath: joinPath(root.path, folder), ...connectionArgs(root) })

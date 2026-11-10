@@ -23,6 +23,7 @@ type BadgeProps = {
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
 }
 
+/** One badge's icon button, with a tooltip naming it and a menu of its commands per folder. */
 function WorktreeCardPluginBadge({
   match,
   worktreeId,

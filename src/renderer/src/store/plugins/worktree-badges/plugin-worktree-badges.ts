@@ -17,6 +17,8 @@ export type ActivePluginWorktreeBadge = Omit<PluginWorktreeBadgeEntry, 'commands
   commands: ActivePluginCommand[]
 }
 
+/** Badges of live plugins, keeping only the commands that are workspace worker commands; a badge
+ *  left with none is dropped. */
 export function collectActivePluginWorktreeBadges(
   plugins: readonly PluginHostListEntry[]
 ): ActivePluginWorktreeBadge[] {

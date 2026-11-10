@@ -68,6 +68,7 @@ function installPlugin(enabled: boolean): void {
     pathExists: async ({ filePath }: { filePath: string }) => MARKERS.has(filePath),
     pathsExist: async ({ filePaths }: { filePaths: string[] }) =>
       filePaths.map((filePath) => ({ exists: MARKERS.has(filePath) })),
+    /** Lists the fake workspace's subfolders; any other folder is empty. */
     readDir: async ({ dirPath }: { dirPath: string }) =>
       (FOLDERS[dirPath] ?? []).map((name) => ({ name, isDirectory: true, isSymlink: false }))
   })
