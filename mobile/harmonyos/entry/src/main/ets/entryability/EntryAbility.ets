@@ -88,7 +88,8 @@ export default class EntryAbility extends UIAbility {
     try {
       let navigation = this.mainWindow.getUIContext().getRouter();
       let options: router.RouterOptions = { url: route.page, params: route.params };
-      if (route.page === 'pages/PairScan' && navigation.getState().name === 'PairScan') {
+      let current = route.page === 'pages/PairScan' ? navigation.getState() : null;
+      if (current && current.index > 1 && current.name !== 'Home') {
         await navigation.replaceUrl(options);
       } else { await navigation.pushUrl(options); }
     } catch (e) {

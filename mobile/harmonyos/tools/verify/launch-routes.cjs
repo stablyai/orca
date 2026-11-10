@@ -44,10 +44,10 @@ test('ambiguous and malformed session destinations are refused', () => {
   assert.equal(parseLaunchRoute('https://example.com'), null)
 })
 
-test('a newer external pairing link replaces the pending confirmation and keeps Home below it', async () => {
-  const stack = [{ url: 'pages/Home' }]
+function createLaunchFixture(...pages) {
+  const stack = pages.map((url) => ({ url }))
   const router = {
-    getState: () => ({ name: stack.at(-1).url.split('/').at(-1) }),
+    getState: () => ({ name: stack.at(-1).url.split('/').at(-1), index: stack.length }),
     async pushUrl(page) {
       await Promise.resolve()
       stack.push(page)
@@ -83,6 +83,11 @@ test('a newer external pairing link replaces the pending confirmation and keeps 
       getUIContext: () => ({ getRouter: () => router })
     })
   })
+  return { ability, stack }
+}
+
+test('a newer external pairing link replaces the pending confirmation and keeps Home below it', async () => {
+  const { ability, stack } = createLaunchFixture('pages/Home')
   ability.onNewWant({ uri: 'orca://pair?code=old' })
   ability.onNewWant({ uri: 'orca://pair?code=new' })
   await new Promise(setImmediate)
@@ -91,4 +96,14 @@ test('a newer external pairing link replaces the pending confirmation and keeps 
     ['pages/Home', 'pages/PairScan']
   )
   assert.equal(stack.at(-1).params.pairingCode, 'orca://pair?code=new')
+})
+
+test('an external pairing link replaces the open desktop so Back can return to Home after pairing', async () => {
+  const { ability, stack } = createLaunchFixture('pages/Home', 'pages/ShellScreen')
+  ability.onNewWant({ uri: 'orca://pair?code=new' })
+  await new Promise(setImmediate)
+  assert.deepEqual(
+    stack.map((page) => page.url),
+    ['pages/Home', 'pages/PairScan']
+  )
 })
