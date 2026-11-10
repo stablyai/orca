@@ -3,6 +3,9 @@ import type { AppState } from '@/store/types'
 import * as worktreeCatalog from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import * as repoCatalog from '@/store/repos/repository-catalog-index'
 import * as worktreeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
+import * as titleAgents from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import * as stablePaneIds from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 import {
@@ -77,6 +80,191 @@ async function collectGarbage(): Promise<void> {
 }
 
 describe('AI Vault title subscription inputs', () => {
+  it.each([100, 1000])('compares only addressed title facts among %i associations', (count) => {
+    const state = makeState(count)
+    state.agentStatusByPaneKey = {}
+    state.sleepingAgentSessionsByPaneKey = {}
+    const key = 'tab-0:00000000-0000-4000-8000-000000000001'
+    state.agentConversationsByPaneKey = Object.fromEntries(
+      Array.from({ length: count }, (_, index) => {
+        const paneKey = `tab-${index}:00000000-0000-4000-8000-000000000001`
+        return [
+          paneKey,
+          {
+            paneKey,
+            worktreeId: 'wt-title',
+            executionHostId: 'local' as const,
+            connectionId: null,
+            agent: 'codex' as const,
+            ...(index === 0
+              ? { providerSession: { key: 'session_id' as const, id: 'wanted' } }
+              : {})
+          }
+        ]
+      })
+    )
+    const classify = vi.spyOn(titleAgents, 'isAiVaultTitleAgent')
+    const lookups = [
+      vi.spyOn(worktreeCatalog, 'getIndexedWorktreeMap'),
+      vi.spyOn(repoCatalog, 'getIndexedRepoMap'),
+      vi.spyOn(worktreeOwner, 'getExecutionHostIdForWorktree')
+    ]
+    for (const changedKey of [key, 'tab-1:00000000-0000-4000-8000-000000000001']) {
+      const equivalent = {
+        ...state,
+        agentConversationsByPaneKey: replaceRecordEntries<
+          AppState['agentConversationsByPaneKey'][string]
+        >(state.agentConversationsByPaneKey, [
+          [
+            changedKey,
+            { ...state.agentConversationsByPaneKey[changedKey]!, firstStateStartedAt: 2000 }
+          ]
+        ])
+      }
+      classify.mockClear()
+      expect(aiVaultTitleSyncInputsChanged(equivalent, state)).toBe(false)
+      expect(classify.mock.calls.length).toBeLessThanOrEqual(2)
+    }
+    const changed = {
+      ...state,
+      agentConversationsByPaneKey: replaceRecordEntries<
+        AppState['agentConversationsByPaneKey'][string]
+      >(state.agentConversationsByPaneKey, [
+        [
+          key,
+          {
+            ...state.agentConversationsByPaneKey[key]!,
+            providerSession: { key: 'session_id' as const, id: 'new' }
+          }
+        ]
+      ])
+    }
+    classify.mockClear()
+    expect(aiVaultTitleSyncInputsChanged(changed, state)).toBe(true)
+    expect(classify.mock.calls.length).toBeLessThanOrEqual(2)
+    for (const lookup of lookups) {
+      expect(lookup.mock.calls.length).toBe(0)
+    }
+
+    const visits: string[] = []
+    const a = '00000000-0000-4000-8000-000000000001'
+    const c = '00000000-0000-4000-8000-000000000003'
+    const leaf = (tab: string, leafId: string) => ({
+      get type() {
+        visits.push(tab)
+        return 'leaf' as const
+      },
+      leafId
+    })
+    state.terminalLayoutsByTabId = Object.fromEntries(
+      state.tabsByWorktree['wt-title'].map((tab) => [
+        tab.id,
+        {
+          root: leaf(tab.id, a),
+          activeLeafId: a,
+          expandedLeafId: null
+        }
+      ])
+    )
+    state.terminalLayoutsByTabId['tab-0'] = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: leaf('tab-0', a),
+        second: leaf('tab-0', c)
+      },
+      activeLeafId: c,
+      expandedLeafId: null
+    }
+    const metadataOnly = {
+      ...state,
+      terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
+        state.terminalLayoutsByTabId,
+        [
+          [
+            'tab-0',
+            { ...state.terminalLayoutsByTabId['tab-0']!, ptyIdsByLeafId: { [c]: 'pty-new' } }
+          ]
+        ]
+      )
+    }
+    classify.mockClear()
+    expect(aiVaultTitleSyncInputsChanged(metadataOnly, state)).toBe(false)
+    expect(visits).toEqual([])
+    expect(classify.mock.calls.length).toBe(0)
+    const pruned = {
+      ...state,
+      terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
+        state.terminalLayoutsByTabId,
+        [['tab-0', { ...state.terminalLayoutsByTabId['tab-0']!, root: leaf('tab-0', c) }]]
+      )
+    }
+    expect(aiVaultTitleSyncInputsChanged(pruned, state)).toBe(true)
+    expect(visits.every((tab) => tab === 'tab-0')).toBe(true)
+    expect(visits.length).toBeLessThanOrEqual(4)
+    expect(classify.mock.calls.length).toBeLessThanOrEqual(6)
+  })
+
+  it.each([100, 1000])('compares %i restored rootless layouts in one source pass', (count) => {
+    const state = makeState(count)
+    state.agentStatusByPaneKey = {}
+    state.sleepingAgentSessionsByPaneKey = {}
+    const a = '00000000-0000-4000-8000-000000000001'
+    const b = '00000000-0000-4000-8000-000000000002'
+    state.agentConversationsByPaneKey = Object.fromEntries(
+      Array.from({ length: count }, (_, index) => {
+        const paneKey = `tab-${index}:${a}`
+        return [
+          paneKey,
+          {
+            paneKey,
+            worktreeId: 'wt-title',
+            executionHostId: 'local' as const,
+            connectionId: null,
+            agent: 'codex' as const,
+            providerSession: { key: 'session_id' as const, id: `session-${index}` }
+          }
+        ]
+      })
+    )
+    state.terminalLayoutsByTabId = Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [
+        `tab-${index}`,
+        { root: null, activeLeafId: a, expandedLeafId: null }
+      ])
+    )
+    const rooted = {
+      ...state,
+      terminalLayoutsByTabId: Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `tab-${index}`,
+          {
+            root: { type: 'leaf' as const, leafId: a },
+            activeLeafId: a,
+            expandedLeafId: null
+          }
+        ])
+      )
+    }
+    const classify = vi.spyOn(titleAgents, 'isAiVaultTitleAgent')
+    const parse = vi.spyOn(stablePaneIds, 'parsePaneKey')
+    expect(aiVaultTitleSyncInputsChanged(rooted, state)).toBe(false)
+    expect(classify.mock.calls.length).toBeLessThanOrEqual(2 * count)
+    expect(parse.mock.calls.length).toBeLessThanOrEqual(2 * count)
+    const excluded = {
+      ...rooted,
+      terminalLayoutsByTabId: {
+        ...rooted.terminalLayoutsByTabId,
+        'tab-0': {
+          root: { type: 'leaf' as const, leafId: b },
+          activeLeafId: a,
+          expandedLeafId: null
+        }
+      }
+    }
+    expect(aiVaultTitleSyncInputsChanged(excluded, state)).toBe(true)
+  })
+
   it.each([100, 1000])('does no ownership lookups for %i unusable title identities', (count) => {
     const state = makeState(count)
     state.agentStatusByPaneKey = {}

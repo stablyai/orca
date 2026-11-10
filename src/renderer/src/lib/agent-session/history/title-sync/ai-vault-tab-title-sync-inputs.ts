@@ -5,7 +5,9 @@ import {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
+import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
+import { placedPanesEqual, titleRelevant } from './ai-vault-tab-title-placement-inputs'
 import { worktreeOwnerRowsTokenOf } from '../../../workspace/ownership/worktree-owner-rows-token'
 import {
   selectDetectedWorktreesByRepo,
@@ -24,7 +26,7 @@ function providerSessionEqual(
   )
 }
 
-function relevantRecordEqual<T>(
+function relevantRecordEqual<T extends object>(
   current: Record<string, T>,
   previous: Record<string, T>,
   relevant: (entry: T) => boolean,
@@ -33,24 +35,33 @@ function relevantRecordEqual<T>(
   if (current === previous) {
     return true
   }
-  let currentCount = 0
-  let previousCount = 0
+  const changes = readRecordChanges(current, previous)
+  if (changes?.kind === 'addressed') {
+    for (const key of changes.keys) {
+      const left = current[key]
+      const right = previous[key]
+      if (left && relevant(left)) {
+        if (!right || !relevant(right) || !equal(left, right)) {
+          return false
+        }
+      } else if (right && relevant(right)) {
+        return false
+      }
+    }
+    return true
+  }
+  const before = Object.entries(previous).filter(([, entry]) => relevant(entry))
+  let index = 0
   for (const [key, entry] of Object.entries(current)) {
     if (!relevant(entry)) {
       continue
     }
-    currentCount++
-    const previousEntry = previous[key]
-    if (!previousEntry || !relevant(previousEntry) || !equal(entry, previousEntry)) {
+    const prior = before[index++]
+    if (!prior || prior[0] !== key || !equal(entry, prior[1])) {
       return false
     }
   }
-  for (const entry of Object.values(previous)) {
-    if (relevant(entry)) {
-      previousCount++
-    }
-  }
-  return currentCount === previousCount
+  return index === before.length
 }
 
 function agentRecordsEqual(current: AppState, previous: AppState): boolean {
@@ -73,7 +84,7 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
 
   const relevantSleeping = (entry: AppState['sleepingAgentSessionsByPaneKey'][string]): boolean =>
     isAiVaultTitleAgent(entry.agent) && Boolean(entry.providerSession.id)
-  return relevantRecordEqual(
+  const sleepingEqual = relevantRecordEqual(
     current.sleepingAgentSessionsByPaneKey,
     previous.sleepingAgentSessionsByPaneKey,
     relevantSleeping,
@@ -83,6 +94,21 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
       left.tabId === right.tabId &&
       left.worktreeId === right.worktreeId &&
       providerSessionEqual(left.providerSession, right.providerSession)
+  )
+  return (
+    sleepingEqual &&
+    relevantRecordEqual(
+      current.agentConversationsByPaneKey ?? {},
+      previous.agentConversationsByPaneKey ?? {},
+      titleRelevant,
+      (left, right) =>
+        left.agent === right.agent &&
+        left.paneKey === right.paneKey &&
+        left.worktreeId === right.worktreeId &&
+        left.executionHostId === right.executionHostId &&
+        left.connectionId === right.connectionId &&
+        providerSessionEqual(left.providerSession, right.providerSession)
+    )
   )
 }
 
@@ -130,6 +156,7 @@ function activePanesEqual(current: AppState, previous: AppState): boolean {
 type RequestWorktreeIdsInputs = Pick<
   AppState,
   | 'agentStatusByPaneKey'
+  | 'agentConversationsByPaneKey'
   | 'sleepingAgentSessionsByPaneKey'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -140,6 +167,7 @@ let cachedRequestWorktreeIds: { inputs: RequestWorktreeIdsInputs; worktreeIds: s
 function requestInputsMatch(inputs: RequestWorktreeIdsInputs, state: AppState): boolean {
   return (
     inputs.agentStatusByPaneKey === state.agentStatusByPaneKey &&
+    inputs.agentConversationsByPaneKey === state.agentConversationsByPaneKey &&
     inputs.sleepingAgentSessionsByPaneKey === state.sleepingAgentSessionsByPaneKey &&
     inputs.tabsByWorktree === state.tabsByWorktree &&
     inputs.terminalLayoutsByTabId === state.terminalLayoutsByTabId
@@ -158,6 +186,7 @@ function requestWorktreeIds(state: AppState): string[] {
   cachedRequestWorktreeIds = {
     inputs: {
       agentStatusByPaneKey: state.agentStatusByPaneKey,
+      agentConversationsByPaneKey: state.agentConversationsByPaneKey,
       sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
       tabsByWorktree: state.tabsByWorktree,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId
@@ -193,6 +222,7 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
 function syncInputsChanged(current: AppState, previous: AppState): boolean {
   const agentRecordsChanged =
     current.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
+    current.agentConversationsByPaneKey !== previous.agentConversationsByPaneKey ||
     current.sleepingAgentSessionsByPaneKey !== previous.sleepingAgentSessionsByPaneKey
   if (agentRecordsChanged && !agentRecordsEqual(current, previous)) {
     return true
@@ -202,7 +232,7 @@ function syncInputsChanged(current: AppState, previous: AppState): boolean {
   }
   if (
     current.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId &&
-    !activePanesEqual(current, previous)
+    (!activePanesEqual(current, previous) || !placedPanesEqual(current, previous))
   ) {
     return true
   }
