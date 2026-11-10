@@ -49,7 +49,7 @@ export function ManageInstalledSkillsButton({
       }}
     >
       <BookOpen className="size-3.5" />
-      {t('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
+      {t('auto.components.settings.shareSkills.c07ba8ab0b', 'Open skills')}
     </Button>
   )
 }
