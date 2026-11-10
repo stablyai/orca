@@ -5,8 +5,7 @@ import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-
 import type {
   TaskViewPresetId,
   TopLevelView,
-  VisibleWorkspaceHostIds,
-  StatusBarItem
+  VisibleWorkspaceHostIds
 } from '../../../../../shared/ui-chrome-types'
 
 import {
@@ -17,7 +16,6 @@ import { isTopLevelView } from '../../../../../shared/top-level-view'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
-import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -220,17 +218,7 @@ export function presetToQuery(presetId: TaskViewPresetId | null): string {
   }
 }
 
-export function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
-  const source = items ?? DEFAULT_STATUS_BAR_ITEMS
-  const out: string[] = []
-  for (const id of source) {
-    const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
-    if (!out.includes(mapped)) {
-      out.push(mapped)
-    }
-  }
-  return out as StatusBarItem[]
-}
+export { migrateStatusBarItems } from '../../../../../shared/status-bar-defaults'
 
 export function hydrateUnexpectedSignoutDismissal(
   state: Pick<UISlice, 'unexpectedSignoutDismissedVersions'>,
