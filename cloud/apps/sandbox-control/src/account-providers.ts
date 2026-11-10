@@ -5,6 +5,7 @@
 // is accepted and sent as `Authorization: Bearer`), Codex in codex-credentials.ts.
 import type { CredentialAgent } from './agent-credential-names'
 import { readUsableAgentCredential } from './agent-credentials'
+import { codexAccount } from './codex-credentials'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
 
@@ -45,7 +46,7 @@ export const claudeAccount: AccountProvider = {
   credential: (db, keyring, userId, now) => readUsableAgentCredential(db, keyring, userId, 'claude', now)
 }
 
-export const ACCOUNT_PROVIDERS: AccountProvider[] = [claudeAccount]
+export const ACCOUNT_PROVIDERS: AccountProvider[] = [claudeAccount, codexAccount]
 
 export function accountProvider(agent: CredentialAgent): AccountProvider | undefined {
   return ACCOUNT_PROVIDERS.find((provider) => provider.agent === agent)
