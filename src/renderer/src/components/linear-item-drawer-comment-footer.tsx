@@ -1,5 +1,5 @@
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -8,10 +8,13 @@ import { Button } from '@/components/ui/button'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

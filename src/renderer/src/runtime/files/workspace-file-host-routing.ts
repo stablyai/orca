@@ -4,7 +4,7 @@ import {
 } from '@/lib/workspace/ownership/connection-context'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { hasRemoteRuntimeOwner } from '@/runtime/files/runtime-file-routing'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { useAppStore } from '@/store/index'
 
 /** Which host owns a workspace file, resolved the same way for every surface that opens one. */

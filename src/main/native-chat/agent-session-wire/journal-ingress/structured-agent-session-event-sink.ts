@@ -125,6 +125,8 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   ): StructuredAgentSessionSinkAdmission
   journalEpoch?(): string | null
   journalLinkage?(): StructuredAgentSessionLinkageJournal | null
+  /** Deferred sinks notify after binding; an already-bound listener runs immediately. */
+  onJournalBound?(listener: () => void): () => void
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
   /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
   journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
@@ -268,6 +270,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
       journalLinkage: queue.journalLinkage,
+      onJournalBound: queue.onJournalBound,
       journalHistory: queue.journalHistory,
       journalStopDecidesTurn: queue.journalStopDecidesTurn,
       appendLifecycleBatch: (settlementId, mutations) => {

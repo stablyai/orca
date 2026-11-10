@@ -336,6 +336,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
     },
     db: {
       crewChanges: new CrewChanges(),
+      hasAnyDispatchContexts: () => false,
       listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>

@@ -108,6 +108,48 @@ describe('GitHub source lookup routing', () => {
     }
   )
 
+  describe('an issue link whose number is a pull request', () => {
+    const pullRequest = {
+      id: 'pr:42',
+      type: 'pr' as const,
+      number: 42,
+      title: 'Fix it',
+      state: 'open' as const,
+      url: 'https://github.com/acme/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-11-09T00:00:00Z',
+      author: null
+    }
+    const lookup = (extra: { preview?: boolean; repo?: string }) =>
+      lookupGitHubWorkItemByOwnerRepoForSource({
+        repoPath: '/repo',
+        repoId: 'repo',
+        sourceContext: { ...runtimeSourceContext, hostId: 'local', repoId: 'repo' },
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.com',
+        number: 42,
+        type: 'issue',
+        ...extra
+      })
+
+    beforeEach(() => {
+      vi.mocked(window.api.gh.workItemByOwnerRepo).mockResolvedValue(pullRequest)
+    })
+
+    it('previews as the pull request', async () => {
+      await expect(lookup({ preview: true })).resolves.toMatchObject({ type: 'pr', number: 42 })
+    })
+
+    it('still rejects a preview answered from another repository', async () => {
+      await expect(lookup({ preview: true, repo: 'other' })).rejects.toThrow("Couldn't load")
+    })
+
+    it('is rejected outside previews', async () => {
+      await expect(lookup({})).rejects.toThrow("Couldn't load")
+    })
+  })
+
   it('keeps local GitHub details on Electron IPC with source context', async () => {
     vi.mocked(window.api.gh.workItemDetails).mockResolvedValue(null)
     const sourceContext: TaskSourceContext = {

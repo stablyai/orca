@@ -3,7 +3,6 @@
   "exclude": [
     "../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-main-surface.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
-    "../tests/e2e/terminal-agent-pane-launch.unit.test.ts",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",

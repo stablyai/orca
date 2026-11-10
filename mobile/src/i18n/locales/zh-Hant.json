@@ -1315,13 +1315,47 @@
       "durationSeconds_one": "{{count}} 秒",
       "durationSeconds_other": "{{count}} 秒",
       "durationMinutes_one": "{{count}} 分鐘",
-      "durationMinutes_other": "{{count}} 分鐘"
+      "durationMinutes_other": "{{count}} 分鐘",
+      "discard": "捨棄錄音",
+      "retry": "重試聽寫",
+      "retryShort": "重試"
     },
     "status": {
       "finishingOn": "正在 {{computer}} 上完成",
       "finishingOnComputer": "正在電腦上完成",
       "movedTo": "已轉到 {{computer}}",
       "movedToComputer": "已轉到電腦"
+    },
+    "failure": {
+      "connectionLost": "連線中斷",
+      "connectionSlow": "連線太慢",
+      "phoneStopped": "已在此手機上停止",
+      "stopped": "聽寫已停止",
+      "recordingKept": "錄音已保留"
+    },
+    "announce": {
+      "typedInto": "已輸入到 {{target}}",
+      "insertedIn": "已插入到 {{target}}",
+      "listeningOnPhone": "正在聽。正在此手機上轉寫。",
+      "listeningOn": "正在聽。正在 {{computer}} 上轉寫。",
+      "listeningOnComputer": "正在聽。正在電腦上轉寫。",
+      "finishing": "正在完成。",
+      "inserted": "已插入。",
+      "cancelled": "已取消聽寫。",
+      "movedTo": "此手機已停止轉寫。在 {{computer}} 上繼續。",
+      "movedToComputer": "此手機已停止轉寫。在電腦上繼續。",
+      "stoppedKept": "聽寫已停止。{{reason}}。錄音已保留。",
+      "stoppedKeptGeneric": "聽寫已停止。錄音已保留。",
+      "stillListening": "仍在聽。"
+    },
+    "pill": {
+      "open": "開啟",
+      "listening": "正在聽",
+      "starting": "正在開始",
+      "finishing": "正在完成",
+      "stopped": "聽寫已停止",
+      "label": "聽寫到 {{target}}，{{duration}}",
+      "hint": "點兩下返回"
     }
   },
   "files": {
@@ -2126,6 +2160,10 @@
       "providerExitedRejection": "{{agent}} 在傳送此訊息前已停止。",
       "providerExitedRow": "{{agent}} 在產生此回覆時停止了。您可以在此對話中繼續。",
       "providerRateLimited": "{{agent}} 受到速率限制，正在重試。",
+      "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
+      "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
+      "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+      "selectedModel": "所選模型",
       "providerRejected": "{{agent}} 未接受此訊息。",
       "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
       "providerRetryLastError": "上次錯誤：{{detail}}。",
@@ -2412,8 +2450,7 @@
     "tabStrip": {
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
       "newTab": "新分頁",
-      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令",
-      "tabStatus": "{{title}}，{{status}}"
+      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",
@@ -2526,8 +2563,8 @@
       "insertFailed": "無法插入聽寫內容",
       "insertFailedCopied": "無法插入聽寫內容，已複製到剪貼簿",
       "inserted": "已插入聽寫內容",
-      "stoppedAfterSilence": "靜音一分鐘後已停止",
-      "stoppedAtCloudLimit": "已達 10 分鐘雲端上限。聽寫已停止。"
+      "stoppedAtCloudLimit": "已達 10 分鐘雲端上限。聽寫已停止。",
+      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
     },
     "useNativeChatStop": {
       "stopNotSent": "未送出停止命令",
@@ -3322,6 +3359,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "已合併",
+      "closed": "已關閉",
+      "conflicts": "有衝突",
+      "behind": "落後",
+      "blocked": "已封鎖",
+      "checksPending": "等待檢查",
+      "ableToMerge": "可以合併",
+      "unknown": "未知"
+    },
+    "pagination": {
+      "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
+      "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。",
+      "noMoreResults": "第 {{page}} 頁沒有更多結果。"
+    },
     "composerSource": {
       "baseFailed": "無法解析基礎分支。",
       "forkPushWarning": "此 PR 未啟用「允許維護者編輯」；推送至分叉存放庫可能會遭 GitHub 拒絕。"

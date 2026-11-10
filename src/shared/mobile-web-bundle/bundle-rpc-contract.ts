@@ -19,6 +19,8 @@ export const MOBILE_WEB_BUNDLE_MANIFEST_METHOD = 'mobileWeb.bundle.manifest'
 export const MOBILE_WEB_BUNDLE_CHUNK_METHOD = 'mobileWeb.bundle.chunk'
 /** Separate method because released hosts parse chunk params strictly and released phones may parse replies strictly; neither can add encoding. */
 export const MOBILE_WEB_BUNDLE_RANGE_METHOD = 'mobileWeb.bundle.range'
+/** Windows of an asset's whole-file brotli copy; phones call it only for assets whose manifest entry has `brotliByteLength`. */
+export const MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD = 'mobileWeb.bundle.brotliRange'
 
 export const MOBILE_WEB_BUNDLE_RANGE_ENCODINGS = ['gzip', 'identity'] as const
 export type MobileWebBundleRangeEncoding = (typeof MOBILE_WEB_BUNDLE_RANGE_ENCODINGS)[number]
@@ -67,7 +69,7 @@ const windowParamsFields = {
 /** Host validates offset alignment against advertised chunkBytes, which may be smaller than the constant; no fixed multipleOf. */
 export const MobileWebBundleChunkParamsSchema = z.object(windowParamsFields).strict()
 
-/** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised. */
+/** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised (over the brotli copy for brotliRange). */
 export const MobileWebBundleRangeParamsSchema = MobileWebBundleChunkParamsSchema
 
 /** What every chunk or range reply restates about the window it answers. */
@@ -95,8 +97,20 @@ export const MobileWebBundleRangeResultSchema = z
   })
   .strict()
 
+/** Raw window bytes of the brotli copy: `assetByteLength` and `sha256` still describe the inflated asset,
+ *  while `eof` and the decoded length of `dataBase64` follow `brotliByteLength`. */
+export const MobileWebBundleBrotliRangeResultSchema = z
+  .object({
+    ...windowHeaderFields,
+    dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
+  })
+  .strict()
+
 export type MobileWebBundleManifestResult = z.infer<typeof MobileWebBundleManifestResultSchema>
 export type MobileWebBundleChunkParams = z.infer<typeof MobileWebBundleChunkParamsSchema>
 export type MobileWebBundleChunkResult = z.infer<typeof MobileWebBundleChunkResultSchema>
 export type MobileWebBundleRangeParams = z.infer<typeof MobileWebBundleRangeParamsSchema>
 export type MobileWebBundleRangeResult = z.infer<typeof MobileWebBundleRangeResultSchema>
+export type MobileWebBundleBrotliRangeResult = z.infer<
+  typeof MobileWebBundleBrotliRangeResultSchema
+>

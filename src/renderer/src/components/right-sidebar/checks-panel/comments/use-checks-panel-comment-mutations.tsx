@@ -24,7 +24,7 @@ import type {
   PRComment
 } from '../../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { gitHubSlugApiForWorkspace } from '@/runtime/repository-github/github-slug-owner-api'
 import { errorMessage } from '../../../../../../shared/error-message'
 

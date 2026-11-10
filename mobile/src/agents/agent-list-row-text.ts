@@ -21,7 +21,14 @@ function oneLine(text: string | null | undefined): string {
   return text?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
-function lastMessage(agent: RuntimeWorktreeAgentRow): string {
+// A worktree agent row or a session tab's AgentStatusEntry, which leaves these optional.
+type AgentPreviewSource = Pick<RuntimeWorktreeAgentRow, 'prompt'> & {
+  lastAssistantMessage?: string | null
+  toolName?: string | null
+  toolInput?: string | null
+}
+
+function lastMessage(agent: AgentPreviewSource): string {
   const message = agent.lastAssistantMessage
   return message ? oneLine(withoutNativeChatVisualDirectiveLines(message)) : ''
 }
@@ -31,7 +38,7 @@ function lastMessage(agent: RuntimeWorktreeAgentRow): string {
  * (`group` null) shows no tool, since the tool call is long over.
  */
 export function agentListPreview(
-  agent: RuntimeWorktreeAgentRow,
+  agent: AgentPreviewSource,
   group: AgentStatusGroup | null,
   title: string
 ): string {

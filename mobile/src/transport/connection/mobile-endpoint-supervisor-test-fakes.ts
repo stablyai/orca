@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from '../relay/mobile-relay-rpc-session-contract'
 import { RelayDialStageTracker, type RelayDialStage } from '../relay/relay-dial-stage'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
@@ -9,7 +9,7 @@ import type { SendRequestOptions } from '../rpc/unvalidated-rpc-request-port'
 import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 import type { RpcResponse } from '../rpc/rpc-wire-types'
 
 export class FakeSession implements RpcClient {

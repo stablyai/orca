@@ -15,10 +15,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { hasRemoteProviderRuntime } from '@/runtime/hosts/observations/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
-import { bitbucketConnectErrorText } from '@/lib/bitbucket-connect-error-copy'
+import { bitbucketConnectErrorText } from '@/lib/source-control/remote/bitbucket-connect-error-copy'
 import { useTranslate } from '@/i18n/use-translate'
 import { BitbucketApiTokenScopes } from './bitbucket-api-token-scopes'
 

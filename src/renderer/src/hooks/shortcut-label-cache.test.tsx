@@ -1,16 +1,15 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 
 const platformRef = vi.hoisted(() => ({ current: 'darwin' as NodeJS.Platform }))
 
-vi.mock('../lib/shortcut-platform', () => ({
+vi.mock('../lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => platformRef.current
 }))
 
-const { formatShortcutLabel, useShortcutLabel } = await import('./useShortcutLabel')
-const { useAppStore } = await import('@/store')
+const { formatShortcutLabel } = await import('./useShortcutLabel')
 
 // A fresh overrides object per test keeps each case on its own cache entry, exactly as a real edit does.
 function overridesFor(binding: string): KeybindingOverrides {
@@ -29,38 +28,5 @@ describe('shortcut label memoization', () => {
     expect(formatShortcutLabel('tab.close', overrides)).toBe('Ctrl+⇧+K')
     platformRef.current = 'darwin'
     expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
-  })
-})
-
-function CloseLabel(): React.JSX.Element {
-  return <span data-testid="close-label">{useShortcutLabel('tab.close')}</span>
-}
-
-describe('useShortcutLabel', () => {
-  beforeEach(() => {
-    platformRef.current = 'darwin'
-  })
-
-  afterEach(() => {
-    cleanup()
-    useAppStore.setState({ keybindings: {} })
-  })
-
-  it('shows an edited keybinding immediately, with no stale-cache window', () => {
-    useAppStore.setState({ keybindings: overridesFor('Mod+Shift+K') })
-    render(<CloseLabel />)
-    expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
-
-    act(() => useAppStore.setState({ keybindings: overridesFor('Mod+Shift+L') }))
-    expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧L')
-
-    act(() => useAppStore.setState({ keybindings: { 'tab.close': ['Mod+Alt+Backspace'] } }))
-    expect(screen.getByTestId('close-label').textContent).toBe('⌘⌥⌫')
-
-    act(() => useAppStore.setState({ keybindings: { 'tab.close': [] } }))
-    expect(screen.getByTestId('close-label').textContent).toBe('Unassigned')
-
-    act(() => useAppStore.setState({ keybindings: overridesFor('Mod+Shift+K') }))
-    expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
   })
 })

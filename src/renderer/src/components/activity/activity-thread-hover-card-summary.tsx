@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
 import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -9,9 +9,9 @@ import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-i
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getExecutionHostLabel,
   getWorktreeExecutionHostId,

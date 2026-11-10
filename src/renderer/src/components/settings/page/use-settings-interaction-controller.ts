@@ -23,12 +23,12 @@ export type SettingsInteractionModel = Pick<
   | 'hasUnsavedBranchPromptChanges'
   | 'hasUnsavedChatPromptChanges'
   | 'hasUnsavedCommitPromptChanges'
-  | 'highlightedSettingsTargetId'
+  | 'highlightedSettingsTarget'
   | 'setFontSuggestions'
   | 'setHasUnsavedBranchPromptChanges'
   | 'setHasUnsavedChatPromptChanges'
   | 'setHasUnsavedCommitPromptChanges'
-  | 'setHighlightedSettingsTargetId'
+  | 'setHighlightedSettingsTarget'
   | 'setSettingsSearchQuery'
   | 'setSourceControlAiPromptDiscardSignal'
   | 'settings'
@@ -42,12 +42,12 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     hasUnsavedBranchPromptChanges,
     hasUnsavedChatPromptChanges,
     hasUnsavedCommitPromptChanges,
-    highlightedSettingsTargetId,
+    highlightedSettingsTarget,
     setFontSuggestions,
     setHasUnsavedBranchPromptChanges,
     setHasUnsavedChatPromptChanges,
     setHasUnsavedCommitPromptChanges,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setSettingsSearchQuery,
     setSourceControlAiPromptDiscardSignal,
     settings,
@@ -134,15 +134,15 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
   }, [])
 
   useEffect(() => {
-    if (!highlightedSettingsTargetId) {
+    if (!highlightedSettingsTarget) {
       return
     }
     const timeout = window.setTimeout(
-      () => setHighlightedSettingsTargetId(null),
+      () => setHighlightedSettingsTarget(null),
       SETTINGS_TARGET_HIGHLIGHT_MS
     )
     return () => window.clearTimeout(timeout)
-  }, [highlightedSettingsTargetId, setHighlightedSettingsTargetId])
+  }, [highlightedSettingsTarget, setHighlightedSettingsTarget])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {

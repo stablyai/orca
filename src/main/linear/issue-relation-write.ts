@@ -9,6 +9,7 @@ import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
 import { linearError } from './issue-context/errors'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 import {
   INVERSE_RELATIONS_QUERY,
   RELATIONS_QUERY,
@@ -135,7 +136,7 @@ async function findRelationInDirection(
     }
 
     inspected += nodes.length
-    const hasMore = connection?.pageInfo?.hasNextPage === true
+    const hasMore = linearConnectionHasNextPage(connection)
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
     if (!hasMore) {
       return { relation: null, hasMore: false }

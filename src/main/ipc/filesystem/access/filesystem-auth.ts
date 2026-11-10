@@ -7,7 +7,12 @@ import {
 } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../../../shared/file-access/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
-import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
+import {
+  isDescendantOrEqual,
+  isDescendantOrEqualExact,
+  isENOENT,
+  normalizeExistingPath
+} from './filesystem-path-containment'
 import {
   ensureAuthorizedRootsCache,
   isPathAllowedByCanonicalRegisteredRoot,
@@ -16,16 +21,22 @@ import {
 
 export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
 /** Lazily share allowed roots across every check in one authorization. */
-type AllowedRootsSnapshot = { get: () => Promise<readonly string[]> }
+type AllowedRootsSnapshot = {
+  /** Roots whose own links may be followed; exact roots are excluded. */
+  getCanonicalizable: () => Promise<readonly string[]>
+  /** Matched as spelled only: the Unicode-identity fallback would stat through a swapped root link. */
+  exactRoots: readonly string[]
+}
 
 function createAllowedRootsSnapshot(
   store: RuntimeStore,
-  extraRoots: readonly string[] = []
+  extraRoots: readonly string[] = [],
+  exactRoots: readonly string[] = []
 ): AllowedRootsSnapshot {
   let roots: Promise<readonly string[]> | undefined
-  return {
-    get: () => (roots ??= getAllowedRoots(store).then((found) => [...found, ...extraRoots]))
-  }
+  const getCanonicalizable = () =>
+    (roots ??= getAllowedRoots(store).then((found) => [...found, ...extraRoots]))
+  return { getCanonicalizable, exactRoots }
 }
 
 export async function isPathAllowed(
@@ -34,7 +45,12 @@ export async function isPathAllowed(
   allowedRoots?: AllowedRootsSnapshot
 ): Promise<boolean> {
   const resolvedTarget = resolve(targetPath)
-  return (await (allowedRoots?.get() ?? getAllowedRoots(store))).some((root) =>
+  if (
+    (allowedRoots?.exactRoots ?? []).some((root) => isDescendantOrEqualExact(resolvedTarget, root))
+  ) {
+    return true
+  }
+  return (await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))).some((root) =>
     isDescendantOrEqual(resolvedTarget, root)
   )
 }
@@ -44,6 +60,8 @@ export type ResolveAuthorizedPathOptions = {
   preserveSymlink?: boolean
   /** Roots one caller owns outside the store (desktop: floating workspace; runtime: chat scratch). */
   extraRoots?: readonly string[]
+  /** Roots that must contain the real target as spelled; a root later replaced by a link drops out. */
+  exactRoots?: readonly string[]
 }
 
 export async function resolveAuthorizedPath(
@@ -53,7 +71,7 @@ export async function resolveAuthorizedPath(
 ): Promise<string> {
   const resolvedTarget = resolve(targetPath)
   // Reuse store-derived roots while fully checking each candidate.
-  const allowedRoots = createAllowedRootsSnapshot(store, options.extraRoots)
+  const allowedRoots = createAllowedRootsSnapshot(store, options.extraRoots, options.exactRoots)
   if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store, { allowedRoots }))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
@@ -201,7 +219,7 @@ async function isPathAllowedByCanonicalAllowedRoot(
   if (!sourcePath) {
     return false
   }
-  for (const root of await (allowedRoots?.get() ?? getAllowedRoots(store))) {
+  for (const root of await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))) {
     const resolvedRoot = resolve(root)
     if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
       continue

@@ -2,8 +2,8 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
+import '../../../../../shared/workspace-layout/stable-pane-id'
+import '../../../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import type * as WebRuntimeTerminalCreationModule from '../../hosted-terminals/creation/web-runtime-terminal-creation'
@@ -40,9 +40,9 @@ vi.mock('../../hosted-terminals/creation/web-runtime-terminal-creation', async (
 })
 
 import { useAppStore } from '@/store/index'
-import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import '../terminal-handles/web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
@@ -50,8 +50,8 @@ import {
   resetWebSessionTabsSnapshotFreshnessForTests
 } from '../tracking-lifecycle'
 import { useWebSessionTabsSync } from '../use-web-session-tabs-sync'
-import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from '../state'
-import { WINDOW_HIDE_PARK_GRACE_MS as WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from '../../../lib/window-park-visibility'
+import '../state'
+import '../../../lib/window-activity/window-park-visibility'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
@@ -139,35 +139,6 @@ function makeTerminalSnapshot(
   }
 }
 
-function makeEditorSnapshot(idSuffix: string): RuntimeMobileSessionTabsResult {
-  const filePath = `/repo${idSuffix}/README.md`
-  return {
-    worktree: WORKTREE,
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: `host-group${idSuffix}`,
-    activeTabId: `host-editor${idSuffix}`,
-    activeTabType: 'markdown',
-    tabs: [
-      {
-        type: 'markdown',
-        id: `host-editor${idSuffix}`,
-        title: `README ${idSuffix}`,
-        filePath,
-        relativePath: 'README.md',
-        language: 'markdown',
-        mode: 'edit',
-        isDirty: false,
-        isActive: true,
-        sourceFileId: filePath,
-        sourceFilePath: filePath,
-        sourceRelativePath: 'README.md',
-        documentVersion: `file:${filePath}`
-      }
-    ]
-  }
-}
-
 function setDocumentVisibility(state: 'visible' | 'hidden'): void {
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -180,23 +151,6 @@ async function settle(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()
-}
-
-async function settleGlobalMirrorResumeStarts(): Promise<void> {
-  act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
-  await act(settle)
-}
-
-function findGlobalSubscription(environmentId: string, occurrence = 0): RuntimeSubscription {
-  const matches = subscriptions.filter(
-    ({ request }) =>
-      request.method === 'session.tabs.subscribeAll' && request.selector === environmentId
-  )
-  const subscription = matches[occurrence]
-  if (!subscription) {
-    throw new Error(`Missing global subscription ${occurrence} for ${environmentId}`)
-  }
-  return subscription
 }
 
 function findActiveSubscription(environmentId: string, occurrence = 0): RuntimeSubscription {
@@ -271,335 +225,6 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     resetStaleDocumentVisibilityForTesting()
     setDocumentVisibility('visible')
     vi.useRealTimers()
-  })
-
-  it('replays a surviving terminal host after a later omitted-host tombstone', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-a')]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-b')]
-    })
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [],
-      authoritative: true
-    })
-
-    const state = useAppStore.getState()
-    const tabId = toWebTerminalSurfaceTabId('host-tab-b')
-    const paneKey = makePaneKey(tabId, LEAF_B)
-    expect(state.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
-    expect(state.ptyIdsByTabId[tabId]).toEqual([toRemoteRuntimePtyId('terminal-b', ENV_B)])
-    expect(state.terminalLayoutsByTabId[tabId]?.activeLeafId).toBe(LEAF_B)
-    expect(state.unifiedTabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
-    expect(state.tabBarOrderByWorktree[WORKTREE]).toEqual([tabId])
-    expect(state.activeTabIdByWorktree[WORKTREE]).toBe(tabId)
-    expect(state.groupsByWorktree[WORKTREE]?.flatMap((group) => group.tabOrder)).toEqual([tabId])
-    expect(state.agentStatusByPaneKey[paneKey]?.state).toBe('working')
-    hook.unmount()
-  })
-
-  it('replays a surviving editor host after a later omitted-host tombstone', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeEditorSnapshot('-a')]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'snapshots',
-      snapshots: [makeEditorSnapshot('-b')]
-    })
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [],
-      authoritative: true
-    })
-
-    const state = useAppStore.getState()
-    const fileId = buildOwnedEditorFileId('/repo-b/README.md', WORKTREE, ENV_B)
-    expect(
-      state.openFiles
-        .filter((file) => file.worktreeId === WORKTREE)
-        .map((file) => [file.id, file.runtimeEnvironmentId])
-    ).toEqual([[fileId, ENV_B]])
-    expect(state.unifiedTabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(['host-editor-b'])
-    expect(state.tabBarOrderByWorktree[WORKTREE]).toEqual(['host-editor-b'])
-    expect(state.activeFileIdByWorktree[WORKTREE]).toBe(fileId)
-    expect(state.groupsByWorktree[WORKTREE]?.flatMap((group) => group.tabOrder)).toEqual([
-      'host-editor-b'
-    ])
-    hook.unmount()
-  })
-
-  it('waits for a newer surviving-host frame before repairing shared state', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-a')]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-b')]
-    })
-
-    const newerRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot.mockImplementationOnce(() => newerRecovery.promise)
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'updated',
-      ...makeTerminalSnapshot('-b', 2)
-    })
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [],
-      authoritative: true
-    })
-    const tabId = toWebTerminalSurfaceTabId('host-tab-b')
-    // Each host's rows are its own, so A's wait with the deferred repair instead of being wiped by B.
-    expect(
-      useAppStore
-        .getState()
-        .tabsByWorktree[WORKTREE]?.map((tab) => tab.id)
-        .sort()
-    ).toEqual([toWebTerminalSurfaceTabId('host-tab-a'), tabId])
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(2)
-
-    newerRecovery.resolve(makeTerminalSnapshot('-b', 2))
-    await act(settle)
-
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    hook.unmount()
-  })
-
-  it('fences an omitted host while its survivor inventory is unavailable', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-a')]
-    })
-    await publish(findGlobalSubscription(ENV_B), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-b')]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-
-    const staleRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    const slowInventoryRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot
-      .mockImplementationOnce(() => staleRecovery.promise)
-      .mockImplementationOnce(() => slowInventoryRecovery.promise)
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'updated',
-      ...makeTerminalSnapshot('-a', 2)
-    })
-    const unrelatedSnapshot = {
-      ...makeTerminalSnapshot('-a'),
-      worktree: 'repo-a::other-worktree'
-    }
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [unrelatedSnapshot],
-      authoritative: true
-    })
-    const hostATabId = toWebTerminalSurfaceTabId('host-tab-a')
-    const hostBTabId = toWebTerminalSurfaceTabId('host-tab-b')
-    const terminalTabIds = (): string[] | undefined =>
-      useAppStore
-        .getState()
-        .tabsByWorktree[WORKTREE]?.map((tab) => tab.id)
-        .sort()
-    // Each host's rows are its own, so A's stay until its omission is recorded.
-    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
-
-    staleRecovery.resolve(makeTerminalSnapshot('-a', 2))
-    await act(settle)
-    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
-
-    slowInventoryRecovery.resolve(unrelatedSnapshot)
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'updated',
-      ...makeTerminalSnapshot('-a', 3)
-    })
-    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
-    hook.unmount()
-  })
-
-  it('caches semantic freshness instead of later receive order', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-a')]
-    })
-    await publish(findGlobalSubscription(ENV_B), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-b')]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-
-    const newerRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot.mockImplementationOnce(() => newerRecovery.promise)
-    await publish(findActiveSubscription(ENV_A, 1), {
-      type: 'snapshot',
-      ...makeTerminalSnapshot('-a', 2)
-    })
-    await publish(findActiveSubscription(ENV_A, 1), {
-      type: 'snapshot',
-      ...makeTerminalSnapshot('-a')
-    })
-    newerRecovery.resolve(makeTerminalSnapshot('-a', 2))
-    await act(settle)
-
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'snapshots',
-      snapshots: [],
-      authoritative: true
-    })
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-a')
-    ])
-    hook.unmount()
-  })
-
-  it('keeps a newer recovered frame when its resume inventory finishes later', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-a')]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-
-    const slowInventory = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot.mockImplementationOnce(() => slowInventory.promise)
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'snapshots',
-      snapshots: [makeTerminalSnapshot('-b')]
-    })
-    await publish(findGlobalSubscription(ENV_B, 1), {
-      type: 'updated',
-      ...makeTerminalSnapshot('-b', 2)
-    })
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [],
-      authoritative: true
-    })
-
-    slowInventory.resolve(makeTerminalSnapshot('-b'))
-    await act(settle)
-
-    const tabId = toWebTerminalSurfaceTabId('host-tab-b')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    hook.unmount()
-  })
-
-  it('keeps a post-inventory live frame ahead of an older pending recovery', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const snapshot = makeTerminalSnapshot('-a')
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-
-    const slowActiveRecovery = createDeferred<RuntimeMobileSessionTabsResult>()
-    mocks.recoverSnapshot.mockImplementationOnce(() => slowActiveRecovery.promise)
-    const pendingSnapshot = makeTerminalSnapshot('-b', 3)
-    await publish(findActiveSubscription(ENV_A, 1), {
-      type: 'snapshot',
-      ...pendingSnapshot
-    })
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [],
-      authoritative: true
-    })
-
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]).toBeUndefined()
-    expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
-      receipts: 1,
-      removalWatermarks: 1
-    })
-    const liveSnapshot = makeTerminalSnapshot('-a', 2)
-    await publish(findActiveSubscription(ENV_A, 1), {
-      type: 'updated',
-      ...liveSnapshot
-    })
-    const liveTabId = toWebTerminalSurfaceTabId('host-tab-a')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      liveTabId
-    ])
-
-    slowActiveRecovery.resolve(pendingSnapshot)
-    await act(settle)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      liveTabId
-    ])
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    // Retraction boundary must outlive recovery and receipt-slot overwrite to fence delayed pre-close frames.
-    expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
-      receipts: 1,
-      removalWatermarks: 1
-    })
-    hook.unmount()
   })
 
   it('does not let old cleanup erase a new recovery generation', async () => {

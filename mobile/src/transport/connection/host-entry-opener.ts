@@ -1,18 +1,18 @@
 import { attachPushRegistration } from '../../notifications/push-registration'
-import { recordHostDescriptorFromStatus } from '../hosts/host-descriptor-recorder'
+import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-descriptor-recorder'
 import { startRuntimeStatusProbe } from './runtime-status-probe'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
 } from '../../diagnostics/connection/persisted-connection-log-store'
-import { loadHosts } from '../hosts/host-store'
+import { loadHosts } from '../../host-catalog/host-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 
 export type HostClientStoreEntry = {
   client: RpcClient
