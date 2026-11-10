@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
-import { isEphemeralVmProjectHost } from './project-host-setup-options'
+import { isEphemeralVmProjectHost } from './workspace/creation/project-host-setup-options'
 
 /** Run on never lists per-workspace VMs, so Create waits for a visible host; a VM recipe creates a new VM instead. */
 export function needsVisibleRunTargetHost(

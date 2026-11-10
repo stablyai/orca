@@ -10,6 +10,7 @@ import {
 import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
 import {
   countAgentsNeedingYouByHost,
+  selectActiveAgents,
   selectAgentsNeedingYou,
   type AgentListInput
 } from '../agents/agent-list-rows'
@@ -29,9 +30,9 @@ import {
 import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
-} from '../transport/hosts/host-catalog-selection'
-import { loadHostCatalog } from '../transport/hosts/host-store'
-import type { HostCatalogEntry } from '../transport/hosts/host-profile'
+} from '../host-catalog/host-catalog-selection'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import { hostObserverOptions, type HostQuery } from '../query/host-query'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -253,6 +254,7 @@ export function useMobileHomeData() {
     [sortedHosts, hostStates, worktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
+  const activeAgents = useMemo(() => selectActiveAgents(agentList), [agentList])
   const needsYouByHost = useMemo(
     () => countAgentsNeedingYouByHost(agentsNeedingYou),
     [agentsNeedingYou]
@@ -274,6 +276,7 @@ export function useMobileHomeData() {
     ...connections,
     accountsByHost,
     applyAgentActivity: agentActivity.apply,
+    activeAgents,
     agentList,
     agentsNeedingYou,
     connectedHosts,

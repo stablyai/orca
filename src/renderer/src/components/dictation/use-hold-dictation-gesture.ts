@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef } from 'react'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import {
   keybindingMatchesAction,
@@ -124,7 +124,7 @@ export function useHoldDictationGesture({
   settings,
   startDictation,
   stopDictation
-}: HoldDictationGestureOptions): void {
+}: HoldDictationGestureOptions): { isHolding: () => boolean } {
   const activeHoldRef = useRef<ActiveHold | null>(null)
   const mode = dictationShortcutMode(settings?.voice)
   const enabled = settings?.voice?.enabled === true
@@ -236,4 +236,8 @@ export function useHoldDictationGesture({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [mode, enabled])
+
+  // True while a held shortcut press is the one recording.
+  const isHolding = useCallback(() => activeHoldRef.current?.startedDictation === true, [])
+  return { isHolding }
 }

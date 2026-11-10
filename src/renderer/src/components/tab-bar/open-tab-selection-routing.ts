@@ -3,7 +3,7 @@
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { translate } from '@/i18n/i18n'
 import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator/tabs/simulator-tab-palette-activation'
 import { activateWorkspaceTabPaletteResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
 import type { OpenTabSearchResult } from './open-tab-search'

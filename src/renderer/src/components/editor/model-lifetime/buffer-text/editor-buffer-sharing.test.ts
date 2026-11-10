@@ -31,7 +31,7 @@ vi.mock('@/store/index', () => {
     })
   }
 })
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
 

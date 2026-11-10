@@ -168,10 +168,6 @@ export function stubAuxiliaryModules(): void {
   vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
-  vi.doMock('@/lib/editor/appearance/editor-font-zoom', () => ({
-    nextEditorFontZoomLevel: vi.fn(() => 0),
-    computeEditorFontSize: vi.fn(() => 13)
-  }))
   vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
     ...(await importOriginal<typeof UIZoomLevelModule>()),
     zoomLevelToPercent: vi.fn(() => 100),

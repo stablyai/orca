@@ -120,10 +120,10 @@ describe('main keeps the window’s generated-title rules', () => {
   ) {
     const host = await hostWith([GIT])
     const reads = [labels].flat()
-    const read = vi.spyOn(host.runtime['agentOrchestrationProjection'], 'buildByPaneKey')
-    read.mockReturnValue(reads.at(-1))
+    const read = vi.spyOn(host.runtime['agentOrchestrationProjection'], 'getForPaneKey')
+    read.mockImplementation((paneKey) => reads.at(-1)?.[paneKey])
     for (const each of reads.slice(0, -1)) {
-      read.mockReturnValueOnce(each)
+      read.mockImplementationOnce((paneKey) => each[paneKey])
     }
     for (const batch of statuses) {
       for (const row of batch) {

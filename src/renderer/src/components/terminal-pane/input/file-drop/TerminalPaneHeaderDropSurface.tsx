@@ -1,5 +1,8 @@
 import type { ComponentProps } from 'react'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  WORKSPACE_FILE_PATH_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/files/drop/workspace-file-drag'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import {
   useTerminalPaneFileDropOwner,

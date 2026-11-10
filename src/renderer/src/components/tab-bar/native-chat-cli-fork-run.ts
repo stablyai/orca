@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   prepareNativeChatCliFork,

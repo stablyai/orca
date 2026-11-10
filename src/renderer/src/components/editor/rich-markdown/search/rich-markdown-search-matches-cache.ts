@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import type { TextMatchOptions } from '../../../../lib/text-match-ranges'
+import type { TextMatchOptions } from '../../../../lib/text-search/text-match-ranges'
 import { findRichMarkdownSearchMatches, type RichMarkdownSearchMatch } from './rich-markdown-search'
 
 type CachedMatches = {

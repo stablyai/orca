@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -20,8 +20,7 @@ import { RepositoryIconColorSection } from './RepositoryIconColorSection'
 import { RepositoryIconTabs, type RepositoryIconTabsHandle } from './RepositoryIconTabs'
 import {
   buildRepositoryGitHubAvatarUpdate,
-  resolveRepositoryGitHubAvatar,
-  resolveRepositoryUpstreamLive
+  resolveRepositoryGitHubAvatar
 } from '../../../../runtime/repository-github/repository-icon-github'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -71,11 +70,6 @@ export function RepositoryIconPicker({
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
   const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })
-
-  const resolveUpstreamLive = useCallback(
-    () => resolveRepositoryUpstreamLive(runtimeTarget, repo),
-    [runtimeTarget, repo]
-  )
 
   const resolveGitHubAvatar = useCallback(
     (options?: { forceLive?: boolean }) =>
@@ -139,39 +133,6 @@ export function RepositoryIconPicker({
       }
     }
   }
-
-  const githubIdentityRefreshedRef = useRef<string | null>(null)
-  useEffect(() => {
-    const hasGitHubAvatar = repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
-    const shouldRefresh = hasGitHubAvatar || repo.upstream === undefined
-    if (!shouldRefresh || githubIdentityRefreshedRef.current === repo.id) {
-      return
-    }
-    githubIdentityRefreshedRef.current = repo.id
-    let cancelled = false
-    void (async () => {
-      let updates: Partial<Repo> | null
-      try {
-        if (hasGitHubAvatar) {
-          // Stored GitHub avatar metadata can outlive transfers; refresh live only when opening affected repo settings.
-          const resolution = await resolveGitHubAvatar({ forceLive: true })
-          updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
-        } else {
-          const upstream = await resolveUpstreamLive()
-          updates = { upstream: upstream ?? null }
-        }
-      } catch {
-        return
-      }
-      if (cancelled || !mountedRef.current || !updates) {
-        return
-      }
-      updateRepo(repo.id, updates)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [repo, resolveGitHubAvatar, resolveUpstreamLive, updateRepo, mountedRef])
 
   return (
     <div className="space-y-3">

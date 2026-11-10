@@ -13,7 +13,7 @@ import { ScrollArea } from '../../../ui/scroll-area'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type WarpThemeImportModalProps = Pick<
   UseWarpThemeImportReturn,
