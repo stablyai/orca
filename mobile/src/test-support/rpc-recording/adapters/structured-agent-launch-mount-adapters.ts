@@ -1,5 +1,6 @@
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type { createMobileStructuredAgentSession } from '../../../session/native-chat/agent-session/mobile-structured-agent-session-launch'
 
 const WORKSPACE = 'workspace-1'
 
@@ -9,9 +10,9 @@ export function structuredAgentLaunchMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'agentSession.structured-launch': ({ client }) => {
-      const create = modules.load<
-        typeof import('../../../session/native-chat/agent-session/mobile-structured-agent-session-launch')
-      >(
+      const create = modules.load<{
+        createMobileStructuredAgentSession: typeof createMobileStructuredAgentSession
+      }>(
         'mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts'
       ).createMobileStructuredAgentSession
       let launched: unknown = 'unlaunched'
