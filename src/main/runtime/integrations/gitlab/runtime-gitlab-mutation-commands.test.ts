@@ -42,10 +42,7 @@ describe('RuntimeGitLabMutationCommands.updateGitLabRepoMR', () => {
       'ssh-1',
       undefined
     )
-    expect(invalidateMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      getStoredRepoExecutionHostId(repo)
-    )
+    expect(invalidateMock).toHaveBeenCalledWith('/remote/repo', getStoredRepoExecutionHostId(repo))
     expect(getStoredRepoExecutionHostId(repo)).toBe('ssh:ssh-1')
   })
 })
