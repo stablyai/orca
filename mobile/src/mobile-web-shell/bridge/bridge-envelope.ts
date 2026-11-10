@@ -289,6 +289,10 @@ const BridgeHostMessageSchema = z.union([
     // The status the shell's compatibility gate already read; older shells omit it and the page asks.
     // Opaque here: the page's status gate validates it with the reader it already loads.
     hostStatus: salvagedOptional('hostStatus', z.looseObject({})).optional(),
+    automationCatalog: salvagedOptional(
+      'automationCatalog',
+      z.object({ result: z.string().max(256 * 1024), readAt: z.number().int().positive() })
+    ).optional(),
     storage: BridgeInitStorageSchema.optional(),
     refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),
     /**

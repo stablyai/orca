@@ -17,6 +17,7 @@ import {
   OP_OUTPUT_SPAN
 } from '../transport/TerminalBinaryFrame';
 import { HostMeta } from '../storage/HostStore';
+import { DesktopAutomationCatalog } from '../transport/DesktopConnections';
 import { FoldDivision } from './WindowRegions';
 import { NativeMediaTooLargeError } from './NativeDevice';
 import { parseTerminalRailClaim, terminalRailKeyEnabled, TerminalRailClaim } from './TerminalRailClaim';
@@ -145,6 +146,7 @@ interface BridgeInitWire {
   host: BridgeInitHostWire;
   storage: Record<string, string>;
   storageOversize: string[];
+  automationCatalog?: DesktopAutomationCatalog;
   refreshTerminalShortcuts?: boolean;
   ownsHostArea: boolean;
   safeAreaInsets: BridgeSafeAreaInsets;
@@ -200,6 +202,7 @@ export class BridgeHost {
   private pushReady = false;
   private disposed = false;
   private storageStore: PageStorageStore | null = null;
+  private readAutomationCatalog: (() => DesktopAutomationCatalog | null) | null = null;
   private pendingIds: Set<string> = new Set();
   private desktopPending: Set<string> = new Set();
   private backClaimed: boolean = false;
@@ -312,6 +315,7 @@ export class BridgeHost {
   setWideLayout(wide: boolean): void { this.wideLayout = wide; }
 
   setStorage(store: PageStorageStore): void { this.storageStore = store; this.pageStorage = store.entries(); }
+  setAutomationCatalog(read: () => DesktopAutomationCatalog | null): void { this.readAutomationCatalog = read; }
   refreshTerminalSettings(settings: Map<string, string>): void {
     let changed = false;
     TERMINAL_SETTINGS_STORAGE_KEYS.forEach((key: string): void => {
@@ -1428,7 +1432,15 @@ export class BridgeHost {
       foldDivision: this.foldDivision,
       terminalKeyRail: this.railKeys
     };
-    this.pushFrame(JSON.stringify(init));
+    if (!this.client && route.pathname === `${hostRoot}/automations`) {
+      init.automationCatalog = this.readAutomationCatalog?.() ?? undefined;
+    }
+    let frame = JSON.stringify(init);
+    if (init.automationCatalog && utf8Encode(frame).length > BRIDGE_MAX_FRAME_BYTES) {
+      init.automationCatalog = undefined;
+      frame = JSON.stringify(init);
+    }
+    this.pushFrame(frame);
     this.log(`init sent (v1) grants=${grants.length} storage=${count}`);
   }
 

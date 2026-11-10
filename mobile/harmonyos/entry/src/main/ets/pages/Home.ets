@@ -648,7 +648,8 @@ struct Home {
     let request = client.request('automation.list', '{}', 8000).then((response: RpcResponse): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
       let rows = response instanceof RpcSuccess ? readHomeAutomations(response.result) : null;
-      if (rows !== null) {
+      if (response instanceof RpcSuccess && rows !== null) {
+        rt.lease.connection.rememberAutomationCatalog(client, response.result);
         let next: Record<string, HomeAutomation[]> = {};
         let keys = Object.keys(this.automationsByHost);
         for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.automationsByHost[keys[i]]; }

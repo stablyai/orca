@@ -103,6 +103,27 @@ test('page transitions keep the desktop channel and an address edit replaces onl
   assert.equal(beta.closed, true)
 })
 
+test('an offline automation list stays with its pairing and ignores a replaced connection', async () => {
+  const profile = { id: 'alpha', endpoint: 'ws://alpha.invalid:6768', lastConnected: 1 }
+  const { retainDesktopConnection, refreshDesktopConnection } = loadDesktopConnections([profile])
+  const { connection, release } = retainDesktopConnection({}, 'alpha', 'explicit')
+  try {
+    const first = await waitForPhase(connection, 'connected')
+    connection.rememberAutomationCatalog(first, '{"automations":[],"items":[]}')
+    connection.disconnect()
+    assert.equal(connection.getAutomationCatalog(profile)?.result, '{"automations":[],"items":[]}')
+    assert.equal(connection.getAutomationCatalog({ ...profile, id: 'beta' }), null)
+
+    profile.lastConnected = 2
+    refreshDesktopConnection('alpha', 'paired')
+    await waitForPhase(connection, 'connected')
+    connection.rememberAutomationCatalog(first, '{"automations":[],"items":[]}')
+    assert.equal(connection.getAutomationCatalog(profile), null)
+  } finally {
+    release()
+  }
+})
+
 test('an unreadable device credential remains retryable while a missing credential requires pairing', async () => {
   const hosts = [
     { id: 'locked', endpoint: 'ws://locked.invalid:6768', lastConnected: 1 },

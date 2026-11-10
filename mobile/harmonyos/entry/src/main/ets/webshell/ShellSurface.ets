@@ -1,7 +1,7 @@
 import { uiText } from '../settings/NativeUi';
 import { readPagePreferencesSync } from '../settings/SettingsStore';
 import { SessionPhase } from '../transport/HostSession';
-import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
+import { DesktopAutomationCatalog, DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { readHomeResume, saveHomeResume, resumeFromLocation } from '../home/HomeResume';
 import { ClipboardPastePrompt, NATIVE_DEVICE_METHODS, NativeDevice } from './NativeDevice';
 import { ClipboardPasteSheet } from './ClipboardPasteSheet';
@@ -727,6 +727,7 @@ export struct ShellSurface {
       let connection = this.desktop?.connection;
       bridge.suspendTransport(connection?.getReconnectAttempt() ?? 0,
         connection?.getPendingPath(), connection?.getRelayHostReachability());
+      bridge.setAutomationCatalog((): DesktopAutomationCatalog | null => connection?.getAutomationCatalog(meta) ?? null);
     }
     bridge.setWideLayout(this.isWideSurface());
     bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale);

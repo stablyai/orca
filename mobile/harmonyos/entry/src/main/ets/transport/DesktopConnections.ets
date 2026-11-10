@@ -12,6 +12,7 @@ type LeaseDemand = 'automatic' | 'explicit';
 
 type DesktopListener = (phase: SessionPhase, detail: string) => void;
 export type DesktopCredentialStatus = 'ready' | 'missing' | 'temporarily-unavailable';
+export interface DesktopAutomationCatalog { result: string; readAt: number; }
 
 interface DesktopCredentials { token: string | null; relay: RelayCredential | null; }
 export interface HomeDesktopConnection { host: HostMeta; connection: DesktopConnection; }
@@ -107,6 +108,7 @@ export class DesktopConnection {
   private detail: string = '';
   private credentialStatus: DesktopCredentialStatus = 'ready';
   private connectedAt: number | null = null;
+  private automationCatalog: DesktopAutomationCatalog | null = null;
   private activePath: string = 'lan';
   private holders: number = 0;
   private scopedConnectionHolders: number = 0;
@@ -160,6 +162,17 @@ export class DesktopConnection {
   getReconnectAttempt(): number { return this.session?.getReconnectAttempt() ?? 0; }
   getRelayHostReachability(): string { return this.session?.getRelayHostReachability() ?? 'connecting'; }
 
+  rememberAutomationCatalog(client: SpikeRpcClient, result: string): void {
+    if (this.client === client) {
+      this.automationCatalog = result.length <= 256 * 1024 ? { result: result, readAt: Date.now() } : null;
+    }
+  }
+
+  getAutomationCatalog(meta: HostMeta): DesktopAutomationCatalog | null {
+    return meta.id === this.hostId && this.meta?.lastConnected === meta.lastConnected && this.meta?.endpoint === meta.endpoint
+      ? this.automationCatalog : null;
+  }
+
   private async readCredentials(): Promise<DesktopCredentials> {
     let token = await getDeviceToken(this.context, this.hostId);
     let relay = token ? await getRelayCredential(this.context, this.hostId) : null;
@@ -206,6 +219,7 @@ export class DesktopConnection {
   clearViewing(owner: Object): void { this.notifications.clearViewing(owner); }
 
   private publish(phase: SessionPhase, detail: string): void {
+    if (phase === 'auth-failed') { this.automationCatalog = null; }
     this.phase = phase; this.detail = detail;
     Array.from(this.listeners).forEach((listener: DesktopListener): void => listener(phase, detail));
   }
@@ -289,7 +303,7 @@ export class DesktopConnection {
     this.closeTransport(); this.publish('stopped', this.removed ? '主机不存在' : '已断开');
   }
 
-  forget(): void { this.removed = true; this.meta = null; this.disconnect(); }
+  forget(): void { this.removed = true; this.meta = null; this.automationCatalog = null; this.disconnect(); }
 
   refresh(change: ProfileChange): void {
     if (this.removed) { return; }
@@ -320,7 +334,7 @@ export class DesktopConnection {
   }
 
   private replaceTransport(): void {
-    this.closeTransport(); this.meta = null;
+    this.closeTransport(); this.meta = null; this.automationCatalog = null;
     if (this.hasDemand() && !this.paused) { this.startConnection(true); }
     else { this.publish('stopped', '已断开'); }
   }

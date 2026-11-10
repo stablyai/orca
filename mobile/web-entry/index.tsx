@@ -198,6 +198,17 @@ bootstrapShellPage({
     // An open-target boot paints the shell's target first, so that is the screen to preload and restore.
     const route = bootRoute(session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM])
     const queryClient = createOrcaQueryClient()
+    const { host, automationCatalog } = session
+    const automationRestore =
+      host &&
+      automationCatalog &&
+      route.pathname === `/h/${encodeURIComponent(host.id)}/automations`
+        ? import('../src/automations/use-automation-catalog')
+            .then(({ restoreAutomationCatalog }) =>
+              restoreAutomationCatalog(queryClient, host.id, automationCatalog)
+            )
+            .catch(() => {})
+        : null
     // One store read for the first screen's stored data, alongside the catalog and route loads.
     const firstPaintRestore = startPageQueryPersistence(
       queryClient,
@@ -213,7 +224,7 @@ bootstrapShellPage({
     })
     const bootRoutes = preloadBootRoutes(route.pathname)
     // Activation settles to English on failure and preloads settle either way, so the page always mounts.
-    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes])
+    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes, automationRestore])
       .then(() => awaitFirstPaintRestore(firstPaintRestore))
       .then(() =>
         createRoot(container).render(
