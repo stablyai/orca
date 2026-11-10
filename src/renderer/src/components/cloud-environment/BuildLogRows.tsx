@@ -3,7 +3,6 @@ import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
-import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { FOCUS_RING } from '../orca-cloud/cloud-focus'
 import { parseAnsiSegments, type AnsiColor } from '../editor/notebook/outputs/ipynb-ansi'
@@ -218,12 +217,15 @@ export function EmptyStepRow({
 export function FailureSummary({
   build,
   activeBuildNumber,
-  onShowError
+  onShowError,
+  actions
 }: {
   build: EnvironmentBuildView
   activeBuildNumber: number | null
-  /** Scrolls to Orca's own error note in the log; null when the log has none. */
+  /** Scrolls to Orca's own error note in the log (the title's click); null when the log has none. */
   onShowError: (() => void) | null
+  /** Try again / Fix with agent, on the latest failed build for admins (DS-40). */
+  actions?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const summary = failedBuildSummary(build.number, build.failedStep, activeBuildNumber, t)
@@ -232,7 +234,21 @@ export function FailureSummary({
   return (
     <InlineError
       layout="strip-top"
-      title={summary.headline}
+      title={
+        onShowError ? (
+          // The failed step opens on its error already; the title jumps back to it (the log may
+          // have been scrolled, collapsed or virtualized away since).
+          <button
+            type="button"
+            onClick={onShowError}
+            className={cn('rounded-sm text-left hover:underline underline-offset-2', FOCUS_RING)}
+          >
+            {summary.headline}
+          </button>
+        ) : (
+          summary.headline
+        )
+      }
       detail={
         reason ? (
           <>
@@ -242,13 +258,7 @@ export function FailureSummary({
           summary.consequence
         )
       }
-      action={
-        onShowError ? (
-          <Button type="button" variant="outline" size="xs" onClick={onShowError}>
-            {t('cloudEnvironment.log.showError', 'Show error')}
-          </Button>
-        ) : undefined
-      }
+      action={actions}
     />
   )
 }

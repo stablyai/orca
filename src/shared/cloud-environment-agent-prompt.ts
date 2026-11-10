@@ -87,6 +87,59 @@ export function buildCloudEnvironmentAgentPrompt(args: {
   return lines.join('\n')
 }
 
+const MAX_SCRIPT_CHARS = 8_000
+
+/**
+ * DS-40 "Fix with agent": the prompt a cloud workspace's agent gets after an environment build
+ * failed. `lead` is the user-facing sentence (localized by the caller). The workspace boots from the
+ * last good build, but `orca cloud env` only works on the desktop, so the agent hands the fixed
+ * script back instead of saving it.
+ */
+export function buildCloudEnvironmentFixPrompt(args: {
+  lead: string
+  /** What failed: the install script (default) or cloning a repo's contents. */
+  focus?: 'install' | 'clone'
+  installScript?: string
+  log?: string
+}): string {
+  const steps =
+    args.focus === 'clone'
+      ? [
+          'This workspace starts from the environment’s last good build, or from a fresh sandbox if no build has succeeded yet, so you can rerun the failing clone here.',
+          '- Reproduce it with the same `git clone` (and branch), find what in the repository breaks it (submodules, Git LFS objects, paths that cannot be checked out), and fix it in the repository.',
+          '- Work on a new branch. Finish with a commit and open a pull request that explains what changed, so an admin can rebuild once it merges.',
+          '- Do not change Orca Cloud access or credentials: if the real problem is access, stop and say so.'
+        ]
+      : [
+          'This workspace starts from the environment’s last good build, or from a fresh sandbox if no build has succeeded yet, so you can rerun the failing part of the install script here.',
+          '- Reproduce the failure, fix the script, and rerun the fixed part until it succeeds.',
+          '- Finish by printing the complete corrected install script in one ```bash block, so an admin can save it in Settings > Orca Cloud > Cloud environments and rebuild.'
+        ]
+  const lines = [
+    oneLine(args.lead),
+    '',
+    ...steps,
+    '- Never print, echo or write secret values, and never put them in the script. Refer to them only as `$NAME`.'
+  ]
+  const script = args.installScript?.trim() ? redact(args.installScript.trimEnd()) : ''
+  if (script) {
+    lines.push(
+      '',
+      'Current install script:',
+      '```bash',
+      script.length > MAX_SCRIPT_CHARS
+        ? `${script.slice(0, MAX_SCRIPT_CHARS)}\n# …(truncated)`
+        : script,
+      '```'
+    )
+  }
+  const tail = logTail(args.log)
+  if (tail) {
+    lines.push('', 'Build log (last lines):', '```', tail, '```')
+  }
+  return lines.join('\n')
+}
+
 function logTail(log: string | undefined): string {
   if (!log?.trim()) {
     return ''

@@ -26587,7 +26587,6 @@
       "snapshotDone": "Snapshot saved.",
       "snapshotting": "Saving the snapshot…",
       "noOutput": "No output.",
-      "showError": "Show error",
       "lostStatic": "Lost connection to the build log.",
       "reconnectingDetail": "Reconnecting… The build keeps running.",
       "keepsRunning": "The build keeps running in Orca Cloud.",
@@ -26753,7 +26752,16 @@
     "failedAtStep": "Build #{{number}} failed at {{step}}.",
     "failedPlain": "Build #{{number}} failed.",
     "failedNoActive": "New workspaces start without a prebuilt environment until a build succeeds.",
-    "failedStillActive": "New workspaces still start from build #{{active}}."
+    "failedStillActive": "New workspaces still start from build #{{active}}.",
+    "failure": {
+      "tryAgain": "Try again",
+      "fixWithAgent": "Fix with agent",
+      "fixPrompt": "The environment build failed at {{step}}. Fix the install script so the build succeeds.",
+      "giveAccess": "Give access",
+      "fixClonePrompt": "The environment build failed while cloning {{repo}}. Fix the repository setup so the clone succeeds.",
+      "aRepository": "a repository",
+      "giveAccessFailed": "Couldn’t open GitHub. Try again in a moment."
+    }
   },
   "cloudShare": {
     "openFailed": {

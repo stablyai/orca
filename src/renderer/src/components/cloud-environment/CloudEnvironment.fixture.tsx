@@ -4,6 +4,7 @@ import { BuildHistoryList } from './BuildHistoryList'
 import { BuildLogViewer } from './BuildLogViewer'
 import {
   buildingLog,
+  cloneFailedLog,
   failedLog,
   FIXTURE_NOW,
   longLog,
@@ -316,6 +317,8 @@ export const panelOverviewFailed = defineFixture({
         onActivate={noop}
         onSelectBuild={noop}
         onConfigureWithAgent={noop}
+        onFixWithAgent={noop}
+        onGiveAccess={null}
       />
     )
   }
@@ -351,7 +354,55 @@ export const panelMember = defineFixture({
         onActivate={noop}
         onSelectBuild={noop}
         onConfigureWithAgent={noop}
+        onFixWithAgent={null}
+        onGiveAccess={null}
       />
     )
   }
 })
+
+function cloneFailedPanel(reason: 'submodule' | 'access') {
+  const failed = sampleBuild({
+    id: 'bld_000000000009',
+    number: 9,
+    status: 'failed',
+    activatable: false,
+    snapshotStartedAt: null,
+    error: 'clone_failed',
+    failedStep: 'clone'
+  })
+  const builds = [failed, ...sampleHistory.slice(2)]
+  return defineFixture({
+    width: 760,
+    render: () => (
+      <CloudEnvironmentPanel
+        environment={sampleEnvironment}
+        builds={builds}
+        canAdmin
+        now={FIXTURE_NOW}
+        frozenNow={FIXTURE_NOW}
+        selectedBuild={failed}
+        log={{ buffer: cloneFailedLog(failed, reason), state: 'ended', error: null, onRetry: noop }}
+        staleness={null}
+        starting={false}
+        busyBuildId={null}
+        actionError={null}
+        agentAvailable
+        agentLaunching={false}
+        form={formHandlers}
+        onBuild={noop}
+        onCancel={noop}
+        onActivate={noop}
+        onSelectBuild={noop}
+        onConfigureWithAgent={noop}
+        onFixWithAgent={reason === 'submodule' ? noop : null}
+        onGiveAccess={reason === 'access' ? noop : null}
+      />
+    )
+  })
+}
+
+/** DS-40 (b): a submodule broke the clone, so an agent can fix the repo. */
+export const panelCloneFailedContent = cloneFailedPanel('submodule')
+/** DS-40 (b): the clone was refused; access goes to GitHub, never to an agent. */
+export const panelCloneFailedAccess = cloneFailedPanel('access')

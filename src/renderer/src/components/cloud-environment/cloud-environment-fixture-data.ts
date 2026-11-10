@@ -192,6 +192,33 @@ export function failedLog(build: EnvironmentBuildView): BuildLogBuffer {
   ])
 }
 
+/** DS-40 (b): the clone step failed; `reason` is repo contents (an agent's fix) or access. */
+export function cloneFailedLog(
+  build: EnvironmentBuildView,
+  reason: 'submodule' | 'access'
+): BuildLogBuffer {
+  return fill(syncBuffer(), build.createdAt, [
+    CLONE[0],
+    CLONE[1],
+    [18_600, 'Cloning https://github.com/acme/web (main)\n'],
+    reason === 'submodule'
+      ? [
+          21_000,
+          "fatal: clone of 'git@github.com:acme/vendor-ui.git' into submodule path 'packages/ui' failed\n",
+          'stderr'
+        ]
+      : [
+          21_000,
+          'remote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/web/\n',
+          'stderr'
+        ],
+    [
+      21_100,
+      '::orca-error:: Could not clone https://github.com/acme/web at main. Check that the branch exists and Orca Cloud can reach the repository.\n'
+    ]
+  ])
+}
+
 export function buildingLog(build: EnvironmentBuildView): BuildLogBuffer {
   const buffer = fill(syncBuffer(), build.createdAt, [...CLONE, ...INSTALL_START.slice(0, 6)])
   buffer.append(

@@ -11,6 +11,7 @@ import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { OrcaOrgMember } from '../../../../shared/orca-profiles'
 import { stalenessBannerCopy } from './cloud-environment-copy'
+import { environmentFailureFix } from './environment-failure-fix'
 import type {
   EnvironmentBuildView,
   EnvironmentDraft,
@@ -259,6 +260,19 @@ function CloudEnvironmentController({
       .then(() => setAgentLaunching(false))
   }
 
+  // DS-40: a failed latest build gets Fix with agent (install script, or repo contents that broke
+  // the clone) or Give access (the clone couldn't reach the repo); see environment-failure-fix.ts.
+  const failureFix = environmentFailureFix({
+    build: builds[0],
+    logLines:
+      builds[0] && builds[0].id === logBuild?.id
+        ? stream.buffer.lines.map((line) => line.plain)
+        : null,
+    environment,
+    repoId: agentRepo?.id ?? null,
+    t
+  })
+
   const activate = (build: EnvironmentBuildView): void => {
     void confirm({
       title: t('cloudEnvironment.activate.title', 'Use build #{{number}}?', {
@@ -326,6 +340,8 @@ function CloudEnvironmentController({
       onActivate={activate}
       onSelectBuild={(build) => setSelectedBuildId(build.id)}
       onConfigureWithAgent={configureWithAgent}
+      onFixWithAgent={failureFix.onFixWithAgent}
+      onGiveAccess={failureFix.onGiveAccess}
     />
   )
 }
