@@ -68,6 +68,7 @@ export function useNativeChatComposerCommandPicker(
     readTerminalScreen,
     readTerminalDraft,
     onSwitchToTerminal,
+    onReturnToDraft: () => editor.textareaRef.current?.focus(),
     disabled: pickerArgs.disabled,
     isWorking
   })

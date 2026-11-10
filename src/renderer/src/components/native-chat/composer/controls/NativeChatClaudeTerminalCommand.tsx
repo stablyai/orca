@@ -23,6 +23,7 @@ export function NativeChatClaudeTerminalCommand({
   disabled,
   remote,
   openTerminal,
+  onDone,
   onActiveChange
 }: {
   command: string
@@ -32,6 +33,7 @@ export function NativeChatClaudeTerminalCommand({
   disabled: boolean
   remote: boolean
   openTerminal?: () => void
+  onDone?: () => void
   onActiveChange?: (active: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -42,6 +44,43 @@ export function NativeChatClaudeTerminalCommand({
   const handle = useRef<NativeChatSendHandle | null>(null)
   const live = useRef(true)
   const busy = useRef(false)
+  const screenRef = useRef<HTMLPreElement>(null)
+  const doneRef = useRef<HTMLButtonElement>(null)
+  const atPrompt = started && !pending && readDraft() !== null
+  const focusRequest = useRef<{
+    target: 'menu' | 'navigation' | 'draft'
+    from: Element | null
+  } | null>(null)
+  const requestFocus = (target: 'menu' | 'navigation' | 'draft') => {
+    focusRequest.current = { target, from: document.activeElement }
+  }
+  useEffect(() => {
+    const requested = focusRequest.current
+    if (!requested || pending || (requested.target !== 'draft' && (!started || !screen))) {
+      return
+    }
+    if (requested.target === 'menu' && readDraft() !== null) {
+      return
+    }
+    if (requested.target !== 'draft' && readDraft() === null && readScreen() !== screen) {
+      return
+    }
+    focusRequest.current = null
+    if (document.activeElement !== requested.from && document.activeElement !== document.body) {
+      return
+    }
+    if (requested.target === 'draft') {
+      onDone?.()
+    } else {
+      const target = readDraft() === null ? screenRef.current : doneRef.current
+      target?.focus({ preventScroll: true })
+    }
+  }, [onDone, pending, readDraft, readScreen, screen, started])
+  useEffect(() => {
+    if (atPrompt && document.activeElement === screenRef.current) {
+      doneRef.current?.focus({ preventScroll: true })
+    }
+  }, [atPrompt])
   useEffect(() => {
     live.current = true
     return () => {
@@ -66,6 +105,7 @@ export function NativeChatClaudeTerminalCommand({
       return
     }
     busy.current = true
+    requestFocus('menu')
     setPending(true)
     setFailed(false)
     setStarted(true)
@@ -79,6 +119,7 @@ export function NativeChatClaudeTerminalCommand({
       setPending(false)
       setFailed(true)
       setStarted(false)
+      focusRequest.current = null
       onActiveChange?.(false)
       return
     }
@@ -107,6 +148,7 @@ export function NativeChatClaudeTerminalCommand({
       return
     }
     busy.current = true
+    requestFocus('navigation')
     setPending(true)
     const delivered = await sendRuntimePtyInputVerified(ptyId, key, 'driving', {
       requireWriteSettlement: true
@@ -120,7 +162,6 @@ export function NativeChatClaudeTerminalCommand({
   }
   const menuDisabled =
     disabled || pending || !screen || readDraft() !== null || readScreen() !== screen
-  const atPrompt = started && !pending && readDraft() !== null
   return (
     <SecuritySurface>
       <section
@@ -162,6 +203,7 @@ export function NativeChatClaudeTerminalCommand({
                   setFailed(true)
                   return
                 }
+                requestFocus('menu')
                 setStarted(true)
                 onActiveChange?.(true)
               }}
@@ -173,6 +215,7 @@ export function NativeChatClaudeTerminalCommand({
         {started && (
           <>
             <pre
+              ref={screenRef}
               className="scrollbar-sleek max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 font-mono text-chat-code focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               tabIndex={0}
               onKeyDown={(event) => {
@@ -188,16 +231,19 @@ export function NativeChatClaudeTerminalCommand({
                   Escape: '\x1b'
                 }
                 const key = keys[event.key]
-                if (key && !menuDisabled) {
+                if (key) {
                   event.preventDefault()
-                  void press(key)
+                  event.stopPropagation()
+                  if (!menuDisabled) {
+                    void press(key)
+                  }
                 }
               }}
               aria-label={t('components.native-chat.commands.liveMenu', 'Live Claude menu')}
             >
               {screen && stripScrollbackAnsi(screen)}
             </pre>
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-2">
               {!atPrompt && (
                 <NativeChatClaudeMenuNavigation
                   disabled={menuDisabled}
@@ -217,6 +263,7 @@ export function NativeChatClaudeTerminalCommand({
               )}
               {atPrompt && (
                 <Button
+                  ref={doneRef}
                   size="sm"
                   className="pointer-coarse:min-h-11"
                   disabled={pending}
@@ -225,6 +272,7 @@ export function NativeChatClaudeTerminalCommand({
                       setFailed(true)
                       return
                     }
+                    requestFocus('draft')
                     setStarted(false)
                     onActiveChange?.(false)
                   }}

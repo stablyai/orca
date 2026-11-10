@@ -12,6 +12,7 @@ export function useNativeChatClaudeCommandPanel(args: {
   readTerminalScreen?: () => string | null
   readTerminalDraft?: () => string | null
   onSwitchToTerminal?: () => void
+  onReturnToDraft?: () => void
   disabled: boolean
   isWorking?: boolean
 }) {
@@ -49,6 +50,7 @@ export function useNativeChatClaudeCommandPanel(args: {
           disabled={args.disabled || args.isWorking === true}
           remote={nativeChatComposerTargetIsRemote(targetPtyId)}
           openTerminal={args.onSwitchToTerminal}
+          onDone={args.onReturnToDraft}
           onActiveChange={(started) =>
             setActive(started ? { ptyId: targetPtyId, command: shown } : null)
           }

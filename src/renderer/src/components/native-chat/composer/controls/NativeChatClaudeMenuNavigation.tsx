@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -15,31 +16,31 @@ export function NativeChatClaudeMenuNavigation({
     {
       key: '\x1b[A',
       icon: ArrowUp,
-      position: 'col-start-2 row-start-1',
+      position: 'pointer-coarse:col-start-2 pointer-coarse:row-start-1',
       label: t('components.native-chat.commands.previous', 'Previous')
+    },
+    {
+      key: '\x1b[B',
+      icon: ArrowDown,
+      position: 'pointer-coarse:col-start-2 pointer-coarse:row-start-3',
+      label: t('components.native-chat.commands.next', 'Next')
     },
     {
       key: '\x1b[D',
       icon: ArrowLeft,
-      position: 'col-start-1 row-start-2',
+      position: 'pointer-coarse:col-start-1 pointer-coarse:row-start-2',
       label: t('components.native-chat.commands.left', 'Left')
     },
     {
       key: '\x1b[C',
       icon: ArrowRight,
-      position: 'col-start-3 row-start-2',
+      position: 'pointer-coarse:col-start-3 pointer-coarse:row-start-2',
       label: t('components.native-chat.commands.right', 'Right')
-    },
-    {
-      key: '\x1b[B',
-      icon: ArrowDown,
-      position: 'col-start-2 row-start-3',
-      label: t('components.native-chat.commands.next', 'Next')
     }
   ]
   return (
     <div
-      className="grid grid-cols-3 gap-1"
+      className="flex flex-wrap items-center gap-1 pointer-coarse:grid pointer-coarse:grid-cols-3"
       role="group"
       aria-label={t('components.native-chat.commands.navigation', 'Menu navigation')}
     >
@@ -49,8 +50,8 @@ export function NativeChatClaudeMenuNavigation({
             <TooltipTrigger asChild>
               <Button
                 variant="outline"
-                size="icon"
-                className="h-9 w-full pointer-coarse:min-h-11"
+                size="icon-sm"
+                className="pointer-coarse:h-11 pointer-coarse:w-full"
                 disabled={disabled}
                 aria-label={label}
                 onClick={() => onPress(key)}
@@ -64,11 +65,18 @@ export function NativeChatClaudeMenuNavigation({
       ))}
       <Button
         size="sm"
-        className="col-start-2 row-start-2 h-9 pointer-coarse:min-h-11"
+        className="pointer-coarse:col-start-2 pointer-coarse:row-start-2 pointer-coarse:min-h-11"
+        aria-label={t('components.native-chat.commands.select', 'Select')}
         disabled={disabled}
         onClick={() => onPress('\r')}
       >
         {t('components.native-chat.commands.select', 'Select')}
+        <span aria-hidden className="pointer-coarse:hidden">
+          <ShortcutKeyCombo
+            keys={['Enter']}
+            keyCapClassName="border-current/20 bg-transparent text-inherit shadow-none"
+          />
+        </span>
       </Button>
     </div>
   )

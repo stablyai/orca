@@ -9,12 +9,14 @@ import type { AgentSessionMcpServer } from '../../../../../../shared/agent-sessi
 import { AgentSessionMcpParams } from '../../../../../../shared/rpc-contract/agent-session-mcp-params'
 import type { SessionOptionDescriptor } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 
-function setupMcp() {
-  let servers: AgentSessionMcpServer[] = [
+function setupMcp(
+  initialServers: AgentSessionMcpServer[] = [
     { name: 'figma', status: 'needs-auth', canAuthenticate: true },
     { name: 'docs', status: 'connected', canAuthenticate: false },
     { name: 'local-tools', status: 'disabled', canAuthenticate: false }
   ]
+) {
+  let servers = initialServers
   window.api.runtime.call = async ({ params }) => {
     const operation = AgentSessionMcpParams.safeParse(params).data?.operation
     if (operation && operation.action !== 'status') {
@@ -51,6 +53,24 @@ export const mcp = defineFixture({
 })
 
 export const narrowMcp = defineFixture({ ...mcp, width: 360 })
+
+export const splitMcp = defineFixture({
+  ...mcp,
+  width: 480,
+  setup: () =>
+    setupMcp([
+      {
+        name: 'figma-design-system-review-preview-environment',
+        status: 'needs-auth',
+        canAuthenticate: true
+      },
+      ...Array.from({ length: 12 }, (_, index): AgentSessionMcpServer => ({
+        name: `workspace-docs-${index + 1}`,
+        status: index === 0 ? 'failed' : 'connected',
+        canAuthenticate: false
+      }))
+    ])
+})
 
 function SettingsFixture() {
   const [options, setOptions] = useState<SessionOptionDescriptor[]>([
@@ -197,3 +217,5 @@ export const terminalComposer = defineFixture({
 })
 
 export const narrowTerminalComposer = defineFixture({ ...terminalComposer, width: 360 })
+export const splitTerminalComposer = defineFixture({ ...terminalComposer, width: 480 })
+export const wideTerminalComposer = defineFixture({ ...terminalComposer, width: 960 })

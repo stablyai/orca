@@ -44,6 +44,7 @@ it('runs the command in the owning PTY and allows menu navigation without cleari
     { wrapper: TooltipProvider }
   )
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Run in Chat' })))
+  expect(document.activeElement).toBe(screen.getByLabelText('Live Claude menu'))
   expect(sendNativeChatObservedWrites).toHaveBeenCalledWith(
     'remote:windows@@pty-1',
     [
@@ -59,9 +60,7 @@ it('runs the command in the owning PTY and allows menu navigation without cleari
     'driving',
     { requireWriteSettlement: true }
   )
-  await act(async () =>
-    fireEvent.keyDown(screen.getByLabelText('Live Claude menu'), { key: 'ArrowUp' })
-  )
+  await act(async () => fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' }))
   expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
     'remote:windows@@pty-1',
     '\x1b[A',
