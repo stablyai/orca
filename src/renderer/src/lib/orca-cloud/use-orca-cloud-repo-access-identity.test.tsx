@@ -16,7 +16,7 @@ function connected(orgId: string): OrcaProfileAuthStatus {
     activeProfileId: 'p1',
     configured: true,
     state: 'connected',
-    persistence: 'keychain',
+    persistence: 'encrypted',
     cloud: {
       cloudProfileId: 'cp1',
       userId: 'u1',
@@ -24,14 +24,18 @@ function connected(orgId: string): OrcaProfileAuthStatus {
       activeOrgId: orgId,
       linkedAt: 1
     }
-  } as OrcaProfileAuthStatus
+  }
 }
 
-const signedOut = { ...connected('o1'), state: 'unconfigured', cloud: undefined }
+const signedOut: OrcaProfileAuthStatus = {
+  activeProfileId: 'p1',
+  configured: true,
+  state: 'unconfigured',
+  persistence: 'encrypted'
+}
 
 beforeEach(() => {
-  vi.stubGlobal('api', { ...window.api, orcaCloudWorkspace: { getRepoAccess } })
-  window.api = (globalThis as unknown as { api: typeof window.api }).api
+  vi.stubGlobal('window', Object.assign(window, { api: { orcaCloudWorkspace: { getRepoAccess } } }))
   useAppStore.setState({
     repos: [
       {
@@ -55,7 +59,7 @@ afterEach(() => {
 
 it('keys identity by account and team, and is empty while signed out', () => {
   expect(orcaCloudIdentityKey(connected('o1'))).not.toBe(orcaCloudIdentityKey(connected('o2')))
-  expect(orcaCloudIdentityKey(signedOut as OrcaProfileAuthStatus)).toBe('')
+  expect(orcaCloudIdentityKey(signedOut)).toBe('')
   expect(orcaCloudIdentityKey(null)).toBe('')
 })
 
@@ -69,7 +73,7 @@ it('drops a cached "Done" for GitHub after sign-out and asks again after a team 
 
   // Signed out, the control plane can't tell: the row must not stay "Done" from the cache.
   getRepoAccess.mockResolvedValue({ ok: false, code: 'unauthorized', message: 'x' })
-  act(() => useAppStore.setState({ orcaProfileAuthStatus: signedOut as OrcaProfileAuthStatus }))
+  act(() => useAppStore.setState({ orcaProfileAuthStatus: signedOut }))
   await waitFor(() => expect(result.current.state).toBe('unknown'))
   expect(getRepoAccess).toHaveBeenCalledTimes(2)
 
