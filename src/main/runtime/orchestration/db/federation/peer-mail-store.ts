@@ -78,7 +78,7 @@ export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
 export function listPeerConversationIds(this: OrchestrationDb, peerFingerprint: string): string[] {
   const statement = this.db.prepare(
     `SELECT conversation_id FROM peer_mail_conversations
-     WHERE role = 'peer' AND peer_fingerprint = ?`
+     WHERE role = 'peer' AND peer_fingerprint = ? ORDER BY conversation_id`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
   const rows = statement.all(peerFingerprint) as { conversation_id: string }[]

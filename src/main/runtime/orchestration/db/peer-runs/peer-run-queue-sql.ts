@@ -159,7 +159,10 @@ export function createPeerRunQueueTriggers(db: Database.Database): void {
       WHEN NEW.state <> OLD.state AND ${NOT_CORRECTING('NEW.dispatch_id')}
       ${trigger(peerRunDispatchStateStatements('NEW.dispatch_id', false, 'NULL'))}
       CREATE TRIGGER trg_peer_run_task_status AFTER UPDATE OF status ON tasks
-      WHEN NEW.status <> OLD.status AND ${NOT_CORRECTING(LATEST_TASK_DISPATCH('NEW.id'))}
+      WHEN NEW.status <> OLD.status AND NOT EXISTS (
+        SELECT 1 FROM peer_run_corrections c JOIN dispatch_contexts d ON d.id = c.dispatch_id
+        WHERE d.task_id = NEW.id
+      )
       ${trigger(peerRunDispatchStateStatements(LATEST_TASK_DISPATCH('NEW.id'), false, 'NULL'))}
       CREATE TRIGGER trg_peer_run_correction AFTER DELETE ON peer_run_corrections
       ${trigger(peerRunDispatchStateStatements('OLD.dispatch_id', true, 'NULL'))}

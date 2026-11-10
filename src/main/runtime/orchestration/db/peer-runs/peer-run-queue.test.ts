@@ -103,6 +103,35 @@ describe("a paired Orca's Run: its queue home", () => {
     ])
   })
 
+  it('holds back the Task change of a correction even when a newer attempt is the latest', () => {
+    const first = start()
+    fail(first.dispatch.id, first.task.id)
+    db.transitionLifecycle({
+      entity: 'dispatch',
+      id: first.dispatch.id,
+      from: 'failed',
+      to: 'failed',
+      projection: { last_failure: AGENT_PROMPT_STALLED_ERROR }
+    })
+    const retry = start({ adoptTaskId: first.task.id })
+    fail(retry.dispatch.id, first.task.id)
+    const before = states().length
+
+    db.settleWorkerReport({
+      taskId: first.task.id,
+      dispatchId: first.dispatch.id,
+      outcome: 'succeeded',
+      result: 'actually done'
+    })
+
+    expect(states().slice(before)).toEqual([
+      expect.objectContaining({
+        correctedUnobservedPrompt: true,
+        dispatch: expect.objectContaining({ id: first.dispatch.id })
+      })
+    ])
+  })
+
   it("queues a worker's question with its thread, so the coordinator can answer in it", () => {
     const { dispatch } = start()
     const { message } = db.createQuestion({
