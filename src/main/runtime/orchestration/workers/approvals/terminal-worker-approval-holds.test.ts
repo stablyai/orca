@@ -25,7 +25,7 @@ function setup(options: { canAnswer?: boolean } = {}) {
   })
   const task = db.createTask({ spec: 'do the work', runId: run.id })
   const dispatch = createRootDispatch(db, task.id, HANDLE, PANE)
-  const screen = { dialog: true as boolean | null }
+  const screen: { dialog: boolean | null } = { dialog: true }
   const timers: { run: () => void; cancelled: boolean }[] = []
   const holds = new TerminalWorkerApprovalHolds({
     notify: vi.fn(),
