@@ -260,3 +260,20 @@ export function resolveDefaultRunOn({
   }
   return { target: wanted, cloudFellBack: false }
 }
+
+/**
+ * The session's rows, with its GitHub row done once this desktop's own check reaches the
+ * repository: the control plane's notice to the session is best effort, and the desktop's
+ * repo-access poll is the fallback that keeps a waiting start from hanging.
+ */
+export function withReachableGitHub(
+  steps: readonly CloudSetupStep[],
+  reachable: boolean
+): readonly CloudSetupStep[] {
+  if (!reachable || !steps.some((step) => step.id === 'github' && step.state !== 'done')) {
+    return steps
+  }
+  return steps.map(
+    (step): CloudSetupStep => (step.id === 'github' ? { id: 'github', state: 'done' } : step)
+  )
+}

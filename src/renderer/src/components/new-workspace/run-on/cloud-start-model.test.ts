@@ -5,7 +5,8 @@ import {
   getOrcaCloudSegmentState,
   getRunOnSegment,
   isCloudSetupPanelVisible,
-  resolveDefaultRunOn
+  resolveDefaultRunOn,
+  withReachableGitHub
 } from './cloud-start-model'
 
 describe('Run on segment', () => {
@@ -248,5 +249,27 @@ describe('remembered Run on default', () => {
         cloudUsable: true
       })
     ).toEqual({ target: 'local', cloudFellBack: false })
+  })
+})
+
+describe('withReachableGitHub', () => {
+  const session = [
+    { id: 'account', state: 'done' },
+    { id: 'plan', state: 'done', detail: 'subscription' },
+    { id: 'github', state: 'active' }
+  ] as const
+
+  it("marks the session's GitHub row done once this desktop reaches the repository", () => {
+    expect(withReachableGitHub([...session], true)).toEqual([
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done', detail: 'subscription' },
+      { id: 'github', state: 'done' }
+    ])
+    expect(getCloudPrimaryAction([...withReachableGitHub([...session], true)])).toBe('start')
+  })
+
+  it('leaves the rows alone while the repository is still unreachable', () => {
+    const steps = [...session]
+    expect(withReachableGitHub(steps, false)).toBe(steps)
   })
 })

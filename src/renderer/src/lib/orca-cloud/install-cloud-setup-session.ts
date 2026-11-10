@@ -34,6 +34,20 @@ export function setupNeedsFrom(needs: readonly string[]): CloudSetupNeed[] {
   )
 }
 
+/**
+ * What the session is asked to run. Signed out, Orca can't check GitHub access yet, so a GitHub
+ * project always asks for it: the chain marks it done on its own when access is already there.
+ * Without it the browser said "You're all set" while the composer still needed GitHub.
+ */
+export function sessionNeedsFor(needs: readonly string[], repoUrl: string | undefined): CloudSetupNeed[] {
+  const steps = setupNeedsFrom(needs)
+  if (!repoUrl) {
+    // Without a GitHub remote there's nothing to install; D3 covers that case in the composer.
+    return steps.filter((need) => need !== 'github')
+  }
+  return needs.includes('account') && !steps.includes('github') ? [...steps, 'github'] : steps
+}
+
 export function installCloudSetupSession(): () => void {
   setCloudSetupSessionSource((sessionId) => {
     const snapshot = getCloudSetupSnapshot(sessionId)
@@ -57,11 +71,9 @@ export function installCloudSetupSession(): () => void {
   setCloudSetupStarter(async (request) => {
     const repo = getIndexedRepoMap(useAppStore.getState().repos).get(request.repoId)
     const repoUrl = githubRepoUrlFor(repo?.gitRemoteIdentity?.remoteUrl)
-    const needs = setupNeedsFrom(request.needs)
     return startCloudSetupSession({
       ...(repoUrl ? { repo: repoUrl } : {}),
-      // Without a GitHub remote there's nothing to install; D3 covers that case in the composer.
-      needs: repoUrl ? needs : needs.filter((need) => need !== 'github')
+      needs: sessionNeedsFor(request.needs, repoUrl)
     })
   })
   const unsubscribe = subscribeCloudSetupSessions(() => notifyCloudSetupSessionChanged())
