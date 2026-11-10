@@ -12,6 +12,8 @@ import type { SandboxCaller } from './auth'
 import { memberNamesFor } from './member-names'
 import { effectiveSecrets } from './secrets'
 import { getSandbox, type SandboxRow } from './store'
+import { agentCredentialState, isUsable } from './agent-credentials'
+import { accountProvider, isSharedWorkspace } from './account-providers'
 
 export type AgentSource = 'sign-in' | 'key'
 type OfferAnswer = 'unanswered' | 'accepted' | 'declined'
@@ -97,7 +99,13 @@ async function ownedWorkspace(db: D1Database, caller: SandboxCaller, workspaceId
   return row
 }
 
-export async function agentSourcesView(db: D1Database, caller: SandboxCaller, workspaceId: string | null) {
+export async function agentSourcesView(
+  db: D1Database,
+  caller: SandboxCaller,
+  workspaceId: string | null,
+  enabled: Record<CredentialAgent, boolean> = { claude: false, codex: false },
+  now: number = Date.now()
+) {
   const row = workspaceId ? await ownedWorkspace(db, caller, workspaceId) : null
   // The sandbox applies its owner's choice (shared sandboxes, v1): show the owner's, not the caller's.
   const subject = row ? row.user_id : caller.userId
@@ -106,6 +114,11 @@ export async function agentSourcesView(db: D1Database, caller: SandboxCaller, wo
   const workspace = row ? byAgent(rows, row.id) : null
   const effective = await effectiveSecrets(db, caller, row?.repo_url ?? null)
   const covered = coveredByKey(new Set(effective.map((secret) => secret.name)))
+  // v4: with no key covering it, a set-up Orca account is the default (no question asked).
+  const usable = {} as Record<CredentialAgent, boolean>
+  for (const agent of CREDENTIAL_AGENTS) {
+    usable[agent] = enabled[agent] && isUsable(await agentCredentialState(db, subject, agent, now))
+  }
   const offerRows = rows.filter((r) => r.scope === OFFER_SCOPE)
   const signInOffer = Object.fromEntries(
     CREDENTIAL_AGENTS.map((agent) => [
@@ -122,7 +135,7 @@ export async function agentSourcesView(db: D1Database, caller: SandboxCaller, wo
       if (defaults[agent]) {
         return [agent, { source: defaults[agent], origin: 'default' }]
       }
-      return [agent, { source: covered[agent] ? 'key' : null, origin: 'implicit' }]
+      return [agent, { source: covered[agent] ? 'key' : usable[agent] ? 'sign-in' : null, origin: 'implicit' }]
     })
   )
   let owner: { userId: string; displayName: string | null; isCaller: boolean } | null = null
@@ -130,7 +143,9 @@ export async function agentSourcesView(db: D1Database, caller: SandboxCaller, wo
     const names = await memberNamesFor(db, caller.accountId, [row.user_id])
     owner = { userId: row.user_id, displayName: names.get(row.user_id) ?? null, isCaller: row.user_id === caller.userId }
   }
-  return { defaults, workspace, effective: resolved, coveredByKey: covered, signInOffer, owner }
+  // D13: personal accounts never apply in a workspace shared with teammates.
+  const sharedWorkspace = row ? isSharedWorkspace(row) : false
+  return { defaults, workspace, effective: resolved, coveredByKey: covered, signInOffer, owner, sharedWorkspace }
 }
 
 async function upsert(db: D1Database, caller: SandboxCaller, scope: string, agent: CredentialAgent, source: string | null, now: number) {
@@ -180,4 +195,44 @@ export async function runningSandboxesForDefault(db: D1Database, userId: string,
 
 export async function deleteAgentSourcesForSandbox(db: D1Database, sandboxId: string): Promise<void> {
   await db.prepare('DELETE FROM agent_sources WHERE scope = ?').bind(sandboxId).run()
+}
+
+/**
+ * How each agent authenticates in this session (D10):
+ * - 'account': the owner's Orca-account credential through an egress placeholder (keys for that agent dropped);
+ * - 'omit':    kill-switch fallback (Source sign-in, provider off): keys dropped, the agent's own login in the sandbox;
+ * - 'keep':    API keys as resolved (precedence), the default.
+ * Source: explicit (workspace, then default), else implicit: a covering key wins, else a usable account.
+ */
+export type AgentMode = 'account' | 'omit' | 'keep'
+export async function agentModesFor(
+  db: D1Database,
+  row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility'>,
+  env: Readonly<Record<string, string>>,
+  options: { providerEnabled: Record<CredentialAgent, boolean>; accountsUsable: boolean; now: number }
+): Promise<Record<CredentialAgent, AgentMode>> {
+  const rows = await rowsFor(db, row.user_id, [row.id, DEFAULT_SCOPE])
+  const workspace = byAgent(rows, row.id)
+  const defaults = byAgent(rows, DEFAULT_SCOPE)
+  const covered = coveredByKey(new Set(Object.keys(env)))
+  const modes = {} as Record<CredentialAgent, AgentMode>
+  for (const agent of CREDENTIAL_AGENTS) {
+    const explicit = workspace[agent] ?? defaults[agent]
+    const provider = accountProvider(agent)
+    const enabled = options.providerEnabled[agent] && provider !== undefined
+    const usable = enabled ? isUsable(await agentCredentialState(db, row.user_id, agent, options.now)) : false
+    const source = explicit ?? (covered[agent] ? 'key' : usable ? 'sign-in' : null)
+    if (source !== 'sign-in') {
+      modes[agent] = 'keep'
+    } else if (!enabled) {
+      // Kill switch (or no provider yet): the agent signs in inside the sandbox; keys stay out (Rule 3).
+      modes[agent] = 'omit'
+    } else if (usable && options.accountsUsable && !isSharedWorkspace(row)) {
+      modes[agent] = 'account'
+    } else {
+      // Expired/revoked, placeholders off, or a shared workspace (D13): the winning key, if any.
+      modes[agent] = 'keep'
+    }
+  }
+  return modes
 }

@@ -69,3 +69,15 @@ export function applySecretPlaceholders(
   }
   return { env: next, targets }
 }
+
+/** `account:<agent>@<host>` entries: hosts where an agent's Orca-account placeholder is swapped (D10). */
+export function egressAccountRoutes(row: Pick<SandboxRow, 'egress_secret_hosts'>): { agent: 'claude' | 'codex'; host: string }[] {
+  const out: { agent: 'claude' | 'codex'; host: string }[] = []
+  for (const entry of (row.egress_secret_hosts ?? '').split(',')) {
+    const match = /^account:(claude|codex)@([a-z0-9.-]+)$/.exec(entry)
+    if (match) {
+      out.push({ agent: match[1] as 'claude' | 'codex', host: match[2]! })
+    }
+  }
+  return out
+}
