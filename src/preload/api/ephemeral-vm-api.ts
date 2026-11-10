@@ -104,6 +104,10 @@ export type EphemeralVmApi = {
   /** Fires after any runtime record write; re-list to read the new lifecycle status. */
   onRuntimesChanged: (callback: () => void) => () => void
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+  /** Orca Cloud: before Delete drops the row, prove the signed-in identity can reach the sandbox. */
+  preflightCloudDelete?: (args: {
+    runtimeEnvironmentId: string
+  }) => Promise<{ ok: true; asleep?: boolean } | { ok: false; error: string; errorCode?: string }>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   /** Drops an interrupted write-ahead record that never received a recipe result. */
   forgetRuntime: (args: { runtimeId: string }) => Promise<void>

@@ -22,6 +22,12 @@ import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-p
 import { installCloudSsh } from '../cloud-ssh/cloud-ssh-main'
 import { pendingVmCheckouts } from '../ephemeral-vm/pending-vm-checkouts'
 import {
+  cloudSandboxIdForEnvironment,
+  preflightCloudWorkspaceDelete,
+  type CloudDeletePreflight
+} from '../hosted-sandbox/cloud-delete-preflight'
+import { getHostedSandboxControlPlaneClient } from '../hosted-sandbox/hosted-sandbox-install'
+import {
   parsePendingVmCheckouts,
   PENDING_VM_CHECKOUTS_CHANGED_CHANNEL
 } from '../../shared/pending-vm-checkouts'
@@ -112,6 +118,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
+  ipcMain.removeHandler('ephemeralVm:preflightCloudDelete')
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
   ipcMain.removeHandler('ephemeralVm:forgetRuntime')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
@@ -131,6 +138,18 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         workspaceId: args.workspaceId
       })
     }
+  )
+
+  ipcMain.handle(
+    'ephemeralVm:preflightCloudDelete',
+    (_event, args: { runtimeEnvironmentId: string }): Promise<CloudDeletePreflight> =>
+      preflightCloudWorkspaceDelete(
+        cloudSandboxIdForEnvironment(
+          app.getPath('userData'),
+          String(args?.runtimeEnvironmentId ?? '')
+        ),
+        getHostedSandboxControlPlaneClient()
+      )
   )
 
   ipcMain.handle(

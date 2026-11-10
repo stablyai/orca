@@ -1082,8 +1082,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const owner = row !== null && row.account_id === caller.accountId && row.user_id === caller.userId
     const adminAction =
       (route === 'DELETE ' || route === 'POST suspend') && row?.account_id === caller.accountId && isOrgAdmin(caller)
+    // The creator can always see and delete their own sandbox, whichever team is active now: a team
+    // switch must never leave a billed VM that its owner's Delete can't reach. Nothing that bills
+    // (resume, rollover) crosses accounts.
+    const creatorStop = (route === 'GET ' || route === 'DELETE ') && row !== null && row.user_id === caller.userId
     // Another account's (or a teammate's) sandbox is indistinguishable from a missing one.
-    if (!row || !(owner || adminAction)) {
+    if (!row || !(owner || adminAction || creatorStop)) {
       return fail('not_found', 404)
     }
     switch (route) {

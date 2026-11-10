@@ -40,7 +40,12 @@ import {
 } from './ephemeral-vm-recipe-context'
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
 import type { PluginService } from '../plugins/plugin-service'
-import { installHostedSandbox, withProviderRecipes } from '../hosted-sandbox/hosted-sandbox-install'
+import {
+  getOrcaCloudAvailability,
+  installHostedSandbox,
+  withProviderRecipes
+} from '../hosted-sandbox/hosted-sandbox-install'
+import { missingRecipeFailure } from './orca-cloud-missing-recipe'
 import { refuseOrcaCloudWithoutGithub } from '../hosted-sandbox/hosted-sandbox-recipe'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
@@ -132,7 +137,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         await withProviderRecipes(pluginService)
       )
       if (!recipe) {
-        return provisionFailure(ephemeralVmFailure('recipeNotFound', { recipeId: args.recipeId }))
+        return provisionFailure(await missingRecipeFailure(args.recipeId, getOrcaCloudAvailability))
       }
       const refused = await refuseOrcaCloudWithoutGithub(recipe, repo.repo.path)
       if (refused) {

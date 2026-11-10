@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { takeOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
 
 type EphemeralVmRecipeOptionsArgs = {
   enabled: boolean
@@ -74,6 +75,10 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
                 nextRecipes.some((recipe) => recipe.id === args.initialRecipeId)
                 ? args.initialRecipeId
                 : null
+            }
+            const afterSignIn = takeOrcaCloudSelectionAfterSignIn(nextRecipes)
+            if (afterSignIn) {
+              return afterSignIn
             }
             return current && nextRecipes.some((recipe) => recipe.id === current) ? current : null
           })
