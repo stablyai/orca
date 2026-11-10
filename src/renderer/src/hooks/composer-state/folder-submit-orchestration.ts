@@ -28,21 +28,15 @@ type FolderSubmitOrchestrationInput = Pick<
 >
 
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { useAppStore } from '@/store'
-import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/folder-workspace-agent-startup'
-import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { submitFolderWorkspaceCreate } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
 import { translate } from '@/i18n/i18n'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import { toast } from 'sonner'
 
 export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInput) {
@@ -103,10 +97,6 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
         if (isSubmissionCancelled()) {
           return
         }
-        const launchHost = getFolderWorkspaceAgentLaunchFact(
-          useAppStore.getState(),
-          selectedProjectGroup
-        )
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
           projectGroup: selectedProjectGroup,
           name: smartGitHubMetadata?.workspaceName ?? name,
@@ -116,16 +106,11 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           note,
           quickAgent: agent,
           launchChoice: options?.launchChoice,
+          launchInputs: options?.launchInputs,
+          legacyLaunchInputs: options?.legacyLaunchInputs,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
+          settings: settings ?? undefined,
           agentCmdOverrides: settings?.agentCmdOverrides,
-          agentArgs: agent ? resolveTuiAgentLaunchArgs(agent, settings) : undefined,
-          agentEnv: agent
-            ? resolveTuiAgentLaunchEnv(
-                agent,
-                settings,
-                launchHost.kind === 'known' ? launchHost.platform : null
-              )
-            : undefined,
           terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',

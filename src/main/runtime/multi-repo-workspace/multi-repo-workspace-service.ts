@@ -1,18 +1,14 @@
-import { randomUUID } from 'node:crypto'
 import { rmdir } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   MULTI_REPO_WORKSPACE_CREATE_CONCURRENCY,
   MultiRepoWorkspaceError,
   type MultiRepoDeleteInspection,
-  type MultiRepoDeleteResult,
-  type MultiRepoMember,
-  type MultiRepoWorkspace
+  type MultiRepoDeleteResult
 } from '../../../shared/multi-repo-workspace'
 import type { WorkspaceCreatorProvenance } from '../../../shared/worktree/types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { sanitizeWorktreeName } from '../../ipc/worktree-logic'
 import { track } from '../../telemetry/client'
 import {
@@ -21,7 +17,7 @@ import {
   type MultiRepoDeleteRequest
 } from './multi-repo-workspace-delete'
 import { classifyMultiRepoMemberFailure } from './multi-repo-member-failure'
-import { allocateMemberDirNames, allocateMultiRepoRoot } from './multi-repo-root-allocation'
+import { allocateMultiRepoRoot } from './multi-repo-root-allocation'
 import type { MultiRepoWorkspacePort } from './multi-repo-workspace-port'
 import {
   patchMultiRepoMember,
@@ -37,6 +33,7 @@ import {
 import { recordMultiRepoMemberLineage, tryAdoptMultiRepoMember } from './multi-repo-member-adoption'
 import {
   ensureMultiRepoSystemGroup,
+  buildMultiRepoRecord,
   reportMultiRepoCreated,
   validateMultiRepoRepos
 } from './multi-repo-create-support'
@@ -51,6 +48,8 @@ export type MultiRepoWorkspaceCreateInput = {
 
 export class MultiRepoWorkspaceService {
   private readonly activeMembers = new Set<string>()
+  // A retry that lands mid-delete would create a worktree under a root no record owns.
+  private readonly deletingWorkspaces = new Set<string>()
   private readonly createsByMutationId = new Map<string, Promise<FolderWorkspace>>()
 
   constructor(private readonly port: MultiRepoWorkspacePort) {}
@@ -71,6 +70,12 @@ export class MultiRepoWorkspaceService {
   }
 
   async retryMember(folderWorkspaceId: string, memberId: string): Promise<FolderWorkspace> {
+    if (this.deletingWorkspaces.has(folderWorkspaceId)) {
+      throw new MultiRepoWorkspaceError(
+        'multi_repo_member_not_retryable',
+        'This workspace is being deleted.'
+      )
+    }
     const store = this.port.requireStore()
     const member = requireMultiRepoMember(
       requireMultiRepoWorkspace(store, folderWorkspaceId).multiRepo,
@@ -114,10 +119,21 @@ export class MultiRepoWorkspaceService {
     return inspectMultiRepoDelete(this.port, folderWorkspaceId)
   }
 
-  delete(request: MultiRepoDeleteRequest): Promise<MultiRepoDeleteResult> {
-    return deleteMultiRepoWorkspace(this.port, request, (memberId) =>
-      this.activeMembers.has(memberId)
-    )
+  async delete(request: MultiRepoDeleteRequest): Promise<MultiRepoDeleteResult> {
+    if (this.deletingWorkspaces.has(request.folderWorkspaceId)) {
+      throw new MultiRepoWorkspaceError(
+        'multi_repo_create_in_progress',
+        'This workspace is already being deleted.'
+      )
+    }
+    this.deletingWorkspaces.add(request.folderWorkspaceId)
+    try {
+      return await deleteMultiRepoWorkspace(this.port, request, (memberId) =>
+        this.activeMembers.has(memberId)
+      )
+    } finally {
+      this.deletingWorkspaces.delete(request.folderWorkspaceId)
+    }
   }
 
   private async createOnce(input: MultiRepoWorkspaceCreateInput): Promise<FolderWorkspace> {
@@ -158,24 +174,7 @@ export class MultiRepoWorkspaceService {
       await rmdir(rootPath).catch(() => {})
       throw error
     }
-    const dirNames = allocateMemberDirNames(repos.map((repo) => repo.path))
-    const members: MultiRepoMember[] = input.members.map((requested, index) => ({
-      memberId: randomUUID(),
-      repoId: requested.repoId,
-      dirName: dirNames[index],
-      branchName: requested.branchName ?? defaultBranch,
-      ...(requested.branchName ? { branchExplicit: true } : {}),
-      ...(requested.baseRef ? { baseRef: requested.baseRef } : {}),
-      state: 'queued',
-      attempts: 0
-    }))
-    const multiRepo: MultiRepoWorkspace = {
-      version: 1,
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      rootOwnedByOrca: true,
-      members,
-      ...(input.createdWithAgent ? { pendingAgentStart: true } : {})
-    }
+    const multiRepo = buildMultiRepoRecord(input, repos, defaultBranch)
     const stored = store.updateFolderWorkspace?.(workspace.id, { multiRepo })
     if (!stored) {
       await this.port.deleteFolderWorkspace(workspace.id)
@@ -189,7 +188,7 @@ export class MultiRepoWorkspaceService {
     const startedAt = Date.now()
     void this.runMembers(
       workspace.id,
-      members.map((member) => member.memberId),
+      multiRepo.members.map((member) => member.memberId),
       { startedAt }
     ).catch((error: unknown) => {
       console.warn('[multi-repo-workspace] create run failed', error)

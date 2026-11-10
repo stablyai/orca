@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,
@@ -8,7 +9,9 @@ import {
   MULTI_REPO_WORKSPACE_MAX_MEMBERS,
   MULTI_REPO_WORKSPACE_MIN_MEMBERS,
   MultiRepoWorkspaceError,
-  isMultiRepoWorkspaceSettled
+  isMultiRepoWorkspaceSettled,
+  type MultiRepoMember,
+  type MultiRepoWorkspace
 } from '../../../shared/multi-repo-workspace'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -16,6 +19,8 @@ import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { Repo } from '../../../shared/repo-types'
 import { bucketMultiRepoMemberCount } from '../../../shared/telemetry-multi-repo-workspace-event-schemas'
 import { track } from '../../telemetry/client'
+import { allocateMemberDirNames } from './multi-repo-root-allocation'
+import type { MultiRepoWorkspaceCreateInput } from './multi-repo-workspace-service'
 import type { MultiRepoWorkspacePort } from './multi-repo-workspace-port'
 
 export function validateMultiRepoRepos(
@@ -116,4 +121,29 @@ export function reportMultiRepoCreated(
     total_duration_ms: Date.now() - startedAt,
     execution_host: 'local'
   })
+}
+
+export function buildMultiRepoRecord(
+  input: MultiRepoWorkspaceCreateInput,
+  repos: readonly Repo[],
+  defaultBranch: string
+): MultiRepoWorkspace {
+  const dirNames = allocateMemberDirNames(repos.map((repo) => repo.path))
+  const members: MultiRepoMember[] = input.members.map((requested, index) => ({
+    memberId: randomUUID(),
+    repoId: requested.repoId,
+    dirName: dirNames[index],
+    branchName: requested.branchName ?? defaultBranch,
+    ...(requested.branchName ? { branchExplicit: true } : {}),
+    ...(requested.baseRef ? { baseRef: requested.baseRef } : {}),
+    state: 'queued',
+    attempts: 0
+  }))
+  return {
+    version: 1,
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    rootOwnedByOrca: true,
+    members,
+    ...(input.createdWithAgent ? { pendingAgentStart: true } : {})
+  }
 }

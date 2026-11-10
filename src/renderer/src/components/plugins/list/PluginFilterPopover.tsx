@@ -1,16 +1,10 @@
 import { ListFilter } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
-import {
-  NO_PLUGIN_LIST_FILTER,
-  pluginFilterSize,
-  type PluginListFilter
-} from './plugin-list-filter'
-import { pluginCategoryLabel } from './plugin-category-label'
-import { PluginCategoryIcon } from './PluginCategoryBadge'
+import { NO_PLUGIN_LIST_FILTER, type PluginListFilter } from './plugin-list-filter'
 
 function toggled(set: ReadonlySet<string>, value: string, on: boolean): Set<string> {
   const next = new Set(set)
@@ -52,20 +46,19 @@ function FilterOption({
   )
 }
 
-/** Narrow the list by category and by catalog. */
+/** Narrow the list by catalog; categories are inline chips beside it. */
 export function PluginFilterPopover({
   filter,
-  categories,
   sources,
   onChange
 }: {
   filter: PluginListFilter
-  categories: readonly [string, number][]
   sources: readonly PluginMarketplaceHostSourceState[]
   onChange: (filter: PluginListFilter) => void
 }): React.JSX.Element {
-  const active = pluginFilterSize(filter)
-  const label = translate('auto.components.settings.PluginFilterPopover.label', 'Filter plugins')
+  const t = useTranslate()
+  const active = filter.sourceIds.size
+  const label = t('auto.components.settings.PluginFilterPopover.catalogLabel', 'Filter by catalog')
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -75,40 +68,13 @@ export function PluginFilterPopover({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64">
-        {categories.length > 0 ? (
-          <div
-            role="group"
-            aria-label={translate('auto.components.settings.PluginFilterPopover.kind', 'Category')}
-          >
-            <p className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">
-              {translate('auto.components.settings.PluginFilterPopover.kind', 'Category')}
-            </p>
-            {categories.map(([category, count]) => (
-              <FilterOption
-                key={category}
-                id={`plugin-filter-category-${category}`}
-                label={pluginCategoryLabel(category)}
-                icon={<PluginCategoryIcon category={category} />}
-                count={count}
-                checked={filter.categories.has(category)}
-                onChange={(on) =>
-                  onChange({ ...filter, categories: toggled(filter.categories, category, on) })
-                }
-              />
-            ))}
-          </div>
-        ) : null}
         {sources.length > 0 ? (
           <div
             role="group"
-            aria-label={translate(
-              'auto.components.settings.PluginFilterPopover.catalog',
-              'Catalog'
-            )}
-            className="mt-1 border-t border-border pt-1"
+            aria-label={t('auto.components.settings.PluginFilterPopover.catalog', 'Catalog')}
           >
             <p className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">
-              {translate('auto.components.settings.PluginFilterPopover.catalog', 'Catalog')}
+              {t('auto.components.settings.PluginFilterPopover.catalog', 'Catalog')}
             </p>
             {sources.map((source) => (
               <FilterOption
@@ -129,9 +95,9 @@ export function PluginFilterPopover({
             size="sm"
             className="w-full justify-start"
             disabled={active === 0}
-            onClick={() => onChange(NO_PLUGIN_LIST_FILTER)}
+            onClick={() => onChange({ ...filter, sourceIds: NO_PLUGIN_LIST_FILTER.sourceIds })}
           >
-            {translate('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
+            {t('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
           </Button>
         </div>
       </PopoverContent>

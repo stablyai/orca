@@ -10,12 +10,14 @@ const isDevelopmentBuild = typeof __DEV__ !== 'undefined' && __DEV__
 
 export default function NativeTroubleshootRoute() {
   const router = useRouter()
-  const { rootRef, diagnosticStatus, checks, runDiagnostics } = useTroubleshootDiagnostics()
+  const { rootRef, diagnosticStatus, checks, hostEndpoints, runDiagnostics } =
+    useTroubleshootDiagnostics()
   return (
     <TroubleshootView
       rootRef={rootRef}
       diagnosticStatus={diagnosticStatus}
       checks={checks}
+      hostEndpoints={hostEndpoints}
       runDiagnostics={() => void runDiagnostics()}
       onBack={() => router.back()}
       onConnectionLog={() => router.push('/connection-log')}

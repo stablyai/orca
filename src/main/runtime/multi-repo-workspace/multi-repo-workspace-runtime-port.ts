@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { queueWorkspaceDelete } from '../workspaces/workspace-lifecycle-commands'
+import { queueWorkspaceDelete } from '../workspaces/lifecycle/workspace-lifecycle-commands'
 import { MultiRepoWorkspaceService } from './multi-repo-workspace-service'
 import type { MultiRepoWorkspacePort } from './multi-repo-workspace-port'
 

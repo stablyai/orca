@@ -6,10 +6,10 @@ import { useAppStore } from '@/store'
 import { resolveMultiRepoExecutionHostId } from '@/lib/multi-repo-execution-host'
 import { translate } from '@/i18n/i18n'
 import { activateWorkspaceRepoEntry } from '@/lib/multi-repo-workspace-repo-navigation'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { deleteFolderWorkspaceUnlessUnsaved } from '@/components/sidebar/folder-workspace-delete'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { deleteFolderWorkspaceUnlessUnsaved } from '@/components/sidebar/workspace-actions/deletion/folder-workspace-delete'
 import type { MultiRepoMemberAction } from '@/store/slices/multi-repo-workspace/multi-repo-workspace-contract'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { buildRootPanelModel, type RootPanelRow, type RootPanelRowStatus } from './root-panel-model'
 import {
   getNotCreatedNote,

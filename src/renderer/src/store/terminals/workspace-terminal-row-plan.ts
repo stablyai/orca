@@ -1,12 +1,12 @@
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   collectReleasedLeafIds,
   hydrateWorkspaceTerminalRows
-} from '../slices/terminal-session-row-hydration'
-import { removeSleepingAgentSessionsForTab } from '../slices/terminal-tab-retirement'
+} from './terminal-session-row-hydration'
+import { removeSleepingAgentSessionsForTab } from './terminal-tab-retirement'
 
 export type WorkspaceTerminalRowPlan = {
   canonicalTabIdBySubsumedTabId: Map<string, string>

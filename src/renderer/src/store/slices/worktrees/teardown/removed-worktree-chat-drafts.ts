@@ -1,17 +1,23 @@
+import { retireNativeChatComposerSubmissionsWhere } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import {
+  nativeChatLaunchPromptDraftOwner,
+  launchDraftSource
+} from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { AppState } from '../../../types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { NativeChatComposerDraftOwner } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { NativeChatComposerDraftOwner } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   deleteNativeChatComposerDraft,
   deleteNativeChatComposerDraftsForTab,
-  deleteNativeChatComposerDraftsOwnedBy,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+  deleteNativeChatComposerDraftsOwnedBy
+} from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   clearNativeChatPendingAttachments,
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 /** Include owner-tagged open/closed drafts plus tab conversation/pane keys written before owner attribution existed. */
 export type WorkspaceChatDraftKeys = {
@@ -66,4 +72,31 @@ export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
     deleteNativeChatComposerDraftsForTab(tabId)
     dropNativeChatPendingAttachmentsForTab(tabId)
   }
+}
+
+/** Committed deletion revokes only the new automatic return writer; saved cleanup remains ordinary. */
+export function deleteWorkspaceChatDraftOwners(
+  keys: WorkspaceChatDraftKeys,
+  additionally?: (owner: NativeChatComposerDraftOwner, scope: string) => boolean
+): void {
+  const owners = new Set(
+    keys.owners.map((owner) => JSON.stringify([owner.executionHostId, owner.workspaceId]))
+  )
+  retireNativeChatComposerSubmissionsWhere((scope, draft) => {
+    const owner =
+      launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner
+    return (
+      !!owner &&
+      (owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId])) ||
+        additionally?.(owner, scope) === true)
+    )
+  })
+}
+export function deleteProjectChatDrafts(projectId: string, executionHostId: ExecutionHostId): void {
+  deleteWorkspaceChatDraftOwners(
+    { owners: [], conversations: [], terminalTabIds: [] },
+    (owner) =>
+      owner.executionHostId === executionHostId &&
+      getRepoIdFromWorktreeId(owner.workspaceId) === projectId
+  )
 }

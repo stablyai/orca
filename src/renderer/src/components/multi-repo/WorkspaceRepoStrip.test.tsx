@@ -3,12 +3,12 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import WorkspaceRepoStrip from './WorkspaceRepoStrip'
 
 const mocks = vi.hoisted(() => ({ activate: vi.fn() }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
 
 const workspace: FolderWorkspace = {
   id: 'f1',

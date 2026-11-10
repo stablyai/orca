@@ -41,6 +41,15 @@ export function pluginGitCloneArgs(url: string, ref: string, repository: string)
   ]
 }
 
+/** Branches and tags (with peeled `^{}` lines) without downloading objects. */
+export function pluginGitListRefsArgs(url: string): string[] {
+  return ['ls-remote', '--tags', '--heads', '--', url]
+}
+
+export function pluginGitRemoteHeadArgs(url: string): string[] {
+  return ['ls-remote', '--', url, 'HEAD']
+}
+
 export function pluginGitFetchCommitArgs(commit: string): string[] {
   return ['fetch', '--quiet', '--no-tags', '--depth', '1', 'origin', commit]
 }

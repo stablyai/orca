@@ -1,42 +1,37 @@
-import type { WebContents } from 'electron'
+import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { isDeepStrictEqual } from 'node:util'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationPrecheckResult
+} from '../../shared/automations/history/automation-run'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import type { HeadlessAutomationDispatchContext } from './headless-dispatch-runner'
-import {
-  AutomationDispatchRefusedError,
-  runHeadlessAutomationDispatch
-} from './headless-dispatch-runner'
+import type { AutomationLauncher } from './automation-launch'
+import type { AutomationLaunchContext } from './automation-launch-runner'
+import { AutomationDispatchRefusedError, runAutomationLaunch } from './automation-launch-runner'
 import type { AutomationRunTargetResult } from './run-target-resolution'
-import { createAutomationDispatchToken } from './dispatch-tokens'
-import {
-  describeScheduledRefusal,
-  describeStoppedWslDistroRefusal,
-  sendRendererDispatch
-} from './dispatch-refusal'
+import { describeScheduledRefusal, describeStoppedWslDistroRefusal } from './dispatch-refusal'
 import {
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
-
-export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
 export { AutomationDispatchCancelledError }
 
 type DispatchContext = Pick<
-  HeadlessAutomationDispatchContext,
+  AutomationLaunchContext,
   'runPrecheck' | 'markDispatchResult' | 'watchRun'
 > & {
   store: Store
   runs: AutomationRunWriter
   isActive(): boolean
-  getRenderer(): AutomationRendererChannel | null
-  headlessDispatcher: HeadlessAutomationDispatcher | null
+  /** Read at each check: a window graph can close while the claim is acknowledged. */
+  launcher(): AutomationLauncher | null
+  chatDispatcher?: AutomationLauncher | null
   resolveTarget(automation: Automation): AutomationRunTargetResult
 }
 
@@ -116,7 +111,8 @@ export async function requestAutomationDispatch(
   let target = resolveCurrentTarget()
   const refusal = describeScheduledRefusal({
     target,
-    canDispatch: Boolean(ctx.getRenderer() || ctx.headlessDispatcher)
+    canDispatch:
+      automation.surface === 'chat' ? Boolean(ctx.chatDispatcher) : Boolean(ctx.launcher())
   })
   if (refusal || !target.ok) {
     return refuse(refusal ?? automationRunFailure('noDispatchHost'))
@@ -144,28 +140,22 @@ export async function requestAutomationDispatch(
   if (lateRefusal || !target.ok) {
     return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
-  const renderer = ctx.getRenderer()
-  if (renderer) {
-    return sendRendererDispatch(
-      renderer,
-      {
-        automation,
-        run,
-        dispatchToken: createAutomationDispatchToken(automation.id, run.id)
-      },
-      ctx.runs,
-      run
-    )
-  }
-  const dispatcher = ctx.headlessDispatcher
+  const dispatcher = automation.surface === 'chat' ? ctx.chatDispatcher : ctx.launcher()
   if (!dispatcher) {
     return refuse(automationRunFailure('noDispatchHost'))
   }
-  return runHeadlessAutomationDispatch({
+  return runAutomationLaunch({
     ...ctx,
     automation,
     run,
     target,
+    // The status check and the store write share one synchronous step, so a settled run stays settled.
+    transition: (result) => {
+      const current = readRun()
+      return current.status === 'dispatching'
+        ? { applied: true, run: ctx.runs.updateRun({ runId: run.id, ...result }) }
+        : { applied: false, run: returnDurable(current) }
+    },
     dispatcher: (request) => {
       if (readRun().status !== 'dispatching') {
         throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')
@@ -184,5 +174,35 @@ export async function requestAutomationDispatch(
       }
       return dispatcher({ ...request, target: latestTarget })
     }
+  })
+}
+
+export async function runAutomationRequestPrecheck(
+  store: Store,
+  automationId: string,
+  runId: string,
+  resolveTarget: (automation: Automation) => AutomationRunTargetResult
+): Promise<AutomationPrecheckResult | null> {
+  const automation = store.listAutomations().find((entry) => entry.id === automationId)
+  if (!automation) {
+    throw new Error('Automation not found.')
+  }
+  const run = store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
+  if (!run) {
+    throw new Error('Automation run not found.')
+  }
+  if (run.trigger !== 'scheduled' || !automation.precheck) {
+    return null
+  }
+  const target = resolveTarget(automation)
+  if (!target.ok) {
+    return failedPrecheckResult(automation.precheck, Date.now(), target.error)
+  }
+  return await runAutomationPrecheck({
+    precheck: automation.precheck,
+    target:
+      automation.executionTargetType === 'ssh'
+        ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
+        : { type: 'local', cwd: target.cwd }
   })
 }

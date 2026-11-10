@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
@@ -52,6 +52,7 @@ export function NewWorkspaceComposerFooter({
   const shownError = multiActive ? multiRepo.createError : createError
   const shownCreating = multiActive ? multiRepo.creating : creating
   const blockedReason = multiActive ? multiRepo.blockedReason : null
+  const t = useTranslate()
   return (
     <>
       {multiActive && multiRepo.mixedHostsError ? (
@@ -60,13 +61,13 @@ export function NewWorkspaceComposerFooter({
           className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
           <p>
-            {translate(
+            {t(
               'auto.components.newWorkspace.multiRepo.mixedHosts',
               'Selected projects span more than one host. Pick a host to continue.'
             )}
           </p>
           <Button type="button" variant="outline" size="xs" onClick={chooseHost}>
-            {translate('auto.components.newWorkspace.multiRepo.chooseHost', 'Choose host')}
+            {t('auto.components.newWorkspace.multiRepo.chooseHost', 'Choose host')}
           </Button>
         </div>
       ) : null}
@@ -103,7 +104,7 @@ export function NewWorkspaceComposerFooter({
           >
             <SwitchIndicator checked={createMultiple} />
             <span className="text-muted-foreground transition-colors group-hover:text-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
+              {t('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>
           </button>
         ) : null}

@@ -66,7 +66,9 @@ export const ReplyParams = z.object({
   id: requiredString('Missing --id'),
   body: requiredString('Missing --body'),
   from: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  // Optional check: mail from a paired server always answers there.
+  on: OptionalString
 })
 
 export const InboxParams = z.object({
@@ -131,6 +133,8 @@ export const AskParams = z
     resume: OptionalString,
     options: OptionalString,
     timeoutMs: OptionalFiniteNumber,
+    /** false records a new question and returns at once; omitted keeps the older waiting form. */
+    wait: OptionalBoolean,
     from: OptionalString,
     run: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),

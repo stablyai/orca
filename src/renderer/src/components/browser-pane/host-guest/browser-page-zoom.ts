@@ -1,25 +1,9 @@
 import type { BrowserPageZoomCommand } from '../../../../../shared/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../../shared/browser-site-display'
 
 export type { BrowserPageZoomCommand } from '../../../../../shared/browser-page-zoom'
 
 export const ORCA_BROWSER_PAGE_ZOOM_EVENT = 'orca:browser-page-zoom'
-
-export type BrowserPageZoomIndicatorState = {
-  ariaHidden: boolean
-  opacityClassName: 'opacity-100' | 'opacity-0'
-}
-
-export function getBrowserPageZoomIndicatorState({
-  feedbackVisible
-}: {
-  feedbackVisible: boolean
-}): BrowserPageZoomIndicatorState {
-  // Show zoom only as transient feedback; non-default zoom must not leave a permanent badge.
-  return {
-    ariaHidden: !feedbackVisible,
-    opacityClassName: feedbackVisible ? 'opacity-100' : 'opacity-0'
-  }
-}
 
 /** Zoom chords that land in Orca's own window while a browser pane holds focus. */
 export function dispatchBrowserPageZoom(command: BrowserPageZoomCommand): void {
@@ -36,4 +20,29 @@ export function addBrowserPageZoomEventListener(
   }
   window.addEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
   return () => window.removeEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
+}
+
+const ORCA_BROWSER_PAGE_SITE_DISPLAY_EVENT = 'orca:browser-page-site-display'
+
+type BrowserPageSiteDisplayUpdate = {
+  browserPageId: string
+  display: BrowserPageSiteDisplay | null
+}
+
+/** Zoom resolves in main with no push event, so whoever changed it tells the page's chrome. */
+export function publishBrowserPageSiteDisplay(update: BrowserPageSiteDisplayUpdate): void {
+  window.dispatchEvent(new CustomEvent(ORCA_BROWSER_PAGE_SITE_DISPLAY_EVENT, { detail: update }))
+}
+
+export function addBrowserPageSiteDisplayListener(
+  browserPageId: string,
+  callback: (display: BrowserPageSiteDisplay | null) => void
+): () => void {
+  const listener = (event: Event): void => {
+    if (event instanceof CustomEvent && event.detail?.browserPageId === browserPageId) {
+      callback(event.detail.display)
+    }
+  }
+  window.addEventListener(ORCA_BROWSER_PAGE_SITE_DISPLAY_EVENT, listener)
+  return () => window.removeEventListener(ORCA_BROWSER_PAGE_SITE_DISPLAY_EVENT, listener)
 }

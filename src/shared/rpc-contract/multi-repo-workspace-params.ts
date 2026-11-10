@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   MULTI_REPO_WORKSPACE_MAX_MEMBERS,
   MULTI_REPO_WORKSPACE_MIN_MEMBERS

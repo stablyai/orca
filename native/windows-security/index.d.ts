@@ -33,7 +33,21 @@ export declare function setDaclSddl(path: string, sddl: string): void
 export declare function setDaclSddlAsync(path: string, sddl: string): Promise<void>
 
 /** Creates a NEW file already carrying the DACL in `sddl`, then writes `data` into it. */
-export declare function createFileWithDacl(path: string, sddl: string, data: Uint8Array): void
+export declare function createFileWithDacl(
+  path: string,
+  sddl: string,
+  data: Uint8Array,
+  strict?: boolean
+): void
+
+/** Read bounded regular-file bytes and their DACL through one handle, excluding writers/replacement. */
+export declare function readFileWithDacl(
+  path: string,
+  maxBytes: number
+): { data: Uint8Array; dacl: WindowsDacl | null } | null
+/** Missing returns null; native read failures carry syscall='CredReadW' and numeric win32Code. */
+export declare function readGenericCredential(target: string): Uint8Array | null
+export declare function writeGenericCredential(target: string, user: string, data: Uint8Array): void
 
 /**
  * Adds an allow rule for `sid` to the existing DACL, keeping its protection state; Windows orders
@@ -60,12 +74,19 @@ export type StdHandleInheritanceFailure = { stream: 'stdin' | 'stdout' | 'stderr
  */
 export declare function clearStdHandleInheritance(): StdHandleInheritanceFailure[]
 
-/** `exitWatchError` is the Win32 code when the exit can't be observed; the child still runs. */
-export type IsolatedSpawnResult = { pid: number; exitWatchError: number | null }
+/**
+ * `exitWatchError` is the Win32 code when the exit can't be observed; the child still runs.
+ * `breakawayDenied`: a job this process is in forbids breakaway, so the child stays in it.
+ */
+export type IsolatedSpawnResult = {
+  pid: number
+  exitWatchError: number | null
+  breakawayDenied: boolean
+}
 
 /**
- * Starts `file` detached and hidden, inheriting only a NUL handle for its stdio, so none of this
- * process's other inheritable handles reach it. `commandLine` is the full, already quoted line
+ * Starts `file` detached, hidden and outside this process's jobs where they allow it, inheriting
+ * only a NUL handle for its stdio, so none of this process's other inheritable handles reach it. `commandLine` is the full, already quoted line
  * (argv[0] included); an empty `cwd` keeps ours; `environmentBlock` is `K=V\0…\0\0`. `onExit` gets the exit code and never
  * keeps the event loop alive. Throws an Error naming the failed Win32 call.
  */
@@ -79,3 +100,6 @@ export declare function spawnDetachedIsolated(
 
 /** Whether the resolved binary exports `name`; loads it, but calls nothing else. */
 export declare function hasNativeExport(name: string): boolean
+
+/** True on builds whose isolated spawn requests job breakaway; older binaries lack the export. */
+export declare function isolatedSpawnBreaksAwayFromJob(): boolean

@@ -1,12 +1,15 @@
 import { useCallback, useMemo, useState } from 'react'
-import { rpcClientForExecutionHost } from '../transport/execution-host-scoped-rpc-client'
-import type { RpcClient } from '../transport/rpc-client'
+import { rpcClientForExecutionHost } from '../worktree/execution-host-scoped-rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { multiRepoRetryMember } from '../worktree/multi-repo-workspace-operations'
 import {
   multiRepoMemberOpenTarget,
-  type MobileMultiRepoMember
+  type MobileMultiRepoMember,
+  type MobileMultiRepoSummary
 } from '../worktree/multi-repo-workspace-summary'
 import type { Worktree } from '../worktree/workspace-list-types'
+
+export type MultiRepoDeleteTarget = { row: Worktree; multiRepo: MobileMultiRepoSummary }
 
 const RETRY_TIMEOUT_MS = 120_000
 
@@ -24,7 +27,7 @@ export function useMultiRepoWorkspaceActions({
   reportError
 }: Args) {
   const [retryingMemberIds, setRetryingMemberIds] = useState<ReadonlySet<string>>(new Set())
-  const [deleteTarget, setDeleteTarget] = useState<Worktree | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<MultiRepoDeleteTarget | null>(null)
 
   const openMember = useCallback(
     (parent: Worktree, member: MobileMultiRepoMember) => {
@@ -37,16 +40,16 @@ export function useMultiRepoWorkspaceActions({
   )
 
   const retryMember = useCallback(
-    async (parent: Worktree, member: MobileMultiRepoMember) => {
+    async (parent: Worktree, folderWorkspaceId: string, member: MobileMultiRepoMember) => {
       const rowClient = client && rpcClientForExecutionHost(client, hostCapabilities, parent.hostId)
-      if (!rowClient || !parent.multiRepo) {
+      if (!rowClient) {
         return
       }
       setRetryingMemberIds((prev) => new Set(prev).add(member.memberId))
       try {
         const reply = await multiRepoRetryMember.request(
           rowClient,
-          { folderWorkspaceId: parent.multiRepo.folderWorkspaceId, memberId: member.memberId },
+          { folderWorkspaceId, memberId: member.memberId },
           { timeoutMs: RETRY_TIMEOUT_MS }
         )
         multiRepoRetryMember.interpret(reply)
@@ -66,12 +69,18 @@ export function useMultiRepoWorkspaceActions({
   const deleteClient = useMemo(
     () =>
       client && deleteTarget
-        ? rpcClientForExecutionHost(client, hostCapabilities, deleteTarget.hostId)
+        ? rpcClientForExecutionHost(client, hostCapabilities, deleteTarget.row.hostId)
         : null,
     [client, hostCapabilities, deleteTarget]
   )
 
+  const rowActions = useMemo(
+    () => ({ retryingMemberIds, onOpenMember: openMember, onRetryMember: retryMember }),
+    [retryingMemberIds, openMember, retryMember]
+  )
+
   return {
+    rowActions,
     deleteClient,
     deleteTarget,
     openDelete: setDeleteTarget,

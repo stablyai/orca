@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useProjectHostSetupProjection } from '@/store/selectors'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../../shared/execution-host'
 import { MultiRepoWorkspaceError } from '../../../../shared/multi-repo-workspace'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
 import { multiRepoWorkspaceSupportedOnTarget } from '@/store/slices/multi-repo-workspace/multi-repo-workspace-capability'
 import { parseMultiRepoWorkspaceError } from '@/store/slices/multi-repo-workspace/multi-repo-workspace-transport'
 import {
@@ -26,7 +26,7 @@ import {
   getMultiRepoPrimaryActionLabel
 } from './multi-repo-composer-status'
 import type { ReadyProjectHostOption } from './new-workspace-composer-card-props'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 
 export type UseMultiRepoComposerInput = {
   primaryProjectId: string | null

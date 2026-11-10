@@ -1,10 +1,10 @@
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
   CreateSparseCheckoutRequest,
   SetupDecision
 } from '../../../src/shared/worktree/create-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import {
   buildJiraWorkspaceSource,
   getWorkspaceSourceName

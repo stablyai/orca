@@ -1,6 +1,6 @@
 // Inspect raw sessions for dropped tab-bar entries that layout reconstruction hides.
 
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 export function terminalTabBarEntries(session: WorkspaceSessionState): Map<string, Set<string>> {
   return new Map(

@@ -1,24 +1,24 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { MultiRepoWorkspaceError } from '../../../../../shared/multi-repo-workspace'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
-import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { ipcOrRuntimeTargetForHostId } from '../../../runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '../../../runtime/rpc/targets/runtime-client-target'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
+} from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
-import { adoptFromEndpoint } from '../../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../../host-catalog/endpoint-catalog-adoption'
 import { folderWorkspaceOwnerTarget } from '../../folder-workspaces/folder-workspace-routing'
 import {
   captureWorkspaceChatDraftKeys,
   deleteWorkspaceChatDrafts
 } from '../worktrees/teardown/removed-worktree-chat-drafts'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { MultiRepoWorkspaceSlice } from './multi-repo-workspace-contract'
 import { multiRepoWorkspaceSupportedOnTarget } from './multi-repo-workspace-capability'
 import { callMultiRepoWorkspace } from './multi-repo-workspace-transport'

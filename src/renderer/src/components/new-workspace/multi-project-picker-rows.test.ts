@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { buildMultiProjectPickerRows } from './multi-project-picker-rows'
 
 function option(projectId: string): NewWorkspaceProjectOption {

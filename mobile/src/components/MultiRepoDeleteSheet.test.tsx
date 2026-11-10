@@ -9,7 +9,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('./BottomDrawer', () => ({
+vi.mock('./bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children?: ReactNode }) => createElement('View', null, children)
 }))
 

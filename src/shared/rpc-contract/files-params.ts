@@ -1,7 +1,7 @@
-import { PATH_EXISTENCE_BATCH_MAX } from '../path-existence-batch'
-import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../file-dir-page'
+import { PATH_EXISTENCE_BATCH_MAX } from '../file-access/path-existence-batch'
+import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../file-listing/file-dir-page'
 import { z } from 'zod'
-import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open-path-search'
+import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open/quick-open-path-search'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { FileOpen, WorktreeSelector } from './files-target-params'
 
@@ -62,7 +62,8 @@ export const FileOpenTab = FileOpenTarget.extend({
 })
 
 export const FileOpenDiff = FileOpenTarget.extend({
-  staged: z.boolean().optional()
+  staged: z.boolean().optional(),
+  oldPath: z.string().optional()
 })
 
 export const DocPreviewFileRead = FileOpen.extend({
@@ -92,7 +93,7 @@ export const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-const FileChunkRange = {
+export const FileChunkRange = {
   offset: z.number().int().nonnegative(),
   length: z
     .number()

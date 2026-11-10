@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { MultiRepoMemberDeleteNote, RemoveFromWorkspaceMenuItem } from './MultiRepoMemberNotices'
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))

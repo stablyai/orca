@@ -1,5 +1,5 @@
 import { MultiRepoWorkspaceError } from '../../../shared/multi-repo-workspace'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 /** A worktree is locked iff some multi-repo member points at it; the record is the single source of truth. */
 export function findMultiRepoMemberOwner(

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { MultiRepoMember } from '../../../shared/multi-repo-workspace'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace: vi.fn() }))
 
 const { activateWorkspaceRepoEntry, resolveWorkspaceRepoTarget } =
   await import('./multi-repo-workspace-repo-navigation')
-const { activateAndRevealWorkspace } = await import('@/lib/worktree-activation')
+const { activateAndRevealWorkspace } = await import('@/lib/workspace/activation/worktree-activation')
 
 function member(id: string, state: MultiRepoMember['state']): MultiRepoMember {
   return {

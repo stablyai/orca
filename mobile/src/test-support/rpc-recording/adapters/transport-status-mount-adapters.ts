@@ -1,4 +1,7 @@
-import type { ConnectionState } from '../../../transport/types'
+import type * as HostStatusGatesModule from '../../../transport/connection/host-status-gates'
+import type * as RuntimeCapabilityProbeModule from '../../../transport/connection/runtime-capability-probe'
+import type * as PairingCandidateRaceModule from '../../../pairing/pairing-candidate-race'
+import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import { hookMount } from '../hook-mount'
@@ -12,8 +15,8 @@ export function transportStatusMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'transport.host-status-gates': ({ client }: MountContext) => {
-      const useGates = modules.load<typeof import('../../../transport/host-status-gates')>(
-        'mobile/src/transport/host-status-gates.ts'
+      const useGates = modules.load<typeof HostStatusGatesModule>(
+        'mobile/src/transport/connection/host-status-gates.ts'
       ).useHostStatusGates
       let connState: ConnectionState = 'connected'
       let gates: ReturnType<typeof useGates> | undefined
@@ -46,8 +49,8 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.capability-probe': ({ client }: MountContext) => {
-      const start = modules.load<typeof import('../../../transport/runtime-capability-probe')>(
-        'mobile/src/transport/runtime-capability-probe.ts'
+      const start = modules.load<typeof RuntimeCapabilityProbeModule>(
+        'mobile/src/transport/connection/runtime-capability-probe.ts'
       ).startRuntimeCapabilityProbe
       const published: unknown[] = []
       let stop: (() => void) | null = null
@@ -71,8 +74,8 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.pairing-race': ({ client, effect }: MountContext) => {
-      const race = modules.load<typeof import('../../../transport/pairing-candidate-race')>(
-        'mobile/src/transport/pairing-candidate-race.ts'
+      const race = modules.load<typeof PairingCandidateRaceModule>(
+        'mobile/src/pairing/pairing-candidate-race.ts'
       ).racePairingCandidates
       let outcome: unknown = 'unraced'
       const candidate = (path: 'direct' | 'relay') => ({

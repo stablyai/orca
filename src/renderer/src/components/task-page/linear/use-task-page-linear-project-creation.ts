@@ -1,10 +1,14 @@
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageGitHubIssueCreationModel } from '../github/use-task-page-github-issue-creation'
 import { useCallback } from 'react'
-import { linearCreateProject } from '@/runtime/runtime-linear-project-client'
+import { linearCreateProject } from '@/runtime/linear/runtime-linear-project-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreationModel) {
   const {
     settings,
@@ -72,15 +76,16 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
         )
         return
       }
+      const projectUrl = result.project.url
       toast.success(
         translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
           value0: result.project.name
         }),
         {
-          action: result.project.url
+          action: projectUrl
             ? {
                 label: translate('auto.components.TaskPage.9c57663908', 'View'),
-                onClick: () => window.open(result.project.url, '_blank')
+                onClick: () => openAppHttpLink(projectUrl)
               }
             : undefined
         }

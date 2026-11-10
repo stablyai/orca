@@ -1,4 +1,5 @@
 import { utf8ByteLength } from './bridge-caps'
+import type { BridgeTerminalKeyId } from './bridge-terminal-key'
 import { BridgeReplyRefusedError } from './bridge-client-errors'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import type { BridgeClientRequests } from './bridge-client-requests'
@@ -10,6 +11,7 @@ import {
   type BridgeHostMessage
 } from './bridge-envelope'
 import { reconstructBridgeError } from './bridge-error-capture'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge-app-inactive'
 
 export type BridgeInboundFramePort = {
   requests: BridgeClientRequests
@@ -17,7 +19,11 @@ export type BridgeInboundFramePort = {
   report: (diagnostic: BridgeRpcClientDiagnostic) => void
   acceptInit: (message: Extract<BridgeHostMessage, { type: 'init' }>) => void
   acceptState: (connection: BridgeConnectionSnapshot) => void
+  acceptConnectionPath: (connection: BridgeConnectionSnapshot) => void
   acceptBack: () => void
+  acceptParked: () => void
+  acceptAppInactive: () => void
+  acceptTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => void
 }
 
 function describeStreamFailure(error: unknown): string {
@@ -57,8 +63,20 @@ export function createBridgeInboundFrameReader(
       case 'state':
         port.acceptState(message.connection)
         return
+      case 'connectionPath':
+        port.acceptConnectionPath(message.connection)
+        return
       case 'back':
         port.acceptBack()
+        return
+      case 'parked':
+        port.acceptParked()
+        return
+      case BRIDGE_APP_INACTIVE_FRAME:
+        port.acceptAppInactive()
+        return
+      case 'terminalKey':
+        port.acceptTerminalKey(message.key, message.inputOwner)
         return
       case 'reply':
         if (!requests.has(message.id)) {

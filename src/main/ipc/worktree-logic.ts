@@ -9,7 +9,8 @@ import {
   setEmojiShortcodeDatasetLoader
 } from '../../shared/emoji-shortcode-catalog'
 import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
-import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
+import { getWslHome, getWslHomeAsync } from '../wsl/discovery/distro-catalog'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
 
 setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
 

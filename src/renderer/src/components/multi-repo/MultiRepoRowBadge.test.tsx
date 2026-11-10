@@ -3,7 +3,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { MultiRepoMember } from '../../../../shared/multi-repo-workspace'
 import type { Repo } from '../../../../shared/repo-types'
 import MultiRepoRowBadge from './MultiRepoRowBadge'

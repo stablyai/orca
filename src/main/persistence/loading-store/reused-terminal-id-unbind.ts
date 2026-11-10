@@ -1,5 +1,5 @@
 // Local terminal counters reset on restart; unbind older stamped incarnations when a new process reuses an ID.
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 export type ReusedTerminalBinding = {
   ptyId: string

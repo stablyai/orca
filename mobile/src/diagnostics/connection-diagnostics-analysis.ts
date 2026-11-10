@@ -2,12 +2,12 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-r
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
-} from '../transport/relay-host-reachability'
+} from '../transport/relay/relay-host-reachability'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export type ConnectionDiagnosis = {
   likelyCause: string
@@ -254,6 +254,9 @@ function diagnosticEvidence(entry: ConnectionLogEntry): string {
 }
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
+  if (entry.code === 'native-render-failed') {
+    return false
+  }
   return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
     diagnosticEvidence(entry)
   )

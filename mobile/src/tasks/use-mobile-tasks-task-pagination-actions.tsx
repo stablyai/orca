@@ -1,11 +1,19 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { patchTaskHydration } from './task-queries'
+import {
+  applyEmptyPageClamp,
+  applyWindowPageLimit,
+  deriveAdvertisedTotalPages,
+  resolveEmptyPageOutcome
+} from '../../../src/shared/work-items/work-item-empty-page'
+import { translate } from '../i18n/mobile-i18n'
 import type { TaskListLoadingModel } from './use-mobile-tasks-task-list-loading'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
-  getTaskPagePerRepoLimit,
-  useCallback,
-  useMemo
-} from './mobile-tasks-dependencies'
+  getTaskPagePerRepoLimit
+} from '../../../src/shared/work-items/work-item-pagination'
+import { useCallback, useMemo, useState } from './mobile-tasks-dependencies'
 import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 import { linearAccountConnect } from './mobile-task-list-operations'
 
@@ -34,14 +42,17 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     githubPages,
     githubPaginationLoading,
     githubCountedTotalPages,
+    hostId,
     linearApiKeyDraft,
     linearConnectState,
     loadGenerationRef,
     loadLinearContext,
     loadTasks,
+    revalidating,
     selectedHostedRepos,
     setError,
     setGithubCurrentPage,
+    setGithubCountedTotalPages,
     setGithubLoadingTargetPage,
     setGithubPages,
     setGithubPaginationLoading,
@@ -57,6 +68,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     taskUiReady,
     tasksSupported
   } = model
+  const queryClient = useQueryClient()
   const connectLinearAccount = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !taskUiReady) {
       return
@@ -77,6 +89,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('idle')
       setShowLinearConnect(false)
       setLinearConnected(true)
+      patchTaskHydration(queryClient, hostId, (kept) => ({ ...kept, linearConnected: true }))
       setVisibleProviders((current) =>
         current.includes('linear') ? current : [...current, 'linear']
       )
@@ -86,7 +99,16 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('error')
       setLinearConnectError(err instanceof Error ? err.message : 'Connection failed')
     }
-  }, [client, connState, linearApiKeyDraft, linearConnectState, loadLinearContext, taskUiReady])
+  }, [
+    client,
+    connState,
+    hostId,
+    linearApiKeyDraft,
+    linearConnectState,
+    loadLinearContext,
+    queryClient,
+    taskUiReady
+  ])
 
   const retryGitHubIssueSourceFetch = useCallback(
     async (repoPath: string): Promise<void> => {
@@ -109,10 +131,15 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     [loadTasks]
   )
 
-  // Zero count uses the desktop’s failed-count fallback.
-  const githubTotalPages = githubCountedTotalPages
-    ? Math.max(githubPages.length, githubCountedTotalPages)
-    : githubPages.length
+  const [windowLimit, setWindowLimit] = useState<{ generation: number; pages: number } | null>(null)
+  const provenPageLimit =
+    windowLimit?.generation === loadGenerationRef.current ? windowLimit.pages : null
+  const githubTotalPages = deriveAdvertisedTotalPages({
+    loadedPages: githubPages.length,
+    countedTotalPages: githubCountedTotalPages,
+    fallbackTotalPages: githubPages.length,
+    provenPageLimit
+  })
   const githubPerRepoLimit = getTaskPagePerRepoLimit(
     selectedHostedRepos.length,
     PER_REPO_FETCH_LIMIT,
@@ -120,9 +147,13 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
   )
   // One full per-repo page may have more; all-repo mode skips counts and relies on this to reach page two.
   const githubCanLoadUncountedNextPage =
-    !githubCountedTotalPages && hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
+    !githubCountedTotalPages &&
+    (provenPageLimit === null || githubPages.length < provenPageLimit) &&
+    hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
+  // Kept or previous-filter pages stand in while the list re-reads; paging from them would mix filters.
   const githubCanShowPagination =
-    githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage)
+    !revalidating &&
+    (githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage))
   const githubPagePickerPages = useMemo(() => {
     const visible = new Set<number>()
     const availablePages = Math.min(
@@ -149,6 +180,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         !tasksSupported ||
         targetPage < 0 ||
         githubPaginationLoading ||
+        revalidating ||
         selectedHostedRepos.length === 0
       ) {
         return
@@ -165,11 +197,52 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       const generation = loadGenerationRef.current
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === client
+      setError('')
       setGithubPaginationLoading(true)
       setGithubLoadingTargetPage(targetPage)
       try {
         const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage, isCurrent)
-        if (!isCurrent() || page.items.length === 0) {
+        if (!isCurrent()) {
+          return
+        }
+        if (page.items.length === 0) {
+          const emptyPage = {
+            target: targetPage,
+            failedCount: page.failedCount,
+            errorTypes: page.errorTypes
+          }
+          const { reason } = resolveEmptyPageOutcome({ ...emptyPage, countedTotalPages: null })
+          if (reason === 'window-unreachable') {
+            setError(
+              translate(
+                'tasks.pagination.pageUnreachable',
+                'Page {{page}} is beyond what GitHub search can return.',
+                { page: targetPage + 1 }
+              )
+            )
+            setWindowLimit((previous) => ({
+              generation,
+              pages: applyWindowPageLimit(
+                previous?.generation === generation ? previous.pages : null,
+                targetPage
+              )
+            }))
+          } else if (reason === 'load-failed') {
+            setError(
+              translate(
+                'tasks.pagination.loadPageFailed',
+                'Page {{page}} could not be loaded from GitHub.',
+                { page: targetPage + 1 }
+              )
+            )
+          } else {
+            setError(
+              translate('tasks.pagination.noMoreResults', 'No more results on page {{page}}.', {
+                page: targetPage + 1
+              })
+            )
+            setGithubCountedTotalPages((previous) => applyEmptyPageClamp(previous, emptyPage))
+          }
           return
         }
         if (page.failedCount > 0) {
@@ -194,7 +267,9 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       githubPages,
       githubPaginationLoading,
       loadGenerationRef,
+      revalidating,
       selectedHostedRepos,
+      setGithubCountedTotalPages,
       tasksSupported
     ]
   )

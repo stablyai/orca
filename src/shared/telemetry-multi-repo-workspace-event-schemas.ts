@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { WORKTREE_CREATE_EXECUTION_HOSTS } from './worktree/create-timing-vocabulary'
 
 // Counts and closed enums only: no repo names, branch names, paths or error text.

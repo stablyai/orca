@@ -1,28 +1,27 @@
 import { useCallback, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
-import { getCachedWorktrees } from '../cache/worktree-cache'
-import type { RpcClient } from '../transport/rpc-client'
-import { WorktreeCatalogSnapshotClient } from '../worktree/worktree-catalog-snapshot-client'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
+import { storedHostDescriptor, type HostStoredDescriptor } from './host-stored-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
 import type { SectionRepo } from '../worktree/workspace-list-types'
 import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import { cachedHostWorktrees } from './host-list-queries'
+import { cachedHostView, useHostViewMemory } from './host-view-memory'
 
-export function useHostScreenState(hostId: string | undefined) {
-  const [initialCache] = useState(() =>
-    hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
-  )
+export function useHostScreenState(
+  hostId: string | undefined,
+  storedHost: HostProfile | null = null
+) {
+  const queryClient = useQueryClient()
+  // The rows this world last read for the host, so a reopened list paints them in its first frame.
+  const [initialCache] = useState(() => cachedHostWorktrees(queryClient, hostId))
   const clientRef = useRef<RpcClient | null>(null)
-  const fetchWorktreesInFlightRef = useRef(false)
-  // Use a ref: React may discard memoized values and silently reset the owned snapshot token.
-  const worktreeCatalogRef = useRef(new WorktreeCatalogSnapshotClient())
-  const fetchRepoMetadataInFlightRef = useRef(new WeakSet<RpcClient>())
-  const fetchRepoMetadataPendingRef = useRef(new WeakSet<RpcClient>())
-  const repoMetadataFetchedAtRef = useRef(0)
-  const newWorktreeModalVisibleRef = useRef(false)
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
   // Retain catalog failure codes so broken hosts do not render as empty; clear on success (STA-3123).
@@ -31,21 +30,22 @@ export function useHostScreenState(hostId: string | undefined) {
   const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
     string | null
   >(null)
-  const [hostName, setHostName] = useState('')
+  const [seedHost] = useState(storedHost)
+  const [hostName, setHostName] = useState(seedHost?.name ?? '')
   // The stored name identity, loaded with the name so the header can label an offline host.
-  const [hostStoredDescriptor, setHostStoredDescriptor] = useState<{
-    personalName?: string
-    lastKnownMachineName?: string
-    lastKnownHostPlatform?: NodeJS.Platform
-  } | null>(null)
+  const [hostStoredDescriptor, setHostStoredDescriptor] = useState<HostStoredDescriptor | null>(
+    seedHost ? storedHostDescriptor(seedHost) : null
+  )
   const [error, setError] = useState('')
   // Keep action errors separate from identity errors so a failed action cannot replace the list and its recovery controls.
   const [actionError, setActionError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
-  const [showSearch, setShowSearch] = useState(false)
-  const [view, setView] = useState<MobileViewState>(INITIAL_MOBILE_VIEW)
+  const [view, setView] = useState<MobileViewState>(
+    () => cachedHostView(queryClient, hostId) ?? INITIAL_MOBILE_VIEW
+  )
   const viewRef = useRef(view)
+  const rememberView = useHostViewMemory(hostId)
   const [servedProjectSections, setServedProjectSections] = useState<ServedProjectSections | null>(
     null
   )
@@ -65,11 +65,7 @@ export function useHostScreenState(hostId: string | undefined) {
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [showNewWorktree, setShowNewWorktree] = useState(false)
-  // Why the ref too: the catalog poll reads it from callbacks that outlive this render.
-  const setNewWorktreeVisible = useCallback((visible: boolean) => {
-    newWorktreeModalVisibleRef.current = visible
-    setShowNewWorktree(visible)
-  }, [])
+  const setNewWorktreeVisible = useCallback((visible: boolean) => setShowNewWorktree(visible), [])
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
@@ -84,22 +80,17 @@ export function useHostScreenState(hostId: string | undefined) {
     hostProjectGroups,
     actionError,
     error,
-    fetchRepoMetadataInFlightRef,
-    fetchRepoMetadataPendingRef,
-    fetchWorktreesInFlightRef,
     hostLabelById,
     hostHealthById,
     hostName,
     hostPlatform,
     hostStoredDescriptor,
     lastKnownWorktrees,
-    newWorktreeModalVisibleRef,
     optimisticActiveWorktreeIdentity,
     pinnedIds,
     repoHostIdByRepoId,
     servedProjectSections,
     desktopRepos,
-    repoMetadataFetchedAtRef,
     search,
     serverNotice,
     serverWorkspaces,
@@ -127,19 +118,17 @@ export function useHostScreenState(hostId: string | undefined) {
     setServerWorkspaces,
     setShowWorkspaceOptions,
     setShowPinnedInGroups,
-    setShowSearch,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
     showNewWorktree,
     showWorkspaceOptions,
     showPinnedInGroups,
-    showSearch,
     setView,
+    rememberView,
     view,
     viewRef,
     sleptIds,
-    worktreeCatalogRef,
     worktrees,
     worktreesLoaded
   }

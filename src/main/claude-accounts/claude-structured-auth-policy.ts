@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getClaudeProfileRouter } from './claude-profile-installed-router'
 import { isHostManagedClaudeAccount } from './environment'

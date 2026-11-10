@@ -1,10 +1,10 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceRepoSelection } from '../../../shared/window-shortcut-policy'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { resolveMultiRepoExecutionHostId } from '@/lib/multi-repo-execution-host'
 
 type RepoNavigationState = Pick<AppState, 'folderWorkspaces' | 'activeWorktreeId'>

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { activateWorkspaceRepoEntry } from '@/lib/multi-repo-workspace-repo-navigation'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { buildWorkspaceRepoStripModel } from './workspace-repo-strip-model'
 
 /** One-click repo switching for the active multi-repo workspace; renders nothing anywhere else. */

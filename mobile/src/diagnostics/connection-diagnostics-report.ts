@@ -2,10 +2,10 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-r
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,
-  ConnectionState,
   MobileConnectionDiagnosticPath
-} from '../transport/types'
-import { normalizeHostAppVersion } from '../transport/host-app-version'
+} from './connection/connection-log-types'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { normalizeHostAppVersion } from '../host-descriptors/host-app-version'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
@@ -67,11 +67,18 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(`Likely cause: ${diagnosis.likelyCause}`)
   lines.push(`Next step: ${diagnosis.nextStep}`)
   lines.push('')
+  lines.push(formatConnectionLogHistory(entries))
+  return lines.join('\n')
+}
+
+export function formatConnectionLogHistory(entries: readonly ConnectionLogEntry[]): string {
+  const lines: string[] = []
   if (entries.length === 0) {
     lines.push('No connection events recorded.')
   } else {
     lines.push(`Recent connection history (${entries.length} events, oldest first):`)
-    for (const entry of entries) {
+    for (const rawEntry of entries) {
+      const entry = redactConnectionLogEntry(rawEntry)
       const detail = entry.detail ? ` — ${entry.detail}` : ''
       const evidence = [entry.code, entry.path].filter(Boolean).join(' · ')
       lines.push(

@@ -44,7 +44,7 @@ type RestartSession = {
 
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms)
+    const timeout = setTimeout<[]>(resolve, ms)
     timeout.unref?.()
   })
 }
@@ -245,7 +245,11 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
               return false
             }
             // Show the seeded Git worktree external to Orca’s managed workspace root.
-            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            await store.getState().updateRepo(repo.id, {
+              externalWorktreeVisibility: 'show',
+              // Restart specs model an existing repo, which keeps pre-trust.
+              agentWorkspaceTrust: 'pre-trust'
+            })
             return true
           }, repoId)
         ),

@@ -1,10 +1,13 @@
-import type { Store } from '../persistence'
-import type { Automation } from '../../shared/automations-types'
-import { getAutomationLegacyRepoId } from '../../shared/automation-run-identity'
+import { findAutomationRepo } from '../../shared/automations/ownership/automation-repo-target'
+import { findProjectHostSetup } from '../../shared/project-host-setup-target'
+import type { Store } from '../persistence/loading-store/store'
+import type { Automation } from '../../shared/automations/automation-definition'
+import { getAutomationLegacyRepoId } from '../../shared/automations/history/automation-run-identity'
 import {
   AUTOMATION_ORPHAN_ISSUES,
   type AutomationCapturedHostIssue
-} from '../../shared/automation-list-scope'
+} from '../../shared/automations/ownership/automation-list-scope'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../shared/automations/ownership/automation-owner-conflict'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -12,13 +15,17 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
-} from '../../shared/task-source-context'
+} from '../../shared/work-items/task-source-context'
 import {
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
-import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
+import {
+  isOrcadFencedAutomation,
+  managedOrcadHostOf,
+  ORCAD_FENCED_AUTOMATION
+} from './orcad-fenced-automation'
 
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
@@ -26,10 +33,18 @@ export type AutomationRunTargetResult =
 
 // Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
 const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, () => AutomationRunFailure> = {
+  [AUTOMATION_ORPHAN_ISSUES.hostReselection]: () => ({
+    error: AUTOMATION_CAPTURED_HOST_REFUSALS[AUTOMATION_ORPHAN_ISSUES.hostReselection]
+  }),
+  [AUTOMATION_ORPHAN_ISSUES.malformed]: () => ({
+    error: AUTOMATION_CAPTURED_HOST_REFUSALS[AUTOMATION_ORPHAN_ISSUES.malformed]
+  }),
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]: () => automationRunFailure('targetMissing'),
   [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: () => automationRunFailure('targetReplaced'),
   [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: () =>
-    automationRunFailure('workspaceHostAmbiguous')
+    automationRunFailure('workspaceHostAmbiguous'),
+  [AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer]: () =>
+    automationRunFailure('targetUnavailable')
 }
 
 type AutomationRunTargetOptions = {
@@ -142,6 +157,10 @@ export function resolveAutomationRunTarget(
   automation: Automation,
   options: AutomationRunTargetOptions = {}
 ): AutomationRunTargetResult {
+  const managedHost = managedOrcadHostOf(store, automation)
+  if (managedHost) {
+    return { ok: false, ...automationRunFailure('managedHostServer', { host: managedHost.label }) }
+  }
   const context = automation.runContext ?? null
   if (!context) {
     return resolveLegacyAutomationRunTarget(store, automation)
@@ -160,9 +179,10 @@ export function resolveAutomationRunTarget(
     return { ok: false, ...CAPTURED_HOST_REFUSALS[hostIssue]() }
   }
 
-  const setup = store
-    .getProjectHostSetups()
-    .find((candidate) => candidate.id === context.projectHostSetupId)
+  const setup = findProjectHostSetup(store.getProjectHostSetups(), {
+    setupId: context.projectHostSetupId,
+    hostId: context.hostId
+  })
   if (!setup) {
     return { ok: false, ...automationRunFailure('projectSetupMissing') }
   }
@@ -177,7 +197,10 @@ export function resolveAutomationRunTarget(
     return { ok: false, ...automationRunFailure('targetSetupMismatch') }
   }
 
-  const repo = store.getRepo(context.repoId)
+  const repo = findAutomationRepo(store.getRepos(), context.repoId, {
+    hostId: context.hostId,
+    path: setup.path
+  })
   if (!repo) {
     return { ok: false, ...automationRunFailure('repoUnavailable') }
   }

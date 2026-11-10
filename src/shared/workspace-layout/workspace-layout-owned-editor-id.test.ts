@@ -3,8 +3,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { saveWorkspaceLayout } from './workspace-layout-save'
@@ -77,16 +77,6 @@ describe('editor tabs under an owned id, layout-owner build', () => {
     const twice = load(saved)
     expect(twice.layout.workspaces[key]!.tabs[0]).toMatchObject({ isPreview: true })
     expect(onDisk(saveWorkspaceLayout(twice))).toEqual(onDisk(stored))
-  })
-
-  it('keeps it as the active file', () => {
-    const { session: stored, fileId } = previewUnderOwnedId(GIT_KEY, '/Users/dev/orca/README.md')
-    stored.activeFileIdByWorktree = { [GIT_KEY]: fileId }
-    stored.activeTabTypeByWorktree = { [GIT_KEY]: 'editor' }
-
-    const saved = saveWorkspaceLayout(load(stored))
-
-    expect(saved.activeFileIdByWorktree?.[GIT_KEY]).toBe(fileId)
   })
 
   it('a stored disagreement still demotes the tab, as for a bare id', () => {

@@ -1,6 +1,8 @@
+import type * as UseMobileSessionContentCreateActionsModule from '../../../session/use-mobile-session-content-create-actions'
+import type * as UseMobileSessionCloseActionsModule from '../../../session/tabs/use-mobile-session-close-actions'
 import { hookMount, performHookAction } from '../hook-mount'
-import type { MobileSessionTab } from '../../../session/mobile-session-route-types'
-import type { TerminalRecord } from '../../../session/mobile-terminal-records'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
+import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -14,9 +16,7 @@ export function sessionScreenTabMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.content-create': ({ client, effect }) => {
-      const useCreate = modules.load<
-        typeof import('../../../session/use-mobile-session-content-create-actions')
-      >(
+      const useCreate = modules.load<typeof UseMobileSessionContentCreateActionsModule>(
         'mobile/src/session/use-mobile-session-content-create-actions.ts'
       ).useMobileSessionContentCreateActions
       let creatingBrowser = false
@@ -88,9 +88,9 @@ export function sessionScreenTabMountAdapters(
       }
     },
     'session.tab-close': ({ client, effect }) => {
-      const useClose = modules.load<
-        typeof import('../../../session/use-mobile-session-close-actions')
-      >('mobile/src/session/use-mobile-session-close-actions.ts').useMobileSessionCloseActions
+      const useClose = modules.load<typeof UseMobileSessionCloseActionsModule>(
+        'mobile/src/session/tabs/use-mobile-session-close-actions.ts'
+      ).useMobileSessionCloseActions
       const terminalTab = mountFixture<Extract<MobileSessionTab, { type: 'terminal' }>>({
         id: 'tab-1',
         type: 'terminal',
@@ -121,10 +121,8 @@ export function sessionScreenTabMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            reconcileBufferedDraftsRef: { current: () => {} },
+            forgetLastSessionTab: () => {},
             closedTabTombstonesRef: { current: new Map() },
-            clearTerminalLiveInputDefault: (handle: string) =>
-              effect('clear-live-input', { handle }),
             setActiveHandle: (value) => {
               activeHandle = typeof value === 'function' ? value(activeHandle) : value
             },

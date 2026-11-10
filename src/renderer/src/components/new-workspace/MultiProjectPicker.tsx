@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { getMultiRepoUnavailableCopy } from './multi-repo-composer-copy'
 import {
   buildMultiProjectPickerRows,

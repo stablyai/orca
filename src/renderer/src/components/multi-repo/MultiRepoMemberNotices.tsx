@@ -5,8 +5,8 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { resolveMultiRepoExecutionHostId } from '@/lib/multi-repo-execution-host'
 import { translate } from '@/i18n/i18n'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { findMultiRepoMemberByWorktreeId } from '@/store/slices/multi-repo-workspace/multi-repo-workspace-selectors'
 
 const NO_FOLDER_WORKSPACES: readonly FolderWorkspace[] = []

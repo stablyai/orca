@@ -1,4 +1,4 @@
-import { isRestoreSpawnIntent } from '../../../../shared/host-spawn-admission'
+import { isRestoreSpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import {
@@ -52,6 +52,9 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
   ctx.spawnOptions = launch.spawnOptions
   if (args.wslPassiveRestore === true) {
     ctx.spawnOptions.wslPassiveRestore = true
+  }
+  if (ctx.wslHoldReadAnchor !== undefined) {
+    ctx.spawnOptions.wslHoldReadAnchor = ctx.wslHoldReadAnchor
   }
   ctx.spawnEnv = launch.env
   ctx.launchCommand = launch.launchCommand

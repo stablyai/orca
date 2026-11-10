@@ -1,25 +1,28 @@
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
 import { useMemo } from 'react'
-import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
+import {
+  normalizeSparseDirectoryLines,
+  sparseDirectoriesMatch
+} from '@/lib/directory-input/sparse-paths'
 import {
   parseGitHubIssueOrPRNumber,
-  parseGitHubIssueOrPRLink,
-  normalizeGitHubLinkQuery
-} from '@/lib/github-links'
+  parseGitHubIssueOrPRLink
+} from '../../../../shared/github/links'
+import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import {
-  getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
   getWorkspaceSeedName,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
-} from '@/lib/new-workspace'
-import type { SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
-import { getDefaultSetupDecision, getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+} from '@/lib/workspace/creation/new-workspace'
+import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
-import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+import { getSuggestedCreatureName } from '@/components/sidebar/workspace-creation/naming/worktree-name-suggestions'
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useDerivedComposerState(input: DerivedComposerStateInput) {
@@ -123,22 +126,23 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
     [currentYamlHooks, selectedRepo, selectedRepoIsGit]
   )
-
-  const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
-
-  const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
-
-  const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
-
-  const resolvedSetupDecision =
-    setupDecision ?? getDefaultSetupDecision(Boolean(setupConfig), setupPolicy)
-
   const isSetupCheckPending =
     selectedRepoIsGit &&
     Boolean(selectedRepoHookContextKey) &&
     checkedHooksContextKey !== selectedRepoHookContextKey
-
-  const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
+  const {
+    setupPolicy,
+    requiresExplicitSetupChoice,
+    resolvedSetupDecision,
+    shouldWaitForSetupCheck
+  } = deriveWorkspaceSetupState(
+    selectedRepo,
+    setupConfig,
+    setupDecision,
+    selectedRepoIsGit,
+    isSetupCheckPending
+  )
+  const linkedWorkItemProvider = linkedWorkItem ? getWorkspaceSourceProvider(linkedWorkItem) : null
 
   // Blank unseeded names need globally unique creature names; exclude retired paths too.
   const retiredNamesRefreshKey = useMemo(

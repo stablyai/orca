@@ -3,7 +3,7 @@ import {
   type SidebarFeedNotice,
   type SidebarFeedReaderRead
 } from '../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
-import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { hostSidebarFeedTransport } from './host-sidebar-feed-operations'
 
 export type HostSidebarFeedTriggers = {

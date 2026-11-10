@@ -1,6 +1,6 @@
 import { access, rmdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   MultiRepoWorkspaceError,
   type MultiRepoDeleteInspection,
@@ -12,7 +12,7 @@ import {
 import { bucketMultiRepoMemberCount } from '../../../shared/telemetry-multi-repo-workspace-event-schemas'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { ensurePathWithinWorkspace } from '../../ipc/worktree-logic'
-import { getStatus } from '../../git/status'
+import { getStatus } from '../../git/source-control/status-read'
 import { gitExecFileAsync } from '../../git/runner'
 import { track } from '../../telemetry/client'
 import type { MultiRepoWorkspacePort } from './multi-repo-workspace-port'

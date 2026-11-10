@@ -29,9 +29,20 @@ import type {
   PluginMarketplaceListing,
   PluginMarketplaceService
 } from './plugin-marketplace-service'
-import { marketplaceSourceId } from './plugin-marketplace-store'
-import { isSamePluginSource } from '../../../shared/plugins/catalog/plugin-marketplace'
-import type { PluginInstallSource } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import {
+  marketplaceInstallMoved,
+  marketplaceInstallOf,
+  type MarketplaceInstall
+} from './plugin-marketplace-install-origin'
+import type {
+  PluginLockEntry,
+  PluginLockfile
+} from '../../../shared/plugins/installation/plugin-install-lockfile'
+import {
+  pluginInstallKind,
+  trackPluginInstalled,
+  type PluginInstallTrigger
+} from '../../telemetry/plugin-install-telemetry'
 
 export type PluginMarketplaceInstallPreview = {
   marketplaceSourceId: string
@@ -51,14 +62,12 @@ export type PluginMarketplaceInstallPreview = {
   images?: PluginHostImages
   /** What each recipe file can run, read before the staging tree is deleted; null if unreadable. */
   vmRecipeIdentities?: PluginVmRecipeIdentities
-  /** Update previews only: the catalog now points at a different repository than the install. */
+  /** The catalog now points at a different repository than the installed copy came from. */
   repositoryMoved?: true
 }
 
 /** `repositoryMoved`: this replaced an install that came from a different repository. */
 export type PluginMarketplaceInstallResult = PluginInstallResult & { repositoryMoved?: true }
-
-type MarketplaceInstallSource = Extract<PluginInstallSource, { kind: 'marketplace' }>
 
 export type PluginMarketplacePreviewIdentity = Pick<
   PluginMarketplaceInstallPreview,
@@ -71,6 +80,7 @@ export class PluginMarketplaceInstaller {
   private readonly hostVersion: string
   private readonly blockedPluginReason: (pluginKey: string) => string | null
   private readonly imageCache: PluginImageCache | null
+  private readonly revokeConsent: (pluginKey: string) => Promise<void>
 
   constructor(options: {
     marketplace: PluginMarketplaceService
@@ -78,8 +88,10 @@ export class PluginMarketplaceInstaller {
     hostVersion: string
     blockedPluginReason?: (pluginKey: string) => string | null
     imageCache?: PluginImageCache
+    revokeConsent: (pluginKey: string) => Promise<void>
   }) {
     this.imageCache = options.imageCache ?? null
+    this.revokeConsent = options.revokeConsent
     this.marketplace = options.marketplace
     this.userDataPath = options.userDataPath
     this.hostVersion = options.hostVersion
@@ -108,7 +120,7 @@ export class PluginMarketplaceInstaller {
       const inspection = await inspectPluginInstallTree({
         rootDir: stagingDirectory,
         hostVersion: this.hostVersion,
-        expectedPluginKey: pluginKey,
+        identity: { pluginKey },
         ...(listing.release ? { release: { record: listing.release, resolvedCommit } } : {})
       })
       if (!inspection.ok) {
@@ -119,6 +131,8 @@ export class PluginMarketplaceInstaller {
         inspection.manifest.contributes.vmRecipes.length > 0
           ? await readPluginVmRecipeIdentities(stagingDirectory, inspection.manifest)
           : undefined
+      // Why every preview, not only updates: an install link to an installed plugin replaces it too.
+      const moved = marketplaceInstallMoved(await this.readLockEntry(pluginKey), listing.source)
       return {
         marketplaceSourceId,
         marketplaceName: listing.marketplaceName,
@@ -134,7 +148,8 @@ export class PluginMarketplaceInstaller {
         bundled: listing.bundled,
         ...(listing.blockedByKillList ? { blockedByKillList: listing.blockedByKillList } : {}),
         ...(images ? { images } : {}),
-        ...(vmRecipeIdentities !== undefined ? { vmRecipeIdentities } : {})
+        ...(vmRecipeIdentities !== undefined ? { vmRecipeIdentities } : {}),
+        ...(moved ? { repositoryMoved: true as const } : {})
       }
     } finally {
       await rm(stagingDirectory, { recursive: true, force: true })
@@ -143,7 +158,7 @@ export class PluginMarketplaceInstaller {
 
   async install(
     preview: PluginMarketplacePreviewIdentity,
-    options: { requireInstalled?: boolean } = {}
+    options: { requireInstalled?: boolean; trigger?: PluginInstallTrigger } = {}
   ): Promise<PluginMarketplaceInstallResult> {
     const listing = await this.requireListing(preview.marketplaceSourceId, preview.pluginKey)
     const blockedReason =
@@ -165,9 +180,10 @@ export class PluginMarketplaceInstaller {
       return { ok: false, error: 'marketplace source is no longer configured' }
     }
     // Why read first: the install rewrites the lock entry this comparison needs.
-    const installed = await this.readMarketplaceInstall(preview.pluginKey)
-    const repositoryMoved =
-      installed !== null && !isSamePluginSource(installed.plugin, listing.source)
+    const priorEntry = await this.readLockEntry(preview.pluginKey)
+    const repositoryMoved = marketplaceInstallMoved(priorEntry, listing.source)
+    // Why revoke before publishing: a content-only fingerprint does not name its repository.
+    await (repositoryMoved ? this.revokeConsent(preview.pluginKey) : undefined)
     const result = await installPluginFromMarketplace({
       pluginsDir: getUserPluginsDir(this.userDataPath),
       hostVersion: this.hostVersion,
@@ -187,24 +203,35 @@ export class PluginMarketplaceInstaller {
       blockedPluginReason: this.blockedPluginReason,
       ...(options.requireInstalled ? { requireInstalled: true } : {})
     })
+    if (result.ok) {
+      trackPluginInstalled({
+        marketplaceUrl: sourceState.source.url,
+        plugin_key: result.pluginKey,
+        version: result.version,
+        kind: pluginInstallKind(priorEntry?.version ?? null, result.version),
+        trigger: options.trigger ?? 'catalog'
+      })
+    }
     return result.ok && repositoryMoved ? { ...result, repositoryMoved: true } : result
+  }
+
+  /** Why: one read lets a pass over every plugin skip a full lockfile recovery per plugin. */
+  readInstallLockfile(): Promise<PluginLockfile> {
+    return readPluginLockfile(getUserPluginsDir(this.userDataPath))
+  }
+
+  private async readLockEntry(pluginKey: string): Promise<PluginLockEntry | null> {
+    return (await this.readInstallLockfile()).plugins[pluginKey] ?? null
   }
 
   /** The catalog an installed plugin came from, or null when it was not a marketplace install. */
   private async readMarketplaceInstall(
-    pluginKey: string
-  ): Promise<{ sourceId: string; plugin: MarketplaceInstallSource['plugin'] } | null> {
-    const entry = (await readPluginLockfile(getUserPluginsDir(this.userDataPath))).plugins[
-      pluginKey
-    ]
-    if (entry?.source.kind !== 'marketplace') {
-      return null
-    }
-    const { marketplace, plugin } = entry.source
-    return {
-      sourceId: marketplaceSourceId({ kind: 'git', url: marketplace.url, ref: marketplace.ref }),
-      plugin
-    }
+    pluginKey: string,
+    lock?: PluginLockfile
+  ): Promise<MarketplaceInstall | null> {
+    return marketplaceInstallOf(
+      lock ? (lock.plugins[pluginKey] ?? null) : await this.readLockEntry(pluginKey)
+    )
   }
 
   async previewInstalledUpdate(pluginKey: string): Promise<PluginMarketplaceInstallPreview> {
@@ -212,18 +239,18 @@ export class PluginMarketplaceInstaller {
     if (!installed) {
       throw new Error(`plugin ${pluginKey} was not installed from a marketplace`)
     }
-    const preview = await this.preview(installed.sourceId, pluginKey)
-    return isSamePluginSource(installed.plugin, preview.source)
-      ? preview
-      : { ...preview, repositoryMoved: true }
+    return this.preview(installed.sourceId, pluginKey)
   }
 
   /** The own-catalog listing an installed plugin would update from, read from caches only. */
-  async findInstalledUpdateListing(pluginKey: string): Promise<{
+  async findInstalledUpdateListing(
+    pluginKey: string,
+    lock?: PluginLockfile
+  ): Promise<{
     listing: PluginMarketplaceListing
     officialCatalog: boolean
   } | null> {
-    const installed = await this.readMarketplaceInstall(pluginKey)
+    const installed = await this.readMarketplaceInstall(pluginKey, lock)
     const listing = installed
       ? await this.marketplace.findPlugin(installed.sourceId, pluginKey)
       : null

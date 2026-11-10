@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { MultiRepoWorkspaceError } from '../../../../shared/multi-repo-workspace'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { loadLastMultiRepoSet } from './multi-repo-last-set-storage'
 import { useMultiRepoComposer, type UseMultiRepoComposerInput } from './use-multi-repo-composer'
 
 const mocks = vi.hoisted(() => ({ activate: vi.fn() }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
-vi.mock('@/runtime/runtime-client-target', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
+vi.mock('@/runtime/rpc/targets/runtime-client-target', () => ({
   ipcOrRuntimeTargetForHostId: () => ({ kind: 'local' })
 }))
 vi.mock('@/store/slices/multi-repo-workspace/multi-repo-workspace-capability', () => ({

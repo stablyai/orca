@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 
 /** Share the write-gate harness across separate platform files because platform detection runs at module load. */
 export type TabBarProbeState = {
@@ -68,7 +68,6 @@ export const probeWindowsCapabilities: WindowsTerminalCapabilities = {
 export const localProjectRuntimeSpy = vi.fn(() => undefined)
 
 const AGENT_PROJECTIONS = Object.freeze({
-  nativeChatEnabled: false,
   tabAgentTypesByTabId: Object.freeze({}),
   nativeChatTabWideFallbackUnsafeTabsById: Object.freeze({})
 })

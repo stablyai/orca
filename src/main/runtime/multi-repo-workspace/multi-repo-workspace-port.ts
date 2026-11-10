@@ -1,12 +1,12 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type {
   CreateWorktreeResult,
   RemoveWorktreeResult
 } from '../../../shared/worktree/create-types'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
-import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeManagedWorktreeCreateArgs } from '../workspaces/creation/runtime-managed-worktree-create-types'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 export type MultiRepoWorktreeRemoval = {
   force: boolean

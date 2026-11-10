@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MULTI_REPO_WORKSPACE_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { multiRepoSiblingListRead } from '../worktree/multi-repo-workspace-operations'
 import {
   resolveMultiRepoSessionSiblings,

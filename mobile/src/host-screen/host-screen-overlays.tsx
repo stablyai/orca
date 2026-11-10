@@ -1,19 +1,23 @@
+import { useState } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { Pressable, Text, View } from 'react-native'
-import { Moon, Pin, PinOff } from 'lucide-react-native'
+import { Edit3, Moon, Pin, PinOff } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
-import { useWorkspaceServer } from '../transport/workspace-server'
+import { useWorkspaceServer } from '../worktree/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
-import { BottomDrawer } from '../components/BottomDrawer'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
-import { isWorktreePinned } from '../worktree/workspace-list-sections'
+import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
+import { WorkspaceRenameSheet } from './workspace-rename-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -27,10 +31,18 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     connState,
     existingWorktreePaths,
     hostCapabilities,
+    hostDisplay,
     hostId,
     state
   } = controller
   const actionTarget = state.actionTarget
+  // Tied to the menu's row, so a menu closed elsewhere never reopens on the rename sheet.
+  const [renameTarget, setRenameTarget] = useState<Worktree | null>(null)
+  const closeActionSheet = () => {
+    setRenameTarget(null)
+    state.setConfirmDelete(null)
+    state.setActionTarget(null)
+  }
   // A server row's screens are offered by what that server supports, not the desktop.
   const actionServer = useWorkspaceServer({
     client,
@@ -43,132 +55,182 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     <>
       <WorkspaceOptionsSheet controller={controller} />
 
-      {/* Confirm inline to avoid stacking native Modals. */}
-      <BottomDrawer
-        visible={actionTarget != null}
-        onClose={() => {
-          state.setConfirmDelete(null)
-          state.setActionTarget(null)
-        }}
-      >
-        {state.confirmDelete ? (
-          <View>
-            <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>
-                {t('hostScreen.hostScreenOverlays.deleteWorktree', 'Delete Worktree')}
-              </Text>
-              <Text style={styles.confirmMessage}>
-                {t(
-                  'hostScreen.hostScreenOverlays.deleteConfirmMessage',
-                  'Delete "{{name}}" ({{branch}})?',
-                  {
-                    name: state.confirmDelete.displayName || state.confirmDelete.repo,
-                    branch: state.confirmDelete.branch
-                  }
-                )}
-              </Text>
-            </View>
-            <View style={styles.confirmButtons}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  styles.confirmBtnCancel,
-                  pressed && styles.confirmBtnPressed
-                ]}
-                onPress={() => state.setConfirmDelete(null)}
-              >
-                <Text style={styles.confirmBtnCancelText}>{t('common.cancel', 'Cancel')}</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  styles.confirmBtnDestructive,
-                  pressed && styles.confirmBtnPressed
-                ]}
-                onPress={() => {
-                  if (state.confirmDelete) {
-                    void actions.handleDeleteWorktree(state.confirmDelete)
-                  }
-                  state.setConfirmDelete(null)
-                  state.setActionTarget(null)
-                }}
-              >
-                <Text style={styles.confirmBtnDestructiveText}>{t('common.delete', 'Delete')}</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <ActionSheetContent
-            actions={
-              actionTarget
-                ? [
-                    ...buildWorktreeNavigationActions({
-                      hostId,
-                      worktreeId: actionTarget.worktreeId,
-                      worktreeName: actionTarget.displayName || actionTarget.repo,
-                      executionHost: actionServer.routeHost,
-                      hostCapabilities:
-                        actionServer.server?.gates.hostCapabilities ?? hostCapabilities,
-                      navigate: actions.navigateFromHostList,
-                      onDone: () => state.setActionTarget(null)
-                    }),
-                    // Server sleep is not offered yet; the desktop would sleep its own id.
-                    ...(actionServer.server
-                      ? []
-                      : [
-                          {
-                            id: 'sleep',
-                            label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
-                            icon: Moon,
-                            onPress: () => {
-                              actions.putWorktreeToSleep(actionTarget)
-                              state.setActionTarget(null)
-                            }
-                          }
-                        ]),
+      {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
+      <BottomDrawerModalHost>
+        <BottomDrawer visible={actionTarget != null} onClose={closeActionSheet}>
+          {state.confirmDelete ? (
+            <View>
+              <View style={styles.confirmContent}>
+                <Text style={styles.confirmTitle}>
+                  {t('hostScreen.hostScreenOverlays.deleteWorktree', 'Delete Worktree')}
+                </Text>
+                <Text style={styles.confirmMessage}>
+                  {t(
+                    'hostScreen.hostScreenOverlays.deleteConfirmMessage',
+                    'Delete "{{name}}" ({{branch}})?',
                     {
-                      id: 'togglePin',
-                      label: isWorktreePinned(actionTarget, state.pinnedIds)
-                        ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
-                        : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
-                      icon: isWorktreePinned(actionTarget, state.pinnedIds) ? PinOff : Pin,
-                      onPress: () => {
-                        actions.togglePin(actionTarget)
-                        state.setActionTarget(null)
-                      }
-                    },
-                    {
-                      id: 'delete',
-                      label: t('common.delete', 'Delete'),
-                      destructive: true,
-                      onPress: () => state.setConfirmDelete(actionTarget),
-                      // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
-                      ...(actionTarget.isMainWorktree === true
-                        ? {
-                            disabled: true,
-                            hint: t(
-                              'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
-                              "Primary worktree — can't be deleted. Remove the project instead."
-                            )
-                          }
-                        : {})
+                      name: state.confirmDelete.displayName || state.confirmDelete.repo,
+                      branch: state.confirmDelete.branch
                     }
-                  ]
-                : []
-            }
-          >
-            {actionTarget ? (
-              <WorkspaceDetailsSheet
-                row={actionTarget}
-                onOpenLink={(url) => {
-                  openExternalLink(url)
-                  state.setActionTarget(null)
-                }}
-              />
-            ) : null}
-          </ActionSheetContent>
-        )}
-      </BottomDrawer>
+                  )}
+                </Text>
+                {state.confirmDelete.recipeEnvironment ? (
+                  <Text style={styles.confirmMessage}>
+                    {state.confirmDelete.recipeEnvironment.destroys === false
+                      ? t(
+                          'hostScreen.hostScreenOverlays.deleteKeepsEnvironment',
+                          'The environment "{{environment}}" that Orca created for it keeps running: its recipe has no destroy step.',
+                          { environment: state.confirmDelete.recipeEnvironment.name }
+                        )
+                      : t(
+                          'hostScreen.hostScreenOverlays.deleteDestroysEnvironment',
+                          'This also destroys the environment "{{environment}}" that Orca created for it, with any uncommitted work and running terminals on it.',
+                          { environment: state.confirmDelete.recipeEnvironment.name }
+                        )}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.confirmButtons}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.confirmBtn,
+                    styles.confirmBtnCancel,
+                    pressed && styles.confirmBtnPressed
+                  ]}
+                  onPress={() => state.setConfirmDelete(null)}
+                >
+                  <Text style={styles.confirmBtnCancelText}>{t('common.cancel', 'Cancel')}</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.confirmBtn,
+                    styles.confirmBtnDestructive,
+                    pressed && styles.confirmBtnPressed
+                  ]}
+                  onPress={() => {
+                    if (state.confirmDelete) {
+                      void actions.handleDeleteWorktree(state.confirmDelete)
+                    }
+                    state.setConfirmDelete(null)
+                    state.setActionTarget(null)
+                  }}
+                >
+                  <Text style={styles.confirmBtnDestructiveText}>
+                    {t('common.delete', 'Delete')}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : actionTarget && renameTarget === actionTarget ? (
+            <WorkspaceRenameSheet
+              hostId={hostId ?? ''}
+              hostName={hostDisplay.title}
+              row={actionTarget}
+              rename={actions.renameWorktree}
+              blockedOffline={actions.workspaceRenameWrite.blockedOffline}
+              onClose={closeActionSheet}
+            />
+          ) : (
+            <ActionSheetContent
+              actions={
+                actionTarget
+                  ? [
+                      ...buildWorktreeNavigationActions({
+                        hostId,
+                        worktreeId: actionTarget.worktreeId,
+                        worktreeName: actionTarget.displayName || actionTarget.repo,
+                        executionHost: actionServer.routeHost,
+                        hostCapabilities:
+                          actionServer.server?.gates.hostCapabilities ?? hostCapabilities,
+                        navigate: actions.navigateFromHostList,
+                        onDone: () => state.setActionTarget(null)
+                      }),
+                      {
+                        id: 'rename',
+                        label: t('hostScreen.hostScreenOverlays.rename', 'Rename'),
+                        icon: Edit3,
+                        onPress: () => setRenameTarget(actionTarget)
+                      },
+                      // Server sleep is not offered yet; the desktop would sleep its own id.
+                      ...(actionServer.server
+                        ? []
+                        : [
+                            {
+                              id: 'sleep',
+                              label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
+                              icon: Moon,
+                              onPress: () => {
+                                actions.putWorktreeToSleep(actionTarget)
+                                state.setActionTarget(null)
+                              }
+                            }
+                          ]),
+                      {
+                        id: 'togglePin',
+                        label: isWorktreePinned(actionTarget, state.pinnedIds)
+                          ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
+                          : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
+                        icon: isWorktreePinned(actionTarget, state.pinnedIds) ? PinOff : Pin,
+                        onPress: () => {
+                          actions.togglePin(actionTarget)
+                          state.setActionTarget(null)
+                        }
+                      },
+                      {
+                        id: 'delete',
+                        label: t('common.delete', 'Delete'),
+                        destructive: true,
+                        onPress: () => state.setConfirmDelete(actionTarget),
+                        // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
+                        ...(actionTarget.isMainWorktree === true
+                          ? {
+                              disabled: true,
+                              hint: t(
+                                'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
+                                "Primary worktree — can't be deleted. Remove the project instead."
+                              )
+                            }
+                          : {})
+                      }
+                    ]
+                  : []
+              }
+            >
+              {actionTarget ? (
+                <WorkspaceDetailsSheet
+                  row={actionTarget}
+                  onOpenLink={(url) => {
+                    openExternalLink(url)
+                    state.setActionTarget(null)
+                  }}
+                />
+              ) : null}
+            </ActionSheetContent>
+          )}
+        </BottomDrawer>
+
+        <OrcaHookTrustDrawer
+          visible={actions.archiveTrustRequest != null}
+          prompt={actions.archiveTrustRequest?.prompt ?? null}
+          onRunOnce={() => void actions.approveArchiveTrust(false)}
+          onAlwaysTrust={() => void actions.approveArchiveTrust(true)}
+          onDontRun={actions.skipArchiveHook}
+          onClose={actions.cancelArchiveTrust}
+        />
+
+        <ConfirmModal
+          visible={actions.archiveHookFailure != null}
+          title={t('hostScreen.hostScreenOverlays.deleteFailed', 'Failed to delete "{{name}}"', {
+            name:
+              actions.archiveHookFailure?.item.displayName || actions.archiveHookFailure?.item.repo
+          })}
+          message={actions.archiveHookFailure?.message}
+          confirmLabel={t('hostScreen.hostScreenOverlays.deleteAnyway', 'Delete Anyway')}
+          destructive
+          onConfirm={actions.deleteDespiteArchiveHookFailure}
+          onCancel={actions.dismissArchiveHookFailure}
+        />
+      </BottomDrawerModalHost>
 
       <ConfirmModal
         visible={state.confirmRemoveHost}

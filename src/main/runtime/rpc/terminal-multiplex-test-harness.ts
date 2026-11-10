@@ -2,15 +2,15 @@ import { vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 export const SET_OUTPUT_PAUSED_OPCODE = 16 as TerminalStreamOpcode
 export const WRITE_UNAVAILABLE_OPCODE = 17 as TerminalStreamOpcode

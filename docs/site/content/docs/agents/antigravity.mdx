@@ -1,0 +1,101 @@
+---
+title: Antigravity CLI setup
+description: Install, find, and launch Google's agy CLI, including custom install paths, WSL, and remote hosts.
+---
+
+Orca launches Google's **Antigravity CLI**, whose command is `agy`. Installing the Antigravity desktop application alone does not put that command on your machine, and the separate `gemini` command is a different agent in Orca. To save and switch between several `agy` logins, see [Antigravity accounts](/docs/agents/antigravity-accounts).
+
+## Check the CLI first
+
+Install the CLI with [Google's current instructions](https://antigravity.google/docs/cli-overview), then open a new terminal so it picks up any updated `PATH`.
+
+On Windows (PowerShell):
+
+```powershell
+Get-Command agy -All | Select-Object CommandType, Source, Definition
+agy --version
+```
+
+On macOS, Linux, or inside a WSL distribution:
+
+```sh
+command -v agy
+agy --version
+```
+
+A PowerShell alias or function is not an executable Orca can launch; use the path of the actual CLI executable.
+
+Run `agy` in a project directory, complete Google's sign-in, and send a small prompt. Finding the binary or listing models with `agy models` does not prove the account can generate a reply.
+
+## Find it in Orca
+
+Open **Settings → Agents** and click **Refresh**. This searches again for installed agents; it does not install the CLI or sign you in.
+
+If `agy` is installed somewhere Orca does not search, expand the **Antigravity** row and enter the executable's full path in **Command**:
+
+```text
+/opt/agent-tools/agy
+```
+
+On Windows, a path without spaces needs no quotes (`C:\Tools\agy.exe`). Quote a path that contains spaces. PowerShell, Orca's default Windows terminal shell, also needs its `&` call operator in front of a quoted path; Command Prompt does not:
+
+```text
+& "C:\Agent Tools\agy.exe"
+```
+
+Keep launch flags out of **Command**. The field saves when you press Enter or leave it, and **Reset** restores `agy`. Once the executable exists at that path on the host, Orca lists Antigravity as installed: it appears in the New Tab menu and the new-workspace agent picker, and can be your default agent. A path Orca cannot find leaves Antigravity listed as not installed.
+
+## WSL and remote hosts
+
+Install and sign in to `agy` on the machine that runs the workspace: the WSL distribution, the [SSH host](/docs/ssh), or the [Remote Orca Server](/docs/remote-servers). A working CLI on your laptop does not make it available there.
+
+On Windows, the **Command** value is shared by Windows and WSL workspaces. A Windows path does not name a Linux executable, so a WSL workspace does not find `agy` through it, and a WSL workspace that finds `agy` on its own `PATH` still launches the Windows path. If you run Antigravity in both, add the Windows install to `PATH` instead of setting **Command**. For an SSH host or Remote Orca Server, choose that host in the Settings host menu before editing **Command**; the value is stored and checked on that host.
+
+## API-key authentication in WSL
+
+Google sign-in is the normal way to authenticate `agy`; an API key is not required for it. If you intentionally use a Gemini API key instead, `agy` needs two things on the machine that runs it:
+
+1. The `GEMINI_API_KEY` environment variable.
+1. The API-key provider selected in `~/.gemini/antigravity-cli/settings.json`. Merge this into the existing JSON and keep your other settings:
+
+   ```json
+   {
+     "modelProvider": "gemini"
+   }
+   ```
+
+   Without this setting, `agy` may still ask for Google sign-in even when the key is present.
+
+In WSL, both belong to the **Linux user inside the distribution**. A Windows environment variable is not automatically a Linux one, and changing a Windows variable does not update an Orca instance or terminal that is already running.
+
+The simplest setup is to export the key in the distribution's shell startup file (for example `~/.bashrc`), then open a new Orca terminal in that workspace. To forward a key you keep as a Windows environment variable instead, run this in PowerShell; use `'Machine'` instead of `'User'` for a system variable. It preserves your other `WSLENV` entries:
+
+```powershell
+$env:GEMINI_API_KEY = [Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'User')
+$entries = @($env:WSLENV -split ':' | Where-Object { $_ -and ($_ -split '/')[0] -ne 'GEMINI_API_KEY' })
+$env:WSLENV = ($entries + 'GEMINI_API_KEY/u') -join ':'
+```
+
+These assignments affect only this PowerShell process and programs it starts, so quit Orca and start it from this PowerShell window for the key to reach WSL. Never put the key in the **Command** or **Arguments** fields.
+
+Inside the distribution, check that the key arrived without printing it, then request a short reply:
+
+```sh
+if [ -n "${GEMINI_API_KEY:-}" ]; then echo 'API key present'; else echo 'API key missing'; fi
+agy --print 'Reply exactly AGY_AUTH_OK. Do not use tools.' --output-format json --print-timeout 30s
+```
+
+A present key proves only that it was forwarded; a successful reply proves `agy` can authenticate and generate.
+
+## Troubleshooting
+
+| Symptom                                                             | Next check                                                                                                                               |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| The Antigravity desktop app opens, but Orca does not list the agent | Confirm `agy --version` works; Orca needs the CLI executable.                                                                            |
+| `agy` works in a new terminal but Orca does not list it             | Click **Refresh** in **Settings → Agents**, or enter the executable's full path in **Command**.                                          |
+| A custom path with spaces is not found                              | Quote the path (with `&` in front for PowerShell), point at the executable rather than a shell alias, and keep flags out of **Command**. |
+| Works in Windows workspaces, missing in WSL                         | Install `agy` inside the distribution, and see the note above about a Windows path in **Command**.                                       |
+| A request returns 401 or `UNAUTHENTICATED`                          | Run `agy` on the same host outside Orca and complete Google's sign-in, or set up API-key authentication above.                           |
+| A model name is rejected                                            | Run `agy models` on the host and pick a model it lists.                                                                                  |
+
+When reporting a setup problem, include the Orca version, the host that runs the workspace, `agy --version`, and the error text. Remove account identifiers, keys, and private paths first.

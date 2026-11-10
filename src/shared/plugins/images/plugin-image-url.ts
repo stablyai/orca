@@ -20,8 +20,9 @@ export function pluginShaImageUrl(sha256: string): string {
   return `${PLUGIN_IMAGE_SCHEME}://sha/${sha256}`
 }
 
-/** `slot` is `icon`, `cover`, `screenshot-<index>`, or a contribution's icon: `editor-<index>`
- *  (custom editors) or `new-file-<index>` (new files). */
+/** `slot` is `icon`, `cover`, `screenshot-<index>`, a contribution's icon: `editor-<index>`
+ *  (custom editors) or `new-file-<index>` (new files), an app theme's background: `theme-<index>`
+ *  or its video `theme-<index>-video`, or a font file: `font-<family index>-<face index>`. */
 export function pluginInstalledImageUrl(
   pluginKey: string,
   contentHash: string,
@@ -51,10 +52,32 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     key &&
     contentHash &&
     slot &&
-    /^(?:[0-9a-f]{64}|dev)$/.test(contentHash) &&
-    /^(?:icon|cover|(?:screenshot|editor|new-file)-\d{1,2})$/.test(slot)
+    /^(?:[0-9a-f]{64}|[0-9a-f]{32}|dev)$/.test(contentHash) &&
+    /^(?:icon|cover|(?:screenshot|editor|new-file)-\d{1,2}|theme-(?:0|[1-9]\d{0,2})(?:-video)?|font-\d-\d)$/.test(
+      slot
+    )
   ) {
     return { kind: 'installed', pluginKey: decodeURIComponent(key), contentHash, slot }
   }
   return null
+}
+
+/** Only the images main serves over the plugin image scheme. Why: entries can come from a paired
+ *  remote host, and the renderer's CSP allows web images, so any other URL could hotlink. */
+export function servedPluginHostImages(
+  images: PluginHostImages | undefined
+): PluginHostImages | undefined {
+  if (!images) {
+    return undefined
+  }
+  const served = <T extends PluginHostImage>(image: T | undefined): T | undefined =>
+    image && parsePluginImageUrl(image.url) ? image : undefined
+  const icon = served(images.icon)
+  const cover = served(images.cover)
+  const screenshots = images.screenshots?.filter((shot) => served(shot))
+  return {
+    ...(icon ? { icon } : {}),
+    ...(cover ? { cover } : {}),
+    ...(screenshots?.length ? { screenshots } : {})
+  }
 }

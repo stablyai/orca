@@ -1,33 +1,35 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
+  type StructuredAgentSessionForkSource,
   type StructuredAgentSessionResumeSource
-} from '../../../shared/structured-agent-session-create'
+} from '../../../shared/agent-session/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import {
-  clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '@/runtime/web-session-focus-intent'
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,
-  StructuredAgentSessionOwnerUnresolvedError
-} from '@/lib/structured-agent-session-launch-errors'
+  StructuredAgentSessionOwnerUnresolvedError,
+  type StructuredAgentSessionCreateGate
+} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export {
   StructuredAgentSessionCreateRefusalError,
@@ -43,10 +45,15 @@ export type StructuredAgentSessionLaunchIntent = {
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  sendSelectionSupport?: boolean
+  /** Client-only admission requirement; reacquired from the child after reload. */
+  forkRequiresInheritedOriginal?: boolean
+  sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
+  createAfter?: Promise<StructuredAgentSessionCreateGate>
   surfaceAddress?: StructuredLaunchSurfaceAddress
   /** The saved selection create seeds, read when the intent is built. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -60,12 +67,18 @@ function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
   agent: TuiAgent,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
     owner.target.kind === 'local'
-      ? structuredLaunchSeedOptions(state.settings, agent)
-      : hostSeedOptions
+      ? structuredLaunchSeedOptions(
+          resumeFrom ? { ...state.settings, agentLaunchChoices: undefined } : state.settings,
+          agent
+        )
+      : resumeFrom
+        ? undefined
+        : hostSeedOptions
   return seedOptions ? { seedOptions } : {}
 }
 
@@ -87,7 +100,8 @@ export function createStructuredAgentSessionLaunchIntent(
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
-  activate = true
+  activate = true,
+  forkFrom?: StructuredAgentSessionForkSource
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -109,7 +123,8 @@ export function createStructuredAgentSessionLaunchIntent(
     agent,
     sessionId,
     resumeFrom,
-    hostSeedOptions
+    hostSeedOptions,
+    forkFrom
   )
 }
 
@@ -119,7 +134,8 @@ function buildStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  forkFrom: StructuredAgentSessionForkSource | undefined
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -133,25 +149,44 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
+      ...(forkFrom ? { forkFrom } : {}),
       randomUuid: createBrowserUuid
     }),
-    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+    ...(forkFrom ? {} : launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom))
   }
 }
 
 /** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
 export function retryStructuredAgentSessionLaunchIntent(
-  intent: StructuredAgentSessionLaunchIntent
+  intent: StructuredAgentSessionLaunchIntent,
+  retainOpening = false,
+  /** Starts a new conversation instead of resuming one the agent never saved. */
+  fresh = false
 ): StructuredAgentSessionLaunchIntent {
+  if (retainOpening) {
+    const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
+    return {
+      ...retained,
+      params: {
+        ...intent.params,
+        envelope: {
+          ...intent.params.envelope,
+          clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid)
+        }
+      }
+    }
+  }
   return {
     ...buildStructuredAgentSessionLaunchIntent(
       intent.worktreeId,
       intent,
       intent.agent,
       intent.sessionId,
-      intent.params.resumeFrom,
-      intent.seedOptions
+      fresh ? undefined : intent.params.resumeFrom,
+      intent.seedOptions,
+      intent.params.forkFrom
     ),
+    forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
 }
@@ -165,12 +200,14 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
@@ -191,6 +228,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+      ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
@@ -200,21 +238,19 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
     ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
-    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
+    ...(args.forkFrom
+      ? {}
+      : args.createMessageSupport !== undefined
+        ? args.seedOptions
+          ? { seedOptions: args.seedOptions }
+          : {}
+        : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
   }
 }
 
-export function abandonStructuredAgentSessionLaunchIntent(
-  intent: StructuredAgentSessionLaunchIntent
-): void {
-  clearWebSessionFocusIntentIfMatches(
-    structuredAgentSessionFocusOwner(intent.target),
-    intent.worktreeId,
-    `agent-session:${intent.sessionId}`
-  )
-}
+export { abandonStructuredAgentSessionLaunchIntent } from './agent-session/launch/structured-agent-session-launch-abandon'
 
 export {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from './structured-agent-session-launch-create-call'
+} from './agent-session/launch/structured-agent-session-launch-create-call'

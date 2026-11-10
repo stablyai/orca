@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithPtyControllerInventoryListing } from './pty-controller-inventory-listing'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import type * as PtyControllerContract from '../../runtime-pty-controller-contract'
+
+import type * as PtyControllerContract from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   type ExecutionHostId,
@@ -8,22 +8,23 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
+  type ResolvedWorktree,
   createIncrementalResolvedWorktreeLookup,
   findResolvedWorktreeIdForPath,
   inferWorktreeIdFromPtyId
-} from '../../runtime-worktree-path-identity'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
   indexPersistedPtyWorktreeBindings,
   type PersistedPtyBindingIndexes
-} from '../../runtime-worktree-binding-index'
+} from '../identity/runtime-worktree-binding-index'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
-import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/pty-liveness-verdict'
-import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
-import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
+import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
+import { retireOrchestrationAuthorityAbsentFromInventory } from '../../orchestration/terminal-authority/runtime-restored-orchestration-authority-sweep'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
@@ -133,16 +134,25 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         inferredWorktreeId &&
         worktreeIdsEqual(session.worktreeId, inferredWorktreeId)
       )
+      const recordedPty = this.ptysById.get(session.id)
       // Explicit unresolved provider ownership wins unless the session id proves it predates a persisted rename.
-      const worktreeId = providerWorktree
+      const boundWorktreeId = providerWorktree
         ? providerWorktree.id
         : hasMigrationEvidence
           ? (persistedWorktree?.id ?? null)
           : (session.worktreeId ??
             persistedWorktree?.id ??
+            // A binding outside a targeted list belongs to that sibling; cwd must not re-file it (#36716).
+            persistedWorktreeId ??
             (recordedFloating ? FLOATING_TERMINAL_WORKTREE_ID : undefined) ??
             inferredWorktreeId ??
-            findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
+            (recordedPty && !recordedPty.worktreeInferredFromCwd
+              ? recordedPty.worktreeId
+              : undefined))
+      const worktreeInferredFromCwd = boundWorktreeId === undefined
+      const worktreeId = worktreeInferredFromCwd
+        ? findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId)
+        : boundWorktreeId
       const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
       const restoresExactSurface =
         persistedSurface &&
@@ -173,6 +183,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
           agentSessionOwners: session.incarnationId ? (session.agentSessionOwners ?? []) : [],
           spawnPaneKey: session.paneKey ?? null,
+          ...(worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
           ...(session.wslDistro !== undefined
             ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }
             : {}),
@@ -190,7 +201,7 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
         }
         pty.controllerTitle = session.title?.trim() || null
-        this.reconcileSubscriberDrivenProviderAttach(session.id)
+        this.mainDaemonAttachments.reconcile(session.id)
       }
       // Do not serialize relay probes or let one throw abort inventory cleanup.
       if (inventoryOptions?.refreshForegroundAgents !== false) {

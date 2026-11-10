@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows.test-fixture'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import { repo, worktree } from './worktree-list-groups-test-fixtures'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 
 function group(id: string, name: string, tabOrder: number): ProjectGroup {

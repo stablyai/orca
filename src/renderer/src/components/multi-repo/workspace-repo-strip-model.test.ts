@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { MultiRepoMember } from '../../../../shared/multi-repo-workspace'
 import type { Repo } from '../../../../shared/repo-types'
 import { buildWorkspaceRepoStripModel } from './workspace-repo-strip-model'

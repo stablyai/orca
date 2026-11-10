@@ -1,9 +1,13 @@
 import {
   filterAiVaultSessions,
   groupAiVaultSessions
-} from '../../../src/shared/ai-vault-session-filters'
-import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/session-display/ai-vault-session-filters'
+import {
+  AI_VAULT_AGENTS,
+  type AiVaultScope,
+  type AiVaultSession
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+
 import {
   buildMobileAgentHistoryCard,
   type MobileAgentHistoryCard

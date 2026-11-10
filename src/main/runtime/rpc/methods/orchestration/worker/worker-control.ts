@@ -1,8 +1,8 @@
-import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
+import { exposeDispatchContext } from './dispatch-context-exposure'
+import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
-  exposeDispatchContext,
   exposeObservation,
   exposeWorker,
   inspectWorkerTerminal,
@@ -11,21 +11,25 @@ import {
   showContextOnlyWorker
 } from './worker-observation'
 import { readArchivedWorkerOutput } from './worker-archive-read'
-import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
-import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
-import { sessionIdFromStructuredWorkerIncarnation } from '../../../../structured-worker-identity'
+import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
-import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
-import { showFederatedWorker } from '../federation/federated-worker-show'
+import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import {
+  readFederatedWorkerOutput,
+  showFederatedWorker
+} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import {
   WorkerDispatchParams,
   WorkerReadParams
 } from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerShow',
+    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
@@ -74,12 +78,14 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         projection: projectFleetWorker(runtime, db, params.dispatch),
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
-        terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
+        terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
+        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource)
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRead',
+    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
@@ -197,8 +203,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerAbandon',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence }) => {
@@ -234,10 +241,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         // Why: only a session caller is verified; terminal env could name anyone.
         orchestrationCaller?.address
       )
+      // Mail still queued as cards for the abandoned Dispatch must not run.
+      runtime.withdrawStaleChatMail([`dispatch:${params.dispatch}`])
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon must release redrive like stop/release, or an unowned session keeps receiving nudges.
-          releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }
         return {
@@ -254,11 +261,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       if (abandoned.disposition === 'abandoned') {
         // Only the worker's own Dispatch settles the worker; a side task's parked mail stays.
         releaseStructuredWorkerSession(
-          params.dispatch,
-          runtime,
           sessionIdFromStructuredWorkerIncarnation(
             db.getDispatchContextById(params.dispatch)?.process_incarnation
-          )
+          ),
+          runtime
         )
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
       }

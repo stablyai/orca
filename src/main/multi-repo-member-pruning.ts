@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../shared/folder-workspaces/folder-workspace-types'
 
 type MultiRepoPruneStore = {
   getFolderWorkspaces?: () => FolderWorkspace[]

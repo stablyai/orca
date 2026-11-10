@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { MultiRepoWorkspaceError } from '../../../shared/multi-repo-workspace'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
 import { recordMultiRepoMemberLineage } from './multi-repo-member-adoption'

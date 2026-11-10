@@ -23,7 +23,7 @@ import { joinPath } from '@/lib/path'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { useAppStore } from '@/store'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { showComposerDropFailureToast } from '../composer-drop-failure-toast'
 import {
@@ -33,8 +33,8 @@ import {
 } from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
 import { useMountedRef } from '../useMountedRef'
-import { userNamedFileAccess } from '@/lib/local-file-access'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 // Local drops bypass the runtime importer's skip classification.
 function localDropFailure(detail: string | undefined): ComposerDropFailure {

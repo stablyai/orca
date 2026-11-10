@@ -1,4 +1,5 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
+import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
@@ -25,12 +26,12 @@ import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
-import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
+import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
@@ -190,6 +191,10 @@ export function updatePersistedUI(
         : normalizeExplorerDisplayRootByWorktree(
             operations.state.ui?.explorerDisplayRootByWorktree
           ),
+    gitGraphFiltersByWorktree:
+      sanitizedUpdates.gitGraphFiltersByWorktree !== undefined
+        ? normalizeGitGraphFilters(sanitizedUpdates.gitGraphFiltersByWorktree)
+        : operations.state.ui?.gitGraphFiltersByWorktree,
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)

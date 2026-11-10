@@ -1,10 +1,10 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   MultiRepoWorkspaceError,
   type MultiRepoMember,
   type MultiRepoWorkspace
 } from '../../../shared/multi-repo-workspace'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 export type MultiRepoRecordStore = Pick<
   RuntimeStore,

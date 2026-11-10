@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { Check, ChevronDown } from 'lucide-react-native'
-import { BottomDrawer } from '../components/BottomDrawer'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { styles as sessionStyles } from './mobile-session-styles'
 import { useMultiRepoSessionSiblings } from './use-multi-repo-session-siblings'
@@ -13,13 +13,8 @@ import {
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-export function MobileSessionRepoSwitcher({
-  controller,
-  title
-}: {
-  controller: MobileSessionController
-  title: string
-}) {
+/** Row under the session bar for a multi-repo workspace's sessions; draws nothing for any other session. */
+export function MobileSessionRepoSwitcher({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
   const { client, connState, hostCapabilities, hostId, router, worktreeId } = controller
   const executionHost = useWorkspaceExecutionHost()
@@ -27,17 +22,13 @@ export function MobileSessionRepoSwitcher({
   const [open, setOpen] = useState(false)
 
   if (!siblings || executionHost !== undefined) {
-    return (
-      <Text style={sessionStyles.sessionTitle} numberOfLines={1}>
-        {title}
-      </Text>
-    )
+    return null
   }
   const label = siblings.currentMemberName
     ? `${siblings.workspaceName} / ${siblings.currentMemberName}`
     : siblings.workspaceName
   return (
-    <>
+    <View style={localStyles.bar}>
       <Pressable
         style={localStyles.trigger}
         accessibilityRole="button"
@@ -82,11 +73,12 @@ export function MobileSessionRepoSwitcher({
           </Pressable>
         ))}
       </BottomDrawer>
-    </>
+    </View>
   )
 }
 
 const localStyles = themedStyleSheet(() => ({
+  bar: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xs, alignItems: 'flex-start' },
   trigger: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 },
   title: { flexShrink: 1 },
   heading: {

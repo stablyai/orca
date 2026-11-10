@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { hostScreenStyles as styles } from '../host-screen/host-screen-styles'
 import {
   multiRepoDelete,
@@ -19,7 +19,7 @@ import {
   multiRepoRootKeptText
 } from '../worktree/multi-repo-delete-sheet-model'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 
 const DELETE_TIMEOUT_MS = 120_000
 

@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { ensureWindowsAppDataPath } from './windows-app-data-path'
@@ -54,7 +54,8 @@ export function runAgentHooksUninstallPreflight(argv: readonly string[] = proces
   }
   // Loaded only here, so ordinary startup never pays for every agent's hook module.
   void removeAgentHooksForUninstall(async () => {
-    const { removeManagedAgentHooks } = await import('../agent-hooks/managed-agent-hook-controls')
+    const { removeManagedAgentHooks } =
+      await import('../agent-hooks/installation/managed-agent-hook-controls')
     return removeManagedAgentHooks()
   }).then((code) => {
     clearTimeout(timeout)

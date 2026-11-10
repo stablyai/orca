@@ -4,7 +4,7 @@ import {
   consumeFloatingPanelReclaimIntent,
   isFloatingPanelReclaimIntentArmed,
   subscribeFloatingPanelReclaimIntent
-} from '@/lib/floating-workspace-focus-reclaim'
+} from '@/components/floating-terminal/floating-workspace-focus-reclaim'
 import { reportFloatingFocus } from './floating-terminal-focus-reporting'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'

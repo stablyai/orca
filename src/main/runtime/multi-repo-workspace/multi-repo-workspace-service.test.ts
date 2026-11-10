@@ -3,11 +3,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import { MultiRepoWorkspaceError } from '../../../shared/multi-repo-workspace'
 import { pruneMultiRepoMemberForWorktree } from '../../multi-repo-member-pruning'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { MULTI_REPO_WORKSPACE_METHODS } from '../rpc/methods/multi-repo-workspace'
 import { assertWorktreeNotMultiRepoMember } from './multi-repo-member-lock'
 import type { MultiRepoWorkspacePort } from './multi-repo-workspace-port'
@@ -248,6 +248,34 @@ describe('multi-repo delete', () => {
     expect(result.workspaceRemoved).toBe(true)
     expect(result.remainingMemberCount).toBe(0)
     expect(port.deleteFolderWorkspace).toHaveBeenCalledWith(settled.id)
+  })
+
+  it('refuses a retry while the same workspace is being deleted', async () => {
+    const { service, port, workspaces, failingRepos } = createHarness(['a', 'b'])
+    failingRepos.add('b')
+    await service.create({ name: 'Race', members: [{ repoId: 'a' }, { repoId: 'b' }] })
+    const settled = await settle(workspaces)
+    const failed = settled.multiRepo!.members.find((member) => member.state === 'failed')!
+    let releaseRemoval: () => void = () => {}
+    port.removeWorktree.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseRemoval = () => resolve({})
+        })
+    )
+
+    const deleting = service.delete({ folderWorkspaceId: settled.id })
+
+    await expect(service.retryMember(settled.id, failed.memberId)).rejects.toMatchObject({
+      code: 'multi_repo_member_not_retryable'
+    })
+    await expect(service.delete({ folderWorkspaceId: settled.id })).rejects.toMatchObject({
+      code: 'multi_repo_create_in_progress'
+    })
+    expect(port.createWorktree).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(port.removeWorktree).toHaveBeenCalled())
+    releaseRemoval()
+    await deleting
   })
 
   it('removes the record last and keeps a non-empty root', async () => {

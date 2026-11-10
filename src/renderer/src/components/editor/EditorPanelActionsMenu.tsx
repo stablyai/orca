@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -47,11 +47,12 @@ export function EditorPanelActionsMenu({
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelActionsMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const wordWrapChecked = isDiffSurface ? diffWordWrap : editorWordWrap
   const onToggleWordWrap = isDiffSurface ? onToggleDiffWordWrap : onToggleEditorWordWrap
   const menuLabel = fileLocationActions
-    ? translate('auto.components.editor.EditorPanelActionsMenu.fileActions', 'File actions')
-    : translate('auto.components.editor.EditorPanelMarkdownActionsMenu.561251019a', 'More actions')
+    ? t('auto.components.editor.EditorPanelActionsMenu.fileActions', 'File actions')
+    : t('auto.components.editor.EditorPanelMarkdownActionsMenu.561251019a', 'More actions')
 
   return (
     <DropdownMenu modal={false}>
@@ -75,17 +76,14 @@ export function EditorPanelActionsMenu({
           </>
         ) : null}
         <DropdownMenuCheckboxItem checked={wordWrapChecked} onCheckedChange={onToggleWordWrap}>
-          {translate(
-            'auto.components.editor.EditorPanelMarkdownActionsMenu.1eef809708',
-            'Word Wrap'
-          )}
+          {t('auto.components.editor.EditorPanelMarkdownActionsMenu.1eef809708', 'Word Wrap')}
         </DropdownMenuCheckboxItem>
         {isDiffSurface ? (
           <DropdownMenuCheckboxItem
             checked={diffShowWhitespace}
             onCheckedChange={onToggleDiffWhitespace}
           >
-            {translate(
+            {t(
               'auto.components.editor.EditorPanelMarkdownActionsMenu.4dedd55efa',
               'Show Whitespace'
             )}
@@ -96,7 +94,7 @@ export function EditorPanelActionsMenu({
             checked={markdownFrontmatterVisible}
             onCheckedChange={onToggleMarkdownFrontmatter}
           >
-            {translate('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
+            {t('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
           </DropdownMenuCheckboxItem>
         ) : null}
         {shouldShowMarkdownExportAction ? <DropdownMenuSeparator /> : null}
@@ -107,10 +105,7 @@ export function EditorPanelActionsMenu({
             onSelect={onExportMarkdownToPdf}
           >
             <FileDown />
-            {translate(
-              'auto.components.editor.EditorPanelMarkdownActionsMenu.3e0ce48c24',
-              'Export as PDF'
-            )}
+            {t('auto.components.editor.EditorPanelMarkdownActionsMenu.3e0ce48c24', 'Export as PDF')}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

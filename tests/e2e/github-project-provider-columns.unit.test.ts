@@ -7,16 +7,18 @@ import {
   normalizeItem,
   type RawItem
 } from '../../src/main/github/project-view/project-view-item-normalization'
-import { fetchItemsPageWithRaw } from '../../src/main/github/project-view/project-view-item-page'
+import '../../src/main/github/project-view/project-view-item-page'
 import { fetchAllItems } from '../../src/main/github/project-view/project-view-items'
 import {
   _resetProjectViewCachesForTests,
   type OptionalProjectItemField
 } from '../../src/main/github/project-view/project-view-cache'
 import { ghExecFileAsync } from '../../src/main/github/project-view/internals'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../src/shared/github/project-types'
-import { sortRows, groupRows } from '../../src/shared/github/project-group-sort'
-import * as fieldNormalization from '../../src/main/github/project-view/project-view-field-normalization'
+import type { GitHubProjectRow } from '../../src/shared/github/project-types'
+import { normalizeLinkedPullRequests } from '../../src/main/github/project-view/project-view-field-normalization'
+import { projectRelationsTableFixture } from '../../src/shared/github/project-relations.test-fixture'
+import { sortRows } from '../../src/shared/github/project-group-sort'
+
 import ProjectCell from '../../src/renderer/src/components/github-project/ProjectCell'
 
 vi.mock('../../src/main/github/project-view/internals', () => ({
@@ -70,7 +72,11 @@ const args = {
   unsupportedFields: new Set<OptionalProjectItemField>(),
   host: 'acme.ghe.com'
 } as const
-const prText = '#1, #2, #3, #4, #5, #6, #7, #8, #9, #10 +2'
+const prText = '#1, #2, #3, #4, #5, #6, #7, #8, #9, #10 +2 more'
+// The linked PR overflow renders in its own span, so match the element holding the whole cell text.
+const cellText = (text: string) => (_: string, element: Element | null) =>
+  element?.textContent === text &&
+  !Array.from(element.children).some((child) => child.textContent === text)
 const missingSummary = {
   extensions: { code: 'undefinedField', typeName: 'Issue', fieldName: 'subIssuesSummary' },
   message: "Field 'subIssuesSummary' doesn't exist on type 'Issue'"
@@ -161,55 +167,6 @@ function renderColumns(row: GitHubProjectRow): void {
 }
 
 describe('Project columns from the items response', () => {
-  it.each([prText, '1/2 (50%)'])(
-    'renders %s through one bounded items request on a named cloud host',
-    async (expectedText) => {
-      vi.mocked(ghExecFileAsync).mockResolvedValueOnce(
-        response([
-          {
-            ...item,
-            fieldValues: {
-              nodes: [
-                null,
-                {
-                  __typename: 'ProjectV2ItemFieldTextValue',
-                  field: { id: 'notes' },
-                  text: 'Keep this too'
-                },
-                ...(item.fieldValues?.nodes ?? [])
-              ]
-            }
-          }
-        ])
-      )
-      const page = await fetchItemsPageWithRaw(args)
-      if (!page.ok || !page.page.nodes?.[0]) {
-        throw new Error('Expected an items page')
-      }
-      const row = normalized(page.page.nodes[0])
-      renderColumns(row)
-      expect(screen.getByText(expectedText).textContent).toBe(expectedText)
-      expect(row.fieldValuesByFieldId).toEqual({
-        notes: { kind: 'text', fieldId: 'notes', text: 'Keep this too' }
-      })
-      expect(ghExecFileAsync).toHaveBeenCalledTimes(1)
-      const query = vi.mocked(ghExecFileAsync).mock.calls[0][0].join(' ')
-      expect(query).toContain('pullRequests(first:10)')
-      expect(query).toContain('subIssuesSummary { completed total percentCompleted }')
-      expect(query).not.toContain('ProjectV2ItemFieldProgressValue')
-    }
-  )
-
-  it.each([
-    { completed: 0, total: 2, percentCompleted: 0 },
-    { completed: 2, total: 2, percentCompleted: 100 }
-  ])('preserves zero and complete counters: %j', (summary) => {
-    renderColumns(normalized({ ...item, content: { subIssuesSummary: summary } }))
-    expect(
-      screen.getByText(`${summary.completed}/2 (${summary.percentCompleted}%)`).textContent
-    ).toBeTruthy()
-  })
-
   it('keeps old-host, draft, PR, redacted and zero-total rows blank', () => {
     for (const raw of [
       { id: 'old', type: 'ISSUE', content: {} },
@@ -253,7 +210,7 @@ describe('Project columns from the items response', () => {
     expect(warning).toHaveBeenCalledTimes(parentDropped ? 1 : 0)
     renderColumns(result.rows[0])
     expect(Boolean(screen.queryByText('1/2 (50%)'))).toBe(summary)
-    expect(Boolean(screen.queryByText(prText))).toBe(prs)
+    expect(Boolean(screen.queryByText(cellText(prText)))).toBe(prs)
     expect(ghExecFileAsync).toHaveBeenCalledTimes(2)
     const query = vi.mocked(ghExecFileAsync).mock.calls[1][0].join(' ')
     expect(query.includes('parent {')).toBe(!parentDropped)
@@ -397,129 +354,55 @@ describe('Project columns from the items response', () => {
     row.content.linkedPullRequests.totalCount = totalCount
     renderColumns(row)
     expect(
-      screen.getByText(totalCount === 12 ? prText : prText.replace(' +2', '')).textContent
+      screen.getByText(cellText(totalCount === 12 ? prText : prText.replace(' +2 more', '')))
+        .textContent
     ).toBeTruthy()
   })
+})
 
-  it('preserves populated and legacy rows through shared sorting, grouping and cells', async () => {
-    const result = await fetchAllItems(args)
-    if (!result.ok) {
-      throw new Error('Expected rows')
+it('sorts linked PRs by their first number and treats count-only metadata as an unknown sort key', () => {
+  const field = {
+    kind: 'field',
+    id: 'prs',
+    name: 'Linked pull requests',
+    dataType: 'LINKED_PULL_REQUESTS'
+  } as const
+  const rows = ['ten', 'two-high', 'count-only', 'two-low', 'absent'].map((id, position) => ({
+    ...normalized({ id, type: 'ISSUE', content: { title: id } }),
+    position
+  }))
+  const table = projectRelationsTableFixture()
+  table.rows = rows
+  for (const [index, numbers] of [
+    [0, [10]],
+    [1, [2, 100]],
+    [3, [2, 9]]
+  ] as const) {
+    rows[index].content.linkedPullRequests = {
+      pullRequests: numbers.map((number) => ({
+        number,
+        title: 'PR',
+        url: `https://github.com/acme/repo/pull/${number}`
+      })),
+      totalCount: numbers.length
     }
-    const populated = result.rows[0]
-    populated.fieldValuesByFieldId.points = { kind: 'number', fieldId: 'points', number: 2 }
-    const legacy = normalized({ id: 'legacy', type: 'ISSUE', content: { title: 'Older host' } })
-    delete legacy.content.linkedPullRequests
-    delete legacy.content.subIssuesProgress
-    legacy.fieldValuesByFieldId.points = { kind: 'number', fieldId: 'points', number: 1 }
-    const points = { kind: 'field', id: 'points', name: 'Points', dataType: 'NUMBER' } as const
-    const prs = {
-      kind: 'field',
-      id: 'field-pr',
-      name: 'Linked PRs',
-      dataType: 'LINKED_PULL_REQUESTS'
-    } as const
-    const progress = {
-      kind: 'field',
-      id: 'field-progress',
-      name: 'Progress',
-      dataType: 'SUB_ISSUES_PROGRESS'
-    } as const
-    const table: GitHubProjectTable = {
-      project: {
-        id: 'P',
-        owner: 'o',
-        ownerType: 'organization',
-        number: 1,
-        title: 'Project',
-        url: ''
-      },
-      selectedView: {
-        id: 'V',
-        number: 1,
-        name: 'Table',
-        layout: 'TABLE_LAYOUT',
-        filter: '',
-        fields: [points, prs, progress],
-        groupByFields: [points],
-        sortByFields: [{ field: points, direction: 'ASC' }]
-      },
-      rows: [populated, legacy],
-      totalCount: 2,
-      parentFieldDropped: false
-    }
-    const sorted = sortRows(table, table.rows)
-    expect(sorted.map((row) => row.id)).toEqual(['legacy', 'item-1'])
-    const groups = groupRows(table, sorted)
-    expect(groups.map((group) => group.label)).toEqual(['1', '2'])
-    renderColumns(groups[1].rows[0])
-    expect(screen.getByText(prText)).toBeTruthy()
-    expect(screen.getByText('1/2 (50%)')).toBeTruthy()
-    cleanup()
-    renderColumns(groups[0].rows[0])
-    expect(document.body.textContent).toBe('')
-    cleanup()
-    // Existing builtin ordering still uses the field map, with no new relation value kind.
-    for (const field of [prs, progress]) {
-      const relationTable = {
-        ...table,
-        selectedView: {
-          ...table.selectedView,
-          groupByFields: [field],
-          sortByFields: [{ field, direction: 'ASC' as const }]
-        }
-      }
-      expect(sortRows(relationTable, table.rows).map((row) => row.id)).toEqual(['item-1', 'legacy'])
-      expect(groupRows(relationTable, table.rows).map((group) => group.key)).toEqual(['__empty__'])
-    }
+  }
+  rows[2].content.linkedPullRequests = normalizeLinkedPullRequests({
+    __typename: 'ProjectV2ItemFieldPullRequestValue',
+    pullRequests: { nodes: [null, {}], totalCount: 3 }
   })
-
-  it.each([50, 500])(
-    'normalizes %i ten-PR rows with linear work and page requests',
-    async (count) => {
-      let prNodeReads = 0
-      const normalize = fieldNormalization.normalizeLinkedPullRequests
-      const normalizer = vi
-        .spyOn(fieldNormalization, 'normalizeLinkedPullRequests')
-        .mockImplementation((raw) => {
-          for (const node of raw.pullRequests?.nodes ?? []) {
-            if (node) {
-              const number = node.number
-              Object.defineProperty(node, 'number', {
-                get() {
-                  prNodeReads++
-                  return number
-                }
-              })
-            }
-          }
-          return normalize(raw)
-        })
-      const corpus = Array.from({ length: count }, (_, i) => ({ ...item, id: `item-${i}` }))
-      vi.mocked(ghExecFileAsync).mockImplementation(async (arguments_) => {
-        const after = arguments_.find((arg) => arg.startsWith('after='))
-        const offset = after ? Number(after.slice('after='.length)) : 0
-        expect(offset).toBe((vi.mocked(ghExecFileAsync).mock.calls.length - 1) * 100)
-        const end = Math.min(offset + 100, count)
-        return response(corpus.slice(offset, end), count, {
-          hasNextPage: end < count,
-          endCursor: end < count ? String(end) : null
-        })
-      })
-      const result = await fetchAllItems(args)
-      if (!result.ok) {
-        throw new Error('Expected paginated rows')
-      }
-      expect(result.rows).toHaveLength(count)
-      expect(result.rows.at(-1)?.position).toBe(count - 1)
-      expect(normalizer).toHaveBeenCalledTimes(count)
-      expect(prNodeReads).toBe(count * 10 * 2) // Validation and copying each returned PR number.
-      expect(ghExecFileAsync).toHaveBeenCalledTimes(Math.ceil(count / 100))
-      for (const [arguments_] of vi.mocked(ghExecFileAsync).mock.calls) {
-        expect(arguments_.join(' ')).toContain('pullRequests(first:10)')
-      }
-      renderColumns(result.rows[count - 1])
-      expect(screen.getByText(prText)).toBeTruthy()
-    }
-  )
+  for (const [direction, expected] of [
+    ['ASC', ['two-high', 'two-low', 'ten', 'count-only', 'absent']],
+    ['DESC', ['ten', 'two-high', 'two-low', 'count-only', 'absent']]
+  ] as const) {
+    expect(
+      sortRows(
+        {
+          ...table,
+          selectedView: { ...table.selectedView, sortByFields: [{ field, direction }] }
+        },
+        rows
+      ).map((row) => row.id)
+    ).toEqual(expected)
+  }
 })

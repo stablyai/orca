@@ -1,17 +1,16 @@
 import { RefreshCw } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import type { PluginListFilter } from './plugin-list-filter'
 import { PluginFilterPopover } from './PluginFilterPopover'
 
-/** Tools beside the search: Update all (on the Updates tab), filter, and refresh. */
+/** Tools beside the search: Update all (on the Updates filter), catalog filter, and refresh. */
 export function PluginListToolbar({
   updateCount,
   onUpdateAll,
   filter,
-  categories,
   sources,
   onFilterChange,
   refreshBusy,
@@ -21,29 +20,23 @@ export function PluginListToolbar({
   updateCount: number
   onUpdateAll: () => void
   filter: PluginListFilter
-  categories: readonly [string, number][]
   sources: readonly PluginMarketplaceHostSourceState[]
   onFilterChange: (filter: PluginListFilter) => void
   refreshBusy: boolean
   onRefresh: () => void
 }): React.JSX.Element {
-  const refreshLabel = translate(
-    'auto.components.settings.PluginManager.refreshLabel',
-    'Refresh catalogs'
-  )
+  const t = useTranslate()
+  const refreshLabel = t('auto.components.settings.PluginManager.refreshLabel', 'Refresh catalogs')
   return (
     <>
       {updateCount > 0 ? (
         <Button variant="outline" size="sm" onClick={onUpdateAll}>
-          {translate('auto.components.settings.PluginManager.updateAll', 'Update all…')}
+          {t('auto.components.settings.PluginManager.updateAll', 'Update all…')}
         </Button>
       ) : null}
-      <PluginFilterPopover
-        filter={filter}
-        categories={categories}
-        sources={sources}
-        onChange={onFilterChange}
-      />
+      {sources.length > 0 ? (
+        <PluginFilterPopover filter={filter} sources={sources} onChange={onFilterChange} />
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

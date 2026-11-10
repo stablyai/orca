@@ -1,5 +1,5 @@
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   dashboardCardBaseDisplayState,
   type DashboardCard,

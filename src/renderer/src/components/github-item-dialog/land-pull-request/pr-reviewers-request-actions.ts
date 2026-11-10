@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
@@ -13,10 +13,10 @@ import type {
   GitHubOwnerRepo
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ReviewerRequestArgs = {
   submitting: boolean
@@ -39,6 +39,7 @@ type ReviewerRequestArgs = {
     options: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
 }
 
 export async function requestPRReviewers({
@@ -58,7 +59,8 @@ export async function requestPRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   requestedLogins?: string[]
   reviewerInput: string
@@ -163,6 +165,8 @@ export async function requestPRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }
 
@@ -180,7 +184,8 @@ export async function removePRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   reviewersToRemove: string[]
 }): Promise<void> {
@@ -276,5 +281,7 @@ export async function removePRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }

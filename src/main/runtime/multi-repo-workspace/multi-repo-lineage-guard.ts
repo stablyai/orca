@@ -1,7 +1,7 @@
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { WorktreeLineageResolution } from '../runtime-worktree-lineage-resolution'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { recordCreatedWorktreeLineage } from '../runtime-worktree-lineage-recording'
+import type { WorktreeLineageResolution } from '../workspaces/lineage/runtime-worktree-lineage-resolution'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { recordCreatedWorktreeLineage } from '../workspaces/lineage/runtime-worktree-lineage-recording'
 
 function isMultiRepoFolderParentKey(
   store: Pick<RuntimeStore, 'getFolderWorkspaces'>,

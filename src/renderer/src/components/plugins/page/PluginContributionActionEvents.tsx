@@ -2,6 +2,7 @@ import { Zap } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import type { PluginEventName } from '../../../../../shared/plugins/contributions/plugin-event-contribution'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DetailRow } from './PluginDetailSections'
 import { useInstalledPluginManifest } from '../state/use-plugin-contribution-source'
 
@@ -12,22 +13,32 @@ export function usePluginWorkerEvents(plugin: PluginHostListEntry | null): Plugi
   return [...new Set(manifest?.contributes.events.map((event) => event.on) ?? [])]
 }
 
-function eventTitle(event: PluginEventName): string {
+function eventTitle(event: PluginEventName, t: Translate = translate): string {
   switch (event) {
     case 'workspace.created':
-      return translate(
+      return t(
         'auto.components.settings.PluginContributionActionEvents.worktreeCreated',
         'When a workspace is created'
       )
     case 'workspace.removed':
-      return translate(
+      return t(
         'auto.components.settings.PluginContributionActionEvents.worktreeRemoved',
         'When a workspace is removed'
       )
     case 'agent.status.changed':
-      return translate(
+      return t(
         'auto.components.settings.PluginContributionActionEvents.agentStatusChanged',
         'When an agent’s status changes'
+      )
+    case 'workspace.changed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.workspaceChanged',
+        'When you switch workspace or its terminals change'
+      )
+    case 'editor.typography.changed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.editorTypographyChanged',
+        'When the editor font or zoom changes'
       )
   }
 }
@@ -38,11 +49,12 @@ export function PluginContributionEventRow({
 }: {
   event: PluginEventName
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DetailRow
       icon={<Zap />}
-      title={eventTitle(event)}
-      detail={`${translate(
+      title={eventTitle(event, t)}
+      detail={`${t(
         'auto.components.settings.PluginContributionActionEvents.detail',
         'Background code runs'
       )} · ${event}`}

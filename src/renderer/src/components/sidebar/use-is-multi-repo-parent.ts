@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isMultiRepoWorkspace } from '@/store/slices/multi-repo-workspace/multi-repo-workspace-selectors'
 
 /** A multi-repo parent owns worktrees, so its menu says "Delete", like its confirmation dialog. */

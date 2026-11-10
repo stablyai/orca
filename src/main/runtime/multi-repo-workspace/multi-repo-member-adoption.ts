@@ -1,11 +1,11 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { MultiRepoMember, MultiRepoWorkspace } from '../../../shared/multi-repo-workspace'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
-import { recordCreatedWorktreeLineage } from '../runtime-worktree-lineage-recording'
+import { recordCreatedWorktreeLineage } from '../workspaces/lineage/runtime-worktree-lineage-recording'
 import { PlacedWorktreePathOccupiedError } from './placed-worktree-path-occupied-error'
 import type { MultiRepoWorkspacePort } from './multi-repo-workspace-port'
 

@@ -7,6 +7,7 @@ export function createIdleSshApiStub() {
     listDetectedPorts: () => Promise.resolve([]),
     getState: () => Promise.resolve(null),
     onStateChanged: () => () => {},
+    onTargetRemoved: () => () => {},
     onCredentialRequest: () => () => {},
     onPortForwardsChanged: () => () => {},
     onDetectedPortsChanged: () => () => {},

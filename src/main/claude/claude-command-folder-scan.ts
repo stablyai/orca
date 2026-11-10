@@ -1,7 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { opendir, readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 
 const MARKDOWN_EXTENSION = '.md'

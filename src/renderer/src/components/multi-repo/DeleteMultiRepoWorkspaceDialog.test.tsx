@@ -3,17 +3,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
   MultiRepoDeleteInspection,
   MultiRepoDeleteResult
 } from '../../../../shared/multi-repo-workspace'
 import DeleteMultiRepoWorkspaceDialog from './DeleteMultiRepoWorkspaceDialog'
 
-vi.mock('@/components/sidebar/RemovalUnsavedFilesNotice', () => ({
+vi.mock('@/components/sidebar/workspace-actions/deletion/RemovalUnsavedFilesNotice', () => ({
   RemovalUnsavedFilesNotice: () => null
 }))
-vi.mock('@/components/editor/removal-unsaved-editor-files', () => ({
+vi.mock('@/components/editor/save/flush/removal-unsaved-editor-files', () => ({
   collectRemovalUnsavedFiles: () => []
 }))
 const toast = vi.hoisted(() => ({ info: vi.fn() }))

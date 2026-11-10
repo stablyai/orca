@@ -1,4 +1,4 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../../src/shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 import { stopSurfaceTouchGestures } from './surface-touch-gestures'
 import { clearLongPress } from './tap-dispatch'
@@ -30,8 +30,8 @@ import { attachTermObservers } from './term-observers'
 import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal-scrollback-policy'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../src/shared/terminal-unicode-provider'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal/replay/terminal-scrollback-policy'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../src/shared/terminal/appearance/terminal-unicode-provider'
 
 function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) {
   const term = scope.createTerminal({
@@ -197,11 +197,10 @@ export function init(
         scope.surface!.style.visibility = ''
       }
       // Replay lands at bottom; restore only readers who had scrolled upward before reflow.
-      if (scrollAnchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
+      const anchorRows = scope.pendingReplayScrollAnchorRows ?? 0
+      if (anchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
         try {
-          scope.term.scrollToLine(
-            Math.max(0, (scope.term.buffer.active.baseY || 0) - scrollAnchorRows)
-          )
+          scope.term.scrollToLine(Math.max(0, (scope.term.buffer.active.baseY || 0) - anchorRows))
         } catch {}
       }
       captureInitialOscLinkTexts(scope)

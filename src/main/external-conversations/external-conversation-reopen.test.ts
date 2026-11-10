@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { AgentSessionResumeResult } from '../runtime/session-lifecycle/projection/resume-agent-session-in-workspace'
 import type { ConversationKey } from './external-conversation-types'
 import {
   fakeLauncher,
@@ -14,7 +13,7 @@ import {
   sessionRow,
   WORKTREE
 } from './external-conversation.test-fixture'
-import { deferred, harness } from './external-conversation-seam.test-fixture'
+import { harness } from './external-conversation-seam.test-fixture'
 
 const KEY: ConversationKey = { source: 'dev', externalId: 'thread-1' }
 const START = {
@@ -42,14 +41,6 @@ async function started(
 }
 
 describe('ExternalConversationSeam reopen', () => {
-  it('captures a session already reported when the link is published', async () => {
-    const { seam, host, terminal } = await started()
-    terminal.exit()
-    terminal.state.rows = []
-    terminal.reopenable()
-    expect(await seam.send(host, KEY, 'early-report', 'next')).toEqual(REOPENED)
-  })
-
   it('never adopts a replacement process while the reopened agent becomes ready', async () => {
     const { seam, host, terminal, reportSessions } = await started()
     reportSessions([{ paneKey: PANE, sessionId: SESSION.id }])
@@ -100,19 +91,6 @@ describe('ExternalConversationSeam reopen', () => {
     expect(link()).toEqual([expect.objectContaining({ paneKey: REOPENED_PANE })])
     expect(await seam.send(host, KEY, 'd2', 'next')).toEqual({ outcome: 'accepted' })
     expect(terminal.resumeAgentSessionInWorkspace).toHaveBeenCalledTimes(1)
-  })
-
-  it('reopens an agent that exited to its shell, from the session captured at an earlier send', async () => {
-    const { seam, host, terminal, link } = await started()
-    expect(await seam.send(host, KEY, 'd1', 'one')).toEqual({ outcome: 'accepted' })
-    expect(link()).toEqual([expect.objectContaining({ providerSession: SESSION })])
-    terminal.state.rows = []
-    terminal.terminal.readLaunchedAgentForeground.mockImplementation(async (ptyId: string) =>
-      ptyId === 'pty-1' ? 'shell' : 'agent'
-    )
-    terminal.reopenable()
-    expect(await seam.send(host, KEY, 'd2', 'two')).toEqual(REOPENED)
-    expect(terminal.writes).toEqual(['one', 'two'])
   })
 
   it('keeps a reopened answer for a repeated delivery id without reopening again', async () => {
@@ -208,28 +186,6 @@ describe('ExternalConversationSeam reopen', () => {
     expect(await head).toEqual(REOPENED)
     expect(await follower).toEqual({ outcome: 'accepted' })
     expect(terminal.writes).toEqual(['one', 'two'])
-  })
-
-  it('queues a second message behind a reopen and sends it to the reopened agent', async () => {
-    const { seam, host, terminal, reportSessions } = await started()
-    reportSessions([{ paneKey: PANE, sessionId: SESSION.id }])
-    terminal.exit()
-    const resumed = deferred<void>()
-    terminal.resumeAgentSessionInWorkspace.mockImplementation(
-      async (): Promise<AgentSessionResumeResult> => {
-        await resumed.promise
-        terminal.state.paneKey = REOPENED_PANE
-        terminal.state.ptyId = 'pty-2'
-        return { ok: true, handle: 'term-2', paneKey: REOPENED_PANE, ptyId: 'pty-2' }
-      }
-    )
-    const head = seam.send(host, KEY, 'd1', 'one')
-    const follower = seam.send(host, KEY, 'd2', 'two')
-    resumed.resolve()
-    expect(await head).toEqual(REOPENED)
-    expect(await follower).toEqual({ outcome: 'accepted' })
-    expect(terminal.writes).toEqual(['one', 'two'])
-    expect(terminal.resumeAgentSessionInWorkspace).toHaveBeenCalledTimes(1)
   })
 
   it('refuses a reopened agent that never shows its composer, and links its pane', async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
-import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
+import { BrowserPageFeedbackBadge } from './assemble-chrome/browser-page-feedback-badge'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
@@ -30,14 +30,14 @@ import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-a
 import { useBrowserPageFindShortcuts } from './assemble-chrome/use-browser-page-find-shortcuts'
 import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus'
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
-import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { BrowserNewTabPage } from './new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
 import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure-for-url'
@@ -216,6 +216,7 @@ export function ClientHostedBrowserPagePane({
       // A commit is a successful load; did-stop-loading must preserve the preceding did-fail-load overlay.
       if (event?.type === 'did-navigate') {
         activeLoadFailureRef.current = null
+        setFindOpen(false)
       }
       const activeLoadFailure = activeLoadFailureRef.current
       // URL writes clear certificate challenges, so preserve them while a failure stands.
@@ -281,9 +282,6 @@ export function ClientHostedBrowserPagePane({
   ])
 
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
-  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
-    feedbackVisible: zoom.browserZoomFeedbackVisible
-  })
 
   const markup = useClientHostedBrowserMarkup({
     webviewRef,
@@ -357,11 +355,9 @@ export function ClientHostedBrowserPagePane({
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
         >
           {markup.overlay}
-          <BrowserPageZoomIndicator
-            state={browserZoomIndicatorState}
-            percent={zoom.browserZoomPercent}
-          />
+          <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
+            browserPageId={browserTab.id}
             isOpen={findOpen}
             onClose={() => setFindOpen(false)}
             webviewRef={webviewRef}

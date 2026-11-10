@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   MULTI_REPO_WORKSPACE_ERROR_CODES,
   MultiRepoWorkspaceError,
@@ -8,8 +8,8 @@ import {
 } from '../../../../../shared/multi-repo-workspace'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { PreloadApi } from '../../../../../preload/api-types'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../../runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../../runtime/rpc/calls/runtime-rpc-result'
 
 type MultiRepoApi = PreloadApi['multiRepoWorkspaces']
 

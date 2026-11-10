@@ -19,20 +19,41 @@ import {
   type MobileMultiRepoSummary
 } from '../worktree/multi-repo-workspace-summary'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { Worktree } from '../worktree/workspace-list-types'
 
-type Props = {
-  summary: MobileMultiRepoSummary
+/** What a list row needs to open or retry one of its workspace's repos. */
+export type MultiRepoRowActions = {
   retryingMemberIds: ReadonlySet<string>
-  onOpenMember: (member: MobileMultiRepoMember) => void
-  onRetryMember: (member: MobileMultiRepoMember) => void
+  onOpenMember: (item: Worktree, member: MobileMultiRepoMember) => void
+  onRetryMember: (item: Worktree, folderWorkspaceId: string, member: MobileMultiRepoMember) => void
 }
 
-export function MultiRepoMemberRows({
+type Props = {
+  item: Worktree
+  summary: MobileMultiRepoSummary | undefined
+  actions: MultiRepoRowActions | undefined
+}
+
+export function MultiRepoMemberRows({ item, summary, actions }: Props) {
+  if (!summary || !actions) {
+    return null
+  }
+  return <MultiRepoMemberRowsList item={item} summary={summary} actions={actions} />
+}
+
+function MultiRepoMemberRowsList({
+  item,
   summary,
-  retryingMemberIds,
-  onOpenMember,
-  onRetryMember
-}: Props) {
+  actions
+}: {
+  item: Worktree
+  summary: MobileMultiRepoSummary
+  actions: MultiRepoRowActions
+}) {
+  const { retryingMemberIds } = actions
+  const onOpenMember = (member: MobileMultiRepoMember) => actions.onOpenMember(item, member)
+  const onRetryMember = (member: MobileMultiRepoMember) =>
+    actions.onRetryMember(item, summary.folderWorkspaceId, member)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(() => multiRepoRowNeedsAttention(summary))
   const chip = multiRepoChipText(summary.members)
@@ -157,7 +178,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 28,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 8,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   toggleText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   memberRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: spacing.sm },

@@ -1,9 +1,9 @@
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type {
   MultiRepoDeleteInspection,
   MultiRepoDeleteResult
 } from '../../shared/multi-repo-workspace'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 type MemberArgs = { folderWorkspaceId: string; memberId: string }
 

@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../src/shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../src/shared/folder-workspaces/folder-workspace-types'
 import type {
   MultiRepoMember,
   MultiRepoMemberState
@@ -103,8 +103,7 @@ export function multiRepoMemberOpenTarget(
     workspaceKind: 'git',
     displayName: member.dirName,
     repo: member.dirName,
-    branch: member.branchName,
-    multiRepo: undefined
+    branch: member.branchName
   }
 }
 

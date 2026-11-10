@@ -1,17 +1,16 @@
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
 
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import {
-  WORKER_START_VOCABULARY,
-  type WorkerStartModeReceipt
-} from '../../orchestration-worker-start-mode'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { WORKER_START_VOCABULARY } from '../structured-workers/orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { WorkerStartInput } from './worker-start-schema'
 import {
@@ -21,6 +20,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
+import type { ReopenedWorker, WorkerFollowUp } from './worker-follow-up-placement'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -31,9 +31,14 @@ export type WorkerAgentPlacement = {
   mode: WorkerStartModeReceipt
   worktree: PlacedWorktree
   terminalHandle: string
+  terminalCreation?: RuntimeTerminalCreate
   structuredSession: WorkerStructuredSession | null
   setupReceipt: WorkerSetupReceipt
   warning?: string
+  /** Set when a follow-up brought a closed worker back instead of launching one. */
+  reopened?: ReopenedWorker
+  /** Context the fresh agent's Task carries in place of the conversation it could not reopen. */
+  extraSpec?: string
 }
 
 type WorkerAgentPlacementArgs = {
@@ -54,6 +59,8 @@ type WorkerAgentPlacementArgs = {
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
+  /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
+  followUp?: WorkerFollowUp | undefined
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -85,7 +92,29 @@ export async function placeWorkerAgent(
       setupReceipt: EXISTING_WORKTREE_SETUP
     }
   }
-  return launchWorkerAgent(args, existing)
+  const reopened = existing && (await args.followUp?.reopen?.(args.dispatchId))
+  if (existing && reopened) {
+    args.effects.push({
+      kind: 'terminal',
+      role: 'agent',
+      // Only a resumed tab is Orca's to clean up; a chat keeps its conversation.
+      action: reopened.chat ? 'reused' : 'created',
+      id: reopened.handle
+    })
+    return {
+      mode: args.mode,
+      worktree: existing,
+      terminalHandle: reopened.handle,
+      structuredSession: null,
+      setupReceipt: EXISTING_WORKTREE_SETUP,
+      reopened
+    }
+  }
+  const launched = await launchWorkerAgent(args, existing)
+  // A reopen refused before spawning anything: the fresh agent gets the earlier work instead.
+  return reopened === null && args.followUp?.earlierWork
+    ? { ...launched, extraSpec: args.followUp.earlierWork }
+    : launched
 }
 
 async function launchWorkerAgent(
@@ -95,6 +124,7 @@ async function launchWorkerAgent(
   const agent = requireAgent(args.agent)
   let created: Awaited<ReturnType<typeof createWorkerWorktree>> | undefined
   let structuredSession: WorkerStructuredSession | null = null
+  let terminalCreation: RuntimeTerminalCreate | undefined
   let launched: Awaited<ReturnType<typeof executeAgentLaunch>>
   try {
     launched = await executeAgentLaunch({
@@ -142,20 +172,29 @@ async function launchWorkerAgent(
           })
           return {
             worktreeId: created.worktree.id,
-            startupTerminalHandle: created.terminalHandle
+            startupTerminalHandle: created.terminalHandle,
+            startupTerminalCreation: created.terminalCreation
           }
         }
       },
-      surfaces: workerSurfaceFactory(args, agent, (session) => {
-        structuredSession = session
-      })
+      surfaces: workerSurfaceFactory(
+        args,
+        agent,
+        (terminal) => {
+          terminalCreation = terminal
+        },
+        (session) => {
+          structuredSession = session
+        }
+      )
     })
   } catch (error) {
     // The caller only sees a returned placement, so a session made before this throw is ours.
     await tearDownFailedWorkerStart({
       runtime: args.runtime,
       structuredSession,
-      dispatchId: args.dispatchId
+      dispatchId: args.dispatchId,
+      error
     })
     throw error
   }
@@ -163,6 +202,7 @@ async function launchWorkerAgent(
     mode: launched.receipt,
     worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,
+    terminalCreation: created?.terminalCreation ?? terminalCreation,
     structuredSession,
     setupReceipt: created?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
     ...(launched.warning ? { warning: launched.warning } : {})
@@ -173,6 +213,7 @@ async function launchWorkerAgent(
 function workerSurfaceFactory(
   args: WorkerAgentPlacementArgs,
   agent: TuiAgent,
+  onTerminalCreation: (terminal: RuntimeTerminalCreate) => void,
   onStructuredSession: (session: WorkerStructuredSession) => void
 ): AgentLaunchSurfaceFactory {
   const recordSurfaceStage = (worktreeId: string): void => {
@@ -211,7 +252,12 @@ function workerSurfaceFactory(
         taskId: args.taskId,
         effects: args.effects
       })
-      return { handle: terminal.handle, ...(terminal.warning ? { warning: terminal.warning } : {}) }
+      onTerminalCreation(terminal)
+      return {
+        handle: terminal.handle,
+        terminalCreation: terminal,
+        ...(terminal.warning ? { warning: terminal.warning } : {})
+      }
     }
   }
 }

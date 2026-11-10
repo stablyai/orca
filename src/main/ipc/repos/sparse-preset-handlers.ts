@@ -1,9 +1,16 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
-import { normalizeSparseDirectories } from '../sparse-checkout-directories'
+import {
+  normalizeSparsePresetDirectories,
+  normalizeSparsePresetName
+} from './sparse-preset-validation'
+import {
+  SparsePresetValidationError,
+  type SparsePresetFailure
+} from '../../../shared/worktree/sparse-preset-failure'
 import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
@@ -16,14 +23,23 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
     (
       _event,
       args: { repoId: string; id?: string; name: string; directories: string[] }
-    ): SparsePreset => {
+    ): SparsePreset | SparsePresetFailure => {
       const repo = store.getRepo(args.repoId)
       if (!repo) {
         throw new Error(`Repo "${args.repoId}" not found`)
       }
       assertWslMoveProjectWritable(store, { repoId: args.repoId })
-      const name = normalizeSparsePresetName(args.name)
-      const directories = normalizeSparsePresetDirectories(args.directories)
+      let name: string
+      let directories: string[]
+      try {
+        name = normalizeSparsePresetName(args.name)
+        directories = normalizeSparsePresetDirectories(args.directories)
+      } catch (error) {
+        if (error instanceof SparsePresetValidationError) {
+          return error.data
+        }
+        throw error
+      }
       const now = Date.now()
       const existing = args.id
         ? store.getSparsePresets(args.repoId).find((preset) => preset.id === args.id)
@@ -57,34 +73,4 @@ function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): 
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('sparsePresets:changed', { repoId })
   }
-}
-
-function normalizeSparsePresetName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) {
-    throw new Error('Preset name is required.')
-  }
-  if (trimmed.length > 80) {
-    throw new Error('Preset name is too long.')
-  }
-  return trimmed
-}
-
-function normalizeSparsePresetDirectories(directories: string[]): string[] {
-  let normalized: string[]
-  try {
-    normalized = normalizeSparseDirectories(directories)
-  } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message === 'Sparse checkout directories must be repo-relative paths.'
-    ) {
-      throw new Error('Preset directories must be repo-relative paths.')
-    }
-    throw err
-  }
-  if (normalized.length === 0) {
-    throw new Error('Preset must have at least one directory.')
-  }
-  return normalized
 }

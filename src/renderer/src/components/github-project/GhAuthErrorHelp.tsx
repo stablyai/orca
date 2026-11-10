@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
 import type { GhAuthDiagnostic } from '../../../../shared/github/auth-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { projectViewErrorMessage } from './project-view-error-copy'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
@@ -38,10 +40,13 @@ export function reloadOrcaRenderer(): void {
   })
 }
 
-function findEnvVarCommand(varName: string): { label: string; command: string } {
+function findEnvVarCommand(
+  varName: string,
+  t: Translate = translate
+): { label: string; command: string } {
   if (IS_WINDOWS) {
     return {
-      label: translate(
+      label: t(
         'auto.components.github.project.GhAuthErrorHelp.df636f5886',
         'Check if it’s set (PowerShell)'
       ),
@@ -49,19 +54,19 @@ function findEnvVarCommand(varName: string): { label: string; command: string } 
     }
   }
   return {
-    label: translate(
-      'auto.components.github.project.GhAuthErrorHelp.ae43542893',
-      'Find where it’s set'
-    ),
+    label: t('auto.components.github.project.GhAuthErrorHelp.ae43542893', 'Find where it’s set'),
     command: `grep -RIn '${varName}' ~/.zshrc ~/.zshenv ~/.bashrc ~/.bash_profile ~/.profile ~/.config 2>/dev/null`
   }
 }
 
-function unsetEnvVarCommand(varName: string): { label: string; command: string } {
+function unsetEnvVarCommand(
+  varName: string,
+  t: Translate = translate
+): { label: string; command: string } {
   if (IS_WINDOWS) {
     // User-scope changes require a fresh shell and Orca relaunch.
     return {
-      label: translate(
+      label: t(
         'auto.components.github.project.GhAuthErrorHelp.fd17b3019f',
         'Unset (PowerShell, persistent)'
       ),
@@ -69,17 +74,9 @@ function unsetEnvVarCommand(varName: string): { label: string; command: string }
     }
   }
   return {
-    label: translate(
-      'auto.components.github.project.GhAuthErrorHelp.891a7d4616',
-      'Unset for this shell'
-    ),
+    label: t('auto.components.github.project.GhAuthErrorHelp.891a7d4616', 'Unset for this shell'),
     command: `unset ${varName}`
   }
-}
-
-function openExternal(url: string): void {
-  // Route through Electron’s shell IPC because window.open may not reach the default browser.
-  void window.api.shell.openUrl(url)
 }
 
 async function copyToClipboard(text: string): Promise<void> {
@@ -106,7 +103,8 @@ export function buildRemediation(
   errorMessage: string,
   kind: AuthErrorKind,
   diag: GhAuthDiagnostic | null,
-  requestedHost?: string
+  requestedHost?: string,
+  t: Translate = translate
 ): Remediation {
   // Keep the original guidance usable while diagnosis loads or is unavailable.
   if (!diag) {
@@ -114,10 +112,7 @@ export function buildRemediation(
       summary: errorMessage,
       commands: [
         {
-          label: translate(
-            'auto.components.github.project.GhAuthErrorHelp.b436c586d1',
-            'Copy command'
-          ),
+          label: t('auto.components.github.project.GhAuthErrorHelp.b436c586d1', 'Copy command'),
           command:
             kind === 'auth_required'
               ? loginCommandForHost(requestedHost)
@@ -130,19 +125,17 @@ export function buildRemediation(
   // Missing Enterprise credentials outrank token/scope advice for another host.
   if (diag.requiredHost && diag.requiredHostAuthenticated === false) {
     return {
-      summary: translate(
-        'projectViews.authHelp.hostSignedOut',
-        '`gh` is not signed in to {{host}}.',
-        { host: diag.requiredHost }
-      ),
-      detail: translate(
+      summary: t('projectViews.authHelp.hostSignedOut', '`gh` is not signed in to {{host}}.', {
+        host: diag.requiredHost
+      }),
+      detail: t(
         'projectViews.authHelp.hostSignedOutDetail',
         'GitHub Enterprise hosts need their own `gh` login, separate from github.com. Run the login command in a terminal, complete the browser flow on {{host}}, then reload.',
         { host: diag.requiredHost }
       ),
       commands: [
         {
-          label: translate(
+          label: t(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
@@ -154,17 +147,17 @@ export function buildRemediation(
 
   if (!diag.ghAvailable) {
     return {
-      summary: translate(
+      summary: t(
         'projectViews.authHelp.ghMissing',
         'GitHub CLI (`gh`) is not installed or not on PATH.'
       ),
-      detail: translate(
+      detail: t(
         'projectViews.authHelp.ghMissingDetail',
         'Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.'
       ),
       commands: [
         {
-          label: translate(
+          label: t(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
@@ -180,33 +173,33 @@ export function buildRemediation(
   if (active?.envToken) {
     const varName = active.envToken
     const fallback = diag.hasKeyringFallback
-      ? translate(
+      ? t(
           'projectViews.authHelp.envTokenKeyringFallback',
           'Your keyring already has a `gh` login that will take over once the env var is gone.'
         )
-      : translate(
+      : t(
           'projectViews.authHelp.envTokenLoginAfterUnset',
           'After unsetting it, run `gh auth login` to sign in normally, then retry.'
         )
     const removal = IS_WINDOWS
-      ? translate(
+      ? t(
           'projectViews.authHelp.envTokenRemoveWindows',
           'Find where `{{varName}}` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.',
           { varName }
         )
-      : translate(
+      : t(
           'projectViews.authHelp.envTokenRemovePosix',
           "Find where `{{varName}}` is exported (commonly `~/.zshrc`, `~/.zshenv`, `~/.bashrc`, `~/.profile`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.",
           { varName }
         )
     return {
-      summary: translate(
+      summary: t(
         'projectViews.authHelp.envTokenActive',
         "`{{varName}}` is set in your environment, so `gh` is using that token instead of your keyring login. `gh auth refresh` cannot modify env-supplied tokens — that's why running it didn't help.",
         { varName }
       ),
       detail: `${removal} ${fallback}`,
-      commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
+      commands: [findEnvVarCommand(varName, t), unsetEnvVarCommand(varName, t)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
   }
@@ -215,36 +208,33 @@ export function buildRemediation(
   if (diag.envTokenInProcess && (!active || diag.missingScopes.length > 0)) {
     const varName = diag.envTokenInProcess
     return {
-      summary: translate(
+      summary: t(
         'projectViews.authHelp.envTokenInherited',
         "Orca inherited `{{varName}}` from your shell, and `gh` is using that token. `gh auth refresh` doesn't apply to env-supplied tokens.",
         { varName }
       ),
       detail: IS_WINDOWS
-        ? translate(
+        ? t(
             'projectViews.authHelp.envTokenInheritedDetailWindows',
             'Unset `{{varName}}` in the shell that launches Orca (or in your user environment variables), then restart Orca.',
             { varName }
           )
-        : translate(
+        : t(
             'projectViews.authHelp.envTokenInheritedDetailPosix',
             'Unset `{{varName}}` in the shell that launches Orca (or in your shell rc file), then restart Orca.',
             { varName }
           ),
-      commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
+      commands: [findEnvVarCommand(varName, t), unsetEnvVarCommand(varName, t)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
   }
 
   if (kind === 'auth_required' || !active) {
     return {
-      summary: translate(
-        'projectViews.authHelp.signedOut',
-        'You’re not signed in to GitHub via `gh`.'
-      ),
+      summary: t('projectViews.authHelp.signedOut', 'You’re not signed in to GitHub via `gh`.'),
       commands: [
         {
-          label: translate(
+          label: t(
             'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
             'Copy login command'
           ),
@@ -256,18 +246,18 @@ export function buildRemediation(
 
   if (diag.missingScopes.length > 0) {
     return {
-      summary: translate(
+      summary: t(
         'projectViews.authHelp.missingScopes',
         'Your `gh` token is missing scopes needed for GitHub Projects: {{scopes}}.',
         { scopes: diag.missingScopes.map((scope) => `\`${scope}\``).join(', ') }
       ),
-      detail: translate(
+      detail: t(
         'projectViews.authHelp.missingScopesDetail',
         'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.'
       ),
       commands: [
         {
-          label: translate(
+          label: t(
             'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
             'Copy refresh command'
           ),
@@ -280,13 +270,13 @@ export function buildRemediation(
   // Valid scopes can still fail on org visibility or SAML SSO authorization.
   return {
     summary: errorMessage,
-    detail: translate(
+    detail: t(
       'projectViews.authHelp.accessDeniedDetail',
       'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.'
     ),
     commands: [
       {
-        label: translate(
+        label: t(
           'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
           'Copy refresh command'
         ),
@@ -308,6 +298,7 @@ export function GhAuthErrorHelp({
   /** GHES host the failing surface talks to; scopes the diagnosis per host. */
   host?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const [diag, setDiag] = useState<GhAuthDiagnostic | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -325,7 +316,13 @@ export function GhAuthErrorHelp({
     }
   }, [host])
 
-  const remedy = buildRemediation(projectViewErrorMessage(error, { host }), error.type, diag, host)
+  const remedy = buildRemediation(
+    projectViewErrorMessage(error, { host }, t),
+    error.type,
+    diag,
+    host,
+    t
+  )
   const docsUrl = remedy.docsUrl
 
   if (variant === 'banner') {
@@ -348,11 +345,11 @@ export function GhAuthErrorHelp({
           {docsUrl ? (
             <button
               type="button"
-              onClick={() => openExternal(docsUrl)}
+              onClick={(event) => openAppHttpLink(docsUrl, { event })}
               className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
             >
               <ExternalLink className="size-3" />{' '}
-              {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
+              {t('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
             </button>
           ) : null}
           {/* Reload diagnostics after refreshing credentials in a terminal. */}
@@ -362,7 +359,7 @@ export function GhAuthErrorHelp({
             className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
           >
             <RotateCw className="size-3" />{' '}
-            {translate('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}
+            {t('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}
           </button>
         </div>
       </div>
@@ -386,15 +383,19 @@ export function GhAuthErrorHelp({
           </Button>
         ))}
         {docsUrl ? (
-          <Button size="sm" variant="outline" onClick={() => openExternal(docsUrl)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(event) => openAppHttpLink(docsUrl, { event })}
+          >
             <ExternalLink className="mr-1 size-3.5" />{' '}
-            {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
+            {t('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
           </Button>
         ) : null}
         {/* Reload diagnostics after refreshing credentials in a terminal. */}
         <Button size="sm" variant="outline" onClick={reloadOrcaRenderer}>
           <RotateCw className="mr-1 size-3.5" />{' '}
-          {translate('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}
+          {t('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}
         </Button>
       </div>
     </div>

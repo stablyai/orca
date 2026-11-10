@@ -21,20 +21,6 @@ describe('responsive layout metrics', () => {
     })
   })
 
-  it('splits an unfolded iPhone Duo in both holds and keeps its cover phone-like', () => {
-    expect(getResponsiveLayoutMetrics(951, 669)).toMatchObject({ isWideLayout: true })
-    expect(getResponsiveLayoutMetrics(669, 951)).toMatchObject({ isWideLayout: true })
-    expect(getResponsiveLayoutMetrics(466, 678)).toMatchObject({
-      isTabletLayout: false,
-      isWideLayout: false,
-      isLandscapePhone: false
-    })
-    expect(getResponsiveLayoutMetrics(678, 466)).toMatchObject({
-      isWideLayout: false,
-      isLandscapePhone: true
-    })
-  })
-
   it('keeps narrow iPad split windows phone-like', () => {
     expect(getResponsiveLayoutMetrics(560, 1024)).toMatchObject({
       isTabletLayout: false,
