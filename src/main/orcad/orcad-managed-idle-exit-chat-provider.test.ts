@@ -22,6 +22,7 @@ beforeEach(async () => {
   rig = await createRestTestRig()
   rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
   await foundRestTestChat(rig)
+  await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(REST_TEST_SESSION)
 })
 
 afterEach(async () => {

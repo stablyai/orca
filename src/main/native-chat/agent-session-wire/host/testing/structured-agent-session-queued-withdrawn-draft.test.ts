@@ -22,6 +22,13 @@ afterEach(async () => {
   await observationClock.restoreBeforeCleanup(() => rig.dispose())
 })
 
+function holdDraftDelivery(messageId: string): ReturnType<typeof holdDelivery> {
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  return holdDelivery(
+    async () => (await journal.reads.input({ kind: 'linked-to', messageId })).submissions.length > 0
+  )
+}
+
 async function queuedDraft(text: string): Promise<string> {
   const queued = await rig.send(text, 'queue-if-active').result
   if (!queued.ok || !('queued' in queued.value)) {
@@ -46,7 +53,7 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   const b = await queuedDraft('B')
   const c = await queuedDraft('C')
   // Hold provider delivery after A is consumed.
-  const { release } = holdDelivery()
+  const { release } = holdDraftDelivery(a)
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)
@@ -100,7 +107,7 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
 it('a Stop whose acceptance fails takes back no hand-off; the draft sends as it was', async () => {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')
-  const { release } = holdDelivery()
+  const { release } = holdDraftDelivery(a)
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)

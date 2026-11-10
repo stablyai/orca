@@ -165,7 +165,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await edgesAnswered()
     // The report the death left in doubt is not sent again: check is where it waits.
     expect(providerFaults.turnStarts).toBe(2)
-    expect(unread(`run:${runId}`)).toHaveLength(1)
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toHaveLength(1), WAIT)
     expect(providerFaults.starts - before).toBe(1)
   })
 
