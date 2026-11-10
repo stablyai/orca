@@ -27,6 +27,7 @@ import type {
   Routine,
   RoutineRun
 } from '../../../../../shared/cloud-api/cloud-api-types'
+import { PersonSentence } from './PersonName'
 import { RoutineRunHistory, type LoadRoutineRuns } from './RoutineRunHistory'
 import {
   describeRoutineTrigger,
@@ -59,7 +60,8 @@ export function RoutineRow({
   onRunNow,
   onLatestRun,
   onOpenWorkspace,
-  fixedNow
+  fixedNow,
+  viewerUserId
 }: {
   routine: Routine
   projects: readonly CloudApiProject[]
@@ -75,6 +77,7 @@ export function RoutineRow({
   onLatestRun?: (run: RoutineRun | null) => void
   onOpenWorkspace?: (workspaceId: string) => void
   fixedNow?: number
+  viewerUserId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -162,6 +165,19 @@ export function RoutineRow({
                 ? t('auto.components.settings.cloudRoutines.agentCodex', 'Codex')
                 : t('auto.components.settings.cloudRoutines.agentClaude', 'Claude Code')}
             </span>
+            {viewerUserId && routine.createdBy !== viewerUserId ? (
+              <span className="text-muted-foreground">
+                {' · '}
+                <PersonSentence
+                  sentence={t(
+                    'auto.components.settings.cloudRoutines.createdByPerson',
+                    'by <person></person>'
+                  )}
+                  name={routine.createdByName}
+                  id={routine.createdBy}
+                />
+              </span>
+            ) : null}
           </p>
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             {lastRun ? (
@@ -189,8 +205,8 @@ export function RoutineRow({
                   dateTime={new Date(routine.nextRunAt).toISOString()}
                   title={formatAbsoluteTime(routine.nextRunAt, locale)}
                 >
-                  {t('auto.components.settings.cloudRoutines.nextRun', 'Next run {{value0}}', {
-                    value0: formatRelativeFromNow(routine.nextRunAt, now, locale)
+                  {t('auto.components.settings.cloudRoutines.nextRun', 'Next run {{time}}', {
+                    time: formatRelativeFromNow(routine.nextRunAt, now, locale)
                   })}
                 </time>
               </>
@@ -211,12 +227,16 @@ export function RoutineRow({
               active
                 ? t(
                     'auto.components.settings.cloudRoutines.runningShowHistory',
-                    '{{value0}} is running. Show run history',
-                    { value0: routine.name }
+                    '{{routineName}} is running. Show run history',
+                    { routineName: routine.name }
                   )
-                : t('auto.components.settings.cloudRoutines.runNowLabel', 'Run {{value0}} now', {
-                    value0: routine.name
-                  })
+                : t(
+                    'auto.components.settings.cloudRoutines.runNowLabel',
+                    'Run {{routineName}} now',
+                    {
+                      routineName: routine.name
+                    }
+                  )
             }
             title={
               active
@@ -244,8 +264,8 @@ export function RoutineRow({
                 size="icon-xs"
                 aria-label={t(
                   'auto.components.settings.cloudRoutines.more',
-                  'More actions for {{value0}}',
-                  { value0: routine.name }
+                  'More actions for {{routineName}}',
+                  { routineName: routine.name }
                 )}
               >
                 <MoreHorizontal />
@@ -277,8 +297,8 @@ export function RoutineRow({
             onCheckedChange={(next) => (enabled !== null ? undefined : void toggle(next))}
             aria-label={t(
               'auto.components.settings.cloudRoutines.enableLabel',
-              'Enable {{value0}}',
-              { value0: routine.name }
+              'Enable {{routineName}}',
+              { routineName: routine.name }
             )}
           />
         </div>

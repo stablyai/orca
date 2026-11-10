@@ -23,8 +23,8 @@ export function GithubAppHint({
       {installations.length > 0
         ? t(
             'auto.components.settings.cloudRoutines.editor.appInstalled',
-            'The Orca Cloud GitHub App can reach repositories in {{value0}}.',
-            { value0: formatList(installations.map((installation) => installation.account)) }
+            'The Orca Cloud GitHub App can reach repositories in {{accounts}}.',
+            { accounts: formatList(installations.map((installation) => installation.account)) }
           )
         : t(
             'auto.components.settings.cloudRoutines.editor.appMissing',

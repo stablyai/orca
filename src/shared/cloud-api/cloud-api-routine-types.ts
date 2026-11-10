@@ -1,6 +1,6 @@
 // Orca Cloud routines: /v1/routines wire shapes and the editor's request bodies.
 import { z } from 'zod'
-import { HttpsUrl, Id, Millis, ShortText } from './cloud-api-primitives'
+import { HttpsUrl, Id, Millis, PersonName, ShortText } from './cloud-api-primitives'
 
 // ── Routines ────────────────────────────────────────────────────────────────
 
@@ -91,6 +91,7 @@ export const RoutineSchema = z.object({
     .object({ id: Id, status: z.enum(ROUTINE_RUN_STATUSES), finishedAt: Millis.nullable() })
     .nullable(),
   createdBy: Id,
+  createdByName: PersonName,
   createdAt: Millis,
   updatedAt: Millis
 })
