@@ -37,6 +37,11 @@ export function cloudSecretsErrorCopy(
         'cloudSecrets.error.notSwappable',
         'A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that.'
       )
+    case 'desktop_key_conflict':
+      return t(
+        'cloudSecrets.error.desktopKeyConflict',
+        'Another agent’s key is saved in your Orca account under this name. Save this one to replace it.'
+      )
     case 'invalid_name':
       return t(
         'cloudSecrets.error.invalidName',

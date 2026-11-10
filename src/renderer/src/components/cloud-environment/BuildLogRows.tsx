@@ -1,19 +1,14 @@
 import { memo } from 'react'
-import type { ITheme } from '@xterm/xterm'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
-import { getBuiltinTheme } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { FOCUS_RING } from '../orca-cloud/cloud-focus'
-import {
-  DEFAULT_TERMINAL_THEME_DARK,
-  DEFAULT_TERMINAL_THEME_LIGHT
-} from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { parseAnsiSegments, type AnsiColor } from '../editor/notebook/outputs/ipynb-ansi'
 import type { LogLine } from './build-log-model'
+import { ANSI_PALETTES } from './build-log-ansi-palette'
 import { formatLineTimestamp, formatStepDuration, type BuildStepView } from './build-steps'
 import { BuildStatusIcon } from './BuildStatusIcon'
 import type { BuildLogStreamState } from './BuildLogViewer'
@@ -23,34 +18,12 @@ import type { EnvironmentBuildStep, EnvironmentBuildView } from './cloud-environ
 /** Lines longer than this render truncated (the copy keeps them whole); minified bundles exist. */
 const MAX_RENDERED_LINE_CHARS = 2000
 
-const ANSI_PALETTE_KEYS = [
-  'black',
-  'red',
-  'green',
-  'yellow',
-  'blue',
-  'magenta',
-  'cyan',
-  'white',
-  'brightBlack',
-  'brightRed',
-  'brightGreen',
-  'brightYellow',
-  'brightBlue',
-  'brightMagenta',
-  'brightCyan',
-  'brightWhite'
-] as const satisfies readonly (keyof ITheme)[]
-
-const ANSI_PALETTES = {
-  dark: ANSI_PALETTE_KEYS.map((key) => getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)?.[key]),
-  light: ANSI_PALETTE_KEYS.map((key) => getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT)?.[key])
-}
-
 function AnsiLine({ text, dark }: { text: string; dark: boolean }): React.JSX.Element {
   const palette = ANSI_PALETTES[dark ? 'dark' : 'light']
-  const resolve = (color: AnsiColor | undefined): string | undefined =>
-    typeof color === 'number' ? palette[color] : color
+  const resolve = (
+    color: AnsiColor | undefined,
+    layer: readonly (string | undefined)[]
+  ): string | undefined => (typeof color === 'number' ? layer[color] : color)
   const clipped =
     text.length > MAX_RENDERED_LINE_CHARS ? `${text.slice(0, MAX_RENDERED_LINE_CHARS)}…` : text
   return (
@@ -62,8 +35,8 @@ function AnsiLine({ text, dark }: { text: string; dark: boolean }): React.JSX.El
           <span
             key={index}
             style={{
-              color: resolve(segment.fg),
-              backgroundColor: resolve(segment.bg),
+              color: resolve(segment.fg, palette.fg),
+              backgroundColor: resolve(segment.bg, palette.bg),
               fontWeight: segment.bold ? 600 : undefined,
               fontStyle: segment.italic ? 'italic' : undefined,
               textDecoration: segment.underline ? 'underline' : undefined
@@ -177,7 +150,7 @@ export function StepHeaderRow({
       </span>
       {lineCount > 0 ? (
         <span
-          className="text-[11px] tabular-nums text-muted-foreground"
+          className="text-2xs tabular-nums text-muted-foreground"
           title={t('cloudEnvironment.log.lineCountTitle', 'Lines of output')}
         >
           {lineCount.toLocaleString(getIntlLocale())}

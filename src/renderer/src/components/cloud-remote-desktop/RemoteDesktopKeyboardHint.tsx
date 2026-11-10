@@ -44,7 +44,7 @@ export function RemoteDesktopKeyboardHintView({
           )}
           components={{
             kbd: (
-              <kbd className="mx-0.5 inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px] font-medium" />
+              <kbd className="mx-0.5 inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-3xs font-medium" />
             )
           }}
         />

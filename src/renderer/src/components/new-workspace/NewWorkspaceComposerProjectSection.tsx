@@ -16,6 +16,9 @@ import type {
 } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
 import { OrcaCloudSelectionHint } from './OrcaCloudSelectionHint'
+import RunOnSegmentedControl from './run-on/RunOnSegmentedControl'
+import { RunOnHintLine } from './run-on/RunOnHintLine'
+import { OrcaCloudSetupPanel } from './run-on/OrcaCloudSetupPanel'
 import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
 import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
 import { orcaCloudCanStart, type OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
@@ -40,6 +43,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
   | 'orcaCloudAvailability'
+  | 'cloudStart'
 > & {
   disabled?: boolean
   projectDescriptionId: string
@@ -94,15 +98,19 @@ export function NewWorkspaceComposerProjectSection({
   sshStatusLabel,
   connectButtonLabel,
   selectedProjectName,
-  orcaCloudAccess
+  orcaCloudAccess,
+  cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
+  const cloudOnly =
+    selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? cloudStart?.cloudOnly : undefined
   const t = useTranslate()
   const orcaCloudOffered = shouldShowRunTargetPicker && ephemeralVmRecipes.some(isOrcaCloudRecipe)
   // Shared with the picker; mounting the composer prefetches it so the row rarely shows a skeleton.
   const fetchedOrcaCloudAccess = useOrcaCloudRunTargetAccess(orcaCloudOffered && !orcaCloudAccess)
   return (
     <fieldset disabled={disabled} className="space-y-1">
-      <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
+      {/* Run on as segments needs the full width, so it sits under the project (spec E1). */}
+      <div className={cn('grid gap-3', shouldShowRunTargetPicker && !cloudStart && 'grid-cols-2')}>
         <div className="min-w-0 space-y-1">
           <div className="flex h-5 items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
@@ -140,9 +148,18 @@ export function NewWorkspaceComposerProjectSection({
                 selectedProjectHostSetupId,
                 selectedRepoExecutionHostId
               )}
-              onValueChange={onProjectChange}
+              onValueChange={(projectId) => {
+                cloudOnly?.clear()
+                onProjectChange(projectId)
+              }}
               onValueSelected={focusNameInput}
               onAddProject={onAddProject}
+              // D4: while Orca Cloud is picked, GitHub repositories with no clone here.
+              cloudRepos={cloudOnly?.repos ?? null}
+              cloudRepoValue={cloudOnly?.picked?.fullName ?? null}
+              onCloudRepoSelected={cloudOnly?.pick}
+              onMoreCloudAccess={cloudOnly?.moreAccess}
+              onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
@@ -171,26 +188,55 @@ export function NewWorkspaceComposerProjectSection({
             <label className="flex h-5 min-w-0 items-center truncate text-xs font-medium text-muted-foreground">
               {t('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
             </label>
-            <RunTargetCombobox
-              hostOptions={projectHostSetupOptions ?? []}
-              hostValue={selectedProjectHostSetupId ?? null}
-              hostExecutionHostId={selectedRepoExecutionHostId}
-              onHostChange={handleProjectHostSetupChange}
-              recipes={ephemeralVmRecipes}
-              recipeValue={selectedEphemeralVmRecipeId}
-              onRecipeChange={onEphemeralVmRecipeChange}
-              onAddSshHost={handleAddSshHost}
-              onAddRemoteServer={handleAddRemoteServer}
-              onConnectHost={handleConnectRunTargetHost}
-              onSetLocation={handleSetLocation}
-              orcaCloudAvailability={orcaCloudAvailability}
-              {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
-            />
+            {cloudStart ? (
+              <RunOnSegmentedControl
+                cloudOnlyRepo={Boolean(cloudOnly?.picked)}
+                hostOptions={projectHostSetupOptions ?? []}
+                hostValue={selectedProjectHostSetupId ?? null}
+                hostExecutionHostId={selectedRepoExecutionHostId}
+                onHostChange={handleProjectHostSetupChange}
+                recipes={ephemeralVmRecipes}
+                recipeValue={selectedEphemeralVmRecipeId}
+                onRecipeChange={onEphemeralVmRecipeChange}
+                onAddSshHost={handleAddSshHost}
+                onAddRemoteServer={handleAddRemoteServer}
+                onConnectHost={handleConnectRunTargetHost}
+                onSetLocation={handleSetLocation}
+                orcaCloudAvailability={orcaCloudAvailability}
+                {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
+                onSelectOrcaCloud={cloudStart.onSelectOrcaCloud}
+                onUserPick={cloudStart.onUserPick}
+              />
+            ) : (
+              <RunTargetCombobox
+                hostOptions={projectHostSetupOptions ?? []}
+                hostValue={selectedProjectHostSetupId ?? null}
+                hostExecutionHostId={selectedRepoExecutionHostId}
+                onHostChange={handleProjectHostSetupChange}
+                recipes={ephemeralVmRecipes}
+                recipeValue={selectedEphemeralVmRecipeId}
+                onRecipeChange={onEphemeralVmRecipeChange}
+                onAddSshHost={handleAddSshHost}
+                onAddRemoteServer={handleAddRemoteServer}
+                onConnectHost={handleConnectRunTargetHost}
+                onSetLocation={handleSetLocation}
+                orcaCloudAvailability={orcaCloudAvailability}
+                {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
+              />
+            )}
             {ephemeralVmRecipeError ? (
               <p className="whitespace-pre-line text-[11px] text-destructive">
                 {ephemeralVmRecipeError}
               </p>
-            ) : orcaCloudOffered ? (
+            ) : cloudStart && selectedEphemeralVmRecipeId !== ORCA_CLOUD_RECIPE_ID ? (
+              <RunOnHintLine
+                hostOptions={projectHostSetupOptions ?? []}
+                selectedHostId={selectedProjectHostSetupId ?? null}
+                recipes={ephemeralVmRecipes}
+                selectedRecipeId={selectedEphemeralVmRecipeId}
+                orcaCloudAvailability={orcaCloudAvailability}
+              />
+            ) : orcaCloudOffered && !cloudStart?.panelVisible ? (
               <OrcaCloudSelectionHint
                 access={orcaCloudAccess ?? fetchedOrcaCloudAccess}
                 visible={isOrcaCloudSelection({ ephemeralVmRecipes, selectedEphemeralVmRecipeId })}
@@ -199,9 +245,11 @@ export function NewWorkspaceComposerProjectSection({
           </div>
         ) : null}
       </div>
-      {/* Agent access is moot while Orca Cloud can't start (no plan, cap, payment, signed out). */}
-      {selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID &&
-      orcaCloudCanStart(orcaCloudAccess ?? fetchedOrcaCloudAccess) ? (
+      {cloudStart?.panelVisible && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
+        <OrcaCloudSetupPanel steps={cloudStart.steps} allSet={cloudStart.allSet} />
+      ) : // Agent access is moot while Orca Cloud can't start (no plan, cap, payment, signed out).
+      selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID &&
+        orcaCloudCanStart(orcaCloudAccess ?? fetchedOrcaCloudAccess) ? (
         <ComposerCloudAgentHint />
       ) : null}
       {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (

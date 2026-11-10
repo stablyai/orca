@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import {
-  Archive,
   ArchiveRestore,
   ChevronRight,
+  Cloud,
   File,
   Folder,
   GitPullRequest,
@@ -208,7 +208,7 @@ export function CloudArchivedWorkspaceView({
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
         <CloudWorkspaceHeader
-          icon={Archive}
+          icon={Cloud}
           title={workspaceName ?? t('orcaCloudWorkspace.archived.title', 'Archived workspace')}
           state="archived"
           stateLine={stateLine}
@@ -309,12 +309,13 @@ export function CloudArchivedWorkspaceView({
                   <div className="max-h-96 overflow-y-auto p-1.5 scrollbar-sleek [mask-image:linear-gradient(to_bottom,black_calc(100%-2rem),transparent)]">
                     <TreeList nodes={tree} depth={0} />
                     {hiddenFiles > 0 ? (
-                      <p className="px-1 pt-1 pb-4 text-[11px] text-muted-foreground">
+                      <p className="px-1 pt-1 pb-4 text-2xs text-muted-foreground">
                         {t(
                           'orcaCloudWorkspace.archived.moreFiles',
                           '{{count}} more files not shown',
                           {
-                            count: hiddenFiles
+                            count: hiddenFiles,
+                            defaultValue_one: '{{count}} more file not shown'
                           }
                         )}
                       </p>

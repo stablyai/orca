@@ -1,5 +1,6 @@
 // Display helpers for team cloud workspaces (pure, unit-tested).
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { uiDateTimeFormat, uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudWorkspacePresence } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -61,17 +62,19 @@ export function formatRelative(
   if (seconds < 45) {
     return t('auto.components.cloudWorkspaces.justNow', 'just now')
   }
+  // Intl, not hand-rolled "{{n}}m ago": word order, unit and plural follow the UI language.
+  const locale = intlLocale ?? getIntlLocale()
   const minutes = Math.round(seconds / 60)
   if (minutes < 60) {
-    return t('auto.components.cloudWorkspaces.minutesAgo', '{{value0}}m ago', { value0: minutes })
+    return formatUiNarrowRelativeTime(-minutes, 'minute', locale)
   }
   const hours = Math.round(minutes / 60)
   if (hours < 24) {
-    return t('auto.components.cloudWorkspaces.hoursAgo', '{{value0}}h ago', { value0: hours })
+    return formatUiNarrowRelativeTime(-hours, 'hour', locale)
   }
   const days = Math.round(hours / 24)
   return days < 30
-    ? t('auto.components.cloudWorkspaces.daysAgo', '{{value0}}d ago', { value0: days })
+    ? formatUiNarrowRelativeTime(-days, 'day', locale)
     : uiDateTimeFormat(DATE_FORMAT, intlLocale).format(at)
 }
 

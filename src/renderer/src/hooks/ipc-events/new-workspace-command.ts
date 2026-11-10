@@ -1,3 +1,5 @@
+import type { WorkspaceSource } from '../../../../shared/workspace-source'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
@@ -33,4 +35,18 @@ export function openNewWorkspaceFromShortcut(
     return
   }
   state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+}
+
+/** New cloud workspace (⇧⌘N, File menu, palette, sidebar, Landing, Cloud home): the composer on Orca Cloud. */
+export function openNewCloudWorkspace(
+  state: Pick<AppState, 'activeModal' | 'openModal'>,
+  telemetrySource: WorkspaceSource = 'shortcut'
+): void {
+  if (state.activeModal === 'new-workspace-composer') {
+    return
+  }
+  state.openModal('new-workspace-composer', {
+    telemetrySource,
+    initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID
+  })
 }

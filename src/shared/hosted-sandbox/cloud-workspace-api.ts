@@ -90,6 +90,13 @@ export type OrcaCloudWorkspaceApi = {
   listGitHubRepositories: (args: {
     cursor?: string | null
   }) => Promise<CloudWorkspaceResult<HostedGithubRepositoriesResponse>>
+  /**
+   * Starts a sandbox that clones a GitHub repository with no copy on this computer (cloud-start
+   * D4). Resolves once it is ready; the window then opens it like any cloud workspace.
+   */
+  createFromGitHub: (args: {
+    repoUrl: string
+  }) => Promise<CloudWorkspaceResult<{ sandboxId: string }>>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void
 }
@@ -105,6 +112,7 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   connectGitHub: 'orcaCloudWorkspace:connectGitHub',
   getRepoAccess: 'orcaCloudWorkspace:getRepoAccess',
   listGitHubRepositories: 'orcaCloudWorkspace:listGitHubRepositories',
+  createFromGitHub: 'orcaCloudWorkspace:createFromGitHub',
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',
   oom: 'orcaCloudWorkspace:oom'
 } as const

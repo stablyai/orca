@@ -9,8 +9,10 @@ export const SECRET_COMMAND_SPECS: CommandSpec[] = [
       'orca secret request <NAME> --reason "<why>" [--scope personal|repo] [--wait <sec>] [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'name', 'reason', 'scope', 'wait'],
     positionalArgs: ['name'],
+    optionalNumberFlags: ['wait'],
     notes: [
-      'Orca shows the person a card with NAME and your reason; they type the value. The value never passes through you or this command.',
+      'Orca shows the person a card with NAME and your reason; they type the value into Orca, not into this command or your conversation.',
+      'Once saved, NAME is a plain environment variable: any command in this workspace can read it, you included. Do not print or log it.',
       'Once provided, NAME is set for new shells in this workspace. In the current shell run eval "$(orca-env)" (fish: orca-env --fish | source).',
       '--reason (at most 200 characters) is shown to the person as your words. Say what the secret unblocks.',
       '--scope is a hint: the person chooses where it is saved.',

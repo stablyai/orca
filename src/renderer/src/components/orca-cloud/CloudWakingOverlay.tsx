@@ -115,7 +115,7 @@ export function CloudWakingOverlay({
       : wake.source === 'restart'
         ? t('orcaCloudWorkspace.overlay.restarting', 'Restarting…')
         : wake.source === 'unarchive'
-          ? t('orcaCloudWorkspace.overlay.unarchiving', 'Restoring from archive…')
+          ? t('orcaCloudWorkspace.overlay.unarchivingNow', 'Unarchiving…')
           : t('orcaCloudWorkspace.overlay.waking', 'Waking…')
   const hint = stuck
     ? t('orcaCloudWorkspace.overlay.stuck', 'This is taking much longer than usual.')
@@ -153,7 +153,7 @@ export function CloudWakingOverlay({
           : wake.source === 'restart'
             ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name })
             : wake.source === 'unarchive'
-              ? t('orcaCloudWorkspace.announce.unarchiving', 'Restoring {{name}} from archive.', {
+              ? t('orcaCloudWorkspace.announce.unarchivingNamed', 'Unarchiving {{name}}.', {
                   name
                 })
               : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })

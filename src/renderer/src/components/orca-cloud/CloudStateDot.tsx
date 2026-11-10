@@ -19,7 +19,8 @@ export const CLOUD_DOT_CLASS: Record<CloudDotState, string> = {
   // Starting a new sandbox reads like waking (half-filled), without implying it slept before.
   starting:
     'rounded-full border-[1.5px] border-foreground bg-[linear-gradient(90deg,var(--foreground)_50%,transparent_50%)] motion-safe:animate-pulse',
-  archived: 'rounded-[2px] bg-muted-foreground',
+  // Outlined square: at 1x a filled square read the same as the filled running circle.
+  archived: 'rounded-[1px] border-[1.5px] border-muted-foreground bg-transparent',
   failed: 'rounded-full bg-destructive',
   // A failed wake: the workspace is fine, so a hollow destructive ring rather than a solid failure.
   wakeFailed: 'rounded-full border-[1.5px] border-destructive bg-transparent',
@@ -32,7 +33,8 @@ export function CloudStateDot({
   className
 }: {
   state: CloudDotState
-  size?: 'sm' | 'md'
+  /** badge: the 7px corner dot on a 12px host glyph. */
+  size?: 'badge' | 'sm' | 'md'
   className?: string
 }): React.JSX.Element {
   return (
@@ -41,7 +43,7 @@ export function CloudStateDot({
       data-cloud-state={state}
       className={cn(
         'inline-block shrink-0',
-        size === 'md' ? 'size-2' : 'size-1.5',
+        size === 'md' ? 'size-2' : size === 'badge' ? 'size-[7px]' : 'size-1.5',
         CLOUD_DOT_CLASS[state],
         className
       )}

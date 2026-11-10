@@ -327,6 +327,12 @@ export function getCreationProgressLabel(
   if (entry.indeterminate) {
     return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')
   }
+  // Orca Cloud glossary: the sandbox clones the repository; there is no local worktree to create.
+  if (entry.request.ephemeralVmRecipe?.provider === 'orca-cloud') {
+    return entry.phase === 'fetching'
+      ? t('auto.lib.pendingWorktreeCreation.cloningRepository', 'Cloning the repository…')
+      : t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')
+  }
   if (entry.phase === 'preparing') {
     return t('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
   }

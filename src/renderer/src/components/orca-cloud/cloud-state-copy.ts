@@ -36,7 +36,8 @@ export function cloudStateDetail(state: CloudDotState, t: Translate = translate)
     case 'waking':
       return t('orcaCloudWorkspace.detail.waking', 'Waking…')
     case 'starting':
-      return t('orcaCloudWorkspace.detail.starting', 'Starting the sandbox…')
+      // Same words as the creating row in the sidebar.
+      return t('auto.lib.pendingWorktreeCreation.startingSandbox', 'Starting sandbox…')
     case 'unresponsive':
       return t(
         'orcaCloudWorkspace.detail.restartToRecover',

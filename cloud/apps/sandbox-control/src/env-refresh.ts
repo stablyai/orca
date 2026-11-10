@@ -39,6 +39,22 @@ export async function sandboxesForSecretOwner(db: D1Database, change: SecretChan
   }
 }
 
+/**
+ * A just-booted session whose env changed while it booted: a secret saved meanwhile (the build sheet asks
+ * for missing ones) missed the boot's env, and that change's refresh skipped a sandbox not yet running.
+ */
+export async function envChangedSinceBoot(deps: LifecycleDeps, row: SandboxRow, bootEnv: Record<string, string>): Promise<boolean> {
+  if (row.status !== 'running' || !deps.secrets) {
+    return false
+  }
+  const { env } = await sessionSecretEnv(deps, row)
+  const same = Object.keys(env).length === Object.keys(bootEnv).length && Object.entries(env).every(([k, v]) => bootEnv[k] === v)
+  if (!same) {
+    console.log(JSON.stringify({ event: 'session_env_changed_during_boot', sandboxId: row.id }))
+  }
+  return !same
+}
+
 /** Re-resolves one running session's env and applies it in the VM. False when it could not. */
 export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): Promise<boolean> {
   if (row.status !== 'running' || !row.session_id || !deps.secrets) {

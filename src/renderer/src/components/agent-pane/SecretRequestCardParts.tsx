@@ -26,7 +26,7 @@ export function SecretRequestTitle({
   const t = useTranslate()
   const text = agent
     ? t('secretRequest.title', '{{agent}} asked for {{name}}', { agent, name: NAME_SLOT })
-    : t('secretRequest.titleUnknown', 'An agent asked for {{name}}', { name: NAME_SLOT })
+    : t('secretRequest.titleUnknown', 'A command asked for {{name}}', { name: NAME_SLOT })
   const at = text.indexOf(NAME_SLOT)
   if (at === -1) {
     return <>{text}</>
@@ -44,7 +44,7 @@ export function SecretRequestTitle({
 export function secretRequestTitle(agent: string | null, name: string, t: Translate): string {
   return agent
     ? t('secretRequest.title', '{{agent}} asked for {{name}}', { agent, name })
-    : t('secretRequest.titleUnknown', 'An agent asked for {{name}}', { name })
+    : t('secretRequest.titleUnknown', 'A command asked for {{name}}', { name })
 }
 
 /** Plain text clamped to two lines, with Show more when it overflows. Never linkified. */
@@ -53,7 +53,8 @@ export function UntrustedReason({
   from
 }: {
   reason: string
-  from: string
+  /** "from Claude"; null when orcad couldn't tell who asked (the title already says so). */
+  from: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const ref = React.useRef<HTMLSpanElement>(null)
@@ -72,21 +73,23 @@ export function UntrustedReason({
           {`“${reason}”`}
         </span>
       </blockquote>
-      <figcaption className="flex items-center gap-2">
-        <span>{from}</span>
-        {overflows || expanded ? (
-          <button
-            type="button"
-            className="rounded-sm text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            aria-expanded={expanded}
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded
-              ? t('secretRequest.showLess', 'Show less')
-              : t('secretRequest.showMore', 'Show more')}
-          </button>
-        ) : null}
-      </figcaption>
+      {from || overflows || expanded ? (
+        <figcaption className="flex items-center gap-2">
+          {from ? <span>{from}</span> : null}
+          {overflows || expanded ? (
+            <button
+              type="button"
+              className="rounded-sm text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded
+                ? t('secretRequest.showLess', 'Show less')
+                : t('secretRequest.showMore', 'Show more')}
+            </button>
+          ) : null}
+        </figcaption>
+      ) : null}
     </figure>
   )
 }
@@ -136,6 +139,25 @@ export function SecretRequestScopeControl({
   )
 }
 
+/** The saved state's headline; also what the live region announces before the card goes away. */
+export function secretRequestDoneTitle(
+  args: { agent: string | null; name: string; scope: SecretRequestScope; toldAgent: boolean },
+  t: Translate
+): string {
+  if (!args.toldAgent) {
+    return t(
+      'secretRequest.savedAfterExpiry',
+      'Saved. {{agent}} stopped waiting, so tell it the secret is ready.',
+      { agent: args.agent ?? t('secretRequest.theAgent', 'The agent') }
+    )
+  }
+  return args.scope === 'repo'
+    ? t('secretRequest.doneRepo', '{{name}} added to this repository’s secrets.', {
+        name: args.name
+      })
+    : t('secretRequest.done', '{{name}} added to your personal secrets.', { name: args.name })
+}
+
 /** Saved: when the value reaches new shells, whether the agent was told, and Restart {{agent}} (Q5). */
 export function SecretRequestDone({
   agent,
@@ -165,23 +187,13 @@ export function SecretRequestDone({
       <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div role="status" className="min-w-0 flex-1 space-y-1">
         <p id={titleId} className="font-medium text-foreground">
-          {!toldAgent
-            ? t(
-                'secretRequest.savedAfterExpiry',
-                'Saved. {{agent}} stopped waiting, so tell it the secret is ready.',
-                { agent: theAgent }
-              )
-            : scope === 'repo'
-              ? t('secretRequest.doneRepo', '{{name}} added to this repository’s secrets.', {
-                  name
-                })
-              : t('secretRequest.done', '{{name}} added to your personal secrets.', { name })}
+          {secretRequestDoneTitle({ agent, name, scope, toldAgent }, t)}
         </p>
         <p className="text-xs leading-5 text-muted-foreground">
           {toldAgent
             ? t(
                 'secretRequest.doneDetail',
-                'New shells get it now. {{agent}} was told it’s ready, and it never gets the value from Orca.',
+                'New shells get it now. {{agent}} was told it’s ready.',
                 { agent: theAgent }
               )
             : t('secretRequest.doneDetailExpired', 'New shells get it now.')}{' '}

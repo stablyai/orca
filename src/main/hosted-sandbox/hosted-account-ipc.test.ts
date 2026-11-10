@@ -25,7 +25,8 @@ function register(installUrl: string, config = vi.fn(async () => ({ idleSleepMin
       config,
       connectGitHub: async () => ({ installUrl, authorizeUrl: installUrl }),
       githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
-      githubRepositories: async () => ({ repositories: [], nextCursor: null })
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate
     },
     { repoIds: async () => null }
   )
@@ -33,6 +34,47 @@ function register(installUrl: string, config = vi.fn(async () => ({ idleSleepMin
 }
 
 const REPO = 'https://github.com/acme/web'
+const unusedCreate = async (): Promise<never> => {
+  throw new Error('not called')
+}
+
+it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anything else', async () => {
+  const create = vi.fn(async (body: { workspaceId: string; repo?: { url: string } }) => ({
+    sandbox: {
+      id: 'sbx_1',
+      workspaceId: body.workspaceId,
+      status: 'running' as const,
+      machineSize: 'standard' as const,
+      region: 'iad1',
+      session: null,
+      createdAt: 1
+    },
+    connection: { type: 'orca-server' as const, pairingCode: 'code', projectRoot: '/work' }
+  }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
+      githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create
+    },
+    { repoIds: async () => null }
+  )
+  expect(await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: REPO })).toEqual({
+    ok: true,
+    value: { sandboxId: 'sbx_1' }
+  })
+  expect(create).toHaveBeenLastCalledWith({
+    workspaceId: expect.stringMatching(/^web-[0-9a-f]{8}$/),
+    machineSize: 'standard',
+    repo: { url: 'https://github.com/acme/web.git' }
+  })
+  expect(
+    await handlers.get(CH.createFromGitHub)?.({}, { repoUrl: 'https://gitlab.com/acme/web' })
+  ).toMatchObject({ ok: false })
+  expect(create).toHaveBeenCalledTimes(1)
+})
 const SESSION = 'cs_abcdefghijklmnopqrstuv'
 
 it('asks again with the repo and owner ids when access is missing, so GitHub preselects the repo', async () => {
@@ -53,7 +95,8 @@ it('asks again with the repo and owner ids when access is missing, so GitHub pre
       config: async () => ({ idleSleepMinutes: 15 }),
       connectGitHub,
       githubRepoAccess,
-      githubRepositories: async () => ({ repositories: [], nextCursor: null })
+      githubRepositories: async () => ({ repositories: [], nextCursor: null }),
+      create: unusedCreate
     },
     { repoIds: async () => ({ repoId: 7, ownerId: 50 }) }
   )
