@@ -8,7 +8,7 @@ import {
   TextInput,
   View
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
@@ -27,13 +27,15 @@ import {
 } from '../tasks/smart-source-paste-intent'
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
+import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
+import { SheetHeader } from './nav-bar/SheetHeader'
 
 // Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
@@ -75,15 +77,14 @@ export function SmartWorkspaceSourceDrawer({
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const inputRef = useRef<TextInput>(null)
-  // Read latest availability without reactive dependency so recreated object reseeds only on open.
-  const availabilityRef = useRef(availability)
-  availabilityRef.current = availability
-
-  useEffect(() => {
+  // Reseed only on open so a recreated availability object cannot reset the picked mode.
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
-      setMode(resolveDefaultSmartMode(availabilityRef.current))
+      setMode(resolveDefaultSmartMode(availability))
     }
-  }, [visible])
+  }
 
   // Focus after opening interactions settle; docked field shares composer.name with form.
   useEffect(() => {
@@ -208,12 +209,14 @@ export function SmartWorkspaceSourceDrawer({
       {/* Fill column ends at keyboard top; non-flex dock stays beside flex results so FlatList cannot clip input. */}
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {t('components.smartWorkspaceSourceDrawer.title', "Name or 'Create From'")}
-          </Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.done}>{t('common.done', 'Done')}</Text>
-          </Pressable>
+          <SheetHeader
+            title={
+              availability.textOnly
+                ? t('components.smartWorkspaceSourceDrawer.workspaceName', 'Workspace name')
+                : t('components.smartWorkspaceSourceDrawer.startFrom', 'Start from')
+            }
+            trailing={{ label: t('common.done', 'Done'), onPress: onClose }}
+          />
         </View>
 
         <View style={styles.results}>
@@ -230,11 +233,14 @@ export function SmartWorkspaceSourceDrawer({
                 )}
               </Text>
               <View style={styles.crossRepoActions}>
-                <Pressable style={styles.crossRepoDismiss} onPress={dismissCrossRepoPrompt}>
+                <Pressable
+                  style={({ pressed }) => [styles.crossRepoDismiss, pressed && pressedStyle]}
+                  onPress={dismissCrossRepoPrompt}
+                >
                   <Text style={styles.crossRepoDismissText}>{t('common.cancel', 'Cancel')}</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.crossRepoSwitch}
+                  style={({ pressed }) => [styles.crossRepoSwitch, pressed && pressedStyle]}
                   onPress={() => void handleAcceptCrossRepo()}
                 >
                   <Text style={styles.crossRepoSwitchText}>
@@ -276,11 +282,12 @@ export function SmartWorkspaceSourceDrawer({
           <FlatList
             data={rows}
             keyExtractor={(row) => row.value}
-            style={styles.list}
+            style={[styles.list, rows.length === 0 && styles.listEmpty]}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="none"
             nestedScrollEnabled
+            ItemSeparatorComponent={SourceRowSeparator}
             ListFooterComponent={
               loading ? (
                 <View style={styles.loading}>
@@ -314,7 +321,11 @@ export function SmartWorkspaceSourceDrawer({
                 return (
                   <Pressable
                     key={option.id}
-                    style={[styles.chip, selected && styles.chipSelected]}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      selected && styles.chipSelected,
+                      pressed && pressedStyle
+                    ]}
                     onPress={() => setMrStateFilter(option.id)}
                   >
                     <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -333,7 +344,11 @@ export function SmartWorkspaceSourceDrawer({
               return (
                 <Pressable
                   key={option.id}
-                  style={[styles.tab, selected && styles.tabSelected]}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    selected && styles.tabSelected,
+                    pressed && pressedStyle
+                  ]}
                   onPress={() => setMode(option.id)}
                 >
                   <SmartSourceModeIcon icon={option.icon} color={tint} />
@@ -345,16 +360,14 @@ export function SmartWorkspaceSourceDrawer({
             })}
           </View>
 
-          <TextInput
-            ref={inputRef}
-            style={styles.search}
+          <TextField
+            inputRef={inputRef}
             value={composer.name}
             onChangeText={composer.setName}
             placeholder={t(
               'components.smartWorkspaceSourceDrawer.searchPlaceholder',
               'Type a name or search a source'
             )}
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             // Still request native auto-focus; the delayed ref focus is the reliable path.
@@ -367,4 +380,9 @@ export function SmartWorkspaceSourceDrawer({
       </View>
     </BottomDrawer>
   )
+}
+
+function SourceRowSeparator() {
+  useMobileColorScheme()
+  return <View style={styles.separator} />
 }

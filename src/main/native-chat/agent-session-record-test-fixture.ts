@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
-} from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export function agentSessionRecordFixture(

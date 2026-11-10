@@ -1,9 +1,8 @@
-import { reportWorkerTerminalUserInput } from './worker-terminal-takeover-report'
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
 import { terminalInputSend } from './mobile-terminal-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { ConnectionState } from '../transport/types'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 type TerminalLiveAccessoryRawSendArgs = {
   readonly sendTerminalUserInput: typeof terminalInputSend.request
@@ -41,11 +40,7 @@ export async function sendTerminalLiveAccessoryRawBytes(
     )
     .then(
       (reply) => {
-        const accepted = terminalInputSend.interpret(reply) === true
-        if (accepted) {
-          reportWorkerTerminalUserInput(args.client!, rawSendTarget)
-        }
-        return accepted
+        return terminalInputSend.interpret(reply) === true
       },
       () => false
     )

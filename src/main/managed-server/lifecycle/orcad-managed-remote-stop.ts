@@ -1,6 +1,6 @@
 // Readiness and instance-lock records must agree before the slot's own build requests a stop.
 import { randomUUID } from 'node:crypto'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { selectOrcadSlotRuntimeCommand } from '../install/orcad-remote-runtime'
 import {
   parseOrcadReadinessWaitOutput,
@@ -8,8 +8,8 @@ import {
 } from '../install/orcad-remote-readiness-wait'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recovery-slot'
+import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
   orcadWindowsNodeCommandLine,

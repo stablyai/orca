@@ -3,14 +3,14 @@ import {
   getManagedOrcadFenceEnvironmentId,
   managedOrcadServerName
 } from '../../../shared/managed-orcad-ssh-owner'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../ssh/orcad-migration-cutover-journal'
-import { abandonOrcadConversion } from '../../ssh/orcad-conversion-abandon'
-import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
-import { enableMovedOrcadAutomationsForTarget } from '../../ssh/orcad-migration-moved-automations'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { abandonOrcadConversion } from '../../managed-server/migration/cutover/orcad-conversion-abandon'
+import { retainOrcadMigrationSource } from '../../persistence/migrating-orcad-catalog/orcad-migration-source-retention'
+import { enableMovedOrcadAutomationsForTarget } from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
 import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
 import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/orcad-host-unavailable'
-import { managedServerUpdateDeps } from '../../ssh/managed-server-update-deps'
+import { managedServerUpdateDeps } from '../../ssh/host-server/managed-server-update-deps'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
 import { convertSshTargetToManagedOrcad } from '../../managed-server/lifecycle/orcad-runtime-conversion'
@@ -21,24 +21,24 @@ import {
   orcadServerRepositoriesFor
 } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import { createManagedOrcadEnvironment } from '../../managed-server/lifecycle/orcad-runtime-deployment'
-import type { HostServerOnConnectDeps } from '../../ssh/ssh-host-server-on-connect'
+import type { HostServerOnConnectDeps } from '../../ssh/host-server/ssh-host-server-on-connect'
 import {
   censusSshHostRelaysBeforeSession,
   relayTerminalsOnConnect
-} from '../../ssh/legacy-relay/ssh-host-relay-terminals-on-connect'
+} from '../../ssh/legacy-relay/endpoints/ssh-host-relay-terminals-on-connect'
 import { requireManagedOrcadInfrastructure } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
-import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/ssh-host-relay-census-for-target'
-import { setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
-import { trackSshHostServerEvent } from '../../ssh/ssh-host-server-telemetry'
-import { knownSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
-import { knownOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
+import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/endpoints/ssh-host-relay-census-for-target'
+import { setSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
+import { trackSshHostServerEvent } from '../../ssh/host-server/ssh-host-server-telemetry'
+import { knownSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
+import { knownOrcadTunnelTransport } from '../../managed-server/lifecycle/orcad-tunnel-transport-memo'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { releaseUnreachableOrcadSetup } from '../../ssh/orcad-unreachable-setup-release'
+import { releaseUnreachableOrcadSetup } from '../../managed-server/migration/cutover/orcad-unreachable-setup-release'
 import { getCurrentMainWindow } from './ssh-ipc-context'
 import { broadcastSshState } from './ssh-renderer-broadcast'
 import { connectInFlight } from './ssh-connect-attempt-registry'
-import { startLegacyRelayBridge } from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
-import { isBridgeableLease } from '../../ssh/legacy-relay/legacy-relay-bridge-leases'
+import { startLegacyRelayBridge } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
+import { isBridgeableLease } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-leases'
 
 export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConnectDeps {
   const registry = getSshTargetRegistryStore()!
@@ -129,7 +129,9 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         serverFolderCatalogFor: orcadServerFolderCatalogFor,
         serverAutomationEnablerFor: orcadServerAutomationEnablerFor
       })
-      if (converted.outcome === 'converted' || converted.outcome === 'refused') {
+      // A quiet retry's refusal is not the user's attempt, so it keeps their consent.
+      const quiet = connectInFlight.get(target.id)?.quiet?.active === true
+      if (converted.outcome === 'converted' || (converted.outcome === 'refused' && !quiet)) {
         // Move-anyway consent covers one attempt; retain it on failure so held-fence verification can resume.
         registry.updateTarget(target.id, { managedServerLeaveBehind: undefined })
       }
@@ -174,7 +176,8 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       ),
     progress: (target, phase) => {
       // Cancelled decisions keep running; their progress must not revive connection status.
-      if (!connectInFlight.has(target.id)) {
+      const attempt = connectInFlight.get(target.id)
+      if (!attempt || attempt.quiet?.active) {
         return
       }
       setSshHostServerStatus(target.id, { kind: 'setting-up', phase })

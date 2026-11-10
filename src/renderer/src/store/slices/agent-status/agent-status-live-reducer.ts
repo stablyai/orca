@@ -1,5 +1,6 @@
+import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   capLiveAgentStatusesInPlace,
   classifyPaneKeyLiveness,
@@ -8,8 +9,9 @@ import {
 } from './agent-status-capacity-eviction'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
-import { agentProviderSessionsEqual } from '../../../../../shared/agent-session-resume'
-import { liveResumeRecordChange } from '../../../../../shared/agent-resume-record-from-status'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { liveResumeRecordChange } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { retiresLaunch } from './agent-status-launch-config'
 
 export type AgentStatusLiveUpdateReduction = {
   patch: Partial<AppState>
@@ -20,7 +22,8 @@ export type AgentStatusLiveUpdateReduction = {
 export function reduceAgentStatusLiveUpdate(
   state: AppState,
   build: AgentStatusLiveEntryBuild,
-  updatedAt: number
+  updatedAt: number,
+  projectConversation = projectAgentPaneConversation
 ): AgentStatusLiveUpdateReduction {
   const {
     entry,
@@ -64,9 +67,11 @@ export function reduceAgentStatusLiveUpdate(
       [paneKey]: { ...registryEntry, identity: { ...registryEntry.identity, providerSession } }
     }
   }
-  // Launch tokens authorize only the session they started; a completed turn or changed provider id consumes them.
+  // A completed turn, changed provider id or the owner retiring the launch consumes its token.
   if (
-    (providerSessionChanged || (entry.state === 'done' && entry.sessionBoundary !== true)) &&
+    (providerSessionChanged ||
+      (entry.state === 'done' && entry.sessionBoundary !== true) ||
+      retiresLaunch(state.agentStatusByPaneKey[paneKey], entry)) &&
     paneKey in state.agentLaunchConfigByPaneKey
   ) {
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }
@@ -107,8 +112,12 @@ export function reduceAgentStatusLiveUpdate(
     nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
+  const nextConversations = projectConversation(state, entry)
   const patch: Partial<AppState> = {
     agentStatusByPaneKey: nextLive,
+    ...(nextConversations !== state.agentConversationsByPaneKey
+      ? { agentConversationsByPaneKey: nextConversations }
+      : {}),
     retainedAgentsByPaneKey: nextRetainedAgents,
     sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
     agentLaunchConfigByPaneKey: nextLaunchConfigs,

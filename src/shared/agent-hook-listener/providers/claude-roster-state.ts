@@ -1,19 +1,20 @@
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type {
-  AgentMainAgentStatus,
   AgentStatusState,
-  AgentSubagentSnapshot,
   AgentWorkingMode
-} from '../../agent-status-types'
-import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+} from '../../agent-status/contracts/agent-status-types'
+import type { AgentSubagentSnapshot } from '../../agent-status/contracts/agent-status-subagent-snapshot'
+import {
+  continueMainAgentStatus,
+  mainAgentTurnInterrupted
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
-import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
+import type { HookListenerState } from '../listener-state'
+import type { ClaudeLeadTurnState } from '../main-agent-turn-state'
 import { readString } from '../tool-input-preview'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import { resolveClaudePaneStatus } from './claude-pane-hold-evidence'
-export {
-  resolveClaudePaneStatus,
-  type ClaudePaneStatusResolution
-} from './claude-pane-hold-evidence'
 
 /** Only attributable lead events may re-anchor ownership; unknown/child events void nothing. */
 const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
@@ -47,9 +48,7 @@ export function voidClaimsOfReplacedClaudeSession(
   // Ignored compact/unknown SessionStart must not advance ownership or hide the next real replacement.
   if (
     eventName === 'SessionStart' &&
-    hookPayload['source'] !== 'startup' &&
-    hookPayload['source'] !== 'resume' &&
-    hookPayload['source'] !== 'clear'
+    !CLAUDE_NEW_SESSION_START_SOURCES.has(hookPayload['source'])
   ) {
     return
   }
@@ -144,16 +143,22 @@ export function claudeMainAgentStatusForPayload(
 export function markClaudeLeadTurnInterrupted(
   state: HookListenerState,
   paneKey: string
+): ReturnType<typeof markClaudeLeadTurnDone> {
+  return markClaudeLeadTurnDone(state, paneKey, 'cancellation')
+}
+
+/** End the lead turn without its Stop hook; an absent outcome is unknown, as on a plain Stop. */
+export function markClaudeLeadTurnDone(
+  state: HookListenerState,
+  paneKey: string,
+  outcome?: 'cancellation'
 ): {
   state: AgentStatusState
   workingMode?: AgentWorkingMode
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
-  const record = setClaudeMainAgentTurnState(state, paneKey, {
-    state: 'done',
-    outcome: 'cancellation'
-  })
+  const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
   return {

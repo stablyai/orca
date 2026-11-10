@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session/requests/agent-session-current-requests-capability'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
@@ -170,6 +170,13 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.continueInterrupted',
     hostMethod: 'continueInterrupted',
     result: { sessionId: SESSION, outcome: 'superseded' }
+  },
+  // Cancel a scheduled automatic continuation. Clients call it only on a host advertising
+  // `agent-session.usage-limit-auto-continue.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.cancelUsageLimitContinue',
+    hostMethod: 'cancelUsageLimitContinue',
+    result: { ok: true }
   },
   // Name a chat again after naming failed. Clients call it only on a host advertising
   // `agent-session.structured.regenerate-name.v1`; an older host answers `method_not_found`.

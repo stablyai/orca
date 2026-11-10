@@ -6,6 +6,20 @@ const LONG_TASK_LIMIT = 500
 const SLOWEST_SAMPLE_LIMIT = 10
 const SCRIPTS_PER_TASK = 3
 
+export type LongTaskEchoSample = Pick<
+  ExactEchoSample,
+  | 'startedAt'
+  | 'paintedAt'
+  | 'inputToPaintMs'
+  | 'eventToPaintMs'
+  | 'eventToHandlerMs'
+  | 'inputToDispatchMs'
+  | 'dispatchToArrivalMs'
+  | 'arrivalToWriteMs'
+  | 'writeToParseMs'
+  | 'parseToPaintMs'
+>
+
 export type RendererLongTaskSource = 'long-animation-frame' | 'longtask' | 'unavailable'
 
 export type RendererLongTaskScript = {
@@ -152,7 +166,7 @@ export type LongTaskOverlapReport = {
 export function summarizeLongTaskOverlap(
   source: RendererLongTaskSource,
   tasks: readonly RendererLongTask[],
-  samples: readonly ExactEchoSample[],
+  samples: readonly LongTaskEchoSample[],
   history: Pick<RendererLongTaskLog, 'droppedTasks' | 'incompleteBefore'> = {
     droppedTasks: 0,
     incompleteBefore: 0

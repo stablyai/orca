@@ -3,36 +3,33 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
+import type * as RuntimeFileReadClient from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
-import type { FileContent } from './editor-panel-content-types'
-import {
-  useEditorPanelFileContentLoader,
-  type EditorPanelFileContentLoader
-} from './useEditorPanelFileContentLoader'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import type { FileContent, EditorPanelFileContentLoader } from './editor-panel-content-types'
+import { useEditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Use main-owned layout frames and move acknowledgments.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -135,25 +132,19 @@ function seedServerWorkspace(): void {
   })
 }
 
-function fileIdentities() {
-  return useAppStore.getState().openFiles.map(({ id, worktreeId, relativePath }) => ({
-    id,
-    worktreeId,
-    relativePath
-  }))
-}
-
 describe('a restored tab re-owned inside its own workspace, layout-owner build', () => {
   let container: HTMLDivElement
   let root: Root
   let load: EditorPanelFileContentLoader | null
   let fileContents: Record<string, FileContent>
+  let outstanding: { current: Record<string, number> }
 
   beforeEach(() => {
     mocks.readRuntimeFileContent.mockReset()
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# a', isBinary: false })
     fileContents = {}
     load = null
+    outstanding = { current: {} }
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -167,7 +158,7 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
             return useAppStore.getState().openFiles
           }
         },
-        outstandingFileReadsRef: { current: {} },
+        outstandingFileReadsRef: outstanding,
         setFileContents: (updater) => {
           fileContents = typeof updater === 'function' ? updater(fileContents) : updater
         }
@@ -184,17 +175,61 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
     container.remove()
   })
 
-  it('keeps a local tab where it is when loaded for its own workspace', async () => {
-    seedNestedLocalWorkspaces()
-    const id = await drawFromMain(openAbsoluteTabInFolder)
-    const before = fileIdentities()
-
-    await act(async () => load!(FILE_PATH, id, FOLDER, FILE_PATH))
-
-    expect(fileIdentities()).toEqual(before)
-    expect(fileContents[id]).toMatchObject({ content: '# a' })
-    expect(layoutCommands()).toEqual([])
-  })
+  it.each([
+    [false, 'resource'],
+    [true, 'resource'],
+    [false, 'owner'],
+    [true, 'owner']
+  ] as const)(
+    'drops a delayed read after the same tab ID changes (failure=%s, change=%s) and clears its owning read',
+    async (failure, change) => {
+      seedNestedLocalWorkspaces()
+      const id = await drawFromMain(openAbsoluteTabInFolder)
+      let finish!: () => void
+      mocks.readRuntimeFileContent.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            finish = () =>
+              failure
+                ? reject(new Error("ENOENT: no such file or directory, open '/repo-a/pkg/a.md'"))
+                : resolve({ content: 'obsolete', isBinary: false })
+          })
+      )
+      const baseline = useAppStore
+        .getState()
+        .openFiles.find((file) => file.id === id)?.lastKnownDiskSignature
+      let pending!: Promise<void>
+      await act(async () => {
+        pending = load!(FILE_PATH, id, FOLDER, FILE_PATH)
+        await Promise.resolve()
+      })
+      expect(mocks.readRuntimeFileContent).toHaveBeenCalledOnce()
+      if (change === 'resource') {
+        useAppStore.setState((state) => ({
+          openFiles: state.openFiles.map((file) =>
+            file.id === id
+              ? { ...file, filePath: '/repo-a/pkg/new.md', relativePath: 'new.md' }
+              : file
+          )
+        }))
+      } else {
+        useAppStore.setState((state) => ({
+          folderWorkspaces: state.folderWorkspaces.map((folder) => ({
+            ...folder,
+            folderPath: '/repo-a/moved'
+          }))
+        }))
+      }
+      finish()
+      await act(async () => pending)
+      expect(fileContents[id]).toBeUndefined()
+      expect(
+        useAppStore.getState().openFiles.find((file) => file.id === id)?.lastKnownDiskSignature
+      ).toBe(baseline)
+      expect(outstanding.current[id]).toBeUndefined()
+      expect(useAppStore.getState().openFiles[0]?.externalMutation).toBeUndefined()
+    }
+  )
 
   it("tells main when a parent workspace's conflict review re-owns a local tab in place", async () => {
     seedNestedLocalWorkspaces()

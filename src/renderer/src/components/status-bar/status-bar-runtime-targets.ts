@@ -3,7 +3,7 @@ import type { RateLimitRuntimeTarget } from '../../../../shared/rate-limit-types
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import { translate } from '@/i18n/i18n'
-import { getHostRuntimeLabel } from '../settings/accounts-pane-runtime'
+import { getHostRuntimeLabel } from '../../lib/provider-accounts/account-runtime-label'
 
 export type CodexStatusRuntimeTarget = {
   runtime: 'host' | 'wsl'
@@ -12,7 +12,11 @@ export type CodexStatusRuntimeTarget = {
 
 export type CodexStatusSwitchTarget = {
   id: string | null
+  /** Full one-line label, e.g. for the details header. */
   label: string
+  /** Row title and its secondary line; `detail` holds the workspace or disambiguating ID. */
+  name: string
+  detail: string | null
   active: boolean
   runtimeTarget: CodexStatusRuntimeTarget
 }

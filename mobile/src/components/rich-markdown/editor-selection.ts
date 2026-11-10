@@ -92,7 +92,55 @@ export function restoreRememberedSelection(scope: RichMarkdownEditorScope) {
   collapseToEnd(scope)
 }
 
-// Wrap selected format lacking execCommand verb; extract/reinsert if surroundContents crosses element boundary. Emit nothing because runCommand alone reports change.
+const BLOCK_CONTENT = 'p,div,h1,h2,h3,h4,h5,h6,blockquote,pre,ul,ol,li,table,thead,tbody,tr,th,td'
+const INLINE_BOUNDARY = `${BLOCK_CONTENT},br,img,input,hr,[contenteditable="false"]`
+
+function selectedInlineRuns(parent: ParentNode, selected: Range): Range[] {
+  const ranges: Range[] = []
+  const hasBlocks = Array.from(parent.children).some((child) => child.matches(BLOCK_CONTENT))
+  let run: Node[] = []
+  const flush = () => {
+    const first = run[0]
+    const last = run.at(-1)
+    if (first && last) {
+      const range = selected.cloneRange()
+      range.setStartBefore(first)
+      range.setEndAfter(last)
+      if (selected.comparePoint(range.startContainer, range.startOffset) < 0) {
+        range.setStart(selected.startContainer, selected.startOffset)
+      }
+      if (selected.comparePoint(range.endContainer, range.endOffset) > 0) {
+        range.setEnd(selected.endContainer, selected.endOffset)
+      }
+      const text = range.toString()
+      if (!range.collapsed && text && (!hasBlocks || text.trim())) {
+        ranges.push(range)
+      }
+    }
+    run = []
+  }
+  for (const child of Array.from(parent.childNodes)) {
+    if (!selected.intersectsNode(child)) {
+      flush()
+      continue
+    }
+    if (
+      child instanceof Element &&
+      (child.matches(INLINE_BOUNDARY) || child.querySelector(INLINE_BOUNDARY))
+    ) {
+      flush()
+      if (!child.matches('br,img,input,hr,[contenteditable="false"],pre')) {
+        ranges.push(...selectedInlineRuns(child, selected))
+      }
+    } else {
+      run.push(child)
+    }
+  }
+  flush()
+  return ranges
+}
+
+// Keep inline code inside each selected block and outside embedded controls.
 export function wrapSelection(scope: RichMarkdownEditorScope, tagName: string) {
   restoreSelectionOrEnd(scope)
   const selection = scope.getSelection()
@@ -103,13 +151,25 @@ export function wrapSelection(scope: RichMarkdownEditorScope, tagName: string) {
   if (range.collapsed) {
     return
   }
-  const wrapper = scope.getDocument().createElement(tagName)
-  try {
-    range.surroundContents(wrapper)
-  } catch {
-    wrapper.appendChild(range.extractContents())
-    range.insertNode(wrapper)
+  const ranges = selectedInlineRuns(editorElement(scope), range)
+  const wrappers: HTMLElement[] = []
+  for (let index = ranges.length - 1; index >= 0; index -= 1) {
+    const selected = ranges[index]
+    const wrapper = scope.getDocument().createElement(tagName)
+    try {
+      selected.surroundContents(wrapper)
+    } catch {
+      wrapper.appendChild(selected.extractContents())
+      selected.insertNode(wrapper)
+    }
+    wrappers.unshift(wrapper)
   }
-  selection.removeAllRanges()
-  selection.selectAllChildren(wrapper)
+  const first = wrappers[0]
+  const last = wrappers.at(-1)
+  if (first && last) {
+    const formatted = scope.getDocument().createRange()
+    formatted.setStart(first, 0)
+    formatted.setEnd(last, last.childNodes.length)
+    applySelectionRange(scope, formatted)
+  }
 }

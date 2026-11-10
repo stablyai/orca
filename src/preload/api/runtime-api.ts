@@ -1,25 +1,31 @@
+import type {
+  CrewSubscriptionAttemptArgs,
+  CrewSubscriptionAttemptCallbacks,
+  CrewSubscriptionSetupResult
+} from '../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
 import type { WslHostsPreloadApi } from './wsl-hosts-api'
-import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
-  RuntimeStatus,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
-} from '../../shared/runtime-environments'
-import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-runtime/pairing/remote-pairing-verification'
 import type {
   BrowserClientHostPlacementPreparationRequest,
   BrowserPageCreationPlacement
-} from '../../shared/browser-client-host-placement'
+} from '../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { WslOrcadAccountNotAppliedEvent } from '../../shared/wsl-orcad-account-notice'
 
@@ -51,7 +57,7 @@ export type RuntimeApi = {
     getBrowserDrivers: () => Promise<
       {
         browserPageId: string
-        driver: RuntimeBrowserDriverState
+        driver: RuntimeTerminalDriverState
       }[]
     >
     getBrowserRemoteViewerPages?: () => Promise<string[]>
@@ -73,7 +79,7 @@ export type RuntimeApi = {
       callback: (event: { tabId: string; text: string; createdAt: number }) => void
     ) => () => void
     onBrowserDriverChanged: (
-      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+      callback: (event: { browserPageId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
     // Older preloads lack this signal.
     onBrowserRemoteViewersChanged?: (
@@ -143,6 +149,10 @@ export type RuntimeApi = {
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
     }) => Promise<RuntimeRpcResponse<unknown>>
+    subscribeCrewAttempt?: (
+      args: CrewSubscriptionAttemptArgs,
+      callbacks: CrewSubscriptionAttemptCallbacks
+    ) => Promise<CrewSubscriptionSetupResult>
     cancelSubscription: (args: { subscriptionId: string }) => Promise<void>
     subscribe: (
       args: {

@@ -1,4 +1,4 @@
-import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
 import type {
   RuntimeWorktreeListResult,
@@ -7,7 +7,7 @@ import type {
 import {
   projectPendingWorktreeRemovals,
   type PendingWorktreeRemovals
-} from '../../worktree-removal-listing'
+} from '../../workspaces/removal/worktree-removal-listing'
 import type { RpcContext } from './core'
 
 // Without negotiation, CLI/host readers act on rows; omit deleting checkouts they cannot use.

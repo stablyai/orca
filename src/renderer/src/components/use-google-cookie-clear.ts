@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../shared/browser-runtime-capabilities'
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { useConfirmationDialog } from './confirmation-dialog-context'
 import {
   captureGoogleCookieClearTarget,
   confirmAndClearGoogleCookies
-} from '@/lib/browser-google-cookie-clear'
-import { translate } from '@/i18n/i18n'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+} from '@/lib/browser/cookies/browser-google-cookie-clear'
+import { useTranslate } from '@/i18n/use-translate'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string, label?: string) {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   const running = useRef(false)
   const [busy, setBusy] = useState(false)
@@ -107,7 +108,7 @@ export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string,
         return
       }
       toast.error(
-        translate(
+        t(
           'browser.googleCookieClear.unverified',
           "Couldn't check {{profile}}'s Google cookies. Try again.",
           { profile: label || (profileId === 'default' ? 'Default' : 'Browser profile') }

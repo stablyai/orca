@@ -53,18 +53,22 @@ export function flattenAgentRowLineage(rows: readonly RuntimeWorktreeAgentRow[])
   const out: AgentRowNode[] = []
   const seen = new Set<string>()
   const ancestors = new Set<string>()
-  const visit = (row: RuntimeWorktreeAgentRow, depth: number) => {
+  const visit = (row: RuntimeWorktreeAgentRow, depth: number): AgentRowNode | undefined => {
     if (ancestors.has(row.paneKey)) {
-      return
+      return undefined
     }
     seen.add(row.paneKey)
     const node: AgentRowNode = { row, depth, children: [] }
     out.push(node)
     ancestors.add(row.paneKey)
     for (const child of childrenByParentPaneKey.get(row.paneKey) ?? []) {
-      visit(child, depth + 1)
+      const childNode = visit(child, depth + 1)
+      if (childNode) {
+        node.children.push(childNode)
+      }
     }
     ancestors.delete(row.paneKey)
+    return node
   }
   for (const root of rootRows) {
     visit(root, 0)

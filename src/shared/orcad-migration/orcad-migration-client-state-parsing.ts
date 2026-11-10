@@ -1,8 +1,5 @@
-import { parseHostStableKey } from '../automation-owner-key'
-import {
-  MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
-  type ClientHostedBrowserCloseIntent
-} from '../client-hosted-browser-close-intent'
+import { parseHostStableKey } from '../automations/ownership/automation-owner-key'
+import { MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS as MAX_ORCAD_MIGRATION_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS } from '../workspace-session/client-hosted-browser-close-intent'
 import type {
   OrcadMigrationClientHostedBrowserCloseIntent,
   OrcadMigrationUiRoutingState
@@ -23,8 +20,6 @@ import { requiredRecord } from './orcad-migration-dormant-value-validation'
 export const MAX_ORCAD_MIGRATION_CLIENT_SELECTIONS = 4_096
 export const MAX_ORCAD_MIGRATION_CLIENT_ROUTING_ENTRIES = 16_384
 export const MAX_ORCAD_MIGRATION_SAVED_PORT_FORWARDS = 256
-export const MAX_ORCAD_MIGRATION_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS =
-  MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS
 
 export function parseClientHostedBrowserCloseIntents(
   value: unknown
@@ -250,5 +245,3 @@ export function parseUiRouting(value: unknown): OrcadMigrationUiRoutingState {
 export function parseSavedPortForwards(value: unknown): SavedPortForward[] {
   return parseSavedPortForwardsValue(value, MAX_ORCAD_MIGRATION_SAVED_PORT_FORWARDS)
 }
-
-export type { ClientHostedBrowserCloseIntent }

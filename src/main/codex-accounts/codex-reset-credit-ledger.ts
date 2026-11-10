@@ -8,7 +8,7 @@ import type {
   CodexRateLimitResetOutcome,
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { profileStateWriterFailureOutcome } from '../persistence/profile-state/profile-state-writer-errors'
 
 export type CodexResetCreditAttempt = {

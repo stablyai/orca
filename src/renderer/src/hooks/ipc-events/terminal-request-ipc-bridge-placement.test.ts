@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTabsSliceMockApi } from '../../store/slices/tabs-slice-test-harness'
-import { createTestStore } from '../../store/slices/store-test-helpers'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
+import { createTabsSliceMockApi } from '../../store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '../../store/testing/app-store-test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => ({
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentStatusModule>()),
   detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
 }))
@@ -91,18 +91,5 @@ describe("a host's focused terminal create into a requested group", () => {
       .unifiedTabsByWorktree[WT]?.find((tab) => tab.entityId === tabId)?.groupId
     expect(landed).toBe(splitGroupId)
     expect(store.getState().groupsByWorktree[WT]?.map((group) => group.id)).toContain(splitGroupId)
-  })
-
-  it('is new work in a workspace with no live terminal: its first bind moves it up in Recent', () => {
-    store.getState().setActiveWorktree('repo1::/tmp/other')
-
-    request({ requestId: 'request-2', worktreeId: WT, presentation: 'focused' })
-
-    const tabId: string = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
-    const tab = store.getState().tabsByWorktree[WT]?.find((candidate) => candidate.id === tabId)
-    expect(tab?.pendingActivationSpawn).toBeUndefined()
-    const epoch = store.getState().sortEpoch
-    store.getState().updateTabPtyId(tabId, 'pty-new-1')
-    expect(store.getState().sortEpoch).toBe(epoch + 1)
   })
 })

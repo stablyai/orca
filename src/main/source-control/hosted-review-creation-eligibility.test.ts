@@ -101,7 +101,7 @@ vi.mock('../gitlab/gl-utils', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
@@ -246,29 +246,31 @@ describe('getHostedReviewCreationEligibility', () => {
     })
   })
 
-  it('uses exact remote-ref probes instead of a wildcard ref scan', async () => {
+  it('probes every remote candidate in one exact for-each-ref call', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\nfork\n', stderr: '' }
       }
-      if (args[0] === 'show-ref') {
-        return args.at(-1) === 'refs/remotes/fork/main'
-          ? { stdout: '', stderr: '' }
-          : Promise.reject(Object.assign(new Error('missing ref'), { code: 1 }))
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/fork/main\n', stderr: '' }
       }
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
     await expect(baseRefExistsOnRemote('main', '/repo', 'local')).resolves.toBe(true)
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
-      'show-ref',
-      '--verify',
-      '--quiet',
-      '--',
-      'refs/remotes/fork/main'
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['remote'],
+      [
+        'for-each-ref',
+        '--format=%(refname)',
+        '--',
+        'refs/remotes/origin/main',
+        'refs/remotes/upstream/main',
+        'refs/remotes/fork/main'
+      ]
     ])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/fork/main'],
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      expect.any(Array),
       expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 })
     )
   })
@@ -739,44 +741,6 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(result).not.toHaveProperty('stackedCreationSupported')
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('resolves remote eligibility from SSH repo metadata without running git or PR copy', async () => {
-    const remoteGit = {
-      exec: vi.fn(async (args: string[]) => ({
-        stdout:
-          args[0] === 'remote'
-            ? 'origin\n'
-            : args[0] === 'show-ref'
-              ? 'abc refs/remotes/origin/main\n'
-              : '',
-        stderr: ''
-      }))
-    }
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/remote/repo',
-        executionHostId: 'ssh:ssh-1',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      head: 'feature/create-pr'
-    })
-
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
-    )
-    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

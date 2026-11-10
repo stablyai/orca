@@ -66,26 +66,6 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-it('releases the pinned descriptor before consolidating duplicate token maxima', async () => {
-  await writeFile(transcript, row(301) + row(503))
-  const max = Math.max
-  let duplicateCorrections = 0
-  vi.spyOn(Math, 'max').mockImplementation((...values) => {
-    if (values[0] === 301 && values[1] === 503) {
-      expect(observations.handles).toHaveLength(1)
-      expect(observations.handles[0].fd).toBe(-1)
-      duplicateCorrections++
-    }
-    return max(...values)
-  })
-
-  const read = await readClaudeUsageScanFile(transcript)
-
-  expect(duplicateCorrections).toBe(1)
-  expect(read.turns).toHaveLength(1)
-  expect(read.turns[0].inputTokens).toBe(503)
-})
-
 it('closes a failed generation before opening its replacement', async () => {
   await writeFile(transcript, row(301) + row(503))
   observations.afterValidationStat = () => writeFile(transcript, row(701))

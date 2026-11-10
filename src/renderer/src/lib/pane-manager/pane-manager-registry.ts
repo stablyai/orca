@@ -1,4 +1,4 @@
-import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { registerRendererMemoryProfileContributor } from '../renderer-memory-profile'
 import type { PaneRenderingDiagnostics } from './pane-manager-types'
 
@@ -16,11 +16,20 @@ type RegisteredPaneManager = {
 
 const liveManagers = new Set<RegisteredPaneManager>()
 const managerIds = new WeakMap<RegisteredPaneManager, number>()
+/** Detaches a manager's WebGL renderers and returns the step that reattaches them. */
+type WebglRendererDetacher = () => () => void
+const webglRendererDetachers = new WeakMap<RegisteredPaneManager, WebglRendererDetacher>()
 let nextManagerId = 1
 
-export function registerLivePaneManager(manager: RegisteredPaneManager): void {
+export function registerLivePaneManager(
+  manager: RegisteredPaneManager,
+  detachWebglRenderers?: WebglRendererDetacher
+): void {
   if (!managerIds.has(manager)) {
     managerIds.set(manager, nextManagerId++)
+  }
+  if (detachWebglRenderers) {
+    webglRendererDetachers.set(manager, detachWebglRenderers)
   }
   liveManagers.add(manager)
 }
@@ -29,7 +38,10 @@ export function unregisterLivePaneManager(manager: RegisteredPaneManager): void 
   liveManagers.delete(manager)
 }
 
-export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
+export function resetAndRefreshAllTerminalWebglAtlases(
+  reason?: string,
+  options?: { includeHidden?: boolean }
+): void {
   // Record heavy atlas recovery so freeze reports distinguish a missing repaint from a completed post-wake attempt.
   const recoveryManagers = Array.from(liveManagers).filter(
     (manager) => manager.isVisibleForAtlasRecovery?.() !== false
@@ -39,6 +51,18 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
     mountedManagers: liveManagers.size,
     ...(reason ? { reason } : {})
   })
+  if (options?.includeHidden) {
+    // Light reveal only presents, so hidden atlases are cleared without painting or they keep stale glyphs.
+    for (const manager of liveManagers) {
+      if (!recoveryManagers.includes(manager)) {
+        try {
+          manager.clearWebglTextureAtlases?.()
+        } catch {
+          // A manager torn down while hidden must not block the rest.
+        }
+      }
+    }
+  }
   const resetManagers: RegisteredPaneManager[] = []
   // clearTextureAtlas is global: wipe all before presenting or later wipes invalidate earlier panes’ generation and preserve stale footer pixels.
   for (const manager of recoveryManagers) {
@@ -62,6 +86,25 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
       }
     } catch {
       // Panes may unmount between reset and repaint; continue with remaining managers.
+    }
+  }
+}
+
+/** Recreates every WebGL renderer; xterm shares atlases across terminals, so all detach before any reattach. */
+export function rebuildAllTerminalWebglRenderers(reason: string): void {
+  recordTerminalWebglDiagnostic('webgl-renderer-rebuild', { managers: liveManagers.size, reason })
+  const reattachSteps = Array.from(liveManagers, (manager) => {
+    try {
+      return webglRendererDetachers.get(manager)?.()
+    } catch {
+      return undefined
+    }
+  })
+  for (const reattach of reattachSteps) {
+    try {
+      reattach?.()
+    } catch {
+      // A manager disposed mid-rebuild must not block its siblings.
     }
   }
 }

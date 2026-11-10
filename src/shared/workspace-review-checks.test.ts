@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from './worktree/types'
-import { getWorkspaceAttachmentKey } from './workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from './workspace-attachments/workspace-attachment-normalization'
 import {
   summarizeWorkspaceReviewChecks,
   type WorkspaceReviewCheckDetails
@@ -33,6 +33,29 @@ function map(
 }
 
 describe('all workspace review checks', () => {
+  it('retains matched lifecycle and staleness without check results and rejects foreign details', () => {
+    const item = attachment(1)
+    const retained = {
+      stale: true,
+      review: { provider: 'github', number: 1, url: item.url, state: 'merged' }
+    } as const
+    expect(summarizeWorkspaceReviewChecks([item], map([[item, retained]]))).toMatchObject({
+      reviewState: 'merged',
+      stale: 1,
+      state: 'unknown',
+      unknown: 1
+    })
+    const foreign = {
+      ...retained,
+      review: { ...retained.review, url: 'https://github.com/other/project/pull/1' }
+    }
+    expect(summarizeWorkspaceReviewChecks([item], map([[item, foreign]]))).toMatchObject({
+      reviewState: undefined,
+      stale: 0,
+      state: 'unknown'
+    })
+  })
+
   it('aggregates every review rather than a selected compatibility slot', () => {
     const first = attachment(1)
     const second = attachment(2)

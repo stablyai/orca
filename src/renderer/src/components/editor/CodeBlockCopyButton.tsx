@@ -1,15 +1,18 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
   children?: React.ReactNode
+  wrapInPre?: boolean
 }
 
 export default function CodeBlockCopyButton({
   children,
+  wrapInPre = true,
   ...props
 }: CodeBlockCopyButtonProps): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   // Clipboard IPC may settle after unmount; do not start an orphan reset timer.
@@ -63,21 +66,23 @@ export default function CodeBlockCopyButton({
   }, [children, clearCopiedResetTimer])
 
   return (
-    <div className="code-block-wrapper">
-      <pre {...props}>{children}</pre>
+    <div
+      className={wrapInPre ? 'code-block-wrapper' : 'code-block-wrapper code-block-wrapper-diagram'}
+    >
+      {wrapInPre ? <pre {...props}>{children}</pre> : children}
       <button
         ref={setCopyButtonRef}
         type="button"
         className="code-block-copy-btn"
         onClick={handleCopy}
-        aria-label={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
-        title={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
+        aria-label={t('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
+        title={t('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
       >
         {copied ? (
           <>
             <Check size={14} />
             <span className="code-block-copy-label">
-              {translate('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
+              {t('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
             </span>
           </>
         ) : (

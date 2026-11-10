@@ -3,7 +3,7 @@ import { scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { lazyWithPreload } from '@/lib/lazy-with-retry'
 
 export const WorktreeJumpPalette = lazyWithPreload(
-  () => import('../components/WorktreeJumpPalette')
+  () => import('../components/worktree-jump/WorktreeJumpPalette')
 )
 
 /** Loads the Cmd+J palette after startup settles so its first open renders without suspending. */

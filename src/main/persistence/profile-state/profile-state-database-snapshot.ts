@@ -3,7 +3,8 @@ import { access, mkdir, open, realpath, rm, stat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { durableWriteTempPath, renameDurable } from '../../durable-file-write'
+import { durableWriteTempPath, renameDurable } from '../../filesystem/durable-file-write'
+import { refreshStaleProfileStateLegacyDocuments } from './profile-state-legacy-document-refresh'
 
 /** Caller owns the destination and keeps the source connection open until completion. */
 export async function writeProfileStateDatabaseSnapshotAsync(
@@ -38,6 +39,9 @@ export async function writeProfileStateDatabaseSnapshotAsync(
       if (snapshot.pragma('journal_mode = DELETE', { simple: true }) !== 'delete') {
         throw new Error('Profile state snapshot could not become a self-contained database')
       }
+      // A restored snapshot outlives any later refresh of the live copy, so older builds
+      // reading it must already see current legacy rows.
+      refreshStaleProfileStateLegacyDocuments(snapshot)
     } finally {
       snapshot.close()
     }

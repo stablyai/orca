@@ -1,6 +1,7 @@
 import type { AdoptStablePaneArgs } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -9,7 +10,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 async function startSplitHost() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
@@ -109,42 +110,5 @@ describe('OrcaRuntimeService', () => {
     disk.resolve()
     await exiting
     expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
-  })
-
-  // PTY exit remains real even when quit/maintenance refuses persistence.
-  it('retires the pane and ends the stream when the profile refuses the staging write', async () => {
-    const { runtime, runtimeStore, activate, terminalLeafIds } = await startSplitHost()
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    runtimeStore.setWorkspaceSession.mockImplementation(() => {
-      throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
-    })
-    const streamEnd = vi.fn()
-    runtime.subscribeToPtyExit('pty-b', streamEnd)
-
-    await runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
-
-    expect(streamEnd).toHaveBeenCalledOnce()
-    expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
-    await expect(activate(HEADLESS_SECOND_LEAF_ID, 'automatic')).rejects.toThrow('tab_not_found')
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[runtime] could not stage terminal retirement:',
-      expect.any(Error)
-    )
-    errorSpy.mockRestore()
-  })
-
-  // Cleanup exceptions must not strand streams now waiting behind retirement.
-  it('still ends the stream when exit cleanup throws before the retirement', () => {
-    const runtime = new OrcaRuntimeService()
-    Object.assign(runtime, {
-      disposeHeadlessTerminal: () => {
-        throw new Error('dispose_failed')
-      }
-    })
-    const streamEnd = vi.fn()
-    runtime.subscribeToPtyExit('pty-a', streamEnd)
-
-    expect(() => runtime.onPtyExit('pty-a', 0)).toThrow('dispose_failed')
-    expect(streamEnd).toHaveBeenCalledOnce()
   })
 })

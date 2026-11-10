@@ -2,7 +2,7 @@ import type { AppState } from '../../../types'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import { editorTabContentTypeForMode, isEditorTabContentType } from './editor-tab-content-type'
 import type { OpenFile } from '../types/open-file'
-import { ownsGlobalSelection } from '../../../global-selection-owner'
+import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import type { EditorOpenLinkIntent } from '../types/editor-open-link-intent'
 import { pickAdjacentEditorOpenGroupId } from './editor-open-adjacent-group'
 import {
@@ -11,6 +11,8 @@ import {
 } from '@/lib/link-open-intent'
 import type { LinkPlacementState } from '@/lib/link-open-intent'
 import { collectTabGroupLayoutGroupIds } from '../../../../../../shared/workspace-layout/tab-group-moves'
+import { resolveLinkOpenSidePlacement } from '@/lib/adjacent-link-open-group'
+import type { TabSplitTarget } from '../../tabs/tabs-slice-contract'
 export {
   isLiveLinkOpenGroup as isLiveEditorOpenGroup,
   canOpenLinkInSourceGroup
@@ -125,6 +127,7 @@ export function liveLayoutGroupIds(
 
 export type EditorLinkOpenPlacement =
   | { kind: 'group'; groupId: string }
+  | { kind: 'split'; split: TabSplitTarget }
   | { kind: 'default' }
   | { kind: 'refused' }
 
@@ -161,6 +164,24 @@ export function resolveEditorLinkOpenPlacement(
     fileId,
     contentType: editorTabContentTypeForMode(mode)
   })
+  if (
+    groupId === source.groupId &&
+    !tabs.some(
+      (tab) =>
+        tab.groupId === groupId &&
+        tab.entityId === fileId &&
+        tab.contentType === editorTabContentTypeForMode(mode)
+    )
+  ) {
+    const placement = resolveLinkOpenSidePlacement({
+      layout,
+      groups: state.groupsByWorktree?.[worktreeId] ?? [],
+      sourceGroupId: source.groupId
+    })
+    if (placement && 'split' in placement) {
+      return { kind: 'split', split: placement.split }
+    }
+  }
   return groupId ? { kind: 'group', groupId } : { kind: 'default' }
 }
 

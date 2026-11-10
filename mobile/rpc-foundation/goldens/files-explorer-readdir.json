@@ -4,23 +4,35 @@
   "family": "files.explorer-screen",
   "namedDeltas": [],
   "values": {
-    "1fac8f3b8f44": {
+    "34bd55d6f194": {
+      "name": "files.readDir#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\",\"limit\":500}}"
+    },
+    "9f1a5ca359ab": {
       "crash": {
         "$rpc": "null"
       },
       "elements": {
         "ChevronLeft": 1,
+        "Defs": 1,
         "FlatList": 1,
+        "LinearGradient": 1,
         "Pressable": 1,
+        "Rect": 1,
         "SafeAreaView": 1,
+        "Search": 1,
+        "Stop": 2,
+        "Svg": 1,
         "Text": 2,
-        "View": 3
+        "TextInput": 1,
+        "View": 11
       },
-      "labels": ["Back to session"],
+      "labels": ["Back to session", "Filter files"],
       "rows": ["dir:src", "file:README.md"],
       "text": ["Files", "orca-files"]
     },
-    "59851eb4cbf7": {
+    "c60ce6016166": {
       "name": "files.readDir#1",
       "ordinal": 1,
       "args": [
@@ -31,6 +43,7 @@
         {
           "name": "params",
           "value": {
+            "limit": 500,
             "relativePath": "",
             "worktree": "id:wt-files"
           }
@@ -38,63 +51,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "858aa6e98236": {
-      "name": "files.readDir#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
-    },
-    "e91880eefe86": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "ChevronLeft": 1,
-        "Pressable": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 4
-      },
-      "labels": ["Back to session"],
-      "rows": [],
-      "text": ["Files", "orca-files"]
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "fbc738d75fe6": {
-      "name": "files.readDir#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readDir"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "",
-            "worktree": "id:wt-files"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -117,6 +74,58 @@
           ]
         }
       }
+    },
+    "c721e7f4a5c5": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "ChevronLeft": 1,
+        "Pressable": 1,
+        "SafeAreaView": 1,
+        "Text": 3,
+        "View": 7
+      },
+      "labels": ["Back to session"],
+      "rows": [],
+      "text": ["Files", "orca-files", "Loading files…"]
+    },
+    "ca13345ac236": {
+      "name": "files.readDir#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readDir"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 500,
+            "relativePath": "",
+            "worktree": "id:wt-files"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -125,24 +134,24 @@
       {
         "id": "loading",
         "observation": {
-          "sender": ["59851eb4cbf7"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["ca13345ac236"],
+          "payloads": ["34bd55d6f194"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "e91880eefe86",
+          "state": "c721e7f4a5c5",
           "effects": []
         }
       },
       {
         "id": "listed",
         "observation": {
-          "sender": ["fbc738d75fe6"],
-          "payloads": ["858aa6e98236"],
+          "sender": ["c60ce6016166"],
+          "payloads": ["34bd55d6f194"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1fac8f3b8f44",
+          "state": "9f1a5ca359ab",
           "effects": []
         }
       }

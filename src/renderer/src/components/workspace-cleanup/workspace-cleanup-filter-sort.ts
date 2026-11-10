@@ -1,5 +1,5 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup-filter-model'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import type {
   WorkspaceCleanupContextFilter,

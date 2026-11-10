@@ -2,8 +2,10 @@ import { z } from 'zod'
 import type { TabGroupLayoutNode } from '../tab-types'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 import { TerminalPaneLayoutNodeSchema } from './session-tabs-schemas-params'
-import { isPtyIncarnationId } from '../pty-incarnation'
-import type { PtyIncarnationId } from '../pty-incarnation'
+import {
+  isPtyIncarnationId,
+  type PtyIncarnationId
+} from '../terminal/pty/lifecycle/pty-incarnation'
 
 export function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | null {
   const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }]

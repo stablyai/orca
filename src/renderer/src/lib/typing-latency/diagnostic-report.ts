@@ -11,7 +11,7 @@ import {
   type LatencyPercentiles,
   type TypingScaleCensus
 } from './diagnostic-summary'
-import { listProbePanes, type ExactEchoSample, type InstrumentedPane } from './echo-instrumentation'
+import { listProbePanes, type InstrumentedPane } from './echo-instrumentation'
 import {
   emptyInputSourceBreakdown,
   type InputSourceBreakdown,
@@ -19,6 +19,7 @@ import {
 } from './input-source'
 import {
   summarizeLongTaskOverlap,
+  type LongTaskEchoSample,
   type LongTaskOverlapReport,
   type RendererLongTaskLog
 } from './renderer-long-tasks'
@@ -38,7 +39,7 @@ export type ProbeState = {
   stoppedAt: number | null
   startedAtIso: string
   exact: ExactLatencySampleWindow
-  exactSamples: ExactEchoSample[]
+  exactSamples: LongTaskEchoSample[]
   longTasks: RendererLongTaskLog
   ambiguous: AmbiguousBurstState
   exactInputs: number

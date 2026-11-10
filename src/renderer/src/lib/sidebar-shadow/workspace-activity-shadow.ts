@@ -1,8 +1,13 @@
-import type { AppState } from '@/store'
-import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
-import { getWorktreeIdsWithStructuredChat } from '@/components/sidebar/visible-worktree-activity-inputs'
+import { getWorktreeIdsWithStructuredChat } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -13,7 +18,6 @@ import {
   isIdleWorkspaceActivity,
   type WorkspaceActivityFacts
 } from '../../../../shared/sidebar-list/workspace-activity-facts'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The window's own activity facts, from the same store slices the sidebar filter reads. */
 export function readWindowWorkspaceActivityFacts(
@@ -67,7 +71,7 @@ export function toLocallyOwnedRows<Value>(
   state: AppState,
   values: ReadonlyMap<string, Value>
 ): Map<string, Value> {
-  const repoById = getRepoMapFromState(state)
+  const repoById = getIndexedRepoMap(state.repos)
   const ownersById = new Map<string, Set<'local' | 'server'>>()
   const own = (id: string, owner: ExecutionHostId | null | undefined): void => {
     if (owner) {
@@ -76,7 +80,7 @@ export function toLocallyOwnedRows<Value>(
       ownersById.set(id, owners)
     }
   }
-  for (const worktree of getAllWorktreesFromState(state)) {
+  for (const worktree of getIndexedAllWorktrees(selectWorktreesByRepo(state))) {
     const repo = repoById.get(worktree.repoId)
     own(worktree.id, worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : null))
   }

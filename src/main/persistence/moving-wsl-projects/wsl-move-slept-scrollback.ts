@@ -6,20 +6,27 @@
 import { createHash } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+
+import {
+  type OrcadMigrationBlobDescriptor,
+  ORCAD_MIGRATION_BLOB_KIND_CONTRACTS
+} from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import {
   ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION,
   type OrcadMigrationTerminalHistoryDocument
 } from '../../../shared/orcad-migration/orcad-migration-terminal-history'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMoveRequest } from '../../../shared/wsl-move/wsl-move-driver-types'
-import { parsePtySessionId } from '../../../shared/pty-session-id-format'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
-import type { ColdRestoreInfo } from '../../daemon/history-reader'
-import type { TerminalCheckpointFile } from '../../daemon/types'
-import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
+import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
+import type { ColdRestoreInfo } from '../../daemon/history/restoration/terminal-history-cold-restore-info'
+import type { TerminalCheckpointFile } from '../../daemon/protocol/daemon-checkpoint-file'
+import type { OrcadMigrationBlobSource } from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
 import { orcadMigrationTerminalHistoryKey } from '../migrating-orcad-catalog/orcad-terminal-history-installer'
 import type { WslMoveDriverDeps } from './wsl-move-driver-ports'
 import {

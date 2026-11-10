@@ -79,19 +79,6 @@ export function terminalMountAdapters(
         dispose: () => {}
       }
     },
-    'terminal.takeover-report': ({ client }) => {
-      const report = modules.load<
-        typeof import('../../../terminal/worker-terminal-takeover-report')
-      >('mobile/src/terminal/worker-terminal-takeover-report.ts')
-      // The per-client report window is module state; a fresh recording must not inherit one.
-      report.resetWorkerTerminalTakeoverReportsForTest()
-      return {
-        action: (_name, args) =>
-          report.reportWorkerTerminalUserInput(client, String(args.terminal ?? HANDLE)),
-        state: () => ({}),
-        dispose: report.resetWorkerTerminalTakeoverReportsForTest
-      }
-    },
     'terminal.viewport-refit': ({ client, effect }) => {
       const useRefit = modules.load<typeof import('../../../terminal/terminal-viewport-refit')>(
         'mobile/src/terminal/terminal-viewport-refit.ts'

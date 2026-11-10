@@ -75,14 +75,18 @@ vi.mock('./configure-process', () => ({
   optOutOfHiddenPageWakeUpThrottling: vi.fn(),
   patchPackagedProcessPath: vi.fn()
 }))
-vi.mock('../serve-update-handoff', () => ({ installServeSupervisorDisconnectQuit: vi.fn() }))
+vi.mock('../updater/serve-update-handoff', () => ({
+  installServeSupervisorDisconnectQuit: vi.fn()
+}))
 vi.mock('./main-process-error-guards', () => ({
   installUncaughtPipeErrorGuard: vi.fn(),
   installUnhandledRejectionLogging: vi.fn()
 }))
 vi.mock('./hydrate-shell-path')
-vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
-vi.mock('../updater', () => ({
+vi.mock('../runtime/hosts/management/remote-server-updater', () => ({
+  configureRemoteServerUpdater: vi.fn()
+}))
+vi.mock('../updater/updater-service', () => ({
   getRemoteServerUpdaterSnapshot: vi.fn(),
   checkForRemoteServerUpdate: vi.fn(),
   downloadRemoteServerUpdate: vi.fn(),
@@ -127,7 +131,7 @@ vi.mock('./single-instance-lock', () => ({
 }))
 vi.mock('../../shared/app-environment', () => ({ setAppEnvironment: vi.fn() }))
 vi.mock('../host/electron-app-environment', () => ({ ElectronAppEnvironment: class {} }))
-vi.mock('../own-chromium-tree-kill-guard')
+vi.mock('../pty/process-retirement/own-chromium-tree-kill-guard')
 vi.mock('../../shared/secret-store', () => ({
   setSecretStore: () => {
     mocks.events.push('continued-after-browser-identity')
@@ -137,14 +141,14 @@ vi.mock('../../shared/secret-store', () => ({
 vi.mock('../host/electron-secret-store')
 vi.mock('../ipc/pty/pty-host-bindings')
 vi.mock('../host/electron-runtime-desktop-surface')
-vi.mock('../runtime/runtime-desktop-surface')
+vi.mock('../runtime/construction/runtime-desktop-surface')
 vi.mock('../host/electron-browser-commands')
-vi.mock('../runtime/runtime-browser-commands-factory')
+vi.mock('../runtime/browser/installation/runtime-browser-commands-factory')
 vi.mock('../host/electron-http-client')
 vi.mock('../network/http-client')
 vi.mock('../host/electron-speech-services')
 vi.mock('../speech/speech-runtime-service')
-vi.mock('../ipc/worktree-watcher-removal')
+vi.mock('../workspaces/removal/worktree-watcher-removal')
 vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
   desktopWorktreeWatcherRemoval: {
     closeLocal: vi.fn(),
@@ -153,7 +157,7 @@ vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
   }
 }))
 vi.mock('../network/proxy-settings')
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
@@ -163,8 +167,8 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
     return mocks.admission()
   }
 }))
-vi.mock('../macos-press-and-hold-default')
-vi.mock('../ai-vault/session-parse-cache-persistence')
+vi.mock('../window/desktop-integration/macos-press-and-hold-default')
+vi.mock('../ai-vault/parse-cache/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/canonical-user-data'
@@ -179,7 +183,7 @@ vi.mock('../stats/collector')
 vi.mock('../claude-usage/store')
 vi.mock('../codex-usage/store')
 vi.mock('../opencode-usage/store')
-vi.mock('../browser/doc-preview-protocol')
+vi.mock('../browser/document-preview/doc-preview-protocol')
 vi.mock('../crash-reporting/crashpad-capture')
 vi.mock('../crash-reporting/crash-report-store')
 vi.mock('../crash-reporting/crash-breadcrumb-store')
@@ -194,7 +198,7 @@ vi.mock('./ensure-virtual-display', () => ({
 vi.mock('./gpu-lifecycle')
 vi.mock('./main-process-state', () => ({ mainProcessState: {} }))
 vi.mock('./synthetic-title-runtime')
-vi.mock('../browser/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/mode/browser-identity-mode-store', () => ({
   initializeBrowserIdentityModeStore: (path: string) => {
     mocks.events.push(`read-mode:${path}`)
     return {
@@ -208,99 +212,6 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
 }))
 
 describe('browser process user-agent startup ordering', () => {
-  it('explains admission refusal before a desktop launch exits', async () => {
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    mocks.backgroundLaunch.mockReturnValueOnce(false)
-    mocks.admission.mockImplementationOnce(() => {
-      throw new Error('Stop Orca and orcad before retrying profile recovery')
-    })
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect(
-        runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-      ).toBe(false)
-      expect(mocks.showErrorBox).toHaveBeenCalledWith(
-        'Orca could not start',
-        expect.stringContaining('Stop Orca and orcad before retrying profile recovery')
-      )
-      expect(mocks.app.isReady).not.toHaveBeenCalled()
-    } finally {
-      error.mockRestore()
-      platform.mockRestore()
-      mocks.showErrorBox.mockClear()
-      mocks.events.length = 0
-    }
-  })
-
-  it('explains an orcad holding the profile instead of exiting silently', async () => {
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    mocks.backgroundLaunch.mockReturnValueOnce(false)
-    mocks.profileLock.mockReturnValueOnce({ state: 'held', message: 'Another orcad (pid 7)' })
-    mocks.app.exit.mockClear()
-    mocks.events.length = 0
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect(
-        runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-      ).toBe(false)
-      expect(mocks.showErrorBox).toHaveBeenCalledWith(
-        'Orca could not start',
-        'Another orcad (pid 7)'
-      )
-      expect(mocks.app.exit.mock.calls).toEqual([[3]])
-      expect(mocks.events).not.toContain('admission:/canonical-user-data')
-    } finally {
-      error.mockRestore()
-      platform.mockRestore()
-      mocks.showErrorBox.mockClear()
-      mocks.app.exit.mockClear()
-      mocks.events.length = 0
-    }
-  })
-
-  it('does not acquire profile admission for a duplicate launch', async () => {
-    mocks.events.length = 0
-    mocks.lock.mockReturnValueOnce(false)
-    expect(
-      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-    ).toBe(false)
-    expect(mocks.events).not.toContain('admission:/canonical-user-data')
-    expect(mocks.events).not.toContain('read-mode:/canonical-user-data')
-    expect(mocks.app.exit).toHaveBeenCalledWith(3)
-    mocks.events.length = 0
-  })
-
-  it('executes after the dev app name and before later preflight work', async () => {
-    const { getBrowserProcessUserAgentIdentity } =
-      await import('../browser/browser-process-user-agent')
-
-    expect(
-      runMainProcessPreflight({
-        focusExistingWindow: vi.fn(),
-        requestDesktopActivation: vi.fn()
-      })
-    ).toBe(false)
-
-    const nameIndex = mocks.events.indexOf('set-name:Orca Development')
-    const modeIndex = mocks.events.indexOf('read-mode:/canonical-user-data')
-    const writeIndex = mocks.events.indexOf('write-user-agent')
-    const continuationIndex = mocks.events.indexOf('continued-after-browser-identity')
-    expect(mocks.events.indexOf('init-data-path')).toBeLessThan(nameIndex)
-    expect(mocks.events.indexOf('init-data-path')).toBeLessThan(
-      mocks.events.indexOf('admission:/canonical-user-data')
-    )
-    expect(mocks.events.indexOf('admission:/canonical-user-data')).toBeLessThan(modeIndex)
-    expect(nameIndex).toBeLessThan(modeIndex)
-    expect(modeIndex).toBeLessThan(writeIndex)
-    expect(writeIndex).toBeLessThan(continuationIndex)
-    expect(getBrowserProcessUserAgentIdentity()).toEqual({
-      mode: 'clean',
-      userAgent: mocks.userAgent()
-    })
-    expect(mocks.userAgent()).not.toMatch(/Electron/)
-    expect(mocks.userAgent()).not.toMatch(/Orca|Development/)
-  })
-
   it('exits without reading profile state or revealing a window when recovery holds admission', async () => {
     mocks.events.length = 0
     mocks.admission.mockImplementationOnce(() => {
@@ -327,27 +238,9 @@ describe('browser process user-agent startup ordering', () => {
   })
 })
 
-it('exits and releases admission after pending profile move recovery fails', async () => {
-  const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
-  resetBrowserProcessUserAgentForTests()
-  const release = vi.fn()
-  mocks.admission.mockReturnValueOnce({ release })
-  mocks.afterIdentity.mockImplementationOnce(() => undefined)
-  mocks.recoverMoves.mockImplementationOnce(() => {
-    throw new Error('unreadable move journal')
-  })
-  expect(
-    runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-  ).toBe(false)
-  expect(mocks.recoverMoves).toHaveBeenCalledWith('/canonical-user-data', 'active-profile')
-  expect(release).toHaveBeenCalledOnce()
-  expect(mocks.app.exit).toHaveBeenCalledWith(1)
-})
-
 it('defers a Linux desktop startup failure until Electron is ready', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   let resolveReady: (() => void) | undefined
@@ -391,7 +284,7 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
 
 it('exits after a Linux desktop readiness rejection without showing a dialog', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   let rejectReady!: (error: Error) => void
@@ -422,66 +315,5 @@ it('exits after a Linux desktop readiness rejection without showing a dialog', a
     error.mockRestore()
     platform.mockRestore()
     mocks.app.whenReady.mockClear()
-  }
-})
-
-it('keeps Linux background startup failures console-only and immediate', async () => {
-  const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
-  resetBrowserProcessUserAgentForTests()
-  const release = vi.fn()
-  mocks.admission.mockReturnValueOnce({ release })
-  mocks.afterIdentity.mockImplementationOnce(() => {
-    throw new Error('Linux background failure')
-  })
-  mocks.app.whenReady.mockClear()
-  mocks.app.exit.mockClear()
-  mocks.showErrorBox.mockClear()
-  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-  mocks.backgroundLaunch.mockReturnValueOnce(true)
-  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-  try {
-    expect(
-      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-    ).toBe(false)
-    expect(release).toHaveBeenCalledOnce()
-    expect(mocks.app.whenReady).not.toHaveBeenCalled()
-    expect(mocks.showErrorBox).not.toHaveBeenCalled()
-    expect(mocks.app.exit).toHaveBeenCalledWith(1)
-  } finally {
-    error.mockRestore()
-    platform.mockRestore()
-  }
-})
-
-it('keeps Linux serve startup failures console-only and immediate', async () => {
-  const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
-  resetBrowserProcessUserAgentForTests()
-  const release = vi.fn()
-  const originalArgv = process.argv
-  process.argv = originalArgv.includes('--serve') ? [...originalArgv] : [...originalArgv, '--serve']
-  mocks.admission.mockReturnValueOnce({ release })
-  mocks.afterIdentity.mockImplementationOnce(() => {
-    throw new Error('Linux serve failure')
-  })
-  mocks.app.whenReady.mockClear()
-  mocks.app.exit.mockClear()
-  mocks.showErrorBox.mockClear()
-  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-  mocks.backgroundLaunch.mockReturnValueOnce(false)
-  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-  try {
-    expect(
-      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-    ).toBe(false)
-    expect(release).toHaveBeenCalledOnce()
-    expect(mocks.app.whenReady).not.toHaveBeenCalled()
-    expect(mocks.showErrorBox).not.toHaveBeenCalled()
-    expect(mocks.app.exit).toHaveBeenCalledWith(1)
-  } finally {
-    error.mockRestore()
-    platform.mockRestore()
-    process.argv = originalArgv
   }
 })

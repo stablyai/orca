@@ -3,21 +3,21 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { UISlice } from '../../store/slices/ui'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../shared/worktree/types'
-import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerStoreActions } from './composer-store-actions'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../store/slices/runtime-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
@@ -27,6 +27,7 @@ export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
   initialEphemeralVmRecipeId: string | undefined
   initialName: string
+  initialNote: string
   initialPrompt: string
   initialLinkedWorkItem: LinkedWorkItemSummary | null
   initialGitHubWorkItem: GitHubWorkItem | null
@@ -34,6 +35,7 @@ export type ComposerTargetStoreModel = {
   initialWorkspaceTarget: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus: WorkspaceStatus | undefined
   initialBaseBranch: string | undefined
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated: (() => void) | undefined
   isSubmissionCancelled: () => boolean

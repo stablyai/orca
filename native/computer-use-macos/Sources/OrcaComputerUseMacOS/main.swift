@@ -157,6 +157,8 @@ struct Snapshot {
     let screenshotScale: CGSize
     let screenshotEngine: String?
     let elements: [Int: ElementRecord]
+    let elementOrder: [Int]
+    let nextFreshElementIndex: Int
     let truncated: Bool
     let maxDepthReached: Bool
     /// On-screen windows of the app (menus and sheets included), so a new or closed window counts as a change.
@@ -181,6 +183,8 @@ struct Snapshot {
             screenshotScale: CGSize(width: 1, height: 1),
             screenshotEngine: nil,
             elements: elements,
+            elementOrder: elementOrder,
+            nextFreshElementIndex: nextFreshElementIndex,
             truncated: truncated,
             maxDepthReached: maxDepthReached,
             appWindowIds: appWindowIds
@@ -309,12 +313,19 @@ final class Provider {
         if params["restoreWindow"]?.bool == true {
             recoverWindow(app)
         }
+        let namespace = snapshotNamespace(params)
+        pruneSnapshotCache()
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
             windowId: windowId,
             windowIndex: windowIndex,
-            restoreWindow: params["restoreWindow"]?.bool == true
+            restoreWindow: params["restoreWindow"]?.bool == true,
+            previousSnapshot: { [snapshots] resolvedWindowId in
+                // Why: indexes carry over from this caller's own last view of exactly this window.
+                snapshots[namespacedSnapshotKey(namespace, snapshotCanonicalWindowIdKey(resolvedWindowId))]
+                    .flatMap { $0.app.pid == app.pid ? $0 : nil }
+            }
         )
         // Why: cached snapshots only validate element identity for follow-up
         // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
@@ -645,7 +656,8 @@ final class Provider {
         includeScreenshot: Bool,
         windowId: CGWindowID?,
         windowIndex: Int?,
-        restoreWindow: Bool
+        restoreWindow: Bool,
+        previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
             // Why: agents retry failed observations. Only the explicit setup flow
@@ -694,6 +706,7 @@ final class Provider {
         if renderer.appStoppedResponding {
             throw AccessibilityMessaging.appNotResponding(app.name)
         }
+        let indexes = renderer.carryOverIndexes(from: previousSnapshot(capture.windowId))
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
@@ -718,6 +731,8 @@ final class Provider {
             screenshotScale: screenshotScale(screenshot: screenshot, bounds: capture.bounds),
             screenshotEngine: capture.image?.engine,
             elements: renderer.records,
+            elementOrder: indexes.order,
+            nextFreshElementIndex: indexes.nextFreshIndex,
             truncated: renderer.truncated,
             maxDepthReached: renderer.maxDepthReached,
             appWindowIds: windowCandidates.map(\.windowId).sorted()
@@ -2115,6 +2130,28 @@ private final class TreeRenderer {
         }
         guard omittedCount > 0 else { return }
         lines.insert("\(indent)... \(omittedCount) inactive browser tabs omitted", at: insertionIndex)
+    }
+}
+
+extension TreeRenderer {
+    /// Swaps the walk-order indexes for ones carried over from the previous snapshot of this window.
+    func carryOverIndexes(from previous: Snapshot?) -> (order: [Int], nextFreshIndex: Int) {
+        let walked = records.values.sorted { $0.index < $1.index }
+        let assignment = StableElementIndexes.assign(
+            current: walked.map(\.element),
+            previous: previous?.elementOrder.compactMap { index in
+                previous?.elements[index].map { (key: $0.element, index: index) }
+            } ?? [],
+            previousNextFreshIndex: previous?.nextFreshElementIndex ?? 0
+        )
+        let renumbered = Dictionary(uniqueKeysWithValues: zip(walked.map(\.index), assignment.indexes))
+        records = Dictionary(uniqueKeysWithValues: zip(walked, assignment.indexes).map { record, index in
+            (index, ElementRecord(index: index, element: record.element, localFrame: record.localFrame, actions: record.actions, signature: record.signature))
+        })
+        lines = lines.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
+        focusedElementId = focusedElementId.flatMap { renumbered[$0] }
+        focusedSummary = focusedSummary.map { StableElementIndexes.renumber(line: $0, indexes: renumbered) }
+        return (assignment.indexes, assignment.nextFreshIndex)
     }
 }
 

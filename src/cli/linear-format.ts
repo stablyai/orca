@@ -25,7 +25,7 @@ import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
 } from '../shared/linear/project-list-format'
-import { terminalSafeLine as safe } from '../shared/terminal-safe-text'
+import { terminalSafeLine as safe } from '../shared/terminal/output/terminal-safe-text'
 
 export function formatLinearIssue(result: LinearIssueContextResult): string {
   const issue = result.issue

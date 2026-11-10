@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
-import { SideSafeArea } from '../layout/side-safe-area'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { HostDisplaySource } from '../transport/use-host-display'
+import type { HostDisplaySource } from '../transport/hosts/use-host-display'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type {
   MobileWebShellFailureCause,
@@ -86,7 +85,8 @@ function Failed({
   )
 }
 
-function StateView({
+// What the shell shows natively until its page is ready.
+export function ShellStateScreen({
   hostId,
   state,
   onRetry,
@@ -140,15 +140,6 @@ function StateView({
   }
 }
 
-// What the shell shows natively until the page is ready; only the page draws in a released Duo rail, so these pad it.
-export function ShellStateScreen(props: Parameters<typeof StateView>[0]) {
-  return (
-    <SideSafeArea>
-      <StateView {...props} />
-    </SideSafeArea>
-  )
-}
-
 const styles = themedStyleSheet(() => ({
   centered: {
     flex: 1,
@@ -173,7 +164,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   retryLabel: {
     fontSize: typography.bodySize,

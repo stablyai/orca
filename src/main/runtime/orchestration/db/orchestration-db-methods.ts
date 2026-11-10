@@ -17,6 +17,7 @@ import type { RemoteDispatchAttachmentCreateMethods } from './federation/remote-
 import type { RemoteDispatchAttachmentReleaseMethods } from './federation/remote-dispatch-attachment-release'
 import type { RemoteDispatchAttachmentStopMethods } from './federation/remote-dispatch-attachment-stop'
 import type { RemoteQuestionStoreMethods } from './federation/remote-question-store'
+import type { PeerMailStoreMethods } from './federation/peer-mail-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
 import type { LegacyCompatibilityCandidatesMethods } from './legacy/legacy-compatibility-candidates'
 import type { LegacyCompatibilityPrincipalsMethods } from './legacy/legacy-compatibility-principals'
@@ -60,9 +61,10 @@ import type { WorkerDispatchStartMethods } from './worker-dispatch/worker-dispat
 import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatch-stop'
 import type { WorkerTerminalRecoveryMethods } from './worker-dispatch/worker-terminal-recovery'
 import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-terminal-archive'
+import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-terminal-auto-release'
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
-import type { StructuredPointerOperationStoreMethods } from './messages/structured-pointer-operation-store'
+import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -118,12 +120,14 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   FederationRelayAckMethods &
   FederationRelayImportMethods &
   RemoteQuestionStoreMethods &
+  PeerMailStoreMethods &
   FederationRelayItemMethods &
-  StructuredPointerOperationStoreMethods &
+  StructuredMailSendStoreMethods &
   WorkerTerminalResourceStoreMethods &
   WorkerTerminalTransferMethods &
   WorkerTerminalReleaseMethods &
   WorkerTerminalArchiveMethods &
+  WorkerTerminalAutoReleaseMethods &
   WorkerTerminalListingMethods &
   DispatchContextStoreMethods &
   DispatchLookupMethods &

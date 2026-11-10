@@ -69,10 +69,7 @@ export async function rememberPushDismissals(payloads: readonly OrcaPushPayload[
   }
   return queueDismissalOperation(async () => {
     if (nativePushDismissal) {
-      for (const { payload } of valid) {
-        await nativePushDismissal.remember(payload)
-      }
-      return
+      return nativePushDismissal.rememberAll(valid.map(({ payload }) => payload))
     }
     const entries = new Map((await readEntries()).map((entry) => [entry.key, entry]))
     const expiresAt = Date.now() + RETENTION_MS

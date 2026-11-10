@@ -1,14 +1,16 @@
+import type * as UseMobileDiffReviewInteractionsModule from '../../../source-control/review/use-mobile-diff-review-interactions'
+import type * as MobileDiffReviewSheetsModule from '../../../source-control/review/mobile-diff-review-sheets'
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
-import type { MobileDiffReviewQueueItem } from '../../../session/mobile-diff-review-queue'
+import type { MobileDiffReviewQueueItem } from '../../../source-control/review/mobile-diff-review-queue'
 import type {
   ReviewScreenState,
   SendSheetState
-} from '../../../session/mobile-diff-review-screen-model'
+} from '../../../source-control/review/mobile-diff-review-screen-model'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type * as NativeChatStaleInput from '../../../session/native-chat/mobile-native-chat-stale-input'
+import type * as NativeChatStaleInput from '../../../session/native-chat/composer/mobile-native-chat-stale-input'
 
 const WORKSPACE = 'workspace-1'
 const HOST = 'host-1'
@@ -21,14 +23,14 @@ export function diffReviewActionMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.diff-review-actions': ({ client, effect }) => {
-      const useInteractions = modules.load<
-        typeof import('../../../session/use-mobile-diff-review-interactions')
-      >('mobile/src/session/use-mobile-diff-review-interactions.ts').useMobileDiffReviewInteractions
-      const reviewSheets = modules.load<
-        typeof import('../../../session/mobile-diff-review-sheets')
-      >('mobile/src/session/mobile-diff-review-sheets.ts')
+      const useInteractions = modules.load<typeof UseMobileDiffReviewInteractionsModule>(
+        'mobile/src/source-control/review/use-mobile-diff-review-interactions.ts'
+      ).useMobileDiffReviewInteractions
+      const reviewSheets = modules.load<typeof MobileDiffReviewSheetsModule>(
+        'mobile/src/source-control/review/mobile-diff-review-sheets.ts'
+      )
       const staleInput = modules.load<typeof NativeChatStaleInput>(
-        'mobile/src/session/native-chat/mobile-native-chat-stale-input.ts'
+        'mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts'
       )
       staleInput.resetMobileNativeChatStaleInputForTests()
       const comment: DiffComment = {
@@ -90,23 +92,27 @@ export function diffReviewActionMountAdapters(
             hostId: HOST,
             worktreeId: WORKSPACE,
             screenState,
-            diffState: { kind: 'idle' },
             currentItem: item,
             queue: [item],
             filteredQueue: [item],
-            filter: 'all',
             currentIndex: 0,
-            activeHunkIndex: null,
             composer: null,
             composerBody: '',
-            listRef: { current: null },
             setScreenState: (update) => {
               screenState = typeof update === 'function' ? update(screenState) : update
             },
-            setFilter: () => {},
-            setCurrentIndex: () => {},
-            setActiveHunkIndex: () => {},
-            setComposerBody: () => {},
+            selectIndex: () => {},
+            selectKey: () => {},
+            moveSelection: () => {},
+            // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
+            remoteViewed: () => null,
+            noteDraft: {
+              composerBody: '',
+              setComposerBody: () => {},
+              openNewNoteSheet: () => {},
+              openEditComposer: () => {},
+              clearSavedNote: () => {}
+            },
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
             },
@@ -139,9 +145,6 @@ export function diffReviewActionMountAdapters(
             }
             if (name === 'discard') {
               return interactions.runGitMutation('git.discard', item)
-            }
-            if (name === 'stage-reviewed') {
-              return interactions.stageReviewedFiles()
             }
             if (name === 'open-send-sheet') {
               return interactions.openSendSheet()

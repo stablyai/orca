@@ -1,17 +1,15 @@
-import type {
-  WorkspaceCleanupBlocker,
-  WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
 import {
+  type WorkspaceCleanupBlocker,
+  type WorkspaceCleanupCandidate,
   applyWorkspaceCleanupPolicy,
-  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
-} from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 /** Broad scans may defer Git reads; resolve unknown rows on demand before trusting Git-based filtering or sorting. */
 export function hasWorkspaceCleanupGitEvidence(candidate: WorkspaceCleanupCandidate): boolean {
@@ -26,8 +24,6 @@ const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'git-status-error',
   'unknown-base'
 ])
-
-export const WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS = WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
 
 export function needsWorkspaceCleanupGitEvidence(
   filters: WorkspaceCleanupFilterState,

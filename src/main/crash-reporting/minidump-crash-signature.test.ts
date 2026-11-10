@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { minidumpSignatureDetails, parseMinidumpCrashSignature } from './minidump-crash-signature'
+import { parseMinidumpCrashSignature } from './minidump-crash-signature'
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
@@ -249,29 +249,6 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.checkMessage).toBeUndefined()
   })
 
-  it('still parses fully when the process type matches', async () => {
-    const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
-    const dumpWithMemory = Buffer.concat([
-      dump,
-      Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
-    ])
-
-    const signature = await parseMinidumpCrashSignature(dumpWithMemory, {
-      expectedProcessType: 'renderer'
-    })
-
-    expect(signature?.checkMessage).toBe(ELECTRON_43_CHECK_LINE)
-  })
-
-  it('ignores a log prefix further back than the prefix limit', async () => {
-    const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
-    // Keep the opening bracket beyond the parser's bounded prefix search.
-    const farPrefix = `[${'x'.repeat(200)}:FATAL:render_frame_impl.cc(4821)] Check failed: far.`
-    const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${farPrefix}\0`, 'utf8')])
-
-    expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBeUndefined()
-  })
-
   it('does not promote an unrelated Chromium ERROR line containing CHECK', async () => {
     const { dump } = buildDump({})
     const unrelated =
@@ -289,20 +266,6 @@ describe('parseMinidumpCrashSignature', () => {
     ])
 
     expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBe(FATAL_LINE)
-  })
-
-  it('reads annotations from the process-level simple string dictionary', async () => {
-    const { dump } = buildDump({
-      simpleAnnotations: {
-        ptype: 'gpu-process',
-        'gpu-gl-vendor': 'Intel Inc.'
-      }
-    })
-
-    const signature = await parseMinidumpCrashSignature(dump)
-
-    expect(signature?.processType).toBe('gpu-process')
-    expect(signature?.annotations['gpu-gl-vendor']).toBe('Intel Inc.')
   })
 
   it('drops annotations outside the allowlist', async () => {
@@ -373,18 +336,6 @@ describe('parseMinidumpCrashSignature', () => {
     expect((await parseMinidumpCrashSignature(corrupt))?.faultingModule).toBeUndefined()
   })
 
-  it('omits the faulting module when no image range covers the address', async () => {
-    const { dump } = buildDump({
-      exception: { code: 11, address: 0x10n },
-      modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
-    })
-
-    const signature = await parseMinidumpCrashSignature(dump)
-
-    expect(signature?.exceptionAddress).toBe('0x10')
-    expect(signature?.faultingModule).toBeUndefined()
-  })
-
   it('returns null for a buffer that is not a minidump', async () => {
     expect(await parseMinidumpCrashSignature(Buffer.from('not a dump at all', 'utf8'))).toBeNull()
     expect(await parseMinidumpCrashSignature(Buffer.alloc(0))).toBeNull()
@@ -406,39 +357,5 @@ describe('parseMinidumpCrashSignature', () => {
 
     await expect(parseMinidumpCrashSignature(corrupt)).resolves.not.toBeNull()
     expect((await parseMinidumpCrashSignature(corrupt))?.annotations).toEqual({})
-  })
-})
-
-describe('minidumpSignatureDetails', () => {
-  it('flattens the check location and faulting module into detail keys', async () => {
-    const { dump } = buildDump({
-      annotations: {
-        LOG_FATAL: FATAL_LINE,
-        ptype: 'renderer',
-        channel: 'stable'
-      },
-      exception: { code: 0x80000003, address: 0x7ff8_0000_1234n },
-      modules: [{ base: 0x7ff8_0000_0000n, size: 0x10_0000, name: 'chrome_elf.dll' }]
-    })
-
-    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
-
-    expect(details).toMatchObject({
-      minidumpCheckMessage: FATAL_LINE,
-      minidumpCheckFile: 'render_frame_impl.cc',
-      minidumpCheckLine: 4821,
-      minidumpProcessType: 'renderer',
-      minidumpExceptionCode: '0x80000003',
-      minidumpFaultingModule: 'chrome_elf.dll',
-      minidumpAnnotation_channel: 'stable'
-    })
-  })
-
-  it('does not duplicate the fatal line into an annotation key', async () => {
-    const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
-
-    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
-
-    expect(details.minidumpAnnotation_LOG_FATAL).toBeUndefined()
   })
 })

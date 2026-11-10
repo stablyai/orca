@@ -1,21 +1,16 @@
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { AutomationService } from '../automations/service'
-import type {
-  AutomationDispatchResult,
-  AutomationPrecheckResult,
-  AutomationRun
-} from '../../shared/automations-types'
 import { createScopedExternalAutomations } from '../automations/external-manager'
 import {
   ExternalAutomationManagerCache,
   type ExternalAutomationManagerCacheEntry
 } from '../automations/external-automation-manager-cache'
 import { ExternalAutomationProbeScheduler } from '../automations/external-automation-probe-scheduler'
-import { ownerKey } from '../../shared/automation-owner-key'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
+import { ownerKey } from '../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
@@ -84,19 +79,6 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     }
   )
   ipcMain.handle(
-    'automations:runPrecheck',
-    (
-      _event,
-      args: { automationId: string; runId: string }
-    ): Promise<AutomationPrecheckResult | null> =>
-      service.runPrecheck(args.automationId, args.runId)
-  )
-  ipcMain.handle(
-    'automations:markDispatchResult',
-    (_event, result: AutomationDispatchResult): Promise<AutomationRun> =>
-      service.markDispatchResult(result)
-  )
-  ipcMain.handle(
     'automations:snapshotWorkspaceName',
     (_event, args: { workspaceId: string; hostId?: string; displayName: string }): number => {
       const host = parseExecutionHostId(args.hostId)
@@ -109,7 +91,4 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
         : 0
     }
   )
-  ipcMain.handle('automations:rendererReady', (): void => {
-    service.setRendererReady()
-  })
 }

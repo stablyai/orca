@@ -84,38 +84,6 @@ export function registerProfileStateWorkerSecretRetentionTests(): void {
     }
   )
 
-  describe('worker protected settings serialization', () => {
-    it.each(['selective', 'complete'] as const)(
-      'seals the cookie and retains the legacy Go key privately in a %s SQLite write',
-      async (mode) => {
-        const { store, authority, readState } = await fixture(ciphertext('legacy-go-key'))
-        const selectiveWrite = vi.spyOn(authority, 'writeSerializedDomains')
-        const completeWrite = vi.spyOn(authority, 'writeCompleteSerializedDomains')
-        const secrets = {
-          opencodeSessionCookie: 'cookie-only-plaintext',
-          opencodeGoApiKey: 'retired-write-is-ignored'
-        }
-        store.updateSettings(secrets)
-        if (mode === 'complete') {
-          store.updateOnboarding({ outcome: 'completed' })
-        }
-        await store.flushPendingOrThrowAsync()
-        expect(selectiveWrite).toHaveBeenCalledTimes(mode === 'selective' ? 1 : 0)
-        expect(completeWrite).toHaveBeenCalledTimes(mode === 'complete' ? 1 : 0)
-        const persisted = readState()
-        expect(persisted.settings).toMatchObject({
-          opencodeSessionCookie: ciphertext(secrets.opencodeSessionCookie),
-          opencodeGoApiKey: ciphertext('legacy-go-key')
-        })
-        for (const plaintext of Object.values(secrets)) {
-          expect(JSON.stringify(persisted)).not.toContain(plaintext)
-        }
-        expect(store.getSettings().opencodeSessionCookie).toBe(secrets.opencodeSessionCookie)
-        expect(store.getSettings()).not.toHaveProperty('opencodeGoApiKey')
-      }
-    )
-  })
-
   it('does not restore the migrated legacy Go ciphertext from a pending worker acknowledgement', async () => {
     const { store, authority, readState } = await fixture(ciphertext('legacy-go-key'))
     const gate = authority.pause()

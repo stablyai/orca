@@ -1,6 +1,6 @@
 import { useCallback, type KeyboardEvent, type RefObject } from 'react'
 
-import { isSelectAllShortcut } from '@/lib/editable-target'
+import { isSelectAllShortcut } from '@/lib/text-input/focus/editable-target'
 
 type SearchInputOptions<TCommand> = {
   commandListRef: RefObject<HTMLDivElement | null>

@@ -51,6 +51,13 @@ export type ComputerSnapshotData = {
   treeText: string
   elementCount: number
   focusedElementId: number | null
+  // Present only when treeText is a diff against the previous snapshot of the same window.
+  treeDiff?: {
+    baseSnapshotId: string
+    changed: number
+    added: number
+    removed: number
+  }
   truncation?: {
     truncated: boolean
     maxNodes?: number
@@ -152,6 +159,8 @@ export type ComputerProviderCapabilities = {
       annotatedScreenshot: boolean
       elementFrames: boolean
       ocr: boolean
+      // Absent from runtimes that predate action-result tree diffs.
+      treeDiff?: boolean
     }
     actions: {
       click: boolean

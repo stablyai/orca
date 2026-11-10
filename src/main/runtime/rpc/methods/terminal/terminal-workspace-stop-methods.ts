@@ -4,7 +4,7 @@ import {
   queueTerminalWorkspaceCommand,
   sleepOutcome,
   terminalLostContact
-} from '../../../workspaces/workspace-lifecycle-commands'
+} from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { defineMethod } from '../../core'
 import {
   TerminalCloseAll,

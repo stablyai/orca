@@ -1,3 +1,4 @@
+import { linearIssueReadFailureMessage } from '../../../src/shared/integration-credential-errors'
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
@@ -6,8 +7,8 @@ import {
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import type { RpcClient } from '../transport/rpc-client'
-import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/work-items'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/github/work-item-ssh-error'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import {
@@ -132,7 +133,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     fail(gitlab.reason)
   }
   if (linear.status === 'rejected') {
-    fail(linear.reason)
+    fail(new Error(linearIssueReadFailureMessage(linear.reason)))
   }
   if (jira.status === 'rejected') {
     fail(jira.reason)

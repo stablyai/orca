@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -60,7 +60,8 @@ it('lists metadata and reads a theme only when it is loaded', async () => {
     {
       id: 'plugin:samples.minimal-icons/minimal',
       pluginKey: 'samples.minimal-icons',
-      label: 'Minimal'
+      label: 'Minimal',
+      revision: expect.stringMatching(/^[0-9a-f]{32}$/)
     }
   ])
   const theme = await registry.load('plugin:samples.minimal-icons/minimal')
@@ -68,6 +69,11 @@ it('lists metadata and reads a theme only when it is loaded', async () => {
   expect(theme?.svgs[theme.icons.folder ?? -1]).toContain('currentColor')
   expect(theme?.svgs[theme.fileExtensions.ts ?? -1]).toContain('#3178c6')
   await expect(registry.load('plugin:samples.other/x')).resolves.toBeNull()
+
+  // An update that changes only SVG bytes keeps id and title but installs a new tree hash.
+  const revision = registry.list()[0]?.revision
+  await registry.reconcile([{ ...plugin, contentHash: 'a'.repeat(64) }], () => true)
+  expect(registry.list()[0]?.revision).not.toBe(revision)
 })
 
 it('fails a load whose file is not an SVG document and forgets themes once disabled', async () => {
@@ -83,4 +89,25 @@ it('fails a load whose file is not an SVG document and forgets themes once disab
   )
   await registry.reconcile([plugin], () => false)
   expect(registry.list()).toEqual([])
+})
+
+it('changes a dev folder theme revision when an SVG is edited in place', async () => {
+  const plugin = await iconPlugin({
+    'folder.svg': '<svg viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>',
+    'ts.svg': '<svg/>'
+  })
+  const registry = new PluginIconThemeRegistry(new PluginContentVerifier())
+  await registry.reconcile([plugin], () => true)
+  const revision = registry.list()[0]?.revision
+  await registry.reconcile([plugin], () => true)
+  expect(registry.list()[0]?.revision).toBe(revision)
+
+  const svgPath = join(plugin.rootDir, 'icons', 'ts.svg')
+  await writeFile(svgPath, '<svg viewBox="0 0 2 2"/>')
+  // Pin a distinct mtime so coarse filesystem timestamps cannot hide the edit.
+  await utimes(svgPath, new Date(2_000_000_000_000), new Date(2_000_000_000_000))
+  await registry.reconcile([plugin], () => true)
+  expect(registry.list()[0]?.revision).not.toBe(revision)
+  const theme = await registry.load('plugin:samples.minimal-icons/minimal')
+  expect(theme?.svgs[theme.fileExtensions.ts ?? -1]).toBe('<svg viewBox="0 0 2 2"/>')
 })

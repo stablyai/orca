@@ -1,15 +1,15 @@
 import { useCallback, useMemo } from 'react'
 import { groupWorkspaceSpaceDecisionInputs } from './workspace-space-decision-inputs'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import {
   getWorkspaceDecisionDetails,
   type WorkspaceDecisionDetails
 } from './workspace-space-decision-details'
 import { getWorkspaceSpaceDeleteState } from './workspace-space-state-resolution'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
 

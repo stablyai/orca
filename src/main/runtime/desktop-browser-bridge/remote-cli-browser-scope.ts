@@ -7,8 +7,12 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE
 } from '../../../shared/desktop-browser-bridge-protocol'
 
+/** The SSH host a bridged command came from, so its tabs can say who is driving them. */
+export type RemoteCliBrowserController = { targetId: string; hostLabel: string }
+
 type RemoteCliBrowserScope = {
   workspaceId: string
+  controller?: RemoteCliBrowserController
   revoked?: AbortSignal
   /** Attachment lifetime, independent of individual command cancel/deadline. */
   hostRevoked?: AbortSignal
@@ -22,14 +26,16 @@ export function runInRemoteCliBrowserScope<T>(
   run: () => Promise<T>,
   revoked?: AbortSignal,
   admitGuest?: (webContentsId: number) => boolean,
-  hostRevoked?: AbortSignal
+  hostRevoked?: AbortSignal,
+  controller?: RemoteCliBrowserController
 ): Promise<T> {
   return scope.run(
     {
       workspaceId,
       ...(revoked ? { revoked } : {}),
       ...(admitGuest ? { admitGuest } : {}),
-      ...(hostRevoked ? { hostRevoked } : {})
+      ...(hostRevoked ? { hostRevoked } : {}),
+      ...(controller ? { controller } : {})
     },
     run
   )
@@ -69,6 +75,15 @@ export function captureRemoteCliBrowserScope(): {
     hostRevoked: active?.hostRevoked,
     run: (work) => (active ? scope.run(active, work) : scope.exit(work))
   }
+}
+
+/** The workspace an SSH host's command is scoped to, if this call came through the bridge. */
+export function remoteCliBrowserScopeWorkspaceId(): string | undefined {
+  return scope.getStore()?.workspaceId
+}
+
+export function remoteCliBrowserScopeController(): RemoteCliBrowserController | undefined {
+  return scope.getStore()?.controller
 }
 
 /** Prevent long-lived resources from inheriting a command's host scope. */

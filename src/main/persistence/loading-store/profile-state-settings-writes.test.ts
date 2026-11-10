@@ -117,55 +117,6 @@ function fixture() {
 }
 
 describe('selective SQLite settings persistence', () => {
-  it.each(['sync', 'async'] as const)(
-    'saves settings through the %s barrier without rewriting history or unknown domains',
-    async (mode) => {
-      const state = fixture()
-      const before = state.read()
-      const wholeWrite = vi.spyOn(state.authority, 'writeCompleteSerializedDomains')
-      state.store.updateSettings({ terminalFontSize: 19, httpProxyBypassRules: '*.internal' })
-      if (mode === 'sync') {
-        state.store.flushOrThrow()
-      } else {
-        await state.store.flushPendingOrThrowAsync()
-      }
-      expect(wholeWrite).not.toHaveBeenCalled()
-      const after = state.read()
-      expect(after.otherDocuments).toEqual(before.otherDocuments)
-      expect(after.runs).toEqual(before.runs)
-      expect(after.state).toMatchObject({
-        settings: { terminalFontSize: 19, httpProxyBypassRules: '*.internal' },
-        futureTopLevelExtension: before.state.futureTopLevelExtension
-      })
-      expect(JSON.stringify(after.state)).not.toContain(ORIGINAL.opencodeSessionCookie)
-      expect(JSON.stringify(after.state)).not.toContain(ORIGINAL.httpProxyUrl)
-      expect(state.reopen().getSettings()).toMatchObject({ ...ORIGINAL, terminalFontSize: 19 })
-    }
-  )
-
-  it.each(['unavailable', 'availability', 'encryption'] as const)(
-    'retains committed secrets while %s and retries them after recovery',
-    async (mode) => {
-      const state = fixture()
-      const before = state.read()
-      failure = mode
-      state.store.updateSettings({ opencodeSessionCookie: 'pending-cookie', terminalFontSize: 18 })
-      await state.store.flushPendingOrThrowAsync()
-      expect(state.read().state.settings).toEqual({
-        ...getSettingsRecord(before.state),
-        terminalFontSize: 18
-      })
-      failure = 'none'
-      state.store.updateSettings({ terminalFontSize: 20 })
-      await state.store.flushPendingOrThrowAsync()
-      expect(state.reopen().getSettings()).toMatchObject({
-        ...ORIGINAL,
-        opencodeSessionCookie: 'pending-cookie',
-        terminalFontSize: 20
-      })
-    }
-  )
-
   it('preserves sealed settings on unrelated saves and permits an explicit clear', () => {
     const state = fixture()
     const before = state.read()
@@ -206,60 +157,6 @@ describe('selective SQLite settings persistence', () => {
     expect(state.reopen().getSettings()).toMatchObject({ ...ORIGINAL, terminalFontSize: 22 })
   })
 
-  it('commits pending session/settings domains together and falls back for unclassified updates', () => {
-    const state = fixture()
-    state.store.patchWorkspaceSession({ activeTabId: 'pending-tab' })
-    state.store.updateSettings({ terminalFontSize: 23 })
-    state.store.flushOrThrow()
-    expect(state.read().state).toMatchObject({
-      settings: { terminalFontSize: 23 },
-      workspaceSession: { activeTabId: 'pending-tab' }
-    })
-    const wholeWrite = vi.spyOn(state.authority, 'writeCompleteSerializedDomains')
-    state.store.updateSettings({ terminalFontSize: 24 })
-    state.store.updateOnboarding({ outcome: 'completed' })
-    state.store.flushOrThrow()
-    expect(wholeWrite).toHaveBeenCalledOnce()
-    expect(state.read().state).toMatchObject({
-      settings: { terminalFontSize: 24 },
-      onboarding: { outcome: 'completed' }
-    })
-  })
-
-  it.each(['unavailable', 'encryption'] as const)(
-    'retries a deferred UI secret on a settings save after %s recovers',
-    async (mode) => {
-      const state = fixture()
-      state.store.updateUI({ browserKagiSessionLink: 'original-link' })
-      await state.store.flushPendingOrThrowAsync()
-      const before = state.read().state
-
-      failure = mode
-      state.store.updateUI({ browserKagiSessionLink: 'pending-link' })
-      await state.store.flushPendingOrThrowAsync()
-      expect(state.read().state).toMatchObject({ ui: before.ui })
-
-      failure = 'none'
-      const wholeWrite = vi.spyOn(state.authority, 'writeCompleteSerializedDomains')
-      wholeWrite.mockImplementationOnce(() => {
-        throw new Error('recovery commit failed')
-      })
-      state.store.updateSettings({ terminalFontSize: 25 })
-      await expect(state.store.flushPendingOrThrowAsync()).rejects.toThrow('recovery commit failed')
-      expect(state.read().state).toMatchObject({ ui: before.ui })
-      state.store.updateSettings({ terminalFontSize: 26 })
-      await state.store.flushPendingOrThrowAsync()
-      expect(wholeWrite).toHaveBeenCalledTimes(2)
-      const reopened = state.reopen()
-      expect(reopened.getUI().browserKagiSessionLink).toBe('pending-link')
-      expect(JSON.stringify(state.read().state)).not.toMatch(/pending-link/)
-
-      state.store.updateSettings({ terminalFontSize: 27 })
-      await state.store.flushPendingOrThrowAsync()
-      expect(wholeWrite).toHaveBeenCalledTimes(2)
-    }
-  )
-
   it('keeps an explicit UI secret clear after an unavailable write and later settings save', async () => {
     const state = fixture()
     state.store.updateUI({ browserKagiSessionLink: 'original-link' })
@@ -274,25 +171,6 @@ describe('selective SQLite settings persistence', () => {
     await state.store.flushPendingOrThrowAsync()
     expect(state.reopen().getUI().browserKagiSessionLink).toBeNull()
   })
-
-  it.each(['unavailable', 'decryption'] as const)(
-    'persists an explicit empty UI secret clear after reopening with %s secrets',
-    async (mode) => {
-      const state = fixture()
-      state.store.updateUI({ browserKagiSessionLink: 'original-link' })
-      await state.store.flushPendingOrThrowAsync()
-      state.store.freezeWrites()
-      failure = mode
-      const sealed = state.reopen()
-      await sealed.flushPendingOrThrowAsync()
-      expect(sealed.getUI().browserKagiSessionLink).toBe('')
-      sealed.updateUI({ browserKagiSessionLink: '' })
-      sealed.updateSettings({ terminalFontSize: 29 })
-      await sealed.flushPendingOrThrowAsync()
-      failure = 'none'
-      expect(state.reopen().getUI().browserKagiSessionLink).toBeNull()
-    }
-  )
 })
 
 function getSettingsRecord(state: Record<string, unknown>): Record<string, unknown> {

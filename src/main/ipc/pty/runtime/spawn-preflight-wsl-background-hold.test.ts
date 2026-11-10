@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGateModule from '../../../wsl-background-distro-gate'
+import type * as BackgroundDistroGateModule from '../../../wsl/discovery/wsl-background-distro-gate'
 import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
@@ -8,7 +8,7 @@ import { makeRuntimePtySpawnTestDeps } from './spawn-preflight-test-deps-fixture
 const mocks = vi.hoisted(() => ({
   readWslDistroRunningState: vi.fn<() => Promise<'running' | 'stopped' | 'unverifiable'>>()
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGateModule>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))
@@ -16,8 +16,11 @@ vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
 const WSL_CWD = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const hostPlatform = process.platform
 
-async function prepare(args: Partial<RuntimePtySpawnArgs>): Promise<void> {
-  const ctx = createRuntimePtySpawnState(makeRuntimePtySpawnTestDeps(), {
+async function prepare(
+  args: Partial<RuntimePtySpawnArgs>,
+  deps = makeRuntimePtySpawnTestDeps()
+): Promise<void> {
+  const ctx = createRuntimePtySpawnState(deps, {
     cols: 120,
     rows: 40,
     cwd: WSL_CWD,

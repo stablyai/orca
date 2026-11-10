@@ -1,13 +1,12 @@
 import { lstatSync, readdirSync, realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import {
-  ProfileStateAccessError,
   hasCode,
   profileStateAccessPaths,
   publishAccessOwner,
   reclaimExitedOwner
 } from './profile-state-access-owner'
-export { ProfileStateAccessError } from './profile-state-access-owner'
+import { ProfileStateAccessError } from './profile-state-access-error'
 
 export type ProfileStateRuntimeAdmission = {
   assertActive(): void

@@ -1,18 +1,21 @@
-// Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
+// Project every human-authored journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
-import { deriveNativeChatRowContent, nativeChatRowRendersContent } from '../native-chat-row-content'
+} from './journal/agent-session-journal-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../native-chat/transcript/native-chat-row-content'
 import { iterateProcessOutputLines } from '../process-output-field-scanner'
-import { agentJournalSubmissionKey } from '../agent-session-journal-item-key'
-import { dispatchWasWithdrawn } from '../structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from '../native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../native-chat-turn-membership'
+import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
+import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
+import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'
+import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
+import { nativeChatTurnMembership } from '../native-chat/transcript/native-chat-turn-membership'
 
 /** Cap previews on the host because the rail hides prose beyond two lines. */
 export const AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS = 200
@@ -32,7 +35,9 @@ export type AgentSessionConversationOutlineEntry = {
 
 export type AgentSessionConversationOutline = {
   sessionId: string
-  /** Journal position the outline is current through: every user message created
+  /** Absent on older hosts whose outlines can include agent-authored turn inputs. */
+  humanMessagesOnly?: true
+  /** Journal position the outline is current through: every human-authored message created
    *  at or before `cursor.sequence` is listed, unless `omittedEntries` says otherwise. */
   cursor: AgentJournalCursor
   entries: AgentSessionConversationOutlineEntry[]
@@ -173,6 +178,7 @@ export function projectAgentSessionConversationOutline(
       sequence === undefined ||
       stopped.has(message.id) ||
       message.role !== 'user' ||
+      message.from !== undefined ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue
