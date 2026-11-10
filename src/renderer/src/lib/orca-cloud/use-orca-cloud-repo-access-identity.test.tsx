@@ -40,12 +40,16 @@ beforeEach(() => {
     repos: [
       {
         id: 'web',
+        path: '/code/web',
+        displayName: 'web',
+        badgeColor: '#888',
+        addedAt: 1,
         gitRemoteIdentity: {
           canonicalKey: 'github.com/acme/web',
           remoteName: 'origin',
           remoteUrl: REPO_URL
         }
-      } as Repo
+      } satisfies Repo
     ],
     orcaProfileAuthStatus: connected('o1')
   })
