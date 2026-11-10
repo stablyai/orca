@@ -26,16 +26,6 @@ export const AGENT_PANE_HOOK_ENV_KEYS = [
   ...AGENT_HOOK_RUNTIME_ENV_KEYS
 ] as const
 
-// Inherited Claude child stamps make an independent pane act as the launching session's child.
-export const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
-  'CLAUDECODE',
-  'CLAUDE_CODE_CHILD_SESSION',
-  'CLAUDE_CODE_SESSION_ID',
-  'CLAUDE_CODE_BRIDGE_SESSION_ID',
-  'CLAUDE_CODE_EXECPATH',
-  'CLAUDE_CODE_ENTRYPOINT'
-] as const
-
 // Inherited structured-session IDs would make every pane claim the parent orchestration caller.
 export const ORCA_AGENT_SESSION_CALLER_ENV_KEYS = [
   ORCA_AGENT_SESSION_ID_ENV,

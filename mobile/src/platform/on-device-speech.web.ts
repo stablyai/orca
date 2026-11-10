@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
+import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
 import { createDictationTextPipeline } from '../../../src/shared/dictation-text-pipeline'
 import { useNativeVerbs, type NativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
 import type { OnDeviceSpeech } from './on-device-speech-contract'
@@ -9,25 +10,32 @@ const keepText = (text: string): string => text
 // The phone's recognizer transcribes only the locale it started in, so that locale's language picks the fillers, as the host does for its model.
 function phoneDictationTextCleaner(
   locale: string | null,
-  removeFillerWords: boolean
+  removeFillerWords: boolean,
+  dictationTerms: readonly DictationTerm[] | undefined
 ): (text: string) => string {
   const language = locale?.split('-')[0].toLowerCase()
-  const clean = createDictationTextPipeline(language ? { language } : undefined, {
-    removeFillerWords
-  })
+  const clean = createDictationTextPipeline(
+    language ? { language } : undefined,
+    { removeFillerWords },
+    dictationTerms
+  )
   return clean ?? keepText
 }
 
 function createPageOnDeviceSpeech(
   verbs: NativeVerbs,
-  removeFillerWords: () => boolean
+  textSettings: () => {
+    removeFillerWords: boolean
+    dictationTerms: readonly DictationTerm[] | undefined
+  }
 ): OnDeviceSpeech {
   let clean = keepText
   return {
     status: () => verbs.speechStatus(onDeviceSpeechLocale()),
     start: async () => {
       const started = await verbs.speechStart(onDeviceSpeechLocale())
-      clean = phoneDictationTextCleaner(started.locale, removeFillerWords())
+      const { removeFillerWords, dictationTerms } = textSettings()
+      clean = phoneDictationTextCleaner(started.locale, removeFillerWords, dictationTerms)
       return started
     },
     read: async () => {
@@ -46,17 +54,20 @@ function createPageOnDeviceSpeech(
 }
 
 // Null on a shell without the verb, so dictation stays on the computer exactly as before.
-// removeFillerWords is the computer's switch, read at each start.
-export function useOnDeviceSpeech(removeFillerWords = true): OnDeviceSpeech | null {
+// The computer's filler switch and dictionary for this worktree, read at each start.
+export function useOnDeviceSpeech(
+  removeFillerWords = true,
+  dictationTerms?: readonly DictationTerm[]
+): OnDeviceSpeech | null {
   const verbs = useNativeVerbs()
-  const removeFillerWordsRef = useRef(removeFillerWords)
+  const textSettingsRef = useRef({ removeFillerWords, dictationTerms })
   useLayoutEffect(() => {
-    removeFillerWordsRef.current = removeFillerWords
-  }, [removeFillerWords])
+    textSettingsRef.current = { removeFillerWords, dictationTerms }
+  }, [removeFillerWords, dictationTerms])
   return useMemo(
     () =>
       verbs.canRecognizeSpeech
-        ? createPageOnDeviceSpeech(verbs, () => removeFillerWordsRef.current)
+        ? createPageOnDeviceSpeech(verbs, () => textSettingsRef.current)
         : null,
     [verbs]
   )

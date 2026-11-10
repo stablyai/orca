@@ -10,7 +10,7 @@ import {
 import type { NativeChatAttachmentOwner } from '../uploads/native-chat-attachment-owner'
 import { stageNativeChatDraftFile } from '../../drafts/native-chat-draft-attachment-staging'
 import { isImageDropPath } from '../../../../../../shared/image-path-paste'
-import { nativeChatPendingAttachmentScope } from '../chips/native-chat-pending-attachment-cache'
+import { nativeChatPendingAttachmentScope } from '../chips/native-chat-pending-attachment-scopes'
 import type {
   NativeChatAttachmentFocusOptions,
   NativeChatResolvedPathOptions

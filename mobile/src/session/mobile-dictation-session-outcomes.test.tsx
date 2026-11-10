@@ -1,5 +1,5 @@
 // Mount the real composing hooks over native capture: refused starts and lost transcripts were in how the session hook and dictation hook meet, which isolated handler tests would miss.
-import { createElement, useRef } from 'react'
+import { createElement, useContext, useRef } from 'react'
 import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,8 +26,11 @@ const seen = vi.hoisted(() => {
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   Platform: { OS: 'ios' }
 }))
+// The computer's name only words announcements; the stored host profile pulls in secure storage.
+vi.mock('../transport/hosts/use-host-profile', () => ({ useHostProfile: () => null }))
 vi.mock('@orca/expo-two-way-audio', () => ({
   addExpoTwoWayAudioEventListener: (name: string, listener: (event: { data: string }) => void) => {
     seen.audioListeners.set(name, listener)
@@ -45,7 +48,10 @@ vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: () => Promise.resolve(),
   deactivateKeepAwake: () => Promise.resolve()
 }))
-vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
+vi.mock('expo-router', () => {
+  const router = { canGoBack: () => false, push: () => {}, dismissTo: () => {} }
+  return { useFocusEffect: () => {}, useRouter: () => router, useNavigation: () => undefined }
+})
 vi.mock('../platform/haptics', () => ({
   triggerError: () => {
     seen.errorHaptics += 1
@@ -108,6 +114,14 @@ vi.mock('./use-mobile-send-completion-generation', () => ({
 }))
 
 import { useMobileSessionNativeChatDictation } from './use-mobile-session-native-chat-dictation'
+import {
+  MobileDictationHostProvider,
+  useMobileDictationHost
+} from '../dictation/mobile-dictation-host'
+import {
+  MobileDictationPillContext,
+  type MobileDictationPill
+} from '../dictation/mobile-dictation-host-context'
 
 type Model = ReturnType<typeof useMobileSessionNativeChatDictation>
 
@@ -117,11 +131,21 @@ const typeIntoTerminal = async (_handle: string, text: string): Promise<boolean>
   return true
 }
 
+type Host = ReturnType<typeof useMobileDictationHost> & { pill: MobileDictationPill | null }
+
 function mount(
   client: FakeRpcClient,
   sendLive: (handle: string, text: string) => Promise<boolean> = typeIntoTerminal
-): { current: () => Model } {
-  const held: { model: Model | null } = { model: null }
+): { current: () => Model; host: () => Host; leave: () => void } {
+  const held: { model: Model | null; host: Host | null; screen: boolean } = {
+    model: null,
+    host: null,
+    screen: true
+  }
+  function HostProbe(): null {
+    held.host = { ...useMobileDictationHost(), pill: useContext(MobileDictationPillContext) }
+    return null
+  }
 
   function Probe(): null {
     const scope = {
@@ -132,7 +156,7 @@ function mount(
       agentSessionHostSupport: { promptCancel: true, questionAnswers: false },
       activeHandle: 't1',
       activeSessionTabId: 'tab1',
-      activeSessionTab: { id: 'tab1', type: 'terminal', terminal: 't1' },
+      activeSessionTab: { id: 'tab1', type: 'terminal', terminal: 't1', title: 'Claude Code' },
       diffComments: [],
       diffCommentsRef: useRef([]),
       setShowDictationSetup: (next: boolean) => {
@@ -152,15 +176,25 @@ function mount(
       showToast: (message: string) => {
         seen.toasts.push(message)
       },
-      resetLiveInputFocus: () => {}
+      resetLiveInputFocus: () => {},
+      // Leaving this session would leave the page, so a recording holds the first leave.
+      router: { canGoBack: () => false }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scope carries every member this hook destructures; the rest of the session model is unreachable from the mic path.
     held.model = useMobileSessionNativeChatDictation(scope as never, sendLive)
     return null
   }
 
+  const tree = () =>
+    createElement(
+      MobileDictationHostProvider,
+      null,
+      createElement(HostProbe),
+      held.screen ? createElement(Probe) : null
+    )
+  let renderer: ReturnType<typeof createWithQueryClient> | null = null
   act(() => {
-    createWithQueryClient(createElement(Probe))
+    renderer = createWithQueryClient(tree())
   })
   return {
     current: () => {
@@ -168,6 +202,17 @@ function mount(
         throw new Error('Probe did not render')
       }
       return held.model
+    },
+    host: () => {
+      if (!held.host) {
+        throw new Error('HostProbe did not render')
+      }
+      return held.host
+    },
+    // The session screen goes away (Back to the workspace list) while the page and its dictation stay.
+    leave: () => {
+      held.screen = false
+      act(() => renderer?.update(tree()))
     }
   }
 }
@@ -203,7 +248,7 @@ async function settle(
 async function startRecording(
   rpc: FakeRpcClient,
   sendLive?: (handle: string, text: string) => Promise<boolean>
-): Promise<{ current: () => Model }> {
+): Promise<ReturnType<typeof mount>> {
   const mounted = mount(rpc, sendLive)
   act(() => mounted.current().handleDictationToggle())
   await settle(rpc, '')
@@ -320,5 +365,21 @@ describe('a dictation that ends after switching between chat and terminal', () =
     await settle(rpc, 'ship it')
     expect(seen.chatWrites).toEqual([['chat-b', 'ship it']])
     expect(seen.inputs).toEqual([])
+  })
+})
+
+describe('a dictation whose session screen was left', () => {
+  it('keeps recording, then puts its words in the chat it started in with a toast that opens it', async () => {
+    seen.chat = { shown: true, scope: 'chat-a' }
+    const rpc = createFakeRpcClient()
+    const mounted = await startRecording(rpc)
+    mounted.leave()
+    expect(mounted.host().getDictation().isRecording).toBe(true)
+    expect(mounted.host().pill?.away).toBe(true)
+    act(() => mounted.host().stop())
+    await settle(rpc, 'ship it')
+    expect(seen.chatWrites).toEqual([['chat-a', 'ship it']])
+    expect(mounted.host().pill?.toast?.message).toBe('Inserted in Claude Code')
+    expect(mounted.host().pill?.toast?.open).toBeTypeOf('function')
   })
 })

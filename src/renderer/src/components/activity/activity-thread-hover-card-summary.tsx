@@ -9,7 +9,7 @@ import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-i
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { cn } from '@/lib/utils'
 import {

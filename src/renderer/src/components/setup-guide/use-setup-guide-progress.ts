@@ -14,8 +14,8 @@ import {
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import {
   getSetupGuideProgressSnapshot,
   type FeatureWallSetupProgress

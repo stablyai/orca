@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { executeTerminalPastePlan } from '@/components/terminal-pane/input/paste/terminal-paste-executor'
 import { planTerminalPasteWithYield } from '@/components/terminal-pane/input/paste/terminal-paste-coordinator'
 import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/input/paste/terminal-paste-runtime'

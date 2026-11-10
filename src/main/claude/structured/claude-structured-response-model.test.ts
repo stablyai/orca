@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest'
-import { acquired, claudeFrame, fakeClaude } from './claude-structured-session-test-support'
+import {
+  acquired,
+  claudeFrame,
+  fakeClaude,
+  USER_MESSAGE
+} from './claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
 it('publishes the main response model after fallback and restoration, ignoring child, foreign and synthetic frames', async () => {
@@ -74,6 +79,12 @@ it('retains the init context suffix when the response reports the same bare mode
   const adapter = await acquired(claude)
   const connection = claude.connections[0]!
   try {
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'first-response',
+      body: USER_MESSAGE,
+      fence: 7
+    })
     claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-opus-5-5[1m]' })
     claudeFrame(connection, {
       type: 'assistant',
@@ -84,6 +95,12 @@ it('retains the init context suffix when the response reports the same bare mode
       (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.reportedModel
     ).toBe('claude-opus-5-5[1m]')
     await adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'opus' })
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'after-context-pick',
+      body: USER_MESSAGE,
+      fence: 7
+    })
     claudeFrame(connection, {
       type: 'assistant',
       uuid: 'after-context-pick',
@@ -92,6 +109,45 @@ it('retains the init context suffix when the response reports the same bare mode
     expect(
       (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.reportedModel
     ).toBe('claude-opus-5-5')
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
+it('keeps a model picked during a turn over that turn’s later replies until a turn runs it', async () => {
+  const claude = fakeClaude({ initModel: 'claude-sonnet-5-5' })
+  const adapter = await acquired(claude)
+  const connection = claude.connections[0]!
+  const read = async () => (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
+  const reply = (uuid: string, model: string) =>
+    claudeFrame(connection, {
+      type: 'assistant',
+      uuid,
+      message: { role: 'assistant', model, content: [] }
+    })
+  try {
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'running',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-sonnet-5-5' })
+    reply('before-pick', 'claude-sonnet-5-5')
+    await adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'haiku' })
+    reply('same-turn', 'claude-sonnet-5-5')
+    expect(await read()).toMatchObject({ model: 'haiku' })
+    expect((await read()).reportedModel).toBeUndefined()
+    expect(connection.calls).toContainEqual({ subtype: 'set_model', params: { model: 'haiku' } })
+
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'next',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    reply('next-turn', 'claude-haiku-5-5')
+    expect(await read()).toMatchObject({ model: 'haiku', reportedModel: 'claude-haiku-5-5' })
   } finally {
     await adapter.closeAll()
   }

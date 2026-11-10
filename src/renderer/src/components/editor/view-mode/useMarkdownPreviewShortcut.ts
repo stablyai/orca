@@ -1,11 +1,11 @@
 import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
 import { useEffect, type RefObject } from 'react'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { canOpenMarkdownPreview, isMarkdownPreviewShortcut } from './markdown-preview-controls'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 type UseMarkdownPreviewShortcutParams = {
   activeViewStateId?: string | null

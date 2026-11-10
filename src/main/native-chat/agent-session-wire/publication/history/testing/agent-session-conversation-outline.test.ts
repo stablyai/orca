@@ -39,4 +39,15 @@ describe('conversation outline read', () => {
     expect(replyBytes(outline)).toBeLessThanOrEqual(HISTORY_PAGE_CONTENT_BUDGET_BYTES)
     expect(outline.entries.at(-1)?.itemId).toBe('user-10000')
   })
+
+  // Newer clients ignore an unmarked outline, which older hosts may fill with agent-written inputs.
+  it('marks its outline as listing only messages a person wrote', () => {
+    expect(readAgentSessionConversationOutline(snapshot([]))).toEqual({
+      sessionId: 'session-1',
+      humanMessagesOnly: true,
+      cursor: { epoch: 'epoch-1', sequence: 0 },
+      entries: [],
+      omittedEntries: 0
+    })
+  })
 })

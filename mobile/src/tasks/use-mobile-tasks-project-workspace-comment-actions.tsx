@@ -233,7 +233,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, projectCommentDraft, projectMutating]
+    [activeGitHubProjectHost, client, projectCommentDraft, projectMutating, setProjectCommentDraft]
   )
 
   const updateProjectRowComment = useCallback(

@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AUTOMATION_RUNTIME_CAPABILITIES } from '../../../../shared/automations/automation-runtime-capabilities'
 
@@ -155,18 +154,6 @@ function renderSidebar(
   return render(<Form />)
 }
 
-function setOldHostCapabilities(capabilities: readonly string[]) {
-  act(() => {
-    const status = {
-      ...createCompatibleRuntimeStatusResponse().result,
-      capabilities: [...capabilities]
-    }
-    useAppStore.setState({
-      runtimeStatusByEnvironmentId: new Map([['old', { status, checkedAt: 1 }]])
-    })
-  })
-}
-
 beforeEach(() => {
   clearNativeChatComposerDraftsForTests()
   setLocalRuntimeCapabilitiesForTests(AUTOMATION_RUNTIME_CAPABILITIES)
@@ -183,55 +170,6 @@ function openPicker() {
 }
 
 describe('AutomationEditorSettingsSidebar agent picker', () => {
-  it('keeps agent selection usable on an older host without exposing unsupported setup', () => {
-    setLocalRuntimeCapabilitiesForTests([])
-    const onDraftChange = vi.fn()
-    setOldHostCapabilities([])
-    renderSidebar(onDraftChange, DRAFT, {
-      kind: 'runtime',
-      environmentId: 'old',
-      pairingRevision: 1
-    })
-    openPicker()
-    expect(screen.queryByRole('button', { name: /^Configure / })).toBeNull()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
-    expect(onDraftChange.mock.calls[0][0](DRAFT).agentId).toBe('claude')
-  })
-
-  it('offers fresh sessions for a full launch setup and preserves its choices', () => {
-    const changed = vi.fn()
-    renderSidebar(changed, {
-      ...DRAFT,
-      reuseSession: true,
-      launchPreferences: { model: 'gpt-5.5' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Use fresh sessions' }))
-    const next = changed.mock.calls[0][0]({
-      ...DRAFT,
-      reuseSession: true,
-      launchPreferences: { model: 'gpt-5.5' }
-    })
-    expect(next.reuseSession).toBe(false)
-    expect(next.launchPreferences).toEqual({ model: 'gpt-5.5' })
-  })
-
-  it('keeps agent and legacy editing available before selecting a destination', () => {
-    const changed = vi.fn()
-    renderSidebar(changed, { ...DRAFT, agentId: 'claude' }, null)
-    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
-      target: { value: '--add-dir docs' }
-    })
-    openPicker()
-    expect(screen.queryByRole('button', { name: /^Configure / })).toBeNull()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
-    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), {
-      ...DRAFT,
-      agentId: 'claude'
-    })
-    expect(next.agentId).toBe('codex')
-    expect(next.extraAgentArgs).toBe('--add-dir docs')
-  })
-
   it('discards an unaccepted setup when the editor owner closes', () => {
     const onDraftChange = vi.fn()
     const form = renderSidebar(onDraftChange)

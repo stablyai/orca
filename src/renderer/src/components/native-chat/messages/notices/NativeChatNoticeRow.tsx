@@ -9,7 +9,7 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
 import { NativeChatForkedFromContext } from '../actions/native-chat-fork-context'
-import { NativeChatPullRequestEventLine } from '../../NativeChatPullRequestEventLine'
+import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
@@ -35,7 +35,7 @@ import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
 } from '../diagnostics/NativeChatProviderDetails'
-import { NativeChatSignInButton } from '../../host-access/NativeChatSignInButton'
+import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -239,9 +239,16 @@ export function NativeChatNoticeRow({
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
-    failure?.kind === 'notSignedIn' ||
-    failure?.kind === 'savedConversationMissing' ||
-    failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'notSignedIn',
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -323,7 +330,7 @@ export function NativeChatNoticeRow({
       {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
         <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
       ) : null}
-      <NativeChatSignInButton failureKind={block.failure?.kind} />
+      <NativeChatSetupButton failureKind={block.failure?.kind} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

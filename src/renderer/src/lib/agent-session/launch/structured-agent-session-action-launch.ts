@@ -123,7 +123,7 @@ export async function openTerminalForDeclinedChat(
       code: 'structured_agent_session_unsupported',
       causeText
     }
-    publishStructuredLaunchChange()
+    publishStructuredLaunchChange(launchState.intent.sessionId)
   }
   if (completed.outcome.status !== 'created') {
     if (terminal.refusal) {

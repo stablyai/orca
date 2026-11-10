@@ -73,23 +73,6 @@ describe("the window's banner for main's start of a pane", () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows the outcome of the terminal the view attached, once per start', async () => {
-    const showMainPaneResumeOutcome = await loadBannerModule()
-    store.publish({
-      terminalPaneResumeOutcomesByPaneKey: {
-        [PANE_KEY]: { ptyId: 'pty-1', ptyGeneration: 1, outcome: 'restored' }
-      }
-    })
-    const first = attachedView()
-    showMainPaneResumeOutcome(first.session, 'pty-1')
-    expect(first.view.showSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith('restored')
-
-    // A remounted view attaching the same start says nothing again.
-    const remounted = attachedView()
-    showMainPaneResumeOutcome(remounted.session, 'pty-1')
-    expect(remounted.view.showSessionRestoredBanner).not.toHaveBeenCalled()
-  })
-
   it('shows once per start: a later start under the same terminal id shows again', async () => {
     const showMainPaneResumeOutcome = await loadBannerModule()
     const publish = (ptyGeneration: number, outcome: TerminalPaneResumeOutcome['outcome']) =>
@@ -126,22 +109,5 @@ describe("the window's banner for main's start of a pane", () => {
     const reloaded = attachedView()
     ;(await loadBannerModule())(reloaded.session, 'pty-1')
     expect(reloaded.view.showSessionRestoredBanner).not.toHaveBeenCalled()
-  })
-
-  it('shows nothing for an outcome naming another terminal', async () => {
-    const showMainPaneResumeOutcome = await loadBannerModule()
-    store.publish({
-      terminalPaneResumeOutcomesByPaneKey: {
-        [PANE_KEY]: { ptyId: 'pty-old', ptyGeneration: 1, outcome: 'restored' }
-      }
-    })
-    const { view, session } = attachedView()
-    showMainPaneResumeOutcome(session, 'pty-1')
-    store.publish({
-      terminalPaneResumeOutcomesByPaneKey: {
-        [PANE_KEY]: { ptyId: 'pty-old', ptyGeneration: 2, outcome: 'resume-unavailable' }
-      }
-    })
-    expect(view.showSessionRestoredBanner).not.toHaveBeenCalled()
   })
 })

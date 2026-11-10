@@ -89,7 +89,6 @@ export function installBrowserLinkMaterializationProbe() {
         dictationHoldToRecord: false,
         removeFillerWords: true,
         terminalConfirmBeforeInsert: true,
-        userModels: [],
         openAiApiKeyConfigured: false,
         microphoneDeviceId: null,
         microphoneDeviceLabel: null,
