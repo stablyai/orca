@@ -4465,6 +4465,8 @@
             "reset": "초기화"
           },
           "InlineUsageBars": {
+            "now": "지금",
+            "resetsNow": "지금 초기화",
             "resetsIn": "{{duration}} 후 초기화"
           }
         }

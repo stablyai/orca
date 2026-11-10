@@ -4938,6 +4938,8 @@
             "reset": "重設"
           },
           "InlineUsageBars": {
+            "now": "現在",
+            "resetsNow": "現在重設",
             "resetsIn": "{{duration}}後重設"
           }
         }

@@ -4601,6 +4601,8 @@
             "reset": "Restablecimiento"
           },
           "InlineUsageBars": {
+            "now": "ahora",
+            "resetsNow": "se restablece ahora",
             "resetsIn": "se restablece en {{duration}}"
           }
         }

@@ -25,14 +25,14 @@ export function AccountSwitchList({
       <DropdownMenuLabel>
         <span className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate">{heading}</span>
-          <span className="flex w-1/2 max-w-48 shrink-0 items-center gap-1 text-right">
+          <span className="flex w-1/2 max-w-48 shrink-0 items-end gap-1 text-right">
             <span className="min-w-0 flex-1" />
-            <span className="w-8 shrink-0">
+            <span className="w-8 shrink-0 whitespace-normal break-all">
               {display === 'used'
                 ? t('auto.components.status.bar.AccountSwitchList.used', 'Used')
                 : t('auto.components.status.bar.AccountSwitchList.left', 'Left')}
             </span>
-            <span className="w-11 shrink-0">
+            <span className="w-11 shrink-0 whitespace-normal break-all">
               {t('auto.components.status.bar.AccountSwitchList.reset', 'Reset')}
             </span>
           </span>

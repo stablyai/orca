@@ -86,14 +86,23 @@ export function InlineUsageBars({
           window.resetsAt != null && Number.isFinite(new Date(window.resetsAt).getTime())
             ? window.resetsAt
             : null
+        const resetDuration =
+          resetsAt == null
+            ? null
+            : resetsAt <= now
+              ? t('auto.components.status.bar.InlineUsageBars.now', 'now')
+              : formatResetDuration(resetsAt - now)
         return (
           <div
             key={window.key}
+            role="img"
             className="flex min-w-0 items-center gap-1 text-3xs text-muted-foreground"
             aria-label={`${window.label}: ${formatUsagePercentageLabel(window.used, display, t)}${
-              resetsAt != null
-                ? `, ${t('auto.components.status.bar.InlineUsageBars.resetsIn', 'resets in {{duration}}', { duration: formatResetDuration(resetsAt - now) })}`
-                : ''
+              resetsAt == null
+                ? ''
+                : resetsAt <= now
+                  ? `, ${t('auto.components.status.bar.InlineUsageBars.resetsNow', 'resets now')}`
+                  : `, ${t('auto.components.status.bar.InlineUsageBars.resetsIn', 'resets in {{duration}}', { duration: resetDuration })}`
             }`}
           >
             <span className="w-8 shrink-0 truncate">{window.label}</span>
@@ -106,9 +115,7 @@ export function InlineUsageBars({
             <span className="w-8 shrink-0 text-right tabular-nums">
               {formatBareUsagePercentage(window.used, display, t)}
             </span>
-            <span className="w-11 shrink-0 text-right tabular-nums">
-              {resetsAt != null ? formatResetDuration(resetsAt - now) : null}
-            </span>
+            <span className="w-11 shrink-0 break-all text-right tabular-nums">{resetDuration}</span>
           </div>
         )
       })}

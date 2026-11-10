@@ -4844,6 +4844,8 @@
             "reset": "Réinitialisation"
           },
           "InlineUsageBars": {
+            "now": "maintenant",
+            "resetsNow": "réinitialisation maintenant",
             "resetsIn": "réinitialisation dans {{duration}}"
           }
         }

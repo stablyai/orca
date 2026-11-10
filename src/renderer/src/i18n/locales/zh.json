@@ -4465,6 +4465,8 @@
             "reset": "重置"
           },
           "InlineUsageBars": {
+            "now": "现在",
+            "resetsNow": "现在重置",
             "resetsIn": "{{duration}}后重置"
           }
         }

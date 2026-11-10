@@ -5241,6 +5241,8 @@
             "reset": "Сброс"
           },
           "InlineUsageBars": {
+            "now": "сейчас",
+            "resetsNow": "сброс сейчас",
             "resetsIn": "сброс через {{duration}}"
           }
         }

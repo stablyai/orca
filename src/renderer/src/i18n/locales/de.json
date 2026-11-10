@@ -5053,6 +5053,8 @@
             "reset": "Zurücksetzung"
           },
           "InlineUsageBars": {
+            "now": "jetzt",
+            "resetsNow": "Zurücksetzung jetzt",
             "resetsIn": "Zurücksetzung in {{duration}}"
           }
         }

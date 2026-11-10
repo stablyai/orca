@@ -5037,6 +5037,8 @@
             "reset": "Sıfırlanma"
           },
           "InlineUsageBars": {
+            "now": "şimdi",
+            "resetsNow": "şimdi sıfırlanır",
             "resetsIn": "{{duration}} içinde sıfırlanır"
           }
         }

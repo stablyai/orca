@@ -4465,6 +4465,8 @@
             "reset": "リセット"
           },
           "InlineUsageBars": {
+            "now": "今",
+            "resetsNow": "今リセット",
             "resetsIn": "{{duration}}後にリセット"
           }
         }

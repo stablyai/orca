@@ -3620,6 +3620,8 @@
             "reset": "Redefinição"
           },
           "InlineUsageBars": {
+            "now": "agora",
+            "resetsNow": "redefinição agora",
             "resetsIn": "redefinição em {{duration}}"
           }
         }

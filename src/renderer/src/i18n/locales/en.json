@@ -5439,6 +5439,8 @@
             "reset": "Reset"
           },
           "InlineUsageBars": {
+            "now": "now",
+            "resetsNow": "resets now",
             "resetsIn": "resets in {{duration}}"
           }
         }
