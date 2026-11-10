@@ -35,6 +35,7 @@ const SUPPORTED = new Set([
   'size',
   'agent',
   'prompt',
+  'env',
   'progress',
   'json',
   'help'
@@ -135,7 +136,7 @@ export async function createWorktreeOnCloud(
   if (unsupported.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `--${unsupported[0]} doesn't apply to --on cloud. Supported: --name, --repo, --base-branch, --size, --agent/--prompt.`,
+      `--${unsupported[0]} doesn't apply to --on cloud. Supported: --name, --repo, --base-branch, --env, --size, --agent/--prompt.`,
       { field: unsupported[0] }
     )
   }
@@ -178,8 +179,17 @@ export async function createWorktreeOnCloud(
   }
   const api = cloudClient(deps)
   const name = getOptionalStringFlag(flags, 'name')
+  const environment = getOptionalStringFlag(flags, 'env')
+  if (environment !== undefined && !/^(env|bld)_[A-Za-z0-9_-]{4,64}$/.test(environment)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--env takes a team environment id (env_…) or a build id (bld_…).',
+      { field: 'env' }
+    )
+  }
   const input: CloudWorkspaceCreateInput = {
     ...(name ? { name } : {}),
+    ...(environment ? { environment } : {}),
     ...(target.project ? { projectId: await resolveCloudProjectId(api, target.project) } : {}),
     ...(repo ? { repo: { url: repo.url, ...(ref ? { ref } : {}) } } : {}),
     ...(machineSize ? { machineSize } : {}),
@@ -208,4 +218,28 @@ export async function createWorktreeOnCloud(
     json,
     (value) => formatCloudWorkspace(value, deps.now())
   )
+}
+
+/**
+ * Private build hook for `worktree create`: the only `--on` target here is Orca Cloud, which talks to
+ * the Orca Cloud API instead of the runtime. True when it handled the command.
+ */
+export async function maybeCreateWorktreeOnCloud(
+  context: Pick<HandlerContext, 'flags' | 'cwd' | 'json'>
+): Promise<boolean> {
+  const { flags } = context
+  if (!flags.has('on') && !flags.has('env') && !flags.has('size') && !flags.has('progress')) {
+    return false
+  }
+  if (!readCloudOnTarget(flags)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      flags.has('on')
+        ? '--on supports `cloud` or `cloud:<project>` in this build.'
+        : '--env, --size and --progress apply to `--on cloud`.',
+      { field: flags.has('on') ? 'on' : 'env' }
+    )
+  }
+  await createWorktreeOnCloud(context)
+  return true
 }

@@ -104,3 +104,14 @@ describe('teammate names', () => {
     expect(messages[0]).toMatchObject({ sentBy: 'bob', sentByName: 'Bob Byte' })
   })
 })
+
+describe('workspace create with a team environment', () => {
+  it('rejects an unknown environment before booting anything, and a malformed id as invalid', async () => {
+    const h = await harness()
+    const missing = await h.call('POST', '/v1/workspaces', { body: { environment: 'env_missing01' } })
+    expect(missing.status).toBe(404)
+    expect(missing.body).toEqual({ error: 'not_found', reason: 'environment' })
+    expect((await h.call('POST', '/v1/workspaces', { body: { environment: 'prod' } })).status).toBe(400)
+    expect(h.vercel.boxes.size).toBe(0)
+  })
+})

@@ -142,6 +142,8 @@ export async function createWorkspace(
     name?: string
     project?: ProjectRow | null
     repo?: { url: string; ref?: string }
+    /** Boot from this environment build (bld_…); default: the project's pinned build, else the repo's active one. */
+    environmentBuildId?: string
     machineSize?: MachineSize
     region?: string
     origin: WorkspaceOrigin
@@ -157,7 +159,8 @@ export async function createWorkspace(
     workspaceId: input.workspaceId ?? randomId(input.origin === 'routine' ? 'rtn' : 'api'),
     machineSize: input.machineSize ?? input.project?.machine_size ?? 'standard',
     ...((input.region ?? input.project?.region) ? { region: (input.region ?? input.project?.region)! } : {}),
-    ...(repo ? { repo } : {})
+    ...(repo ? { repo } : {}),
+    ...((input.environmentBuildId ?? input.project?.build_id) ? { environmentBuildId: (input.environmentBuildId ?? input.project?.build_id)! } : {})
   })
   await setWorkspaceMeta(life.db, ready.row.id, {
     name: input.name ?? null,
