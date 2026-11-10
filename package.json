@@ -61,6 +61,7 @@
     "check:repo-host-read-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-repo-host-read-ratchet.mjs",
     "check:workspace-record-read-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-workspace-record-read-ratchet.mjs",
     "check:tab-map-seam-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-tab-map-seam-ratchet.mjs",
+    "check:terminal-parking-ownership-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-terminal-parking-ownership-ratchet.mjs",
     "check:worktree-id-composer-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-worktree-id-composer-ratchet.mjs",
     "check:direct-link-open-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-direct-link-open-ratchet.mjs",
     "check:e2e-typecheck-ratchet": "node config/scripts/typecheck/e2e-admission/check-e2e-typecheck-ratchet.mjs",

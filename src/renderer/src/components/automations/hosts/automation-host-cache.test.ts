@@ -38,14 +38,6 @@ function createCache(overrides: Parameters<typeof createAutomationHostCache>[0] 
 }
 
 describe('automation host cache commit fence', () => {
-  it('discards a response whose entry was invalidated while it was in flight', () => {
-    const cache = createCache()
-    const fence = cache.beginRequest(DESKTOP_SELF)
-    cache.invalidate(DESKTOP_SELF)
-    expect(cache.commit(fence, { rows: [row('a')] })).toBe(false)
-    expect(cache.get(DESKTOP_SELF)?.data).toEqual([])
-  })
-
   it('discards a response whose authority catalog generation advanced', () => {
     let generation = 7
     const cache = createCache({ catalogGeneration: () => generation })

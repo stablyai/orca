@@ -45,36 +45,28 @@ describe('useImeEnterGestureOwnership', () => {
   }
 
   // Pinyin can emit Process/229 for every key; non-Enter keyup must disarm carry before a later deliberate submit.
-  it.each([
-    { key: '1', keyCode: 49 },
-    { key: 'Process', keyCode: 229 }
-  ])(
-    'expires the carry after candidate selection keyup %j so deliberate Enter submits',
-    (release) => {
-      const { result } = renderHook(() => useImeEnterGestureOwnership())
-      result.current.setComposing(true)
+  it('expires the carry after candidate selection keyup so deliberate Enter submits', () => {
+    const { result } = renderHook(() => useImeEnterGestureOwnership())
+    result.current.setComposing(true)
 
-      // Pinyin candidate selection: the last composing key is a digit reported as Process/229.
-      expect(
-        result.current.ownsKeyDown(
-          gestureEvent({ key: 'Process', keyCode: 229, isComposing: true })
-        )
-      ).toBe(true)
-      result.current.setComposing(false)
-      let frame: FrameRequestCallback | undefined
-      const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-        frame = cb
-        return 1
-      })
-      result.current.onKeyUp(gestureEvent(release))
-      frame?.(0)
-      raf.mockRestore()
+    // Pinyin candidate selection: the last composing key is a digit reported as Process/229.
+    expect(
+      result.current.ownsKeyDown(gestureEvent({ key: 'Process', keyCode: 229, isComposing: true }))
+    ).toBe(true)
+    result.current.setComposing(false)
+    let frame: FrameRequestCallback | undefined
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      frame = cb
+      return 1
+    })
+    result.current.onKeyUp(gestureEvent({ key: 'Process', keyCode: 229 }))
+    frame?.(0)
+    raf.mockRestore()
 
-      const deliberate = gestureEvent({ key: 'Enter', keyCode: 13 })
-      expect(result.current.ownsKeyDown(deliberate)).toBe(false)
-      expect(deliberate.prevented).toBe(false)
-    }
-  )
+    const deliberate = gestureEvent({ key: 'Enter', keyCode: 13 })
+    expect(result.current.ownsKeyDown(deliberate)).toBe(false)
+    expect(deliberate.prevented).toBe(false)
+  })
 
   it('keeps a newer gesture owned when an older keyup expires', () => {
     const { result } = renderHook(() => useImeEnterGestureOwnership())

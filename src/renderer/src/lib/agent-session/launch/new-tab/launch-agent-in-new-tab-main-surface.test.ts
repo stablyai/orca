@@ -29,7 +29,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/host-chat-program-acquisition', async (original) => ({
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', async (original) => ({
   ...(await original<object>()),
   acquireAgentLaunchChoices: async () => ({ detected: ['claude', 'codex'] })
 }))

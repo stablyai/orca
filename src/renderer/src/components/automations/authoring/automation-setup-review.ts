@@ -5,7 +5,7 @@ import {
   confirmCreatedWorktreeSetupContent,
   ensureHooksApproved,
   type HookTrustApproval
-} from '@/lib/ensure-hooks-confirmed'
+} from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import type { AutomationSaveContext } from './automation-save-context'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationUsageSummary } from '../../../../../shared/automations/history/automation-usage-summary'
