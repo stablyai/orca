@@ -7,8 +7,8 @@ import {
   type StructuredSessionOpenFailure
 } from '../../../src/shared/open-structured-agent-session'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
-import { openMobileStructuredSession } from './open-mobile-structured-session'
+import { mobileStructuredSessionOpenMessage } from './native-chat/agent-session/mobile-structured-session-open-message'
+import { openMobileStructuredSession } from './native-chat/agent-session/open-mobile-structured-session'
 import { openMobileAgentMessageTerminal } from '../terminal/session/mobile-agent-message-terminal'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 

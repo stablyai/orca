@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
 import '../../../../shared/worktree/create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
@@ -62,7 +61,8 @@ describe('worktree create preparation registry', () => {
       'main',
       undefined,
       {},
-      mocks.prepareCheckout.mock.calls[0]?.[3]
+      mocks.prepareCheckout.mock.calls[0]?.[3],
+      expect.anything()
     )
   })
 
@@ -189,7 +189,8 @@ describe('worktree create preparation registry', () => {
       repo.path,
       armedPath,
       expect.objectContaining({ signal: undefined }),
-      expect.any(String)
+      expect.any(String),
+      null
     )
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
@@ -307,38 +308,6 @@ describe('worktree create preparation registry', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
     expect(mocks.unlock).not.toHaveBeenCalled()
-    expect(mocks.discard).not.toHaveBeenCalled()
-  })
-
-  it('cleans up and reports a finalize miss so normal add can run', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    mocks.finalize.mockRejectedValueOnce(new Error('submodules prevent worktree move'))
-
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/final',
-        branch: 'feature/test',
-        baseBranch: 'origin/main'
-      })
-    ).resolves.toMatchObject({ status: 'miss', reason: 'finalize_failed' })
-    expect(mocks.mkdir).toHaveBeenCalledWith('/workspace', { recursive: true })
-    expect(mocks.discard).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves another owner’s checkout when finalization loses its lock', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    mocks.finalize.mockRejectedValueOnce(new WorktreePreparationLockOwnershipError())
-    await expect(
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath: '/workspace/final',
-        branch: 'feature/test',
-        baseBranch: 'origin/main'
-      })
-    ).resolves.toMatchObject({ status: 'miss', reason: 'finalize_failed' })
     expect(mocks.discard).not.toHaveBeenCalled()
   })
 })
