@@ -21,6 +21,7 @@ import { createHostedSandboxDeviceEnroller } from './hosted-sandbox-device-enrol
 import { registerOrcaCloudDeviceEnroller } from '../runtime/rpc/methods/orca-cloud/orca-cloud-device-enrollment'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { registerCloudRemoteDesktopHandlers } from '../ipc/cloud-remote-desktop'
+import { readCloudWorkspaceSnapshot } from '../ipc/cloud-workspaces'
 import {
   ORCA_CLOUD_RECIPE,
   createHostedSandboxRecipeClient,
@@ -157,6 +158,11 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
       return found
         ? (await client.workspaceStatus(found.sandboxId)).status.state === 'archived'
         : false
+    },
+    readCloudSnapshot: async (workspaceId) => {
+      const found = findCloudRuntime(userDataPath, workspaceId)
+      const read = found ? await readCloudWorkspaceSnapshot(found.sandboxId) : null
+      return read?.state === 'ready' ? read.snapshot : null
     }
   })
   setCloudOfflineService(offline)

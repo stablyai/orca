@@ -17,6 +17,7 @@ import { NEW_SECTION } from './CloudWorkspaceRowMenu'
 import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
+import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { formatUsdMicros, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
@@ -85,6 +86,8 @@ export function CloudWorkspacesHome({
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
+  // The Asleep workspace whose read-only copy is open (never wakes it).
+  const [readingId, setReadingId] = useState<string | null>(null)
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
@@ -171,7 +174,11 @@ export function CloudWorkspacesHome({
       const outcome = await openCloudWorkspace(w)
       if (!outcome.ok) {
         toast.error(outcome.message)
-      } else if (chatId) {
+        return
+      }
+      // Woken from its read-only copy: the live workspace replaces it.
+      setReadingId((current) => (current === w.id ? null : current))
+      if (chatId) {
         await focusCloudChat(outcome.worktreeId, chatId)
       }
     } finally {
@@ -232,6 +239,7 @@ export function CloudWorkspacesHome({
   const actions = useMemo(
     () => ({
       open: (w: CloudWorkspace) => void open(w),
+      read: (w: CloudWorkspace) => setReadingId(w.id),
       copyLink: (w: CloudWorkspace) => {
         const front = frontCloudChat()
         void copyCloudWorkspaceLink(w.id, front?.sandboxId === w.id ? front.chatId : null)
@@ -356,6 +364,14 @@ export function CloudWorkspacesHome({
             })
           : null}
       </div>
+
+      <CloudReadSnapshotSheet
+        // The list row (refreshed by polling) so a wake elsewhere shows up; gone rows close it.
+        workspace={readingId ? (all.find((w) => w.id === readingId) ?? null) : null}
+        waking={opening !== null && opening === readingId}
+        onWake={(w) => void open(w)}
+        onClose={() => setReadingId(null)}
+      />
 
       {confirm && (
         <CloudWorkspaceConfirmDialog

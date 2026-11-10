@@ -1,4 +1,5 @@
 import { resetCloudOfflineData } from '../hosted-sandbox/cloud-offline-reset'
+import { clearCloudReaderKey } from '../cloud-workspaces/cloud-reader-key-store'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -175,6 +176,8 @@ export async function signOutCurrentOrcaProfile(
   const list = unlinkOrcaProfileFromCloud(active.profile.id, userDataPath)
   // Cached Orca Cloud transcripts and queued prompts belong to the signed-out account.
   resetCloudOfflineData()
+  // The next account signed in on this profile gets its own reader key.
+  clearCloudReaderKey(active.profile.id, userDataPath)
   try {
     clearRelayRegionPreferenceCache(userDataPath)
   } catch {

@@ -1,0 +1,58 @@
+// The team list's read-only view of an Asleep workspace: what it looked like when it went to
+// sleep, read from the copy it sealed to this computer's key. Opening it never wakes the sandbox;
+// "Wake to continue" runs the normal open flow.
+import React, { useEffect, useState } from 'react'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { CloudReadSnapshotView } from '../orca-cloud/read-snapshot/CloudReadSnapshotView'
+import { cloudWorkspaceTitle } from './open-cloud-workspace'
+import { useCloudReadSnapshot } from './use-cloud-read-snapshot'
+
+export function CloudReadSnapshotSheet({
+  workspace,
+  waking,
+  onWake,
+  onClose
+}: {
+  /** Null keeps the sheet closed. */
+  workspace: CloudWorkspace | null
+  waking: boolean
+  onWake: (w: CloudWorkspace) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const { state, retry, retrying } = useCloudReadSnapshot(workspace?.id ?? null)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!workspace) {
+      return
+    }
+    setNow(Date.now())
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 30_000 })
+  }, [workspace])
+  const title = workspace ? cloudWorkspaceTitle(workspace) : ''
+  return (
+    <Sheet open={workspace !== null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        className="w-full gap-0 overflow-y-auto scrollbar-sleek p-6 sm:max-w-xl"
+        aria-describedby={undefined}
+      >
+        {/* The view's own heading is the visible title; Radix needs one for the dialog name. */}
+        <SheetTitle className="sr-only">{title}</SheetTitle>
+        {workspace ? (
+          <div className="pr-6">
+            <CloudReadSnapshotView
+              title={title}
+              state={state}
+              now={now}
+              waking={waking}
+              onWake={() => onWake(workspace)}
+              onRetry={retry}
+              retrying={retrying}
+            />
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  )
+}

@@ -13,6 +13,9 @@ export type CloudOfflineChat = {
   /** When this transcript was last read from the VM. */
   at: number
   messages: CloudOfflineChatMessage[]
+  /** From the workspace's own sleep snapshot (absent for this computer's cache). */
+  agent?: string | null
+  title?: string | null
 }
 
 export type CloudOfflineTerminal = {
@@ -23,7 +26,14 @@ export type CloudOfflineTerminal = {
   at: number
 }
 
-export type CloudOfflineGitChange = { path: string; status: string; area: string }
+export type CloudOfflineGitChange = {
+  path: string
+  status: string
+  area: string
+  /** Lines, when the workspace's sleep snapshot counted them. */
+  added?: number | null
+  removed?: number | null
+}
 export type CloudOfflineCommit = {
   id: string
   subject: string
@@ -38,6 +48,19 @@ export type CloudOfflineGit = {
   changeCount: number
   commits: CloudOfflineCommit[]
   at: number
+  /** Total lines added/removed across `changes`, when known. */
+  added?: number | null
+  removed?: number | null
+}
+
+export type CloudOfflinePr = {
+  number: number
+  title: string
+  state: string
+  /** Always https (checked where it is parsed). */
+  url: string
+  checksStatus: string | null
+  checksSummary: string | null
 }
 
 export type CloudOfflineSnapshot = {
@@ -49,6 +72,13 @@ export type CloudOfflineSnapshot = {
   git: CloudOfflineGit | null
   terminals: CloudOfflineTerminal[]
   chats: CloudOfflineChat[]
+  /** The pull request as of the workspace's last sleep (older builds omit it). */
+  pr?: CloudOfflinePr | null
+  /**
+   * Where the sections came from: this computer's cache, the workspace's own sealed sleep snapshot
+   * (Orca Cloud), or both. Older builds omit it (= device).
+   */
+  source?: 'device' | 'cloud' | 'mixed'
 }
 
 /** `unconfirmed`: it may have reached the agent (sent, but the reply never came back). */

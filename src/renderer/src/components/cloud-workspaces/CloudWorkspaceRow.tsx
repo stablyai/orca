@@ -11,7 +11,7 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 import { CloudStateDot } from '../orca-cloud/CloudStateDot'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
-import { CloudWorkspaceRowMenu, type RowActions } from './CloudWorkspaceRowMenu'
+import { CloudWorkspaceRowMenu, isReadableAsleep, type RowActions } from './CloudWorkspaceRowMenu'
 import {
   formatSandboxHours,
   formatRelative,
@@ -112,6 +112,9 @@ export function CloudWorkspaceRow({
     }
   }, [highlighted])
   const canOpen = w.access !== 'none'
+  // Asleep: Enter / click reads the saved copy; waking is its own explicit action.
+  const readable = isReadableAsleep(w)
+  const primary = readable ? actions.read : actions.open
   const cost = formatUsdMicros(w.cost.totalUsdMicros, intlLocale)
   const lastActive = formatRelative(w.lastActivityAt, now, t, intlLocale)
   const presence = presenceSummary(
@@ -179,7 +182,7 @@ export function CloudWorkspaceRow({
       <button
         type="button"
         disabled={!canOpen}
-        onClick={() => actions.open(w)}
+        onClick={() => primary(w)}
         aria-label={
           w.ownerUserId === selfId
             ? t(
@@ -343,12 +346,14 @@ export function CloudWorkspaceRow({
               tabIndex={-1}
               aria-hidden
               disabled={opening}
-              onClick={() => actions.open(w)}
+              onClick={() => primary(w)}
             >
               {opening ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : null}
               {opening
                 ? t('auto.components.cloudWorkspaces.opening', 'Opening')
-                : t('auto.components.cloudWorkspaces.open', 'Open')}
+                : readable
+                  ? t('auto.components.cloudWorkspaces.view', 'View')
+                  : t('auto.components.cloudWorkspaces.open', 'Open')}
             </Button>
           </span>
         )}

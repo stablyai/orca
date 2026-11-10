@@ -20,6 +20,7 @@ import { CloudAgentStartedCard } from './CloudAgentStartedCard'
 import { CloudErrorBanner } from './CloudErrorBanner'
 import { CloudPromptComposer } from './CloudPromptComposer'
 import { CloudPromptQueueSection } from './CloudPromptQueueSection'
+import { CloudReadSnapshotSection } from './CloudReadSnapshotSection'
 import { CloudStatusCard } from './CloudStatusCard'
 import { CloudWorkspaceActions } from './CloudWorkspaceActions'
 import { archiveCloudWorkspace, sleepCloudWorkspace } from './cloud-control-plane-client'
@@ -41,6 +42,7 @@ import {
   cloudScrollBottomPadding,
   cloudWorkspaceScreenStyles as styles
 } from './cloud-workspace-screen-styles'
+import { useCloudReadSnapshot } from './use-cloud-read-snapshot'
 import { useCloudWorkspaceRun } from './use-cloud-workspace-run'
 import {
   useCloudEnrollment,
@@ -64,6 +66,9 @@ export function CloudWorkspaceScreen({
   const enrollment = useCloudEnrollment()
   const { workspace, isPending, isFetching, refetch } = useCloudWorkspace(enrollment, sandboxId)
   const live = useCloudWorkspaceLiveStatus(sandboxId, workspace?.status === 'running')
+  // Asleep: read its last sealed snapshot instead of waking it. Nothing here ever wakes it.
+  const asleep = workspace?.status === 'sleeping'
+  const snapshot = useCloudReadSnapshot(sandboxId, asleep, workspace?.readSnapshotAt ?? null)
   const invalidate = useInvalidateCloudWorkspaces()
   const { run, active, start, fail, clearError, openSession } = useCloudWorkspaceRun(
     sandboxId,
@@ -196,7 +201,9 @@ export function CloudWorkspaceScreen({
               ? t('cloud.status.archived', 'Archived')
               : awake
                 ? t('cloud.action.open', 'Open workspace')
-                : t('cloud.action.wakeOpen', 'Wake and open workspace')
+                : asleep
+                  ? t('cloud.action.wakeToContinue', 'Wake to continue')
+                  : t('cloud.action.wakeOpen', 'Wake and open workspace')
   const primaryDisabled = active || unavailable
 
   return (
@@ -231,6 +238,16 @@ export function CloudWorkspaceScreen({
             <CloudErrorBanner
               message={run.message}
               onRetry={run.retry ? () => void start(run.retry ?? 'open') : null}
+            />
+          ) : null}
+          {asleep ? (
+            <CloudReadSnapshotSection
+              result={snapshot.data}
+              fetchedAt={snapshot.dataUpdatedAt}
+              loading={
+                snapshot.isPending || (snapshot.isFetching && snapshot.data?.state === 'error')
+              }
+              onRetry={() => void snapshot.refetch()}
             />
           ) : null}
 

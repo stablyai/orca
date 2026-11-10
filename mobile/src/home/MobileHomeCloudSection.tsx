@@ -2,6 +2,7 @@ import { ChevronRight, Cloud, Plus, RotateCw } from 'lucide-react-native'
 import { Fragment, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { CloudStatusDot } from '../cloud/CloudStatusDot'
+import { formatReadSnapshotAsOf } from '../cloud/CloudReadSnapshotSection'
 import type { CloudWorkspace } from '../cloud/cloud-control-plane-client'
 import { CloudEnrollmentError, enrollCloudDevice } from '../cloud/cloud-device-enrollment'
 import type { CloudEnrollment } from '../cloud/cloud-device-identity'
@@ -154,10 +155,17 @@ function CloudWorkspaceRow({
               ago: formatTimeAgo(workspace.createdAt, reference)
             })
   // "Created just now · just now" says one thing twice: the activity time adds nothing yet.
+  // Asleep with a saved read-only copy: say how fresh that copy is; it opens without waking.
   const when =
-    createdLine && lastActive - workspace.createdAt < 60_000
-      ? null
-      : formatTimeAgo(lastActive, reference)
+    workspace.status === 'sleeping' && workspace.readSnapshotAt
+      ? formatReadSnapshotAsOf(
+          workspace.readSnapshotAt,
+          Math.max(reference, workspace.readSnapshotAt),
+          t
+        )
+      : createdLine && lastActive - workspace.createdAt < 60_000
+        ? null
+        : formatTimeAgo(lastActive, reference)
   const line = [status, detail, when].filter(Boolean).join(' · ')
   return (
     <Pressable

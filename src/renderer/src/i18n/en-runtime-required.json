@@ -2052,6 +2052,12 @@
         }
       }
     },
+    "orcaCloud": {
+      "read": {
+        "showMore_one": "Show {{count}} earlier message",
+        "showMore_other": "Show {{count}} earlier messages"
+      }
+    },
     "orchestrationCrew": {
       "needsYou_one": "{{count}} needs you",
       "needsYou_other": "{{count}} need you",

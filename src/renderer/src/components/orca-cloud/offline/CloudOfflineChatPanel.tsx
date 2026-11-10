@@ -200,7 +200,8 @@ export function ChatPanel({
               aria-pressed={candidate.sessionId === chat.sessionId}
               onClick={() => setSelected(candidate.sessionId)}
             >
-              {candidate.messages.find((m) => m.role === 'user')?.text.slice(0, 40) ??
+              {candidate.title?.slice(0, 40) ??
+                candidate.messages.find((m) => m.role === 'user')?.text.slice(0, 40) ??
                 t('components.orcaCloud.offline.chatN', 'Chat {{n}}', { n: index + 1 })}
             </Button>
           ))}

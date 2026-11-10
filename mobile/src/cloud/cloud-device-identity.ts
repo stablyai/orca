@@ -3,6 +3,7 @@ import nacl from 'tweetnacl'
 import { z } from 'zod'
 import { randomBytes } from '../transport/encryption/e2ee'
 import { decodeBase64Bytes, encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
+import { clearCloudReaderKey } from './cloud-reader-key'
 
 // This phone's own Orca Cloud key and enrollment. Kept off iCloud Keychain and backups, like pairing
 // credentials, so a restored phone has to be enrolled again rather than inheriting access.
@@ -91,6 +92,8 @@ export async function saveCloudEnrollment(enrollment: CloudEnrollment): Promise<
 export async function clearCloudEnrollment(): Promise<void> {
   const seed = randomBytes(32)
   await write(seed, null)
+  // The reader key goes with the session: snapshots sealed to it stay unreadable here.
+  await clearCloudReaderKey().catch(() => undefined)
   cached = Promise.resolve(fromSeed(seed, null))
   listeners.forEach((listener) => listener())
 }

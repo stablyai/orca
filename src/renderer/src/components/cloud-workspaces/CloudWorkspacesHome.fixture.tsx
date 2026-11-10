@@ -6,6 +6,7 @@ import {
   teamWorkspaces,
   workspace
 } from './cloud-workspaces.test-fixture'
+import type { CloudReadSnapshotState } from '../../../../shared/cloud-workspaces/read-snapshot-state'
 
 const WIDTH = 760
 
@@ -65,4 +66,102 @@ export const emptyTeam = defineFixture({
   setup: () => stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: [] })),
   render: () => <CloudWorkspacesHome />,
   interact: () => waitFor(() => document.querySelector('section p') !== null)
+})
+
+const ASLEEP_ID = 'sbx_00000000000000000000a51e'
+
+function stubAsleep(answer: () => Promise<CloudReadSnapshotState>): void {
+  const rows = [
+    workspace({
+      id: ASLEEP_ID,
+      title: 'Checkout retries',
+      status: 'suspended',
+      ownerUserId: 'user_grace',
+      createdBy: 'user_grace',
+      access: 'can_open'
+    })
+  ]
+  stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+  Object.assign(window.api.cloudWorkspaces, {
+    readSnapshot: async () => ({ ok: true as const, value: await answer() })
+  })
+}
+
+async function openAsleepRow(): Promise<void> {
+  await waitFor(() => document.querySelector('[data-cloud-workspace-row] button') !== null)
+  document.querySelector<HTMLButtonElement>('[data-cloud-workspace-row] button')?.click()
+  await waitFor(
+    () =>
+      document.querySelector('[data-cloud-read-view]:not([data-cloud-read-view="loading"])') !==
+      null
+  )
+}
+
+/** Clicking a teammate's Asleep row opens its read-only copy in a sheet (no wake). */
+export const asleepReadView = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () =>
+    stubAsleep(async () => ({
+      state: 'ready',
+      storedAt: Date.now() - 20 * 60_000,
+      snapshot: {
+        v: 1,
+        workspaceId: ASLEEP_ID,
+        snapshotId: 'snap_1',
+        capturedAt: Date.now() - 20 * 60_000,
+        reason: 'sleep',
+        pr: {
+          number: 412,
+          title: 'Retry checkout webhooks with backoff',
+          state: 'open',
+          url: 'https://github.com/acme/web/pull/412',
+          checksStatus: 'success',
+          checksSummary: '9/9 passed'
+        },
+        git: {
+          branch: 'checkout-retries',
+          head: '3f95655',
+          changeCount: 1,
+          added: 88,
+          removed: 19,
+          changes: [
+            {
+              path: 'src/payments/webhooks.ts',
+              status: 'modified',
+              area: 'unstaged',
+              added: 88,
+              removed: 19
+            }
+          ],
+          commits: []
+        },
+        sessions: [
+          {
+            sessionId: 's1',
+            agent: 'claude',
+            title: 'Retry failed checkout webhooks',
+            status: 'idle',
+            turnOutcome: 'done',
+            updatedAt: null,
+            truncated: false,
+            messages: [
+              { itemId: 'm1', role: 'user', text: 'Retry failed webhooks with backoff.', at: 0 },
+              { itemId: 'm2', role: 'assistant', text: 'Done. Tests pass.', at: 0 }
+            ]
+          }
+        ]
+      }
+    })),
+  render: () => <CloudWorkspacesHome />,
+  interact: openAsleepRow
+})
+
+/** The snapshot predates this computer's reader key. */
+export const asleepNotSealedForKey = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => stubAsleep(async () => ({ state: 'not_sealed_for_key' })),
+  render: () => <CloudWorkspacesHome />,
+  interact: openAsleepRow
 })
