@@ -14,7 +14,15 @@ import { formatWindowLabel } from '../../../../shared/rate-limit-window-label'
 import { formatResetDuration } from '../../../../shared/rate-limit-reset-format'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+
+const RESET_UNIT_FORMATS: Record<'minute' | 'hour' | 'day', Intl.NumberFormatOptions> = {
+  minute: { style: 'unit', unit: 'minute', unitDisplay: 'short' },
+  hour: { style: 'unit', unit: 'hour', unitDisplay: 'short' },
+  day: { style: 'unit', unit: 'day', unitDisplay: 'short' }
+}
 
 type InlineUsageWindow = { key: string; used: number; label: string; resetsAt: number | null }
 
@@ -26,6 +34,7 @@ export function InlineUsageBars({
   isFetching: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const display = normalizeUsagePercentageDisplay(
     useAppStore((state) => state.usagePercentageDisplay)
   )
@@ -91,7 +100,11 @@ export function InlineUsageBars({
             ? null
             : resetsAt <= now
               ? t('auto.components.status.bar.InlineUsageBars.now', 'now')
-              : formatResetDuration(resetsAt - now)
+              : formatResetDuration(resetsAt - now, (value, unit) =>
+                  intlLocale.startsWith('en')
+                    ? formatUiNarrowDuration(value, unit, intlLocale)
+                    : uiNumberFormat(RESET_UNIT_FORMATS[unit], intlLocale).format(value)
+                )
         return (
           <div
             key={window.key}
