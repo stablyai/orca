@@ -23,7 +23,8 @@ export function useComposerCloudStart({
   quickAgent,
   handleCreate,
   createDisabled,
-  recordCreatedRef
+  recordCreatedRef,
+  onClose
 }: {
   active: boolean
   modalData: ComposerModalData
@@ -33,6 +34,7 @@ export function useComposerCloudStart({
   createDisabled: boolean
   /** The composer's onCreated calls this: only a start that happened is remembered. */
   recordCreatedRef: MutableRefObject<(() => void) | null>
+  onClose?: () => void
 }) {
   // The latest handleCreate, never a ref copied after render: a submit right after an edit must
   // see that edit.
@@ -50,7 +52,8 @@ export function useComposerCloudStart({
     initialTargetFixed: Boolean(
       modalData.initialEphemeralVmRecipeId || modalData.initialWorkspaceTarget || modalData.recovery
     ),
-    onCreate: runCreate
+    onCreate: runCreate,
+    onClose
   })
   useEffect(() => {
     recordCreatedRef.current = cloudStart.recordCreated

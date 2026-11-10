@@ -21,6 +21,8 @@ export type RunOnSegmentedControlProps = RunTargetComboboxProps & {
   onSelectOrcaCloud: () => void
   /** Marks the control as touched so a remembered default never overrides a user pick. */
   onUserPick?: () => void
+  /** D4: the picked project is on GitHub only, so this computer has nothing to run. */
+  cloudOnlyRepo?: boolean
 }
 
 export default function RunOnSegmentedControl(
@@ -36,7 +38,8 @@ export default function RunOnSegmentedControl(
     onRecipeChange,
     orcaCloudAvailability,
     onSelectOrcaCloud,
-    onUserPick
+    onUserPick,
+    cloudOnlyRepo = false
   } = props
   const t = useTranslate()
   const [moreOpen, setMoreOpen] = useState(false)
@@ -64,9 +67,15 @@ export default function RunOnSegmentedControl(
     selectedHostIsLocal: selectedHost ? selectedHost.hostId === LOCAL_EXECUTION_HOST_ID : null
   })
   const cloudState = getOrcaCloudSegmentState(orcaCloudAvailability)
+  const localReason = cloudOnlyRepo
+    ? t(
+        'components.newWorkspace.cloudOnly.notOnThisComputer',
+        'Not on this computer · Orca Cloud only'
+      )
+    : t('components.newWorkspace.runOn.locationNotSet', 'Project location not set')
 
   const pickLocal = (): void => {
-    if (!localOption) {
+    if (!localOption || cloudOnlyRepo) {
       return
     }
     onUserPick?.()
@@ -97,16 +106,15 @@ export default function RunOnSegmentedControl(
           {t('components.newWorkspace.runOn.thisComputer', 'This computer')}
         </span>
       ),
-      disabled: !localOption,
+      disabled: !localOption || cloudOnlyRepo,
       // A disabled option says why in its accessible name too (spec E1).
-      ariaLabel: localOption
-        ? undefined
-        : t('components.newWorkspace.runOn.thisComputerUnusable', 'This computer, {{reason}}', {
-            reason: t('components.newWorkspace.runOn.locationNotSet', 'Project location not set')
-          }),
-      tooltip: localOption
-        ? localOption.label
-        : t('components.newWorkspace.runOn.locationNotSet', 'Project location not set')
+      ariaLabel:
+        localOption && !cloudOnlyRepo
+          ? undefined
+          : t('components.newWorkspace.runOn.thisComputerUnusable', 'This computer, {{reason}}', {
+              reason: localReason
+            }),
+      tooltip: localOption && !cloudOnlyRepo ? localOption.label : localReason
     },
     ...(cloudState === 'hidden'
       ? []

@@ -54,6 +54,7 @@ export function useCloudStartSteps({
   agent,
   cloudSelected,
   setupSessionId,
+  githubOverride = null,
   onGranted
 }: {
   availability: OrcaCloudAvailability
@@ -62,6 +63,8 @@ export function useCloudStartSteps({
   agent: string | null
   cloudSelected: boolean
   setupSessionId: string | null
+  /** A cloud-only repository listed from the team's installations: its GitHub row is done (D4). */
+  githubOverride?: CloudSetupStep | null
   /** A repository that was waiting on GitHub (install or an owner's approval) became reachable. */
   onGranted?: (repoName: string) => void
 }) {
@@ -71,7 +74,11 @@ export function useCloudStartSteps({
     grantedRef.current = onGranted
   }, [onGranted])
   const repoAccess = useOrcaCloudRepoAccess(repoId, {
-    enabled: cloudSelected && availability !== 'unavailable' && availability !== 'unreachable',
+    enabled:
+      cloudSelected &&
+      !githubOverride &&
+      availability !== 'unavailable' &&
+      availability !== 'unreachable',
     // The hook only polls while the repository is waiting on GitHub.
     poll: cloudSelected,
     onGranted: () => grantedRef.current?.(repoNameRef.current),
@@ -97,10 +104,11 @@ export function useCloudStartSteps({
   const signedOut = availability === 'needs-sign-in' || access.state === 'signed-out'
   const steps = useMemo(
     () =>
-      (session?.steps ?? deriveCloudSetupSteps({ availability, access, github })).map((step) =>
-        decorateCloudSetupStep(step, agent, signedOut)
-      ),
-    [access, agent, availability, github, session?.steps, signedOut]
+      (
+        session?.steps ??
+        deriveCloudSetupSteps({ availability, access, github: githubOverride ?? github })
+      ).map((step) => decorateCloudSetupStep(step, agent, signedOut)),
+    [access, agent, availability, github, githubOverride, session?.steps, signedOut]
   )
   return { steps, session, openInstall }
 }

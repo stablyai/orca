@@ -1,5 +1,5 @@
 // "Start in Orca Cloud" composer frames from cloud-start-onboarding spec v2: E1, A1, A6, A7, T1,
-// T2, E, X2 and the panel's GitHub rows D1–D3. Entry points and T4 are in CloudStartSurfaces.
+// T2, E, X2, the panel's GitHub rows D1–D3 and D4's GitHub-only projects. Entry points and T4 are in CloudStartSurfaces.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import type { CloudSetupStep } from './cloud-start-model'
@@ -214,6 +214,42 @@ export const d3NotOnGitHub = defineFixture({
         note: 'Push this project to GitHub, or pick a repository Orca Cloud can reach from Project.',
         action: { label: 'How to push', onClick: () => {} }
       }}
+    />
+  )
+})
+const cloudRepos = [
+  { fullName: 'acme/billing', url: 'https://github.com/acme/billing', private: true },
+  { fullName: 'acme/infra', url: 'https://github.com/acme/infra', private: true }
+]
+/** D4: Orca Cloud picked; the Project picker adds GitHub repositories with no clone here. */
+export const d4GitHubProjects = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={entitled}
+      cloudSelected
+      cloudRepos={cloudRepos}
+    />
+  ),
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('[aria-label="Browse projects"]')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+/** D4 picked: the repository stands in for the project; This computer says why it can't run it. */
+export const d4GitHubProjectPicked = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={entitled}
+      cloudSelected
+      cloudRepos={cloudRepos}
+      pickedCloudRepo="acme/billing"
+      prompt="Write integration tests for the billing webhooks."
     />
   )
 })
