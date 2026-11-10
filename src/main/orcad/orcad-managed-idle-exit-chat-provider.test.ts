@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { StructuredAgentSessionDeliveryLoop } from '../native-chat/agent-session-wire/delivery/structured-agent-session-delivery-loop'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createRestTestRig,
@@ -21,8 +22,17 @@ const SERVER_IDLE_MS = 15 * 60_000
 beforeEach(async () => {
   rig = await createRestTestRig()
   rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
-  await foundRestTestChat(rig)
-  await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(REST_TEST_SESSION)
+  const deliveries = vi.spyOn(StructuredAgentSessionDeliveryLoop.prototype, 'wake')
+  try {
+    await foundRestTestChat(rig)
+    await Promise.all(
+      deliveries.mock.results
+        .filter((result) => result.type === 'return')
+        .map((result) => result.value)
+    )
+  } finally {
+    deliveries.mockRestore()
+  }
 })
 
 afterEach(async () => {

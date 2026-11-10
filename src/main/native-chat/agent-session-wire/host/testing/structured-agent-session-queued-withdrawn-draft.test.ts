@@ -23,10 +23,7 @@ afterEach(async () => {
 })
 
 function holdDraftDelivery(messageId: string): ReturnType<typeof holdDelivery> {
-  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  return holdDelivery(
-    async () => (await journal.reads.input({ kind: 'linked-to', messageId })).submissions.length > 0
-  )
+  return holdDelivery(async () => (await rig.handoff(messageId)) !== undefined)
 }
 
 async function queuedDraft(text: string): Promise<string> {

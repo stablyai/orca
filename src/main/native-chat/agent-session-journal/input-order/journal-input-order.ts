@@ -15,8 +15,6 @@ import { JournalInputEvidence } from './journal-input-evidence'
 import { LegacyQueueOrderReader } from './legacy-queue-order-reader'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
-export { setJournalInputOrder } from './journal-input-order-registry'
-
 /** Delivery evidence and the current hand-off; every other waiting input has a queue row. */
 export class JournalInputOrder extends JournalInputEvidence {
   /** Present only while an old saved queue is being decoded and converted. */
