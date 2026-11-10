@@ -10,6 +10,7 @@ import {
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
 import { subagentTranscriptsDirFor } from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
 import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchWorkerClient } from './session-search-worker-client'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
@@ -26,6 +27,30 @@ it.each([40, 400])(
     const stat = vi.spyOn(filesystem, 'wslGatedStat')
     const readdir = vi.spyOn(filesystem, 'wslGatedReaddir')
     const root = harness.roots.claudeProjectsDir!
+    const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
+    const catalogTraffic = () =>
+      traffic.mock.calls.filter(
+        ([command]) => command.op === 'catalog' && command.command.scope.includes(root)
+      )
+    const catalogRows = () =>
+      catalogTraffic().reduce((total, [command]) => {
+        if (command.op !== 'catalog') {
+          return total
+        }
+        const input = command.command
+        return (
+          total +
+          ('rows' in input
+            ? input.rows.length
+            : 'inputs' in input
+              ? input.inputs.length
+              : 'outcomes' in input
+                ? input.outcomes.length
+                : 'keys' in input
+                  ? input.keys.length
+                  : 0)
+        )
+      }, 0)
     const subject = new SessionSearchIndexer({
       databasePath: harness.databasePath,
       roots: harness.roots,
@@ -44,6 +69,7 @@ it.each([40, 400])(
       await subject.start()
       stat.mockClear()
       readdir.mockClear()
+      traffic.mockClear()
       for (let cycle = 0; cycle < 15; cycle++) {
         clock.advance(20_000)
         await subject.settled()
@@ -55,8 +81,12 @@ it.each([40, 400])(
       expect(
         readdir.mock.calls.filter(([path]) => path === root || path.startsWith(`${root}/`))
       ).toHaveLength(0)
+      // Only bounded empty refusal/ready probes are required for an unchanged known root.
+      expect(catalogTraffic().length).toBeLessThanOrEqual(15 * 8)
+      expect(catalogRows()).toBe(0)
       stat.mockClear()
       readdir.mockClear()
+      traffic.mockClear()
       await appendFile(path, `${claudeLines(['changedneedle'], 'old', 10).join('\n')}\n`)
       notifySessionSearchFileChange(path)
       clock.advance(20_000)
@@ -72,6 +102,8 @@ it.each([40, 400])(
             (observed === root || observed.startsWith(`${root}/`))
         )
       ).toHaveLength(0)
+      // One changed input permits a bounded prepare/apply pair and its keyed admission, not archive records.
+      expect(catalogRows()).toBeLessThanOrEqual(8)
       expect(
         harness.read((db) =>
           db
@@ -85,6 +117,7 @@ it.each([40, 400])(
       await subject.close()
       stat.mockRestore()
       readdir.mockRestore()
+      traffic.mockRestore()
       await harness.cleanup()
     }
   }
@@ -129,10 +162,12 @@ it('resumes partially observed directories and retains a create behind the consu
   }
 })
 
-it('indexes a delivered equal-stat rewrite outside the recent window', async () => {
+it('preserves delivered equal-stat rewrites while Claude and Codex roots drain together', async () => {
   const harness = await openSessionSearchIndexerHarness('ss-equal-stat')
   const clock = new FakeSessionSearchClock()
   const path = join(harness.claudeProjectDir, 'old.jsonl')
+  const fixture = codexFixture()
+  const codexPath = join(harness.roots.codexSessionsDir!, fixture.fileName)
   const subject = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,
@@ -143,6 +178,12 @@ it('indexes a delivered equal-stat rewrite outside the recent window', async () 
   try {
     await writeClaudeTranscript(path, ['initialneedle'], 'old')
     await writeClaudeTranscript(join(harness.claudeProjectDir, 'new.jsonl'), ['otherneedle'], 'new')
+    await mkdir(dirname(codexPath), { recursive: true })
+    await writeFile(codexPath, `${fixture.seedLines.join('\n')}\n`)
+    const preservedTime = new Date('2024-01-01T00:00:00Z')
+    await utimes(path, preservedTime, preservedTime)
+    await utimes(codexPath, preservedTime, preservedTime)
+    const codexOld = await stat(codexPath)
     const old = await stat(path)
     await subject.start()
     await writeFile(
@@ -150,6 +191,12 @@ it('indexes a delivered equal-stat rewrite outside the recent window', async () 
       (await readFile(path, 'utf8')).replaceAll('initialneedle', 'changedneedle')
     )
     await utimes(path, old.atime, old.mtime)
+    await writeFile(
+      codexPath,
+      (await readFile(codexPath, 'utf8')).replace('codex seed question', 'codex newx question')
+    )
+    await utimes(codexPath, codexOld.atime, codexOld.mtime)
+    notifySessionSearchFileChange(codexPath)
     notifySessionSearchFileChange(path)
     clock.advance(20_000)
     await subject.settled()
@@ -171,6 +218,11 @@ it('indexes a delivered equal-stat rewrite outside the recent window', async () 
           .get()
       )
     ).toEqual({ n: 0 })
+    expect(
+      harness.read((db) =>
+        db.prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'newx'").get()
+      )
+    ).toEqual({ n: 1 })
   } finally {
     await subject.close()
     await harness.cleanup()

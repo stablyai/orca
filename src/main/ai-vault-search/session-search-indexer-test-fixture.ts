@@ -87,7 +87,7 @@ export async function openSessionSearchIndexerHarness(
       catalog ??= new SessionSearchCatalog(scratch)
       return new SessionFileInventory(
         path,
-        async (command) => catalog!.execute(command),
+        async (command) => catalog!.response(command),
         `fixture:${path}`
       )
     },

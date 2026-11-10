@@ -25,9 +25,9 @@ it('recovers a declined append through its proven prefix while the transcript ke
     await appendFile(path, `${userRecord(1, 'missedneedle')}\n`)
     await parseTranscript(path)
     unregister = registerSessionSearchIndexConsumer(store)
+    const queue = new SessionSearchWorkQueue()
     const pass = async () => {
       const candidate = await sessionCandidate('claude', path)
-      const queue = new SessionSearchWorkQueue()
       await queue.enqueue(candidate, store)
       await runSessionSearchIndexPass(store, queue, {})
       return candidate

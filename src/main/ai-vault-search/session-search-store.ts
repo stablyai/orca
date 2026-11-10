@@ -1,4 +1,10 @@
 import {
+  transitionSessionSearchCandidates,
+  transitionSessionSearchWork
+} from './session-search-store-transitions'
+import { SessionSearchWorkCatalog } from './session-search-work-catalog'
+import type { SessionSearchWorkCommand, SessionSearchWorkResult } from './session-search-work-queue'
+import {
   coversSessionSearchTranscript,
   sessionSearchResumableCursor
 } from './session-search-committed-coverage'
@@ -7,7 +13,11 @@ import {
   type SessionSearchCandidateCommand
 } from './session-search-catalog-candidates'
 import { SessionSearchCatalog, type SessionSearchCatalogCommand } from './session-search-catalog'
-import { readSessionSearchFileRows, sessionSearchSessionsByAgent } from './session-search-file-rows'
+import {
+  iterateSessionSearchFileRows,
+  readSessionSearchFileRows,
+  readSessionSearchStateCounts
+} from './session-search-file-rows'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import type {
   SessionSearchFileRow,
@@ -23,7 +33,6 @@ export type {
   SessionSearchIndexStore
 } from './session-search-store-types'
 import type SyncDatabase from '../sqlite/sync-database'
-import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
 import type {
@@ -44,6 +53,7 @@ export class SessionSearchStore {
   private readonly writer: SessionSearchIndexWriter
   private candidateCatalog: SessionSearchCatalogCandidates | undefined
   private scratch: SessionSearchCatalog | undefined
+  private workCatalog: SessionSearchWorkCatalog | undefined
   private closed = false
   private retentionCutoffMs: number | null = null
   // Coalesce replacements into one drain, rerunning if more rows become orphaned.
@@ -118,13 +128,16 @@ export class SessionSearchStore {
     )
     return this.candidateCatalog
   }
-  async candidates(command: SessionSearchCandidateCommand) {
-    return this.catalogCandidates.execute(command)
+  candidates(command: SessionSearchCandidateCommand) {
+    return transitionSessionSearchCandidates(this, command)
   }
-
+  work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
+    this.workCatalog ??= new SessionSearchWorkCatalog()
+    return transitionSessionSearchWork(this, this.workCatalog, command)
+  }
   async catalog(command: SessionSearchCatalogCommand) {
     this.scratch ??= new SessionSearchCatalog(this.db)
-    return this.scratch.execute(command)
+    return this.scratch.response(command)
   }
 
   fileRow(path: string): SessionSearchFileRow | undefined {
@@ -132,15 +145,7 @@ export class SessionSearchStore {
   }
 
   *fileRows(): IterableIterator<SessionSearchFileRow> {
-    let after = ''
-    while (true) {
-      const page = readSessionSearchFileRows(this.db, undefined, after)
-      if (!page.length) {
-        return
-      }
-      yield* page
-      after = page.at(-1)!.path
-    }
+    yield* iterateSessionSearchFileRows(this.db)
   }
 
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
@@ -261,24 +266,7 @@ export class SessionSearchStore {
   }
 
   stateCounts(): SessionSearchStateCounts {
-    const rows = this.db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all() as {
-      state: SessionSearchFileState
-      n: number
-    }[]
-    const counts: SessionSearchStateCounts = {
-      current: 0,
-      due: 0,
-      failed: 0,
-      sessionsByAgent: sessionSearchSessionsByAgent(this.db),
-      messages: 0
-    }
-    for (const row of rows) {
-      counts[row.state] = Number(row.n)
-    }
-    counts.messages = Number(
-      asRecord(this.db.prepare('SELECT count(*) AS n FROM messages').get())?.n ?? 0
-    )
-    return counts
+    return readSessionSearchStateCounts(this.db)
   }
 
   /** Only proven deletion permits removal; unreadable sources retain their indexed rows. */

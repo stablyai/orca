@@ -1,3 +1,4 @@
+import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import { SessionSearchContainerSources } from './session-search-container-sources'
 import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
@@ -35,13 +36,28 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
     for (const path of paths) {
       let physical = family.physical.get(path)
       if (!physical) {
+        const files = new SessionSearchCatalogClient<{
+          file: FileWithMtime
+          epoch: number
+          changed: boolean
+        }>(`container:${key}:${path}`, this.request!)
         physical = {
-          files: new SessionSearchCatalogClient(`container:${key}:${path}`, this.request!),
+          files,
           epoch: 0,
-          pending: 0,
+          get pending() {
+            return files.readySize
+          },
           fullDue: true
         }
         family.physical.set(path, physical)
+      }
+      if (physical.retiring) {
+        physical.retiring = false
+        physical.fullDue = true
+      }
+      if (physical.retirement) {
+        await this.advanceRetirement(key, path, family, physical)
+        continue
       }
       const retryKey = `${key}:${path}`
       const before = await this.signature(path, signal)
@@ -66,25 +82,22 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       throwIfAiVaultScanCancelled(signal)
       const epoch = full ? ++physical.epoch : 0
       let currentCount = 0
-      for (const file of discovery.files) {
-        currentCount++
-        const source = splitSyntheticSessionSource(file.path)
-        const previous = await physical.files.get(file.path)
-        const proof = this.acceptedProofs.get(proofKey)
-        if (source && proof && previous?.epoch !== physical.proof) {
+      for (const files of sessionSearchRecordPages(discovery.files)) {
+        currentCount += files.length
+        const result = await physical.files.transition({
+          kind: 'container-apply',
+          scope: physical.files.scope,
+          rows: files.map((file) => ({
+            file,
+            id: splitSyntheticSessionSource(file.path)?.id ?? ''
+          })),
+          epoch,
+          full,
+          proof: this.acceptedProofs.has(proofKey) ? physical.proof : undefined
+        })
+        if (result.invalidProof) {
           this.acceptedProofs.delete(proofKey)
         }
-        const changed =
-          previous?.changed === true ||
-          !previous ||
-          previous.file.mtimeMs !== file.mtimeMs ||
-          previous.file.sizeBytes !== file.sizeBytes
-        physical.pending += Number(changed) - Number(previous?.changed ?? false)
-        await physical.files.put(
-          file.path,
-          { file, epoch: full ? epoch : (previous?.epoch ?? 0), changed },
-          { group: source?.id ?? '', ready: Number(changed) }
-        )
       }
       const after = await this.signature(path, signal)
       const complete = discovery.complete !== false
@@ -94,20 +107,8 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         this.retries.delete(retryKey)
         // Empty also means an unknown schema under the existing reader contract.
         if (stable && currentCount) {
-          let after: string | undefined
-          do {
-            const page = await physical.files.page({ after })
-            for (const { key: old, value } of page.rows) {
-              if (value.epoch !== epoch) {
-                await this.remove(old, discovery.agent)
-                physical.pending -= Number(value.changed)
-                await physical.files.delete(old)
-              }
-            }
-            after = page.after
-          } while (after !== undefined)
-          physical.proof = epoch
-          this.acceptedProofs.set(proofKey, physical)
+          physical.retirement = { epoch }
+          await this.advanceRetirement(key, path, family, physical)
         }
       }
       if (full && !complete) {
@@ -121,15 +122,13 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       if (changes.length >= 256) {
         continue
       }
-      const pending = await physical.files.page({ ready: 1, limit: 256 - changes.length })
-      for (const { key: changedPath, value } of pending.rows) {
-        changes.push(value.file)
-        physical.pending--
-        await physical.files.put(
-          changedPath,
-          { ...value, changed: false },
-          { group: splitSyntheticSessionSource(changedPath)?.id ?? '', ready: 0 }
-        )
+      const pending = await physical.files.transition({
+        kind: 'container-drain',
+        scope: physical.files.scope,
+        limit: 256 - changes.length
+      })
+      for (const row of pending.rows ?? []) {
+        changes.push(physical.files.decode(row).file)
       }
     }
     // A refused family listing cannot certify that a physical source disappeared.
@@ -157,7 +156,9 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         for (const [path, physical] of family.physical) {
           await this.release(key, path, family, physical)
         }
-        this.families.delete(key)
+        if (!family.physical.size) {
+          this.families.delete(key)
+        }
       }
     }
   }
@@ -176,18 +177,13 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       if (!physical.pending || changes.length >= 256) {
         continue
       }
-      const page = await physical.files.page({ ready: 1, limit: 256 - changes.length })
-      for (const { key: path, value } of page.rows) {
-        changes.push(value.file)
-        physical.pending--
-        await physical.files.put(
-          path,
-          { ...value, changed: false },
-          {
-            group: splitSyntheticSessionSource(path)?.id ?? '',
-            ready: 0
-          }
-        )
+      const page = await physical.files.transition({
+        kind: 'container-drain',
+        scope: physical.files.scope,
+        limit: 256 - changes.length
+      })
+      for (const row of page.rows ?? []) {
+        changes.push(physical.files.decode(row).file)
       }
     }
     return { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }

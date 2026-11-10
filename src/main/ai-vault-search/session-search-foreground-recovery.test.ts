@@ -2,7 +2,8 @@ import './session-search-worker.test-fixture'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { SessionSearchWorkerClient } from './session-search-worker-client'
 import SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchWorkerStore } from './session-search-worker-store'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
@@ -27,7 +28,7 @@ it('publishes a cold foreground read and preserves accepted messages across cold
     await store.prepare()
     unregister = registerSessionSearchIndexConsumer(store)
   }
-  const read = async () => {
+  const read = async (parsed?: () => void) => {
     const info = await stat(file)
     const candidate = syntheticCandidate({
       path: file,
@@ -42,6 +43,7 @@ it('publishes a cold foreground read and preserves accepted messages across cold
       resume: null,
       stateFactory: (channel) => createClaudeSessionResumeState(candidate.file, channel)
     })
+    parsed?.()
     await store!.flush()
     return result.session
   }
@@ -83,13 +85,35 @@ it('publishes a cold foreground read and preserves accepted messages across cold
       hits: { n: 2 }
     })
     await reopen()
-    expect(await read()).toMatchObject({ messageCount: 4 })
+    const admission = Promise.withResolvers<void>()
+    const parsed = Promise.withResolvers<void>()
+    const request = SessionSearchWorkerClient.prototype.request
+    const transferred = vi
+      .spyOn(SessionSearchWorkerClient.prototype, 'request')
+      .mockImplementation(async function (command) {
+        if (command.op === 'begin' && command.unprepared) {
+          await admission.promise
+        }
+        return request.call(this, command)
+      })
+    const reading = read(() => parsed.resolve())
+    await parsed.promise
+    expect(transferred.mock.calls.filter(([command]) => command.op === 'read-batch')).toHaveLength(
+      0
+    )
+    admission.resolve()
+    expect(await reading).toMatchObject({ messageCount: 4 })
+    expect(transferred.mock.calls.filter(([command]) => command.op === 'read-batch')).toHaveLength(
+      0
+    )
+    transferred.mockRestore()
     expect(accepted()).toEqual({
       session: { id: 1, content_hash_count: 4 },
       messages: { n: 4 },
       hits: { n: 2 }
     })
   } finally {
+    vi.restoreAllMocks()
     unregister?.()
     store?.close()
     await store?.retired()

@@ -1,3 +1,4 @@
+import { sessionSearchAppendAdmission } from './session-search-append-admission'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
   TranscriptMessage,
@@ -14,6 +15,7 @@ export type SessionSearchReadEvent =
 /** Admission uses the writer's saved cursor; a cold foreground reader never guesses coverage. */
 export class SessionSearchForegroundWrite {
   readonly target: number | null
+  readonly admission: 'covered' | 'target' | 'lag' | 'gap' | 'rejected'
   private readonly authority: string
   private readonly expectedHash: string | null
   private write: SessionSearchFileWrite | null = null
@@ -29,19 +31,32 @@ export class SessionSearchForegroundWrite {
     allowCovered: boolean,
     canProvePrefix: boolean
   ) {
-    this.authority = store.catalogCandidates.admission(candidate).revision
+    const authority = store.catalogCandidates.admission(candidate)
+    this.authority = authority.revision
+    this.admission = 'target'
     const row = store.fileRow(candidate.file.path)
     const resume = mode === 'replace' && canProvePrefix ? store.resumableCursor(candidate) : null
     this.target = row?.state === 'current' ? (resume?.byteOffset ?? null) : null
     this.expectedHash = this.target !== null ? (resume?.prefixHash ?? null) : null
-    if (allowCovered && store.coversTranscript(candidate)) {
+    if (!authority.allowed) {
+      this.admission = 'rejected'
+      this.rejected = true
+      return
+    }
+    if (allowCovered && !authority.required && store.coversTranscript(candidate)) {
+      this.admission = 'covered'
       this.covered = true
       return
     }
-    if (mode === 'append' && row?.byteOffset !== offset) {
-      store.setFileState(candidate.file.path, 'due')
-      this.rejected = true
-      return
+    if (mode === 'append') {
+      this.admission = sessionSearchAppendAdmission(store, candidate, offset)
+      if (this.admission !== 'target') {
+        if (this.admission === 'gap') {
+          store.setFileState(candidate.file.path, 'due')
+        }
+        this.rejected = true
+        return
+      }
     }
     if (this.target === null) {
       this.write = store.beginWrite(candidate, mode, offset, () => this.identity)
@@ -89,7 +104,10 @@ export class SessionSearchForegroundWrite {
       return false
     }
     if (this.covered) {
-      return this.store.coversTranscript(this.candidate)
+      return (
+        !this.store.catalogCandidates.admission(this.candidate).required &&
+        this.store.coversTranscript(this.candidate)
+      )
     }
     if (!this.write) {
       this.rejectPrefix()

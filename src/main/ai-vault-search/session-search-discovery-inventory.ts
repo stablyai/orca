@@ -25,6 +25,7 @@ export class SessionSearchDiscoveryInventory
       }
       this.roots.set(key, root)
     }
+    root.retiring = false
     root.args = args
     await root.inventory.begin(this.force || this.maintenance, args)
     let watching = false
@@ -111,18 +112,20 @@ export class SessionSearchDiscoveryInventory
     }
     do {
       const delta = await root.inventory.drain(args, this.overdue, this.recentLimit)
-      this.forced.clear()
-      this.metadata.clear()
+      const forced = new Set<string>()
+      const metadata = new Set<string>()
+      const paths = delta.changes.map((change) => change.file.path)
+      const metadataFacts = await this.metadataDebt!.getPage(paths)
       for (const change of delta.changes) {
         if (change.force) {
-          this.forced.add(change.file.path)
+          forced.add(change.file.path)
         }
-        if (await this.metadataDebt!.get(change.file.path)) {
-          this.metadata.add(change.file.path)
+        if (metadataFacts.has(change.file.path)) {
+          metadata.add(change.file.path)
         }
-        for (const observer of root.dependencies.values()) {
-          await observer.addFile(change.file.path)
-        }
+      }
+      for (const observer of root.dependencies.values()) {
+        await observer.addFiles(paths)
       }
       for (const observer of root.dependencies.values()) {
         for await (const path of observer.settleDelivered()) {
@@ -132,27 +135,26 @@ export class SessionSearchDiscoveryInventory
           await observer.discardUnowned()
         }
       }
-      for (const path of delta.removedDirectories) {
-        this.artifactMaps.get(args.rootDir)?.delete(path)
+      for (const observer of root.dependencies.values()) {
+        await observer.removeFiles(delta.removed)
       }
       for (const path of delta.removed) {
-        for (const observer of root.dependencies.values()) {
-          await observer.removeFile(path)
-        }
         if (!this.acceptRemoved) {
           this.removed.add(path)
         }
       }
       await this.acceptRemoved?.(delta.removed)
       if (this.accept && delta.changes.length) {
-        await this.accept({
-          agent: args.agent,
-          rootDir: args.rootDir,
-          files: delta.changes.map((change) => change.file)
-        })
-        for (const change of delta.changes) {
-          await this.metadataDebt!.delete(change.file.path)
-        }
+        await this.accept(
+          {
+            agent: args.agent,
+            rootDir: args.rootDir,
+            files: delta.changes.map((change) => change.file)
+          },
+          forced,
+          metadata
+        )
+        await this.metadataDebt!.deletePage(paths)
       } else if (!this.accept) {
         return {
           agent: args.agent,

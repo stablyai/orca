@@ -1,59 +1,158 @@
-import type SyncDatabase from '../sqlite/sync-database'
+import { transitionSessionSearchContainer } from './session-search-container-transition'
+import { transitionSessionSearchDependency } from './session-search-dependency-transition'
+import { transitionSessionSearchDirectory } from './session-search-directory-transition'
+import { transitionSessionSearchInventory } from './session-search-inventory-transition'
+import { SessionSearchCatalogStorage } from './session-search-catalog-storage'
 
 export const SESSION_SEARCH_CATALOG_PAGE_ROWS = 256
 export const SESSION_SEARCH_CATALOG_PAGE_BYTES = 256 * 1024
 
-export type SessionSearchCatalogRow = {
-  key: string
-  value: string
-  parent: string
-  group: string
-  rank: number
-  ready: number
-}
-export type SessionSearchCatalogCommand =
-  | { kind: 'get'; scope: string; key: string }
-  | { kind: 'put'; scope: string; rows: SessionSearchCatalogRow[] }
-  | { kind: 'delete'; scope: string; key: string }
-  | { kind: 'release'; scope: string }
-  | { kind: 'release-scopes'; scope: string }
-  | { kind: 'release-prefix'; scope: string; prefix: string }
-  | { kind: 'count'; scope: string; ready?: number }
-  | {
-      kind: 'page'
-      scope: string
-      after?: string
-      parent?: string
-      group?: string
-      ready?: number
-      orderRank?: boolean
-      limit?: number
-      prefix?: string
-    }
-export type SessionSearchCatalogResult = {
-  rows?: SessionSearchCatalogRow[]
-  count?: number
-  after?: string
-}
+import type {
+  SessionSearchCatalogCommand,
+  SessionSearchCatalogResult,
+  SessionSearchCatalogRow
+} from './session-search-catalog-types'
+export type {
+  SessionSearchCatalogCommand,
+  SessionSearchCatalogResult,
+  SessionSearchCatalogRow
+} from './session-search-catalog-types'
 
 /** Inactive observations and obligations spill to this connection's private scratch catalog. */
-export class SessionSearchCatalog {
-  constructor(private readonly db: SyncDatabase) {
-    db.exec(`PRAGMA temp_store = FILE;
-      PRAGMA temp.cache_size = -1024;
-      CREATE TEMP TABLE search_catalog (
-        scope TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
-        parent TEXT NOT NULL, group_key TEXT NOT NULL, rank REAL NOT NULL,
-        ready INTEGER NOT NULL, PRIMARY KEY(scope,key)
-      ) WITHOUT ROWID;
-      CREATE INDEX temp.search_catalog_parent ON search_catalog(scope,parent,key);
-      CREATE INDEX temp.search_catalog_group ON search_catalog(scope,group_key,key);
-      CREATE INDEX temp.search_catalog_queue ON search_catalog(scope,group_key,rank,key);
-      CREATE INDEX temp.search_catalog_ready ON search_catalog(scope,ready,key)`)
+export class SessionSearchCatalog extends SessionSearchCatalogStorage {
+  private readonly touched = new Set<string>()
+  private revision = 0
+  nextRevision(): number {
+    return ++this.revision
   }
 
   execute(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
+    this.touched.add(command.scope)
+    return this.apply(command)
+  }
+  response(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
+    const records =
+      'rows' in command
+        ? command.rows
+        : 'keys' in command
+          ? command.keys
+          : 'inputs' in command
+            ? command.inputs
+            : 'outcomes' in command
+              ? command.outcomes
+              : 'paths' in command
+                ? command.paths
+                : undefined
+    if (
+      records &&
+      (records.length > SESSION_SEARCH_CATALOG_PAGE_ROWS ||
+        (records.length > 1 &&
+          JSON.stringify(command).length * 2 > SESSION_SEARCH_CATALOG_PAGE_BYTES))
+    ) {
+      throw new Error('Session catalog request exceeds page budget')
+    }
+    this.touched.clear()
+    const result = this.execute(command)
+    return {
+      ...result,
+      scopeCounts: [...this.touched].map((scope) => {
+        const row = this.db
+          .prepare('SELECT n,runnable FROM temp.search_catalog_counts WHERE scope=?')
+          .get(scope)
+        return [scope, Number(row?.n ?? 0), Number(row?.runnable ?? 0)]
+      })
+    }
+  }
+  private apply(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
     switch (command.kind) {
+      case 'container-apply':
+      case 'container-drain':
+      case 'container-retire':
+        return transitionSessionSearchContainer(this, command)
+      case 'dependency-step':
+        return transitionSessionSearchDependency(this, command)
+      case 'directory-step':
+        return transitionSessionSearchDirectory(this, command)
+      case 'release-parent':
+        this.db
+          .prepare('DELETE FROM temp.search_catalog WHERE scope=? AND parent=?')
+          .run(command.scope, command.parent)
+        return {}
+      case 'frontier-set': {
+        const row = this.read('WHERE scope=? AND key=?', [command.scope, command.key])[0]
+        const order =
+          row?.rank ??
+          Number(
+            this.db
+              .prepare(
+                "SELECT rank FROM temp.search_catalog WHERE scope=? AND group_key='' ORDER BY rank DESC,key DESC LIMIT 1"
+              )
+              .get(command.scope)?.rank ?? 0
+          ) + 1
+        return this.execute({
+          kind: 'put',
+          scope: command.scope,
+          rows: [
+            {
+              key: command.key,
+              value: JSON.stringify({
+                value: JSON.parse(command.value),
+                order,
+                revision: this.nextRevision()
+              }),
+              parent: '',
+              group: '',
+              rank: order,
+              ready: 0
+            }
+          ]
+        })
+      }
+      case 'observe-prepare':
+      case 'observe-apply':
+      case 'forget-files': {
+        const records =
+          command.kind === 'observe-prepare'
+            ? command.inputs
+            : command.kind === 'observe-apply'
+              ? command.outcomes
+              : command.paths
+        if (
+          records.length > 256 ||
+          (records.length > 1 && JSON.stringify(command).length * 2 > 256 * 1024)
+        ) {
+          throw new Error('Session observation exceeds page budget')
+        }
+        this.db.exec('SAVEPOINT search_inventory_transition')
+        try {
+          const result = transitionSessionSearchInventory(this, command)
+          this.db.exec('RELEASE search_inventory_transition')
+          return result
+        } catch (error) {
+          this.db.exec(
+            'ROLLBACK TO search_inventory_transition; RELEASE search_inventory_transition'
+          )
+          throw error
+        }
+      }
+      case 'get-page': {
+        const rows: SessionSearchCatalogRow[] = []
+        let bytes = 1024,
+          processed = 0
+        for (const key of command.keys) {
+          const row = this.read('WHERE scope=? AND key=?', [command.scope, key])[0]
+          const size = row ? this.bytes(row) : 0
+          if (rows.length && bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
+            break
+          }
+          processed++
+          if (row) {
+            rows.push(row)
+          }
+          bytes += size
+        }
+        return { rows, processed }
+      }
       case 'get':
         return {
           rows: this.read('WHERE scope = ? AND key = ?', [command.scope, command.key])
@@ -62,7 +161,7 @@ export class SessionSearchCatalog {
         if (command.rows.length > SESSION_SEARCH_CATALOG_PAGE_ROWS) {
           throw new Error('Session catalog batch exceeds row budget')
         }
-        let bytes = 0
+        let bytes = 1024
         for (const row of command.rows) {
           bytes += this.bytes(row)
         }
@@ -72,10 +171,10 @@ export class SessionSearchCatalog {
         this.db.exec('SAVEPOINT search_catalog_batch')
         try {
           const insert = this.db.prepare(`INSERT INTO temp.search_catalog
-            (scope,key,value,parent,group_key,rank,ready) VALUES (?,?,?,?,?,?,?)
+            (scope,key,value,parent,group_key,rank,ready,tie) VALUES (?,?,?,?,?,?,?,?)
             ON CONFLICT(scope,key) DO UPDATE SET value=excluded.value,
             parent=excluded.parent,group_key=excluded.group_key,rank=excluded.rank,
-            ready=excluded.ready`)
+            ready=excluded.ready,tie=excluded.tie`)
           for (const row of command.rows) {
             insert.run(
               command.scope,
@@ -84,7 +183,8 @@ export class SessionSearchCatalog {
               row.parent,
               row.group,
               row.rank,
-              row.ready
+              row.ready,
+              row.tie ?? 0
             )
           }
           this.db.exec('RELEASE search_catalog_batch')
@@ -94,6 +194,11 @@ export class SessionSearchCatalog {
         }
         return {}
       }
+      case 'delete-page':
+        for (const key of command.keys) {
+          this.execute({ kind: 'delete', scope: command.scope, key })
+        }
+        return {}
       case 'delete':
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key = ?')
@@ -102,6 +207,17 @@ export class SessionSearchCatalog {
       case 'release':
         this.db.prepare('DELETE FROM temp.search_catalog WHERE scope = ?').run(command.scope)
         return {}
+      case 'release-scopes-page': {
+        const rows = this.db
+          .prepare(
+            'SELECT scope,key FROM temp.search_catalog WHERE scope=? OR (scope>=? AND scope<?) ORDER BY scope,key LIMIT 256'
+          )
+          .all(command.scope, `${command.scope}:`, `${command.scope}:\uffff`)
+        for (const row of rows) {
+          this.execute({ kind: 'delete', scope: String(row.scope), key: String(row.key) })
+        }
+        return { count: rows.length }
+      }
       case 'release-scopes':
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? OR (scope >= ? AND scope < ?)')
@@ -147,10 +263,10 @@ export class SessionSearchCatalog {
           }
         }
         const rows: SessionSearchCatalogRow[] = []
-        let bytes = 0
+        let bytes = 1024
         const iterator = this.db
-          .prepare(`SELECT key,value,parent,group_key,rank,ready FROM temp.search_catalog
-            WHERE ${conditions.join(' AND ')} ORDER BY ${command.orderRank ? 'rank,key' : 'key'} LIMIT ?`)
+          .prepare(`SELECT key,value,parent,group_key,rank,ready,tie FROM temp.search_catalog
+            WHERE ${conditions.join(' AND ')} ORDER BY ${command.orderRank ? 'rank,tie,key' : 'key'} LIMIT ?`)
           .iterate(
             ...values,
             Math.max(
@@ -173,27 +289,5 @@ export class SessionSearchCatalog {
         return { rows, after: rows.at(-1)?.key }
       }
     }
-  }
-
-  private read(where: string, values: string[]): SessionSearchCatalogRow[] {
-    return this.db
-      .prepare(`SELECT key,value,parent,group_key,rank,ready FROM temp.search_catalog ${where}`)
-      .all(...values)
-      .map((row) => this.decode(row))
-  }
-
-  private decode(row: Record<string, unknown>): SessionSearchCatalogRow {
-    return {
-      key: String(row.key),
-      value: String(row.value),
-      parent: String(row.parent),
-      group: String(row.group_key),
-      rank: Number(row.rank),
-      ready: Number(row.ready)
-    }
-  }
-
-  private bytes(row: SessionSearchCatalogRow): number {
-    return (row.key.length + row.value.length + row.parent.length + row.group.length) * 2 + 64
   }
 }

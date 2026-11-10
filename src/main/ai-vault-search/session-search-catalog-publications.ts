@@ -2,6 +2,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 
 export type SessionSearchPublicationCommand =
   | { kind: 'publication-next' }
+  | { kind: 'publication-current'; group: string }
   | { kind: 'publication-begin' }
   | { kind: 'publication-wake' }
   | {
@@ -49,12 +50,13 @@ export class SessionSearchCatalogPublications {
           .run()
         this.pending += this.changed()
         return {}
+      case 'publication-current':
       case 'publication-next': {
         const row = this.db
           .prepare(
-            'SELECT group_key,revision,frontier,cursor,phase FROM temp.search_publications WHERE dirty = 1 ORDER BY group_key LIMIT 1'
+            `SELECT group_key,revision,frontier,cursor,phase FROM temp.search_publications WHERE ${command.kind === 'publication-current' ? 'group_key=?' : 'dirty = 1'} ORDER BY group_key LIMIT 1`
           )
-          .get()
+          .get(...(command.kind === 'publication-current' ? [command.group] : []))
         return {
           publication: row
             ? {

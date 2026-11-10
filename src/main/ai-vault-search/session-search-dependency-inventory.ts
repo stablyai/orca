@@ -40,8 +40,8 @@ export class SessionSearchDependencyInventory {
       this.retries.pending || this.observe?.pending === true || (this.inventory?.pending ?? false)
     )
   }
-  async release(): Promise<void> {
-    await this.request({ kind: 'release-scopes', scope: this.scope })
+  async release(): Promise<boolean> {
+    return (await this.request({ kind: 'release-scopes-page', scope: this.scope })).count === 0
   }
   async begin(wake: boolean, args: DiscoverSessionFilesArgs): Promise<void> {
     this.retries.begin(wake)
@@ -83,10 +83,18 @@ export class SessionSearchDependencyInventory {
     } while (after !== undefined)
   }
   async addFile(path: string): Promise<void> {
-    const key = this.dependency.fileKey?.(path)
-    if (key) {
-      await this.keys.put(path, key, { parent: key })
-    }
+    await this.addFiles([path])
+  }
+  async addFiles(paths: string[]): Promise<void> {
+    await this.keys.putPage(
+      paths.flatMap((path) => {
+        const key = this.dependency.fileKey?.(path)
+        return key ? [this.keys.encode(path, key, { parent: key })] : []
+      })
+    )
+  }
+  async removeFiles(paths: string[]): Promise<void> {
+    await this.keys.deletePage(paths)
   }
   async removeFile(path: string): Promise<void> {
     await this.keys.delete(path)

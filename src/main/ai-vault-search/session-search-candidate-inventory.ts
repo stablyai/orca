@@ -1,3 +1,5 @@
+import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
+import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionSearchIndexStore } from './session-search-store'
 import { SessionSearchCandidatePublications } from './session-search-candidate-publication'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
@@ -9,7 +11,6 @@ import {
   codexRolloutHardlinkIdentity,
   codexSessionRootRank
 } from '../ai-vault/scanners/codex/codex-session-root-dedup'
-import type { SessionSearchCandidateRow } from './session-search-catalog-candidates'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
@@ -38,11 +39,9 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     }
   }
   private readonly sourceOrders = new Map<string, ReadonlyMap<string, number>>()
-  private active: SessionSearchCandidateRow[] = []
   override reset(): void {
     super.reset()
     this.sourceOrders.clear()
-    this.active = []
   }
   async rootFor(candidate: SessionFileCandidate): Promise<string | undefined> {
     return (
@@ -52,11 +51,23 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   async has(path: string, agent?: string | null): Promise<boolean> {
     return (await this.request!({ kind: 'path', path, agent })).rows.length > 0
   }
-  async acknowledgeChanges(): Promise<void> {
-    for (const row of this.active) {
-      await this.request!({ kind: 'consumed', key: row.key, revision: row.revision })
+  async admitChanges(
+    receipts: { key: string; revision: number }[],
+    recent: boolean,
+    recovering: boolean
+  ) {
+    const response = await this.request!({
+      kind: 'admit',
+      recent,
+      recovering,
+      rows: receipts
+    })
+    return response.work!
+  }
+  async acknowledgeChanges(receipts: { key: string; revision: number }[]): Promise<void> {
+    for (const row of receipts) {
+      await this.request!({ kind: 'consumed', ...row })
     }
-    this.active = []
   }
   async update(
     discoveries: readonly SessionFileDiscovery[],
@@ -67,6 +78,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     partial = false,
     metadata: ReadonlySet<string> = new Set()
   ): Promise<{
+    receipts: { key: string; revision: number }[]
     candidates: SessionFileCandidate[]
     suppressed: Set<string>
     forced: Set<string>
@@ -91,7 +103,29 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         agents: removed.has(path) ? undefined : [...removedCandidates.get(path)!]
       })
     }
+    const rows: (SessionSearchCatalogCandidate & {
+      force?: boolean
+      metadata?: boolean
+    })[] = []
     for (const discovery of discoveries) {
+      const projected = discoveryFileCandidates(discovery, discovery.files, options)
+      const contestedPaths = new Set(
+        (
+          await this.request({
+            kind: 'contested',
+            rows: projected
+              .filter(
+                (candidate) =>
+                  candidate.agent === 'codex' &&
+                  /^rollout-.+\.jsonl$/.test(basename(candidate.file.path))
+              )
+              .map((candidate) => ({
+                group: groupKey(candidate, discovery.rootDir),
+                path: candidate.file.path
+              }))
+          })
+        ).contested
+      )
       const scope = `${discovery.agent}:${discovery.rootDir}`
       if (discovery.sourceOrder && this.sourceOrders.get(scope) !== discovery.sourceOrder) {
         this.sourceOrders.set(scope, discovery.sourceOrder)
@@ -108,7 +142,7 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
           ).after
         } while (after !== undefined)
       }
-      for (const candidate of discoveryFileCandidates(discovery, discovery.files, options)) {
+      for (const candidate of projected) {
         this.invalidate(candidate.file.path)
         const group = groupKey(candidate, discovery.rootDir)
         const source = splitOpenCodeSqliteCandidate(
@@ -123,12 +157,8 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
           candidate.agent === 'codex' && /^rollout-.+\.jsonl$/.test(basename(candidate.file.path))
         if (codex) {
           alias = codexRolloutHardlinkIdentity(candidate.file) ?? alias
-          const first = await this.request({ kind: 'group', group })
-          const contested = first.rows.some(
-            (row) => row.candidate.file.path !== candidate.file.path
-          )
-          if (contested) {
-            let page = first
+          if (contestedPaths.has(candidate.file.path)) {
+            let page = await this.request({ kind: 'group', group })
             do {
               for (const row of page.rows) {
                 if (row.candidate.file.path === candidate.file.path) {
@@ -175,48 +205,39 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
             }
           }
         }
-        await this.request({
-          kind: 'put',
-          row: {
-            candidate,
-            root: discovery.rootDir,
-            group,
-            alias,
-            sqlite: source !== null,
-            sourcePath: source?.dbPath,
-            preference:
-              candidate.agent === 'codex'
-                ? codexSessionRootRank(candidate.codexHome)
-                : candidate.agent === 'omp'
-                  ? 1
-                  : 0,
-            sourceOrder: source
-              ? (this.sourceOrders.get(scope)?.get(source.dbPath) ?? Number.MAX_SAFE_INTEGER)
-              : 0
-          }
+        rows.push({
+          candidate,
+          root: discovery.rootDir,
+          group,
+          alias,
+          sqlite: source !== null,
+          sourcePath: source?.dbPath,
+          preference:
+            candidate.agent === 'codex'
+              ? codexSessionRootRank(candidate.codexHome)
+              : candidate.agent === 'omp'
+                ? 1
+                : 0,
+          sourceOrder: source
+            ? (this.sourceOrders.get(scope)?.get(source.dbPath) ?? Number.MAX_SAFE_INTEGER)
+            : 0,
+          force: invalidated.has(candidate.file.path),
+          metadata: metadata.has(candidate.file.path)
         })
-        if (invalidated.has(candidate.file.path)) {
-          await this.requirePublication(candidate.file.path, 'force')
-        }
-        if (metadata.has(candidate.file.path)) {
-          await this.requirePublication(candidate.file.path, 'metadata')
-        }
       }
     }
-    this.active = (await this.request({ kind: 'changes' })).rows
-    const suppressed = new Set<string>()
-    for (const row of this.active) {
-      if (
-        !row.selected &&
-        !(await this.request({ kind: 'path', path: row.candidate.file.path })).rows.some(
-          (member) => member.selected
-        )
-      ) {
-        suppressed.add(row.candidate.file.path)
-      }
+    for (const page of sessionSearchRecordPages(rows)) {
+      await this.request({ kind: 'batch', rows: page })
     }
+    const changed = await this.request({ kind: 'changes' })
+    const suppressed = new Set(
+      changed.rows
+        .filter((row) => !row.selected && !row.protectedPath)
+        .map((row) => row.candidate.file.path)
+    )
     return {
-      candidates: this.active
+      receipts: changed.rows.map(({ key, revision }) => ({ key, revision })),
+      candidates: changed.rows
         .filter((row) => row.selected)
         .map((row) => row.candidate)
         .sort(
@@ -228,10 +249,10 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         ),
       suppressed,
       forced: new Set(
-        this.active.filter((row) => row.forced).map((row) => row.candidate.file.path)
+        changed.rows.filter((row) => row.forced).map((row) => row.candidate.file.path)
       ),
       metadata: new Set(
-        this.active.filter((row) => row.metadata).map((row) => row.candidate.file.path)
+        changed.rows.filter((row) => row.metadata).map((row) => row.candidate.file.path)
       )
     }
   }

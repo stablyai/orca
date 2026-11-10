@@ -15,13 +15,13 @@ type Root = {
   args: DiscoverSessionFilesArgs
   identity?: string
   fallback: boolean
+  retiring?: boolean
   dependencies: Map<string, SessionSearchDependencyInventory>
 }
 
 /** Search owns its notifications and raw membership; ordinary History discovery stays stateless. */
 export class SessionSearchDiscoverySources {
   protected readonly roots = new Map<string, Root>()
-  protected readonly artifactMaps = new Map<string, Map<string, string>>()
   readonly containers = new SessionSearchContainerInventory()
   protected readonly owner = new AbortController()
   protected readonly watchers: SessionSearchRootWatchers
@@ -31,8 +31,14 @@ export class SessionSearchDiscoverySources {
   onRemoved(accept: (paths: readonly string[]) => Promise<void>): void {
     this.acceptRemoved = accept
   }
-  protected accept: ((discovery: SessionFileDiscovery) => Promise<void>) | undefined
-  onDiscovery(accept: (discovery: SessionFileDiscovery) => Promise<void>): void {
+  protected accept:
+    | ((
+        discovery: SessionFileDiscovery,
+        forced?: ReadonlySet<string>,
+        metadata?: ReadonlySet<string>
+      ) => Promise<void>)
+    | undefined
+  onDiscovery(accept: NonNullable<SessionSearchDiscoverySources['accept']>): void {
     this.accept = accept
   }
   attach(request: SessionSearchCatalogRequest): void {
@@ -45,8 +51,6 @@ export class SessionSearchDiscoverySources {
   protected overdue = () => false
   protected recentLimit = 12
   protected seen = new Set<string>()
-  readonly forced = new Set<string>()
-  readonly metadata = new Set<string>()
   readonly removed = new Set<string>()
   readonly removedCandidates = this.containers.removed
   readonly enumeratedContainers = this.containers.proofs
@@ -68,8 +72,6 @@ export class SessionSearchDiscoverySources {
     this.watchers.begin()
     this.seen = new Set()
     this.containers.begin(options.full || this.maintenance, this.recentLimit)
-    this.forced.clear()
-    this.metadata.clear()
     this.removed.clear()
   }
 
@@ -83,6 +85,7 @@ export class SessionSearchDiscoverySources {
     }
     for (const root of this.roots.values()) {
       if (
+        root.retiring ||
         root.inventory.pending ||
         [...root.dependencies.values()].some((dependency) => dependency.pending)
       ) {
@@ -97,15 +100,6 @@ export class SessionSearchDiscoverySources {
       root: root.inventory.root,
       files: root.inventory.fileCount
     }))
-  }
-
-  artifacts(root: string): Map<string, string> {
-    let map = this.artifactMaps.get(root)
-    if (!map) {
-      map = new Map()
-      this.artifactMaps.set(root, map)
-    }
-    return map
   }
 
   private async fileOwner(
@@ -165,18 +159,26 @@ export class SessionSearchDiscoverySources {
     for (const key of this.roots.keys()) {
       if (!this.seen.has(key)) {
         const root = this.roots.get(key)!
-        for await (const path of root.inventory.paths()) {
-          if (this.acceptRemoved) {
-            await this.acceptRemoved([path])
-          } else {
+        root.retiring = true
+        const paths = await root.inventory.removePage()
+        if (this.acceptRemoved) {
+          await this.acceptRemoved(paths)
+        } else {
+          for (const path of paths) {
             this.removed.add(path)
           }
         }
-        await root.inventory.release()
-        for (const dependency of root.dependencies.values()) {
-          await dependency.release()
+        await root.inventory.retirePage(paths)
+        if (paths.length || !(await root.inventory.releasePage())) {
+          continue
         }
-        this.artifactMaps.delete(root.inventory.root)
+        let released = true
+        for (const dependency of root.dependencies.values()) {
+          released = (await dependency.release()) && released
+        }
+        if (!released) {
+          continue
+        }
         this.roots.delete(key)
       }
     }
@@ -186,7 +188,6 @@ export class SessionSearchDiscoverySources {
     this.owner.abort()
     this.roots.clear()
     this.containers.clear()
-    this.artifactMaps.clear()
     return this.watchers.close()
   }
 }

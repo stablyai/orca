@@ -1,5 +1,6 @@
 import {
   SessionSearchCatalogClient,
+  recordSessionSearchCatalogCounts,
   type SessionSearchCatalogRequest
 } from '../ai-vault-search/session-search-catalog-client'
 import { SessionSearchCatalogFrontier } from '../ai-vault-search/session-search-catalog-frontier'
@@ -34,29 +35,31 @@ export class SessionInventoryDirectoryWalks {
   protected readonly trailing: SessionSearchCatalogClient<true>
   protected readonly failures: SessionSearchCatalogRetries
   protected readonly removedDirectories = new Set<string>()
+  protected readonly request: SessionSearchCatalogRequest
   constructor(
     readonly root: string,
-    protected readonly request: SessionSearchCatalogRequest,
+    request: SessionSearchCatalogRequest,
     readonly scope: string
   ) {
-    this.directories = new SessionSearchCatalogClient(`${scope}:directories`, request)
-    this.entries = new SessionSearchCatalogClient(`${scope}:directory-input`, request)
-    this.trailing = new SessionSearchCatalogClient(`${scope}:trailing`, request)
+    this.request = async (command) => {
+      const result = await request(command)
+      recordSessionSearchCatalogCounts(this.request, result)
+      return result
+    }
+    this.directories = new SessionSearchCatalogClient(`${scope}:directories`, this.request)
+    this.entries = new SessionSearchCatalogClient(`${scope}:directory-input`, this.request)
+    this.trailing = new SessionSearchCatalogClient(`${scope}:trailing`, this.request)
     this.dirty = new SessionSearchCatalogFrontier(
-      new SessionSearchCatalogClient(`${scope}:dirty`, request)
+      new SessionSearchCatalogClient(`${scope}:dirty`, this.request)
     )
     this.walks = new SessionSearchCatalogFrontier(
-      new SessionSearchCatalogClient(`${scope}:walks`, request)
+      new SessionSearchCatalogClient(`${scope}:walks`, this.request)
     )
     this.failures = new SessionSearchCatalogRetries(
-      new SessionSearchCatalogClient(`${scope}:refusals`, request)
+      new SessionSearchCatalogClient(`${scope}:refusals`, this.request)
     )
-    this.observations = new SessionInventoryFiles(
-      scope,
-      request,
-      (path) => this.addDirectory(dirname(path)),
-      (path) => this.schedule(dirname(path)),
-      (path) => this.dirty.delete(path)
+    this.observations = new SessionInventoryFiles(scope, this.request, (path) =>
+      this.schedule(path)
     )
   }
   protected async addDirectory(path: string): Promise<void> {
@@ -103,14 +106,7 @@ export class SessionInventoryDirectoryWalks {
         return
       }
       try {
-        let after: string | undefined
-        do {
-          const page = await this.entries.page({ parent: walk.path, after })
-          for (const { key } of page.rows) {
-            await this.entries.delete(key)
-          }
-          after = page.after
-        } while (after !== undefined)
+        await this.request({ kind: 'release-parent', scope: this.entries.scope, parent: walk.path })
         const entries = await wslGatedReaddir(walk.path, 'scan', args.signal)
         args.onDirectoryEntries?.(walk.path, entries)
         // The filesystem returns one indivisible directory; release it before loading another.
@@ -120,8 +116,10 @@ export class SessionInventoryDirectoryWalks {
               this.entries.encode(
                 join(walk.path, entry.name),
                 {
-                  directory: entry.isDirectory(),
-                  file: entry.isFile()
+                  directory:
+                    entry.isDirectory() &&
+                    (args.directoryPredicate?.(entry.name, walk.depth) ?? true),
+                  file: entry.isFile() && this.accepts(join(walk.path, entry.name), args)
                 },
                 { parent: walk.path }
               )
@@ -142,29 +140,26 @@ export class SessionInventoryDirectoryWalks {
         }
       }
     }
+    const page = await this.request({
+      kind: 'directory-step',
+      scope: this.scope,
+      path: walk.path,
+      phase: walk.phase,
+      after: walk.after,
+      reconcile: walk.reconcile
+    })
+    walk.after = page.after
+    for (const path of page.removedFiles ?? []) {
+      this.observations.recordRemoval(path)
+    }
     if (walk.phase === 'files' || walk.phase === 'remove-files') {
-      const page = await this.observations.files.page({
-        parent: walk.path,
-        after: walk.after,
-        limit: 16
-      })
-      for (const { key } of page.rows) {
-        if (walk.phase === 'remove-files' || !(await this.entries.get(key))?.file) {
-          await this.observations.forget(key)
-        }
-      }
-      walk.after = page.after
       if (!walk.after) {
         walk.phase = walk.phase === 'files' ? 'children' : 'remove-children'
       }
     } else if (walk.phase === 'children' || walk.phase === 'remove-children') {
-      const page = await this.directories.page({ parent: walk.path, after: walk.after, limit: 16 })
-      for (const { key } of page.rows) {
-        if (walk.phase === 'remove-children' || !(await this.entries.get(key))?.directory) {
-          await this.schedule(key, false, true)
-        }
+      for (const entry of page.directoryPage ?? []) {
+        await this.schedule(entry.key, false, true)
       }
-      walk.after = page.after
       if (!walk.after) {
         if (walk.phase === 'remove-children') {
           await this.directories.delete(walk.path)
@@ -174,26 +169,16 @@ export class SessionInventoryDirectoryWalks {
         }
         walk.phase = 'entries'
       }
-    } else if (walk.phase === 'entries') {
-      const page = await this.entries.page({ parent: walk.path, after: walk.after, limit: 16 })
-      for (const { key, value } of page.rows) {
-        if (
-          value.directory &&
-          (args.directoryPredicate?.(relative(walk.path, key), walk.depth) ?? true)
-        ) {
-          const known = await this.directories.get(key)
-          await this.addDirectory(key)
-          if (walk.reconcile || !known) {
-            await this.schedule(key, walk.reconcile)
-          }
-        } else if (value.file && this.accepts(key, args)) {
-          if (walk.reconcile || !(await this.observations.files.get(key))) {
-            await this.observations.observe(key, args, false, limit)
-          }
+    } else {
+      const files: { path: string; force: boolean }[] = []
+      for (const entry of page.directoryPage ?? []) {
+        if (entry.directory) {
+          await this.schedule(entry.key, walk.reconcile)
+        } else {
+          files.push({ path: entry.key, force: false })
         }
-        await this.entries.delete(key)
       }
-      walk.after = page.after
+      await this.observations.observePage(files, args, limit)
       if (!walk.after) {
         await this.finishWalk(walk.path)
         return

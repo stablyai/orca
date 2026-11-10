@@ -1,6 +1,10 @@
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type SyncDatabase from '../sqlite/sync-database'
-import type { SessionSearchFileRow } from './session-search-store-types'
+import type {
+  SessionSearchStateCounts,
+  SessionSearchFileState,
+  SessionSearchFileRow
+} from './session-search-store-types'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 
 export function readSessionSearchFileRows(
@@ -51,5 +55,38 @@ export function sessionSearchSessionsByAgent(db: SyncDatabase): Record<string, n
       counts[agent] = total
     }
   }
+  return counts
+}
+
+export function* iterateSessionSearchFileRows(
+  db: SyncDatabase
+): IterableIterator<SessionSearchFileRow> {
+  let after = ''
+  while (true) {
+    const page = readSessionSearchFileRows(db, undefined, after)
+    if (!page.length) {
+      return
+    }
+    yield* page
+    after = page.at(-1)!.path
+  }
+}
+
+export function readSessionSearchStateCounts(db: SyncDatabase): SessionSearchStateCounts {
+  const rows = db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all() as {
+    state: SessionSearchFileState
+    n: number
+  }[]
+  const counts: SessionSearchStateCounts = {
+    current: 0,
+    due: 0,
+    failed: 0,
+    sessionsByAgent: sessionSearchSessionsByAgent(db),
+    messages: 0
+  }
+  for (const row of rows) {
+    counts[row.state] = Number(row.n)
+  }
+  counts.messages = Number(asRecord(db.prepare('SELECT count(*) AS n FROM messages').get())?.n ?? 0)
   return counts
 }

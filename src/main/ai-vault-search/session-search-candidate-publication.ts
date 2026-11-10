@@ -4,7 +4,6 @@ import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult
 } from './session-search-catalog-candidates'
-import { fileIdentity } from './session-search-file-cursor'
 
 export type SessionSearchPublicationLease = {
   signal: AbortSignal
@@ -69,76 +68,26 @@ export abstract class SessionSearchCandidatePublications {
     }
   }
   async reconcilePublications(
-    store: SessionSearchIndexStore,
+    _store: SessionSearchIndexStore,
     overdue: () => boolean,
     signal?: AbortSignal,
-    owed: (candidate: SessionFileCandidate, root: string) => boolean | Promise<boolean> = () =>
+    _owed: (candidate: SessionFileCandidate, root: string) => boolean | Promise<boolean> = () =>
       false
   ): Promise<void> {
-    await this.request!({ kind: 'publication-next' })
     let consumed = 0
-    while (this.publications && (consumed === 0 || !overdue()) && !signal?.aborted) {
-      const publication = (await this.request!({ kind: 'publication-next' })).publication
-      if (!publication) {
+    while (
+      (consumed === 0 || this.publications) &&
+      (consumed === 0 || !overdue()) &&
+      !signal?.aborted
+    ) {
+      const result = await this.request!({ kind: 'publication-step' })
+      if (!result.processed) {
         break
       }
-      const page = await this.request!({
-        kind: 'group',
-        group: publication.group,
-        after: publication.cursor
-      })
-      let cursor = publication.cursor
-      let blocked = false
-      let failed = false
-      for (const row of page.rows) {
-        if (signal?.aborted || (consumed > 0 && overdue())) {
-          break
-        }
-        consumed++
-        if (publication.phase === 'coverage' && row.selected) {
-          await store.prepareCoverage?.([row.candidate.file.path])
-          if (await owed(row.candidate, row.root)) {
-            await this.requirePublication(row.candidate.file.path)
-            blocked = true
-            break
-          }
-          if (row.required || !covered(store, row.candidate)) {
-            blocked = true
-            break
-          }
-        } else if (publication.phase === 'withdraw' && !row.selected) {
-          const response = await this.request!({
-            kind: 'withdraw',
-            group: publication.group,
-            revision: publication.revision,
-            frontier: publication.frontier,
-            path: row.candidate.file.path
-          })
-          if (!response.accepted) {
-            failed = true
-            break
-          }
-        }
-        cursor = row.key
-      }
-      const complete = !page.rows.length
-      const phase = complete && publication.phase === 'coverage' ? 'withdraw' : publication.phase
-      const dirty = !blocked && !(complete && publication.phase === 'withdraw')
-      await this.request!({
-        kind: 'publication-update',
-        group: publication.group,
-        revision: publication.revision,
-        frontier: publication.frontier,
-        cursor: phase !== publication.phase ? '' : cursor,
-        phase,
-        dirty,
-        failed
-      })
-      if (!page.rows.length) {
-        consumed++
-      }
+      consumed += result.processed
     }
   }
+
   reset(): void {
     this.closePublications()
     this.request = undefined
@@ -154,23 +103,4 @@ export abstract class SessionSearchCandidatePublications {
     }
     this.readers.clear()
   }
-}
-
-function covered(store: SessionSearchIndexStore, candidate: SessionFileCandidate): boolean {
-  const row = store.fileRow(candidate.file.path)
-  const identity = fileIdentity(candidate.file)
-  return (
-    store.acceptingReads !== false &&
-    !!row &&
-    row.state === 'current' &&
-    row.mtimeMs === candidate.file.mtimeMs &&
-    row.byteOffset !== null &&
-    row.byteOffset !== undefined &&
-    row.byteOffset >= 0 &&
-    (candidate.file.sizeBytes === undefined ||
-      (row.sizeBytes === candidate.file.sizeBytes &&
-        row.byteOffset === candidate.file.sizeBytes)) &&
-    (!identity ||
-      (!!row.identity && identity.dev === row.identity.dev && identity.ino === row.identity.ino))
-  )
 }

@@ -1,3 +1,5 @@
+import { SessionSearchCatalogTransport } from './session-search-catalog-transport'
+import type { SessionSearchWorkCommand, SessionSearchWorkResult } from './session-search-work-queue'
 import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult
@@ -32,6 +34,11 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   protected nextHandle = 0
   protected bytes = 0
   private coverageBytes = 0
+  private readonly catalogTransport = new SessionSearchCatalogTransport(
+    () => this.client.epoch,
+    () => (this.acceptingReads ? Promise.resolve() : this.prepare()),
+    (command) => this.send(command)
+  )
   protected closed = false
   protected counts: SessionSearchStateCounts = {
     current: 0,
@@ -80,7 +87,13 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     this.initialization ??= (async () => {
       await this.client.retired()
       const epoch = this.client.epoch
-      await this.client.request({ op: 'open', path: this.path, reader: false, cutoff: this.cutoff })
+      await this.client.request({
+        op: 'open',
+        path: this.path,
+        reader: false,
+        cutoff: this.cutoff,
+        runtimeEpoch: epoch
+      })
       this.initializedEpoch = epoch
     })()
       .catch((error) => {
@@ -202,20 +215,21 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     } while (after !== undefined)
   }
   async candidates(command: SessionSearchCandidateCommand): Promise<SessionSearchCandidateResult> {
-    if (!this.acceptingReads) {
-      await this.prepare()
-    }
-    const response = await this.send({ op: 'candidates', command })
+    const response = await this.catalogTransport.request({ op: 'candidates', command })
     if (!response.candidates) {
       throw new Error('Session search candidate catalog unavailable')
     }
     return response.candidates
   }
-  async catalog(command: SessionSearchCatalogCommand): Promise<SessionSearchCatalogResult> {
-    if (!this.acceptingReads) {
-      await this.prepare()
+  async work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
+    const response = await this.catalogTransport.request({ op: 'work', command })
+    if (!response.work) {
+      throw new Error('Session search work catalog unavailable')
     }
-    const response = await this.send({ op: 'catalog', command })
+    return response.work
+  }
+  async catalog(command: SessionSearchCatalogCommand): Promise<SessionSearchCatalogResult> {
+    const response = await this.catalogTransport.request({ op: 'catalog', command })
     if (!response.catalog) {
       throw new Error('Session search catalog unavailable')
     }

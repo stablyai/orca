@@ -50,6 +50,9 @@ function finish(input: SessionFileCandidate, text: string, empty = false, owner 
   })
 }
 async function settle(wake = false) {
+  await inventory.acknowledgeChanges(
+    (await inventory.update([], new Set(), {}, new Set(), new Map(), true)).receipts
+  )
   await inventory.beginPublications(wake)
   await inventory.reconcilePublications(store, () => false)
 }
@@ -59,7 +62,9 @@ function hits(text: string) {
 
 beforeEach(async () => {
   index = await openSessionSearchIndexFile('ss-alias-publication')
-  store = new SessionSearchStore(index.path)
+  store = new SessionSearchStore(index.path, (error) => {
+    throw error
+  })
   inventory = new SessionSearchCandidateInventory(store)
   engine = new SessionSearchEngine(index.db)
 })
@@ -100,13 +105,14 @@ it('reconstructs cleanup from committed rows after restart and retries acknowled
   finish(previous, 'predecessorneedle', false, detached)
   finish(first, 'replacementneedle', false, detached)
   await inventory.update([discover([first, previous])], new Set(), {})
-  const remove = vi.spyOn(store, 'removeFile').mockReturnValue(false)
+  store.connection.exec(
+    "CREATE TEMP TRIGGER refuse_alias_removal BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT, 'fixture withdrawal refusal'); END"
+  )
   for (let cycle = 0; cycle < 4; cycle++) {
     await settle()
   }
   expect(hits('predecessorneedle')).toBe(1)
-  expect(inventory.pendingPublications).toBe(false)
-  remove.mockRestore()
+  store.connection.exec('DROP TRIGGER refuse_alias_removal')
   await settle(true)
   expect(hits('replacementneedle')).toBe(1)
   expect(hits('predecessorneedle')).toBe(0)
@@ -194,4 +200,36 @@ it('transfers a deferred singleton forced read into later competitive publicatio
   await settle()
   expect(hits('predecessorneedle')).toBe(0)
   expect(hits('acceptedwinnerneedle')).toBe(1)
+})
+
+it('retains a newer same-file rewrite when an older read and candidate page finish', async () => {
+  const initial = await inventory.update([discover([first])], new Set(), {})
+  finish(first, 'originalversionneedle')
+  const stale = reader(first)!
+  stale.message({ role: 'user', text: 'obsoleteversionneedle', timestamp: null })
+  const updated = await inventory.update(
+    [discover([first])],
+    new Set(),
+    {},
+    new Set([first.file.path])
+  )
+  await inventory.acknowledgeChanges(initial.receipts)
+  stale.finish({ session: syntheticSession(), byteOffset: 100, incomplete: false })
+  expect(hits('obsoleteversionneedle')).toBe(0)
+  expect(hits('originalversionneedle')).toBe(1)
+  const queue = new SessionSearchWorkQueue()
+  queue.attach(store)
+  queue.update(await inventory.admitChanges(updated.receipts, true, false))
+  const work = (await queue.next())!
+  const consumer = new SessionSearchIndexConsumer(store, undefined, inventory).beginRead({
+    candidate: work.candidate,
+    mode: 'replace',
+    previousByteOffset: 0
+  })!
+  consumer.message({ role: 'user', text: 'latestversionneedle', timestamp: null })
+  consumer.finish({ session: syntheticSession(), byteOffset: 100, incomplete: false })
+  await queue.acknowledge(work, false)
+  await settle()
+  expect(hits('latestversionneedle')).toBe(1)
+  expect(hits('originalversionneedle')).toBe(0)
 })

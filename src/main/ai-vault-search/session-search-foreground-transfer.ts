@@ -24,6 +24,7 @@ export function sessionSearchForegroundTransfer(
   let cancelled = false
   let failed = false
   let prefixTarget: number | null | undefined
+  let disposition: SearchWorkerResponse['admission']
   let events: SessionSearchReadEvent[] = []
   let bytes = 0
   let settlement = Promise.resolve(false)
@@ -50,7 +51,7 @@ export function sessionSearchForegroundTransfer(
     void request.finally(() => pending.delete(request))
     return request
   }
-  void post({
+  const admission = post({
     op: 'begin',
     handle,
     candidate: start.candidate,
@@ -58,12 +59,20 @@ export function sessionSearchForegroundTransfer(
     offset: start.previousByteOffset,
     unprepared: { allowCovered, canProvePrefix: start.mode === 'replace' && !!start.identity }
   }).then((response) => {
+    disposition = response.admission
+    if (disposition === 'covered') {
+      transport.release(bytes)
+      events = []
+      bytes = 0
+    } else if (disposition !== 'target') {
+      cancelled = true
+    }
     if ('prefixTarget' in response) {
       prefixTarget = response.prefixTarget
     }
   })
   const flush = () => {
-    if (!events.length) {
+    if (!events.length || disposition !== 'target') {
       return
     }
     const payload = events
@@ -89,7 +98,7 @@ export function sessionSearchForegroundTransfer(
     transport.finished()
   }
   const stage = (event: SessionSearchReadEvent) => {
-    if (!valid()) {
+    if (!valid() || disposition === 'covered') {
       return
     }
     const size = event.kind === 'message' ? event.message.text.length * 2 + 256 : 160
@@ -106,6 +115,7 @@ export function sessionSearchForegroundTransfer(
   start.signal?.addEventListener('abort', discard, { once: true })
   return {
     drain: async () => {
+      await admission
       flush()
       await Promise.allSettled(pending)
       if (!valid()) {
@@ -113,7 +123,10 @@ export function sessionSearchForegroundTransfer(
       }
     },
     add: (message) => stage({ kind: 'message', message }),
-    needsPrefix: (offset) => valid() && (prefixTarget === undefined || prefixTarget === offset),
+    needsPrefix: (offset) =>
+      valid() &&
+      disposition !== 'covered' &&
+      (prefixTarget === undefined || prefixTarget === offset),
     prefixReached: (offset, digest) => stage({ kind: 'prefix', offset, digest }),
     failed: () => failed,
     cancelled: () => !active(),
@@ -123,14 +136,23 @@ export function sessionSearchForegroundTransfer(
         discard()
         return false
       }
-      flush()
       ended = true
-      settlement = post({ op: 'finish', handle, outcome, hash: EMPTY_CONTENT_HASH }).then(
-        (response) => {
+      settlement = admission.then(async () => {
+        if (!valid()) {
+          transport.release(bytes)
+          events = []
+          bytes = 0
+          if (transport.active()) {
+            await transport.send({ op: 'discard', handle }).catch(() => undefined)
+          }
           transport.finished()
-          return response.accepted === true && valid()
+          return false
         }
-      )
+        flush()
+        const response = await post({ op: 'finish', handle, outcome, hash: EMPTY_CONTENT_HASH })
+        transport.finished()
+        return response.accepted === true && valid()
+      })
       return true
     },
     discard: () => {

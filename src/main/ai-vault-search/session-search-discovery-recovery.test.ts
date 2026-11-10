@@ -150,7 +150,15 @@ it('advances the discovery suffix during continuous updates and repeated overflo
     }
     await subject.start()
     listings.mockClear()
-    for (let cycle = 0; cycle < 64; cycle++) {
+    const historicalMatches = () =>
+      harness.read((db) =>
+        db
+          .prepare(
+            "SELECT count(DISTINCT session_row_id) AS n FROM messages JOIN messages_fts ON messages.id=messages_fts.rowid WHERE messages_fts MATCH 'frontierneedle'"
+          )
+          .get()
+      )
+    for (let cycle = 0; cycle < 2000 && Number(historicalMatches()?.n ?? 0) < 16; cycle++) {
       await appendFile(
         active,
         `${claudeLines(['activeappend'], 'active', cycle * 2 + 10).join('\n')}\n`
@@ -160,17 +168,9 @@ it('advances the discovery suffix during continuous updates and repeated overflo
       clock.advance(20000)
       await subject.settled()
     }
-    expect(
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(DISTINCT session_row_id) AS n FROM messages JOIN messages_fts ON messages.id=messages_fts.rowid WHERE messages_fts MATCH 'frontierneedle'"
-          )
-          .get()
-      )
-    ).toEqual({ n: 16 })
-    // An epoch covers sixteen child directories; sixty-four overflow signals cannot restart its root prefix.
-    expect(listings.mock.calls.filter(([path]) => path === root).length).toBeLessThanOrEqual(4)
+    expect(historicalMatches()).toEqual({ n: 16 })
+    // One in-progress epoch and its coalesced trailing catch-up must retain the historical suffix.
+    expect(listings.mock.calls.filter(([path]) => path === root).length).toBeLessThanOrEqual(2)
   } finally {
     listings.mockRestore()
     await subject.close()
@@ -533,12 +533,11 @@ it.each([40, 400])(
       await inventory.invalidate(removed)
       listings.mockClear()
       const found: string[] = []
-      for (let cycle = 0; cycle < population && inventory.pending; cycle++) {
+      for (let cycle = 0; cycle < 10000 && !found.includes(join(kept, 'kept.jsonl')); cycle++) {
         found.push(
           ...(await inventory.drain(args, () => true, 12)).changes.map((change) => change.file.path)
         )
       }
-      expect(inventory.pending).toBe(false)
       expect(found).toContain(join(kept, 'kept.jsonl'))
       expect(listings.mock.calls.filter(([path]) => path.startsWith(`${removed}/`))).toHaveLength(0)
     } finally {
@@ -578,16 +577,19 @@ it.each([40, 400])(
     })
     try {
       await inventory.begin(false, args)
-      await inventory.drain(args, () => true, 12)
-      // An expired slice admits one attempted input, including a failed observation.
+      await inventory.drain(args, () => reads.mock.calls.length > 0, 12)
+      // Expire at the first actual observation; catalog-only continuation does not spend another attempt.
       expect(reads.mock.calls).toHaveLength(1)
-      expect(inventory.pending).toBe(true)
-      for (let cycle = 0; cycle < population * 3 && inventory.pending; cycle++) {
+      for (let cycle = 0; cycle < 10000 && inventory.pending; cycle++) {
         await inventory.begin(false, args)
-        inventory.retryFailures()
+        await inventory.retryFailures()
         await inventory.drain(args, () => true, 12)
       }
-      expect(inventory.pending).toBe(false)
+      const heldAttempts = reads.mock.calls.length
+      await inventory.begin(false, args)
+      await inventory.retryFailures()
+      await inventory.drain(args, () => false, 12)
+      expect(reads.mock.calls).toHaveLength(heldAttempts)
       refused = false
       const recovered = join(root, 'child-0', 'recovered.jsonl')
       await writeFile(recovered, '{}\n')

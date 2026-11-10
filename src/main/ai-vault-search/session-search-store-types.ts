@@ -32,6 +32,7 @@ export type SessionSearchStateCounts = {
 
 export type SessionSearchIndexStore = Pick<
   SessionSearchStore,
+  | 'work'
   | 'candidates'
   | 'catalog'
   | 'indexedFile'

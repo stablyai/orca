@@ -80,7 +80,9 @@ export async function runSessionSearchPass(
     const accept = async (
       discoveries: Parameters<typeof state.candidates.update>[0],
       partial: boolean,
-      existing?: Awaited<ReturnType<typeof state.candidates.update>>
+      existing?: Awaited<ReturnType<typeof state.candidates.update>>,
+      forced: ReadonlySet<string> = new Set(),
+      metadata: ReadonlySet<string> = new Set()
     ) => {
       let update =
         existing ??
@@ -88,36 +90,18 @@ export async function runSessionSearchPass(
           discoveries,
           new Set(),
           { ...args.roots, signal },
-          state.discovery.forced,
+          forced,
           new Map(),
           partial,
-          state.discovery.metadata
+          metadata
         ))
       do {
-        for (const path of update.suppressed) {
-          await state.queue.remove(path)
-        }
-        for (const candidate of update.candidates) {
-          await store.prepareCoverage?.([candidate.file.path])
-          await state.parkedRetire.delete(candidate.file.path)
-          if (
-            state.discovery.forced.has(candidate.file.path) ||
-            update.forced.has(candidate.file.path) ||
-            update.metadata.has(candidate.file.path)
-          ) {
-            await state.candidates.requirePublication(candidate.file.path)
-          }
-          await state.queue.enqueue(
-            candidate,
-            store,
-            state.recovering ||
-              state.discovery.forced.has(candidate.file.path) ||
-              update.forced.has(candidate.file.path),
-            !args.full,
-            update.metadata.has(candidate.file.path)
-          )
-        }
-        await state.candidates.acknowledgeChanges()
+        await state.parkedRetire.deletePage(
+          update.candidates.map((candidate) => candidate.file.path)
+        )
+        state.queue.update(
+          await state.candidates.admitChanges(update.receipts, !args.full, state.recovering)
+        )
         if (!state.candidates.pendingChanges || args.discoveryOverdue?.()) {
           break
         }
@@ -131,27 +115,37 @@ export async function runSessionSearchPass(
         )
       } while (state.candidates.pendingChanges)
     }
-    state.discovery.onRemoved(async (paths) => {
-      if (!paths.length) {
-        return
-      }
-      await state.candidates.update(
-        [],
-        new Set(paths),
-        { ...args.roots, signal },
-        new Set(),
-        new Map(),
-        true
-      )
-      for (const path of paths) {
-        if (!(await state.candidates.has(path))) {
-          await state.queue.remove(path)
-          await state.retire.set(path, path)
+    let discoveryLane = Promise.resolve()
+    const serializeDiscovery = (consume: () => Promise<void>): Promise<void> => {
+      const accepted = discoveryLane.then(consume)
+      discoveryLane = accepted
+      return accepted
+    }
+    state.discovery.onRemoved((paths) =>
+      serializeDiscovery(async () => {
+        if (!paths.length) {
+          return
         }
-      }
-      await accept([], true)
-    })
-    state.discovery.onDiscovery((discovery) => accept([discovery], true))
+        await state.candidates.update(
+          [],
+          new Set(paths),
+          { ...args.roots, signal },
+          new Set(),
+          new Map(),
+          true
+        )
+        for (const path of paths) {
+          if (!(await state.candidates.has(path))) {
+            await state.queue.remove(path)
+            await state.retire.set(path, path)
+          }
+        }
+        await accept([], true)
+      })
+    )
+    state.discovery.onDiscovery((discovery, forced, metadata) =>
+      serializeDiscovery(() => accept([discovery], true, undefined, forced, metadata))
+    )
     const swept = await withSessionDiscovery(state.discovery, () =>
       discoverSessionSearchCandidates(args.roots, { limitPerAgent: Infinity, signal, raw: true })
     )
@@ -161,7 +155,7 @@ export async function runSessionSearchPass(
       swept.discoveries,
       state.discovery.removed,
       { ...args.roots, signal },
-      state.discovery.forced,
+      new Set(),
       state.discovery.removedCandidates
     )
     for (const path of update.suppressed) {
@@ -171,6 +165,7 @@ export async function runSessionSearchPass(
       ...state.discovery.removed,
       ...state.discovery.removedCandidates.keys()
     ])) {
+      await store.prepareCoverage?.([path])
       if (await state.candidates.has(path, store.fileRow(path)?.agent)) {
         continue
       }
@@ -224,7 +219,7 @@ export async function runSessionSearchPass(
           }
           await state.queue.enqueue(selected, store, force, !args.full)
         }
-        await state.candidates.acknowledgeChanges()
+        await state.candidates.acknowledgeChanges(refreshed.receipts)
         return state.queue.get(path)
       }
     })

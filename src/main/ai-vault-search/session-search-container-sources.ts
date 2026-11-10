@@ -18,6 +18,8 @@ type Physical = {
   signature?: string
   identity?: string
   fullDue: boolean
+  retiring?: boolean
+  retirement?: { epoch: number; after?: string }
 }
 type Family = {
   discovery?: SessionFileDiscovery
@@ -39,7 +41,9 @@ export class SessionSearchContainerSources {
   readonly removed = new Map<string, Set<string>>()
   protected request: SessionSearchCatalogRequest | undefined
   protected retirement: SessionSearchCatalogClient<string> | undefined
-  protected retirementCount = 0
+  protected get retirementCount(): number {
+    return this.retirement?.size ?? 0
+  }
   protected readonly acceptedProofs = new Map<string, Physical>()
   attach(request: SessionSearchCatalogRequest): void {
     this.request ??= request
@@ -87,7 +91,10 @@ export class SessionSearchContainerSources {
         continue
       }
       for (const [path, physical] of family.physical) {
-        if ((physical.pending || physical.fullDue) && !this.retries.heldOut(`${key}:${path}`)) {
+        if (
+          (physical.pending || physical.fullDue || physical.retiring || physical.retirement) &&
+          !this.retries.heldOut(`${key}:${path}`)
+        ) {
           return true
         }
       }
@@ -129,7 +136,6 @@ export class SessionSearchContainerSources {
     const key = `${agent}:${path}`
     if (!(await this.retirement!.get(key))) {
       await this.retirement!.put(key, path, { parent: agent })
-      this.retirementCount++
     }
   }
   protected async drainRetirements(): Promise<void> {
@@ -139,9 +145,8 @@ export class SessionSearchContainerSources {
       const agents = this.removed.get(path) ?? new Set<string>()
       agents.add(agent)
       this.removed.set(path, agents)
-      await this.retirement!.delete(key)
-      this.retirementCount--
     }
+    await this.retirement!.deletePage(page.rows.map(({ key }) => key))
   }
   protected async release(
     key: string,
@@ -149,20 +154,42 @@ export class SessionSearchContainerSources {
     family: Family,
     physical: Physical
   ): Promise<void> {
-    let after: string | undefined
-    do {
-      const page = await physical.files.page({ after })
-      for (const { key: old } of page.rows) {
-        if (family.discovery) {
-          await this.remove(old, family.discovery.agent)
-        }
-      }
-      after = page.after
-    } while (after !== undefined)
-    await physical.files.release()
+    physical.retiring = true
+    physical.retirement = undefined
+    const result = await physical.files.transition({
+      kind: 'container-retire',
+      scope: physical.files.scope,
+      agent: family.discovery?.agent ?? key.split(':', 1)[0]
+    })
     this.retries.delete(`${key}:${path}`)
     this.acceptedProofs.delete(`${key.split(':', 1)[0]}:${path}`)
-    family.physical.delete(path)
+    if (!result.after) {
+      family.physical.delete(path)
+    }
+  }
+  protected async advanceRetirement(
+    key: string,
+    path: string,
+    family: Family,
+    physical: Physical
+  ): Promise<void> {
+    const retirement = physical.retirement
+    if (!retirement) {
+      return
+    }
+    const result = await physical.files.transition({
+      kind: 'container-retire',
+      scope: physical.files.scope,
+      epoch: retirement.epoch,
+      after: retirement.after,
+      agent: family.discovery?.agent ?? key.split(':', 1)[0]
+    })
+    retirement.after = result.after
+    if (!result.after) {
+      physical.proof = retirement.epoch
+      this.acceptedProofs.set(`${key.split(':', 1)[0]}:${path}`, physical)
+      physical.retirement = undefined
+    }
   }
   protected async signature(path: string, signal?: AbortSignal) {
     let known = true

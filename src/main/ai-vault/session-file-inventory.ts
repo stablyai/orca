@@ -23,8 +23,16 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   async has(path: string): Promise<boolean> {
     return (await this.observations.files.get(path)) !== undefined
   }
-  async release(): Promise<void> {
-    await this.request({ kind: 'release-scopes', scope: this.scope })
+  async releasePage(): Promise<boolean> {
+    return (await this.request({ kind: 'release-scopes-page', scope: this.scope })).count === 0
+  }
+  async removePage(): Promise<string[]> {
+    const page = await this.observations.files.page()
+    const paths = page.rows.map(({ key }) => key)
+    return paths
+  }
+  async retirePage(paths: string[]): Promise<void> {
+    await this.request({ kind: 'forget-files', scope: this.scope, paths })
   }
   async *paths(): AsyncGenerator<string> {
     let after: string | undefined

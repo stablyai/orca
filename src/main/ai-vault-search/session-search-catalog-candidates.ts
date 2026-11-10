@@ -1,50 +1,22 @@
 import { selectSessionSearchCandidates } from './session-search-catalog-selection'
-import {
-  SessionSearchCatalogPublications,
-  type SessionSearchPublicationCommand,
-  type SessionSearchPublicationResult
-} from './session-search-catalog-publications'
+import { SessionSearchCatalogPublications } from './session-search-catalog-publications'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { createHash } from 'node:crypto'
+import { sessionSearchCandidateAdmission } from './session-search-candidate-admission'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 
-export type SessionSearchCatalogCandidate = {
-  candidate: SessionFileCandidate
-  root: string
-  group: string
-  alias: string
-  sqlite: boolean
-  preference: number
-  sourceOrder: number
-  sourcePath?: string
-}
-
-export type SessionSearchCandidateCommand =
-  | { kind: 'put'; row: SessionSearchCatalogCandidate }
-  | { kind: 'remove'; path: string; agents?: string[] }
-  | { kind: 'path'; path: string; agent?: string | null }
-  | { kind: 'group'; group: string; after?: string }
-  | { kind: 'changes'; after?: string }
-  | { kind: 'rerank'; root: string; agent: string; order: [string, number][]; after?: string }
-  | { kind: 'consumed'; key: string; revision: number }
-  | SessionSearchPublicationCommand
-  | { kind: 'require'; path: string; reason?: 'force' | 'metadata' }
-  | { kind: 'acknowledge'; path: string; agent: string; revision: string }
-export type SessionSearchCandidateRow = SessionSearchCatalogCandidate & {
-  key: string
-  selected: boolean
-  required: boolean
-  forced: boolean
-  metadata: boolean
-  revision: number
-}
-export type SessionSearchCandidateResult = SessionSearchPublicationResult & {
-  rows: SessionSearchCandidateRow[]
-  pending: number
-  pendingPublications: number
-  after?: string
-}
+import type {
+  SessionSearchCatalogCandidate,
+  SessionSearchCandidateCommand,
+  SessionSearchCandidateRow,
+  SessionSearchCandidateResult
+} from './session-search-catalog-candidate-types'
+export type {
+  SessionSearchCatalogCandidate,
+  SessionSearchCandidateCommand,
+  SessionSearchCandidateRow,
+  SessionSearchCandidateResult
+} from './session-search-catalog-candidate-types'
 
 /** Raw alternatives and desired publication remain separate from committed search output. */
 export class SessionSearchCatalogCandidates {
@@ -69,7 +41,7 @@ export class SessionSearchCatalogCandidates {
     CREATE INDEX temp.search_candidate_group ON search_candidates(group_key,key);
     CREATE INDEX temp.search_candidate_alias ON search_candidates(group_key,alias_key,preference,key);
     CREATE INDEX temp.search_candidate_rank ON search_candidates(group_key,sqlite_source,mtime DESC,source_order,key);
-    CREATE INDEX temp.search_candidate_changes ON search_candidates(changed,key);
+    CREATE INDEX temp.search_candidate_changes ON search_candidates(changed,mtime DESC,key);
     CREATE INDEX temp.search_candidate_source ON search_candidates(root,agent,group_key);
     `)
     this.publications = new SessionSearchCatalogPublications(db, removeFile)
@@ -80,6 +52,33 @@ export class SessionSearchCatalogCandidates {
   }
   execute(command: SessionSearchCandidateCommand): SessionSearchCandidateResult {
     switch (command.kind) {
+      case 'publication-step':
+      case 'admit':
+        throw new Error('Candidate admission requires the owning search store')
+      case 'contested':
+        return {
+          ...this.result([]),
+          contested: command.rows
+            .filter(({ group, path }) =>
+              this.db
+                .prepare(
+                  'SELECT 1 FROM temp.search_candidates WHERE group_key=? AND path<>? LIMIT 1'
+                )
+                .get(group, path)
+            )
+            .map(({ path }) => path)
+        }
+      case 'batch':
+        for (const row of command.rows) {
+          this.put(row)
+          if (row.force) {
+            this.require(row.candidate.file.path, 'force', true)
+          }
+          if (row.metadata) {
+            this.require(row.candidate.file.path, 'metadata', true)
+          }
+        }
+        return this.result([])
       case 'put':
         this.put(command.row)
         return this.result([])
@@ -98,7 +97,7 @@ export class SessionSearchCatalogCandidates {
           ])
         )
       case 'changes': {
-        const rows = this.read('WHERE changed = 1 AND key > ? ORDER BY key LIMIT 256', [
+        const rows = this.read('WHERE changed = 1 AND key > ? ORDER BY mtime DESC,key LIMIT 256', [
           command.after ?? ''
         ])
         return this.result(rows)
@@ -135,6 +134,7 @@ export class SessionSearchCatalogCandidates {
         return this.result([])
       case 'publication-begin':
       case 'publication-next':
+      case 'publication-current':
       case 'publication-wake':
       case 'publication-update':
       case 'withdraw': {
@@ -142,12 +142,7 @@ export class SessionSearchCatalogCandidates {
         return { ...this.result([]), ...result }
       }
       case 'require':
-        this.db
-          .prepare(
-            `UPDATE temp.search_candidates SET required = 1${command.reason === 'force' ? ',force_read=1' : command.reason === 'metadata' ? ',metadata=1' : ''} WHERE path = ? AND selected = 1`
-          )
-          .run(command.path)
-        this.dirtyPath(command.path)
+        this.require(command.path, command.reason)
         return this.result([])
       case 'acknowledge': {
         const row = this.read('WHERE path = ? AND agent = ? LIMIT 1', [
@@ -192,26 +187,13 @@ export class SessionSearchCatalogCandidates {
     }
   }
 
-  admission(candidate: SessionFileCandidate): { allowed: boolean; revision: string } {
-    const rows = this.db
-      .prepare(`SELECT c.key,c.selected,c.revision,p.revision AS group_revision
-      FROM temp.search_candidates c LEFT JOIN temp.search_publications p ON p.group_key=c.group_key
-      WHERE c.path = ? AND c.agent = ? ORDER BY c.key`)
-      .iterate(candidate.file.path, candidate.agent)
-    let seen = false
-    let allowed = false
-    const hash = createHash('sha256')
-    for (const row of rows) {
-      seen = true
-      allowed ||= row.selected === 1
-      hash.update(`${row.key}:${row.group_revision ?? row.revision}\0`)
-    }
-    return {
-      allowed: !seen || allowed,
-      revision: seen ? hash.digest('hex') : ''
-    }
+  admission(candidate: SessionFileCandidate) {
+    return sessionSearchCandidateAdmission(this.db, candidate)
   }
 
+  entry(key: string): SessionSearchCandidateRow | undefined {
+    return this.read('WHERE key=?', [key])[0]
+  }
   rowChanged(path: string): void {
     this.dirtyPath(path)
   }
@@ -219,6 +201,18 @@ export class SessionSearchCatalogCandidates {
   private put(row: SessionSearchCatalogCandidate): void {
     const key = `${row.group}\0${row.candidate.agent}:${row.candidate.file.path}`
     const previous = this.read('WHERE key = ?', [key])[0]
+    if (
+      previous &&
+      JSON.stringify(previous.candidate) === JSON.stringify(row.candidate) &&
+      previous.root === row.root &&
+      previous.alias === row.alias &&
+      previous.sqlite === row.sqlite &&
+      previous.preference === row.preference &&
+      previous.sourceOrder === row.sourceOrder &&
+      previous.sourcePath === (row.sourcePath ?? '')
+    ) {
+      return
+    }
     this.db
       .prepare(`INSERT INTO temp.search_candidates
       (key,path,agent,root,group_key,alias_key,candidate,sqlite_source,preference,source_order,mtime,required,source_path)
@@ -258,6 +252,28 @@ export class SessionSearchCatalogCandidates {
     )
   }
 
+  private require(path: string, reason?: 'force' | 'metadata', delivered = false): void {
+    const predicate = delivered
+      ? ''
+      : ` AND (required=0${reason === 'force' ? ' OR force_read=0' : reason === 'metadata' ? ' OR metadata=0' : ''})`
+    const previouslyClean = Number(
+      this.db
+        .prepare(
+          `SELECT count(*) AS n FROM temp.search_candidates WHERE path=? AND selected=1 AND changed=0${predicate}`
+        )
+        .get(path)?.n ?? 0
+    )
+    this.db
+      .prepare(
+        `UPDATE temp.search_candidates SET required=1,changed=1,revision=?${reason === 'force' ? ',force_read=1' : reason === 'metadata' ? ',metadata=1' : ''} WHERE path=? AND selected=1${predicate}`
+      )
+      .run(++this.revision, path)
+    if (Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0)) {
+      this.pending += previouslyClean
+      this.dirtyPath(path)
+    }
+  }
+
   private dirtyPath(path: string): void {
     this.publications.rowChanged(path)
   }
@@ -277,6 +293,9 @@ export class SessionSearchCatalogCandidates {
         sourceOrder: Number(row.source_order),
         sourcePath: String(row.source_path),
         selected: row.selected === 1,
+        protectedPath: !!this.db
+          .prepare('SELECT 1 FROM temp.search_candidates WHERE path=? AND selected=1 LIMIT 1')
+          .get(String(row.path)),
         required: row.required === 1,
         forced: row.force_read === 1,
         metadata: row.metadata === 1,

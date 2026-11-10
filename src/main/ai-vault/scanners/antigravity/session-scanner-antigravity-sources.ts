@@ -41,8 +41,9 @@ export function antigravityDiscoveries(
     )
   ]
   return rootDirs.map((rootDir) => {
-    const antigravityArtifactPaths =
-      currentSessionDiscovery()?.artifacts(rootDir) ?? new Map<string, string>()
+    const antigravityArtifactPaths = currentSessionDiscovery()
+      ? undefined
+      : new Map<string, string>()
     return discoverFiles({
       rootDir,
       limit,
@@ -51,8 +52,10 @@ export function antigravityDiscoveries(
       extensions: ['.jsonl'],
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
-      onDirectoryEntries: (dirPath, entries) =>
-        recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
+      onDirectoryEntries: antigravityArtifactPaths
+        ? (dirPath, entries) =>
+            recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries)
+        : undefined,
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
       signal: options.signal
     })

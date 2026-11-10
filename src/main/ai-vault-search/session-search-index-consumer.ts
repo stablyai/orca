@@ -1,3 +1,4 @@
+import { sessionSearchAppendAdmission } from './session-search-append-admission'
 import type {
   SessionSearchCandidatePublications,
   SessionSearchPublicationLease
@@ -15,7 +16,6 @@ import {
   type TranscriptReadStart
 } from '../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { fileIdentity } from './session-search-file-cursor'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
 import type { SessionSearchResumableCursor, SessionSearchIndexStore } from './session-search-store'
 
@@ -75,10 +75,13 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       return null
     }
     if (!unprepared && start.mode === 'append') {
-      const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
-      if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
-        const recoverable = this.store.resumableCursor(candidate)
-        if (recoverable && recoverable.byteOffset < start.previousByteOffset) {
+      const admission = sessionSearchAppendAdmission(
+        this.store,
+        candidate,
+        start.previousByteOffset
+      )
+      if (admission !== 'target') {
+        if (admission === 'lag') {
           if (start.indexing) {
             // Why: invalidate after this lane saves its resume point, before the next read acquires it.
             void inSessionParseFileLane(candidate.file.path, async () =>

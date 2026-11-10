@@ -1,7 +1,7 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
-import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
+import { recordSessionScanIssue, SCAN_ISSUE_LIMIT } from '../ai-vault/session-scan-issues'
 import type { SessionSearchCatalogClient } from './session-search-catalog-client'
 
 type Debt = { failures: number; attempted: number; force: boolean; issue?: AiVaultScanIssue }
@@ -9,15 +9,16 @@ type Debt = { failures: number; attempted: number; force: boolean; issue?: AiVau
 /** Refusal debt has one owner and survives pauses without becoming an archive-sized heap. */
 export class SessionSearchCatalogRetries {
   private generation = 0
-  private count = 0
-  private runnableCount = 0
   constructor(private readonly catalog: SessionSearchCatalogClient<Debt>) {}
 
+  get epoch(): number {
+    return this.generation
+  }
   get size(): number {
-    return this.count
+    return this.catalog.size
   }
   get pending(): boolean {
-    return this.runnableCount > 0
+    return this.catalog.readySize > 0
   }
   async begin(wake = false): Promise<void> {
     this.generation++
@@ -50,8 +51,6 @@ export class SessionSearchCatalogRetries {
       issue: issue ?? previous?.issue
     }
     await this.put(path, debt)
-    this.count += previous ? 0 : 1
-    this.runnableCount += Number(!this.held(debt)) - Number(!!previous && !this.held(previous))
   }
   async wake(path?: string): Promise<void> {
     let after: string | undefined
@@ -60,7 +59,6 @@ export class SessionSearchCatalogRetries {
       for (const { key, value } of page.rows) {
         if (path === undefined || isInsideSessionRoot(path, key)) {
           await this.put(key, { ...value, failures: 0 })
-          this.runnableCount += Number(this.held(value))
         }
       }
       after = page.after
@@ -72,8 +70,6 @@ export class SessionSearchCatalogRetries {
       return
     }
     await this.catalog.delete(path)
-    this.count--
-    this.runnableCount -= Number(!this.held(debt))
   }
   async *runnable(): AsyncGenerator<readonly [string, boolean]> {
     let after: string | undefined
@@ -89,20 +85,31 @@ export class SessionSearchCatalogRetries {
   }
   async report(issues: AiVaultScanIssue[]): Promise<void> {
     let after: string | undefined
-    do {
-      const page = await this.catalog.page({ after, ready: 0 })
+    while (issues.length < SCAN_ISSUE_LIMIT) {
+      const page = await this.catalog.page({
+        after,
+        group: 'issue',
+        ready: 0,
+        limit: SCAN_ISSUE_LIMIT - issues.length
+      })
       for (const { value } of page.rows) {
         if (value.issue) {
           recordSessionScanIssue(issues, value.issue)
         }
       }
+      if (!page.after) {
+        break
+      }
       after = page.after
-    } while (after !== undefined)
+    }
   }
   private held(debt: Debt | undefined): boolean {
     return (debt?.failures ?? 0) >= SESSION_INPUT_FAILURES_BEFORE_HELD_OUT
   }
   private put(path: string, debt: Debt): Promise<void> {
-    return this.catalog.put(path, debt, { ready: Number(!this.held(debt)) })
+    return this.catalog.put(path, debt, {
+      group: debt.issue ? 'issue' : '',
+      ready: Number(!this.held(debt))
+    })
   }
 }

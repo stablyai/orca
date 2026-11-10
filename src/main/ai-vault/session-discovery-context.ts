@@ -36,7 +36,6 @@ export type SessionDiscoveryContext = {
     issues: readonly AiVaultScanIssue[],
     enumerationComplete?: boolean
   ): Promise<SessionFileDiscovery>
-  artifacts(root: string): Map<string, string>
 }
 
 const discoveryContext = new AsyncLocalStorage<SessionDiscoveryContext>()

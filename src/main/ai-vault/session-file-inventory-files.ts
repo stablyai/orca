@@ -1,4 +1,8 @@
-import { dirname } from 'node:path'
+import type {
+  SessionSearchPreparedObservation,
+  SessionSearchObservationOutcome
+} from '../ai-vault-search/session-search-inventory-transition'
+import { sessionSearchRecordPages } from '../ai-vault-search/session-search-catalog-pages'
 import {
   SessionSearchCatalogClient,
   type SessionSearchCatalogRequest
@@ -10,7 +14,6 @@ import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { retainRecentSessionFile } from './session-file-observation'
 import { sidecarEnrichesWithoutReparse } from './parse-cache/session-scanner-sidecar-enrichment'
-import { sidecarUnchanged } from './parse-cache/session-sidecar-stat'
 
 export type SessionFileChange = { file: FileWithMtime; force: boolean }
 
@@ -21,16 +24,16 @@ export class SessionInventoryFiles {
     dependency?: string
   }>
   readonly failures: SessionSearchCatalogRetries
-  count = 0
+  get count(): number {
+    return this.files.size
+  }
   readonly changes = new Map<string, SessionFileChange>()
   readonly removed = new Set<string>()
   readonly recent = new Map<string, FileWithMtime>()
   constructor(
-    scope: string,
+    private readonly scope: string,
     request: SessionSearchCatalogRequest,
-    private readonly addFile: (path: string) => Promise<void>,
-    private readonly scheduleParent: (path: string) => Promise<void>,
-    private readonly forgetDirty: (path: string) => Promise<void>
+    private readonly scheduleParent: (path: string) => Promise<void>
   ) {
     this.files = new SessionSearchCatalogClient(`${scope}:files`, request)
     this.failures = new SessionSearchCatalogRetries(
@@ -44,110 +47,118 @@ export class SessionInventoryFiles {
     limit: number,
     readOwed = false
   ) {
-    if (!(await this.failures.mayAttempt(path))) {
-      if (force || readOwed) {
-        await this.failures.requireRead(path)
+    return (await this.observePage([{ path, force, readOwed }], args, limit)).get(path)
+  }
+  async observePage(
+    inputs: { path: string; force: boolean; readOwed?: boolean }[],
+    args: DiscoverSessionFilesArgs,
+    limit: number
+  ): Promise<Map<string, FileWithMtime>> {
+    const readable = new Map<string, FileWithMtime>()
+    for (const page of sessionSearchRecordPages(inputs)) {
+      let offset = 0
+      while (offset < page.length) {
+        const prepared = await this.files.transition({
+          kind: 'observe-prepare',
+          scope: this.scope,
+          generation: this.failures.epoch,
+          inputs: page.slice(offset)
+        })
+        const projected = prepared.prepared ?? []
+        if (!projected.length) {
+          throw new Error('Session observation did not advance')
+        }
+        for (const [path, file] of await this.observePrepared(projected, args, limit)) {
+          readable.set(path, file)
+        }
+        offset += projected.length
       }
-      return
     }
-    force ||= await this.failures.force(path)
-    const accepted = await this.files.get(path)
-    const previous = accepted
-      ? { ...accepted.file, modifiedAt: new Date(accepted.file.mtimeMs).toISOString() }
-      : undefined
-    const observation = await observeSessionFile(
-      path,
-      args.contentDependencyPath,
-      args.signal,
-      !force && previous ? { file: previous, path: accepted?.dependency } : undefined
-    )
-    throwIfAiVaultScanCancelled(args.signal)
-    if ('issue' in observation) {
-      if (observation.missing && !accepted) {
-        await this.failures.delete(path)
-        return
+    return readable
+  }
+  private async observePrepared(
+    prepared: SessionSearchPreparedObservation[],
+    args: DiscoverSessionFilesArgs,
+    limit: number
+  ): Promise<Map<string, FileWithMtime>> {
+    const outcomes: SessionSearchObservationOutcome[] = []
+    for (const input of prepared) {
+      if (!input.attempt) {
+        continue
       }
-      if (!observation.missing) {
-        recordSessionScanIssue(args.issues, { agent: args.agent, ...observation.issue })
-      }
-      await this.failures.fail(
-        path,
-        force || readOwed,
-        observation.missing ? undefined : { agent: args.agent, ...observation.issue }
+      const previous = input.accepted
+        ? {
+            ...input.accepted.file,
+            modifiedAt: new Date(input.accepted.file.mtimeMs).toISOString()
+          }
+        : undefined
+      const observation = await observeSessionFile(
+        input.path,
+        args.contentDependencyPath,
+        args.signal,
+        !input.force && previous ? { file: previous, path: input.accepted?.dependency } : undefined
       )
-      // Only apparent absence needs a parent membership proof.
-      if (observation.missing) {
+      throwIfAiVaultScanCancelled(args.signal)
+      if ('issue' in observation) {
+        const issue = observation.missing ? undefined : { agent: args.agent, ...observation.issue }
+        if (issue) {
+          recordSessionScanIssue(args.issues, issue)
+        }
+        outcomes.push({ ...input, missing: observation.missing, issue })
+      } else {
+        const file = {
+          ...observation.file,
+          modifiedAt: new Date(observation.file.mtimeMs).toISOString()
+        }
+        const metadataOnly = sidecarEnrichesWithoutReparse({
+          agent: args.agent,
+          file,
+          codexHome: null
+        })
+        outcomes.push({
+          ...input,
+          observed: { file: observation.file, dependency: observation.sidecarPath },
+          metadataOnly
+        })
+      }
+    }
+    const readable = new Map<string, FileWithMtime>()
+    for (const page of sessionSearchRecordPages(outcomes)) {
+      const accepted = await this.files.transition({
+        kind: 'observe-apply',
+        scope: this.scope,
+        generation: this.failures.epoch,
+        outcomes: page
+      })
+      for (const path of accepted.missingParents ?? []) {
         await this.scheduleParent(path)
       }
-      return
+      for (const observation of accepted.observations ?? []) {
+        const file = observation.file!
+        if (observation.changed) {
+          this.changes.set(observation.path, { file, force: observation.force })
+        }
+        retainRecentSessionFile(this.recent, file, limit)
+        if (observation.readable) {
+          readable.set(observation.path, file)
+        }
+      }
     }
-    const file = {
-      ...observation.file,
-      modifiedAt: new Date(observation.file.mtimeMs).toISOString()
-    }
-    const metadataOnly = sidecarEnrichesWithoutReparse({
-      agent: args.agent,
-      file,
-      codexHome: null
-    })
-    if (!metadataOnly && observation.file.sidecar === 'unknown') {
-      await this.failures.fail(path, force || readOwed)
-      file.sidecar = previous?.sidecar ?? 'unknown'
-    } else {
-      await this.failures.delete(path)
-    }
-    const old = previous
-    const dependency = metadataOnly ? undefined : observation.sidecarPath
-    const dependencyChanged =
-      !metadataOnly &&
-      !!old &&
-      file.sidecar !== 'unknown' &&
-      !sidecarUnchanged(old.sidecar ?? 'none', file.sidecar ?? 'none')
-    const { modifiedAt: _modifiedAt, ...facts } = file
-    await this.files.put(
-      path,
-      { file: facts, dependency },
-      { parent: dirname(path), group: dependency }
-    )
-    if (!old) {
-      this.count++
-      await this.addFile(path)
-    }
-    if (
-      force ||
-      !old ||
-      dependencyChanged ||
-      old.mtimeMs !== file.mtimeMs ||
-      old.sizeBytes !== file.sizeBytes ||
-      old.dev !== file.dev ||
-      old.ino !== file.ino
-    ) {
-      this.changes.set(path, {
-        file,
-        force:
-          dependencyChanged ||
-          (force &&
-            !!old &&
-            old.mtimeMs === file.mtimeMs &&
-            old.sizeBytes === file.sizeBytes &&
-            old.dev === file.dev &&
-            old.ino === file.ino)
-      })
-    }
-    retainRecentSessionFile(this.recent, file, limit)
-    return !metadataOnly && observation.file.sidecar === 'unknown' ? undefined : file
+    return readable
   }
-
-  async forget(path: string): Promise<void> {
-    if (await this.files.get(path)) {
-      await this.files.delete(path)
-      this.count--
-    }
-    await this.failures.delete(path)
-    await this.forgetDirty(path)
+  recordRemoval(path: string): void {
     this.recent.delete(path)
     this.changes.delete(path)
     this.removed.add(path)
+  }
+  async forget(path: string): Promise<void> {
+    await this.forgetPage([path])
+  }
+  async forgetPage(paths: string[]): Promise<void> {
+    await this.files.transition({ kind: 'forget-files', scope: this.scope, paths })
+    for (const path of paths) {
+      this.recordRemoval(path)
+    }
   }
 
   async *owners(dependency: string): AsyncGenerator<string> {

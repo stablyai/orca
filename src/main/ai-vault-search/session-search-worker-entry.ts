@@ -1,8 +1,8 @@
+import { listenForSessionSearchRequests } from './session-search-worker-requests'
 import {
   readSessionSearchSnapshotRows,
   applySessionSearchFileCountDelta
 } from './session-search-snapshot-rows'
-import type { SessionSearchCatalogCandidates } from './session-search-catalog-candidates'
 import { SessionSearchForegroundWrite } from './session-search-foreground-write'
 import { SessionSearchToolPurge } from './session-search-tool-purge'
 import { readIndexGeneration } from './session-search-index-generation'
@@ -27,10 +27,12 @@ setActiveSink({
 })
 
 let store: SessionSearchStore | null = null
-let candidates: SessionSearchCatalogCandidates | null = null
+let candidates: SessionSearchStore['catalogCandidates'] | null = null
 let toolPurge: SessionSearchToolPurge | null = null
 let reader: SyncDatabase | null = null
 let engine: SessionSearchEngine | null = null
+let runtimeEpoch = 0
+let pageSequence = 0
 let dataVersion: unknown
 let counts: SessionSearchStateCounts = {
   current: 0,
@@ -78,6 +80,8 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     const onError = (error: unknown): never => {
       throw error
     }
+    runtimeEpoch = c.runtimeEpoch ?? 0
+    pageSequence = 0
     store = new SessionSearchStore(c.path, onError, onMessagesChanged)
     candidates = store.catalogCandidates
     // Why: worker retirement closes the connection and its maintenance together.
@@ -113,6 +117,12 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
   if (!store) {
     throw new Error('Search writer is not open')
   }
+  if ((c.op === 'catalog' || c.op === 'candidates' || c.op === 'work') && c.catalogPage) {
+    if (c.catalogPage.runtimeEpoch !== runtimeEpoch || c.catalogPage.pageSequence <= pageSequence) {
+      throw new Error('Stale session catalog page')
+    }
+    pageSequence = c.catalogPage.pageSequence
+  }
   let reset = false
   // Why: SQLite data_version changes only for foreign commits, including legacy writers' generation bumps.
   if (dataVersion !== store.connection.pragma('data_version', { simple: true })) {
@@ -147,7 +157,14 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
           c.unprepared.canProvePrefix
         )
         foregroundWrites.set(c.handle, write)
-        return { id, reset, accepted: true, prefixTarget: write.target, counts }
+        return {
+          id,
+          reset,
+          accepted: true,
+          admission: write.admission,
+          prefixTarget: write.target,
+          counts
+        }
       }
       let identity: TranscriptSessionIdentity | null = null
       const write = store.beginWrite(c.candidate, c.mode, c.offset, () => identity)
@@ -235,16 +252,20 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     case 'candidates': {
       const path = c.command.kind === 'withdraw' ? c.command.path : undefined
       const previous = path ? rows(path)[0] : undefined
-      const result = candidates!.execute(c.command)
+      const result = await store.candidates(c.command)
       return {
         id,
         reset,
         candidates: result,
-        deltas: path ? [delta(path, previous)] : undefined,
+        deltas: path
+          ? [delta(path, previous)]
+          : result.withdrawn?.map((row) => delta(row.path, row)),
         counts,
         generation: readIndexGeneration(store.connection)
       }
     }
+    case 'work':
+      return { id, reset, work: await store.work(c.command), counts }
     case 'catalog':
       return { id, reset, catalog: await store.catalog(c.command), counts }
     case 'sync':
@@ -270,34 +291,16 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
   }
 }
 const handlePaths = new Map<number, string>()
-let lane = Promise.resolve()
-parentPort?.on('message', (request: SearchWorkerRequest) => {
-  lane = lane.then(async () => {
-    try {
-      const response = await execute(request)
-      response.catalogPending = candidates?.hasPending ?? false
-      parentPort?.postMessage(response)
-    } catch (error) {
-      const command = request.command
-      if ('handle' in command) {
-        foregroundWrites.get(command.handle)?.discard()
-        foregroundWrites.delete(command.handle)
-        writes.get(command.handle)?.write.discard()
-        writes.delete(command.handle)
-        handlePaths.delete(command.handle)
-      }
-      parentPort?.postMessage({
-        id: request.id,
-        accepted: false,
-        failure:
-          command.op === 'begin' ||
-          command.op === 'batch' ||
-          command.op === 'read-batch' ||
-          command.op === 'finish'
-            ? 'write'
-            : undefined,
-        error: error instanceof Error ? error.message : 'Session search failed'
-      })
+listenForSessionSearchRequests(
+  execute,
+  () => candidates?.hasPending ?? false,
+  (command) => {
+    if ('handle' in command) {
+      foregroundWrites.get(command.handle)?.discard()
+      foregroundWrites.delete(command.handle)
+      writes.get(command.handle)?.write.discard()
+      writes.delete(command.handle)
+      handlePaths.delete(command.handle)
     }
-  })
-})
+  }
+)

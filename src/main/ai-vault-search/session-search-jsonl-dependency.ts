@@ -18,28 +18,29 @@ export function createSessionSearchJsonlDependency(
   parse: (line: string) => readonly [string, string] | null,
   owner: { request: SessionSearchCatalogRequest; scope: string }
 ): SessionDiscoveryDependencyObserver {
-  const accepted = new SessionSearchCatalogClient<string>(`${owner.scope}:accepted`, owner.request)
   const staging = new SessionSearchCatalogClient<string>(`${owner.scope}:staging`, owner.request)
   const changed = new SessionSearchCatalogClient<true>(`${owner.scope}:changed`, owner.request)
   let cursor: SessionIndexJsonlCursor | undefined
   let signature: string | undefined
-  let pending = 0
-  const mark = async (key: string) => {
-    if (!(await changed.get(key))) {
-      await changed.put(key, true)
-      pending++
-    }
+  const transition = async (phase: 'install' | 'remove') => {
+    let after: string | undefined
+    do {
+      after = (
+        await changed.transition({ kind: 'dependency-step', scope: owner.scope, phase, after })
+      ).after
+    } while (after !== undefined)
   }
   const changes = async function* () {
-    while (pending) {
+    while (changed.size) {
       const page = await changed.page()
-      for (const { key } of page.rows) {
-        try {
+      const consumed: string[] = []
+      try {
+        for (const { key } of page.rows) {
+          consumed.push(key)
           yield key
-        } finally {
-          await changed.delete(key)
-          pending--
         }
+      } finally {
+        await changed.transition({ kind: 'delete-page', scope: changed.scope, keys: consumed })
       }
     }
   }
@@ -51,15 +52,8 @@ export function createSessionSearchJsonlDependency(
       if (!isMissingTranscriptPathError(error)) {
         throw error
       }
-      let after: string | undefined
-      do {
-        const page = await accepted.page({ after })
-        for (const { key } of page.rows) {
-          await mark(key)
-        }
-        after = page.after
-      } while (after !== undefined)
-      await accepted.release()
+      await staging.release()
+      await transition('remove')
       cursor = undefined
       signature = undefined
       return changes()
@@ -78,9 +72,7 @@ export function createSessionSearchJsonlDependency(
       }
     }
     const drain = async () => {
-      for (const [key, value] of batch) {
-        await staging.put(key, value)
-      }
+      await staging.putPage([...batch].map(([key, value]) => staging.encode(key, value)))
       batch = new Map()
     }
     const start = append ? cursor!.offset : 0
@@ -94,29 +86,9 @@ export function createSessionSearchJsonlDependency(
       : result.consumedThrough > 0
         ? await firstRecordSignature(path, result.consumedThrough)
         : null
-    let after: string | undefined
-    do {
-      const page = await staging.page({ after })
-      for (const { key, value } of page.rows) {
-        if ((await accepted.get(key)) !== value) {
-          await mark(key)
-        }
-        await accepted.put(key, value)
-      }
-      after = page.after
-    } while (after !== undefined)
+    await transition('install')
     if (!append) {
-      after = undefined
-      do {
-        const page = await accepted.page({ after })
-        for (const { key } of page.rows) {
-          if ((await staging.get(key)) === undefined) {
-            await mark(key)
-            await accepted.delete(key)
-          }
-        }
-        after = page.after
-      } while (after !== undefined)
+      await transition('remove')
     }
     cursor = {
       offset: result.consumedThrough,
@@ -129,6 +101,6 @@ export function createSessionSearchJsonlDependency(
     await staging.release()
     return changes()
   }
-  Object.defineProperty(observe, 'pending', { get: () => pending > 0 })
+  Object.defineProperty(observe, 'pending', { get: () => changed.size > 0 })
   return observe
 }
