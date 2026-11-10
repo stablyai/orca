@@ -93,7 +93,10 @@ export function getIssueTaskState(state: IssueInfo['state'] | undefined): Worktr
   return null
 }
 
-// Sidebar Linear glyph tone: only closed states get color, like merged PRs.
+/**
+ * Text color class for the sidebar Linear glyph. Done is purple and canceled is
+ * red, matching the PR glyph; every other state, or no state yet, stays grey.
+ */
 export function getLinearIconTone(stateName: string | undefined, stateType?: string): string {
   const kind = stateName || stateType ? classifyLinearState(stateName ?? '', stateType) : null
   // Softer than the PR glyph's tones: the Linear glyph is a filled disc, so full tone reads heavier.
