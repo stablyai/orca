@@ -15,7 +15,8 @@ import {
   getCloudReaderKeyStore,
   setCloudReaderKeyRevoker
 } from '../cloud-workspaces/cloud-reader-key-store'
-import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
+import type { ReaderKeyAccess, ReadPinAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
+import { getCloudReadPinStore } from '../cloud-workspaces/cloud-read-pin-store'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
@@ -68,7 +69,8 @@ function getService(): Promise<CloudWorkspacesService | null> {
       userDataPath,
       config,
       clientId: await clientIdFor(userDataPath),
-      readerKey: profileReaderKey(userDataPath)
+      readerKey: profileReaderKey(userDataPath),
+      readPins: profileReadPins(userDataPath)
     })
     const started = service
     setCloudReaderKeyRevoker((timeoutMs) => started.revokeReaderKey(timeoutMs))
@@ -98,6 +100,16 @@ function profileReaderKey(userDataPath: string): ReaderKeyAccess {
       getCloudReaderKeyStore(userDataPath).load(ensureActiveOrcaProfile(userDataPath).profile.id),
     peek: () =>
       getCloudReaderKeyStore(userDataPath).peek(ensureActiveOrcaProfile(userDataPath).profile.id)
+  }
+}
+
+/** Signer and rollback pins in the active profile's directory, keyed by account and workspace. */
+function profileReadPins(userDataPath: string): ReadPinAccess {
+  const store = getCloudReadPinStore(userDataPath)
+  const profileId = () => ensureActiveOrcaProfile(userDataPath).profile.id
+  return {
+    get: (identity, sandboxId) => store.get(profileId(), `${identity}\0${sandboxId}`),
+    set: (identity, sandboxId, pin) => store.set(profileId(), `${identity}\0${sandboxId}`, pin)
   }
 }
 

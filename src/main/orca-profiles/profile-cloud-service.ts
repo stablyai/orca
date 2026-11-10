@@ -1,4 +1,5 @@
 import { resetCloudOfflineData } from '../hosted-sandbox/cloud-offline-reset'
+import { clearCloudReadPins } from '../cloud-workspaces/cloud-read-pin-store'
 import {
   clearCloudReaderKey,
   revokeCloudReaderKeyBestEffort
@@ -186,6 +187,7 @@ export async function signOutCurrentOrcaProfile(
   resetCloudOfflineData()
   // The next account signed in on this profile gets its own reader key.
   await clearCloudReaderKey(active.profile.id, userDataPath)
+  await clearCloudReadPins(active.profile.id, userDataPath)
   try {
     clearRelayRegionPreferenceCache(userDataPath)
   } catch {

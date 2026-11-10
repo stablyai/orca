@@ -18,7 +18,11 @@ import {
   type CloudWorkspacesClient
 } from './cloud-workspaces-client'
 import { generateGrantRecipientKey, nodeSealedGrantPrimitives } from './sealed-grant-node'
-import { createReadSnapshotReader, type ReaderKeyAccess } from './cloud-read-snapshot-reader'
+import {
+  createReadSnapshotReader,
+  type ReaderKeyAccess,
+  type ReadPinAccess
+} from './cloud-read-snapshot-reader'
 
 const PRESENCE_BEAT_MS = 20_000
 /** Renew a teammate-opened workspace's lease well before the control plane's 30 min lease lapses. */
@@ -55,6 +59,8 @@ export function createCloudWorkspacesService(deps: {
   fetch?: typeof fetch
   /** This profile's reader key (sleeping-workspace snapshots); absent: reading them is off. */
   readerKey?: ReaderKeyAccess
+  /** Per-workspace signer and rollback pins (persisted per profile); in memory when absent. */
+  readPins?: ReadPinAccess
 }) {
   const client: CloudWorkspacesClient = createCloudWorkspacesClient({
     baseUrl: deps.config.controlPlaneUrl,
@@ -73,7 +79,7 @@ export function createCloudWorkspacesService(deps: {
   let leaseSandboxId: string | null = null
   let leaseRenewedAt = 0
   const reader = deps.readerKey
-    ? createReadSnapshotReader({ client, readerKey: deps.readerKey })
+    ? createReadSnapshotReader({ client, readerKey: deps.readerKey, pins: deps.readPins })
     : null
   // Register the key up front: a workspace seals its snapshot to the keys known when it sleeps.
   void reader?.register()
@@ -188,6 +194,11 @@ export function createCloudWorkspacesService(deps: {
               // A desktop pairs as a runtime client; a mobile-scoped offer is useless here.
               'runtime'
             )
+            // Pairing names the workspace's snapshot signer: the trusted (re-)pin, e.g. after the
+            // VM's disk was replaced. Best effort; the pairing itself must not fail on it.
+            if (opened.readSignerPublicKeyB64 && reader) {
+              await reader.pinSigner(id, opened.readSignerPublicKeyB64).catch(() => undefined)
+            }
             return { grantId: issued.grant.id, pairingCode: opened.pairingUrl }
           } catch (error) {
             // Nothing can use a grant we failed to open; revoke it so it does not count as a device.

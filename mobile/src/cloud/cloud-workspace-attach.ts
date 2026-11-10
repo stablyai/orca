@@ -6,6 +6,8 @@ import { requestCloudWorkspaceGrant } from './cloud-control-plane-access'
 import { wakeCloudWorkspace } from './cloud-control-plane-client'
 import { CloudRequestError, type CloudControlPlane } from './cloud-control-plane-request'
 import { encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
+import { loadCloudDeviceIdentity } from './cloud-device-identity'
+import { recordCloudReadSignerFromGrant } from './cloud-read-snapshot-pins'
 import { createGrantRecipientKey, openCloudSealedGrant } from './cloud-sealed-grant'
 
 // Opening a cloud workspace from the phone: wake the VM through the control plane, then talk to its
@@ -21,6 +23,7 @@ export class CloudAttachError extends Error {
       | 'failed'
       | 'not_found'
       | 'wake_timeout'
+      | 'wake_failed'
       | 'grant_failed'
       | 'pairing_failed'
   ) {
@@ -75,7 +78,15 @@ export async function attachCloudWorkspace(args: {
   signal?: AbortSignal
 }): Promise<{ hostId: string; paired: boolean }> {
   args.onPhase('waking')
-  await wakeCloudWorkspaceUntilReady(args.plane, args.sandboxId, args.signal)
+  try {
+    await wakeCloudWorkspaceUntilReady(args.plane, args.sandboxId, args.signal)
+  } catch (error) {
+    // The control plane failing the wake itself (an unknown 5xx) reads as "couldn't wake".
+    if (error instanceof CloudRequestError && error.status >= 500) {
+      throw new CloudAttachError('wake_failed')
+    }
+    throw error
+  }
   const existing = await cloudWorkspaceHostId(args.sandboxId)
   if (existing) {
     args.onPhase('connected')
@@ -89,8 +100,19 @@ export async function attachCloudWorkspace(args: {
       recipientPublicKeyB64: encodeBase64Bytes(recipient.publicKey),
       deviceLabel: args.deviceLabel
     })
-    pairingUrl = (await openCloudSealedGrant(grant.sealed, grant.grantId, recipient.secretKey))
-      .pairingUrl
+    const opened = await openCloudSealedGrant(grant.sealed, grant.grantId, recipient.secretKey)
+    pairingUrl = opened.pairingUrl
+    // The grant names the workspace's read-snapshot signer: pin it (re-pin after a new disk).
+    if (opened.readSignerPublicKeyB64) {
+      const sessionId = (await loadCloudDeviceIdentity()).enrollment?.deviceSessionId
+      if (sessionId) {
+        await recordCloudReadSignerFromGrant(
+          sessionId,
+          args.sandboxId,
+          opened.readSignerPublicKeyB64
+        ).catch(() => undefined)
+      }
+    }
   } catch (error) {
     if (error instanceof CloudRequestError && error.status === 401) {
       throw error

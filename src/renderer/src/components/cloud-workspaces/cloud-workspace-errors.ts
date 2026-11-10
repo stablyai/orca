@@ -12,6 +12,23 @@ import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
  */
 export type CloudWorkspaceSeatOwner = { self: boolean; name: string | null }
 
+// Codes describeError() has specific copy for; anything else from a 5xx is an unknown server failure.
+const DESCRIBED_CODES: ReadonlySet<string> = new Set([
+  'not_found',
+  'entitlement_denied',
+  'forbidden',
+  'conflict',
+  'timeout',
+  'unavailable',
+  'provider_unavailable',
+  'unauthorized'
+])
+
+/** A 5xx with no specific copy: a failed wake reads "Couldn't wake the sandbox. Your files are safe." */
+export function isUnknownServerFailure(error: string, status?: number): boolean {
+  return status !== undefined && status >= 500 && !DESCRIBED_CODES.has(error)
+}
+
 export function describeError(
   error: string,
   reason?: string,

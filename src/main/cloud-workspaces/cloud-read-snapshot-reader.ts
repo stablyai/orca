@@ -3,11 +3,22 @@
 // after a sign-in or account switch, and at most every 6 h after); the VM seals each snapshot to
 // the reader keys registered when it went to sleep.
 import { hostname } from 'node:os'
-import { openReadSnapshot, ReadSnapshotError } from '../../shared/cloud-workspaces/read-snapshot'
+import {
+  openReadSnapshot,
+  ReadSnapshotError,
+  type ReadSnapshot
+} from '../../shared/cloud-workspaces/read-snapshot'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 import { CloudWorkspacesError, type CloudWorkspacesClient } from './cloud-workspaces-client'
 import type { CloudReaderKey, ReaderKeyLoad } from './cloud-reader-key-store'
-import { nodeSealedGrantPrimitives } from './sealed-grant-node'
+import {
+  checkReadSnapshotPin,
+  pinFromGrant,
+  ReadSnapshotSignatureError,
+  verifyReadSnapshotSigner,
+  type ReadSnapshotPin
+} from '../../shared/cloud-workspaces/read-snapshot-signature'
+import { ed25519Verify, nodeSealedGrantPrimitives } from './sealed-grant-node'
 
 export const READER_KEY_REFRESH_MS = 6 * 60 * 60_000
 
@@ -20,6 +31,23 @@ export type ReaderKeyAccess = {
   peek?: () => Promise<CloudReaderKey | null>
 }
 
+/** Where the per-workspace signer and rollback pins live (persisted per profile in the app). */
+export type ReadPinAccess = {
+  get: (identity: string, sandboxId: string) => Promise<ReadSnapshotPin | null>
+  set: (identity: string, sandboxId: string, pin: ReadSnapshotPin) => Promise<void>
+}
+
+/** In-memory pins (tests, or a build without a profile directory). */
+export function memoryReadPins(): ReadPinAccess {
+  const pins = new Map<string, ReadSnapshotPin>()
+  return {
+    get: async (identity, sandboxId) => pins.get(`${identity}\0${sandboxId}`) ?? null,
+    set: async (identity, sandboxId, pin) => {
+      pins.set(`${identity}\0${sandboxId}`, pin)
+    }
+  }
+}
+
 type Registration = { identity: string; publicKeyB64: string; keyId: string; at: number }
 type Ready = { key: CloudReaderKey; keyId: string; fresh: boolean; identity: string }
 type Unavailable = { unavailable: Extract<ReaderKeyLoad, { ok: false }> }
@@ -27,15 +55,14 @@ type Unavailable = { unavailable: Extract<ReaderKeyLoad, { ok: false }> }
 export function createReadSnapshotReader(deps: {
   client: Pick<CloudWorkspacesClient, 'registerReaderKey' | 'getReadSnapshot' | 'deleteReaderKey'>
   readerKey: ReaderKeyAccess
+  pins?: ReadPinAccess
   deviceLabel?: () => string
   now?: () => number
 }) {
   const now = deps.now ?? Date.now
   let registration: Registration | null = null
   let inflight: { tag: string; promise: Promise<Registration> } | null = null
-  // Highest payload capturedAt opened per (profile/user/account, workspace). Memory only: a
-  // restart forgets it, but within a run a replayed older snapshot is refused.
-  const newestShown = new Map<string, number>()
+  const pins = deps.pins ?? memoryReadPins()
 
   async function ensure(force = false): Promise<Ready | Unavailable> {
     const identity = deps.readerKey.identity()
@@ -147,6 +174,22 @@ export function createReadSnapshotReader(deps: {
       await deps.client.deleteReaderKey(keyId, timeoutMs)
     },
 
+    /**
+     * Pairing (a sealed grant) names the workspace's signer: pin it, replacing any earlier one. This
+     * is the trusted way back after the VM's disk (and so its signing key) was replaced.
+     */
+    async pinSigner(sandboxId: string, signerPublicKeyB64: string): Promise<void> {
+      const identity = deps.readerKey.identity()
+      if (!identity) {
+        return
+      }
+      await pins.set(
+        identity,
+        sandboxId,
+        pinFromGrant(await pins.get(identity, sandboxId), signerPublicKeyB64)
+      )
+    },
+
     async read(sandboxId: string): Promise<CloudReadSnapshotState> {
       const first = await ensure()
       if ('unavailable' in first) {
@@ -166,27 +209,43 @@ export function createReadSnapshotReader(deps: {
       if (fetched.kind !== 'sealed') {
         return { state: fetched.kind }
       }
+      // Who wrote it, before anything is decrypted: a forged signature is refused outright.
+      let signer: string | null
       try {
-        const snapshot = await openReadSnapshot(
+        signer = await verifyReadSnapshotSigner(fetched.sealed, ed25519Verify)
+      } catch (error) {
+        if (error instanceof ReadSnapshotSignatureError) {
+          return { state: 'unverified', reason: 'bad_signature' }
+        }
+        throw error
+      }
+      let snapshot: ReadSnapshot
+      try {
+        snapshot = await openReadSnapshot(
           fetched.sealed,
           sandboxId,
           ready.key.secretKey,
           nodeSealedGrantPrimitives
         )
-        // Rollback pin: never show a copy older than one already shown for this workspace here.
-        const pinKey = `${first.identity}\0${sandboxId}`
-        const pinned = newestShown.get(pinKey)
-        if (pinned !== undefined && snapshot.capturedAt < pinned) {
-          return { state: 'stale' }
-        }
-        newestShown.set(pinKey, snapshot.capturedAt)
-        return { state: 'ready', snapshot, storedAt: fetched.sealed.storedAt }
       } catch (error) {
         if (error instanceof ReadSnapshotError) {
           throw new CloudWorkspacesError(0, 'snapshot_unreadable', error.code)
         }
         throw error
       }
+      // Pins: only the signer this device trusts for the workspace, never an older copy.
+      const verdict = checkReadSnapshotPin(
+        await pins.get(first.identity, sandboxId),
+        signer,
+        snapshot.capturedAt
+      )
+      if (!verdict.ok) {
+        return verdict.reason === 'rollback'
+          ? { state: 'stale' }
+          : { state: 'unverified', reason: verdict.reason }
+      }
+      await pins.set(first.identity, sandboxId, verdict.pin)
+      return { state: 'ready', snapshot, storedAt: fetched.sealed.storedAt }
     }
   }
 }

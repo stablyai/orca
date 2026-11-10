@@ -23,6 +23,8 @@ export type CloudReadViewState =
   | { kind: 'not_found' }
   /** Older than a copy already shown here (a rollback); refused. */
   | { kind: 'stale' }
+  /** The workspace did not sign it (forged, another signer, or unsigned after one was pinned). */
+  | { kind: 'unverified' }
   /** This computer cannot hold a reader key (no OS keychain). */
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
@@ -45,7 +47,7 @@ export type CloudReadSnapshotViewProps = {
 export type CloudReadWake =
   | { phase: 'waking'; startedAt: number }
   /** `message`: why, when the open flow said (e.g. the team's running limit). */
-  | { phase: 'failed'; message?: string }
+  | { phase: 'failed'; message?: string; unknownServerError?: boolean }
 
 function LoadingBody(): React.JSX.Element {
   const t = useTranslate()
@@ -191,7 +193,15 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
             )
           : ''}
       </p>
-      {failed ? (
+      {failed?.unknownServerError ? (
+        // The shared copy for an unexplained server failure (also the remote desktop's).
+        <InlineError
+          title={t('components.cloudRemoteDesktop.wakeFailedTitle', 'Couldn’t wake the sandbox.')}
+          detail={t('components.cloudRemoteDesktop.wakeFailedDetail', 'Your files are safe.')}
+          retryLabel={t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
+          onRetry={props.onWake}
+        />
+      ) : failed ? (
         <InlineError
           title={t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
             name: props.title
@@ -232,6 +242,15 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           title={t(
             'components.orcaCloud.read.staleCopy',
             'Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.'
+          )}
+        />
+      ) : null}
+      {state.kind === 'unverified' ? (
+        <InlineError
+          tone="neutral"
+          title={t(
+            'components.orcaCloud.read.unverified',
+            'Orca Cloud sent a copy this workspace didn’t sign, so it isn’t shown. Wake the workspace to see it as it is now.'
           )}
         />
       ) : null}

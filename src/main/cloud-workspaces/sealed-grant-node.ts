@@ -5,7 +5,8 @@ import {
   createPublicKey,
   diffieHellman,
   generateKeyPairSync,
-  hkdfSync
+  hkdfSync,
+  verify as cryptoVerify
 } from 'node:crypto'
 import {
   bytesToBase64,
@@ -64,4 +65,27 @@ export function generateGrantRecipientKey(): { secretKey: Uint8Array; publicKeyB
   const secret = new Uint8Array(Buffer.from(privateKey.export({ format: 'jwk' }).d!, 'base64url'))
   const pub = new Uint8Array(Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64url'))
   return { secretKey: secret, publicKeyB64: bytesToBase64(pub) }
+}
+
+/**
+ * Ed25519 verify over a raw 32-byte public key (the read snapshot signer). False, never a throw,
+ * for a key node cannot import.
+ */
+export function ed25519Verify(
+  publicKey: Uint8Array,
+  message: Uint8Array,
+  signature: Uint8Array
+): boolean {
+  if (publicKey.length !== 32 || signature.length !== 64) {
+    return false
+  }
+  try {
+    const key = createPublicKey({
+      key: { kty: 'OKP', crv: 'Ed25519', x: b64url(publicKey) },
+      format: 'jwk'
+    })
+    return cryptoVerify(null, message, key, signature)
+  } catch {
+    return false
+  }
 }

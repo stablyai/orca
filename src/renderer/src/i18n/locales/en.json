@@ -23240,7 +23240,8 @@
         "wakingElapsed": "Waking… {{elapsed}}",
         "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
         "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
-        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca.",
+        "unverified": "Orca Cloud sent a copy this workspace didn’t sign, so it isn’t shown. Wake the workspace to see it as it is now."
       }
     },
     "runtimeDownload": {

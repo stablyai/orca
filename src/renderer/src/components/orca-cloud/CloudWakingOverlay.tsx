@@ -14,6 +14,15 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 export const WAKE_SLOW_S = 10
 export const WAKE_STUCK_S = 60
 
+/**
+ * A wake that failed on the server for no known reason (an HTTP 5xx or internal_error from Orca
+ * Cloud). The raw text is diagnostics, not copy: these read "Couldn't wake the sandbox. Your files
+ * are safe." instead.
+ */
+export function isUnknownServerWakeFailure(message: string | undefined): boolean {
+  return message !== undefined && /\((?:HTTP 5\d\d|internal_error)\)/.test(message)
+}
+
 // Prompt lines and output lines of varied length: reads as "a terminal is coming".
 const SKELETON: { prompt: boolean; width: number }[] = [
   { prompt: true, width: 28 },
@@ -91,6 +100,7 @@ export function CloudWakingOverlay({
 }): React.JSX.Element {
   const t = useTranslate()
   const failed = wake.phase === 'failed'
+  const unknownServer = failed && isUnknownServerWakeFailure(wake.message)
   const now = useNow(1_000, !failed && !leaving)
   const seconds = wakeElapsedSeconds(wake.startedAt, Math.max(now, wake.at))
   const slow = !failed && seconds >= WAKE_SLOW_S
@@ -196,15 +206,25 @@ export function CloudWakingOverlay({
                         'orcaCloudWorkspace.overlay.terminalStalledTitle',
                         'Couldn’t reconnect the terminal'
                       )
-                    : t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
-                        name
-                      })}
+                    : unknownServer
+                      ? t(
+                          'components.cloudRemoteDesktop.wakeFailedTitle',
+                          'Couldn’t wake the sandbox.'
+                        )
+                      : t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
+                          name
+                        })}
                 </div>
-                {wake.message ? (
+                {wake.message && !unknownServer ? (
                   <p className="break-words text-xs text-foreground">{wake.message}</p>
                 ) : null}
                 <p className="text-xs text-muted-foreground">
-                  {t('orcaCloudWorkspace.overlay.failedDetail', 'Your files and chats are saved.')}
+                  {unknownServer
+                    ? t('components.cloudRemoteDesktop.wakeFailedDetail', 'Your files are safe.')
+                    : t(
+                        'orcaCloudWorkspace.overlay.failedDetail',
+                        'Your files and chats are saved.'
+                      )}
                 </p>
               </div>
               <Button
