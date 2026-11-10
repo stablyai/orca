@@ -21026,7 +21026,8 @@
         "config": "Open session settings",
         "permissions": "Open session permissions",
         "login": "Open Claude sign-in controls",
-        "currentMenu": "Show current menu"
+        "currentMenu": "Show current menu",
+        "panelLabel": "Claude /{{command}}"
       }
     },
     "tab": {

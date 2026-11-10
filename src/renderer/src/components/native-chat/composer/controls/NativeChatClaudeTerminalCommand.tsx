@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useTranslate } from '@/i18n/use-translate'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import { sendNativeChatObservedWrites } from '../../session/terminal/send/native-chat-observed-send'
@@ -51,10 +52,11 @@ export function NativeChatClaudeTerminalCommand({
     if (!started) {
       return
     }
-    const refresh = () => setScreen(readScreen())
-    refresh()
-    const timer = setInterval(refresh, 250)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({
+      run: () => setScreen(readScreen()),
+      intervalMs: 250,
+      slowWhileUnfocused: true
+    })
   }, [readScreen, started])
   const start = async () => {
     // Never clear or append to an unsubmitted terminal draft or an unreadable prompt.

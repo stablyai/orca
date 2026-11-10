@@ -5,10 +5,8 @@ import { NativeChatClaudeTerminalCommand } from './NativeChatClaudeTerminalComma
 import { NativeChatClaudeSettingsCommand } from './NativeChatClaudeSettingsCommand'
 import { NativeChatComposer } from '../NativeChatComposer'
 import { writeNativeChatDraftCache } from '../../drafts/native-chat-draft-views'
-import type {
-  AgentSessionMcpAction,
-  AgentSessionMcpServer
-} from '../../../../../../shared/agent-session/agent-session-mcp'
+import type { AgentSessionMcpServer } from '../../../../../../shared/agent-session/agent-session-mcp'
+import { AgentSessionMcpParams } from '../../../../../../shared/rpc-contract/agent-session-mcp-params'
 import type { SessionOptionDescriptor } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 
 function setupMcp() {
@@ -18,7 +16,7 @@ function setupMcp() {
     { name: 'local-tools', status: 'disabled', canAuthenticate: false }
   ]
   window.api.runtime.call = async ({ params }) => {
-    const operation = (params as { operation?: AgentSessionMcpAction })?.operation
+    const operation = AgentSessionMcpParams.safeParse(params).data?.operation
     if (operation && operation.action !== 'status') {
       await new Promise((resolve) => setTimeout(resolve, 150))
       servers = servers.map((server) =>
