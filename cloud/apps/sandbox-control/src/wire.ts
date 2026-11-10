@@ -75,14 +75,16 @@ export function sandboxView(row: SandboxRow, archivedAware = false) {
   }
 }
 
-export function readyView(row: SandboxRow, connection: OrcadReady) {
+export function readyView(row: SandboxRow, connection: OrcadReady, cloning = false) {
   return {
     sandbox: sandboxView(row),
     connection: {
       type: 'orca-server' as const,
       pairingCode: connection.pairingCode,
       projectRoot: connection.projectRoot
-    }
+    },
+    // Only for a create that asked (feature `clone-progress`): the repo is still cloning.
+    ...(cloning ? { clone: { state: 'running' as const } } : {})
   }
 }
 

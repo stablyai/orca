@@ -70,11 +70,15 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     return handleRequest(request, env, deps)
   }
 
-  async function call(method: string, path: string, init: { body?: unknown; as?: string; bearer?: string } = {}) {
+  async function call(
+    method: string,
+    path: string,
+    init: { body?: unknown; as?: string; bearer?: string; headers?: Record<string, string> } = {}
+  ) {
     const bearer = init.bearer ?? (await token(init.as ?? 'alice'))
     const request = new Request(`https://sandbox.test${path}`, {
       method,
-      headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...init.headers },
       body: init.body === undefined ? undefined : JSON.stringify(init.body)
     })
     const response = await handleRequest(request, env, deps)
