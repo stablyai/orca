@@ -603,8 +603,7 @@ describe('CodexSharedServerBanner', () => {
     const result = await useAppStore
       .getState()
       .removeWorktree({ id: 'wt-1', executionHostId: 'local' }, false, { mode: 'forget-local' })
-    expect(forgetLocal).toHaveBeenCalledOnce()
-    expect(result.ok).toBe(false)
+    expect(result).toEqual({ ok: false, error: 'disk unavailable' })
     pane.transport.detach?.({ preserveExitObserver: false })
     await reattachPaneWarning()
     expect(paneElement.textContent).toBe('')
