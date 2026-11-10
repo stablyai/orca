@@ -26,6 +26,7 @@ import {
   SourceControlScopeProvider,
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
+import { SourceControlHeaderActionsSlot } from './source-control/panel/header-actions-slot'
 import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
@@ -112,6 +113,7 @@ const WorktreeSection = memo(
         : null
     )
     const panel = useMemo(() => <SourceControlPanel />, [])
+    const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null)
     const identity = getWorktreeGitIdentityDisplay(owner.worktree)
     return (
       <section
@@ -133,6 +135,7 @@ const WorktreeSection = memo(
           expanded={isExpanded}
           onToggle={() => setExpanded(!isExpanded)}
           onOpen={() => useAppStore.getState().setActiveWorktree(id, owner.executionHostId)}
+          actionsSlotRef={setActionsSlot}
         />
         {isExpanded &&
           (!connected ? (
@@ -154,9 +157,11 @@ const WorktreeSection = memo(
           // A read error renders the body's existing failure banner with Retry.
           <div hidden={!bodyShown}>
             <OverlayActivityOwner.Provider value={onOverlayActivity}>
-              <SourceControlScopeProvider owner={owner} active={bodyActive}>
-                {panel}
-              </SourceControlScopeProvider>
+              <SourceControlHeaderActionsSlot.Provider value={bodyShown ? actionsSlot : null}>
+                <SourceControlScopeProvider owner={owner} active={bodyActive}>
+                  {panel}
+                </SourceControlScopeProvider>
+              </SourceControlHeaderActionsSlot.Provider>
             </OverlayActivityOwner.Provider>
           </div>
         )}

@@ -1,5 +1,13 @@
 import React from 'react'
-import { List, ListTree, MessageSquare, MoreHorizontal, RefreshCw, Settings2 } from 'lucide-react'
+import {
+  List,
+  ListTree,
+  MessageSquare,
+  MoreHorizontal,
+  RefreshCw,
+  Settings2,
+  Unlink
+} from 'lucide-react'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,6 +19,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { unnestWorktrees } from '../../../sidebar/workspace-actions/parenting/worktree-unnest'
+import { useSourceControlScopeOwner } from './worktree-scope'
 
 export function SourceControlHeaderOverflowMenu({
   sourceControlViewMode,
@@ -32,6 +43,7 @@ export function SourceControlHeaderOverflowMenu({
   onExpandNotes: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const scopeOwner = useSourceControlScopeOwner()
   const viewModeLabel =
     sourceControlViewMode === 'tree'
       ? t('auto.components.right.sidebar.SourceControl.a91f8e2b01', 'View as list')
@@ -46,7 +58,7 @@ export function SourceControlHeaderOverflowMenu({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className="size-7 text-muted-foreground hover:text-foreground"
+              className={`${scopeOwner ? 'size-6' : 'size-7'} text-muted-foreground hover:text-foreground`}
               aria-label={t(
                 'auto.components.right.sidebar.SourceControl.f71c4a8d90',
                 'More source control actions'
@@ -89,6 +101,23 @@ export function SourceControlHeaderOverflowMenu({
               <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
                 {diffCommentCount}
               </span>
+            </DropdownMenuItem>
+          </>
+        ) : null}
+        {scopeOwner ? (
+          <>
+            <DropdownMenuSeparator />
+            {/* Same unlink as the sidebar's Parent & Children menu; the worktree itself stays. */}
+            <DropdownMenuItem
+              onSelect={() =>
+                void unnestWorktrees(
+                  [scopeOwner.worktree],
+                  useAppStore.getState().updateWorktreeLineage
+                )
+              }
+            >
+              <Unlink className="size-3.5" />
+              {t('auto.components.sidebar.WorktreeContextMenu.579b1a8e61', 'Remove from Parent')}
             </DropdownMenuItem>
           </>
         ) : null}

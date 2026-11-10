@@ -103,6 +103,7 @@ export function SourceControlBranchContextRow({
   headControl,
   manualReviewUrl,
   branchLineTotal,
+  reviewControl,
   onChangeBaseRef,
   onRetry
 }: {
@@ -112,6 +113,7 @@ export function SourceControlBranchContextRow({
   headControl?: React.ReactNode
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
+  reviewControl?: React.ReactNode
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
@@ -124,8 +126,11 @@ export function SourceControlBranchContextRow({
       return null
     }
     return (
-      <div className="min-w-0 text-[11px] text-muted-foreground">
-        {headControl ?? <HeadIdentity display={headDisplay} />}
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className="min-w-0 flex-1">
+          {headControl ?? <HeadIdentity display={headDisplay} />}
+        </span>
+        {reviewControl}
       </div>
     )
   }
@@ -159,7 +164,12 @@ export function SourceControlBranchContextRow({
           onChangeBaseRef={onChangeBaseRef}
           changeBaseTitle={changeBaseTitle}
           leading={<Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />}
-          trailing={<ManualReviewLinkButton url={manualReviewUrl} />}
+          trailing={
+            <>
+              <ManualReviewLinkButton url={manualReviewUrl} />
+              {reviewControl}
+            </>
+          }
         />
         <span className="sr-only">
           {t('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}
@@ -189,6 +199,7 @@ export function SourceControlBranchContextRow({
                 label={t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
                 onClick={onRetry}
               />
+              {reviewControl}
             </>
           }
         />
@@ -224,6 +235,7 @@ export function SourceControlBranchContextRow({
           <>
             {compareStatNodes}
             <ManualReviewLinkButton url={manualReviewUrl} />
+            {reviewControl}
           </>
         }
         headTrailing={<SourceControlBranchLineTotalChip branchLineTotal={branchLineTotal} />}
