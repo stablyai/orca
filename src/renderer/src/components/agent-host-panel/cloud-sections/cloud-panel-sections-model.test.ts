@@ -111,4 +111,27 @@ describe('shared workspaces (D13)', () => {
         .missing
     ).toEqual([])
   })
+
+  it('fails closed when the workspace sharing could not be read (D13)', () => {
+    const declared = ['NPM_TOKEN', 'SENTRY_DSN', 'DATABASE_URL']
+    const data = cloudPanelSectionsData({
+      effective: values,
+      envVarNames: declared,
+      repoKey: null,
+      asleep: false,
+      sharing: null,
+      sharingUnknown: true
+    })
+    expect(data.withoutPersonal).toBe(true)
+    expect(data.missing).toEqual(['NPM_TOKEN'])
+    expect(
+      cloudPanelSectionsData({
+        effective: values,
+        envVarNames: declared,
+        repoKey: null,
+        asleep: false,
+        sharing: null
+      }).withoutPersonal
+    ).toBe(false)
+  })
 })
