@@ -189,8 +189,13 @@ export async function runSessionSearchPass(
         return state.queue.get(path)
       }
     })
-    await state.candidates.reconcilePublications(store, readOverdue, signal, (path) =>
-      state.queue.hasPublicationDebt(path)
+    await state.candidates.reconcilePublications(
+      store,
+      readOverdue,
+      signal,
+      (candidate, root) =>
+        state.queue.hasPublicationDebt(candidate.file.path) ||
+        state.discovery.hasPublicationDebt(candidate, root, args.roots)
     )
     const listings = state.discovery.listings()
     const roots = listings.map((listing) => listing.root)

@@ -4,13 +4,18 @@ import {
   notifySessionSearchOverflow
 } from './session-search-watcher.test-fixture'
 import { appendFile, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import * as parser from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import * as policy from './session-search-filesystem'
 import { SessionSearchIndexer } from './session-search-indexer'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
+import {
+  CODEX_ROLLOUT_FILE,
+  codexRolloutLines,
+  parseTranscript
+} from './session-search-transcript-fixtures'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
@@ -685,3 +690,85 @@ it.each([
     }
   }
 )
+
+it('keeps an accepted alias while its deferred replacement is owed by a held-out observation', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-alias-admission-debt')
+  const clock = new FakeSessionSearchClock()
+  clock.costPerNowMs = 1000
+  const primary = join(harness.roots.codexSessionsDir!, CODEX_ROLLOUT_FILE)
+  const copyHome = join(harness.root, 'copied-home')
+  const copyRoot = join(copyHome, 'sessions')
+  const copy = join(copyRoot, CODEX_ROLLOUT_FILE)
+  const roots = {
+    ...harness.roots,
+    defaultCodexHomeDir: dirname(harness.roots.codexSessionsDir!),
+    additionalCodexSessionsDirs: [copyRoot]
+  }
+  const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
+  const actualStat = filesystem.wslGatedStat
+  let refusing = false
+  const probe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((path, ...rest) => {
+    if (refusing && path === primary) {
+      return Promise.reject(
+        Object.assign(new Error('fixture observation refusal'), { code: 'EIO' })
+      )
+    }
+    return actualStat(path, ...rest)
+  })
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots,
+    historyDays: null,
+    clock,
+    passDeadlineMs: 1000,
+    discoveryDeadlineMs: Infinity
+  })
+  const matching = (text: string) =>
+    harness.read((db) =>
+      db.prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?').get(text)
+    )
+  const rollout = (text: string) =>
+    `${codexRolloutLines(['echo'], 'plainresult', text).join('\n')}\n`
+  const fixedTime = new Date('2024-01-01')
+  try {
+    await mkdir(dirname(primary), { recursive: true })
+    await mkdir(copyRoot, { recursive: true })
+    await writeFile(primary, rollout('canonicaloldneedle'))
+    await utimes(primary, fixedTime, fixedTime)
+    await subject.start()
+    expect(matching('canonicaloldneedle')).toEqual({ n: 1 })
+    // A foreground read can publish an alias before background discovery notices it.
+    await writeFile(copy, rollout('predecessorowedneedle'))
+    await parseTranscript(copy, 'codex', copyHome)
+    expect(matching('predecessorowedneedle')).toEqual({ n: 1 })
+    await writeFile(primary, rollout('canonicalnewneedle'))
+    await utimes(primary, fixedTime, fixedTime)
+    notifySessionSearchFileChange(primary)
+    await writeClaudeTranscript(
+      join(harness.claudeProjectDir, 'newer.jsonl'),
+      ['newerbody'],
+      'newer'
+    )
+    await subject.reconcile()
+    expect(matching('canonicalnewneedle')).toEqual({ n: 0 })
+    expect(matching('canonicaloldneedle')).toEqual({ n: 1 })
+    refusing = true
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await subject.reconcile()
+    }
+    refusing = false
+    notifySessionSearchFileChange(copy)
+    await subject.reconcile()
+    expect(matching('predecessorowedneedle')).toEqual({ n: 1 })
+    expect(matching('canonicalnewneedle')).toEqual({ n: 0 })
+    expect(subject.status().phase).not.toBe('indexing')
+    await subject.reconcile({ full: true })
+    expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
+    expect(matching('predecessorowedneedle')).toEqual({ n: 0 })
+  } finally {
+    probe.mockRestore()
+    polling.mockRestore()
+    await subject.close()
+    await harness.cleanup()
+  }
+})

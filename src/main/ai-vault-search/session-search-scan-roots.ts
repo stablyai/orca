@@ -1,3 +1,4 @@
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { AI_VAULT_AGENT_SOURCES } from '../ai-vault/session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from '../ai-vault/session-scanner-roots'
@@ -84,10 +85,19 @@ export function sessionSearchPhysicalRoot(
   roots: SessionSearchScanRoots,
   discovery: Pick<SessionFileDiscovery, 'agent' | 'rootDir'>,
   path: string
-): string | null {
-  return owningRoot(
-    constituentRoots(roots, normalizedWslHomeDirs(roots.wslHomeDirs), discovery),
-    path
+): string | null | undefined {
+  const agent = discovery.agent
+  if (
+    (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') &&
+    splitOpenCodeSqliteCandidate(path, agent === 'zcode' ? 'zcode' : 'opencode')
+  ) {
+    return null
+  }
+  return (
+    owningRoot(
+      constituentRoots(roots, normalizedWslHomeDirs(roots.wslHomeDirs), discovery),
+      path
+    ) ?? undefined
   )
 }
 

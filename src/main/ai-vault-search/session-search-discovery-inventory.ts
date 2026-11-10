@@ -4,7 +4,6 @@ import { SessionSearchContainerInventory } from './session-search-container-inve
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
 import type { SessionFileCandidate, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
-import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import { sessionSearchPhysicalRoot, type SessionSearchScanRoots } from './session-search-scan-roots'
 import type { SessionDiscoveryContext } from '../ai-vault/session-discovery-context'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
@@ -92,7 +91,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     return map
   }
 
-  async observeForRead(
+  private physicalInventory(
     candidate: SessionFileCandidate,
     logicalRoot: string,
     roots: SessionSearchScanRoots
@@ -101,17 +100,39 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
       agent,
       file: { path }
     } = candidate
-    if (
-      (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') &&
-      splitOpenCodeSqliteCandidate(path, agent === 'zcode' ? 'zcode' : 'opencode')
-    ) {
+    const rootDir = sessionSearchPhysicalRoot(roots, { agent, rootDir: logicalRoot }, path)
+    if (rootDir === null) {
       return null
     }
-    const rootDir = sessionSearchPhysicalRoot(roots, { agent, rootDir: logicalRoot }, path)
-    const root = rootDir === null ? undefined : this.roots.get(`${agent}:${rootDir}`)
+    const root = rootDir === undefined ? undefined : this.roots.get(`${agent}:${rootDir}`)
     if (!root?.inventory.files.has(path)) {
       throw new Error('Session search read has no physical inventory owner')
     }
+    return root
+  }
+
+  hasPublicationDebt(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots
+  ): boolean {
+    return (
+      this.physicalInventory(candidate, logicalRoot, roots)?.inventory.hasPublicationDebt(
+        candidate.file.path
+      ) ?? false
+    )
+  }
+
+  async observeForRead(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots
+  ) {
+    const root = this.physicalInventory(candidate, logicalRoot, roots)
+    if (!root) {
+      return null
+    }
+    const path = candidate.file.path
     const change = await root.inventory.observeForRead(path, root.args, this.recentLimit)
     if (change) {
       for (const observer of root.dependencies.values()) {

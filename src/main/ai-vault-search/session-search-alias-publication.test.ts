@@ -186,7 +186,7 @@ it('transfers a deferred singleton forced read into later competitive publicatio
     store,
     () => true,
     undefined,
-    (path) => queue.hasPublicationDebt(path)
+    (candidate) => queue.hasPublicationDebt(candidate.file.path)
   )
   expect(hits('predecessorneedle')).toBe(1)
   finish(first, 'acceptedwinnerneedle')

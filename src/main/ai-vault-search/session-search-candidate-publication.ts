@@ -126,7 +126,7 @@ export abstract class SessionSearchCandidatePublications {
     store: SessionSearchIndexStore,
     overdue: () => boolean,
     signal?: AbortSignal,
-    owed: (path: string) => boolean = () => false
+    owed: (candidate: SessionFileCandidate, root: string) => boolean = () => false
   ): Promise<void> {
     const available = this.dirtyPublications.size
     let consumed = 0
@@ -145,9 +145,9 @@ export abstract class SessionSearchCandidatePublications {
       }
       const members = rows(this.groups.get(key))
       const selected = this.selected.get(key)
-      for (const path of selected ?? []) {
-        if (owed(path)) {
-          publication.required.add(path)
+      for (const { candidate, root } of members) {
+        if (selected?.has(candidate.file.path) && owed(candidate, root)) {
+          publication.required.add(candidate.file.path)
         }
       }
       if (

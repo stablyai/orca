@@ -68,7 +68,7 @@ it('keeps indexing after a native crawl never becomes ready and retires its chil
   })
   try {
     await writeClaudeTranscript(path, ['beforepressure'], 'pending')
-    nativeRoot = await realpath(harness.roots.claudeProjectsDir)
+    nativeRoot = await realpath(harness.roots.claudeProjectsDir!)
     const start = subject.start()
     await vi.waitFor(() => expect(crawling).toBe(true))
     await vi.advanceTimersByTimeAsync(60_000)
