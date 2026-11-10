@@ -13,7 +13,10 @@ import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
 export function commitProjectHeaderDragDrop(
   args: RootProjectHeaderDrag & {
-    session: ProjectHeaderDragSession
+    session: Pick<
+      ProjectHeaderDragSession,
+      'repo' | 'bucketKey' | 'sidebarRepoHeaderIds' | 'rootProjectHeaderKeys'
+    >
     sidebarDropIndex: number
     orderedRepoIds: readonly string[]
     repoById: ReadonlyMap<string, Repo>

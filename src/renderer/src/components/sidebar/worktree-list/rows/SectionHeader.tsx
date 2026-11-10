@@ -389,6 +389,9 @@ export function renderWorktreeSectionHeaderRow(
                 label={label}
                 projectGroups={ctx.projectGroups}
                 actions={ctx.projectActions}
+                moveToTopRepo={isDraggableRepoHeader ? headerRepo : undefined}
+                moveToTopHostId={row.hostId}
+                moveToTop={headerDrag.repoMoveToTop}
               />
             ) : null}
 

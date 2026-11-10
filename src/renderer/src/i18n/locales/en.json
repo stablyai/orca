@@ -7666,6 +7666,7 @@
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Hide non-Orca worktrees",
+          "moveToTop": "Move to top",
           "showHiddenWorktrees": "Show hidden worktrees"
         },
         "useWorktreeCardLinkedDetails": {

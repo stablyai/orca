@@ -20,6 +20,8 @@ import {
 } from '../viewport/worktree-header-section-boundaries'
 import { useHostHeaderDrag } from './host-header-drag'
 import { useRepoHeaderDrag } from './project-header-drag'
+import type { UseRepoHeaderDragArgs } from './project-header-drag-contract'
+import { useProjectHeaderMoveToTop } from './project-header-move-to-top'
 import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
@@ -228,7 +230,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [suppressScrollCorrectionForHeaderCommit]
   )
   // Drag applies only in manual order; still construct the controller inert for stable hook order.
-  const repoDrag = useRepoHeaderDrag({
+  const repoDragArgs: UseRepoHeaderDragArgs = {
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
     repoById: repoMap,
@@ -239,7 +241,9 @@ export function useWorktreeSidebarHeaderDrag(args: {
     rootProjectHeaderKeys,
     onCommitRootProjectOrder: commitRootProjectOrder,
     getScrollContainer: () => scrollRef.current
-  })
+  }
+  const repoDrag = useRepoHeaderDrag(repoDragArgs)
+  const repoMoveToTop = useProjectHeaderMoveToTop(repoDragArgs)
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
     projectGroupById: projectGroupByIdForHeaderDrag,
@@ -282,6 +286,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     orderedHostIds,
     hostDrag,
     repoDrag,
+    repoMoveToTop,
     projectGroupDrag,
     sidebarRepoHeaderIdsByBucket,
     sidebarProjectGroupHeaderIdsByBucket,
