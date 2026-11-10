@@ -6,10 +6,12 @@ import { normalizeAgentSessionsDir } from '../../session-scanner-values'
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/
 const RESERVED_PROFILE_NAME_RE = /^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i
 
+/** Profile name safe to splice into host session paths (no path metachars, no reserved names). */
 function isSafeProfileName(name: string): boolean {
   return PROFILE_NAME_RE.test(name) && !name.endsWith('.') && !RESERVED_PROFILE_NAME_RE.test(name)
 }
 
+/** Env profile value: `undefined` = no profile, `null` = present but unsafe, else the profile name. */
 function normalizedProfile(value: string | undefined): string | undefined | null {
   const profile = value?.trim()
   if (!profile || profile === 'default') {

@@ -140,6 +140,7 @@ export async function resolveSessionFilePath(
   return resolved
 }
 
+/** Resolves a session ID to its transcript file, walking per-agent roots (plus WSL guests when allowed). */
 async function resolveSessionFileById(
   transcriptAgent: NativeChatTranscriptAgent,
   sessionId: string,

@@ -63,7 +63,7 @@ export function uniqueDirs(dirs: readonly string[]): string[] {
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 
-// Use these same roots for discovery and transcript path validation.
+/** OMP session roots shared by discovery and transcript validation; profile dirs join unless an explicit sessions dir pins one root. */
 export function ompSessionsRootDirs(args: {
   ompSessionsDir?: string
   wslHomeDirs?: readonly string[]
