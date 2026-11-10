@@ -4,7 +4,9 @@
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { compileNetworkPolicy } from '../src/network-policy'
-import { credentialTargets } from '../src/provider-env'
+import { SWAPPED_CREDENTIALS, credentialTargets } from '../src/provider-env'
+import { AGENT_KEY_NAMES } from '../src/secrets'
+import { cloudSecretStoredOnVm } from '../../../../src/shared/cloud-secrets/cloud-secret-rules'
 import { egressSecretHosts, encodeEgressSecretHosts } from '../src/secret-egress'
 import { ENV_COMMAND } from '../src/sandbox-vm-commands'
 import { createHarness } from './harness'
@@ -204,6 +206,20 @@ describe('egress swap on a sandbox with the new keys', () => {
       expect((await send('api.github.com', 'GET', '/copilot_internal/user', { authorization: header })).status).toBe(200)
       expect(upstream.at(-1)!.headers.get('authorization')).toBe(`Bearer ${COPILOT_KEY}`)
     }
+    expect((await send('api.github.com', 'GET', '/user', { authorization: `Bearer ${ph}` })).status).toBe(200)
+    // The rest of GitHub's API is out of reach of the user's token, however the path is dressed up.
+    const sent = upstream.length
+    for (const [method, path] of [
+      ['GET', '/user/repos'],
+      ['POST', '/copilot_internal/user'],
+      ['GET', '/copilot_internal/../user/repos'],
+      ['GET', '/copilot_internal/%2e%2e/user/repos'],
+      ['GET', '/copilot_internal//../gists'],
+      ['DELETE', '/repos/acme/app']
+    ]) {
+      expect(await send('api.github.com', method!, path!, { authorization: `Bearer ${ph}` }), path).toEqual({ status: 403, body: 'path_not_allowed' })
+    }
+    expect(upstream).toHaveLength(sent)
     expect((await send('api.individual.githubcopilot.com', 'POST', '/chat/completions', { authorization: `Bearer ${ph}` })).status).toBe(200)
     expect(upstream.at(-1)!.url).toBe('https://api.individual.githubcopilot.com/chat/completions')
   })
@@ -256,5 +272,19 @@ describe('egress swap on a sandbox with the new keys', () => {
     )
     expect(env.COPILOT_PROVIDER_API_KEY).toBe(`orca-ph-copilot-provider-api-key-${id}`)
     expect(JSON.stringify(env)).not.toContain(COPILOT_KEY)
+  })
+})
+
+describe('every agent credential is either swapped or marked "stored on workspace"', () => {
+  it('leaves no agent key reaching the VM raw without the warning', () => {
+    const settings = /(_MODEL|_BASE_URL|_REGION|_PROJECT|_PROJECT_ID)$|^CLAUDE_CODE_USE_/
+    for (const name of AGENT_KEY_NAMES) {
+      if (settings.test(name)) {
+        continue
+      }
+      const swapped = SWAPPED_CREDENTIALS.includes(name)
+      expect(swapped !== cloudSecretStoredOnVm(name), `${name}: swapped=${swapped}`).toBe(true)
+    }
+    expect(SWAPPED_CREDENTIALS.includes('COPILOT_GITHUB_TOKEN')).toBe(true)
   })
 })

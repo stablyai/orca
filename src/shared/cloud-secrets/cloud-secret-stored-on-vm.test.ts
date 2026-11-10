@@ -24,14 +24,15 @@ describe('agent keys the workspace VM holds in full', () => {
     }
   })
 
-  it('treats the new agent credentials as agent keys (shared beats personal)', () => {
+  it('treats the new agent credentials as agent keys (shared beats personal), except a personal GitHub token', () => {
     for (const name of [
       'GOOGLE_GENERATIVE_AI_API_KEY',
-      'COPILOT_GITHUB_TOKEN',
       'COPILOT_PROVIDER_API_KEY',
       'COPILOT_PROVIDER_BASE_URL'
     ]) {
       expect(cloudSecretKind(name)).toBe('agent_key')
     }
+    // One person's GitHub token: a personal value wins over a team one.
+    expect(cloudSecretKind('COPILOT_GITHUB_TOKEN')).toBe('env')
   })
 })

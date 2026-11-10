@@ -94,7 +94,7 @@ import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from '
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
 import { cachedProviderEnv } from './session-env'
-import { credentialTargets } from './provider-env'
+import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
@@ -293,11 +293,17 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
   }
 }
 
-/** Exact method and path (the query string is ignored). */
-function requestMatches(allowed: readonly { method: string; path: string }[]): (method: string, path: string) => boolean {
+/** Method and path (the query string is ignored); a prefix entry matches below a normalized path only. */
+function requestMatches(allowed: NonNullable<CredentialTarget['paths']>): (method: string, path: string) => boolean {
   return (method, path) => {
-    const pathname = path.split('?')[0]
-    return allowed.some((entry) => entry.method === method.toUpperCase() && entry.path === pathname)
+    const pathname = path.split('?')[0] ?? ''
+    // A prefix grant never stretches across encoded or dot segments into another API.
+    const plain = /^(\/[A-Za-z0-9._~-]+)+\/?$/.test(pathname) && !/(^|\/)\.\.?(\/|$)/.test(pathname)
+    return allowed.some(
+      (entry) =>
+        entry.method === method.toUpperCase() &&
+        (entry.prefix ? plain && pathname.startsWith(entry.path) : entry.path === pathname)
+    )
   }
 }
 

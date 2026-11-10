@@ -89,8 +89,8 @@ export type CredentialTarget = {
 } & CredentialPolicy
 
 export type CredentialPolicy = {
-  /** Only these requests may carry the key (exact method, path up to an optional query). Absent: any. */
-  paths?: readonly { method: string; path: string }[]
+  /** Only these requests may carry the key (method, then the path up to its query: exact, or a prefix). Absent: any. */
+  paths?: readonly { method: string; path: string; prefix?: true }[]
   /**
    * The host stays reachable without the placeholder. Cursor trades the key for a short-lived access
    * token and sends that on every later call, so a 403 for unclaimed requests would break it.
@@ -114,6 +114,8 @@ export type ValueScopes = Readonly<Record<string, string>>
 type CredentialSpec = CredentialPolicy & {
   /** Hosts (of the default ones) that stay open without the placeholder. */
   allowUnclaimedHosts?: readonly string[]
+  /** Per-host request limits, over `paths`. */
+  pathsByHost?: Readonly<Record<string, NonNullable<CredentialPolicy['paths']>>>
   secret: string
   /** Env var that may point this key at a custom host (honoured only from the key's own scope). */
   baseUrl?: string
@@ -167,7 +169,15 @@ const CREDENTIALS: readonly CredentialSpec[] = [
     defaultHosts: ['api.github.com', ...COPILOT_API_HOSTS],
     headers: { authorization: bearer },
     altHeaderFormats: { authorization: [(value: string) => `token ${value}`] },
-    allowUnclaimedHosts: [...COPILOT_API_HOSTS]
+    allowUnclaimedHosts: [...COPILOT_API_HOSTS],
+    // On GitHub's API the user's token checks Copilot access and nothing else: the rest of the API
+    // (repos, gists, ...) stays out of reach of whatever runs in the workspace.
+    pathsByHost: {
+      'api.github.com': [
+        { method: 'GET', path: '/user' },
+        { method: 'GET', path: '/copilot_internal/', prefix: true }
+      ]
+    }
   },
   {
     secret: 'COPILOT_PROVIDER_API_KEY',
@@ -192,7 +202,7 @@ export function credentialShape(secret: string): Omit<CredentialTarget, 'host'> 
   if (!spec) {
     return null
   }
-  const { baseUrl: _baseUrl, defaultHosts: _defaultHosts, allowUnclaimedHosts: _openHosts, ...shape } = spec
+  const { baseUrl: _baseUrl, defaultHosts: _defaultHosts, allowUnclaimedHosts: _openHosts, pathsByHost: _paths, ...shape } = spec
   return shape
 }
 
@@ -221,7 +231,8 @@ export function credentialTarget(secret: string, host: string): CredentialTarget
   }
   const { allowUnclaimed: _open, ...rest } = shape
   const open = spec.allowUnclaimed || spec.allowUnclaimedHosts?.includes(host)
-  return { ...rest, ...(open ? { allowUnclaimed: true as const } : {}), host }
+  const paths = spec.pathsByHost?.[host] ?? spec.paths
+  return { ...rest, ...(open ? { allowUnclaimed: true as const } : {}), ...(paths ? { paths } : {}), host }
 }
 
 /** Where each model credential in `env` is used, so the egress proxy can swap it in on those hosts only. */

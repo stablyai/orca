@@ -114,6 +114,23 @@ function detailOf(run: RunRow): RunDetail {
   }
 }
 
+/** Untrusted context in a prompt, in UTF-8 bytes; the whole prompt stays far below one argv entry's 128 KiB. */
+export const MAX_CONTEXT_BYTES = 48 * 1024
+
+function truncateUtf8(text: string, maxBytes: number): string {
+  let bytes = 0
+  let end = 0
+  for (const char of text) {
+    const size = new TextEncoder().encode(char).length
+    if (bytes + size > maxBytes) {
+      break
+    }
+    bytes += size
+    end += char.length
+  }
+  return text.slice(0, end)
+}
+
 /** The agent's full prompt: the routine's prompt, what happens to its output, and fenced untrusted context. */
 export function composePrompt(routine: Pick<RoutineRow, 'prompt' | 'post_results'>, detail: RunDetail): string {
   const parts = [routine.prompt.trim()]
@@ -128,6 +145,14 @@ export function composePrompt(routine: Pick<RoutineRow, 'prompt' | 'post_results
   }
   if (detail.context !== undefined && detail.context !== null) {
     let context = JSON.stringify(detail.context, null, 2)
+    // The prompt reaches some agents as one argv entry (Linux caps one at 128 KiB): indentation of a
+    // deeply nested payload must not push it over, so a large context is sent compact, then cut.
+    if (new TextEncoder().encode(context).length > MAX_CONTEXT_BYTES) {
+      context = JSON.stringify(detail.context)
+    }
+    if (new TextEncoder().encode(context).length > MAX_CONTEXT_BYTES) {
+      context = `${truncateUtf8(context, MAX_CONTEXT_BYTES)}\n[truncated]`
+    }
     // A payload cannot close the fence early.
     context = context.replaceAll('</untrusted_context>', '<\\/untrusted_context>')
     parts.push(
