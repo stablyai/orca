@@ -37,6 +37,7 @@ import {
 } from '@/lib/workspace/creation/worktree-creation-surface'
 import { prepareCreatedWorktreeActivation } from '@/lib/workspace/creation/worktree-creation-initial-tabs'
 import type { UISlice } from '@/store/slices/ui/ui-slice-contract'
+import { assignUnassignedGitHubIssueOnStart } from '@/lib/assign-unassigned-github-issue-on-start'
 
 export async function executeWorktreeCreation(
   creationId: string,
@@ -152,6 +153,18 @@ export async function executeWorktreeCreation(
   }
   // The VM's checkout is now this workspace (or its project), so the sidebar may list it.
   releaseVmCreateCheckout(creationId)
+  // Why: assignment is best-effort and can wait on gh; do not delay reveal.
+  void assignUnassignedGitHubIssueOnStart({
+    enabled: useAppStore.getState().settings?.assignUnassignedGitHubIssuesOnStart === true,
+    item: preparedRequest.linkedWorkItem
+      ? {
+          ...preparedRequest.linkedWorkItem,
+          assignees: preparedRequest.githubStartAssignees
+        }
+      : preparedRequest.linkedWorkItem,
+    repoId: preparedRequest.repoId,
+    sourceContext: preparedRequest.taskSourceContext
+  }).catch(() => undefined)
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true

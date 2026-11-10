@@ -35,6 +35,11 @@ export function buildProjectWorkItem(
     labels: row.content.labels.map((label) => label.name),
     updatedAt: row.updatedAt,
     author: null,
+    assignees: row.content.assignees.map((user) => ({
+      login: user.login,
+      name: user.name,
+      avatarUrl: user.avatarUrl ?? ''
+    })),
     repoId: ownerRepo.id,
     // Why: the slug matched this row; a twin id must not resolve the item to the other host's row.
     repoHostId: getRepoExecutionHostId(ownerRepo),

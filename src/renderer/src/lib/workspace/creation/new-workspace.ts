@@ -11,6 +11,7 @@ import {
   resolveAgentStartupTabId
 } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../../../shared/worktree/types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 
@@ -22,6 +23,8 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']
+  /** GitHub Start assignment only; stripped when persisting the linked task. */
+  assignees?: GitHubAssignableUser[]
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
   linearBranchName?: string

@@ -31,6 +31,7 @@ import { useTaskSourceProviderReadiness } from './use-task-source-provider-readi
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -239,6 +240,23 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
           )
         })}
       </SearchableSetting>
+
+      <SettingsSwitchRow
+        label={t(
+          'auto.components.settings.tasks.search.assignUnassignedGitHubIssuesTitle',
+          'Assign unassigned GitHub issues to me when starting work'
+        )}
+        description={t(
+          'auto.components.settings.tasks.search.assignUnassignedGitHubIssuesDescription',
+          'When you start a workspace from a GitHub issue that has no assignee, assign it to your signed-in GitHub account. Existing assignees are never changed. If assignment fails, the workspace is still created.'
+        )}
+        checked={settings.assignUnassignedGitHubIssuesOnStart === true}
+        onChange={() =>
+          updateSettings({
+            assignUnassignedGitHubIssuesOnStart: !settings.assignUnassignedGitHubIssuesOnStart
+          })
+        }
+      />
 
       <p data-settings-row="" className="py-3 text-xs text-muted-foreground">
         {t(
