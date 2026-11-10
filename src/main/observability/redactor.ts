@@ -4,7 +4,7 @@
 
 // Word boundaries preserve FOO_SECRET matches; consume full Bearer/Token values.
 const LABELED_KV =
-  /["']?\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b["']?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|Bearer\s+\S+|Token\s+\S+|\S+)/gi
+  /["']?\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|Bearer\s+\S+|Token\s+\S+|\S+)/gi
 
 // Match specific providers first so sk-ant- retains its Anthropic tag.
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
