@@ -24,7 +24,6 @@ import {
   nativeChatForkInventory,
   nativeChatForkRequiresInheritedOriginal,
   nativeChatForkSupport,
-  nativeChatLatestForkItemId,
   type NativeChatForkSupport
 } from '../../../../../../shared/native-chat/native-chat-fork-offer'
 import {
@@ -35,6 +34,8 @@ import {
 } from '@/components/native-chat/messages/actions/native-chat-fork-launch'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatWorktreeForkMode } from './native-chat-worktree-fork'
+import { nativeChatForkPoint } from './native-chat-fork-point'
+import { useNativeChatWorktreeForkDialog } from './use-native-chat-worktree-fork-dialog'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { beginNativeChatSideChatPlacement } from '@/components/native-chat/messages/actions/native-chat-side-chat-placement'
 import {
@@ -51,10 +52,17 @@ export type NativeChatForkRowAction = {
   request: (
     throughItemId: string,
     side?: NativeChatSideChatRequest,
-    destination?: NativeChatForkDestination
+    destination?: NativeChatForkDestination,
+    draft?: string
   ) => Promise<NativeChatForkOutcome | undefined>
   /** Asks where a fork into a new worktree should branch from; absent where the host can't. */
-  openWorktreeFork?: (throughItemId: string, mode?: NativeChatWorktreeForkMode) => void
+  openWorktreeFork?: (
+    throughItemId: string,
+    mode?: NativeChatWorktreeForkMode,
+    draft?: string
+  ) => void
+  /** The response a fork from one of your messages copies through: the last one before it. */
+  forkPointBefore?: (messageItemId: string) => string | undefined
 }
 
 /** Another worktree the fork opens in, instead of beside its source. */
@@ -64,6 +72,8 @@ export type NativeChatForkDestination = { worktreeId: string }
 export type NativeChatWorktreeForkDialog = {
   throughItemId: string
   mode: NativeChatWorktreeForkMode
+  /** Your message, left unsent in the fork's composer. */
+  draft?: string
   close: () => void
 }
 
@@ -132,7 +142,8 @@ export function useNativeChatFork(input: {
     (
       throughItemId: string,
       side?: NativeChatSideChatRequest,
-      destination?: NativeChatForkDestination
+      destination?: NativeChatForkDestination,
+      draft?: string
     ): Promise<NativeChatForkOutcome | undefined> => {
       const { agent, sessionId, tabId, target, worktreeId } = latest.current
       if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
@@ -163,7 +174,8 @@ export function useNativeChatFork(input: {
         surfaceAddress: destination
           ? captureStructuredLaunchSurfaceAddress(destination.worktreeId)
           : nativeChatForkSurfaceAddress(worktreeId, tabId),
-        ...(side ? { side } : {})
+        ...(side ? { side } : {}),
+        ...(draft ? { draft } : {})
       })
         .then((launched) => (outcome = launched))
         .finally(() => {
@@ -194,16 +206,15 @@ export function useNativeChatFork(input: {
   useLayoutEffect(() => {
     forkableRef.current = forkableItemIds
   }, [forkableItemIds])
-  const latestForkItemId = useCallback((): string | undefined => {
-    const { items, contextFloor, epoch } = latest.current
-    return nativeChatLatestForkItemId(items, {
-      contextFloorSequence: Math.max(
-        latestAgentSessionContextClearSequence(items),
-        agentSessionContextFloorSequence(contextFloor, epoch)
-      ),
-      forkableItemIds: nativeChatForkInventory(items).forkableItemIds
-    })
-  }, [])
+  const latestForkItemId = useCallback(
+    (): string | undefined => nativeChatForkPoint(latest.current),
+    []
+  )
+  const forkPointBefore = useCallback(
+    (messageItemId: string): string | undefined =>
+      nativeChatForkPoint(latest.current, messageItemId),
+    []
+  )
   const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
     if (inFlight.current) {
       return 'pending'
@@ -215,33 +226,9 @@ export function useNativeChatFork(input: {
     request(throughItemId)
     return 'started'
   }, [latestForkItemId, request])
-  const [worktreeFork, setWorktreeFork] = useState<{
-    throughItemId: string
-    mode: NativeChatWorktreeForkMode
-  } | null>(null)
   const worktreeForkOffered = worktreeHost === 'supported'
-  const openWorktreeFork = useCallback(
-    (throughItemId: string, mode: NativeChatWorktreeForkMode = 'worktree') => {
-      if (!inFlight.current) {
-        setWorktreeFork({ throughItemId, mode })
-      }
-    },
-    []
-  )
-  const openWorktreeForkLatest = useCallback(
-    (mode: NativeChatWorktreeForkMode = 'worktree'): boolean => {
-      const throughItemId = latestForkItemId()
-      if (throughItemId) {
-        openWorktreeFork(throughItemId, mode)
-      }
-      return throughItemId !== undefined
-    },
-    [latestForkItemId, openWorktreeFork]
-  )
-  const worktreeForkDialog = useMemo<NativeChatWorktreeForkDialog | null>(
-    () => (worktreeFork ? { ...worktreeFork, close: () => setWorktreeFork(null) } : null),
-    [worktreeFork]
-  )
+  const { openWorktreeFork, openWorktreeForkLatest, worktreeForkDialog } =
+    useNativeChatWorktreeForkDialog(inFlight, latestForkItemId)
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
   const inheritedOriginal = support.kind === 'known' && support.inheritedOriginal === true
@@ -250,9 +237,18 @@ export function useNativeChatFork(input: {
       support: fork ? { kind: 'known', fork, inheritedOriginal } : { kind: 'unknown' },
       pendingItemId,
       request,
+      forkPointBefore,
       ...(worktreeForkOffered ? { openWorktreeFork } : {})
     }),
-    [fork, inheritedOriginal, openWorktreeFork, pendingItemId, request, worktreeForkOffered]
+    [
+      fork,
+      forkPointBefore,
+      inheritedOriginal,
+      openWorktreeFork,
+      pendingItemId,
+      request,
+      worktreeForkOffered
+    ]
   )
   return useMemo(
     () =>

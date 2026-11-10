@@ -78,6 +78,7 @@ function WorktreeForkDialog({
           // The person's name is the title; the default keeps its "Fork N of" wording.
           displayName: slug === plan?.name ? plan.displayName : name.trim(),
           mode: dialog.mode,
+          ...(dialog.draft ? { draft: dialog.draft } : {}),
           ...(subagent ? { subagent: { ...source, task: task.trim() } } : {})
         })
       ) {
@@ -190,7 +191,7 @@ function WorktreeForkDialog({
                   ? t(
                       'components.native-chat.fork.worktree.baseCurrentHint',
                       '{{branch}}, as last committed. Uncommitted changes stay here.',
-                      { branch }
+                      { branch: branch.replace(/^refs\/heads\//, '') }
                     )
                   : t(
                       'components.native-chat.fork.worktree.baseCurrentUnavailable',

@@ -112,6 +112,8 @@ export async function runNativeChatWorktreeFork(input: {
   name?: string
   displayName?: string
   mode?: NativeChatWorktreeForkMode
+  /** Your message, left unsent in the fork's composer. */
+  draft?: string
   /** With mode subagent: its task, and the chat it reports back to. */
   subagent?: { task: string; target: RuntimeClientTarget; sessionId: string; label: string }
 }): Promise<boolean> {
@@ -163,10 +165,12 @@ export async function runNativeChatWorktreeFork(input: {
   if (!subagent) {
     activateAndRevealWorktree(created.id, { sidebarRevealBehavior: 'auto' })
   }
+  const draft = subagent ? undefined : input.draft
   const outcome = await input.request(
     input.throughItemId,
     subagent ? { question: await subagentFirstMessage(subagent.task, subagent) } : undefined,
-    { worktreeId: created.id }
+    { worktreeId: created.id },
+    ...(draft ? [draft] : [])
   )
   // A launch failure is already reported; a fork that never started says so here.
   if (outcome === undefined) {

@@ -155,4 +155,22 @@ describe('runNativeChatWorktreeFork', () => {
     expect(side.question).toContain('Try the reverse order')
     expect(side.question).toContain('orca orchestration send --to orca:source-chat')
   })
+
+  it('opens a fork from one of your messages with that message left as a draft', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    await runNativeChatWorktreeFork({
+      sourceWorktreeId: 'repo::/work/feature',
+      base: 'main',
+      agent: 'claude',
+      throughItemId: 'reply-before-message',
+      request,
+      draft: 'Use the reverse order instead'
+    })
+    expect(request).toHaveBeenCalledWith(
+      'reply-before-message',
+      undefined,
+      { worktreeId: 'repo::/work/login-fork' },
+      'Use the reverse order instead'
+    )
+  })
 })

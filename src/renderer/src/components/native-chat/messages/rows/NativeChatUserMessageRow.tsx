@@ -8,6 +8,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from '../actions/NativeChatRewindAction'
+import { NativeChatUserForkAction } from '../actions/NativeChatUserForkAction'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
@@ -27,12 +28,15 @@ function UserMessageMeta({
   markdown,
   timestamp,
   sending,
-  rewind
+  rewind,
+  forkItemId
 }: {
   markdown: string
   timestamp: number | null
   sending: boolean
   rewind?: { itemId: string; surface: NativeChatRewindSurface }
+  /** Your message's journal item, so Fork can copy the chat up to just before it. */
+  forkItemId?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (!markdown && timestamp === null && !sending && !rewind) {
@@ -56,6 +60,9 @@ function UserMessageMeta({
       )}
       {rewind && !sending ? (
         <NativeChatRewindAction itemId={rewind.itemId} rewind={rewind.surface} />
+      ) : null}
+      {forkItemId && !sending ? (
+        <NativeChatUserForkAction itemId={forkItemId} text={markdown} />
       ) : null}
     </div>
   )
@@ -155,6 +162,7 @@ export function NativeChatUserMessageRow({
           timestamp={message.timestamp}
           sending={sending}
           {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
+          {...(message.source === 'transcript' ? { forkItemId: message.id } : {})}
         />
       ) : null}
       {deliveryNotice?.text !== undefined ? (

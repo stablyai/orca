@@ -1,4 +1,5 @@
-import { Bot, GitBranchPlus, GitFork, Loader2, PanelTop } from 'lucide-react'
+import { Bot, GitBranchPlus, Loader2, PanelTop } from 'lucide-react'
+import { NativeChatForkIcon } from './NativeChatForkIcon'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +35,7 @@ export function NativeChatForkAction({
     fork.pendingItemId === itemId ? (
       <Loader2 className="size-3.5 animate-spin" />
     ) : (
-      <GitFork className="size-3.5" />
+      <NativeChatForkIcon />
     )
   const tooltip =
     disabledReason ??
