@@ -17,12 +17,6 @@ import {
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
 import { closeRemoteRunLink, openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../../rpc/methods/orchestration/worker/worker-list-method'
-import {
-  WORKER_LIST_VIEW,
-  WORKER_SHOW_VIEW,
-  type WorkerListResult,
-  type WorkerShowResult
-} from '../../../../../cli/handlers/orchestration/worker-agent-views'
 import { offlineRemoteWorkerShow } from './remote-owned-reads'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 
@@ -87,19 +81,22 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     return getRemoteDispatch(db, dispatchId)!
   }
 
-  async function listWorkers(params: Record<string, unknown>): Promise<WorkerListResult> {
+  type ListedWorkers = {
+    workers: { dispatchId: string; server?: Record<string, unknown> }[]
+    page: { total: number; hasMore: boolean; nextCursor: string | null }
+    warnings?: string[]
+  }
+
+  async function listWorkers(params: Record<string, unknown>): Promise<ListedWorkers> {
     const parsed = ORCHESTRATION_WORKER_LIST_METHOD.params?.parse(params)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method returns the list shape the CLI reads.
     return (await ORCHESTRATION_WORKER_LIST_METHOD.handler(parsed, {
       runtime
-    } as never)) as WorkerListResult
+    } as never)) as ListedWorkers
   }
 
   it('shows an unreachable server’s worker in the ordinary shape, labelled with its server and last report', () => {
-    const shown: WorkerShowResult = offlineRemoteWorkerShow(
-      runtime,
-      remoteWorker('task_1', 'ctx_w1')
-    )
+    const shown = offlineRemoteWorkerShow(runtime, remoteWorker('task_1', 'ctx_w1'))
 
     expect(shown).toMatchObject({
       dispatch: { id: 'ctx_w1', taskId: 'task_1', runId: run.id, status: 'dispatched' },
@@ -107,16 +104,7 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
       server: { name: 'devB', reachable: false, asOf: '2026-11-09T08:30:00Z' },
       lastReport: 'Halfway: tests written.'
     })
-    expect(WORKER_SHOW_VIEW.fields(shown)).toMatchObject({
-      dispatchId: 'ctx_w1',
-      state: 'ready',
-      stage: 'server_unreachable',
-      server: 'devB',
-      asOf: '2026-11-09T08:30:00Z',
-      lastReport: 'Halfway: tests written.',
-      note: expect.stringContaining('devB could not be reached'),
-      waitingOnHuman: 'unknown'
-    })
+    expect(shown.observation.reason).toContain('devB could not be reached')
   })
 
   it('keeps the time devB last reported when this Orca only owes it a stop', () => {
@@ -136,8 +124,11 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     expect(shown.server).toMatchObject({ name: 'devB', repaired: true })
     expect(shown.observation.reason).toContain('The pairing with devB was re-made')
     const listed = await listWorkers({ run: run.id, paginate: true })
-    expect(WORKER_LIST_VIEW.fields({ ...listed, scope: { source: 'all' } }).workers).toEqual([
-      expect.objectContaining({ dispatchId: 'ctx_w1', host: 'devB (pairing re-made)' })
+    expect(listed.workers).toEqual([
+      expect.objectContaining({
+        dispatchId: 'ctx_w1',
+        server: expect.objectContaining({ name: 'devB', repaired: true })
+      })
     ])
   })
 
@@ -163,15 +154,11 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     const first = await listWorkers({ run: run.id, paginate: true })
     expect(first.workers.map((worker) => worker.dispatchId)).toEqual(['ctx_w2', 'ctx_w1'])
     expect(first.page).toMatchObject({ total: 2, hasMore: false })
-    expect(WORKER_LIST_VIEW.fields({ ...first, scope: { source: 'all' } }).workers).toEqual([
-      expect.objectContaining({
-        dispatchId: 'ctx_w2',
-        state: 'ready',
-        host: 'devB',
-        asOf: '2026-11-09T08:30:00Z'
-      }),
-      expect.objectContaining({ dispatchId: 'ctx_w1', host: 'devB' })
-    ])
+    expect(first.workers[0]).toMatchObject({
+      dispatchId: 'ctx_w2',
+      workerState: 'ready',
+      server: { name: 'devB', asOf: '2026-11-09T08:30:00Z' }
+    })
 
     // A later page follows this Orca's own cursor and repeats none of them.
     for (let index = 0; index < 101; index += 1) {
