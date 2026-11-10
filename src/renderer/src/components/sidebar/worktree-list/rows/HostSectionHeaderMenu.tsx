@@ -30,6 +30,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { isOrcaCloudRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
+import { AgentHostPanelMenuItem } from '../../../agent-host-panel/AgentHostPanelMenuItem'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
@@ -96,6 +98,11 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const repairRoute = useAppStore((s) => {
     const environment = s.runtimeEnvironments.find((entry) => entry.id === runtimeEnvironmentId)
     return environment ? runtimePairingRepairRoute(environment) : 'access-link'
+  })
+  // Orca Cloud: one "Agent accounts & secrets…" entry; there is nothing to sign out of per sandbox.
+  const cloudHost = useAppStore((s) => {
+    const environment = s.runtimeEnvironments.find((entry) => entry.id === runtimeEnvironmentId)
+    return environment ? isOrcaCloudRuntimeEnvironment(environment) : false
   })
   const repairableWithAccessLink = repairRoute === 'access-link'
   const stoppedWslDistro = useAppStore((s) =>
@@ -301,7 +308,8 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             {t('auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b', 'Check connection')}
           </DropdownMenuItem>
         )}
-        {runtimeEnvironmentId && row.health !== 'blocked' && (
+        {cloudHost ? <AgentHostPanelMenuItem hostId={row.hostId} /> : null}
+        {runtimeEnvironmentId && !cloudHost && row.health !== 'blocked' && (
           <HostAgentSignOutMenuItems
             environmentId={runtimeEnvironmentId}
             hostLabel={row.label}

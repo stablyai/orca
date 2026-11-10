@@ -27432,16 +27432,104 @@
     "unreachable": "Couldn’t reach Orca Cloud.",
     "section": {
       "keysCloud": "API keys from Cloud secrets",
-      "env": "Environment"
+      "env": "Environment",
+      "agentsCloud": "Agents",
+      "agents": "Agent sign-ins",
+      "keys": "API keys Orca sends to agents here"
     },
     "help": {
       "cloudKeys": "From your Orca account and Cloud secrets. Keys only on this computer aren’t sent to Orca Cloud.",
-      "cloudEnv": "From Cloud secrets: Repository, then Personal, then Shared."
+      "cloudEnv": "From Cloud secrets: Repository, then Personal, then Shared.",
+      "agentsHost": "The agent’s own sign-in, saved on {{host}}. Never copied from this computer.",
+      "keysPassed": "Passed to the agent when it starts. Not stored on {{host}}.",
+      "agentsLocal": "The agent’s own sign-in on this computer. Switch between saved accounts in Accounts.",
+      "keysLocal": "From Agent API keys. Sealed in your keychain and passed to the agent when it starts.",
+      "envLocal": "Agents here get this computer’s environment. Orca doesn’t add variables.",
+      "keysSsh": "Sent over SSH when the agent starts. Not stored on {{host}}.",
+      "envSsh": "Agents on {{host}} get its shell profile. Orca doesn’t add variables on SSH hosts.",
+      "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
+      "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
+      "envPaired": "Agents on {{host}} get its own environment. Orca doesn’t add variables on paired hosts.",
+      "agentsCloud": "From your Orca account. Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
     "loadingSecrets": "Loading Cloud secrets…",
-    "details": "Details"
+    "details": "Details",
+    "menuEntry": "Agent accounts & secrets…",
+    "footer": {
+      "accounts": "Accounts",
+      "agentAccounts": "Agent accounts",
+      "agentApiKeys": "Agent API keys",
+      "cloudSecrets": "Cloud secrets",
+      "customEnvironments": "Custom environments",
+      "allHosts": "All hosts",
+      "label": "Related settings"
+    },
+    "title": "Agent accounts & secrets",
+    "summary": {
+      "account": "your account",
+      "notSetUp": "not set up",
+      "expired": "expired",
+      "signsInHere": "signs in here",
+      "agent": "{{agent}} · {{source}}"
+    },
+    "entry": {
+      "statusPanel": "Agents and secrets · {{summary}}",
+      "statusPanelPlain": "Agents and secrets"
+    },
+    "cloud": {
+      "kept": "Kept outside the sandbox",
+      "accountWho": "From your Orca account · {{email}}",
+      "account": "From your Orca account",
+      "notSetUp": "Not set up",
+      "notSetUpDetail": "Set up once on this computer. Every cloud workspace uses it.",
+      "expired": "Your {{agent}} sign-in for Orca Cloud expired",
+      "expiredDetail": "Renew it once in Agent accounts.",
+      "signsInHere": "{{agent}} signs in for this workspace",
+      "sourceLabel": "{{agent}} source in this workspace",
+      "choose": "Choose",
+      "renew": "Renew",
+      "setUp": "Set up once",
+      "signedOut": "Sign in to Orca to manage this workspace’s agents.",
+      "signIn": "Sign in",
+      "failed": "Couldn’t load your agent accounts."
+    },
+    "kind": {
+      "local": "This computer",
+      "ssh": "SSH host",
+      "wsl": "WSL",
+      "recipe": "Custom environment",
+      "paired": "Paired",
+      "cloud": "Orca Cloud"
+    },
+    "state": {
+      "running": "running",
+      "connected": "connected",
+      "disconnected": "not connected",
+      "stopped": "stopped",
+      "suspended": "suspended",
+      "unreachable": "unreachable",
+      "asleep": "asleep",
+      "archived": "archived"
+    },
+    "notice": {
+      "wslStopped": "{{distro}} is stopped. Showing its last check, {{date}}. Opening a workspace on it starts it as usual.",
+      "wslStoppedNoDate": "{{distro}} is stopped. Opening a workspace on it starts it as usual.",
+      "recipeSuspended": "{{host}} is suspended. Showing its last check, {{date}}. Opening the workspace resumes it as usual.",
+      "recipeSuspendedNoDate": "{{host}} is suspended. Opening the workspace resumes it as usual.",
+      "sshDisconnected": "{{host}} isn’t connected. Showing its last check, {{date}}.",
+      "sshDisconnectedNoDate": "{{host}} isn’t connected.",
+      "unreachable": "Can’t reach {{host}}. Showing what it reported on {{date}}. Sign-in and sign-out need it online.",
+      "unreachableNoDate": "Can’t reach {{host}}. Sign-in and sign-out need it online."
+    },
+    "reason": {
+      "wslStopped": "{{distro}} is stopped. Opening a workspace on it starts it as usual.",
+      "recipeSuspended": "{{host}} is suspended. Opening the workspace resumes it as usual.",
+      "sshDisconnected": "Open a workspace on {{host}} to sign in or out.",
+      "unreachable": "Can’t reach {{host}}. Sign-in and sign-out need it online.",
+      "archived": "This workspace is archived."
+    }
   },
   "cloudSecretsAsk": {
     "scopeLabel": "Scope for {{name}}",
@@ -27742,7 +27830,7 @@
     "expiredDetail": "Sign in again once. Every cloud workspace picks it up.",
     "agentSignIn": "{{agent}} sign-in",
     "paused": "Orca account sign-in is paused",
-    "pausedDetail": "This sign-in stays with this workspace",
+    "pausedDetail": "This sign-in stays with this workspace.",
     "error": "Couldn’t check agent sign-in",
     "errorDetail": "The workspace still opens. Agents can sign in later.",
     "groupAccount": "{{agents}} from your Orca account",
