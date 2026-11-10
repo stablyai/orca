@@ -1,12 +1,12 @@
 import type * as FilePromises from 'node:fs/promises'
-import * as fsPromises from 'node:fs/promises'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import * as gitReadCache from '../../../git/source-control/git-read-cache-invalidation'
 import * as gitAdmin from '../../../../shared/git/metadata/git-common-directory'
 import { preparationPathKey } from './worktree-create-preparation-claim'
+import * as staleCleanup from './worktree-create-preparation-stale-cleanup'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -752,7 +752,7 @@ it('declines after a competing request takes the freed slot without evicting ano
 })
 
 it.each([750, 7500])(
-  'does not scan %i unrelated registrations when no add was issued',
+  'avoids cleanup reconciliation of %i unrelated registrations when no add was issued',
   async (width) => {
     const owner = await fixture()
     await owner.arm()
@@ -763,7 +763,7 @@ it.each([750, 7500])(
     const head = git(owner.repoPath, 'rev-parse', 'HEAD')
     for (let index = 0; index < width; index += 1) {
       const admin = join(adminRoot, `unrelated-${index}`)
-      await fsPromises.mkdir(admin, { recursive: true })
+      await mkdir(admin, { recursive: true })
       await writeFile(join(admin, 'gitdir'), `${join(owner.root, `unrelated-${index}`, '.git')}\n`)
       await writeFile(join(admin, 'commondir'), '../..\n')
       await writeFile(join(admin, 'HEAD'), `${head}\n`)
@@ -780,6 +780,7 @@ it.each([750, 7500])(
     })
     const invalidations = vi.spyOn(gitReadCache, 'runWithGitReadCacheInvalidation')
     const lookups = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    const staleScan = vi.spyOn(staleCleanup, 'startStalePreparationCleanup').mockResolvedValue()
     for (let request = 0; request < 3; request += 1) {
       await expect(
         startPreparation({
@@ -796,6 +797,7 @@ it.each([750, 7500])(
     expect(invalidations).not.toHaveBeenCalled()
     expect(lookups).not.toHaveBeenCalled()
     lookups.mockRestore()
+    staleScan.mockRestore()
     const run = gitRunner.gitExecFileAsync
     vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
       const result = await run(args, options)
