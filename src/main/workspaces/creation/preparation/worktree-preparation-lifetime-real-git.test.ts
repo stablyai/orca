@@ -799,16 +799,20 @@ it.each([750, 7500])(
     lookups.mockRestore()
     staleScan.mockRestore()
     const run = gitRunner.gitExecFileAsync
+    let issuedOperation: typeof primer.operation | undefined
     vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
       const result = await run(args, options)
       if (args.includes('add') && args.includes('--no-checkout')) {
+        issuedOperation = listPreparations()[0].operation
         await rm(args.at(-2)!, { recursive: true, force: true })
         throw new Error('issued add lost its public result')
       }
       return result
     })
     await expect(owner.arm()).rejects.toThrow('issued add lost its public result')
-    await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
+    expect(issuedOperation).toBeDefined()
+    await issuedOperation!.discard()
+    expect(preparationCapacityUsed()).toBe(0)
     expect(unrelatedReads).toBe(width)
   }
 )
