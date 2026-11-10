@@ -44,6 +44,7 @@ import {
 export type SidebarHostOption = {
   id: ExecutionHostId
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   kind: 'local' | 'ssh' | 'runtime'
   health: ExecutionHostHealth
@@ -129,7 +130,11 @@ export function buildSidebarHostOptions(
     ephemeralVmHosts: args.ephemeralVmHosts
   }).map((host) => {
     if (host.kind === 'local') {
-      return { ...host, presence: 'local' }
+      return {
+        ...host,
+        isDefaultLocalLabel: !args.hostLabelOverrides?.has(host.id),
+        presence: 'local'
+      }
     }
     if (host.kind === 'ssh') {
       const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
@@ -175,6 +180,10 @@ export function buildSidebarHostOptions(
       presence: host.id === activeRuntimeHostId ? 'active' : 'project'
     }
   })
+}
+
+export function sidebarHostDisplayLabel(host: SidebarHostOption, t: Translate = translate): string {
+  return host.isDefaultLocalLabel ? translateExecutionHostLabel(host.label, t) : host.label
 }
 
 export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[]): boolean {

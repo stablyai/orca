@@ -2,7 +2,10 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
+import {
+  buildSidebarHostOptions,
+  type SidebarHostOption
+} from '../../worktree-list/controls/sidebar-host-options'
 
 import { AddRepoHostSelector } from './AddRepoHostSelector'
 import { TranslationScopeContext, type Translate } from '@/i18n/use-translate'
@@ -50,12 +53,13 @@ describe('host lists with a 13,692-host ssh config', () => {
   })
   it('finds a host by its displayed translated label as well as its raw label', () => {
     const hosts: SidebarHostOption[] = Array.from({ length: 51 }, (_, i) => ({
-      id: `runtime:server-${i}`,
+      id: i === 50 ? 'local' : `runtime:server-${i}`,
       label: i === 50 ? 'Local Mac' : `node-${i}`,
+      isDefaultLocalLabel: i === 50,
       detail: '',
-      kind: 'runtime',
-      health: 'available',
-      presence: 'configured'
+      kind: i === 50 ? 'local' : 'runtime',
+      health: i === 50 ? 'local' : 'available',
+      presence: i === 50 ? 'local' : 'configured'
     }))
     const onSelectHost = vi.fn()
     render(
@@ -73,10 +77,54 @@ describe('host lists with a 13,692-host ssh config', () => {
     fireEvent.change(search, { target: { value: 'translated-host' } })
     expect(screen.getByText('translated-host')).toBeTruthy()
     fireEvent.keyDown(search, { key: 'Enter' })
-    expect(onSelectHost).toHaveBeenCalledWith('runtime:server-50')
+    expect(onSelectHost).toHaveBeenCalledWith('local')
     onSelectHost.mockClear()
     fireEvent.change(search, { target: { value: 'Local Mac' } })
     fireEvent.keyDown(search, { key: 'Enter' })
-    expect(onSelectHost).toHaveBeenCalledWith('runtime:server-50')
+    expect(onSelectHost).toHaveBeenCalledWith('local')
+  })
+  it('preserves a configured host name that matches a generated label', () => {
+    const hosts: SidebarHostOption[] = [
+      {
+        id: 'local',
+        label: 'Local Mac',
+        isDefaultLocalLabel: true,
+        detail: '',
+        kind: 'local',
+        health: 'local',
+        presence: 'local'
+      },
+      {
+        id: 'runtime:custom',
+        label: 'Local Mac',
+        detail: '',
+        kind: 'runtime',
+        health: 'available',
+        presence: 'configured'
+      }
+    ]
+    render(
+      <TranslationScopeContext.Provider value={scope}>
+        <AddRepoHostSelector
+          hosts={hosts}
+          selectedHostId="runtime:custom"
+          open
+          onOpenChange={vi.fn()}
+          onSelectHost={vi.fn()}
+        />
+      </TranslationScopeContext.Provider>
+    )
+    expect(screen.getAllByText('Local Mac').length).toBeGreaterThan(0)
+    expect(screen.getByText('translated-host')).toBeTruthy()
+  })
+
+  it('treats a local display-label override as a configured name', () => {
+    const hosts = buildSidebarHostOptions({
+      repos: [],
+      sshTargetLabels: new Map(),
+      settings: null,
+      hostLabelOverrides: new Map([['local', 'Local Mac']])
+    })
+    expect(hosts.find((host) => host.id === 'local')?.isDefaultLocalLabel).toBe(false)
   })
 })
