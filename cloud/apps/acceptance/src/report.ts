@@ -92,10 +92,10 @@ function benchTable(runs: RunFile[]): string {
     const b = latest.get(name)
     const n = b?.samples.length ?? 0
     return `<tr><th><code>${esc(name)}</code></th><td class="c">${n}</td><td class="c ${n >= 10 ? '' : 'w'}">${b ? sec(percentile(b.samples, 50)) : 'pending'}</td>
-<td class="c">${b ? sec(percentile(b.samples, 95)) : ''}</td><td class="c">${b ? `${sec(Math.min(...b.samples))} – ${sec(Math.max(...b.samples))}` : ''}</td>
+<td class="c">${b ? sec(percentile(b.samples, 95)) : ''}</td><td class="c">${b && b.samples.length >= 20 ? sec(percentile(b.samples, 99)) : ''}</td><td class="c">${b ? `${sec(Math.min(...b.samples))} – ${sec(Math.max(...b.samples))}` : ''}</td>
 <td>${esc(CONDUCTOR[name] ?? '')}</td><td>${esc(EARLIER[name] ?? '')}</td><td class="small">${b ? `run ${esc(b.run.runId)}${b.note ? `<br>${esc(b.note)}` : ''}` : ''}</td></tr>`
   })
-  return `<div class="tablewrap"><table><thead><tr><th>Metric</th><th>n</th><th>p50</th><th>p95</th><th>min – max</th><th>Conductor (documented)</th><th>Our earlier numbers</th><th>Source</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+  return `<div class="tablewrap"><table><thead><tr><th>Metric</th><th>n</th><th>p50</th><th>p95</th><th>p99 (n≥20)</th><th>min – max</th><th>Conductor (documented)</th><th>Our earlier numbers</th><th>Source</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
 }
 
 function ledgerTable(runs: RunFile[]): string {
