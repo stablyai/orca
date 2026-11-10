@@ -3,7 +3,10 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { clearPaneSpawnDeferral, setPaneSpawnDeferral } from '../../pane-spawn-deferral-registry'
+import {
+  clearPaneSpawnDeferral,
+  setPaneSpawnDeferral
+} from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()

@@ -1,6 +1,6 @@
 import { BookOpen, Download, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 

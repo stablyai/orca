@@ -5,7 +5,7 @@ import {
   type UsageHistorySnapshot,
   type UsageSnapshotQuery
 } from '../../../../shared/usage-history-rpc'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {

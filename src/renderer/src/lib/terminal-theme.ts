@@ -9,10 +9,8 @@ import {
   type TerminalCustomTheme
 } from '../../../shared/terminal-themes/terminal-custom-themes'
 import {
-  lookupTerminalTheme,
   resolveTerminalPalette,
-  type TerminalPaletteSettings,
-  type TerminalThemeLookupSettings
+  type TerminalPaletteSettings
 } from '../../../shared/terminal-themes/terminal-theme-selection'
 import {
   disambiguatedContentPluginNames,
@@ -48,17 +46,6 @@ export function getSystemPrefersDark(): boolean {
     return true
   }
   return window.matchMedia('(prefers-color-scheme: dark)').matches
-}
-
-export function getBuiltinTheme(name: string): ITheme | null {
-  return getTheme(name)
-}
-
-export function getTerminalTheme(
-  settings: TerminalThemeLookupSettings | undefined,
-  selection: string
-): ITheme | null {
-  return lookupTerminalTheme(settings, selection)
 }
 
 export function getAvailableTerminalThemeOptions(

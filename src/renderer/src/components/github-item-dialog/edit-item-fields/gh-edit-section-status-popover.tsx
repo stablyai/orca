@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskPageGitHubCloseAction } from '@/components/task-page/github/task-page-github-status-actions'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'

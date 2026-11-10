@@ -2,7 +2,7 @@ import { WorktreeJumpPaletteTaskRow } from './worktree-jump-palette-task-row'
 import type React from 'react'
 import { flushSync } from 'react-dom'
 import { CommandItem } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { PaletteCreateWorktreeRow } from '@/components/cmd-j/PaletteCreateWorktreeRow'
 import type { PaletteListEntry } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
@@ -17,6 +17,7 @@ import {
   WorktreeJumpPaletteSimulatorRow
 } from './worktree-jump-palette-browser-simulator-rows'
 import { useTranslate } from '@/i18n/use-translate'
+import { WorktreeJumpPaletteExtraRow } from './worktree-jump-palette-extra-row'
 
 export function WorktreeJumpPaletteEntry({
   entry,
@@ -106,6 +107,11 @@ export function WorktreeJumpPaletteEntry({
         renderKey={renderKey}
         controller={controller}
       />
+    )
+  }
+  if (entry.type === 'extra') {
+    return (
+      <WorktreeJumpPaletteExtraRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
   if (entry.type === 'simulator-tab') {

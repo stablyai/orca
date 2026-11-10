@@ -2,7 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 import {
   installWindowVisibilityInterval,
   type WindowVisibilityIntervalTimer
-} from '@/lib/window-visibility-interval'
+} from '@/lib/window-activity/window-visibility-interval'
 
 type ClockDeps = {
   now: () => number

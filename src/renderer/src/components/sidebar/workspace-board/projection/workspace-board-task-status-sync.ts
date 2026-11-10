@@ -1,5 +1,6 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-write-publication'
 import { linearGetIssue, linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
 import type { LinearMutationResult } from '@/runtime/linear/runtime-linear-client'

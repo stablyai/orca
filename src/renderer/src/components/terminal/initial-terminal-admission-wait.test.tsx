@@ -203,6 +203,7 @@ function Watcher(): null {
     terminalStartupRestorationReady: true,
     hydrationSucceeded: false,
     workspaceSurfaceIds: [],
+    workspaceSurfaceIdSet: new Set(),
     tabsByWorktree: {},
     createTab: mocks.createTab,
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 0, activeRenderableTabId: null }),

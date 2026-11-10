@@ -2,7 +2,8 @@ import { enqueueRootProjectOrderForSidebarDrop } from './root-project-order-comm
 import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
+import '@/store/project-groups/project-group-owner-routing'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -116,7 +117,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const projectGroupOwnerHostIdByGroupId = useMemo(() => {
     const byGroupId = new Map<string, ExecutionHostId | null>()
     for (const group of projectGroups) {
-      const hostId = getProjectGroupHostId(group)
+      const hostId = getRepoExecutionHostId(group)
       const existing = byGroupId.get(group.id)
       byGroupId.set(group.id, existing === undefined || existing === hostId ? hostId : null)
     }

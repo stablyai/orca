@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createSessionWriteSubscriber } from '../lib/workspace/persistence/session-write-subscriber'
-import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
+import { buildActiveViewUnloadPatch } from './startup/active-view-persist'
 import {
   isIntentionalAppRestartInProgress,
   registerUpdaterBeforeUnloadBypass
-} from '../lib/updater-beforeunload'
+} from './updates/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
@@ -18,8 +18,8 @@ import {
 import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
-} from '../lib/shutdown-checkpoint-guard'
-import { showShutdownCheckpointFailureToast } from '../lib/shutdown-checkpoint-failure-toast'
+} from './shutdown/shutdown-checkpoint-guard'
+import { showShutdownCheckpointFailureToast } from './shutdown/shutdown-checkpoint-failure-toast'
 import { isPairedWebClientWindow } from '../lib/desktop-window-chrome'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
 import { shutdownBufferCaptures } from '../components/terminal-pane/snapshots/shutdown-buffer-captures'

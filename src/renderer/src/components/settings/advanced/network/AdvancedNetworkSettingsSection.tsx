@@ -8,7 +8,7 @@ import {
   PROXY_URL_FAILURE_COPY,
   type ProxyUrlFailureCode
 } from '../../../../../../shared/network-proxy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'

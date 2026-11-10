@@ -47,7 +47,7 @@ import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from '../code-blocks/rich-markdown-lowlight'
 import { RichMarkdownTaskList } from '../lists/rich-markdown-task-list'
 import { createCachedLowlight } from '../code-blocks/rich-markdown-lowlight-cache'
-import { documentResourceAccess } from '@/lib/local-file-access'
+import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { attachRichMarkdownImageErrorLink } from '../images/rich-markdown-image-error-link'
 import {
   readRichMarkdownImageRuntimeContext,
