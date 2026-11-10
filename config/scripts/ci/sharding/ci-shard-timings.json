@@ -5131,7 +5131,6 @@
       "src/renderer/src/components/mobile/WindowsFirewallNotice.test.tsx": 691,
       "src/renderer/src/components/mobile/paired-mobile-devices.test.ts": 192,
       "src/renderer/src/components/mobile/use-mobile-page-paired-devices.test.ts": 475,
-      "src/renderer/src/components/native-chat-recovery/offers/native-chat-launch-resume-decision.test.tsx": 1844,
       "src/renderer/src/components/native-chat-recovery/integration/native-chat-resume-bulk-progress.test.tsx": 3261,
       "src/renderer/src/components/native-chat-recovery/offers/native-chat-resume-failed-chat-watch.test.ts": 1954,
       "src/renderer/src/components/native-chat-recovery/integration/native-chat-resume-finished-run.test.tsx": 4173,
@@ -5690,7 +5689,6 @@
       "src/renderer/src/components/stats/usage-daily-chart.test.tsx": 333,
       "src/renderer/src/components/stats/usage-overview-model.test.ts": 364,
       "src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx": 2317,
-      "src/renderer/src/components/status-bar/NativeChatResumeStatusSegment.test.tsx": 2452,
       "src/renderer/src/components/status-bar/PortsStatusSegment.render-stability.test.tsx": 2161,
 
       "src/renderer/src/components/status-bar/SshStatusSegment.large-host-list.test.tsx": 1838,
