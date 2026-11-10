@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useOrgRoster } from '../../billing/team/use-org-roster'
 import { CloudAgentSetupDialog } from '../../cloud-agent-setup/CloudAgentSetupDialog'
@@ -27,9 +29,11 @@ function TeamCloudSecretsPane({
 }
 
 /** Shown only where Orca Cloud is offered to this account. */
-export function CloudSecretsSection({ orgId }: { orgId: string | null }): React.JSX.Element | null {
+export function CloudSecretsSection({ orgId }: { orgId: string | null }): React.JSX.Element {
+  const t = useTranslate()
   const api: CloudSecretsApi | undefined = window.api.cloudSecrets
-  const [available, setAvailable] = useState(false)
+  // Null while main answers; the pane shows a placeholder rather than an empty page.
+  const [available, setAvailable] = useState<boolean | null>(null)
   const [setupOpen, setSetupOpen] = useState(false)
   const [revision, setRevision] = useState(0)
   const repos = useAppStore((s) => s.repos)
@@ -50,8 +54,21 @@ export function CloudSecretsSection({ orgId }: { orgId: string | null }): React.
     }
   }, [api])
 
+  if (api && available === null) {
+    return (
+      <div className="space-y-3" aria-busy>
+        <span className="sr-only">{t('cloudSecrets.loading', 'Loading cloud secrets…')}</span>
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    )
+  }
   if (!api || !available) {
-    return null
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t('cloudSecrets.unavailable', 'Cloud secrets aren’t available for this account yet.')}
+      </p>
+    )
   }
   const common = {
     api,

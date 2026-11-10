@@ -1342,6 +1342,57 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "orcaCloud": {
+      "mcp": {
+        "emptyTitle": "No cloud workspace is running",
+        "emptyBody": "MCP servers sync to a cloud workspace while it runs. Start or wake one to choose which servers it gets.",
+        "workspaceLabel": "MCP servers in {{name}}",
+        "searchDescription": "Choose which MCP servers from this computer sync to your cloud workspaces.",
+        "keywordMcp": "mcp",
+        "keywordSync": "sync",
+        "keywordCloud": "cloud",
+        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+      },
+      "environments": {
+        "title": "Cloud environments",
+        "unavailable": "Cloud environments aren’t available for this account yet.",
+        "searchDescription": "Repos and install script built into a snapshot, and waking cloud workspaces before you open them.",
+        "keywordSnapshot": "snapshot",
+        "keywordInstall": "install script",
+        "keywordWake": "wake",
+        "keywordSandbox": "sandbox"
+      },
+      "signedOut": {
+        "reconnectTitle": "Sign in again",
+        "body": "Orca Cloud settings belong to your Orca account. Sign in to manage them."
+      },
+      "team": {
+        "unavailable": "Teams aren’t available for this account yet.",
+        "searchDescription": "Members, invites and seats for your Orca Cloud team.",
+        "keywordMembers": "members",
+        "keywordInvite": "invite",
+        "keywordSeats": "seats"
+      },
+      "billing": {
+        "searchDescription": "Your Orca Cloud plan, sandbox hours, overage and payment.",
+        "keywordPlan": "plan",
+        "keywordBilling": "billing",
+        "keywordInvoice": "invoice",
+        "keywordUsage": "usage",
+        "keywordOverage": "overage",
+        "description": "Your Orca Cloud plan, sandbox hours and payment."
+      }
+    },
+    "groups": {
+      "orcaCloud": "Orca Cloud"
+    },
+    "agentApiKeys": {
+      "descriptionWithCloudLink": "Keys here are for this computer and your SSH and paired hosts. For Orca Cloud, use <secrets>Cloud secrets</secrets>.",
+      "descriptionWithCloud": "Keys here are for this computer and your SSH and paired hosts. For Orca Cloud, use Cloud secrets."
+    },
+    "orcaAccount": {
+      "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
     }
   },
   "menu": {
@@ -20719,7 +20770,9 @@
         "seatsAnnual_other": "{{count}} seats · Annual",
         "seatsMonthly_one": "{{count}} seat · Monthly",
         "seatsMonthly_other": "{{count}} seats · Monthly",
-        "upsellLine2": "Orca Cloud runs agents in sandboxes. Team is {{value0}} per seat per month."
+        "upsellLine2": "Orca Cloud runs agents in sandboxes. Team is {{value0}} per seat per month.",
+        "loading": "Loading your plan…",
+        "unconfigured": "Billing isn’t available in this build of Orca."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -26680,7 +26733,9 @@
     "discardQuestion": "Discard the key you typed?",
     "discard": "Discard",
     "keepEditing": "Keep editing",
-    "signInHandedOff": "Continues in the Agent sign-in row below."
+    "signInHandedOff": "Continues in the Agent sign-in row below.",
+    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
+    "skippedDetailCloudGroup": "Set it up any time from Settings › Orca Cloud › Cloud secrets."
   },
   "cloudSecrets": {
     "editor": {
@@ -26795,7 +26850,9 @@
       "lineName": "line {{line}}",
       "skippedLine": "Line {{line}} · skipped",
       "renamed": "Renamed from {{name}}",
-      "normalized": "Spaces and dashes become underscores"
+      "normalized": "Spaces and dashes become underscores",
+      "valueLabel": "Value for {{name}}",
+      "valueLabelLine": "Value, line {{line}}"
     },
     "value": {
       "hide": "Hide value",
@@ -26828,7 +26885,9 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
-    }
+    },
+    "loading": "Loading cloud secrets…",
+    "unavailable": "Cloud secrets aren’t available for this account yet."
   },
   "cloudMcpSync": {
     "appliesEverywhere": "Applies to every cloud workspace",

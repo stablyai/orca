@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
 import { cn } from '@/lib/utils'
@@ -123,34 +123,49 @@ export function PlanBillingView({
 }: PlanBillingViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const locale = useIntlLocale()
-  if (!result || result.status === 'unconfigured' || result.status === 'signed-out') {
-    // The pane above already handles sign-in; billing stays out of builds without a service.
+  if (!result) {
+    return loading ? (
+      <div className="space-y-3" aria-busy>
+        <span className="sr-only">
+          {t('auto.components.billing.loading', 'Loading your plan…')}
+        </span>
+        <Skeleton className="h-5 w-56" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    ) : null
+  }
+  if (result.status === 'unconfigured') {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t(
+          'auto.components.billing.unconfigured',
+          'Billing isn’t available in this build of Orca.'
+        )}
+      </p>
+    )
+  }
+  if (result.status === 'signed-out') {
+    // The Orca Cloud panes show the sign-in prompt before this renders.
     return null
   }
 
-  const header = (
-    <SettingsGroupHeader
-      className="px-0"
-      title={t('auto.components.billing.title', 'Plan & billing')}
-      action={
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-disabled={refreshing || undefined}
-          onClick={refreshing ? undefined : onRefresh}
-          aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
-        >
-          <RefreshCw className={cn(refreshing && 'motion-safe:animate-spin')} />
-        </Button>
-      }
-    />
+  // Settings › Orca Cloud › Plan & billing owns the title; the refresh sits with the plan it reloads.
+  const refreshButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-disabled={refreshing || undefined}
+      onClick={refreshing ? undefined : onRefresh}
+      aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
+    >
+      <RefreshCw className={cn(refreshing && 'motion-safe:animate-spin')} />
+    </Button>
   )
 
   if (result.status === 'failed') {
     return (
-      <div className="space-y-3 border-t border-border/60 pt-5">
-        {header}
+      <div className="space-y-3">
         <InlineError
           title={t('auto.components.billing.loadFailedTitle', 'Couldn’t load your plan')}
           retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
@@ -167,8 +182,7 @@ export function PlanBillingView({
   const teamPrice = monthlyCents === null ? null : formatCents(monthlyCents, locale)
 
   return (
-    <div className="space-y-4 border-t border-border/60 pt-5">
-      {header}
+    <div className="space-y-4">
       <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
       {hasPlan ? (
         <div className="space-y-4">
@@ -187,6 +201,7 @@ export function PlanBillingView({
                   })}
             </span>
             <PlanStatusBadge entitlement={entitlement} />
+            <span className="ml-auto">{refreshButton}</span>
           </div>
           <UsageSummary entitlement={entitlement} />
           {/* Overage is moot while sandboxes are suspended for a failed payment. */}
@@ -248,7 +263,9 @@ export function PlanBillingView({
           <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
             {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
-        ) : null}
+        ) : (
+          <span className="ml-auto">{refreshButton}</span>
+        )}
       </div>
 
       {/* The payment alert already says who to ask; don't ask twice. */}

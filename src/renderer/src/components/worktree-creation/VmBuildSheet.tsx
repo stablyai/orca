@@ -273,7 +273,7 @@ export function VmBuildSheet({
               onSeePlans: () => openPlansPage('sandbox'),
               onOpenBilling: () => {
                 const store = useAppStore.getState()
-                store.openSettingsTarget({ pane: 'orca-account', repoId: null })
+                store.openSettingsTarget({ pane: 'cloud-billing', repoId: null })
                 store.openSettingsPage()
               },
               onSignIn: signIn,

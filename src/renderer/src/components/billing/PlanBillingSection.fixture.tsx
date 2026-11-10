@@ -126,3 +126,9 @@ export const suspendedAdmin = defineFixture({
     />
   )
 })
+
+/** First read in Settings › Orca Cloud › Plan & billing: a placeholder, not an empty pane. */
+export const loadingFirstRead = defineFixture({
+  width: 600,
+  render: () => <PlanBillingView {...handlers} loading result={null} />
+})

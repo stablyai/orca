@@ -1,12 +1,11 @@
 import { ChevronRight } from 'lucide-react'
-import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
 import { TeamMark } from './TeamAvatar'
 import { memberCountLabel } from './team-copy'
 import { openTeamPage } from './team-page-store'
 import { useOrgRoster } from './use-org-roster'
 
-/** Settings → Orca account: one row that opens the Team page (members, invites, seats). */
+/** Settings › Orca Cloud › Team: one row that opens the Team page (members, invites, seats). */
 export function TeamSettingsLink({
   orgId,
   orgName
@@ -18,11 +17,7 @@ export function TeamSettingsLink({
   const roster = useOrgRoster(orgId)
   const members = roster.result?.status === 'ok' ? roster.result.roster.members.length : null
   return (
-    <div className="space-y-3 border-t border-border/60 pt-5">
-      <SettingsGroupHeader
-        className="px-0"
-        title={t('auto.components.billing.team.title', 'Team')}
-      />
+    <div>
       <button
         type="button"
         onClick={() => openTeamPage()}

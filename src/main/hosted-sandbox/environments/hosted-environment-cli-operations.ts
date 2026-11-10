@@ -35,7 +35,7 @@ export async function resolveCloudEnvironment(
     throw new HostedEnvironmentUserError(
       'not_found',
       'no_environments',
-      'This org has no environment yet. Create one in Settings > Orca Cloud.'
+      'This org has no environment yet. Create one in Settings > Orca Cloud > Cloud environments.'
     )
   }
   if (!selector) {

@@ -1,11 +1,11 @@
-import { AlertTriangle, Copy, Loader2, Square, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Copy, Loader2, Square, Trash2, X } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../../../shared/ephemeral-vm-recipes'
 import { useTranslate } from '@/i18n/use-translate'
 import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { cn } from '@/lib/utils'
 import { Button } from '../../../ui/button'
-import { CloudMcpSyncSection } from '../../runtime-environments/cloud-mcp/CloudMcpSyncSection'
+import { useAppStore } from '@/store'
 
 type EphemeralVmRuntimeRowProps = {
   runtime: EphemeralVmRuntimeRecord
@@ -38,10 +38,12 @@ export function EphemeralVmRuntimeRow({
   const isProvisioning = runtime.status === 'provisioning'
   // Write-ahead rows never got a recipe result, so destroy only knows the instance id.
   const isUntracked = !runtime.recipeResult && !isProvisioning
-  const cloudEnvironmentId =
-    runtime.recipe?.provider === 'orca-cloud' && runtime.status === 'running'
-      ? (runtime.runtimeEnvironmentId ?? null)
-      : null
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  // MCP sync lives in Settings › Orca Cloud › MCP servers; a running cloud VM links there.
+  const showMcpLink =
+    runtime.recipe?.provider === 'orca-cloud' &&
+    runtime.status === 'running' &&
+    Boolean(runtime.runtimeEnvironmentId)
   return (
     <div>
       <div className="flex items-center gap-3 px-4 py-3">
@@ -149,9 +151,18 @@ export function EphemeralVmRuntimeRow({
           )}
         </div>
       </div>
-      {cloudEnvironmentId ? (
-        <div className="px-4 pb-3 pl-9">
-          <CloudMcpSyncSection environmentId={cloudEnvironmentId} />
+      {showMcpLink ? (
+        <div className="px-4 pb-3 pl-8">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="gap-1 text-muted-foreground hover:text-foreground"
+            onClick={() => openSettingsTarget({ pane: 'cloud-mcp', repoId: null })}
+          >
+            {t('cloudMcpSync.title', 'MCP servers')}
+            <ChevronRight className="size-3" />
+          </Button>
         </div>
       ) : null}
     </div>

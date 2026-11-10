@@ -10,11 +10,8 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
-import { PlanBillingSection } from '../../../billing/PlanBillingSection'
-import { TeamSettingsLink } from '../../../billing/team/TeamSettingsLink'
-import { CloudSecretsSection } from '../../cloud-secrets/CloudSecretsSection'
-import { CloudPredictiveWakeSetting } from '../../orca-cloud/CloudPredictiveWakeSetting'
-import { CloudEnvironmentSection } from '../../../cloud-environment/CloudEnvironmentSection'
+import { OrcaCloudSettingsLinks } from '../../orca-cloud/OrcaCloudSettingsLinks'
+import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -71,6 +68,8 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   const t = useTranslate()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const cloudAvailable = useOrcaCloudApiAvailable()
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const connected = authStatus?.state === 'connected'
@@ -134,22 +133,8 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
 
-        {connected ? <PlanBillingSection /> : null}
-        {connected && authStatus?.capabilities?.flags?.billing ? (
-          <TeamSettingsLink
-            orgId={authStatus.cloud?.activeOrgId ?? null}
-            orgName={authStatus.cloud?.activeOrgName ?? null}
-          />
-        ) : null}
-        {connected ? <CloudSecretsSection orgId={authStatus?.cloud?.activeOrgId ?? null} /> : null}
-        {connected && authStatus?.capabilities?.flags?.sandbox ? (
-          <CloudPredictiveWakeSetting />
-        ) : null}
-        {connected ? (
-          <CloudEnvironmentSection
-            orgId={authStatus?.cloud?.activeOrgId ?? null}
-            viewerUserId={authStatus?.cloud?.userId ?? null}
-          />
+        {connected && cloudAvailable ? (
+          <OrcaCloudSettingsLinks onOpen={(pane) => openSettingsTarget({ pane, repoId: null })} />
         ) : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
