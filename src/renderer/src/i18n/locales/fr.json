@@ -19161,7 +19161,15 @@
         "copyOrcaSessionId": "Copier l'ID de session Orca",
         "orcaSessionIdCopied": "ID de session Orca copié",
         "orcaSessionIdCopyFailed": "Impossible de copier l'ID de session Orca",
-        "orcaSessionIdTooltip": "L'ID qu'Orca attribue à ce chat, distinct de l'ID de session propre à la CLI de l'agent. Les agents l'utilisent pour se désigner entre eux via Orca."
+        "orcaSessionIdTooltip": "L'ID qu'Orca attribue à ce chat, distinct de l'ID de session propre à la CLI de l'agent. Les agents l'utilisent pour se désigner entre eux via Orca.",
+        "restartAgent": "Redémarrer l’agent",
+        "restartAgentTooltip": "Arrête l’agent de ce chat. Votre prochain message le relance avec le compte et les réglages actuels, et la conversation continue.",
+        "restartAgentFailed": "Impossible de redémarrer l’agent.",
+        "restartAgentDone": "Agent arrêté. Votre prochain message le lance avec le compte actuel.",
+        "restartAgentNotRunning": "L’agent ne tourne pas. Votre prochain message le lance avec le compte actuel.",
+        "restartAgentBusy": "L’agent travaille. Arrêtez d’abord le tour ou répondez à sa question.",
+        "restartAgentBackgroundWork": "L’agent a encore des tâches en arrière-plan. Le redémarrage les arrête.",
+        "restartAgentForce": "Redémarrer quand même"
       },
       "failureWords": {
         "theAgent": "L'agent",

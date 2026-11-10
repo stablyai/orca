@@ -27,6 +27,7 @@ import type {
   StructuredAgentSessionProviderChildIdentity
 } from '../host/structured-agent-session-host-types'
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
+import { restartStructuredAgentSessionAgent } from './structured-agent-session-restart-agent'
 import '../operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../operations/structured-agent-session-mutation-refusals'
 import { deferredStructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
@@ -203,10 +204,13 @@ export function createStructuredAgentSessionConversationLifetime(
   })
 
   const stopStartingChild = createStructuredAgentSessionStopStartingChild(host)
+  const restartHost = { ...host, hasOpenDispatch, providerHoldsDispatch }
   return {
     closeForWorkspaceSleep,
     idleSweep,
     stopAgent,
+    restartAgent: (sessionId: string, force: boolean) =>
+      restartStructuredAgentSessionAgent(restartHost, sessionId, force),
     /** Expire only the matching still-starting child; its end fails queued work. */
     expireStartup: ({ sessionId, child }: StructuredAgentSessionExpiredStartup): void =>
       stopStartingChild(sessionId, child),

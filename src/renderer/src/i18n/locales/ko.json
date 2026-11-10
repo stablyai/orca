@@ -18505,7 +18505,15 @@
         "copyOrcaSessionId": "Orca 세션 ID 복사",
         "orcaSessionIdCopied": "Orca 세션 ID를 복사했습니다",
         "orcaSessionIdCopyFailed": "Orca 세션 ID를 복사하지 못했습니다",
-        "orcaSessionIdTooltip": "이 채팅에 대한 Orca의 ID로, 에이전트 CLI 자체의 세션 ID와는 별개입니다. 에이전트는 Orca를 통해 서로를 가리킬 때 이 ID를 사용합니다."
+        "orcaSessionIdTooltip": "이 채팅에 대한 Orca의 ID로, 에이전트 CLI 자체의 세션 ID와는 별개입니다. 에이전트는 Orca를 통해 서로를 가리킬 때 이 ID를 사용합니다.",
+        "restartAgent": "에이전트 다시 시작",
+        "restartAgentTooltip": "이 채팅의 에이전트를 중지합니다. 다음 메시지가 현재 계정과 설정으로 다시 시작하며 대화는 이어집니다.",
+        "restartAgentFailed": "에이전트를 다시 시작할 수 없습니다.",
+        "restartAgentDone": "에이전트를 중지했습니다. 다음 메시지가 현재 계정으로 시작합니다.",
+        "restartAgentNotRunning": "에이전트가 실행 중이 아닙니다. 다음 메시지가 현재 계정으로 시작합니다.",
+        "restartAgentBusy": "에이전트가 작업 중입니다. 먼저 턴을 중지하거나 질문에 답하세요.",
+        "restartAgentBackgroundWork": "에이전트에 아직 백그라운드 작업이 있습니다. 다시 시작하면 중지됩니다.",
+        "restartAgentForce": "그래도 다시 시작"
       },
       "failureWords": {
         "theAgent": "에이전트",

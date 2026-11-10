@@ -20642,7 +20642,15 @@
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdCopied": "Orca session ID copied",
         "orcaSessionIdCopyFailed": "Unable to copy Orca session ID",
-        "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
+        "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
+        "restartAgent": "Restart Agent",
+        "restartAgentTooltip": "Stops this chat’s agent. Your next message starts it again with the current account and settings, and the conversation continues.",
+        "restartAgentFailed": "Could not restart the agent.",
+        "restartAgentDone": "Agent stopped. Your next message starts it with the current account.",
+        "restartAgentNotRunning": "The agent is not running. Your next message starts it with the current account.",
+        "restartAgentBusy": "The agent is working. Stop the turn or answer its question first.",
+        "restartAgentBackgroundWork": "The agent still has background tasks. Restarting stops them.",
+        "restartAgentForce": "Restart Anyway"
       },
       "dismissDeliveryNotice": "Dismiss",
       "editDeliveryNotice": "Edit",

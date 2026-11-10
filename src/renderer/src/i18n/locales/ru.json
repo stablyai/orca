@@ -20598,7 +20598,15 @@
         "copyOrcaSessionId": "Копировать ID сессии Orca",
         "orcaSessionIdCopied": "ID сессии Orca скопирован",
         "orcaSessionIdCopyFailed": "Не удалось скопировать ID сессии Orca",
-        "orcaSessionIdTooltip": "ID этого чата в Orca. У самого агента в CLI свой ID сессии. Агенты используют ID Orca, чтобы обращаться друг к другу через Orca."
+        "orcaSessionIdTooltip": "ID этого чата в Orca. У самого агента в CLI свой ID сессии. Агенты используют ID Orca, чтобы обращаться друг к другу через Orca.",
+        "restartAgent": "Перезапустить агента",
+        "restartAgentTooltip": "Останавливает агента этого чата. Следующее сообщение снова запустит его с текущим аккаунтом и настройками, и разговор продолжится.",
+        "restartAgentFailed": "Не удалось перезапустить агента.",
+        "restartAgentDone": "Агент остановлен. Следующее сообщение запустит его с текущим аккаунтом.",
+        "restartAgentNotRunning": "Агент не запущен. Следующее сообщение запустит его с текущим аккаунтом.",
+        "restartAgentBusy": "Агент работает. Сначала остановите ход или ответьте на его вопрос.",
+        "restartAgentBackgroundWork": "У агента ещё есть фоновые задачи. Перезапуск остановит их.",
+        "restartAgentForce": "Всё равно перезапустить"
       },
       "dismissDeliveryNotice": "Скрыть",
       "addSelectionToChat": "Добавить в чат",

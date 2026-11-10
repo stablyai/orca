@@ -19625,7 +19625,15 @@
         "copyOrcaSessionId": "複製 Orca 工作階段 ID",
         "orcaSessionIdCopied": "已複製 Orca 工作階段 ID",
         "orcaSessionIdCopyFailed": "無法複製 Orca 工作階段 ID",
-        "orcaSessionIdTooltip": "Orca 為此聊天分配的 ID，獨立於代理程式 CLI 自身的工作階段 ID。代理程式透過 Orca 使用此 ID 互相指稱。"
+        "orcaSessionIdTooltip": "Orca 為此聊天分配的 ID，獨立於代理程式 CLI 自身的工作階段 ID。代理程式透過 Orca 使用此 ID 互相指稱。",
+        "restartAgent": "重新啟動代理程式",
+        "restartAgentTooltip": "停止此聊天的代理程式。下一則訊息會以目前的帳戶和設定重新啟動它，對話繼續。",
+        "restartAgentFailed": "無法重新啟動代理程式。",
+        "restartAgentDone": "代理程式已停止。下一則訊息會以目前的帳戶啟動它。",
+        "restartAgentNotRunning": "代理程式未在執行。下一則訊息會以目前的帳戶啟動它。",
+        "restartAgentBusy": "代理程式正在工作。請先停止目前的回合或回答它的問題。",
+        "restartAgentBackgroundWork": "代理程式仍有背景工作，重新啟動會停止它們。",
+        "restartAgentForce": "仍要重新啟動"
       },
       "dismissDeliveryNotice": "關閉",
       "addSelectionToChat": "新增到聊天",

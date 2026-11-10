@@ -19932,7 +19932,15 @@
         "copyOrcaSessionId": "Orca-Sitzungs-ID kopieren",
         "orcaSessionIdCopied": "Orca-Sitzungs-ID kopiert",
         "orcaSessionIdCopyFailed": "Orca-Sitzungs-ID konnte nicht kopiert werden",
-        "orcaSessionIdTooltip": "Die ID von Orca für diesen Chat, unabhängig von der Sitzungs-ID der Agenten-CLI. Agenten verwenden sie, um über Orca aufeinander Bezug zu nehmen."
+        "orcaSessionIdTooltip": "Die ID von Orca für diesen Chat, unabhängig von der Sitzungs-ID der Agenten-CLI. Agenten verwenden sie, um über Orca aufeinander Bezug zu nehmen.",
+        "restartAgent": "Agent neu starten",
+        "restartAgentTooltip": "Stoppt den Agenten dieses Chats. Deine nächste Nachricht startet ihn mit dem aktuellen Konto und den aktuellen Einstellungen neu, und die Unterhaltung geht weiter.",
+        "restartAgentFailed": "Der Agent konnte nicht neu gestartet werden.",
+        "restartAgentDone": "Agent gestoppt. Deine nächste Nachricht startet ihn mit dem aktuellen Konto.",
+        "restartAgentNotRunning": "Der Agent läuft nicht. Deine nächste Nachricht startet ihn mit dem aktuellen Konto.",
+        "restartAgentBusy": "Der Agent arbeitet. Stoppe zuerst den Zug oder beantworte seine Frage.",
+        "restartAgentBackgroundWork": "Der Agent hat noch Hintergrundaufgaben. Ein Neustart stoppt sie.",
+        "restartAgentForce": "Trotzdem neu starten"
       },
       "dismissDeliveryNotice": "Ausblenden",
       "addSelectionToChat": "Zum Chat hinzufügen",

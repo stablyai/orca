@@ -186,8 +186,10 @@ export class StructuredAgentSessionHost {
     openConversation: this.conversationDelivery.open
   })
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
-  close: typeof this.lifetime.close = (sessionId, cause, admit) =>
-    this.lifetime.close(sessionId, cause, admit)
+  close: typeof this.lifetime.close = (...args) => this.lifetime.close(...args)
+
+  /** Stop an idle chat's agent so its next send starts on the current account and settings. */
+  restartAgent = (id: string, force: boolean) => this.lifetime.restartAgent(id, force)
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({

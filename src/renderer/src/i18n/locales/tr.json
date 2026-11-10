@@ -19917,7 +19917,15 @@
         "copyOrcaSessionId": "Orca Oturum Kimliğini Kopyala",
         "orcaSessionIdCopied": "Orca oturum kimliği kopyalandı",
         "orcaSessionIdCopyFailed": "Orca oturum kimliği kopyalanamıyor",
-        "orcaSessionIdTooltip": "Orca'nın bu sohbet için kullandığı kimliktir; ajan CLI'sinin kendi oturum kimliğinden ayrıdır. Ajanlar Orca üzerinden birbirlerine başvurmak için bunu kullanır."
+        "orcaSessionIdTooltip": "Orca'nın bu sohbet için kullandığı kimliktir; ajan CLI'sinin kendi oturum kimliğinden ayrıdır. Ajanlar Orca üzerinden birbirlerine başvurmak için bunu kullanır.",
+        "restartAgent": "Ajanı yeniden başlat",
+        "restartAgentTooltip": "Bu sohbetin ajanını durdurur. Sonraki mesajınız onu geçerli hesap ve ayarlarla yeniden başlatır ve sohbet devam eder.",
+        "restartAgentFailed": "Ajan yeniden başlatılamadı.",
+        "restartAgentDone": "Ajan durduruldu. Sonraki mesajınız onu geçerli hesapla başlatır.",
+        "restartAgentNotRunning": "Ajan çalışmıyor. Sonraki mesajınız onu geçerli hesapla başlatır.",
+        "restartAgentBusy": "Ajan çalışıyor. Önce turu durdurun veya sorusunu yanıtlayın.",
+        "restartAgentBackgroundWork": "Ajanın hâlâ arka plan görevleri var. Yeniden başlatmak onları durdurur.",
+        "restartAgentForce": "Yine de yeniden başlat"
       },
       "dismissDeliveryNotice": "Kapat",
       "addSelectionToChat": "Sohbete ekle",
