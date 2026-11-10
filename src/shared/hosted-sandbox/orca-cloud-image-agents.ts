@@ -20,5 +20,5 @@ export type OrcaCloudImageAgent = (typeof ORCA_CLOUD_IMAGE_AGENTS)[number]
 export const ORCA_CLOUD_DEFAULT_AGENT: OrcaCloudImageAgent = 'claude'
 
 export function isOrcaCloudImageAgent(agent: string): agent is OrcaCloudImageAgent {
-  return (ORCA_CLOUD_IMAGE_AGENTS as readonly string[]).includes(agent)
+  return ORCA_CLOUD_IMAGE_AGENTS.some((known) => known === agent)
 }
