@@ -40,6 +40,11 @@ export type GitHubAppMinter = {
   listInstallationRepositories?(installationId: number, page: number): Promise<{ repositories: GitHubListedRepo[]; totalCount: number }>
   /** Owners (lowercased logins) with a pending install request for this app (GET /app/installation-requests). */
   pendingRequestOwners?(): Promise<Set<string>>
+  /**
+   * The GitHub user's membership in the installation's org, read with a members:read installation
+   * token (GET /orgs/{org}/memberships/{login}). Null when not a member or GitHub can't say.
+   */
+  orgMembership?(installationId: number, org: string, login: string): Promise<{ state: string; role: string; userId: number } | null>
 }
 
 export type GitHubListedRepo = {
@@ -55,6 +60,12 @@ export type InstallationBindingCheck = (installationId: number, accountId: strin
 
 const REFRESH_MARGIN_MS = 5 * 60_000
 const REPO_PERMISSIONS = { contents: 'write', pull_requests: 'write', metadata: 'read' } as const
+
+const OrgMembershipBody = z.looseObject({
+  state: z.string(),
+  role: z.string(),
+  user: z.looseObject({ id: z.number().int().positive() })
+})
 
 const Installation = z.looseObject({
   id: z.number().int().positive(),
@@ -165,6 +176,28 @@ export function createGitHubAppMinter(config: {
 
   return {
     getInstallation: (installationId) => installationFor(`/app/installations/${installationId}`),
+
+    async orgMembership(installationId, org, login) {
+      const minted = await github('POST', `/app/installations/${installationId}/access_tokens`, { permissions: { members: 'read' } })
+      const token = MintedToken.safeParse(await minted.json().catch(() => null))
+      if (!minted.ok || !token.success) {
+        return null
+      }
+      const response = await doFetch(
+        `https://api.github.com/orgs/${encodeURIComponent(org)}/memberships/${encodeURIComponent(login)}`,
+        {
+          headers: {
+            authorization: `Bearer ${token.data.token}`,
+            accept: 'application/vnd.github+json',
+            'x-github-api-version': '2022-11-28',
+            'user-agent': 'orca-sandbox-control'
+          },
+          redirect: 'manual'
+        }
+      )
+      const body = OrgMembershipBody.safeParse(await response.json().catch(() => null))
+      return response.ok && body.success ? { state: body.data.state, role: body.data.role, userId: body.data.user.id } : null
+    },
 
     async listInstallationRepositories(installationId, page) {
       const token = await metadataToken(installationId)
