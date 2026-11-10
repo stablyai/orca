@@ -25,6 +25,7 @@ import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useWakeInput, useWakeInputNotices } from './use-wake-input'
+import { useWakeAttachHold } from './use-wake-attach-hold'
 import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
 import {
   runRestartCloudWorkspace,
@@ -223,13 +224,17 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   const t = useTranslate()
   const view = useCloudWorkspaceView(workspaceId)
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
-  const now = useNow(1_000, view.wake !== undefined)
+  // Ready means the server answers; the pill stays ("Connecting…") until the pane in front has
+  // re-attached and can take keys.
+  const attachHold = useWakeAttachHold(workspaceId, view.wake)
+  const shownWake = attachHold ?? view.wake
+  const now = useNow(1_000, shownWake !== undefined)
   // Typing is accepted while a wake is in flight, so the terminal stays visible and typeable.
   const wakeInput = useWakeInput(workspaceId)
   useWakeInputNotices(workspaceId)
   const overlay = useWakeOverlay(
-    view.wake,
-    Math.max(now, view.wake?.at ?? 0),
+    shownWake,
+    Math.max(now, shownWake?.at ?? 0),
     t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.'),
     wakeInput.pending > 0
   )

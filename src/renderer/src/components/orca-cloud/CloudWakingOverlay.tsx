@@ -10,7 +10,7 @@ import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
-export const WAKE_SLOW_S = 20
+export const WAKE_SLOW_S = 10
 export const WAKE_STUCK_S = 60
 
 // Prompt lines and output lines of varied length: reads as "a terminal is coming".
@@ -56,7 +56,7 @@ function TerminalSkeleton({ still }: { still: boolean }): React.JSX.Element {
 /**
  * Covers the workspace while it wakes: a terminal-shaped skeleton (never a blank pane) with a
  * live "Waking… Ns" pill. The same overlay for every wake source (open, message, Wake, restart,
- * unarchive). Slow wakes say so at 20 s and offer recovery at 60 s; a failed wake becomes a
+ * unarchive). Slow wakes say so at 10 s and offer recovery at 60 s; a failed wake becomes a
  * dismissible card. `leaving` fades it out over the live terminal without moving layout.
  */
 export function CloudWakingOverlay({
@@ -104,20 +104,26 @@ export function CloudWakingOverlay({
     }
   }, [failed, autoFocus])
   const name = workspaceName || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
+  // Once the sandbox is up the pill says so; the clock still counts from the wake's start.
   const title =
-    wake.source === 'restart'
-      ? t('orcaCloudWorkspace.overlay.restarting', 'Restarting…')
-      : wake.source === 'unarchive'
-        ? t('orcaCloudWorkspace.overlay.unarchiving', 'Restoring from archive…')
-        : t('orcaCloudWorkspace.overlay.waking', 'Waking…')
+    wake.phase === 'connecting'
+      ? t('orcaCloudWorkspace.overlay.connecting', 'Connecting…')
+      : wake.source === 'restart'
+        ? t('orcaCloudWorkspace.overlay.restarting', 'Restarting…')
+        : wake.source === 'unarchive'
+          ? t('orcaCloudWorkspace.overlay.unarchiving', 'Restoring from archive…')
+          : t('orcaCloudWorkspace.overlay.waking', 'Waking…')
   const hint = stuck
     ? t('orcaCloudWorkspace.overlay.stuck', 'This is taking much longer than usual.')
     : slow
-      ? t('orcaCloudWorkspace.overlay.slow', 'Taking longer than usual…')
+      ? t(
+          'orcaCloudWorkspace.overlay.slow',
+          'Taking longer than usual. Your files and chats are safe.'
+        )
       : wake.source === 'message'
         ? t('orcaCloudWorkspace.overlay.messageQueued', 'Your message sends as soon as it’s up.')
         : null
-  // Announced once each (the text changes only when crossing 20 s and 60 s).
+  // Announced once each (the text changes only when crossing WAKE_SLOW_S and WAKE_STUCK_S).
   const slowAnnouncement = stuck ? hint : slow ? hint : ''
   const passThrough = typeThrough && !failed
   return (
@@ -229,10 +235,11 @@ export function CloudWakingOverlay({
                 <span className="text-muted-foreground">
                   {t(
                     'orcaCloudWorkspace.overlay.pendingKeys',
-                    '{{count}} keys waiting · go to the terminal when it’s up',
+                    '{{count}} keys waiting · they go to the terminal when it’s up',
                     {
                       count: pendingInput,
-                      defaultValue_one: '{{count}} key waiting · goes to the terminal when it’s up'
+                      defaultValue_one:
+                        '{{count}} key waiting · it goes to the terminal when it’s up'
                     }
                   )}
                 </span>
