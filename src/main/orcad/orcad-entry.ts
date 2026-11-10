@@ -31,6 +31,7 @@ import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readi
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
 import { startOrcadEventLoopWatchdog } from './orcad-event-loop-watchdog'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { orcadPostReadyDeps, startOrcadPostReadyWork } from './orcad-post-ready-work'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
 
@@ -242,14 +243,6 @@ async function startOrcadRuntime(
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
   featureReadiness.open('sessionSearch')
 
-  const { startAgentStateRulesLiveUpdates } =
-    await import('../runtime/agent-state-rules/agent-state-rules-live-update')
-  startAgentStateRulesLiveUpdates(profileStore, (rules) =>
-    console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
-  )
-  // Paired phones dictate through this host; keep its model loaded the same way the desktop does.
-  const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
-  startSpeechModelWarmup(profileStore)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const { repairDuplicatePtyPanesOnStart } =
       await import('../runtime/terminal/identity/moved-pane-owner-rekey')
@@ -349,6 +342,7 @@ async function startOrcadRuntime(
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
+  void startOrcadPostReadyWork(orcadPostReadyDeps(runtime, profileStore))
 
   await idleExitStartup.start({
     rpc,
