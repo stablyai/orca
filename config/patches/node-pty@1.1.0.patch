@@ -2257,7 +2257,20 @@ index 297b471..f7ef598 100644
  }
  
  /**
-@@ -454,6 +467,7 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -311,6 +324,12 @@ struct DelBuf {
+   }
+ };
+ 
++// Orca: snprintf, not std::string concatenation. GCC 13 compiles concatenation to out-of-line
++// helpers versioned GLIBCXX_3.4.31, which the oldest supported Linux hosts do not have.
++static void FormatSpawnError(char *out, size_t size, const char *what, const char *detail, int error_code) {
++  snprintf(out, size, "node-pty: %s: %s (errno %d)", what, detail, error_code);
++}
++
+ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+   Napi::Env napiEnv(info.Env());
+   Napi::HandleScope scope(napiEnv);
+@@ -454,6 +473,7 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
    pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
  
    pid = forkpty(&master, nullptr, static_cast<termios*>(term), static_cast<winsize*>(&winp));
@@ -2265,18 +2278,21 @@ index 297b471..f7ef598 100644
  
    if (!pid) {
      // remove all signal handler from child
-@@ -470,7 +484,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -470,7 +490,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
  
    switch (pid) {
-     case -1:
+-    case -1:
 -      throw Napi::Error::New(napiEnv, "forkpty(3) failed.");
++    case -1: {
 +      // Orca: keep errno so a process limit (EAGAIN) reads as one.
-+      throw Napi::Error::New(napiEnv, std::string("node-pty: forkpty failed: ") + strerror(fork_errno) +
-+                                          " (errno " + std::to_string(fork_errno) + ")");
++      char message[256];
++      FormatSpawnError(message, sizeof(message), "forkpty failed", strerror(fork_errno), fork_errno);
++      throw Napi::Error::New(napiEnv, message);
++    }
      case 0:
        if (strlen(cwd_.c_str())) {
          if (chdir(cwd_.c_str()) == -1) {
-@@ -515,7 +531,23 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -515,7 +539,24 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
  
    // Set up process exit callback.
    Napi::Function cb = info[10].As<Napi::Function>();
@@ -2288,8 +2304,9 @@ index 297b471..f7ef598 100644
 +    while (waitpid(pid, nullptr, 0) == -1 && errno == EINTR) {
 +    }
 +    close(master);
-+    return Napi::Error::New(napiEnv, std::string("node-pty: exit_watcher_thread failed: ") + what +
-+                                         " (errno " + std::to_string(error_code) + ")");
++    char message[256];
++    FormatSpawnError(message, sizeof(message), "exit_watcher_thread failed", what, error_code);
++    return Napi::Error::New(napiEnv, message);
 +  };
 +  try {
 +    SetupExitCallback(napiEnv, cb, pid);
