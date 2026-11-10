@@ -14,6 +14,7 @@ import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { SideChatTabMenuItem } from './SideChatTabMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
@@ -178,6 +179,7 @@ export function SortableTabContextMenu({
           </ContextMenuItem>
         </>
       ) : null}
+      <SideChatTabMenuItem tabId={tab.id} isActive={isActive} onActivate={onActivate} />
       <TabSessionSurfaceSwitchMenuItems
         key={sessionSwitchOpening}
         tab={tab}

@@ -57,6 +57,7 @@ export type TerminalShortcutAction =
   | { type: 'toggleExpandActivePane' }
   | { type: 'setTitle' }
   | { type: 'clearPaneTitle' }
+  | { type: 'toggleSideChat' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
@@ -146,6 +147,10 @@ export function resolveTerminalShortcutAction(
 
     if (matches('terminal.clearPaneTitle')) {
       return { type: 'clearPaneTitle' }
+    }
+
+    if (matches('terminal.toggleSideChat')) {
+      return { type: 'toggleSideChat' }
     }
 
     // Treat remapped terminal-scope tab.close as pane close; floating L2 defers so splits never close the whole tab.

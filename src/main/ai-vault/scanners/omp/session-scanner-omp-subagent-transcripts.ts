@@ -2,6 +2,10 @@ import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-
 import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  isOmpSideChatTranscriptPath,
+  OMP_SIDE_CHAT_DIR_NAME
+} from '../../../../shared/agent-launch/side-chat/omp-side-chat-session'
 import type { SubagentTranscriptPartition } from '../claude/session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState } from '../../session-scanner-types'
 
@@ -10,8 +14,11 @@ const OMP_SESSION_DIR_NAME = String.raw`\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3
 
 const OMP_SESSION_ARTIFACT_DIR_PATTERN = new RegExp(`^${OMP_SESSION_DIR_NAME}$`, 'i')
 
-/** Walk workspace buckets but not task artifact dirs; OMP lists only top-level conversations (#9330). */
+/** Walk workspace buckets, not task artifact dirs or ephemeral side chats; OMP lists top-level chats (#9330). */
 export function isOmpConversationDirectory(name: string, depth: number): boolean {
+  if (name.toLowerCase() === OMP_SIDE_CHAT_DIR_NAME) {
+    return false
+  }
   return depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
 }
 
@@ -57,6 +64,9 @@ export function partitionOmpSubagentTranscriptPaths(
   const sessionFilePaths: string[] = []
   const subagentTranscriptCounts = new Map<string, number>()
   for (const path of paths) {
+    if (isOmpSideChatTranscriptPath(path)) {
+      continue
+    }
     if (!OMP_SUBAGENT_SUBTREE_PATTERN.test(path)) {
       sessionFilePaths.push(path)
       continue

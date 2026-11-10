@@ -35,11 +35,18 @@ export function buildAgentResumeStartupPlan(args: {
   launchCwd?: string | null
   /** Open a copy of the conversation instead of re-entering it; null for agents that cannot. */
   fork?: boolean
+  /** Fork selector for agents whose copy the CLI makes outside FORK_ARGV (omp side chats). */
+  forkArgv?: readonly string[]
+  /** Extra provider args appended after the fork selector. */
+  forkArgs?: readonly string[]
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
 }): AgentStartupPlan | null {
+  const forkArgv = args.fork
+    ? (args.forkArgv ?? getAgentForkArgv(args.agent, args.providerSession))
+    : null
   const resumeArgv = args.fork
-    ? getAgentForkArgv(args.agent, args.providerSession)
+    ? forkArgv && [...forkArgv, ...(args.forkArgs ?? [])]
     : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!resumeArgv) {
     return null
