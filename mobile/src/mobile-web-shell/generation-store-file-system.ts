@@ -131,7 +131,16 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
       const from = new Directory(fromUri)
       // Below API 26, Expo 55's move copies a directory without its contents; its copy is recursive.
       if (Platform.OS === 'android' && Number(Platform.Version) < 26) {
-        from.copy(new Directory(toUri))
+        const to = new Directory(toUri)
+        try {
+          from.copy(to)
+        } catch (error) {
+          // Readers trust a generation by its manifest, so a failed copy must leave no partial tree.
+          if (to.exists) {
+            to.delete()
+          }
+          throw error
+        }
         from.delete()
         return
       }
