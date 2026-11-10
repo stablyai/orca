@@ -213,7 +213,7 @@ export async function streamingRows(ctx: RunContext): Promise<void> {
           streamBytes: bytes + 1024 ** 2,
           largeItems,
           observation:
-            'outside read-only SQLite current text, latest eight rows, every 100 ms; adds reader load',
+            'outside read-only SQLite current text, latest 40 records per source, every 100 ms; adds reader load',
           concurrent:
             'send to another chat, large-chat tail read and Stop start together at threshold'
         }
