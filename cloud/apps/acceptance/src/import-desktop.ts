@@ -23,7 +23,8 @@ const MAP: Record<string, string> = {
   'auth.picker-sign-in': 'cli.desktop-picker-signin',
   'life.delete-asleep': 'cli.desktop-delete-asleep',
   'life.delete-asleep-after-move': 'cli.desktop-delete-asleep-moved',
-  'life.move-then-delete': 'cli.desktop-move-then-delete'
+  'life.move-then-delete': 'cli.desktop-move-then-delete',
+  'life.auto-resume': 'life.auto-resume'
 }
 const checks: CheckResult[] = []
 const benchmarks: RunFile['benchmarks'] = []
