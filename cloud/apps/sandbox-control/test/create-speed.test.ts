@@ -1,0 +1,132 @@
+// Repo-backed creates: blobless background clone with progress, bounded failures that say why.
+import { describe, expect, it } from 'vitest'
+import { CLONE_STATUS_SCRIPT, parseCloneStatus } from '../src/clone-status'
+import { maintainPool, poolConfigFromEnv } from '../src/pool'
+import { START_COMMAND } from '../src/sandbox-vm-commands'
+import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
+import { GOLDEN, createHarness } from './harness'
+
+const MIN = 60_000
+const repo = { url: 'https://github.com/acme/big.git' }
+const create = { workspaceId: 'ws-1', machineSize: 'standard', repo }
+const CLONE_FEATURE = { 'x-orca-sandbox-features': 'clone-progress' }
+
+function startEnv(h: Awaited<ReturnType<typeof createHarness>>) {
+  return h.vercel.commands.find((c) => c.command === START_COMMAND)!.env
+}
+
+describe('parseCloneStatus', () => {
+  it('maps git stages onto one percent', () => {
+    expect(parseCloneStatus('none\n')).toEqual({ state: 'none' })
+    expect(parseCloneStatus('running\n')).toEqual({ state: 'running', percent: 0, stage: 'download' })
+    expect(parseCloneStatus('running\nReceiving objects\t50\n')).toEqual({ state: 'running', percent: 27, stage: 'download' })
+    expect(parseCloneStatus('running\nReceiving objects\t100\nResolving deltas\t50\n')).toEqual({
+      state: 'running',
+      percent: 60,
+      stage: 'download'
+    })
+    // The blobless checkout's own fetch of file contents.
+    expect(
+      parseCloneStatus('running\nReceiving objects\t100\nResolving deltas\t100\nReceiving objects\t40\n')
+    ).toEqual({ state: 'running', percent: 75, stage: 'checkout' })
+    expect(
+      parseCloneStatus('running\nReceiving objects\t100\nResolving deltas\t100\nReceiving objects\t100\nUpdating files\t50\n')
+    ).toEqual({ state: 'running', percent: 95, stage: 'checkout' })
+    expect(parseCloneStatus('done\nUpdating files\t100\n')).toEqual({ state: 'done' })
+  })
+
+  it('reports only known failure reasons', () => {
+    expect(parseCloneStatus('failed clone_timeout\n')).toEqual({ state: 'failed', reason: 'clone_timeout' })
+    expect(parseCloneStatus('failed repo_unreachable\n')).toEqual({ state: 'failed', reason: 'repo_unreachable' })
+    expect(parseCloneStatus('failed something https://x\n')).toEqual({ state: 'failed', reason: 'clone_failed' })
+  })
+})
+
+describe('repo-backed create', () => {
+  it('clones blobless, and only in the background for a desktop that shows the clone step', async () => {
+    expect(WORKSPACE_PRELUDE_SCRIPT).toContain('--filter=blob:none')
+    const h = await createHarness()
+    const old = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(old.status).toBe(200)
+    expect(old.body.clone).toBeUndefined()
+    expect(startEnv(h).ORCA_CLONE_BACKGROUND).toBeUndefined()
+
+    h.vercel.commands.length = 0
+    const res = await h.call('POST', '/v1/sandboxes', { body: { ...create, workspaceId: 'ws-2' }, headers: CLONE_FEATURE })
+    expect(res.status).toBe(200)
+    expect(res.body.clone).toEqual({ state: 'running' })
+    expect(startEnv(h).ORCA_CLONE_BACKGROUND).toBe('1')
+  })
+
+  it('no repo, no background clone', async () => {
+    const h = await createHarness()
+    const res = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, headers: CLONE_FEATURE })
+    expect(res.body.clone).toBeUndefined()
+  })
+
+  it('GET /clone reports progress, and a failed clone sets last_error', async () => {
+    const h = await createHarness()
+    const { body } = await h.call('POST', '/v1/sandboxes', { body: create, headers: CLONE_FEATURE })
+    let vm = 'running\nReceiving objects\t100\nResolving deltas\t20\n'
+    h.vercel.commandHandler = (params) =>
+      params.command === 'bash' && params.args?.[1] === CLONE_STATUS_SCRIPT ? { exitCode: 0, stdout: vm, stderr: '' } : undefined
+    const running = await h.call('GET', `/v1/sandboxes/${body.sandbox.id}/clone`)
+    expect(running.body).toEqual({ clone: { state: 'running', percent: 57, stage: 'download' } })
+
+    vm = 'failed repo_unreachable\n'
+    const failed = await h.call('GET', `/v1/sandboxes/${body.sandbox.id}/clone`)
+    expect(failed.body).toEqual({ clone: { state: 'failed', reason: 'repo_unreachable' } })
+    const row = h.raw.prepare('SELECT last_error FROM sandboxes WHERE id = ?').get(body.sandbox.id) as { last_error: string }
+    expect(row.last_error).toBe('repo_unreachable')
+
+    // Someone else's sandbox is not found.
+    expect((await h.call('GET', `/v1/sandboxes/${body.sandbox.id}/clone`, { as: 'mallory' })).status).toBe(404)
+  })
+
+  it('a failed start records why instead of a bare create_failed', async () => {
+    const h = await createHarness()
+    h.vercel.failStart = true
+    const res = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    const row = h.raw.prepare('SELECT status, last_error FROM sandboxes').get() as { status: string; last_error: string }
+    expect(row.last_error).toBe('orcad_start_failed')
+  })
+
+  it('a pooled boot that ran long is not retried on a fresh VM (that would double the wait)', async () => {
+    const h = await createHarness({ SANDBOX_POOL_SIZE: '1' })
+    await maintainPool({
+      db: h.env.SANDBOX_DB,
+      provider: h.vercel,
+      now: h.now,
+      config: { environment: 'test', goldenSnapshotId: GOLDEN, defaultRegion: 'iad1', pool: poolConfigFromEnv(h.env) }
+    })
+    let starts = 0
+    h.vercel.commandHandler = (params) => {
+      if (params.args?.[1]?.endsWith(`exec ${START_COMMAND}`) || params.command === START_COMMAND) {
+        starts++
+        h.advance(2 * MIN) // the start command's 120 s timeout
+        return { exitCode: 1, stdout: '', stderr: 'timed out' }
+      }
+      return undefined
+    }
+    const res = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    expect(starts).toBe(1)
+  })
+
+  it('a create whose Worker was cut off is failed after 5 minutes, not 15', async () => {
+    const h = await createHarness()
+    const { body } = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })
+    h.raw.prepare(`UPDATE sandboxes SET status = 'creating' WHERE id = ?`).run(body.sandbox.id)
+    h.advance(4 * MIN)
+    expect((await h.reconcile()).released).toBe(0)
+    h.advance(2 * MIN)
+    expect((await h.reconcile()).released).toBe(1)
+    const row = h.raw.prepare('SELECT status, last_error FROM sandboxes WHERE id = ?').get(body.sandbox.id) as {
+      status: string
+      last_error: string
+    }
+    expect(row).toEqual({ status: 'destroyed', last_error: 'create_abandoned' })
+    expect(h.vercel.boxes.size).toBe(0)
+  })
+})

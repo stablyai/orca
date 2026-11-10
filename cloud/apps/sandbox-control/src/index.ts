@@ -9,6 +9,7 @@
 //          the public API's POST /v1/workspaces/:id/wake answers the same fields plus `workspace`)
 //   POST   /v1/sandboxes/:id/restart                              -> {sandbox, connection}
 //   GET    /v1/sandboxes/:id/status                               -> {sandbox, status} (live metrics, cost)
+//   GET    /v1/sandboxes/:id/clone                                -> {clone: {state, percent?, stage?, reason?}}
 //   POST   /v1/sandboxes/:id/archive {pullRequests?, checkouts?}  -> {sandbox}
 //   GET    /v1/sandboxes/:id/archive                              -> {archive}
 //   POST   /v1/sandboxes/:id/unarchive                            -> {sandbox, connection}
@@ -139,6 +140,7 @@ import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
+import { readCloneStatus } from './clone-status'
 import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
@@ -699,7 +701,7 @@ function devCredentials(env: Env): CredentialBroker {
 
 /** Ready answers carry phase timings as Server-Timing so clients and dashboards can see the slow step. */
 function readyResponse(ready: Ready): Response {
-  const response = json(readyView(ready.row, ready.connection))
+  const response = json(readyView(ready.row, ready.connection, ready.cloning))
   const timing = Object.entries(ready.timings ?? {})
     .map(([phase, ms]) => `${phase};dur=${ms}`)
     .join(', ')
@@ -1436,7 +1438,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await workspaceRoute(request, url, env, deps, caller)
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive|unarchive|env\/refresh|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -1474,7 +1476,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (!body.success) {
         return fail('invalid_request', 400)
       }
-      const ready = await createSandbox(life, caller, body.data)
+      // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
+      const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
       await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
       return readyResponse(ready)
     }
@@ -1545,6 +1548,9 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return json(readyView(ready.row, ready.connection))
       }
+      case 'GET clone':
+        // The background clone of a create made with feature `clone-progress` (clone-status.ts).
+        return json({ clone: await readCloneStatus(life, row) })
       case 'GET status':
       {
         const [{ idleSleepMinutes, ...status }, hints] = await Promise.all([
