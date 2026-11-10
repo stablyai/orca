@@ -2,7 +2,8 @@ import {
   SET_TERMINAL_PANE_TITLE_EVENT,
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
-import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '@/lib/structured-chat-tab-index'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { useAppStore } from '../../store'
@@ -39,7 +40,7 @@ export function applyRuntimePaneTitle({ tabId, leafId, title }: SetTerminalPaneT
   const layout = store.terminalLayoutsByTabId[tabId]
   // A never-mounted tab's layout can be rootless and name its one pane elsewhere.
   const leafIds = layout?.root
-    ? collectLeafIdsInOrder(layout.root)
+    ? collectLayoutLeafIdsInOrder(layout.root)
     : [layout && resolveRootlessTerminalLayoutLeafId(layout)]
   if (!layout || !isTerminalLeafId(leafId) || !leafIds.includes(leafId)) {
     return
