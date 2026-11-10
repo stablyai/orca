@@ -84,6 +84,7 @@ import {
   authorizeUrl,
   createConnectState,
   handleGitHubReturn,
+  installerFromIdentity,
   SETUP_SESSION_ID,
   installUrl,
   isInstallationBound,
@@ -574,7 +575,11 @@ function githubConnect(env: Env, deps: Deps): GitHubConnectConfig | null {
     clientId: env.GITHUB_APP_CLIENT_ID,
     clientSecret: env.GITHUB_APP_CLIENT_SECRET,
     stateSecret: env.GITHUB_STATE_SECRET!,
-    fetch: deps.githubFetch
+    fetch: deps.githubFetch,
+    verifyInstaller: async (installationId, user) => {
+      const minter = deps.github ?? githubMinter(env)
+      return minter ? installerFromIdentity(minter, installationId, user) : null
+    }
   }
 }
 
@@ -1711,7 +1716,17 @@ async function internalInstallUrl(env: Env, deps: Deps, url: URL): Promise<Respo
     if (!access.connect) {
       return fail('not_configured', 503)
     }
-    const install = await repoInstallUrl(access, { accountId, userId }, repo, { setupSessionId: session })
+    // N5: a GitHub identity auth verified from the user's GitHub sign-in (billing passes it on).
+    const githubUserId = Number(url.searchParams.get('githubUserId') ?? NaN)
+    const githubLogin = url.searchParams.get('githubLogin') ?? ''
+    const githubUser =
+      Number.isSafeInteger(githubUserId) && githubUserId > 0 && /^[A-Za-z0-9-]{1,39}$/.test(githubLogin)
+        ? { id: githubUserId, login: githubLogin }
+        : undefined
+    const install = await repoInstallUrl(access, { accountId, userId }, repo, {
+      setupSessionId: session,
+      ...(githubUser ? { githubUser } : {})
+    })
     return json({ access: result.access, url: install.url })
   } catch (error) {
     console.log(JSON.stringify({ event: 'github_install_url_failed', error: String(error).slice(0, 160) }))
