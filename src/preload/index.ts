@@ -91,6 +91,7 @@ import { grokAccountsApi } from './api/grok-accounts-bridge'
 import { cursorAccountsApi } from './api/cursor-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { plainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
+import { runtimeDownloadsApi } from './api/runtime-downloads-bridge'
 import { agentApiKeysApi } from './api/agent-api-keys-bridge'
 import { cloudApiBridge } from './api/cloud-api-bridge'
 import { cloudSecretsApi } from './api/cloud-secrets-bridge'
@@ -205,6 +206,7 @@ const api = {
   cursorAccounts: cursorAccountsApi,
   ssh: sshApi,
   plainSsh: plainSshTerminalApi,
+  runtimeDownloads: runtimeDownloadsApi,
   agentApiKeys: agentApiKeysApi,
   cloudApi: cloudApiBridge,
   cloudSecrets: cloudSecretsApi,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { classifyVmBuildFailure, isAccountGate, type VmBuildFailure } from './vm-build-failure'
-import { vmBuildFailureCopy } from './vm-build-failure-copy'
+import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
 import { orcaCloudRepoName } from './vm-build-repo-actions'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -102,6 +102,38 @@ describe('vmBuildFailureCopy', () => {
     expect(copy({ kind: 'payment' }, false).body).toContain(
       'Ask an owner or admin to update the payment method.'
     )
+  })
+
+  it('states the running-sandbox cap on the limit cards once the plan is known', () => {
+    const copy = (kind: VmBuildFailure, sandboxLimit: { perSeat: number; team: number } | null) =>
+      vmBuildFailureCopy(
+        kind,
+        { cloud: true, canManageBilling: true, repoName: 'acme/web', sandboxLimit },
+        t
+      ).body
+    expect(copy({ kind: 'concurrency' }, { perSeat: 3, team: 12 })).toContain(
+      'Your team can run 12 sandboxes at once (3 per seat). Put one to sleep or delete it'
+    )
+    expect(copy({ kind: 'memberConcurrency' }, { perSeat: 3, team: 12 })).toContain(
+      'You can run 3 sandboxes at once. Put one to sleep or delete it'
+    )
+    expect(copy({ kind: 'concurrency' }, null)).toMatch(/^Put one to sleep or delete it/)
+  })
+
+  it('derives the caps the way billing enforces them', () => {
+    const status = (seats: number, perSeat: number | null) =>
+      ({
+        status: 'ok',
+        entitlement: {
+          seats,
+          offers: perSeat === null ? null : { team: { concurrentSandboxesPerSeat: perSeat } }
+        }
+      }) as unknown as Parameters<typeof sandboxLimitFromBilling>[0]
+    expect(sandboxLimitFromBilling(status(4, 3))).toEqual({ perSeat: 3, team: 12 })
+    // Billing counts at least one seat.
+    expect(sandboxLimitFromBilling(status(0, 3))).toEqual({ perSeat: 3, team: 3 })
+    expect(sandboxLimitFromBilling(status(4, null))).toBeNull()
+    expect(sandboxLimitFromBilling(null)).toBeNull()
   })
 
   it('names the repository GitHub needs to reach', () => {

@@ -13,21 +13,20 @@ import type { CloudRemoteDesktopResult } from '../../../../shared/hosted-sandbox
 const SLOW_START_MS = 5_000
 const opening = new Set<string>()
 
-/** Desktop identity without the per-boot password or the local port a re-dialed forward may change. */
+/** Desktop identity without the local port a re-dialed forward may change (or an older URL form). */
 function desktopPage(url: string): string | null {
   try {
     const parsed = new URL(url)
-    return parsed.hostname === 'localhost'
-      ? `${parsed.pathname}?${parsed.searchParams.toString()}`
-      : null
+    return parsed.hostname === 'localhost' ? parsed.pathname : null
   } catch {
     return null
   }
 }
 
 /**
- * This workspace's desktop tab: reused when it is the current session, replaced when it holds a
- * previous boot's password (it would only retry a dead login), so there is never a second tab.
+ * This workspace's desktop tab: reused when it is this session's page (main hands it a fresh ticket
+ * and resumes it if it stopped retrying), replaced when it points at an older forward or failed to
+ * load, so there is never a second tab.
  */
 function takeDesktopTab(worktreeId: string, url: string): string | null {
   const state = useAppStore.getState()
@@ -69,7 +68,8 @@ export async function openCloudRemoteDesktop(
           }}
         />
       ),
-      { id, duration: state.kind === 'starting' ? Number.POSITIVE_INFINITY : 12_000 }
+      // Errors stay until dismissed or acted on: each names the one next step.
+      { id, duration: Number.POSITIVE_INFINITY }
     )
   }
   show({ kind: 'starting', slow: false })

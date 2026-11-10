@@ -198,6 +198,16 @@ export class RuntimeFileReads {
     return readLocalFileRange(filePath, offset, length)
   }
 
+  /** A workspace folder's real path for archiving, under the same containment as chunk reads. */
+  async resolveFileExplorerArchivePath(
+    worktreeSelector: string,
+    relativePath: string
+  ): Promise<string> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    requireLocalRuntimeFileRoute(target)
+    return resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
+  }
+
   /** A host image a chat names, under desktop's chat-image rule; the path must be on this machine. */
   async readChatImagePreview(
     worktreeSelector: string,

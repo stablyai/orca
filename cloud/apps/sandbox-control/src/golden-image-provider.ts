@@ -22,7 +22,12 @@ export type GoldenImageProviderApi = {
     params: { command: string; args?: string[]; env?: Record<string, string>; timeoutMs: number }
   ): Promise<string>
   /** Null exit code while it runs; `wait` blocks (provider-side) until it ends. */
-  getCommand(sessionId: string, commandId: string, options?: { wait?: boolean }): Promise<{ exitCode: number | null }>
+  getCommand(
+    sessionId: string,
+    commandId: string,
+    /** `wait`: block until it exits (the only way the provider reports an exit code); `waitMs` caps that. */
+    options?: { wait?: boolean; waitMs?: number }
+  ): Promise<{ exitCode: number | null }>
   /**
    * The command's output as provider ndjson (`{"stream":"stdout"|"stderr","data":"..."}` lines), from
    * the first byte; follows live output until the command ends.

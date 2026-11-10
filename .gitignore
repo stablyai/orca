@@ -157,3 +157,6 @@ ci-shards/
 /.build/windows-native-benchmark/
 
 .local/static-analysis-research/
+
+# Python bytecode (VM entry points tested locally)
+__pycache__/
