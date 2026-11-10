@@ -5,13 +5,13 @@ import {
   readPrimarySelectionText,
   setPrimarySelectionEnabled,
   setPrimarySelectionText
-} from '@/lib/primary-selection'
+} from '@/lib/clipboard/primary-selection/primary-selection'
 import {
   findEditablePrimarySelectionPasteTarget,
   pastePrimarySelectionTextIntoTarget,
   type EditablePrimarySelectionPasteTarget
-} from '@/lib/primary-selection-paste'
-import { readCurrentPrimarySelectionText } from '@/lib/primary-selection-capture'
+} from '@/lib/clipboard/primary-selection/primary-selection-paste'
+import { readCurrentPrimarySelectionText } from '@/lib/clipboard/primary-selection/primary-selection-capture'
 
 const PRIMARY_SELECTION_PENDING_TARGET_TTL_MS = 750
 

@@ -1,8 +1,8 @@
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../shared/event-loop-yield'
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
-} from '../../../shared/utf8-byte-limits'
+} from '../../../../../shared/utf8-byte-limits'
 
 export type PastePayloadMetadata = {
   byteLength: number

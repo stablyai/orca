@@ -1,4 +1,5 @@
-import { isKeybindingActionId, type KeybindingActionId } from '../../../shared/keybindings'
+import { isKeybindingActionId } from '../../../../shared/keybindings/definitions'
+import type { KeybindingActionId } from '../../../../shared/keybindings/types'
 
 export type AppCommandSource =
   | 'plugin-keybinding'

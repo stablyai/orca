@@ -1,10 +1,10 @@
 import { createTextControlRejectedResult } from './text-control-paste-diagnostics'
 import {
   TEXT_CONTROL_PASTE_MAX_BYTES,
-  pasteTextIntoTextControl,
   type TextControlPasteOptions,
   type TextControlPasteResult
-} from './text-control-paste'
+} from './text-control-paste-model'
+import { pasteTextIntoTextControl } from './text-control-paste'
 import {
   classifyTextControlPastePayloadOwnership,
   findOwnedPasteEventTextControlTarget

@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   consumePrimarySelectionNativePasteSuppression,
   readPrimarySelectionText
-} from '@/lib/primary-selection'
+} from '@/lib/clipboard/primary-selection/primary-selection'
 import { usePrimarySelectionPaste } from './usePrimarySelectionPaste'
 
-vi.mock('@/lib/primary-selection', () => ({
+vi.mock('@/lib/clipboard/primary-selection/primary-selection', () => ({
   consumePrimarySelectionNativePasteSuppression: vi.fn(() => false),
   readPrimarySelectionText: vi.fn(),
   setPrimarySelectionEnabled: vi.fn(),

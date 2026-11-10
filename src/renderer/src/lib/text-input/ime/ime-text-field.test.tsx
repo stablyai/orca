@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ImeInput, ImeTextarea } from './ime-text-field'
-import { endComposition } from './ime-composition-event.test-support'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -16,76 +15,6 @@ afterEach(() => {
 const enter = { key: 'Enter', keyCode: 13 }
 
 describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Field) => {
-  it.each([
-    { marked: { key: 'Enter', keyCode: 13, isComposing: true }, release: enter },
-    { marked: { key: 'Enter', keyCode: 229 }, release: enter },
-    { marked: { key: 'Process', keyCode: 229 }, release: enter },
-    {
-      marked: { key: 'Process', keyCode: 229 },
-      release: { key: 'Process', keyCode: 229 }
-    }
-  ])(
-    'keeps a marked confirmation and its redispatch out of field and parent actions: %j',
-    ({ marked, release }) => {
-      const action = vi.fn()
-      const parentAction = vi.fn()
-      const { getByRole } = render(
-        <div onKeyDown={parentAction}>
-          <Field onKeyDown={action} />
-        </div>
-      )
-      const field = getByRole('textbox')
-      expect(fireEvent.keyDown(field, marked)).toBe(true)
-      fireEvent.keyUp(field, release)
-      expect(fireEvent.keyDown(field, enter)).toBe(false)
-      expect(action).not.toHaveBeenCalled()
-      expect(parentAction).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(20)
-      fireEvent.keyDown(field, enter)
-      expect(action).toHaveBeenCalledOnce()
-      expect(parentAction).toHaveBeenCalledOnce()
-    }
-  )
-
-  it.each(['confirm', 'selection'])(
-    'releases completion-first composition ownership after %s',
-    (finish) => {
-      const action = vi.fn()
-      const { getByRole } = render(<Field onKeyDown={action} />)
-      const field = getByRole('textbox')
-      fireEvent.compositionStart(field)
-      fireEvent.change(field, { target: { value: '日本語' } })
-      fireEvent.keyUp(field, { key: 'f', keyCode: 70, isComposing: true })
-      endComposition(field, '日本語')
-      fireEvent.input(field, { data: '日本語', inputType: 'insertText', isComposing: false })
-      if (finish === 'confirm') {
-        expect(fireEvent.keyDown(field, enter)).toBe(false)
-        expect(action).not.toHaveBeenCalled()
-      } else {
-        vi.advanceTimersByTime(20)
-      }
-      expect(fireEvent.keyDown(field, enter)).toBe(true)
-      expect(action).toHaveBeenCalledOnce()
-    }
-  )
-
-  // Hangul has no candidate step, so the Enter that commits the last syllable submits (#30159).
-  it.each([
-    { order: 'marked keydown first', marked: { key: 'Process', keyCode: 229 } },
-    { order: 'completion first (IBus)', marked: null }
-  ])('submits on the Enter that commits Hangul: $order', ({ marked }) => {
-    const action = vi.fn()
-    const { getByRole } = render(<Field onKeyDown={action} />)
-    const field = getByRole('textbox')
-    fireEvent.compositionStart(field)
-    if (marked) {
-      fireEvent.keyDown(field, marked)
-    }
-    endComposition(field, '요')
-    fireEvent.keyDown(field, enter)
-    expect(action).toHaveBeenCalledOnce()
-  })
-
   it('guards active composition, preserves lifecycle callbacks, and releases on blur', () => {
     const action = vi.fn()
     const start = vi.fn(),

@@ -1,5 +1,5 @@
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../../shared/utf8-byte-limits'
 import {
   createTextControlCancelledResult,
   createTextControlPastedResult,
@@ -19,20 +19,6 @@ import {
   type TextControlPasteOptions,
   type TextControlPastePayloadMeasurement,
   type TextControlPasteResult
-} from './text-control-paste-model'
-
-export {
-  TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
-  TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MEASURE_YIELD_CODE_UNITS
-} from './text-control-paste-model'
-export type {
-  TextControlPasteByteLengthMeasurement,
-  TextControlPasteOptions,
-  TextControlPastePayloadMeasurement,
-  TextControlPasteResult,
-  TextControlPasteSource
 } from './text-control-paste-model'
 
 export function measureTextControlPasteByteLength(

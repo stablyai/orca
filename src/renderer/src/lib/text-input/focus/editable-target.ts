@@ -1,4 +1,4 @@
-import { getShortcutPlatform } from './shortcut-platform'
+import { getShortcutPlatform } from '../../keyboard/shortcut-platform'
 
 export function isNativeChatPromptTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[data-native-chat-prompt-editor]') !== null

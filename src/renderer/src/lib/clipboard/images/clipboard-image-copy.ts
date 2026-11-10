@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../shared/clipboard-image'
+import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../shared/clipboard-image'
 import { blobToBase64, convertImageBlobToPng } from './image-blob-png'
 
 export async function copyImageToClipboard(blob: Blob): Promise<void> {

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   armPrimarySelectionNativePasteSuppression,
   resetPrimarySelectionForTests
-} from '@/lib/primary-selection'
+} from '@/lib/clipboard/primary-selection/primary-selection'
 import { usePrimarySelectionPaste } from './usePrimarySelectionPaste'
 
 const originalUserAgent = navigator.userAgent

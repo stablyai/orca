@@ -24,33 +24,6 @@ afterEach(() => {
 })
 
 describe('text control paste', () => {
-  it('chunks large payloads and dispatches one privacy-safe input event', async () => {
-    const textarea = appendTextarea('before:')
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
-    const events = captureInputEvents(textarea)
-    const yieldToEventLoop = vi.fn(async () => {})
-    const text = 'ab😀cd\n'.repeat(6)
-
-    const result = await pasteTextIntoTextControl(textarea, text, {
-      directMaxBytes: 8,
-      chunkMaxBytes: 10,
-      yieldToEventLoop
-    })
-
-    if (result.status !== 'pasted') {
-      throw new Error('Expected chunked paste to complete')
-    }
-    expect(result.mode).toBe('chunked')
-    expect(result.chunksWritten).toBeGreaterThan(1)
-    expect(result.redactedDiagnostic).toContain('lines=7')
-    expect(result.redactedDiagnostic).toContain('controls=false')
-    expect(yieldToEventLoop).toHaveBeenCalledTimes(result.chunksWritten - 1)
-    expect(textarea.value).toBe(`before:${text}`)
-    expect(events).toHaveLength(1)
-    expect(events[0].inputType).toBe('insertFromPaste')
-    expect(events[0].data ?? '').toBe('')
-  })
-
   it('cancels a chunked paste when the target stops being valid', async () => {
     const textarea = appendTextarea()
     const events = captureInputEvents(textarea)

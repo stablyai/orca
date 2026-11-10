@@ -1,10 +1,11 @@
 import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
-} from '../../../shared/clipboard-text'
-import { TEXT_CONTROL_PASTE_MAX_BYTES, pasteTextIntoTextControl } from './text-control-paste'
-import { createTextControlRejectedResult } from './text-control-paste-diagnostics'
-import { findOwnedTextControlPasteTarget } from './text-control-paste-ownership'
+} from '../../../../../shared/clipboard-text'
+import { TEXT_CONTROL_PASTE_MAX_BYTES } from '../../text-input/paste/text-control-paste-model'
+import { pasteTextIntoTextControl } from '../../text-input/paste/text-control-paste'
+import { createTextControlRejectedResult } from '../../text-input/paste/text-control-paste-diagnostics'
+import { findOwnedTextControlPasteTarget } from '../../text-input/paste/text-control-paste-ownership'
 
 export const APP_MENU_PASTE_EVENT = 'orca-app-menu-paste'
 
