@@ -191,7 +191,7 @@ export abstract class HostRelayHandshake extends HostRelayBase {
     })
     // After the ack, which strict shipped parsers must see unchanged; only hosts that asked get it.
     if (a.clientKeepalive) { this.send(ws, { type: 'keepalive-offer', v: 1, intervalMs: this.config.pingIntervalMs }) }
-    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [], '', a.place)
+    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [], a.clientKeepalive ? 'keepalive' : 'legacy', a.place)
     await this.reschedule()
   }
 }

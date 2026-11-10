@@ -2,8 +2,8 @@ import type {
   BrowserGrabComputedStyles,
   BrowserGrabPayload,
   BrowserPageAnnotation
-} from '../../../../../shared/browser/element-grab/browser-grab-types'
-import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
+} from '../element-grab/browser-grab-types'
+import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
 
 function formatPageHeading(payload: BrowserGrabPayload): string {
   // Document previews report a file path; `C:\` would otherwise parse as a URL scheme.

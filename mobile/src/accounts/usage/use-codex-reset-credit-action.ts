@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { CodexResetCreditExpectedScope } from '../../../src/shared/codex-reset-credit-scope'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { translate } from '../i18n/mobile-i18n'
-import type { Translate } from '../i18n/mobile-i18n'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { AccountsSnapshot } from './account-usage-state'
+import type { CodexResetCreditExpectedScope } from '../../../../src/shared/codex-reset-credit-scope'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import type { AccountsSnapshot } from '../accounts-snapshot'
 import {
   getCodexResetCreditOutcomeCopy,
   getCodexResetCreditScope,

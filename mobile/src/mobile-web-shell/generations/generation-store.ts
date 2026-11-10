@@ -1,8 +1,8 @@
-import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebBundleFetchResult,
   MobileWebBundleReusableAssets
-} from '../transport/web-bundle/mobile-web-bundle-fetch'
+} from '../../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
 import { createGenerationHostOrder, withHostLast } from './generation-host-order'
 import { createDeferredCommits } from './generation-deferred-commits'
@@ -18,7 +18,7 @@ import {
   listGenerationHostDirectories
 } from './generation-host-directories'
 import { isHostCacheKey } from './host-cache-key'
-import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
+import type { MobileWebShellUpdateFailure } from '../mobile-web-shell-update-failure'
 import {
   forgetHostUpdateFailuresIn,
   readUpdateFailureLog,
@@ -216,7 +216,7 @@ export function createGenerationStore(options: {
       manifest: staged.manifest
     }
     const entries = await fs.list(generations)
-    // A build-id directory alone proves nothing: pre-API-26 Android moves can leave it empty. Require its activation manifest before reusing it.
+    // A build-id directory alone proves nothing; require its activation manifest before reusing it.
     const existing = entries.find((entry) => entry.name === staged.buildId)
     if (
       existing?.isDirectory === true &&
@@ -238,7 +238,7 @@ export function createGenerationStore(options: {
     }
     await fs.createDirectory(generations)
     await fs.moveDirectory(staged.directory, target)
-    // Below API 26, Expo Android FileSystemPath.kt moves directories via non-recursive copy/delete and can leave an empty target; failed source deletion leaves tmp for sweeping.
+    // Never activate a target without its manifest; a source left in tmp is swept.
     if (!(await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))) {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)

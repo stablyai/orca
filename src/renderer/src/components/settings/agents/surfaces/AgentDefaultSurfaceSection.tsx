@@ -254,7 +254,7 @@ export function AgentDefaultSurfaceSection({
           role="radiogroup"
           aria-label={title}
           aria-busy={pending}
-          className="grid gap-3.5 @3xl:grid-cols-2"
+          className="grid gap-3.5 @2xl:grid-cols-2"
         >
           <SurfaceTile
             name={name}
