@@ -1,6 +1,6 @@
 import { bindPanePtyExit } from '../../pty-connection/lifecycle/pane-pty-exit'
 import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
-import { act } from 'react'
+import { act, createRef, useImperativeHandle } from 'react'
 import type { Root } from 'react-dom/client'
 import { useAppStore } from '@/store/index'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
@@ -31,8 +31,7 @@ export async function renderNoticePaneLifecycle(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only these manager operations are reached by close and mount cleanup.
   const manager = managerFixture as unknown as PaneManager
-  let park = () => {}
-  let close = () => {}
+  const actions = createRef<{ park: () => void; close: () => void }>()
   function PaneLifecycle() {
     const refs = useTerminalPaneLifecycleRefs()
     const state = useAppStore.getState()
@@ -72,22 +71,27 @@ export async function renderNoticePaneLifecycle(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Closed handler reads only the supplied deps, refs and handoffs.
       context as unknown as Parameters<typeof createTerminalPaneClosedHandler>[0]
     )
-    close = () => closed(1, { leafId, reason: 'close' })
-    park = () =>
-      cleanupTerminalPaneMount({
-        manager,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Cleanup reads the supplied lifecycle subset; connection and keyboard callbacks are not reached.
-        deps: controller as unknown as Parameters<typeof cleanupTerminalPaneMount>[0]['deps'],
-        refs,
-        deferredSplitHandoffs: new Map(),
-        expandedStyleSnapshots: new Map(),
-        unregisterRuntimeTab: () => {},
-        cancelResize: () => {}
-      })
+    useImperativeHandle(actions, () => ({
+      close: () => closed(1, { leafId, reason: 'close' }),
+      park: () =>
+        cleanupTerminalPaneMount({
+          manager,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Cleanup reads the supplied lifecycle subset; connection and keyboard callbacks are not reached.
+          deps: controller as unknown as Parameters<typeof cleanupTerminalPaneMount>[0]['deps'],
+          refs,
+          deferredSplitHandoffs: new Map(),
+          expandedStyleSnapshots: new Map(),
+          unregisterRuntimeTab: () => {},
+          cancelResize: () => {}
+        })
+    }))
     return <CodexSharedServerBanner ptyId={ptyId} tabId={tabId} leafId={leafId} />
   }
   await act(async () => root.render(<PaneLifecycle />))
-  return { park: () => park(), close: () => close(), transports }
+  if (!actions.current) {
+    throw new Error('Terminal lifecycle did not mount')
+  }
+  return { ...actions.current, transports }
 }
 
 export async function deliverNoticePaneStartupExit(
