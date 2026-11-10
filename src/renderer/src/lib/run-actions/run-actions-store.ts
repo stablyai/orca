@@ -85,16 +85,8 @@ function sanitizePersisted(value: unknown): RunsByWorktree {
 
 function persist(): void {
   try {
-    // Only live runs matter after a reload: they are what a wake or restart brings back.
-    const live: RunsByWorktree = {}
-    for (const [worktreeId, byAction] of Object.entries(runs)) {
-      for (const [actionId, run] of Object.entries(byAction)) {
-        if (run.status === 'running') {
-          ;(live[worktreeId] ??= {})[actionId] = run
-        }
-      }
-    }
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(live))
+    // Every run whose tab still exists: a restart replaces that tab instead of adding another.
+    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(runs))
   } catch {
     // Storage is best effort; the in-memory state stays authoritative.
   }

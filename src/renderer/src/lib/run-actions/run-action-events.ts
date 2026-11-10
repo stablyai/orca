@@ -6,6 +6,7 @@ import {
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
 import type { AppState } from '@/store/types'
+import { getRemoteRuntimePtyOwner } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { pickAutoRunAction } from '../../../../shared/orca-yaml-run-actions'
 import {
   deleteRunActionRun,
@@ -101,9 +102,33 @@ export function installRunActionEvents(): () => void {
       pruneClosedRunTabs(state)
     }
   })
+  // After a restart, a run recorded as running may have ended while nobody watched its terminal.
+  const reconcileTimer = setTimeout(
+    () => void reconcileLocalRunsAfterStartup(),
+    STARTUP_RECONCILE_MS
+  )
   return () => {
     window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, onFinished)
     unsubscribe()
+    clearTimeout(reconcileTimer)
+  }
+}
+
+const STARTUP_RECONCILE_MS = 5_000
+
+/** Local terminals can say whether anything still runs under the shell; remote ones are left as recorded. */
+async function reconcileLocalRunsAfterStartup(): Promise<void> {
+  const state = useAppStore.getState()
+  for (const run of listRunActionRuns()) {
+    const ptyId = state.ptyIdsByTabId[run.tabId]?.[0]
+    if (run.status !== 'running' || !ptyId || getRemoteRuntimePtyOwner(ptyId)) {
+      continue
+    }
+    const probe = window.api?.pty?.hasChildProcesses
+    const busy = probe ? await probe(ptyId).catch(() => true) : true
+    if (!busy) {
+      patchRunActionRun(run.worktreeId, run.actionId, { status: 'exited', exitCode: null })
+    }
   }
 }
 
