@@ -4,7 +4,7 @@ import { translate } from '../../../i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   MobileRelayStatus,
   MobileRelayStatusDetail

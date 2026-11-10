@@ -2,12 +2,15 @@ import type { RefObject } from 'react'
 import { useMemo } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repo-icon'
-import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
+import type {
+  SettingsNavIcon,
+  SettingsNavInstallStatus
+} from '@/components/settings/navigation/settings-navigation-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
 import { Button } from '../../ui/button'

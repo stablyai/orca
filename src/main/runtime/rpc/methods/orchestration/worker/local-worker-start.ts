@@ -9,7 +9,7 @@ import type {
   RunRow,
   TaskRow
 } from '../../../../orchestration/db/orchestration-records'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
@@ -46,7 +46,7 @@ export async function startLocalWorker(args: {
   bindRun: () => RunRow
   taskDeps: string[] | undefined
   coordinator: OrchestrationCallerIdentity | null
-  callerSession?: OrchestrationSessionCaller
+  callerSession?: OrchestrationEntryCaller
   existingTask?: TaskRow
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */

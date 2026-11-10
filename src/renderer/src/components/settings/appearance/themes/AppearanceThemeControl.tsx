@@ -23,7 +23,7 @@ import {
   terminalThemeUpdate
 } from '../../../plugins/state/plugin-theme-apply'
 import { findCodeEditorTheme } from '@/lib/editor/appearance/code-editor-theme'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-request'
 import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'
 import {

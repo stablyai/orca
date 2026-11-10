@@ -11,10 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type AutoRenameFailedDialogProps = {
   open: boolean

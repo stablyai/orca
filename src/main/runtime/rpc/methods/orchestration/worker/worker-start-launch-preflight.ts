@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
@@ -14,7 +14,7 @@ import type { WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 export async function preflightLocalWorkerStartLaunch(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService
-  callerSession?: OrchestrationSessionCaller
+  callerSession?: OrchestrationEntryCaller
   requestedWorktree: string
   createsWorktree: boolean
   creationTargetFor: (callerWorktreeId: string) => Promise<WorkerWorktreeCreationTarget>
