@@ -3,11 +3,8 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
-import {
-  capPrRefreshSequences,
-  capPrRefreshStates,
-  pruneExpiredPRRefreshStates
-} from './pr-refresh-state'
+import { capPrRefreshStates, pruneExpiredPRRefreshStates } from './pr-refresh-state'
+import { capRecordByInsertionOrder } from '../cache/cache-policy'
 import {
   applyGitHubPRResultToCaches,
   deletePRRefreshStartedEntry,
@@ -260,7 +257,7 @@ export const createRefreshEventActions = (
       // Preserve root identity so no-op writes do not notify every store subscriber.
       return changed
         ? {
-            prRefreshSequences: capPrRefreshSequences(nextSequences),
+            prRefreshSequences: capRecordByInsertionOrder(nextSequences),
             // Why: bound prRefreshStates with status-aware eviction so visible in-progress pills survive.
             prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,

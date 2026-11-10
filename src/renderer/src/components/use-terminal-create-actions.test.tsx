@@ -33,7 +33,9 @@ vi.mock('@/lib/client-creation-action-policy', () => ({
     'mobile-emulator': mocks.simulatorAvailability
   })
 }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))

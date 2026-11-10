@@ -6,7 +6,7 @@ import type { SshConnectionState } from '../../../../../shared/ssh-types'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-catalog-route'
 import { resolveWorktreeOperationRouteResultForHost } from '@/lib/workspace/ownership/worktree-operation-route'
-import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace

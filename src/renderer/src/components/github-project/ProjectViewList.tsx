@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'

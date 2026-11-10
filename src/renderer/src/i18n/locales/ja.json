@@ -1,7 +1,7 @@
 {
   "agentLaunch": {
     "connectSsh": "このワークスペースのSSHホストに接続してから、もう一度お試しください。",
-    "sshUnavailable": "この SSH ホストではターミナルからの起動を利用できません。ワークスペースでターミナルを開き、そこで Agent を起動してください。",
+    "sshUnavailable": "この SSH ホストではターミナル起動を利用できません。ワークスペースでターミナルを開き、そこで Agent を起動してください。",
     "reconnectServer": "このワークスペースのOrcaサーバーに再接続してから、もう一度お試しください。",
     "updateServer": "このワークスペースのサーバーでOrcaを更新してから、もう一度お試しください。",
     "checkSettings": "Agent の起動設定を確認してから、もう一度お試しください。",
@@ -341,10 +341,11 @@
       "customArgsBadge": "カスタム",
       "rowPermissions": "権限",
       "otherAgentsPermissionsLabel": "他の Agent の権限",
-      "autoUnsupported": "自動モードを使うには、このホストの Orca を新規バージョンに更新してください。",
+      "autoUnsupported": "「代わりに承認」を使うには、このホストの Orca を新しいバージョンに更新してください。",
       "permissionsMixedNoMajority": "Agent ごとに設定が異なります。モードを選択すると、すべての Agent に適用されます。",
       "permissionsDescription": "Agent が確認なしで実行できる操作の範囲です。独自の起動引数を設定した Agent は、その引数を維持します。",
-      "permissionsSearchDescription": "手動、自動、Yolo の権限モードで Agent を起動します。",
+      "permissionsSearchDescription": "「代わりに承認」、「フルアクセス」、または各 Agent 独自の権限設定を選択します。",
+      "permissionMixed": "混在",
       "permissionsAutoDescription": "<agents>対応 Agent</agents>は安全な操作を自動で承認します。",
       "permissionsMixed": "ほとんどの Agent は {{mode}} を使用します。モードを選択すると、カスタム引数を除く、マークされた例外がリセットされます。",
       "expandAgentSettings": "Agent 設定を展開する",
@@ -8762,13 +8763,9 @@
           "6fa734ed95": "{{value0}} を削除",
           "openAiKeyName": "OpenAI 転写キー",
           "dictationModeAuto": "自動",
-          "dictationModesWithAutoDescription": "自動：{{shortcut}} を押し続けると離すまで音声入力し、短く押すと開始と停止を切り替えます。ホールド：{{shortcut}} を押している間、音声入力します。トグル：{{shortcut}} を1回押すと開始し、もう一度押すと停止します。",
           "speechGpuLabel": "GPU を使用",
-          "speechGpuDescription": "動作する場合はグラフィックカードで音声を認識し、失敗した場合は CPU で認識します。音声入力でコンピュータがフリーズしたり再起動したりする場合はオフにしてください。",
-          "updateToFasterVersion": "高速版に更新 ({{value0}} MB)",
           "c5ea32143e": "音声モデル",
-          "ba4a900d1d": "ディクテーションモード",
-          "0121960365": "音声ディクテーションを有効にする"
+          "ba4a900d1d": "ディクテーションモード"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",
@@ -10592,16 +10589,20 @@
               "vocabularyTitle": "語彙",
               "vocabularyDescription": "音声入力が自分の書き方で表記する名前やコード用語。個人用またはリポジトリ用。",
               "vocabularyKeyword": "辞書",
-              "b3920972d4": "音声モデルの解放",
               "7f5a2416a6": "音声モデル",
               "9d83747eae": "音声入力の言語",
-              "a5fb30e4da": "音声ディクテーションを有効にする",
               "ffaa3efe7c": "OpenAI 文字起こし",
               "c7a7eaa0da": "フィラーを削除",
               "d0c230c061": "ディクテーションモード",
               "silenceStopTitle": "無音で停止",
               "silenceStopDescription": "話すのをやめた後、音声入力が聞き取りを続ける時間を選びます。",
-              "silenceStopKeyword": "無音"
+              "silenceStopKeyword": "無音",
+              "dictationTitle": "音声入力",
+              "shortcutTitle": "ショートカット",
+              "shortcutDescription": "音声入力を開始するキー。",
+              "shortcutKeyword": "キーボード",
+              "keepLoadedTitle": "モデルを読み込んだままにする",
+              "gpuKeyword": "グラフィックカード"
             }
           }
         },
@@ -11647,7 +11648,6 @@
           "systemDefault": "システムのデフォルト",
           "unavailable": "利用不可",
           "label": "マイクロフォン",
-          "description": "音声ディクテーションに使用される入力デバイス。システムのデフォルトは OS のマイク設定に従います。",
           "accessHint": "入力デバイスの一覧を表示するには、マイクへのアクセスを許可してください。",
           "allowAccess": "アクセスを許可する",
           "noMicrophoneFound": "マイクが見つかりませんでした。 1 つ接続してから、再試行してください。",
@@ -13502,6 +13502,10 @@
                   "archived": {
                     "title": "リポジトリがアーカイブされています",
                     "body": "このリポジトリはアーカイブされているため、Orca は {{reviewLabel}} ステータスを更新しません。"
+                  },
+                  "host_off": {
+                    "title": "WSL ホストがオフです",
+                    "body": "Orca はこのプロジェクトの WSL ホストを通じて {{reviewLabel}} の状態を更新しますが、ホストはオフです。更新するには再接続してください。"
                   },
                   "not_git": {
                     "title": "Git リポジトリではありません",
@@ -19931,55 +19935,34 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} は対応する言語しか文字起こしできないため、この設定は使われません。",
           "unsupported": "{{model}} は{{language}}に対応していないため、言語を自動で判定します。",
-          "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
           "auto": "自動検出",
-          "a9df191aba": "音声入力の言語"
+          "rated": "話す言語。品質はこの言語で評価されます。",
+          "alwaysUses": "話す言語。{{model}} は常に{{language}}を使います。",
+          "detectsItself": "話す言語。{{model}} は自動で判別します。"
         },
         "modelUnload": {
-          "description": "音声入力を終えたあと、ローカルモデルをメモリに残しておく時間です。読み込まれている間は音声入力がすぐに始まります。「すぐに」を選ぶとメモリを解放し、毎回モデルの読み込みを待ってから音声入力が始まります。",
-          "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
-          "never": "しない",
-          "immediately": "すぐに",
-          "94afd37271": "音声モデルの解放"
+          "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。"
         },
         "fillerWords": {
-          "description": "音声入力の言語に合わせて、「えーと」「うーん」などのつなぎ言葉を入力テキストから取り除きます。",
-          "0134406785": "フィラーを削除"
+          "0134406785": "フィラーを削除",
+          "short": "「えーと」「うーん」を取り除きます。"
         },
-        "sectionDescription": "どのペインでも、入力の代わりに話せます。クラウドモデルを選ばない限り、音声はこのコンピューター上で認識されます。",
         "input": {
           "title": "入力",
           "shortcut": "ショートカット",
-          "shortcutDescription": "フォーカス中のペインで音声入力を開始します。",
-          "changeShortcut": "変更"
+          "changeShortcut": "変更",
+          "description": "選ばない限り、システムの設定に従います。",
+          "missing": "{{microphone}} が接続されていません。戻るまでシステムの既定を使います。"
         },
         "language": {
           "title": "言語"
-        },
-        "cleanup": {
-          "title": "クリーンアップ"
         },
         "advanced": {
           "title": "詳細設定"
         },
         "setup": {
-          "downloadingDescription": "このページを離れても大丈夫です。ダウンロードが終わると音声入力が使えます。",
-          "title": "音声入力を設定",
-          "pickModel": "どのペインでも、入力の代わりに話せます。下の音声モデルをダウンロードして始めましょう。このコンピューター上のモデルなら音声は外に出ません。",
-          "microphoneMissingTitle": "{{microphone}} が接続されていません",
-          "microphoneMissingDescription": "接続されるまで、システムの既定のマイクを使います。",
-          "changeMicrophone": "マイクを変更",
-          "onTitle": "音声入力はオンです",
-          "onLocal": "どのペインでも {{shortcut}} を押します。{{model}} はこのコンピューター上で動作します。",
-          "onCloud": "どのペインでも {{shortcut}} を押します。{{model}} はクラウドで動作します。",
-          "offTitle": "音声入力はオフです",
-          "offDescription": "オンにすると、どのペインでも {{shortcut}} で音声入力できます。",
-          "savedMicrophone": "選択したマイク",
-          "description": "どのペインでも、入力の代わりに話せます。音声はこのコンピューター上で認識されるため、外に出ません。",
-          "setUp": "設定する",
-          "asksForMicrophone": "Orca がマイクへのアクセスを求めます。"
+          "savedMicrophone": "選択したマイク"
         },
         "quality": {
           "unsupported": "お使いの言語に非対応",
@@ -19988,29 +19971,34 @@
           "fair": "まずまず",
           "good": "良い",
           "veryGood": "とても良い",
-          "excellent": "非常に優秀",
-          "characterErrorRate": "文字誤り率 {{percent}}%",
-          "wordErrorRate": "単語誤り率 {{percent}}%",
-          "librispeech": "テスト：LibriSpeech（朗読音声）、{{clips}} クリップ、{{date}} に測定。",
-          "fleurs": "テスト：FLEURS（朗読音声）、{{clips}} クリップ、{{date}} に測定。",
-          "bench": "Apple シリコン搭載 Mac での Orca のベンチマーク。",
-          "label": "品質：{{word}}"
+          "excellent": "非常に優秀"
         },
         "models": {
           "retired": "提供終了。削除すると空き容量が増えます。",
           "sendsToOpenAi": "音声を OpenAI に送信します。",
           "delete": "削除",
-          "cancelDownload": "ダウンロードをキャンセル",
           "inUse": "使用中",
           "use": "使用",
           "setUpCloud": "設定",
           "download": "ダウンロード",
           "cloud": "クラウド",
-          "description": "品質は{{language}}での評価です。評価にカーソルを合わせるとテストの詳細が表示されます。",
           "where": "モデルの実行場所",
           "local": "このコンピューター",
-          "cloudDescription": "クラウドモデルは音声をプロバイダーに送信します。このコンピューター上のモデルなら音声は外に出ません。",
-          "sendsToCompatible": "音声を設定したサービスに送信します。"
+          "sendsToCompatible": "音声を設定したサービスに送信します。",
+          "downloadingProgress": "ダウンロード中、{{done}} / {{total}} MB（{{percent}}%）",
+          "needsUpdate": "高速エンジン用に一度だけダウンロードが必要です。",
+          "recommended": "おすすめ",
+          "columnModel": "モデル",
+          "columnQuality": "品質",
+          "columnSize": "サイズ",
+          "about": {
+            "parakeetV3": "高速。ヨーロッパの {{languages}} 言語。",
+            "parakeetV2": "高速。英語専用で、英語では最も正確です。",
+            "whisperTiny": "最小のダウンロード。音声入力のお試しに。",
+            "whisperTurbo": "最多の約 100 言語。GPU がないと低速です。",
+            "senseVoice": "高速。中国語、日本語、韓国語向け。",
+            "nemotron": "アラビア語、ヒンディー語、日本語を含む {{languages}} 言語。"
+          }
         },
         "vocabulary": {
           "title": "語彙",
@@ -20047,9 +20035,36 @@
           "heardFailed": "{{model}} は録音を文字起こしできませんでした。"
         },
         "silenceStop": {
-          "title": "無音で停止",
-          "description": "この時間だけ無音が続くと聞き取りを止めます。ショートカットを押している間は止めません。",
-          "off": "オフ"
+          "off": "オフ",
+          "label": "無音で停止",
+          "short": "話し終えると音声入力を終了します。"
+        },
+        "pageDescription": "どのペインでも、入力の代わりに話せます。",
+        "dictation": {
+          "label": "音声入力",
+          "ready": "どのペインでも {{shortcut}} を押します。",
+          "off": "オンにすると、どのペインでも {{shortcut}} で音声入力できます。",
+          "noModel": "下の音声モデルをダウンロードして始めましょう。このコンピューター上で動くので、音声は外に出ません。",
+          "downloading": "{{model}} のダウンロードが終わると使えます。",
+          "needsUpdate": "音声入力を続けるには、下で {{model}} を更新してください。"
+        },
+        "mode": {
+          "label": "モード",
+          "auto": "{{shortcut}} をタップして開始・停止、または話す間押し続けます。",
+          "hold": "{{shortcut}} を押している間だけ話します。",
+          "toggle": "{{shortcut}} を押して開始、もう一度押して停止します。"
+        },
+        "words": {
+          "title": "単語"
+        },
+        "gpu": {
+          "description": "音声入力でコンピューターがフリーズする場合はオフにしてください。"
+        },
+        "keepLoaded": {
+          "label": "モデルを読み込んだままにする",
+          "description": "読み込まれている間は、音声入力がすぐに始まります。",
+          "always": "常に",
+          "never": "しない"
         }
       },
       "repositoryHooks": {
@@ -21145,7 +21160,7 @@
       "dirty_other": "ブランチを切り替える前に、変更された {{count}} 個のファイルをコミットまたは破棄してください。",
       "agentWorking": "このワークスペースで Agent が作業中です。完了してからブランチを切り替えるか、停止している場合はそのタブを閉じてください。",
       "listFailed": "ローカルブランチを一覧表示できませんでした。ピッカーを開き直してください。",
-      "discoveryFailed": "リモートブランチが見つかりませんでした。ローカルブランチへの切り替えやブランチの作成は引き続き可能です。",
+      "discoveryFailed": "リモートブランチを検索できませんでした。ローカルブランチへの切り替えやブランチの作成は引き続き可能です。",
       "switchFailed": "ブランチを切り替えられませんでした。もう一度お試しください。",
       "switchFailedTitle": "ブランチを切り替えられませんでした",
       "switchFailedIn": "{{workspace}} でブランチを切り替えられませんでした",
@@ -22739,7 +22754,7 @@
     "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
     "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
     "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
-    "search": "Agent と設定を検索…",
+    "search": "検索、例: Opus 5.5…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
     "argumentsHint": "CLI での起動にのみ適用されます。",
@@ -23325,7 +23340,7 @@
     "unsupportedDescription": "Apple はこの Mac で macOS {{macos}} をサポートしていません。",
     "unknownDescription": "この Mac をアップグレードできるか確認できませんでした。Apple の互換性ガイドをご確認ください。",
     "whyTitle": "なぜ変更されるのですか？",
-    "whyIntro": "Orca の基盤である Electron を更新し、次の改善を提供します：",
+    "whyIntro": "Electron やデバイス上の音声エンジンなど、Orca の基盤の一部を更新し、次の改善を提供します：",
     "whySecurity": "Electron と Chromium による継続的なセキュリティ修正。",
     "whyPerformance": "起動の高速化とネイティブ API 呼び出しの効率化。",
     "whySystemApis": "最新の macOS 通知 API と安全なキーチェーンストレージのサポート。",
@@ -23400,29 +23415,23 @@
     "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
   },
   "speechModelUpdate": {
-    "updateTitle": "音声モデルを更新してください",
-    "updateDescription": "音声入力がより高速なエンジンで動作するようになりました。再び音声入力するには、{{model}} を一度だけダウンロードする必要があります（{{size}} MB）。",
     "update": "更新",
-    "replacedTitle": "音声モデルが置き換えられました",
-    "replacedDescription": "{{old}} は新しい音声エンジンでは動作しません。代わりに {{model}} を使用します（{{size}} MB）。",
-    "downloadReplacement": "{{model}} をダウンロード",
-    "later": "後で",
-    "dismiss": "閉じる",
-    "updatingTitle": "{{model}} を更新中",
-    "downloadingTitle": "{{model}} をダウンロード中",
-    "downloadingDescription": "作業を続けられます。完了すると音声入力が使えるようになります。",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "キャンセル",
-    "doneTitle": "音声入力の準備ができました",
-    "doneDescription": "{{model}} を更新しました。古いファイルは削除されました。",
-    "doneRetiredDescription": "{{model}} の準備ができました。{{old}} の古いファイルはまだディスクに残っています。",
-    "keep": "残す",
-    "deleteOld": "古いモデルを削除",
-    "deleteFailed": "{{model}} を削除できませんでした。",
-    "updateFailedTitle": "{{model}} を更新できませんでした",
-    "downloadFailedTitle": "{{model}} をダウンロードできませんでした",
-    "failedAtDescription": "ダウンロードが {{mb}} MB で止まりました。接続を確認して、もう一度お試しください。",
-    "failedDescription": "ダウンロードが止まりました。接続を確認して、もう一度お試しください。",
-    "tryAgain": "再試行"
+    "pill": {
+      "updateNotice": "より高速な音声入力をインストールできます",
+      "retiredNotice": "音声入力はより高速な音声モデルに移行しました",
+      "install": "インストール",
+      "installTooltip": "1 回のみのダウンロード · {{size}} MB",
+      "downloading": "音声入力を準備中",
+      "downloadingTooltip": "{{done}} / {{size}} MB",
+      "ready": "音声入力の準備ができました。<kbd></kbd> を押してください",
+      "readyNoShortcut": "音声入力の準備ができました。",
+      "failed": "ダウンロードが停止しました。接続を確認してください。",
+      "tryAgain": "再試行",
+      "deleteOld": "古いモデルを削除",
+      "deleteFailed": "{{model}} を削除できませんでした。",
+      "dismiss": "閉じる",
+      "cancelDownload": "ダウンロードをキャンセル"
+    }
   }
 }

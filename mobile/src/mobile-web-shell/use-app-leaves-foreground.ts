@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { AppState } from 'react-native'
+import { AppState, Platform } from 'react-native'
 
 /**
  * Calls `onLeave` once each time the app leaves the foreground, before the system can kill it from the app
@@ -29,13 +29,17 @@ export function useAppLeavesForeground(onLeave: () => void): void {
     const change = AppState.addEventListener('change', (next) =>
       next === 'active' ? back() : leave()
     )
-    // Window focus events come from Android only.
-    const blur = AppState.addEventListener('blur', leave)
-    const focus = AppState.addEventListener('focus', back)
+    // Window focus events come from Android only; iOS's RCTAppState rejects the subscription outright
+    // (a red screen in development), so it is never made there.
+    const windowFocus =
+      Platform.OS === 'android'
+        ? [AppState.addEventListener('blur', leave), AppState.addEventListener('focus', back)]
+        : []
     return () => {
       change.remove()
-      blur.remove()
-      focus.remove()
+      for (const subscription of windowFocus) {
+        subscription.remove()
+      }
     }
   }, [])
 }

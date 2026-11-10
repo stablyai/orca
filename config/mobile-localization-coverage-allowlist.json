@@ -560,21 +560,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/hosts/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Expected exactly one endpoint for configured relay metadata",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/hosts/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Relay host identity mismatch",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/hosts/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Relay identity and endpoint must coexist",
     "dynamic": false,

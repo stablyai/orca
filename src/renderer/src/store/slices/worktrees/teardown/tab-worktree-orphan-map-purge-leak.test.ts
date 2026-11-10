@@ -5,7 +5,7 @@ import {
   getForegroundTerminalTabLastSeenAtById,
   resetForegroundTerminalTabIdsForTests,
   setForegroundTerminalTabIds
-} from '@/lib/foreground-terminal-tabs'
+} from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import {
   beginAgentStartupDeliveryAttempt,
   resetAgentStartupDelayedDeliveryForTests

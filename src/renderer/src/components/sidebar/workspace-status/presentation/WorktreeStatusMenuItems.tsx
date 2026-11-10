@@ -6,7 +6,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { Kanban } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'

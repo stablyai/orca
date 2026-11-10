@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 import { HomeSlide } from './slides/HomeSlide'
 import { WorktreeListSlide } from './slides/WorktreeListSlide'
 import { TerminalSlide } from './slides/TerminalSlide'
 import { useTranslate } from '@/i18n/use-translate'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240

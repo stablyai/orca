@@ -19,7 +19,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities,
   type WindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 import {
   selectTabBarAgentProjections,

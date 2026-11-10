@@ -3,7 +3,7 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import { ChevronDown, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { LinearStateCell } from './task-page-linear-issue-model'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'

@@ -17,7 +17,7 @@
 4 src/renderer/src/components/terminal-pane/render-health/recovery/terminal-recovery-ledger-test-store.ts
 3 src/renderer/src/components/worktree-jump/worktree-jump-palette-status-inputs.ts
 1 src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.ts
-4 src/renderer/src/lib/floating-workspace-terminal-actions.ts
+4 src/renderer/src/components/floating-terminal/floating-workspace-terminal-actions.ts
 1 src/renderer/src/lib/pane-manager/client-hosted-browser-row-state.ts
 4 src/renderer/src/lib/workspace/persistence/session-write-subscriber.ts
 1 src/renderer/src/lib/workspace/persistence/workspace-session-browser-tabs.ts

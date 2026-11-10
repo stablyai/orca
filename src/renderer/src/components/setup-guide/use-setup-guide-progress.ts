@@ -4,7 +4,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
+import { hasEffectiveSetupCommand } from '@/runtime/repo-hooks/setup-script-status'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   COMPUTER_USE_SKILL_NAME,

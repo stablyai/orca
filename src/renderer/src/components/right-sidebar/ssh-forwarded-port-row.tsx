@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import { Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
 import {
