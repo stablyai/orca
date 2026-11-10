@@ -11,7 +11,7 @@
 //   (that is what `refresh_token_reused` punishes).
 import { decodeJwt } from 'jose'
 import type { AccountProvider } from './account-providers'
-import { credentialBinding, markAgentCredentialRevoked, putAgentCredential, readUsableAgentCredential } from './agent-credentials'
+import { credentialBinding, putAgentCredential, readUsableAgentCredential } from './agent-credentials'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
 
@@ -118,6 +118,32 @@ function formatCodex(credential: string): string {
   return `Bearer ${stored ? stored.access_token : credential}`
 }
 
+/**
+ * The ChatGPT backend calls Codex makes with its login (seen live, Codex 0.166): the Codex API itself, its
+ * plugin catalog and usage. Nothing else on chatgpt.com (conversations, memories, connectors) gets the token.
+ */
+const CODEX_PREFIXES = ['/backend-api/codex/']
+const CODEX_EXACT_GETS = new Set([
+  '/backend-api/ps/plugins/list',
+  '/backend-api/ps/plugins/installed',
+  '/backend-api/ps/plugins/suggested/codex',
+  '/backend-api/plugins/featured',
+  '/backend-api/plugins/export/curated',
+  '/backend-api/wham/usage'
+])
+
+export function codexPathAllowed(method: string, path: string): boolean {
+  const pathname = path.split('?')[0] ?? ''
+  // Plain segments only: no encoded or dot segments that could walk out of an allowed prefix.
+  if (!/^(\/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)+\/?$/.test(pathname) || /(^|\/)\.\.?(\/|$)/.test(pathname)) {
+    return false
+  }
+  if (CODEX_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return true
+  }
+  return method.toUpperCase() === 'GET' && CODEX_EXACT_GETS.has(pathname)
+}
+
 export const codexAccount: AccountProvider = {
   agent: 'codex',
   hosts: CODEX_ACCOUNT_HOSTS,
@@ -125,6 +151,7 @@ export const codexAccount: AccountProvider = {
   sessionEnv: (row) => ({ [CODEX_PLACEHOLDER_ENV]: codexPlaceholder(row) }),
   header: 'authorization',
   format: formatCodex,
+  pathAllowed: codexPathAllowed,
   // Codex sends its ChatGPT workspace id with a real login; the placeholder file can't know it.
   extraHeaders: (credential): Record<string, string> => {
     const account = credential.startsWith('{') ? parseStoredCodex(credential)?.account_id : null
@@ -133,8 +160,15 @@ export const codexAccount: AccountProvider = {
   // A 401 from chatgpt.com: refresh now instead of revoking (the refresher revokes a dead login itself).
   // At most once per UNAUTHORIZED_REFRESH_MS, so a burst of 401s never spends token after token.
   onUnauthorized: async ({ db, keyring, userId, now, waitUntil }) => {
-    const lease = await db.prepare('SELECT refreshed_at FROM codex_leases WHERE user_id = ?').bind(userId).first<{ refreshed_at: number | null }>()
-    if (lease?.refreshed_at && now - lease.refreshed_at < UNAUTHORIZED_REFRESH_MS) {
+    const lease = await db
+      .prepare('SELECT refreshed_at, next_attempt_at, last_error FROM codex_leases WHERE user_id = ?')
+      .bind(userId)
+      .first<{ refreshed_at: number | null; next_attempt_at: number | null; last_error: string | null }>()
+    if (
+      (lease?.refreshed_at && now - lease.refreshed_at < UNAUTHORIZED_REFRESH_MS) ||
+      (lease?.next_attempt_at && lease.next_attempt_at > now) ||
+      (lease?.last_error && DEAD_LOGIN.has(lease.last_error))
+    ) {
       return
     }
     log('codex_token_unauthorized', { userId })
@@ -206,6 +240,7 @@ async function dueUsers(db: D1Database, now: number): Promise<string[]> {
          JOIN agent_credentials c ON c.user_id = l.user_id AND c.agent = 'codex' AND c.state = 'active'
        WHERE (l.access_expires_at IS NULL OR l.access_expires_at <= ? OR l.refreshed_at IS NULL OR l.refreshed_at <= ?)
          AND (l.next_attempt_at IS NULL OR l.next_attempt_at <= ?)
+         AND (l.last_error IS NULL OR l.last_error NOT IN (${DEAD_SQL}))
          AND (l.lease_until IS NULL OR l.lease_until <= ?)
        ORDER BY l.access_expires_at LIMIT ?`
     )
@@ -267,8 +302,18 @@ async function setExpiry(db: D1Database, userId: string, expectedUpdatedAt: numb
     .run()
 }
 
+async function revokeIf(db: D1Database, userId: string, expectedUpdatedAt: number, now: number): Promise<void> {
+  await db
+    .prepare(`UPDATE agent_credentials SET state = 'revoked', updated_at = ? WHERE user_id = ? AND agent = 'codex' AND updated_at = ?`)
+    .bind(Math.max(now, expectedUpdatedAt + 1), userId, expectedUpdatedAt)
+    .run()
+}
+
 /** Token-endpoint error codes that end a login for good (the person must sign in again). */
-const DEAD_LOGIN = new Set(['refresh_token_expired', 'refresh_token_reused', 'refresh_token_invalidated', 'invalid_grant'])
+const DEAD_LOGIN_CODES = ['refresh_token_expired', 'refresh_token_reused', 'refresh_token_invalidated', 'invalid_grant'] as const
+const DEAD_LOGIN: ReadonlySet<string> = new Set(DEAD_LOGIN_CODES)
+/** SQL list of the codes above: a dead login is never retried (a new broker login clears last_error). */
+const DEAD_SQL = DEAD_LOGIN_CODES.map((code) => `'${code}'`).join(', ')
 
 export type TokenResult =
   | { ok: true; tokens: Partial<CodexTokens> }
@@ -348,10 +393,11 @@ export async function refreshCodexCredential(deps: RefreshDeps, userId: string):
     const lease = await db.prepare('SELECT * FROM codex_leases WHERE user_id = ?').bind(userId).first<LeaseRow>()
     const failures = (lease?.failures ?? 0) + 1
     if (result.permanent) {
+      // Only the login that was refreshed: a newer broker login written meanwhile stays untouched.
       if (result.code === 'refresh_token_expired') {
         await setExpiry(db, userId, snapshot.updatedAt, now)
       } else {
-        await markAgentCredentialRevoked(db, userId, 'codex', now)
+        await revokeIf(db, userId, snapshot.updatedAt, now)
       }
       await release(db, userId, owner, { failures, last_error: result.code, next_attempt_at: null })
       log('codex_token_dead', { userId, code: result.code })

@@ -10,7 +10,6 @@
 import { storeCodexLogin, parseCodexAuthJson } from './codex-credentials'
 import type { SandboxCaller } from './auth'
 import { goldenFor, type LifecycleDeps } from './lifecycle'
-import { SANDBOX_VCPUS } from './machine-size'
 import { compileNetworkPolicy } from './network-policy'
 import type { Keyring } from './secrets-crypto'
 
@@ -20,6 +19,8 @@ const BROKER_SANDBOX_TIMEOUT_MS = 20 * 60_000
 /** A completion that died mid-way (Worker evicted) is retried after this. */
 const COMPLETING_STALE_MS = 2 * 60_000
 const STARTS_PER_HOUR = 6
+/** A device login needs almost nothing: the smallest size (verified live in pdx1). */
+const BROKER_VCPUS = 2
 const START_TIMEOUT_MS = 60_000
 /** Codex's device login talks to auth.openai.com only; chatgpt.com serves the post-login account checks. */
 export const BROKER_EGRESS_HOSTS: readonly string[] = ['auth.openai.com', 'chatgpt.com']
@@ -65,7 +66,7 @@ export type BrokerRow = {
 
 export class CodexBrokerError extends Error {
   constructor(
-    readonly status: 400 | 404 | 429 | 502 | 503,
+    readonly status: 400 | 404 | 409 | 429 | 502 | 503,
     readonly code: string
   ) {
     super(code)
@@ -145,13 +146,6 @@ export async function startCodexBroker(
   if (live?.verification_url && live.user_code) {
     return { brokerId: live.id, verificationUrl: live.verification_url, userCode: live.user_code, expiresAt: live.expires_at }
   }
-  const recent = await db
-    .prepare('SELECT COUNT(*) AS n FROM codex_broker_sessions WHERE user_id = ? AND created_at > ?')
-    .bind(caller.userId, now - 60 * 60_000)
-    .first<{ n: number }>()
-  if ((recent?.n ?? 0) >= STARTS_PER_HOUR) {
-    throw new CodexBrokerError(429, 'rate_limited')
-  }
   const region = config.defaultRegion
   const snapshotId = goldenFor(deps.life, region)
   if (!snapshotId) {
@@ -173,19 +167,34 @@ export async function startCodexBroker(
     expires_at: now + BROKER_CODE_TTL_MS,
     destroyed_at: null
   }
-  await db
+  // One statement decides both limits, so two racing POSTs can't both start a broker: at most one live
+  // broker per person (a second POST while one is still starting gets 409) and STARTS_PER_HOUR an hour.
+  const inserted = await db
     .prepare(
       `INSERT INTO codex_broker_sessions (id, user_id, account_id, provider_name, status, created_at, updated_at, expires_at)
-       VALUES (?, ?, ?, ?, 'starting', ?, ?, ?)`
+       SELECT ?, ?, ?, ?, 'starting', ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM codex_broker_sessions WHERE user_id = ? AND destroyed_at IS NULL
+                           AND status IN ('starting', 'pending', 'completing') AND expires_at > ?)
+         AND (SELECT COUNT(*) FROM codex_broker_sessions WHERE user_id = ? AND created_at > ?) < ?`
     )
-    .bind(row.id, row.user_id, row.account_id, row.provider_name, now, now, row.expires_at)
+    .bind(row.id, row.user_id, row.account_id, row.provider_name, now, now, row.expires_at, caller.userId, now, caller.userId, now - 60 * 60_000, STARTS_PER_HOUR)
     .run()
+  if (inserted.meta.changes !== 1) {
+    const busy = await db
+      .prepare(
+        `SELECT 1 AS hit FROM codex_broker_sessions WHERE user_id = ? AND destroyed_at IS NULL
+           AND status IN ('starting', 'pending', 'completing') AND expires_at > ?`
+      )
+      .bind(caller.userId, now)
+      .first<{ hit: number }>()
+    throw busy ? new CodexBrokerError(409, 'broker_in_progress') : new CodexBrokerError(429, 'rate_limited')
+  }
   let output: string
   try {
     const state = await provider.createSandbox({
       name: row.provider_name,
       snapshotId,
-      vcpus: SANDBOX_VCPUS,
+      vcpus: BROKER_VCPUS,
       region,
       timeoutMs: BROKER_SANDBOX_TIMEOUT_MS,
       ports: [],
@@ -211,7 +220,11 @@ export async function startCodexBroker(
     await fail(deps, row, reason)
     throw new CodexBrokerError(502, reason)
   }
-  await update(db, id, { status: 'pending', verification_url: code.verificationUrl, user_code: code.userCode }, deps.life.now(), 'starting')
+  if (!(await update(db, id, { status: 'pending', verification_url: code.verificationUrl, user_code: code.userCode }, deps.life.now(), 'starting'))) {
+    // Cancelled while it was starting: the code is never handed out.
+    await destroy(deps, row)
+    throw new CodexBrokerError(409, 'cancelled')
+  }
   log('codex_broker_started', { brokerId: id, userId: caller.userId, ms: deps.life.now() - now })
   return { brokerId: id, ...code, expiresAt: row.expires_at }
 }
@@ -239,20 +252,23 @@ export async function advanceCodexBroker(deps: BrokerDeps, row: BrokerRow): Prom
   if (!row.session_id) {
     return fail(deps, row, 'broker_lost')
   }
-  let auth: string | null
+  // Codex writes auth.json before it exits; only an exit status of 0 means the file is complete and final.
   let exit: string | null
+  let auth: string | null = null
   try {
-    auth = await provider.readFile(row.session_id, BROKER_AUTH_PATH)
-    exit = auth ? null : await provider.readFile(row.session_id, BROKER_EXIT_PATH)
+    exit = await provider.readFile(row.session_id, BROKER_EXIT_PATH)
+    if (exit?.trim() === '0') {
+      auth = await provider.readFile(row.session_id, BROKER_AUTH_PATH)
+    }
   } catch {
     // The broker sandbox is gone (timed out or deleted) before the login finished.
     return now > row.expires_at ? fail(deps, row, 'expired') : fail(deps, row, 'broker_lost')
   }
-  if (!auth) {
-    if (exit !== null) {
-      return fail(deps, row, 'login_failed')
-    }
+  if (exit === null) {
     return now > row.expires_at ? fail(deps, row, 'expired') : row
+  }
+  if (!auth) {
+    return fail(deps, row, 'login_failed')
   }
   // Claim the completion: exactly one caller stores this login (a second store would put back a refresh
   // token the refresher may already have spent).

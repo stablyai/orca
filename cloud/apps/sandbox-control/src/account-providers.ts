@@ -19,6 +19,8 @@ export type AccountProvider = {
   header: string
   placeholder(row: Pick<SandboxRow, 'id'>): string
   format(credential: string): string
+  /** Narrows the account route to these requests (Codex: its ChatGPT backend APIs, not all of chatgpt.com). */
+  pathAllowed?(method: string, path: string): boolean
   /** Extra headers derived from the real credential (e.g. Codex's ChatGPT account id). */
   extraHeaders?(credential: string): Record<string, string>
   /**

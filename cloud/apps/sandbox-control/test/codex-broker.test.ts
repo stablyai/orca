@@ -32,6 +32,12 @@ Follow these steps to sign in with ChatGPT using device code authorization:
    \u001b[94mABCD-12EF\u001b[0m
 `
 
+/** Codex wrote auth.json and exited 0. */
+function finishLogin(box: { files: Map<string, string> }) {
+  box.files.set(BROKER_AUTH_PATH, AUTH_JSON)
+  box.files.set(BROKER_EXIT_PATH, '0\n')
+}
+
 let logs: string[] = []
 beforeEach(() => {
   logs = []
@@ -91,7 +97,7 @@ async function setup(overrides: Record<string, string> = {}) {
   const as = (sub: string, org?: string, role?: string) => h.token(sub, org, 'sandbox', role ? { orgRole: role } : {})
   const brokerBox = () => [...h.vercel.boxes.values()].find((box) => box.params.tags.orcaCodexBroker)
   const lastEnv = (command: string) => decode(h.vercel.commands.filter((c) => c.command === command).at(-1)?.env.ORCA_SECRET_ENV)
-  async function proxied(sandboxId: string, host: string, headers: Record<string, string>) {
+  async function proxied(sandboxId: string, host: string, headers: Record<string, string>, path = '/backend-api/codex/responses', method = 'POST') {
     const oidc = await new SignJWT({ team_id: 'team_orca', project_id: 'prj_orca', sandbox_name: `orca-test-${sandboxId}` })
       .setProtectedHeader({ alg: 'RS256', kid: 'v1' })
       .setIssuer('https://oidc.vercel.com/team_orca')
@@ -100,14 +106,14 @@ async function setup(overrides: Record<string, string> = {}) {
       .setExpirationTime('5m')
       .sign(privateKey)
     const response = await h.send(
-      new Request(`${PROXY_URL}/backend-api/codex/responses`, {
-        method: 'POST',
-        body: '{}',
+      new Request(`${PROXY_URL}${path}`, {
+        method,
+        body: method === 'GET' ? undefined : '{}',
         headers: {
           'vercel-forwarded-host': host,
           'vercel-forwarded-scheme': 'https',
           'vercel-forwarded-port': '443',
-          'vercel-forwarded-path': '/backend-api/codex/responses',
+          'vercel-forwarded-path': path,
           'vercel-sandbox-oidc-token': oidc,
           ...headers
         }
@@ -119,7 +125,7 @@ async function setup(overrides: Record<string, string> = {}) {
   async function signIn(bearer: string) {
     const started = await h.call('POST', '/v1/agent-credentials/codex/broker', { bearer })
     expect(started.status).toBe(200)
-    brokerBox()!.files.set(BROKER_AUTH_PATH, AUTH_JSON)
+    finishLogin(brokerBox()!)
     const done = await h.call('GET', `/v1/agent-credentials/codex/broker/${started.body.brokerId}`, { bearer })
     expect(done.body).toEqual({ status: 'active' })
     return started.body.brokerId as string
@@ -175,6 +181,7 @@ describe('Codex broker (flag S2)', () => {
     // Infra: tagged for its own sweep, no workspace tag (orphan sweep, billing), no snapshot, only sign-in hosts.
     expect(box.params.tags).toEqual({ orcaCodexBroker: started.body.brokerId, orcaEnv: 'test', orcaInfra: 'codex-broker' })
     expect(box.params.persistent).toBe(false)
+    expect(box.params.vcpus).toBe(2)
     expect(Object.keys(box.policy.allow).sort()).toEqual(['auth.openai.com', 'chatgpt.com'])
     expect((await h.env.SANDBOX_DB.prepare('SELECT COUNT(*) AS n FROM sandboxes').first<{ n: number }>())!.n).toBe(0)
     // A second POST while the code is live reuses it (no second VM).
@@ -186,7 +193,10 @@ describe('Codex broker (flag S2)', () => {
     // Someone else's broker id is not theirs to read.
     expect((await h.call('GET', path, { bearer: await as('bob', 'acme', 'member') })).status).toBe(404)
 
+    // auth.json alone (Codex still running) is not a finished login.
     box.files.set(BROKER_AUTH_PATH, AUTH_JSON)
+    expect((await h.call('GET', path, { bearer: mia })).body).toEqual({ status: 'pending' })
+    finishLogin(box)
     const done = await h.call('GET', path, { bearer: mia })
     expect(done.body).toEqual({ status: 'active' })
     expect(brokerBox()).toBeUndefined()
@@ -236,11 +246,51 @@ describe('Codex broker (flag S2)', () => {
     expect(brokerBox()).toBeUndefined()
   })
 
+  it('one live broker per person, even for racing POSTs; a cancel while starting never hands out the code', async () => {
+    const { h, as } = await setup()
+    const mia = await as('mia')
+    const [a, b] = await Promise.all([
+      h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: mia }),
+      h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: mia })
+    ])
+    // Either the second sees the first's code (reused) or is refused while it starts; never two VMs.
+    expect(a.status === 409 || b.status === 409 || a.body.brokerId === b.body.brokerId).toBe(true)
+    expect([...h.vercel.boxes.values()].filter((box) => box.params.tags.orcaCodexBroker)).toHaveLength(1)
+    const live = a.status === 200 ? a : b
+    // Another POST while one is still starting (no code yet) is refused, not a second VM.
+    h.raw.exec(`UPDATE codex_broker_sessions SET status = 'starting'`)
+    expect(await h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: mia })).toEqual({ status: 409, body: { error: 'broker_in_progress' } })
+    h.raw.exec(`UPDATE codex_broker_sessions SET status = 'pending'`)
+    await h.call('DELETE', `/v1/agent-credentials/codex/broker/${live.body.brokerId}`, { bearer: mia })
+
+    // The person cancels while the broker is still starting (between create and the device code).
+    h.vercel.commandHandler = (params) => {
+      if (params.command === 'bash' && params.args?.[1]?.includes('--device-auth')) {
+        h.raw.exec(`UPDATE codex_broker_sessions SET status = 'failed', error = 'cancelled' WHERE status = 'starting'`)
+        return { exitCode: 0, stdout: DEVICE_OUTPUT, stderr: '' }
+      }
+      return undefined
+    }
+    const raced = await h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: await as('mia') })
+    expect(raced).toEqual({ status: 409, body: { error: 'cancelled' } })
+    expect([...h.vercel.boxes.values()].filter((box) => box.params.tags.orcaCodexBroker)).toHaveLength(0)
+
+    // At most 6 starts an hour per person (2 so far).
+    h.vercel.commandHandler = (params) =>
+      params.command === 'bash' && params.args?.[1]?.includes('--device-auth') ? { exitCode: 0, stdout: DEVICE_OUTPUT, stderr: '' } : undefined
+    for (let i = 0; i < 4; i++) {
+      const started = await h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: mia })
+      expect(started.status).toBe(200)
+      await h.call('DELETE', `/v1/agent-credentials/codex/broker/${started.body.brokerId}`, { bearer: mia })
+    }
+    expect(await h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: mia })).toEqual({ status: 429, body: { error: 'rate_limited' } })
+  })
+
   it('the cron completes a login nobody polls, and deletes broker sandboxes D1 lost track of', async () => {
     const { h, as, brokerBox } = await setup()
     const mia = await as('mia')
     await h.call('POST', '/v1/agent-credentials/codex/broker', { bearer: mia })
-    brokerBox()!.files.set(BROKER_AUTH_PATH, AUTH_JSON)
+    finishLogin(brokerBox()!)
     await codexTick(h.env, false, h.deps)
     expect(brokerBox()).toBeUndefined()
     expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.codex.state).toBe('active')
@@ -273,6 +323,21 @@ describe('Codex account in workspaces (D10, D13)', () => {
     expect(upstream.at(-1)!.url).toBe('https://chatgpt.com/backend-api/codex/responses')
     expect(upstream.at(-1)!.headers.get('authorization')).toBe(`Bearer ${ACCESS}`)
     expect(upstream.at(-1)!.headers.get('chatgpt-account-id')).toBe('acct-1')
+    // Only Codex's own ChatGPT backend calls get the token: not conversations, memories or connectors.
+    const auth = { authorization: `Bearer ${placeholder}` }
+    expect((await proxied(id, 'chatgpt.com', auth, '/backend-api/codex/models?client_version=0.166.0', 'GET')).status).toBe(200)
+    expect((await proxied(id, 'chatgpt.com', auth, '/backend-api/wham/usage', 'GET')).status).toBe(200)
+    expect((await proxied(id, 'chatgpt.com', auth, '/backend-api/ps/plugins/list?scope=GLOBAL', 'GET')).status).toBe(200)
+    for (const [path, method] of [
+      ['/backend-api/conversation', 'POST'],
+      ['/backend-api/memories', 'GET'],
+      ['/backend-api/wham/apps', 'GET'],
+      ['/backend-api/codex/../conversation', 'POST'],
+      ['/backend-api/codex/%2e%2e/conversation', 'POST'],
+      ['/backend-api/wham/usage', 'POST']
+    ]) {
+      expect((await proxied(id, 'chatgpt.com', auth, path!, method!)).body).toBe('path_not_allowed')
+    }
     // Another sandbox's placeholder (a clone's, D14) is not this one's.
     expect((await proxied(id, 'chatgpt.com', { authorization: `Bearer ${codexPlaceholder({ id: 'sbx_other' })}` })).status).toBe(403)
   })
@@ -355,6 +420,27 @@ describe('Codex lease refresher', () => {
     setTokenReply(() => Response.json({ error: { code: 'refresh_token_reused', message: 'x' } }, { status: 401 }))
     expect(await refreshCodexCredential(await refreshDeps(), 'mia')).toBe('revoked')
     expect(await view()).toBe('revoked')
+
+    // A dead login (refresh_token_expired) is not retried every tick.
+    await signIn(await as('mia'))
+    h.advance(8 * 86_400_000)
+    setTokenReply(() => Response.json({ error: 'refresh_token_expired' }, { status: 401 }))
+    expect(await refreshCodexCredential(await refreshDeps(), 'mia')).toBe('revoked')
+    expect(await view()).toBe('expired')
+    h.advance(10 * 60_000)
+    expect((await refreshCodexLeases(await refreshDeps())).due).toBe(0)
+
+    // A permanent failure never revokes a newer login written while the refresh was in flight.
+    await signIn(await as('mia'))
+    h.advance(8 * 86_400_000)
+    setTokenReply(() => Response.json({ error: { code: 'refresh_token_reused' } }, { status: 401 }))
+    const racing = await refreshDeps()
+    const newerLogin: typeof fetch = async (input, init) => {
+      await h.env.SANDBOX_DB.prepare(`UPDATE agent_credentials SET updated_at = updated_at + 5 WHERE agent = 'codex'`).run()
+      return racing.fetch!(input, init)
+    }
+    expect(await refreshCodexCredential({ ...racing, fetch: newerLogin }, 'mia')).toBe('revoked')
+    expect(await view()).toBe('active')
 
     // A new login, then DELETE while a refresh is in flight: the refreshed tokens are dropped.
     await signIn(await as('mia'))

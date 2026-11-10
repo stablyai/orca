@@ -323,6 +323,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             header: provider.header,
             placeholders: [provider.format(provider.placeholder(row))],
             label: `account:${agent}`,
+            ...(provider.pathAllowed ? { pathAllowed: provider.pathAllowed } : {}),
             credential: async () => {
               const now = (deps.now ?? Date.now)()
               // The session was set up for this owner; a workspace handed to someone else never uses

@@ -1,7 +1,7 @@
 // image/vm/orca-sandbox-env run for real (bash), against a scratch HOME: the Codex account placeholder
 // login (contract D11) and the managed ~/.codex/config.toml staying stable across refreshes.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -66,11 +66,30 @@ describe('orca-sandbox-env: Codex via the Orca account', () => {
     expect(file('.codex/config.toml')).not.toContain('orca_chatgpt')
   })
 
+  it('never overwrites a login already set aside, and recognises its own placeholder without the marker', () => {
+    const { home, run, file } = scratch()
+    mkdirSync(join(home, '.codex'))
+    const saved = '{"tokens":{"access_token":"first"}}\n'
+    const second = '{"tokens":{"access_token":"second"}}\n'
+    writeFileSync(join(home, '.codex', 'auth.json.orca-saved'), saved)
+    writeFileSync(join(home, '.codex', 'auth.json'), second)
+    run({ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_1' }) })
+    expect(file('.codex/auth.json.orca-saved')).toBe(saved)
+    const aside = readdirSync(join(home, '.codex')).filter((name) => name.startsWith('auth.json.orca-saved.'))
+    expect(aside.map((name) => file(`.codex/${name}`))).toEqual([second])
+    // A run cut short before the marker: the placeholder is still Orca's, never set aside as a login.
+    rmSync(join(home, '.codex', '.orca-account-placeholder'))
+    run({ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_2' }) })
+    expect(file('.codex/auth.json.orca-saved')).toBe(saved)
+    run({})
+    expect(file('.codex/auth.json')).toBe(saved)
+  })
+
   it('leaves config.toml byte-identical across refreshes (no blank-line growth) and keeps user settings', () => {
     const { home, run, file } = scratch()
     mkdirSync(join(home, '.codex'))
     writeFileSync(join(home, '.codex', 'config.toml'), 'model = "gpt-x"\n\n[profiles.mine]\nmodel = "y"\n')
-    for (const secrets of [{ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_1' }) }, { OPENAI_BASE_URL: 'https://gw.example.com/v1' }, {}]) {
+    for (const secrets of [{ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_1' }) }, { OPENAI_BASE_URL: 'https://gw.example.com/v1' }, {}] as Record<string, string>[]) {
       run(secrets)
       const first = file('.codex/config.toml')
       run(secrets)

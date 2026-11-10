@@ -128,17 +128,24 @@ codex_auth="$HOME/.codex/auth.json"
 codex_saved="$HOME/.codex/auth.json.orca-saved"
 codex_marker="$HOME/.codex/.orca-account-placeholder"
 codex_ours=''
-if [ -f "$codex_marker" ] && [ -f "$codex_auth" ] && grep -qF "\"$(cat "$codex_marker")\"" "$codex_auth"; then codex_ours=1; fi
+# Ours: the marker's placeholder, or any Orca placeholder (all end in `.orca-placeholder`; a real token never does).
+if [ -f "$codex_auth" ] && { { [ -f "$codex_marker" ] && grep -qF "\"$(cat "$codex_marker")\"" "$codex_auth"; } || grep -q '\.orca-placeholder"' "$codex_auth"; }; then
+  codex_ours=1
+fi
 if [ -n "$codex_placeholder" ]; then
   mkdir -p "$HOME/.codex"
-  if [ -f "$codex_auth" ] && [ -z "$codex_ours" ]; then mv -f "$codex_auth" "$codex_saved"; fi
+  if [ -f "$codex_auth" ] && [ -z "$codex_ours" ]; then
+    # Never overwrite a login already set aside: a second one gets its own name.
+    if [ -e "$codex_saved" ]; then mv -f "$codex_auth" "$codex_saved.$(date -u +%Y%m%d%H%M%S)"; else mv -f "$codex_auth" "$codex_saved"; fi
+  fi
+  # Marker first: a run cut short after the swap still recognises the file as Orca's.
+  printf '%s' "$codex_placeholder" >"$codex_marker"
   codex_tmp="$(mktemp "$HOME/.codex/.auth.XXXXXX")"
   printf '{\n  "OPENAI_API_KEY": null,\n  "tokens": {\n    "id_token": "%s",\n    "access_token": "%s",\n    "refresh_token": "",\n    "account_id": null\n  },\n  "last_refresh": "%s"\n}\n' \
     "$codex_placeholder" "$codex_placeholder" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$codex_tmp"
   chmod 600 "$codex_tmp"
   mv -f "$codex_tmp" "$codex_auth"
-  printf '%s' "$codex_placeholder" >"$codex_marker"
-elif [ -f "$codex_marker" ]; then
+elif [ -f "$codex_marker" ] || [ -n "$codex_ours" ]; then
   if [ -n "$codex_ours" ]; then rm -f "$codex_auth"; fi
   rm -f "$codex_marker"
   if [ -f "$codex_saved" ] && [ ! -f "$codex_auth" ]; then mv -f "$codex_saved" "$codex_auth"; fi
