@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router'
 import { ChevronRight, Cloud, Plus, RotateCw } from 'lucide-react-native'
 import { Fragment, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
@@ -5,6 +6,7 @@ import { CloudStatusDot } from '../cloud/CloudStatusDot'
 import { formatReadSnapshotAsOf } from '../cloud/CloudReadSnapshotSection'
 import type { CloudWorkspace } from '../cloud/cloud-control-plane-client'
 import { CloudEnrollmentError, enrollCloudDevice } from '../cloud/cloud-device-enrollment'
+import { takeCloudReturnTo } from '../cloud/cloud-return-to'
 import type { CloudEnrollment } from '../cloud/cloud-device-identity'
 import { cloudRepoLine, cloudStatusLabel } from '../cloud/cloud-workspace-display'
 import { useCloudWorkspaces } from '../cloud/use-cloud-workspaces'
@@ -16,6 +18,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { homeListStyles as styles } from './home-list-styles'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
+import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export type CloudEnrollDesktop = { name: string; client: RpcClient }
 
@@ -81,6 +84,12 @@ export function MobileHomeCloudSection(props: {
                   'cloud.home.emptyDetail',
                   'Start one here. It keeps running while this phone and your computer sleep.'
                 )}
+              </Text>
+              <Text style={styles.subtitle}>
+                {t('cloud.idle.sleeps', 'Sleeps after {{count}} minutes idle.', {
+                  count: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+                  defaultValue_one: 'Sleeps after {{count}} minute idle.'
+                })}
               </Text>
             </View>
           </View>
@@ -170,10 +179,14 @@ function CloudWorkspaceRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={t('cloud.home.openWorkspace', 'Open {{title}}, {{detail}}', {
-        title: workspace.title,
-        detail: line
-      })}
+      accessibilityLabel={t(
+        'cloud.home.workspaceRowLabel',
+        'Cloud workspace, {{title}}, {{detail}}',
+        {
+          title: workspace.title,
+          detail: line
+        }
+      )}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPress}
     >
@@ -212,6 +225,7 @@ function CloudConnectRow({
   deviceLabel: string
 }) {
   const t = useMobileTranslation()
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const connect = async () => {
@@ -222,6 +236,11 @@ function CloudConnectRow({
     setError(null)
     try {
       await enrollCloudDevice({ desktop: desktop.client, desktopName: desktop.name, deviceLabel })
+      // Arrived here from a team link opened before connecting: go back to that workspace.
+      const next = takeCloudReturnTo()
+      if (next) {
+        router.push(next)
+      }
     } catch (failure) {
       const kind = failure instanceof CloudEnrollmentError ? failure.failure : 'unreachable'
       setError(

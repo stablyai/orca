@@ -1,3 +1,4 @@
+import { CloudHostAsleepGate } from '../../../../src/cloud/CloudHostAsleepGate'
 import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import {
   useWorkspaceExecutionHost,
@@ -68,11 +69,13 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   // Keep shared shellScreenRouteKey unchanged because other screens treat param changes as identity changes.
   const { paneKey: _paneKey, paneView: _paneView, ...identity } = routeParams
   return (
-    <MobileWebShellScreen
-      key={shellScreenRouteKey({ pathname: route.pathname, params: identity })}
-      hostId={hostId}
-      route={route}
-      onRouteParamClear={erasePaneKey}
-    />
+    <CloudHostAsleepGate hostId={hostId}>
+      <MobileWebShellScreen
+        key={shellScreenRouteKey({ pathname: route.pathname, params: identity })}
+        hostId={hostId}
+        route={route}
+        onRouteParamClear={erasePaneKey}
+      />
+    </CloudHostAsleepGate>
   )
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { allowanceWindow, capSeconds, DEFAULT_PLANS } from '../src/plans'
+import { allowanceWindow, capSeconds, DEFAULT_PLANS, overageCents, overageUnitAmountDecimal } from '../src/plans'
+import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { createHarness } from './harness'
 
 const HOUR = 3600
@@ -42,7 +43,8 @@ describe('config: tax and plan catalog', () => {
         concurrentSandboxesPerSeat: 3,
         idleSleepMinutes: 15,
         overageCentsPerHour: 100,
-        defaultSpendCapCents: 5000
+        defaultSpendCapCents: 5000,
+        maxSpendCapCents: 500_000
       },
       enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
     })
@@ -83,5 +85,44 @@ describe('allowance windows and caps', () => {
   it('converts the $25 default cap to 25 overage hours at $1.00', () => {
     expect(DEFAULT_PLANS.team.overageCentsPerHour).toBe(100)
     expect(capSeconds(DEFAULT_PLANS.team, 2500)).toBe(25 * HOUR)
+  })
+
+  it('alerts at 75, 90 and 100% of the included hours', () => {
+    expect(DEFAULT_PLANS.team.warnAtPercent).toEqual([75, 90, 100])
+  })
+})
+
+describe('per-minute overage price', () => {
+  const team = DEFAULT_PLANS.team
+
+  it('derives the Stripe per-minute unit_amount_decimal from the shared hourly rate', () => {
+    expect(team.overageCentsPerHour).toBe(ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR)
+    // $1.00 per hour = 1.666666666667 cents per minute (Stripe's 12-decimal maximum).
+    expect(overageUnitAmountDecimal(100)).toBe('1.666666666667')
+    expect(overageUnitAmountDecimal(75)).toBe('1.250000000000')
+    expect(overageUnitAmountDecimal(team.overageCentsPerHour).split('.')[1]).toHaveLength(12)
+  })
+
+  it('charges whole minutes, rounding up, like the price (transform_quantity divide_by 60, round up)', () => {
+    expect(overageCents(team, 0)).toBe(0)
+    expect(overageCents(team, 1)).toBe(2) // one started minute: 1.67 cents
+    expect(overageCents(team, 60)).toBe(2)
+    expect(overageCents(team, 61)).toBe(3) // two minutes: 3.33 cents
+    expect(overageCents(team, 30 * 60)).toBe(50)
+    expect(overageCents(team, HOUR)).toBe(100)
+    expect(overageCents(team, 4 * HOUR)).toBe(400)
+  })
+
+  it('caps on whole minutes, so the invoice never passes the spend cap', () => {
+    for (const cap of [0, 1, 99, 100, 101, 2500, 2501, 12_345, 500_000]) {
+      const seconds = capSeconds(team, cap)
+      expect(seconds % 60).toBe(0)
+      expect(overageCents(team, seconds)).toBeLessThanOrEqual(cap)
+      // ...and one more minute would pass it.
+      expect(overageCents(team, seconds + 60)).toBeGreaterThan(cap)
+    }
+    // $25.01 doesn't pay for a 1,501st minute ($25.0167); $25.02 does.
+    expect(capSeconds(team, 2501)).toBe(25 * HOUR)
+    expect(capSeconds(team, 2502)).toBe(25 * HOUR + 60)
   })
 })

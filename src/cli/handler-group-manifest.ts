@@ -247,6 +247,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/cloud-env.js')).CLOUD_ENV_HANDLERS
   },
   {
+    name: 'secret',
+    keys: ['secret request'],
+    load: async () => (await import('./handlers/secret.js')).SECRET_HANDLERS
+  },
+  {
     name: 'speech',
     keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
     load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS

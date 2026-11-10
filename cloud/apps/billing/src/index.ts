@@ -192,7 +192,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
           ...result,
           canStartSandbox: entitlement.canStartSandbox,
           reason: entitlement.reason,
-          suspendRunning: entitlement.payment.suspendRunning
+          suspendRunning: entitlement.suspendRunning
         })
       }
 

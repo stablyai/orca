@@ -1,101 +1,54 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store/index'
-import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
+import { useEffect, useMemo } from 'react'
+import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
+import {
+  getBillingReadInFlight,
+  getBillingState,
+  hasBillingWatchers,
+  markBillingStale,
+  refreshBillingStatus,
+  resetBillingSummary,
+  useBillingState,
+  watchBillingStatus,
+  type BillingStoreState
+} from '@/components/billing/billing-summary-store'
 import {
   toOrcaCloudRunTargetAccess,
   type OrcaCloudRunTargetAccess
 } from './orca-cloud-run-target-access'
 
 /**
- * One billing-status read shared by the Run-on picker and the selection hint. The composer prefetches
- * it on mount so the Orca Cloud row rarely shows a loading state; focus refreshes it at most every
- * STALE_MS (the user may come back from Checkout or the portal). The result is keyed by account and
- * org, so a switch never shows the previous one's entitlement, and a newer read always wins.
+ * The Run-on picker's and selection hint's view of the shared billing store. The composer prefetches
+ * on mount so the Orca Cloud row rarely shows a loading state; focus re-reads at most every STALE_MS
+ * (the user may come back from Checkout or the portal). The store is scoped to the account and team,
+ * keeps the last good answer through a failed read, and a newer read always wins.
  */
 const STALE_MS = 30_000
 
-type CacheState = {
-  result: OrcaBillingStatusResult | null
-  /** Account/org the result belongs to. */
-  authKey: string | null
-  loading: boolean
-  fetchedAt: number
-}
-
-let state: CacheState = { result: null, authKey: null, loading: false, fetchedAt: 0 }
-let inFlight: { generation: number; authKey: string; promise: Promise<void> } | null = null
-let generation = 0
-const listeners = new Set<() => void>()
-
-function set(next: CacheState): void {
-  state = next
-  for (const listener of listeners) {
-    listener()
-  }
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function currentAuthKey(): string {
-  const status = useAppStore.getState().orcaProfileAuthStatus
-  return `${status?.activeProfileId}:${status?.state}:${status?.cloud?.activeOrgId}`
-}
-
 /**
- * Starts a read unless a matching one is running or the cached one is fresh for this account.
+ * Starts a read unless one is running or the cached answer is fresh for this account.
  * `force` (after an in-app billing change) always starts a new read that supersedes any running one.
  */
 export function prefetchOrcaCloudBilling(force = false): Promise<void> {
-  const authKey = currentAuthKey()
-  if (!force && inFlight && inFlight.authKey === authKey) {
-    return inFlight.promise
-  }
-  const fresh = state.authKey === authKey && Date.now() - state.fetchedAt < STALE_MS
-  if (!force && state.result && fresh) {
-    return Promise.resolve()
-  }
-  const mine = ++generation
-  const read = async (): Promise<OrcaBillingStatusResult> => {
-    try {
-      return await window.api.orcaProfiles.billingStatus()
-    } catch (error) {
-      return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-  const promise = read().then((result) => {
-    // A newer read, a reset, or an account switch supersedes this one.
-    if (mine !== generation) {
-      return
-    }
-    inFlight = null
-    set({ result, authKey, loading: false, fetchedAt: Date.now() })
-  })
-  inFlight = { generation: mine, authKey, promise }
-  set({ ...state, loading: true })
-  return promise
+  return refreshBillingStatus(force ? { supersede: true } : { maxAgeMs: STALE_MS })
 }
 
 /**
  * After billing changes in-app (overage, cap) the cached read is wrong: refetch now if anyone is
- * listening. `refetchNow: false` only marks it stale, for fixes that finish elsewhere (plans,
+ * looking. `refetchNow: false` only marks it stale, for fixes that finish elsewhere (plans,
  * portal), so the next mount or focus reads again instead of trusting a 30s-fresh answer.
  */
 export function invalidateOrcaCloudBilling({ refetchNow = true } = {}): void {
-  set({ ...state, fetchedAt: 0 })
-  if (refetchNow && listeners.size > 0) {
+  markBillingStale()
+  if (refetchNow && hasBillingWatchers()) {
     void prefetchOrcaCloudBilling(true)
   }
 }
 
-function accessFrom(snapshot: CacheState, authKey: string): OrcaCloudRunTargetAccess {
-  const result = snapshot.authKey === authKey ? snapshot.result : null
-  if (!result && snapshot.loading) {
+function accessFrom(snapshot: BillingStoreState): OrcaCloudRunTargetAccess {
+  if (!snapshot.result && snapshot.loading) {
     return { state: 'loading' }
   }
-  return toOrcaCloudRunTargetAccess(result)
+  return toOrcaCloudRunTargetAccess(snapshot.result)
 }
 
 /** Resolves once billing has answered, or after `timeoutMs` with whatever is known then. */
@@ -109,37 +62,36 @@ export async function waitForOrcaCloudAccess(timeoutMs: number): Promise<OrcaClo
     }, timeoutMs)
   })
   // A superseded read resolves without data; keep waiting on whichever read is current.
-  while (inFlight && !timedOut) {
-    await Promise.race([inFlight.promise, deadline])
+  for (let read = getBillingReadInFlight(); read && !timedOut; read = getBillingReadInFlight()) {
+    await Promise.race([read, deadline])
   }
   clearTimeout(timer)
-  const access = accessFrom(state, currentAuthKey())
+  const access = accessFrom(getBillingState())
   return access.state === 'loading' ? { state: 'unknown' } : access
 }
 
 /** Subscribes to the shared read and keeps it fresh while `enabled`. */
 export function useOrcaCloudRunTargetAccess(enabled: boolean): OrcaCloudRunTargetAccess {
-  const snapshot = useSyncExternalStore(subscribe, () => state)
-  const authKey = useAppStore((s) => {
-    const status = s.orcaProfileAuthStatus
-    return `${status?.activeProfileId}:${status?.state}:${status?.cloud?.activeOrgId}`
-  })
-  // Re-runs on account/org change: the keyed cache then reads as empty and refetches.
+  const snapshot = useBillingState()
+  const accountKey = useOrcaAccountKey()
+  // Re-runs on account/team change: the store then drops the old answer and reads the new one.
   useEffect(() => {
     if (!enabled) {
       return
     }
+    const release = watchBillingStatus()
     void prefetchOrcaCloudBilling()
     const onFocus = (): void => void prefetchOrcaCloudBilling()
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [enabled, authKey])
-  return useMemo(() => accessFrom(snapshot, authKey), [snapshot, authKey])
+    return () => {
+      release()
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [enabled, accountKey])
+  return useMemo(() => accessFrom(snapshot), [snapshot])
 }
 
 /** Test seam: forget the cached read and orphan any running one. */
 export function resetOrcaCloudBillingCache(): void {
-  generation += 1
-  inFlight = null
-  set({ result: null, authKey: null, loading: false, fetchedAt: 0 })
+  resetBillingSummary()
 }

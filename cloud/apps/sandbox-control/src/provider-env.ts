@@ -101,6 +101,11 @@ export type CredentialPolicy = {
    * headers that set state either); anything else is refused.
    */
   keepResponseFields?: readonly string[]
+  /**
+   * The placeholder's shape when the client checks it (default `orca-ph-<secret>-<sandbox>`). Copilot
+   * CLI ignores a COPILOT_GITHUB_TOKEN that doesn't look like a GitHub token.
+   */
+  placeholderFormat?: (sandboxId: string) => string
   /** More ways the client may send the key in a header (gh-style `token <value>`). */
   altHeaderFormats?: Record<string, readonly ((value: string) => string)[]>
 }
@@ -169,6 +174,7 @@ const CREDENTIALS: readonly CredentialSpec[] = [
     defaultHosts: ['api.github.com', ...COPILOT_API_HOSTS],
     headers: { authorization: bearer },
     altHeaderFormats: { authorization: [(value: string) => `token ${value}`] },
+    placeholderFormat: (sandboxId: string) => `github_pat_orcaph_${sandboxId}`,
     allowUnclaimedHosts: [...COPILOT_API_HOSTS],
     // On GitHub's API the user's token checks Copilot access and nothing else: the rest of the API
     // (repos, gists, ...) stays out of reach of whatever runs in the workspace.

@@ -141,6 +141,10 @@
     }
   },
   "cloud": {
+    "idle": {
+      "sleeps_one": "Sleeps after {{count}} minute idle.",
+      "sleeps_other": "Sleeps after {{count}} minutes idle."
+    },
     "snapshot": {
       "git": {
         "files_one": "{{count}} changed file",

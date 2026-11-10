@@ -1,4 +1,5 @@
 import React from 'react'
+import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
 import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -8,6 +9,7 @@ import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { resolveVmEnvironmentCheckDecision } from '@/lib/ephemeral-vm-environment-check-decision'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
@@ -287,11 +289,20 @@ export function VmBuildSheet({
               onCreateLocally: () => onReturnToComposer({ local: true }),
               onOpenBilling: () => {
                 const store = useAppStore.getState()
-                store.openSettingsTarget({ pane: 'orca-account', repoId: null })
+                store.openSettingsTarget({
+                  pane: 'orca-account',
+                  repoId: null,
+                  // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
+                  // payment notice is at the top of the section already.
+                  ...(failure?.kind === 'payment'
+                    ? {}
+                    : { sectionId: ORCA_BILLING_OVERAGE_SECTION_ID })
+                })
                 store.openSettingsPage()
               },
               onSignIn: signIn,
-              onShowWorkspaces: () => useAppStore.getState().setSidebarOpen(true),
+              // Your workspaces on Home, where you can put one to sleep or delete it.
+              onShowWorkspaces: () => openCloudWorkspacesHome(),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

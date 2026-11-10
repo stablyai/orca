@@ -172,5 +172,5 @@ const styles = themedStyleSheet(() => ({
     borderWidth: 1.5,
     borderColor: colors.bgBase
   },
-  badgeText: { fontSize: 11, fontWeight: '700', color: '#000' }
+  badgeText: { fontSize: 11, fontWeight: '700', color: colors.onStatusAmber }
 }))

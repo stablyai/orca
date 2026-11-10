@@ -83,6 +83,10 @@ describe('deriveCloudDotState', () => {
         sleeping: true,
         now: NOW
       })
+    ).toBe('wakeFailed')
+    // A failed create (not a wake) stays "Couldn't start".
+    expect(
+      deriveCloudDotState({ status: status('failed'), wake: undefined, sleeping: false, now: NOW })
     ).toBe('failed')
   })
 
@@ -111,7 +115,7 @@ describe('deriveCloudDotState', () => {
         sleeping: false,
         now: NOW
       })
-    ).toBe('waking')
+    ).toBe('starting')
     expect(deriveCloudDotState({ status: null, wake: undefined, sleeping: false, now: NOW })).toBe(
       'unknown'
     )

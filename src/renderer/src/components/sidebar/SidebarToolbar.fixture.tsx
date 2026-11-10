@@ -1,5 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 import SidebarToolbar from './SidebarToolbar'
 import { registerPlanBillingMenuItem } from '../billing/register-plan-billing-menu-item'
 import { recordBillingStatus } from '../billing/billing-summary-store'
@@ -45,18 +46,20 @@ const signedInWithBilling: OrcaProfileAuthStatus = {
 }
 
 /** Registers the billing items as main.tsx does, with a known plan state. */
-const withBilling = (subscribed: boolean) => (): void => {
-  const result = {
-    status: 'ok' as const,
-    entitlement: subscribed
-      ? sampleTeam
-      : { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
+const withBilling =
+  (subscribed: boolean, usage: Partial<OrcaBillingEntitlement> = {}) =>
+  (): void => {
+    const result = {
+      status: 'ok' as const,
+      entitlement: subscribed
+        ? { ...sampleTeam, ...usage }
+        : { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
+    }
+    // The registration re-reads billing when the account changes; answer like the service would.
+    window.api.orcaProfiles.billingStatus = async () => result
+    registerPlanBillingMenuItem()
+    recordBillingStatus(result)
   }
-  // The registration re-reads billing when the account changes; answer like the service would.
-  window.api.orcaProfiles.billingStatus = async () => result
-  registerPlanBillingMenuItem()
-  recordBillingStatus(result)
-}
 
 const signedOut: OrcaProfileAuthStatus = {
   activeProfileId: 'local-default',
@@ -114,6 +117,18 @@ export const signedInMenuOnTeam = footer({
   height: 320,
   authStatus: signedInWithBilling,
   setup: withBilling(true),
+  interact: openAccountMenu
+})
+
+/** The team at billing's 75% level: hours left and the early warning in the header. */
+export const signedInMenuUsageWarning = footer({
+  height: 360,
+  authStatus: signedInWithBilling,
+  setup: withBilling(true, {
+    usedSeconds: 92 * 3600,
+    remainingIncludedSeconds: 28 * 3600,
+    usageWarningPercent: 75
+  }),
   interact: openAccountMenu
 })
 

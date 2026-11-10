@@ -67,11 +67,9 @@ export function CloudStatusCard(props: {
       <View style={styles.statusHeadline}>
         <CloudStatusDot status={active ? 'waking' : workspace.status} warn={notConnected} />
         <Text style={styles.statusLabel} accessibilityRole="header">
-          {active
-            ? t('cloud.status.waking', 'Waking')
-            : notConnected
-              ? t('cloud.status.cantConnect', 'Can’t connect')
-              : cloudStatusLabel(workspace.status, t)}
+          {/* Only glossary states: a running workspace this phone can't reach still reads
+              "Running" (with the warning dot); the error banner below says what went wrong. */}
+          {active ? t('cloud.status.waking', 'Waking') : cloudStatusLabel(workspace.status, t)}
         </Text>
       </View>
       {active ? (

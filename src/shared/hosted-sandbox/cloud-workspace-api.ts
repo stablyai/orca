@@ -19,7 +19,14 @@ export type CloudWorkspaceErrorCode =
 
 export type CloudWorkspaceResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: CloudWorkspaceErrorCode; message: string; reason?: string | null }
+  | {
+      ok: false
+      code: CloudWorkspaceErrorCode
+      message: string
+      reason?: string | null
+      /** Copy written for people (renderer-authored); shown as is. `message` may be raw. */
+      userMessage?: string
+    }
 
 /** Why a wake started; every source goes through the control plane's single-flight wake. */
 export type CloudWakeSource = 'open' | 'message' | 'ssh' | 'preview' | 'restart' | 'unarchive'

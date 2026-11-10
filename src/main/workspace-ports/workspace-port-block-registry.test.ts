@@ -6,7 +6,8 @@ import {
   WORKSPACE_PORT_BLOCK_SIZE,
   WORKSPACE_PORT_RANGE_END,
   WORKSPACE_PORT_RANGE_START,
-  buildWorkspacePortEnv
+  buildWorkspacePortEnv,
+  hostLauncherPortBase
 } from '../../shared/workspace-port-block'
 import { WorkspacePortBlockRegistry } from './workspace-port-block-registry'
 
@@ -122,5 +123,42 @@ describe('peekBlock', () => {
       Array.from({ length: 20 }, (_, i) => registry.getBlock(`/repo/c-${i}`))
     )
     expect(new Set(blocks.map((block) => block.base)).size).toBe(20)
+  })
+})
+
+describe('a host launcher block (VM launcher sets ORCA_PORT=3000)', () => {
+  it('goes to the first workspace; later ones get registry blocks that never overlap it', async () => {
+    const file = registryFile()
+    const registry = new WorkspacePortBlockRegistry(file, Date.now, 3000)
+    expect(await registry.getBlock('/vercel/orca/workspaces/project/main')).toEqual({
+      base: 3000,
+      count: 10
+    })
+    const second = await registry.getBlock('/vercel/orca/workspaces/project/feature')
+    expect(second.base).toBeGreaterThanOrEqual(WORKSPACE_PORT_RANGE_START)
+    // After a wake the VM's registry file is read again: the first workspace keeps 3000.
+    const reloaded = new WorkspacePortBlockRegistry(file, Date.now, 3000)
+    expect(await reloaded.getBlock('/vercel/orca/workspaces/project/main')).toEqual({
+      base: 3000,
+      count: 10
+    })
+    expect(await reloaded.getBlock('/vercel/orca/workspaces/project/feature')).toEqual(second)
+  })
+
+  it('skips registry slots that overlap a pinned block inside the registry range', async () => {
+    const registry = new WorkspacePortBlockRegistry(registryFile(), Date.now, 25005)
+    expect((await registry.getBlock('/first')).base).toBe(25005)
+    for (let i = 0; i < 200; i++) {
+      const { base } = await registry.getBlock(`/w-${i}`)
+      expect(base + 10 <= 25005 || base >= 25015).toBe(true)
+    }
+  })
+
+  it('reads the launcher block from the host env, never from a parent Orca pane', () => {
+    expect(hostLauncherPortBase({ ORCA_PORT: '3000' })).toBe(3000)
+    expect(hostLauncherPortBase({ ORCA_PORT: '3000', ORCA_WORKTREE_ID: 'r::/w' })).toBeNull()
+    expect(hostLauncherPortBase({ ORCA_PORT: '3000', ORCA_PANE_KEY: 't:l' })).toBeNull()
+    expect(hostLauncherPortBase({ ORCA_PORT: 'x' })).toBeNull()
+    expect(hostLauncherPortBase({})).toBeNull()
   })
 })

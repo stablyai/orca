@@ -66,6 +66,7 @@ export const CLI_COMMAND_NAMES = [
   'scroll',
   'scrollintoview',
   'search',
+  'secret',
   'select',
   'select-all',
   'sender',

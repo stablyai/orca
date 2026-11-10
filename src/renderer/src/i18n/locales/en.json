@@ -2295,7 +2295,8 @@
       },
       "orcaCloud": {
         "workspaceActions": {
-          "unavailable": "Orca Cloud is unavailable."
+          "unavailable": "Orca Cloud is unavailable.",
+          "archiveSleepFailed": "It’s still running. Your files are safe."
         }
       }
     },
@@ -4139,7 +4140,6 @@
             "fixWithAgent": "Fix with agent",
             "openAnyway": "Open anyway",
             "provision": "Provision VM",
-            "retryChecks": "Retry checks",
             "provisionCloud": "Start sandbox",
             "checksCloud": "Prepare environment",
             "createCloud": "Open workspace",
@@ -4161,7 +4161,8 @@
             "stateDone": "Done",
             "stateFailed": "Failed",
             "openFailedCloud": "Couldn’t open your cloud workspace",
-            "stateSkipped": "Skipped"
+            "stateSkipped": "Skipped",
+            "runChecksAgain": "Run checks again"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
@@ -4194,9 +4195,9 @@
             "connectGitHub": "Connect GitHub",
             "planBody2": "Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.",
             "outOfHoursTitle": "Out of sandbox hours",
-            "outOfHoursBody": "Your team has used this month’s sandbox hours. Turn on overage to keep starting sandboxes. Nothing was created, and you weren’t charged.",
+            "outOfHoursBody2": "Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Turn on overage to start sandboxes again.",
             "spendCapReachedTitle": "Spend cap reached",
-            "spendCapReachedBody": "Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.",
+            "spendCapReachedBody2": "Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Raise the cap to start sandboxes again.",
             "paymentFailedTitle": "Payment failed",
             "paymentFailedBody": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.",
             "teamLimitTitle": "You’re at your team’s limit of running sandboxes",
@@ -4216,8 +4217,8 @@
             "howToPushToGitHub": "How to push to GitHub",
             "useThisComputer": "Use this computer instead",
             "planBodyMember3": "Nothing was created, and you weren’t charged. Ask an owner or admin to choose a Team plan.",
-            "outOfHoursBodyMember2": "Your team has used this month’s sandbox hours. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.",
-            "spendCapReachedBodyMember3": "Your team has reached this month’s spend cap. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.",
+            "outOfHoursBodyMember3": "Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.",
+            "spendCapReachedBodyMember4": "Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.",
             "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method."
           },
           "VmBuildLog": {
@@ -7928,8 +7929,7 @@
           "account": "Account",
           "signIn": "Sign in",
           "accountNamed": "Account: {{value0}}",
-          "accountReconnect": "Account: sign in again",
-          "teamPlanLine": "{{value0}} · {{value1}} plan"
+          "accountReconnect": "Account: sign in again"
         },
         "CloudSshIncludeDialog": {
           "title": "Let {{editor}} find your cloud workspaces?",
@@ -20609,7 +20609,6 @@
           "subtitleSubscribed": "Usage this month, your plan, and what Enterprise adds.",
           "subtitle2": "Run Orca agents in hosted sandboxes that keep going when you step away.",
           "vpRunningBody2": "Sandboxes keep working while you are away and report back when they finish.",
-          "leftResets": "{{value0}} hours left · resets {{value1}}",
           "retry": "Try again",
           "featureSleep3": "Sleeps after {{value0}} minutes idle, so quiet time is free",
           "featureReady": "Ready in seconds, nothing to set up or host",
@@ -20624,7 +20623,7 @@
           "was": "Was",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
           "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
-          "featureOverage6": "Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default)",
+          "featureOverage7": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default)",
           "footTerms4": "Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
           "vpSecretsBody4": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
@@ -20635,9 +20634,11 @@
           "perSeatPerMonth": "per seat per month",
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member",
-          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them.",
           "totalPerMonth": "{{total}} per month",
-          "totalPerYear": "{{total}} per year"
+          "totalPerYear": "{{total}} per year",
+          "sandboxHoursLeftResets_one": "{{count}} sandbox hour left · resets {{date}}",
+          "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
+          "vpWakeBody3": "Idle sandboxes sleep to save sandbox hours and wake with your files as you left them."
         },
         "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
@@ -20693,45 +20694,46 @@
         "upsellLineNoPrice": "Orca Cloud runs agents in hosted sandboxes for your whole team.",
         "askAdmin2": "Ask an owner or admin to change the plan.",
         "capInvalid": "Enter a whole dollar amount.",
-        "capReachedHint": "Raise the cap to keep starting sandboxes. Your files are safe.",
+        "capReachedHint2": "Raise the cap to start sandboxes again. Your sandboxes are asleep, and your files are safe.",
         "capSaving": "Saving…",
         "capUsedLabel": "Overage spend cap used",
         "enterpriseContactSales": "Contact sales",
         "openForbidden2": "Only an owner or admin can manage billing.",
         "openSignedOut2": "Sign in to Orca again to manage your team.",
-        "overageDescription6": "Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default).",
-        "overageHoursOnly": "{{value0}} overage hours this month",
+        "overageDescription7": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default).",
         "overageMemberHint": "Owners and admins can change overage.",
         "overageOffRead": "Off",
         "overageOnRead": "On",
         "overagePaymentFailed": "Update the payment method before changing overage.",
         "paymentAsleepBody": "New sandboxes can’t start and running sandboxes are asleep. They can wake again once the payment goes through. Your files are safe.",
         "paymentGraceBody2": "New sandboxes can’t start. Running sandboxes go to sleep on {{value0}} unless the payment goes through.",
-        "reasonCapAdmin2": "Spend cap reached. Raise the monthly spend cap to keep starting sandboxes. Your files are safe.",
-        "reasonExhausted3": "Out of sandbox hours for this month. Turn on overage to keep starting sandboxes. Your files are safe.",
-        "reasonExhaustedMember2": "Out of sandbox hours for this month. Ask an owner or admin to add hours. Your files are safe.",
+        "reasonCapAdmin3": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Raise the monthly spend cap to start sandboxes again.",
+        "reasonExhausted4": "Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Turn on overage to start sandboxes again.",
+        "reasonExhaustedMember3": "Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to add hours.",
         "reasonInactiveMember": "Your team’s plan is not active. Ask an owner or admin to choose a plan.",
         "reasonPastDueMember": "Your team’s last payment failed. Ask an owner or admin to update the payment method.",
         "resetsAndRenews": "Resets and renews {{value0}}",
         "resetsEnds": "Hours reset {{value0}} · Plan ends {{value1}}",
         "resetsRenews": "Hours reset {{value0}} · Renews {{value1}}",
-        "sandboxHoursLeft": "{{value0}} sandbox hours left",
         "sandboxHoursUsedMonth": "{{value0}} of {{value1}} sandbox hours used this month",
-        "warn100b": "All of this month’s sandbox hours are used.",
-        "warnPercent2": "You’ve used {{value0}}% of this month’s sandbox hours.",
-        "overageDescriptionOn3": "Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set.",
-        "reasonCapMember3": "Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.",
+        "overageDescriptionOn4": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set.",
+        "reasonCapMember4": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to raise the spend cap.",
         "reasonGraceExpired3": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.",
         "reasonGraceExpiredMember2": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.",
         "reasonNoPlan2": "Orca Cloud needs a Team plan.",
-        "sandboxHoursOver_one": "{{count}} sandbox hour over",
-        "sandboxHoursOver_other": "{{count}} sandbox hours over",
         "sandboxHoursUsedLabel": "Sandbox hours used",
         "seatsAnnual_one": "{{count}} seat · Annual",
         "seatsAnnual_other": "{{count}} seats · Annual",
         "seatsMonthly_one": "{{count}} seat · Monthly",
         "seatsMonthly_other": "{{count}} seats · Monthly",
-        "upsellLine2": "Orca Cloud runs agents in sandboxes. Team is {{value0}} per seat per month."
+        "upsellLine2": "Orca Cloud runs agents in sandboxes. Team is {{value0}} per seat per month.",
+        "capAtMost": "The spend cap can be at most {{max}}.",
+        "loadingPlan": "Loading your plan…",
+        "sandboxHoursLeftCount_one": "{{count}} sandbox hour left",
+        "sandboxHoursLeftCount_other": "{{count}} sandbox hours left",
+        "sandboxHoursOverIncluded_one": "{{count}} sandbox hour over the included amount this month",
+        "sandboxHoursOverIncluded_other": "{{count}} sandbox hours over the included amount this month",
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -20830,8 +20832,6 @@
         "reassignOwner": "Reassign owner",
         "reassignTitle": "Make {{name}} the owner?",
         "refresh": "Refresh cloud workspaces",
-        "restored": "Restored",
-        "retry": "Retry",
         "rowActions": "Actions for {{value0}}",
         "rowDescription2": "{{usage}}. Last active {{lastActive}}. {{visibility}}.",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
@@ -20869,7 +20869,11 @@
         "youAreViewing": "You are viewing",
         "view": "View",
         "viewAsleep": "View read-only copy",
-        "routines": "Routines"
+        "routines": "Routines",
+        "archiveConfirmTitle": "Archive {{name}}?",
+        "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
+        "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
+        "showCloudWorkspaces": "Show cloud workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26549,7 +26553,8 @@
       "moreChanges": "{{count}} more",
       "noCommits": "No commits on this branch yet.",
       "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "files_other": "{{count}} files",
+      "loadFailedDetail": "Your files are safe in the archive."
     },
     "state": {
       "archived": "Archived",
@@ -26559,10 +26564,11 @@
       "waking": "Waking",
       "notResponding": "Not responding",
       "failed": "Couldn’t start",
-      "unknown": "Checking…"
+      "unknown": "Checking…",
+      "starting": "Starting",
+      "wakeFailed": "Couldn’t wake"
     },
     "unarchive": "Unarchive",
-    "retry": "Retry",
     "change": {
       "modified": "Modified",
       "added": "Added",
@@ -26612,10 +26618,13 @@
     "detail": {
       "restartKeeps": "Restart keeps your files; agents resume.",
       "restarting": "Orca resumes your agents after the restart.",
-      "asleep": "Files and chats are saved. Opening it wakes it.",
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
-      "failed": "The last start failed. Your files are saved.",
-      "waking": "Waking…"
+      "waking": "Waking…",
+      "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
+      "starting": "Starting the sandbox…",
+      "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
+      "startFailed": "The sandbox couldn’t start. Nothing was lost.",
+      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
     },
     "restarting": "Restarting…",
     "restart": "Restart",
@@ -26629,13 +26638,10 @@
     "usedOfTotal": "{{used}} / {{total}}",
     "disk": "Disk",
     "uptime": "Up for",
-    "usedLabel": "Used",
-    "overage": "Overage so far",
     "keptUntil": "Kept until",
     "ago": "{{ago}} ago",
     "wake": "Wake",
     "error": {
-      "noHours": "You’re out of sandbox hours. Your files are safe.",
       "seePlans": "See plans",
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
@@ -26646,9 +26652,6 @@
     "restarted": "Sandbox restarted",
     "restartedDetail": "Orca resumes your agents after the restart.",
     "archiveFailed": "Couldn’t archive the workspace",
-    "archivingNamed": "Archiving {{name}}…",
-    "archiving": "Archiving workspace…",
-    "archivingDetail": "It stops and stays browsable: PRs, last changes and files.",
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
@@ -26681,6 +26684,28 @@
     "recovery": {
       "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
       "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
+    },
+    "unarchiveFailedNamed": "Couldn’t unarchive {{name}}",
+    "unarchivedNamed": "Unarchived {{name}}",
+    "unarchivedAsleep": "It’s asleep. Opening it wakes it.",
+    "archiveFailedNamed": "Couldn’t archive {{name}}",
+    "archivedNamed": "Archived {{name}}",
+    "archivedWorkspace": "Archived the workspace",
+    "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
+    "tryAgain": "Try again",
+    "sandboxHoursUsedLabel": "Sandbox hours used",
+    "sleep": "Sleep",
+    "thisWorkspace": "This workspace",
+    "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
+    "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
+    "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe.",
+    "versionSkew": {
+      "newerTitle": "This cloud workspace uses a newer version of Orca",
+      "olderTitle": "This cloud workspace uses an older version of Orca",
+      "newerDetail": "Update Orca on this computer to connect to it. Your files are safe.",
+      "olderDetail": "This version of Orca can’t connect to it, and restarting won’t update it. Your files are safe. New cloud workspaces use the current version.",
+      "checkForUpdates": "Check for updates",
+      "createWorkspace": "Create workspace"
     }
   },
   "cloudAgentSetup": {
@@ -27079,23 +27104,37 @@
       "running": "Running",
       "stopping": "Stopping…",
       "stopped": "Stopped",
-      "exited": "Exited",
       "failed": "Failed",
       "failedWithCode": "Failed (exit {{code}})",
-      "notRunning": "Not running"
+      "notRunning": "Not running",
+      "finished": "Finished"
     },
     "restart": "Restart",
     "stop": "Stop",
     "runAgain": "Run again",
     "run": "Run",
     "showOutput": "Show output",
-    "showRunning": "Show {{name}}",
     "runNamed": "Run {{name}}",
     "menu": "Run actions",
     "ports": "Ports",
     "noPorts": "No servers listening in this workspace yet.",
     "tabTitle": "Run: {{name}}",
     "noneTitle": "No run actions for this workspace",
-    "noneBody": "Add a command under scripts.run in orca.yaml, for example a dev server on $ORCA_PORT."
+    "noneBody": "Add a command under scripts.run in orca.yaml, for example a dev server on $ORCA_PORT.",
+    "announceStopped": "{{name}} stopped",
+    "announceFailed": "{{name}} failed",
+    "announceFinished": "{{name}} finished",
+    "restartNamed": "Restart {{name}}",
+    "stopNamed": "Stop {{name}}",
+    "runAgainNamed": "Run {{name}} again",
+    "showOutputNamed": "Show {{name}} output",
+    "openInBrowser": "Open in browser",
+    "shareInPorts": "Share…",
+    "runningShowOutput": "{{name}} is running. Show output",
+    "stoppingShowOutput": "{{name}} is stopping. Show output",
+    "runLastFailed": "Run {{name}}, last run failed",
+    "showOutputTooltip": "Show {{name}} output",
+    "shortcutRestarts": "{{shortcut}} restarts it",
+    "menuRunning": "Run actions, {{count}} running"
   }
 }

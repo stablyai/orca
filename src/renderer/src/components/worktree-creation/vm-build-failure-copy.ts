@@ -92,12 +92,12 @@ export function vmBuildFailureCopy(
         ),
         body: canManageBilling
           ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.outOfHoursBody',
-              'Your team has used this month’s sandbox hours. Turn on overage to keep starting sandboxes. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.outOfHoursBody2',
+              'Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Turn on overage to start sandboxes again.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.outOfHoursBodyMember2',
-              'Your team has used this month’s sandbox hours. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.'
+              'auto.components.worktree.creation.VmBuildFailureCard.outOfHoursBodyMember3',
+              'Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.'
             )
       }
     case 'spendCap':
@@ -108,12 +108,12 @@ export function vmBuildFailureCopy(
         ),
         body: canManageBilling
           ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBody',
-              'Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBody2',
+              'Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Raise the cap to start sandboxes again.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBodyMember3',
-              'Your team has reached this month’s spend cap. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.'
+              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBodyMember4',
+              'Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.'
             )
       }
     case 'payment':

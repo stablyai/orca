@@ -133,6 +133,10 @@ export function statusSentence(
       return t('cloud.line.archived', 'Unarchive it on your computer to work in it again.')
     case 'failed':
       return t('cloud.line.failed', 'The sandbox couldn’t start. Your files are safe.')
+    case 'unresponsive':
+      return t('cloud.line.unresponsive', 'The sandbox isn’t responding. Your files are safe.')
+    case 'deleting':
+      return t('cloud.line.deleting', 'This workspace is being deleted.')
   }
 }
 

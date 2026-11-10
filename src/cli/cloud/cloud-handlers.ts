@@ -1,5 +1,5 @@
 // Private build only: `orca cloud …` handlers. They never touch the Orca runtime (ctx.client): they
-// call the Orca Cloud public API over HTTPS, so they work inside a VM with no desktop app running.
+// call the Orca Cloud public API over HTTPS, so they work inside a sandbox with no desktop app running.
 import type { CommandHandler } from '../dispatch'
 import {
   getOptionalPositiveIntegerFlag,
@@ -37,7 +37,6 @@ import {
   createCloudWorkspace,
   defaultCloudHandlerDeps,
   getAgentFlag,
-  getSizeFlag,
   normalizeCloudRepoUrl,
   readMessageFlags,
   resolveCloudProjectId,
@@ -49,6 +48,7 @@ import {
 } from './cloud-operations'
 
 import { cloudLifecycleHandler, type CloudLifecycleAction } from './cloud-lifecycle'
+import { createCloudRoutineHandlers } from './cloud-routines'
 
 export type { CloudHandlerDeps } from './cloud-operations'
 
@@ -181,7 +181,6 @@ export function createCloudHandlers(
       if (ref && !repoFlag) {
         throw new RuntimeClientError('invalid_argument', '--ref needs --repo.', { field: 'ref' })
       }
-      const machineSize = getSizeFlag(flags)
       const api = cloudClient(deps)
       const project = getOptionalStringFlag(flags, 'project')
       const name = getOptionalStringFlag(flags, 'name')
@@ -192,7 +191,6 @@ export function createCloudHandlers(
         ...(repoFlag
           ? { repo: { url: normalizeCloudRepoUrl(repoFlag), ...(ref ? { ref } : {}) } }
           : {}),
-        ...(machineSize ? { machineSize } : {}),
         ...(region ? { region } : {}),
         ...(prompt ? { message: { text: prompt, ...(agent ? { agent } : {}) } } : {})
       }
@@ -202,7 +200,9 @@ export function createCloudHandlers(
     'cloud workspace sleep': mutate('sleep'),
     'cloud workspace wake': mutate('wake'),
     'cloud workspace archive': mutate('archive'),
-    'cloud workspace destroy': mutate('destroy'),
+    'cloud workspace delete': mutate('delete'),
+    // Hidden alias kept so scripts written before the rename keep working.
+    'cloud workspace destroy': mutate('delete'),
     'cloud message': async ({ flags, json }) => {
       const deps = getDeps()
       const body = readMessageFlags(flags)
@@ -263,7 +263,8 @@ export function createCloudHandlers(
       const api = cloudClient(deps)
       const result = await api.request<{ projects: CloudProject[] }>('GET', '/v1/projects')
       printCloudResult(result, json, formatCloudProjects)
-    }
+    },
+    ...createCloudRoutineHandlers(getDeps)
   }
 }
 

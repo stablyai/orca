@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router'
+import { Cloud } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -23,7 +24,11 @@ import { CloudPromptQueueSection } from './CloudPromptQueueSection'
 import { CloudReadSnapshotSection } from './CloudReadSnapshotSection'
 import { CloudStatusCard } from './CloudStatusCard'
 import { CloudWorkspaceActions } from './CloudWorkspaceActions'
-import { archiveCloudWorkspace, sleepCloudWorkspace } from './cloud-control-plane-client'
+import {
+  archiveCloudWorkspace,
+  restartCloudWorkspace,
+  sleepCloudWorkspace
+} from './cloud-control-plane-client'
 import { CloudRequestError } from './cloud-control-plane-request'
 import {
   enqueueCloudPrompt,
@@ -37,6 +42,8 @@ import {
   useCloudHostRemoval
 } from './cloud-session'
 import { attachErrorMessage, phaseLabel } from './cloud-workspace-copy'
+import { setCloudReturnTo } from './cloud-return-to'
+import { cloudMissingState } from './cloud-screen-states'
 import { cloudRepoLine } from './cloud-workspace-display'
 import {
   cloudScrollBottomPadding,
@@ -66,8 +73,14 @@ export function CloudWorkspaceScreen({
   const insets = useSafeAreaInsets()
   const removal = useCloudHostRemoval()
   const enrollment = useCloudEnrollment()
-  const { workspace, isPending, isFetching, refetch } = useCloudWorkspace(enrollment, sandboxId)
-  const live = useCloudWorkspaceLiveStatus(sandboxId, workspace?.status === 'running')
+  const listed = useCloudWorkspace(enrollment, sandboxId)
+  const { isPending, isFetching, isError, refetch } = listed
+  const live = useCloudWorkspaceLiveStatus(sandboxId, listed.workspace?.status === 'running')
+  // The registry only knows "running"; the live status knows when it is up but not answering.
+  const workspace =
+    listed.workspace?.status === 'running' && live.data?.state === 'unresponsive'
+      ? { ...listed.workspace, status: 'unresponsive' as const }
+      : listed.workspace
   // Asleep: read its last sealed snapshot instead of waking it. Nothing here ever wakes it.
   const asleep = workspace?.status === 'sleeping'
   const snapshot = useCloudReadSnapshot(sandboxId, asleep, workspace?.readSnapshotAt ?? null)
@@ -85,7 +98,7 @@ export function CloudWorkspaceScreen({
   // keychain), the button already reads Waking rather than keeping "Wake to continue".
   const [wakeTappedAt, setWakeTappedAt] = useState<CloudWorkspaceRun | null>(null)
   const wakePending = wakeTappedAt !== null && wakeTappedAt === run
-  const [busyAction, setBusyAction] = useState<'sleep' | 'archive' | null>(null)
+  const [busyAction, setBusyAction] = useState<'sleep' | 'archive' | 'restart' | null>(null)
 
   useEffect(() => {
     const load = () =>
@@ -129,7 +142,7 @@ export function CloudWorkspaceScreen({
   )
 
   const lifecycle = useCallback(
-    async (action: 'sleep' | 'archive') => {
+    async (action: 'sleep' | 'archive' | 'restart') => {
       const plane = await loadCloudControlPlane()
       if (!plane || !workspace) {
         return
@@ -137,7 +150,9 @@ export function CloudWorkspaceScreen({
       clearError()
       setBusyAction(action)
       try {
-        if (action === 'sleep') {
+        if (action === 'restart') {
+          await restartCloudWorkspace(plane, workspace.id)
+        } else if (action === 'sleep') {
           await sleepCloudWorkspace(plane, workspace.id)
         } else {
           await archiveCloudWorkspace(plane, workspace.id)
@@ -146,12 +161,17 @@ export function CloudWorkspaceScreen({
       } catch (error) {
         await forgetRevokedCloudSession(error, removal)
         fail(
-          action === 'archive' && error instanceof CloudRequestError && error.status === 404
+          action === 'restart' && error instanceof CloudRequestError && error.status === 404
             ? t(
-                'cloud.error.archiveUnavailable',
-                'Archiving isn’t available yet. Put it to sleep instead.'
+                'cloud.error.restartOwner',
+                'Only the workspace’s owner can restart it. Your files are safe.'
               )
-            : attachErrorMessage(error, t)
+            : action === 'archive' && error instanceof CloudRequestError && error.status === 404
+              ? t(
+                  'cloud.error.archiveUnavailable',
+                  'Archiving isn’t available yet. Put it to sleep instead.'
+                )
+              : attachErrorMessage(error, t)
         )
       } finally {
         setBusyAction(null)
@@ -162,6 +182,7 @@ export function CloudWorkspaceScreen({
   )
 
   if (!workspace) {
+    const missing = cloudMissingState({ enrollment, isPending, isFetching, isError })
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <SettingsNavBar
@@ -169,15 +190,38 @@ export function CloudWorkspaceScreen({
           onBack={() => router.back()}
         />
         <View style={styles.centered}>
-          {isPending || isFetching || enrollment === undefined ? (
+          {missing === 'signin' ? (
+            // A share link opened on a phone that isn't connected yet: the list query never runs.
+            <>
+              <Text style={styles.emptyText}>
+                {t('cloud.workspace.signIn', 'Sign in to Orca Cloud on this phone')}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  // Connect on Home, then come straight back to this workspace.
+                  setCloudReturnTo(`/cloud/${sandboxId}`)
+                  router.replace('/')
+                }}
+                style={styles.linkButton}
+              >
+                <Text style={styles.link}>{t('cloud.workspace.signInAction', 'Sign in')}</Text>
+              </Pressable>
+            </>
+          ) : missing === 'loading' ? (
             <ActivityIndicator color={colors.textMuted} />
           ) : (
             <>
               <Text style={styles.emptyText}>
-                {t(
-                  'cloud.workspace.missing',
-                  'This workspace is gone or you no longer have access.'
-                )}
+                {missing === 'unreachable'
+                  ? t(
+                      'cloud.workspace.unreachable',
+                      'Couldn’t reach Orca Cloud. Check your connection and try again.'
+                    )
+                  : t(
+                      'cloud.workspace.missing',
+                      'This workspace is gone or you no longer have access.'
+                    )}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -193,10 +237,12 @@ export function CloudWorkspaceScreen({
     )
   }
 
-  const awake = workspace.status === 'running'
+  // Up either way: a prompt sent now goes out without a wake.
+  const awake = workspace.status === 'running' || workspace.status === 'unresponsive'
   const unavailable =
     workspace.status === 'creating' ||
     workspace.status === 'stopping' ||
+    workspace.status === 'deleting' ||
     workspace.status === 'archived'
   const waking =
     wakePending ||
@@ -205,7 +251,9 @@ export function CloudWorkspaceScreen({
     workspace.status === 'waking'
   // Asleep, or waking from it: the read-only copy stays readable (header says Waking) until it opens.
   const showSnapshot = asleep || (waking && !awake && snapshot.data !== undefined)
-  const busy = active || wakePending
+  // Up but not answering: the one thing that helps is a restart (glossary "Restarting").
+  const restartable = workspace.status === 'unresponsive' && run.kind !== 'launched' && !active
+  const busy = active || wakePending || busyAction === 'restart'
   const primaryLabel = wakePending
     ? phaseLabel('waking', t)
     : run.kind === 'launched'
@@ -218,11 +266,17 @@ export function CloudWorkspaceScreen({
             ? t('cloud.action.settingUp', 'Starting…')
             : workspace.status === 'archived'
               ? t('cloud.status.archived', 'Archived')
-              : awake
-                ? t('cloud.action.open', 'Open workspace')
-                : asleep
-                  ? t('cloud.action.wakeToContinue', 'Wake to continue')
-                  : t('cloud.action.wakeOpen', 'Wake and open workspace')
+              : workspace.status === 'deleting'
+                ? t('cloud.status.deleting', 'Deleting')
+                : busyAction === 'restart'
+                  ? t('cloud.status.restarting', 'Restarting')
+                  : restartable
+                    ? t('cloud.action.restart', 'Restart sandbox')
+                    : awake
+                      ? t('cloud.action.open', 'Open workspace')
+                      : asleep
+                        ? t('cloud.action.wakeToContinue', 'Wake to continue')
+                        : t('cloud.action.wakeOpen', 'Wake and open workspace')
   const primaryDisabled = busy || unavailable
 
   return (
@@ -231,7 +285,12 @@ export function CloudWorkspaceScreen({
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <SettingsNavBar title={workspace.title} onBack={() => router.back()} />
+        <SettingsNavBar
+          title={workspace.title}
+          // The cloud-icon rule: a bare, muted Cloud that never changes with state (the card says it).
+          titleIcon={<Cloud size={14} strokeWidth={2} color={colors.textMuted} />}
+          onBack={() => router.back()}
+        />
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
@@ -310,7 +369,7 @@ export function CloudWorkspaceScreen({
 
           <CloudWorkspaceActions
             workspace={workspace}
-            busy={busyAction}
+            busy={busyAction === 'restart' ? null : busyAction}
             disabled={active || busyAction !== null}
             onSleep={() => void lifecycle('sleep')}
             onArchive={() => void lifecycle('archive')}
@@ -325,6 +384,10 @@ export function CloudWorkspaceScreen({
             onPress={() => {
               if (run.kind === 'launched') {
                 openSession('chat')
+                return
+              }
+              if (restartable) {
+                void lifecycle('restart')
                 return
               }
               setWakeTappedAt(run)

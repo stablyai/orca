@@ -54,7 +54,7 @@ export type Env = {
   BILLING_URL?: string
   /** Service binding to the billing Worker; Workers on one account cannot reach each other over workers.dev. */
   BILLING?: Fetcher
-  /** Durable Object that advances environment builds on alarms (EnvironmentBuildRunner in index.ts). */
+  /** Durable Object that advances environment builds on alarms (EnvironmentBuildRunner, hosted by the build runner Worker: src/build-runner.ts). */
   ENV_BUILD_RUNNER?: DurableObjectNamespace
   CONTROL_PLANE_TOKEN?: string
   /** `stub` allows every start and records nothing: local dev only, refused when SANDBOX_ENV=prod. */
@@ -90,6 +90,14 @@ export type Env = {
   SECRETS_EGRESS_PLACEHOLDERS?: string
   /** Per-team kill switch (comma account ids): those accounts get plain env injection. */
   SECRETS_EGRESS_PLACEHOLDERS_OFF?: string
+  /** Flag S1 (`on`): Claude via the person's Orca account (setup-token store + egress swap, contract D10/D11). */
+  AGENT_ACCOUNTS_CLAUDE?: string
+  /** `1`: kill switch for S1 (agents fall back to keys, or sign in inside the sandbox). */
+  AGENT_ACCOUNTS_CLAUDE_DISABLED?: string
+  /** Flag S2 (`on`): Codex via the account broker. */
+  AGENT_ACCOUNTS_CODEX?: string
+  /** `1`: kill switch for S2. */
+  AGENT_ACCOUNTS_CODEX_DISABLED?: string
 
   /** App slug for the install URL (github.com/apps/<slug>). */
   GITHUB_APP_SLUG?: string

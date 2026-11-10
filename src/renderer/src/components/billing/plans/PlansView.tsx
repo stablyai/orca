@@ -15,6 +15,12 @@ import { PlanStatusBadge } from '../PlanStatusBadge'
 import type { PlanBillingNotice } from '../PlanBillingSection'
 import { seatCountLabel } from '../team/team-copy'
 import { formatHours, includedUsagePercent } from '../plan-billing-format'
+import {
+  includedUsageTone,
+  sandboxHoursCount,
+  sandboxHoursLeftLine,
+  usageWarningLine
+} from '../plan-billing-usage-copy'
 import { EnterprisePlanCard } from './EnterprisePlanCard'
 import { PlansIntervalToggle } from './PlansIntervalToggle'
 import { TeamPlanCard, type TeamPlanCardMode } from './TeamPlanCard'
@@ -56,8 +62,8 @@ function ValueProps(): React.JSX.Element {
       icon: Zap,
       title: t('auto.components.billing.plans.vpWakeTitle', 'Wake in seconds'),
       body: t(
-        'auto.components.billing.plans.vpWakeBody2',
-        'Idle sandboxes sleep to save hours and wake with your files as you left them.'
+        'auto.components.billing.plans.vpWakeBody3',
+        'Idle sandboxes sleep to save sandbox hours and wake with your files as you left them.'
       )
     },
     {
@@ -96,6 +102,7 @@ function CurrentPlanStrip({
   const resets = entitlement.usageWindow
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(entitlement.usageWindow.end)
     : null
+  const warning = usageWarningLine(entitlement, t)
   return (
     <div className="space-y-2 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -113,7 +120,7 @@ function CurrentPlanStrip({
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
-        tone={includedUsagePercent(entitlement) >= 100 ? 'warning' : 'default'}
+        tone={includedUsageTone(entitlement)}
         aria-label={t('auto.components.billing.sandboxHoursUsedLabel', 'Sandbox hours used')}
       />
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground tabular-nums">
@@ -130,16 +137,18 @@ function CurrentPlanStrip({
         <span>
           {resets
             ? t(
-                'auto.components.billing.plans.leftResets',
-                '{{value0}} hours left · resets {{value1}}',
+                'auto.components.billing.plans.sandboxHoursLeftResets',
+                '{{count}} sandbox hours left · resets {{date}}',
                 {
-                  value0: formatHours(entitlement.remainingIncludedSeconds),
-                  value1: resets
+                  count: sandboxHoursCount(entitlement.remainingIncludedSeconds),
+                  date: resets,
+                  defaultValue_one: '{{count}} sandbox hour left · resets {{date}}'
                 }
               )
-            : null}
+            : sandboxHoursLeftLine(entitlement, t)}
         </span>
       </div>
+      {warning ? <p className="text-xs font-medium">{warning}</p> : null}
     </div>
   )
 }
@@ -226,15 +235,16 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
   const seats = clampSeats(props.seats, ORCA_BILLING_MAX_SEATS)
   const result = props.result
   const ready = result?.status === 'ok'
-  // Once plans load (or after "Back to plans"), land on this state's primary action, but only if
-  // focus is still on the dialog or nowhere; never steal it from something the user picked.
+  // Once plans load (or after "Back to plans"), land on the dialog heading, never on a buy button
+  // (Enter would start Checkout): Tab then reaches the interval toggle before the cards. Only when
+  // focus is on the dialog or nowhere; never steal it from something the user picked.
   useEffect(() => {
     const active = document.activeElement
     if (
       ready &&
       (!active || active === document.body || active.getAttribute('role') === 'dialog')
     ) {
-      document.querySelector<HTMLElement>('[role="dialog"] [data-plans-primary]')?.focus()
+      document.querySelector<HTMLElement>('[role="dialog"] [data-plans-heading]')?.focus()
     }
   }, [ready])
 

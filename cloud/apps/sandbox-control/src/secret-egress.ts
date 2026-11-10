@@ -5,7 +5,7 @@
 // Codex) hang under Vercel transform rules, so these hosts always take the forwardURL path through
 // /v1/egress/proxy, the same path api.github.com uses. Placeholders are not secrets: the proxy
 // authenticates the sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
-import { SWAPPED_CREDENTIALS, credentialTarget, credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
+import { SWAPPED_CREDENTIALS, credentialShape, credentialTarget, credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
 import type { SandboxRow } from './store'
 
 export type SecretEgressHost = CredentialTarget
@@ -14,7 +14,8 @@ export type SecretEgressHost = CredentialTarget
 const LEGACY_HOSTS: Record<string, string> = { 'api.anthropic.com': 'ANTHROPIC_API_KEY', 'api.openai.com': 'OPENAI_API_KEY' }
 
 export function secretPlaceholder(row: Pick<SandboxRow, 'id'>, secret: string): string {
-  return `orca-ph-${secret.toLowerCase().replaceAll('_', '-')}-${row.id}`
+  const format = credentialShape(secret)?.placeholderFormat
+  return format ? format(row.id) : `orca-ph-${secret.toLowerCase().replaceAll('_', '-')}-${row.id}`
 }
 
 /** `SECRET@host` entries recorded on the row at boot (or refresh) as placeholder-routed. */
@@ -68,4 +69,24 @@ export function applySecretPlaceholders(
     }
   }
   return { env: next, targets }
+}
+
+/**
+ * `account:<agent>:<owner>@<host>` entries: hosts where an agent's Orca-account placeholder is swapped (D10).
+ * The owner (URI-encoded user id) is recorded so a workspace handed to someone else never starts using
+ * the new owner's account behind the old session.
+ */
+export function encodeAccountRoute(agent: 'claude' | 'codex', ownerUserId: string, host: string): string {
+  return `account:${agent}:${encodeURIComponent(ownerUserId)}@${host}`
+}
+
+export function egressAccountRoutes(row: Pick<SandboxRow, 'egress_secret_hosts'>): { agent: 'claude' | 'codex'; owner: string; host: string }[] {
+  const out: { agent: 'claude' | 'codex'; owner: string; host: string }[] = []
+  for (const entry of (row.egress_secret_hosts ?? '').split(',')) {
+    const match = /^account:(claude|codex):([^@,]+)@([a-z0-9.-]+)$/.exec(entry)
+    if (match) {
+      out.push({ agent: match[1] as 'claude' | 'codex', owner: decodeURIComponent(match[2]!), host: match[3]! })
+    }
+  }
+  return out
 }
