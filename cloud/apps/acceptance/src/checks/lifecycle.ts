@@ -224,6 +224,29 @@ export const lifecycleChecks: Record<string, Check> = {
     }
   },
 
+  'acc.remote-desktop': async (ctx) => {
+    const b = await refresh(ctx)
+    const r = await control.as(ctx.solo, 'POST', `/v1/sandboxes/${b.id}/desktop`)
+    const d = r.body?.desktop
+    if (r.status !== 200 || !d?.port) {
+      return { status: 'fail', detail: `POST desktop ${r.status} ${JSON.stringify(r.body).slice(0, 200)}` }
+    }
+    const portHex = Number(d.port).toString(16).toUpperCase().padStart(4, '0')
+    // WebSocket upgrade on the VM loopback with the single-use ticket (what the desktop's port forward carries).
+    const probe = await ctx.exec(
+      b.sessionId,
+      `cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$4=="0A"' | grep -c ":${portHex} "; curl -s -m 5 --http1.1 -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H "Origin: http://127.0.0.1:${d.port}" "http://127.0.0.1:${d.port}/websockify?ticket=${encodeURIComponent(d.ticket)}"; echo; curl -s -m 5 --http1.1 -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H "Origin: http://127.0.0.1:${d.port}" "http://127.0.0.1:${d.port}/websockify?ticket=bogus"; echo; pgrep -fl 'Xvfb|x11vnc|websockify|Xvnc' | head -3`,
+      30_000
+    )
+    const [listening, withTicket, bogus, ...procs] = probe.stdout.trim().split('\n')
+    const ok = Number(listening) > 0 && withTicket === '101' && bogus !== '101'
+    return {
+      status: ok ? 'pass' : 'fail',
+      detail: `POST desktop ${r.status} in ${r.ms} ms -> loopback :${d.port}; listening=${Number(listening) > 0}; WebSocket upgrade with ticket -> ${withTicket}, bogus ticket -> ${bogus}; processes: ${procs.map((x) => x.split(' ').slice(1).join(' ').slice(0, 40)).join(', ') || 'none'}. Streaming into a desktop tab is UI (desktop run).`,
+      timingsMs: { desktopStart: r.ms }
+    }
+  },
+
   'acc.ssh': async (ctx) => {
     const b = await refresh(ctx)
     const { publicKey } = generateKeyPairSync('ed25519')
