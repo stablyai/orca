@@ -79,9 +79,9 @@ function describeStop(
           'If it is idle on purpose, leave it: its later idle turns are not reported until you write to it.'
         ]
       : []),
-    ...(output && !stop.approval
+    ...(output
       ? [
-          'Last output:',
+          stop.approval ? "Worker's screen:" : 'Last output:',
           output.length > LAST_OUTPUT_MAX_CHARS
             ? `…${output.slice(-LAST_OUTPUT_MAX_CHARS)}`
             : output
@@ -220,6 +220,7 @@ const CLOSED_BY: Record<NonNullable<WorkerApprovalPayload['outcome']>['by'], str
   person: 'by a person in Orca',
   coordinator: 'by the coordinator',
   'worker-chat': "in the worker's own chat",
+  'worker-terminal': "in the worker's terminal",
   unknown: 'without an answer Orca can name'
 }
 

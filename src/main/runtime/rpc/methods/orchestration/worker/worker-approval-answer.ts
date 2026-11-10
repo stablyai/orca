@@ -50,14 +50,49 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
           { effectsApplied: false }
         )
       }
+      const notify = (handle: string, type: string): void =>
+        runtime.notifyMessageArrived(handle, type)
       const custody = structuredMailboxCustody(`dispatch:${dispatch.id}`, db)
-      // Only a chat worker's prompt is a record Orca can answer; others stay with the person.
+      // A chat worker's prompt is its journal item; a terminal worker's is its waiting hook, if any.
       if (typeof custody !== 'object') {
-        throw new OrchestrationError(
-          'approval_unsupported',
-          `Orca cannot answer this worker's prompts. A person must answer ${params.prompt} where the worker runs.`,
-          { effectsApplied: false }
+        const answered = await runtime.terminalWorkerApprovals.answer({
+          dispatchId: dispatch.id,
+          approvalId: params.prompt,
+          decision: params.decision,
+          // Claude gives the model this text word for word, and the turn continues.
+          message: access.reason ?? 'Denied by the owner.'
+        })
+        if (!answered.ok) {
+          throw new OrchestrationError(answered.code, answered.message, {
+            effectsApplied: answered.code === 'approval_refused'
+          })
+        }
+        reportWorkerApprovalClosed(
+          db,
+          dispatch,
+          {
+            from: worker,
+            approval: {
+              ...answered.approval,
+              state: 'answered',
+              allowedActions: [],
+              outcome: {
+                by: access.answeredBy,
+                decision: params.decision,
+                reason: access.reason,
+                reasonDelivered: true
+              }
+            }
+          },
+          { notify }
         )
+        return {
+          approvalId: params.prompt,
+          dispatchId: dispatch.id,
+          decision: params.decision,
+          option: params.decision === 'allow' ? 'Allow' : 'Deny',
+          reasonMessageId: null
+        }
       }
       const answered = await answerChatWorkerApproval({
         sessionId: custody.sessionId,
@@ -68,8 +103,6 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
       if (!answered.ok) {
         throw new OrchestrationError(answered.code, answered.message, { effectsApplied: false })
       }
-      const notify = (handle: string, type: string): void =>
-        runtime.notifyMessageArrived(handle, type)
       // Chat prompts take no deny message, so the reason reaches the worker as its next mail, once.
       const reasonId = stopReportId(dispatch.id, `approval:${params.prompt}:reason`)
       const reasonMessage =

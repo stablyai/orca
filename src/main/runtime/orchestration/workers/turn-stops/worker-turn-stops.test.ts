@@ -74,6 +74,7 @@ function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcP
     },
     getHandle: () => HANDLE,
     getProcessIncarnation: () => null,
+    takeOpenApproval: () => null,
     readScreen: async () => ({
       handle: HANDLE,
       status: 'running',

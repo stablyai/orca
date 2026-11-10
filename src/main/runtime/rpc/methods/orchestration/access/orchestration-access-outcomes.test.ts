@@ -359,11 +359,10 @@ const CASES = {
 
 /** Recorded on main before the access check existed; every row must stay the same. Callers: term_owner, term_other, term_lone, term_worker. */
 const EXPECTED: Record<string, string> & Record<keyof typeof CASES, string> = {
-  // Added with the method: an agent caller can never allow, and the terminal worker here has no chat prompt.
+  // Added with the method: an agent caller can never allow, and the terminal worker here has no waiting prompt.
   approvalAllow:
     'approval_requires_person approval_requires_person approval_requires_person approval_requires_person',
-  approvalDeny:
-    'approval_unsupported approval_unsupported approval_unsupported approval_unsupported',
+  approvalDeny: 'approval_not_open approval_not_open approval_not_open approval_not_open',
   approvalDenyNoReason: 'invalid_argument invalid_argument invalid_argument invalid_argument',
   ask: 'dispatch_inactive dispatch_inactive dispatch_inactive dispatch_run_mismatch',
   callerShow: 'ok ok ok ok',

@@ -207,7 +207,8 @@ export function chatWorkerTurnStopReporter(
                 from,
                 stopKey: stop.stopKey,
                 reason: stop.reason,
-                lastOutput: status?.lastAssistantMessage,
+                // The payload names the prompt; the agent's prose before it adds nothing.
+                lastOutput: payload ? undefined : status?.lastAssistantMessage,
                 ...(stop.waitingOn ? { waitingOn: payload ? 'approval' : stop.waitingOn } : {}),
                 ...(payload ? { approval: payload } : {})
               },
