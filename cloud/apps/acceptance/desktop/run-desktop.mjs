@@ -1029,7 +1029,7 @@ async function main() {
     results.notes.push('test repo not clonable here; used a local repo with the same origin URL')
   }
   created.tmp = tmp
-  if (process.env.W9D_ONLY === 'run-actions') {
+  if (process.env.W9D_ONLY === 'run-actions' || process.env.W9D_ONLY === 'run-ports2') {
     writeFileSync(path.join(repoDir, 'orca.yaml'), runActionsYaml(tmp))
     execFileSync('git', ['-C', repoDir, 'add', 'orca.yaml'], { stdio: 'ignore' })
     execFileSync('git', ['-C', repoDir, '-c', 'user.email=w9@orca.dev', '-c', 'user.name=W9', 'commit', '-qm', 'orca.yaml run actions'], { stdio: 'ignore' })
@@ -2024,7 +2024,7 @@ async function runMenuItem(step, actionName, item) {
       const isItem = el.getAttribute('role') === 'menuitem'
       const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
       if (!isItem && el.children.length <= 3 && text.startsWith(actionName) && !text.startsWith(`${actionName} `.repeat(2))) under = true
-      else if (!isItem && under && el.children.length <= 3 && /^(Web|Echo loop)\b/.test(text) && !text.startsWith(actionName)) under = false
+      else if (!isItem && under && el.children.length <= 3 && /^(Web|Echo loop|Env)\b/.test(text) && !text.startsWith(actionName)) under = false
       if (under && isItem && text === item) {
         el.setAttribute('data-w9d-run-item', '1')
         return 'ok'
@@ -2034,6 +2034,203 @@ async function runMenuItem(step, actionName, item) {
   }, { actionName, item })
   if (found !== 'ok') throw new Error(`menu item "${item}" under ${actionName}: ${found}; menu ${step.lastRunMenu}`)
   await page.locator('[data-w9d-run-item="1"]').first().click()
+}
+
+/** #233: nonconcurrent stops only the same action elsewhere; cloud port block is 3000 and stable. */
+async function runPorts2Flow() {
+  const A = `${wsName}-a`
+  const B = `${wsName}-b`
+  const wsA = {}
+  const wsB = {}
+  await runStep('run.nonconcurrent', 'echo-loop (nonconcurrent) started in B stops echo-loop in A; concurrent web keeps running and serving in A and B (#233)', async (step) => {
+    Object.assign(wsA, await createLocalWorktree(step, A))
+    await waitFor(step, async () => (await runOf(wsA.id, 'web'))?.status === 'running', 90_000)
+    Object.assign(wsB, await createLocalWorktree(step, B))
+    await waitFor(step, async () => (await runOf(wsB.id, 'web'))?.status === 'running', 90_000)
+    const envA = await terminalEnv(step, A)
+    const envB = await terminalEnv(step, B)
+    wsA.port = Number(envA?.ORCA_PORT)
+    wsB.port = Number(envB?.ORCA_PORT)
+    step.ports = { A: wsA.port, B: wsB.port }
+    step.before = { webA: (await runOf(wsA.id, 'web'))?.status, webB: (await runOf(wsB.id, 'web'))?.status, serveA: await httpOk(wsA.port), serveB: await httpOk(wsB.port) }
+    await (await rowOf(A, 'local')).click()
+    await sleep(800)
+    await runMenuItem(step, 'Echo loop', 'Run')
+    const aOn = await waitFor(step, async () => (await runOf(wsA.id, 'echo-loop'))?.status === 'running', 20_000)
+    await (await rowOf(B, 'local')).click()
+    await sleep(800)
+    const t0 = Date.now()
+    await runMenuItem(step, 'Echo loop', 'Run')
+    const res = await waitFor(step, async () => {
+      const a = await runOf(wsA.id, 'echo-loop')
+      const b = await runOf(wsB.id, 'echo-loop')
+      return b?.status === 'running' && (!a || a.status === 'stopped' || a.status === 'exited') ? true : null
+    }, 20_000)
+    step.timings.bStartToAStoppedMs = res.v ? Date.now() - t0 : null
+    await sleep(3000)
+    step.after = {
+      echoA: (await runOf(wsA.id, 'echo-loop'))?.status ?? 'gone',
+      echoB: (await runOf(wsB.id, 'echo-loop'))?.status ?? 'gone',
+      webA: (await runOf(wsA.id, 'web'))?.status ?? 'gone',
+      webB: (await runOf(wsB.id, 'web'))?.status ?? 'gone',
+      serveA: await httpOk(wsA.port),
+      serveB: await httpOk(wsB.port)
+    }
+    await runMenu(step)
+    await shot(step, 'b-menu')
+    await page.keyboard.press('Escape')
+    const webKept = step.after.webA === 'running' && step.after.webB === 'running' && step.after.serveA === 200 && step.after.serveB === 200
+    step.status = aOn.v && res.v && webKept ? 'pass' : 'fail'
+    step.detail = `ports A ${wsA.port}, B ${wsB.port}; before ${JSON.stringify(step.before)}; echo-loop in A running: ${Boolean(aOn.v)}; started in B -> A's echo-loop stopped in ${step.timings.bStartToAStoppedMs}ms; after ${JSON.stringify(step.after)} (web kept running and serving in both: ${webKept})`
+  })
+
+  // ---- cloud: ORCA_PORT=3000 for the first workspace's terminal and run action, also after Sleep -> wake.
+  await store(() => window.__store.getState().connectCurrentOrcaProfile())
+  await sleep(1500)
+  let cws = null
+  await runStep('run.ports', 'Cloud: the first workspace terminal and run action see ORCA_PORT=3000, still 3000 after Sleep -> wake; a second worktree on the same VM gets another block (if the UI allows)', async (step) => {
+    const sub = {}
+    step.substeps = sub
+    const w = await createExtraWorkspace(step, `${wsName}-cl`, { blankAgent: true })
+    const wt = await worktreeByName(w.name)
+    cws = { ...w, id: wt?.id }
+    step.sandboxId = w.sandboxId
+    const repoPath = await store((id) => { const s = window.__store.getState(); const r = s.repos.find((x) => (s.worktreesByRepo?.[x.id] ?? []).some((t) => t.id === id)); return r?.path ?? null }, cws.id)
+    step.cloudRepoPath = repoPath
+    // orca.yaml in the VM's primary checkout (committed there, so worktrees made from it have it too).
+    const yaml = [
+      'scripts:',
+      '  setup: "echo SETUP P=$ORCA_PORT C=$ORCA_PORT_COUNT K=$CONDUCTOR_PORT > /tmp/w9-setup-env-$(basename $PWD)"',
+      '  run:',
+      '    env:',
+      '      command: "echo RUNENV P=$ORCA_PORT C=$ORCA_PORT_COUNT K=$CONDUCTOR_PORT; sleep 600"',
+      '      default: true',
+      ''
+    ].join('\n')
+    const b64 = Buffer.from(yaml).toString('base64')
+    await openNewTerminalTab()
+    await waitShellPrompt(90_000)
+    await focusTerminal()
+    const rp = repoPath ?? '/vercel/sandbox/project'
+    await page.keyboard.type(`clear; echo ${b64} | base64 -d > ${rp}/orca.yaml && git -C ${rp} add orca.yaml && git -C ${rp} -c user.email=w9@orca.dev -c user.name=W9 commit -qm w9-orca-yaml && cp ${rp}/orca.yaml ./orca.yaml && echo YAMLOK; echo W9ENV P=$ORCA_PORT C=$ORCA_PORT_COUNT K=$CONDUCTOR_PORT\n`)
+    // The VM's port registry and orcad build, to explain which workspace holds the launcher's block.
+    await sleep(1500)
+    await page.keyboard.type('clear; echo W9REG; cat /vercel/.orcad-data/workspace-port-blocks.json; echo; echo W9REGEND\n')
+    const reg = await waitFor(step, async () => (await visibleTerminals()).join('\n').match(/W9REG\s*\n([\s\S]*?)\n\s*W9REGEND/)?.[1]?.replace(/\s+/g, ' ') ?? null, 15_000)
+    step.vmRegistry = reg.v
+    await focusTerminal()
+    await page.keyboard.type('clear; echo W9ENV P=$ORCA_PORT C=$ORCA_PORT_COUNT K=$CONDUCTOR_PORT\n')
+    const env1 = await waitFor(step, async () => {
+      const m = (await visibleTerminals()).join('\n').match(/W9ENV P=(\d*) C=(\d*) K=(\d*)\s*$/m)
+      return m ? { ORCA_PORT: m[1], ORCA_PORT_COUNT: m[2], CONDUCTOR_PORT: m[3] } : null
+    }, 30_000)
+    step.terminalEnv = env1.v
+    sub.terminal3000 = env1.v?.ORCA_PORT === '3000' && env1.v?.ORCA_PORT_COUNT === '10' && env1.v?.CONDUCTOR_PORT === '3000'
+    // Run action env.
+    await (await rowOf(A, 'local')).click()
+    await sleep(800)
+    await (await rowOf(cws.name)).click()
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await waitFor(step, async () => /Env/.test(await runButton().innerText().catch(() => '')), 30_000)
+    const readRunEnv = async () => {
+      const r = await waitFor(step, async () => {
+        const m = (await visibleTerminals()).join('\n').match(/RUNENV P=(\d*) C=(\d*) K=(\d*)/)
+        return m ? { ORCA_PORT: m[1], ORCA_PORT_COUNT: m[2], CONDUCTOR_PORT: m[3] } : null
+      }, 30_000)
+      return r.v
+    }
+    await runButton().getByRole('button', { name: /^Run Env/ }).click()
+    await waitFor(step, async () => (await runOf(cws.id, 'env'))?.status === 'running', 60_000)
+    step.runActionEnv = await readRunEnv()
+    sub.runAction3000 = step.runActionEnv?.ORCA_PORT === '3000'
+    await shot(step, 'run-env')
+    step.setupEnvFirst = 'not testable: the first workspace is created from the GitHub test repo, which has no orca.yaml, so no setup runs for it'
+    // Sleep -> wake, then terminal + run action again.
+    await openRowMenu(cws.name)
+    await page.getByRole('menuitem', { name: /^(Suspend VM|Sleep)$/ }).first().click()
+    await page.getByRole('dialog').getByRole('button', { name: /^(Sleep|Suspend)/ }).click({ timeout: 1500 }).catch(() => {})
+    const asleep = await waitSandboxStatus(cws.sandboxId, ['suspended', 'sleeping', 'stopped'], 180_000)
+    step.timings.sleepMs = asleep.ms
+    await sleep(2000)
+    const tabBeforeSleep = (await runOf(cws.id, 'env'))?.tabId
+    const t0 = Date.now()
+    await (await rowOf(cws.name)).click()
+    // Back = relaunched in a new tab after the wake.
+    const back = await waitFor(step, async () => { const r = await runOf(cws.id, 'env'); return r?.status === 'running' && r.tabId !== tabBeforeSleep }, 180_000)
+    step.timings.wakeClickToRunActionBackMs = back.v ? Date.now() - t0 : null
+    await page.getByText('Run: Env', { exact: true }).first().click().catch(() => {})
+    await sleep(1000)
+    step.runActionEnvAfterWake = await readRunEnv()
+    await openNewTerminalTab()
+    await waitShellPrompt(90_000)
+    await focusTerminal()
+    await page.keyboard.type('clear; echo W9ENV P=$ORCA_PORT C=$ORCA_PORT_COUNT K=$CONDUCTOR_PORT\n')
+    const env2 = await waitFor(step, async () => {
+      const m = (await visibleTerminals()).join('\n').match(/W9ENV P=(\d*) C=(\d*) K=(\d*)\s*$/m)
+      return m ? { ORCA_PORT: m[1], ORCA_PORT_COUNT: m[2], CONDUCTOR_PORT: m[3] } : null
+    }, 30_000)
+    step.terminalEnvAfterWake = env2.v
+    sub.stillAfterWake = env2.v?.ORCA_PORT === '3000' && step.runActionEnvAfterWake?.ORCA_PORT === '3000'
+    await shot(step, 'after-wake')
+    // A second worktree on the same VM: offered by the composer?
+    const d = await openComposer(step, 'second-worktree-composer')
+    await d.getByRole('combobox', { name: 'Run on' }).click()
+    const targets = page.getByRole('listbox', { name: 'Run targets' })
+    await targets.waitFor()
+    step.runTargetsWithCloud = (await targets.getByRole('option').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+    await shot(step, 'run-targets')
+    // Only a target for the existing VM counts (not "Orca Cloud", which starts a new sandbox).
+    const sameVm = targets.getByRole('option').filter({ hasText: new RegExp(`${cws.name}|sandbox ·|environment`, 'i') }).filter({ hasNotText: /Orca Cloud|Local Mac|Connect/ }).first()
+    if (await sameVm.isVisible().catch(() => false)) {
+      step.secondWorktree = 'offered'
+      await sameVm.click()
+      await selectBlankAgent(d)
+      const n2 = `${wsName}-cl2`
+      await fillName(d, n2)
+      await d.getByRole('button', { name: /^Create/ }).click()
+      const w2 = await waitFor(step, () => worktreeByName(n2), 120_000)
+      if (w2.v) {
+        await openNewTerminalTab()
+        await waitShellPrompt(90_000)
+        await focusTerminal()
+        await page.keyboard.type('clear; echo W9ENV P=$ORCA_PORT C=$ORCA_PORT_COUNT K=$CONDUCTOR_PORT; cat /tmp/w9-setup-env-* 2>/dev/null\n')
+        const env3 = await waitFor(step, async () => {
+          const m = (await visibleTerminals()).join('\n').match(/W9ENV P=(\d*) C=(\d*) K=(\d*)/)
+          return m ? { ORCA_PORT: m[1], ORCA_PORT_COUNT: m[2], CONDUCTOR_PORT: m[3] } : null
+        }, 30_000)
+        step.secondWorktreeEnv = env3.v
+        step.setupEnvLines = ((await visibleTerminals()).join('\n').match(/SETUP P=\S* C=\S* K=\S*/g) ?? [])
+        sub.secondWorktreeOtherBlock = Boolean(env3.v?.ORCA_PORT) && env3.v.ORCA_PORT !== '3000'
+      } else {
+        step.secondWorktree = 'offered, but no worktree appeared within 120s'
+      }
+    } else {
+      step.secondWorktree = 'not testable: the composer offers no target for an existing cloud VM (only a new Orca Cloud sandbox)'
+      await page.keyboard.press('Escape').catch(() => {})
+      await page.keyboard.press('Escape').catch(() => {})
+    }
+    step.status = Object.values(sub).every(Boolean) ? 'pass' : 'fail'
+    step.detail = `cloud first workspace: terminal ${JSON.stringify(step.terminalEnv)}, run action ${JSON.stringify(step.runActionEnv)}; Sleep -> ${asleep.status} ${asleep.ms}ms; click to wake -> run action back ${step.timings.wakeClickToRunActionBackMs}ms, then terminal ${JSON.stringify(step.terminalEnvAfterWake)}, run action ${JSON.stringify(step.runActionEnvAfterWake)}; setup: ${step.setupEnvFirst}; second worktree on the same VM: ${step.secondWorktree}${step.secondWorktreeEnv ? ` -> ${JSON.stringify(step.secondWorktreeEnv)}, setup env ${JSON.stringify(step.setupEnvLines)}` : ''}; run targets ${JSON.stringify(step.runTargetsWithCloud)}; ${JSON.stringify(sub)}`
+  })
+
+  if (cws) {
+    await runStep('life.destroy', 'Delete the cloud workspace', async (step) => {
+      step.sandboxId = cws.sandboxId
+      await page.keyboard.press('Escape').catch(() => {})
+      const o = await uiDelete(step, cws.name, 'delete', 120_000)
+      const w = await waitSandboxStatus(cws.sandboxId, ['destroyed'], 120_000)
+      step.status = o.kind === 'removed' && w.status === 'destroyed' ? 'pass' : 'fail'
+      step.detail = `UI Delete -> ${o.kind} in ${o.ms}ms; sandbox -> ${w.status}`
+    })
+  }
+  for (const n of [A, B]) {
+    if (await rowShown(n, 'local')) {
+      await openRowMenu(n, 'local').catch(() => {})
+      await page.getByRole('menuitem', { name: /^Delete/ }).click().catch(() => {})
+      await page.getByRole('dialog').getByRole('button', { name: /^(Force )?Delete( Workspace)?$/ }).first().click().catch(() => {})
+      await waitRowGone(n, 'local', 30_000).catch(() => {})
+    }
+  }
 }
 
 async function runActionsFlow() {
@@ -2309,6 +2506,10 @@ async function runActionsFlow() {
  * and a normal Delete.
  */
 async function targetedFlow() {
+  if (process.env.W9D_ONLY === 'run-ports2') {
+    await runPorts2Flow()
+    return
+  }
   if (process.env.W9D_ONLY === 'run-actions') {
     await runActionsFlow()
     return

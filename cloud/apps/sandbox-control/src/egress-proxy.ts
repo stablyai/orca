@@ -35,7 +35,12 @@ export const NO_CREDENTIALS: CredentialBroker = { authorizationFor: async () => 
 export type ProxiedRoute = {
   header: string
   placeholders: readonly string[]
-  credential: () => Promise<string | null>
+  /** The header value, or null (refused), or `{ deny }` to refuse with a specific reason. */
+  credential: () => Promise<string | null | { deny: string }>
+  /** Extra headers set with the credential (e.g. an account id the client can't know). */
+  extraHeaders?: () => Record<string, string>
+  /** Sees the provider's status (e.g. a 401 revokes an account credential). Never sees the body. */
+  onUpstreamStatus?: (status: number) => void
   /** Narrows where this credential may be used (member tokens: the workspace repository only). */
   pathAllowed?: (method: string, path: string) => boolean
   /** The reply must be a JSON object; only these top-level fields pass (no refresh token for the VM). */
@@ -134,6 +139,9 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (!credential) {
     return deny('credential_unavailable')
   }
+  if (typeof credential !== 'string') {
+    return deny(credential.deny)
+  }
   const headers = new Headers(request.headers)
   for (const name of DROP_HEADERS) {
     headers.delete(name)
@@ -145,6 +153,9 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     }
   }
   headers.set(route.header, credential)
+  for (const [name, value] of Object.entries(route.extraHeaders?.() ?? {})) {
+    headers.set(name, value)
+  }
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
   const upstream = await (deps.fetch ?? fetch)(`https://${host}${path}`, {
     method: request.method,
@@ -156,6 +167,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   console.log(
     JSON.stringify({ event: 'egress_swap', sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status })
   )
+  route.onUpstreamStatus?.(upstream.status)
   if (route.keepResponseFields) {
     return onlyFields(upstream, route.keepResponseFields)
   }

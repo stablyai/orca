@@ -48,22 +48,22 @@ export function denyReasonCopy(
     case 'included_hours_exhausted':
       return canManage
         ? t(
-            'auto.components.billing.reasonExhausted3',
-            'Out of sandbox hours for this month. Turn on overage to keep starting sandboxes. Your files are safe.'
+            'auto.components.billing.reasonExhausted4',
+            'Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Turn on overage to start sandboxes again.'
           )
         : t(
-            'auto.components.billing.reasonExhaustedMember2',
-            'Out of sandbox hours for this month. Ask an owner or admin to add hours. Your files are safe.'
+            'auto.components.billing.reasonExhaustedMember3',
+            'Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to add hours.'
           )
     case 'overage_cap_reached':
       return canManage
         ? t(
-            'auto.components.billing.reasonCapAdmin2',
-            'Spend cap reached. Raise the monthly spend cap to keep starting sandboxes. Your files are safe.'
+            'auto.components.billing.reasonCapAdmin3',
+            'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Raise the monthly spend cap to start sandboxes again.'
           )
         : t(
-            'auto.components.billing.reasonCapMember3',
-            'Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.'
+            'auto.components.billing.reasonCapMember4',
+            'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to raise the spend cap.'
           )
   }
 }
@@ -96,6 +96,11 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
       return t(
         'auto.components.billing.openAlreadySubscribed',
         'This account already has a plan. Use Manage billing to change it.'
+      )
+    case 'team-required':
+      return t(
+        'auto.components.billing.openTeamRequired',
+        'Plans belong to a team. Create a team, then choose a plan.'
       )
     case 'no-billing-account':
       return t(

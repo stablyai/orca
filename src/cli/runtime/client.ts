@@ -9,6 +9,7 @@ import {
 } from '../../shared/orchestration/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './open-local-orca'
+import { runtimeBuildFields } from './runtime-build-fields'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import {
   getCliStatus,
@@ -247,7 +248,7 @@ export class RuntimeClient {
               status: response.result
             }),
             runtimeId: response.result.runtimeId,
-            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+            ...runtimeBuildFields(response.result),
             ...(response.result.remoteUpdateSupport
               ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
               : {}),

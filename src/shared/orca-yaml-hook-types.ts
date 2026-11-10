@@ -26,8 +26,8 @@ export type OrcaWorktreeDefaults = {
 
 /**
  * `concurrent`: the action may run in several workspaces at once.
- * `nonconcurrent`: starting it first stops every other running action of the same project,
- * for projects that share one fixed port, database or container stack.
+ * `nonconcurrent`: starting it first stops the same action running in the project's other
+ * workspaces, for projects that share one fixed port, database or container stack.
  */
 export type OrcaRunMode = 'concurrent' | 'nonconcurrent'
 

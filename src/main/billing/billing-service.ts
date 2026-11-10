@@ -9,7 +9,8 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
-  OrcaBillingStatusResult
+  OrcaBillingStatusResult,
+  OrcaBillingTeamPlansResult
 } from '../../shared/orca-billing'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
@@ -19,6 +20,7 @@ import {
   createCheckoutUrl,
   createPortalUrl,
   fetchEntitlement,
+  fetchTeamPlans,
   mintBillingToken,
   updateOverage,
   type BillingEndpoints
@@ -104,6 +106,22 @@ function prepare(userDataPath: string): Ready {
   }
 }
 
+/**
+ * Runs one billing-service call with a fresh billing token for the active profile (cloud setup
+ * uses it for its session calls). 'signed-out' when there is no usable Orca session.
+ */
+export async function withBillingToken<T>(
+  userDataPath: string,
+  call: (token: string, endpoints: BillingEndpoints) => Promise<T>
+): Promise<{ status: 'ok'; value: T } | { status: 'unconfigured' | 'signed-out' }> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  const value = await ready.run(call)
+  return value === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', value }
+}
+
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBillingStatusResult> {
@@ -119,6 +137,26 @@ export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBi
   }
 }
 
+/** Plan state for other teams the signed-in user is on (cloud start B2); never switches teams. */
+export async function getOrcaBillingTeamPlans(
+  userDataPath: string,
+  orgIds: readonly string[]
+): Promise<OrcaBillingTeamPlansResult> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  if (orgIds.length === 0) {
+    return { status: 'ok', teams: [] }
+  }
+  try {
+    const teams = await ready.run((token, endpoints) => fetchTeamPlans(endpoints, token, orgIds))
+    return teams === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', teams }
+  } catch (error) {
+    return { status: 'failed', error: message(error) }
+  }
+}
+
 function openResultForError(error: unknown): OrcaBillingOpenResult {
   if (error instanceof BillingServiceError) {
     if (error.statusCode === 403) {
@@ -129,6 +167,9 @@ function openResultForError(error: unknown): OrcaBillingOpenResult {
     }
     if (error.errorCode === 'no_billing_account') {
       return { status: 'no-billing-account' }
+    }
+    if (error.errorCode === 'team_required') {
+      return { status: 'team-required' }
     }
   }
   return { status: 'failed', error: message(error) }
@@ -161,11 +202,25 @@ async function openHosted(
   }
 }
 
-export function openOrcaBillingCheckout(
+export async function openOrcaBillingCheckout(
   userDataPath: string,
   args: OrcaBillingCheckoutArgs
 ): Promise<OrcaBillingOpenResult> {
-  return openHosted(userDataPath, (token, endpoints) => createCheckoutUrl(endpoints, token, args))
+  const result = await openHosted(userDataPath, (token, endpoints) =>
+    createCheckoutUrl(endpoints, token, args)
+  )
+  // A setup session for another team or user (or an expired one) must not block buying.
+  if (
+    args.setupSessionId &&
+    result.status === 'failed' &&
+    /setup_session_mismatch/.test(result.error)
+  ) {
+    const { setupSessionId: _dropped, ...plain } = args
+    return openHosted(userDataPath, (token, endpoints) =>
+      createCheckoutUrl(endpoints, token, plain)
+    )
+  }
+  return result
 }
 
 export function openOrcaBillingPortal(userDataPath: string): Promise<OrcaBillingOpenResult> {

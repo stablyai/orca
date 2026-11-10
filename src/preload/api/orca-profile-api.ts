@@ -1,4 +1,10 @@
 import type {
+  CloudSetupGetResult,
+  CloudSetupLinkResult,
+  CloudSetupStartArgs,
+  CloudSetupStartResult
+} from '../../shared/orca-cloud-setup'
+import type {
   OrcaProfileOrgCreateArgs,
   OrcaProfileOrgCreateResult,
   OrcaProfileOrgLeaveArgs
@@ -36,8 +42,10 @@ import type {
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingReturn,
-  OrcaBillingStatusResult
+  OrcaBillingStatusResult,
+  OrcaBillingTeamPlansResult
 } from '../../shared/orca-billing'
+import type { OrcaCloudSetupReturn } from '../../shared/orca-cloud-setup-link'
 
 export type OrcaProfileApi = {
   list: () => Promise<OrcaProfileListResult>
@@ -87,12 +95,22 @@ export type OrcaProfileApi = {
   orgCreate: (args: OrcaProfileOrgCreateArgs) => Promise<OrcaProfileOrgCreateResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
+  /** Fires when the setup done page opens orca://cloud/setup/return?session=… (N9). */
+  onCloudSetupReturn: (callback: (event: OrcaCloudSetupReturn) => void) => () => void
   /** Plan & billing for the signed-in account (Orca Cloud billing service). */
   billingStatus: () => Promise<OrcaBillingStatusResult>
   /** Opens hosted Stripe Checkout in the browser. */
   billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
+  /** Starts Orca Cloud setup: one browser tab for sign-in, team, plan and GitHub. */
+  cloudSetupStart: (args: CloudSetupStartArgs) => Promise<CloudSetupStartResult>
+  /** The setup session's steps, for the composer's setup panel. */
+  cloudSetupGet: (args: { sessionId: string }) => Promise<CloudSetupGetResult>
+  /** "Copy setup link": a fresh one-time link to the same setup session. */
+  cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
+  /** Plan state for other teams the user is on ("Switch to <team>"); never switches teams. */
+  billingTeamPlans: (args: { orgIds: string[] }) => Promise<OrcaBillingTeamPlansResult>
   /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */
   billingSetOverage: (args: OrcaBillingOverageArgs) => Promise<OrcaBillingOverageResult>
 }

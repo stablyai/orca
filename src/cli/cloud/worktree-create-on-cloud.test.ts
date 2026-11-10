@@ -140,7 +140,7 @@ describe('worktree create --on cloud', () => {
       () => deps
     )
     expect(bodies[0]).toEqual({ name: 't', projectId: 'prj_9' })
-    expect(errs[0]).toContain('Creating an Orca Cloud workspace')
+    expect(errs[0]).toContain('Starting your cloud workspace')
   })
 
   it('refuses flags and agents a cloud workspace cannot honour, before any request', async () => {

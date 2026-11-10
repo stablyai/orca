@@ -179,10 +179,14 @@ function CloudWorkspaceRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={t('cloud.home.openWorkspace', 'Open {{title}}, {{detail}}', {
-        title: workspace.title,
-        detail: line
-      })}
+      accessibilityLabel={t(
+        'cloud.home.workspaceRowLabel',
+        'Cloud workspace, {{title}}, {{detail}}',
+        {
+          title: workspace.title,
+          detail: line
+        }
+      )}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPress}
     >

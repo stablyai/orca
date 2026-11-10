@@ -23,6 +23,7 @@ import type {
 } from '../../shared/cloud-ssh'
 import type { CloudRemoteDesktopResult } from '../../shared/hosted-sandbox/cloud-remote-desktop'
 import type { PendingVmCheckout } from '../../shared/pending-vm-checkouts'
+import type { RecipeForwardedEnvSummary } from '../../shared/ephemeral-vm-recipe-forwarded-env'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -45,6 +46,8 @@ export type EphemeralVmApi = {
       diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
     }[]
   >
+  /** Names (never values) of this computer's env that recipe create scripts receive. */
+  forwardedEnvSummary: () => Promise<RecipeForwardedEnvSummary>
   doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>
   provision: (args: {
     repoId: string

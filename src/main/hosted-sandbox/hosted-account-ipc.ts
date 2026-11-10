@@ -1,17 +1,45 @@
-// Account-level Orca Cloud calls for the window: product config (measured timings) and GitHub connect.
+// Account-level Orca Cloud calls for the window: product config (measured timings), GitHub connect,
+// repository access (cloud-start N2) and the repositories the account's GitHub installations reach.
 import { ipcMain, shell } from 'electron'
 import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
+import { githubRepoSlug, lookupGitHubRepoIds, type GitHubRepoIds } from './github-repo-ids'
 
 const CONFIG_TTL_MS = 5 * 60_000
+const SETUP_SESSION_ID = /^cs_[A-Za-z0-9_-]{22}$/
 
-export const HOSTED_ACCOUNT_CHANNELS = [CH.getConfig, CH.connectGitHub] as const
+export const HOSTED_ACCOUNT_CHANNELS = [
+  CH.getConfig,
+  CH.connectGitHub,
+  CH.getRepoAccess,
+  CH.listGitHubRepositories
+] as const
+
+type RepoArgs = { repoUrl?: unknown; setupSessionId?: unknown } | undefined
+
+/** A https://github.com/<owner>/<repo> URL and a well-formed setup session id, or nothing. */
+function repoTarget(args: RepoArgs): { repo: string; setupSessionId?: string } | null {
+  const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
+  if (!slug) {
+    return null
+  }
+  const session =
+    typeof args?.setupSessionId === 'string' && SETUP_SESSION_ID.test(args.setupSessionId)
+      ? args.setupSessionId
+      : undefined
+  return { repo: `https://github.com/${slug}`, ...(session ? { setupSessionId: session } : {}) }
+}
 
 export function registerHostedAccountHandlers(
-  client: Pick<HostedSandboxControlPlaneClient, 'config' | 'connectGitHub'>
+  client: Pick<
+    HostedSandboxControlPlaneClient,
+    'config' | 'connectGitHub' | 'githubRepoAccess' | 'githubRepositories'
+  >,
+  options: { repoIds?: (repoUrl: string) => Promise<GitHubRepoIds | null> } = {}
 ): void {
+  const repoIds = options.repoIds ?? lookupGitHubRepoIds
   // The Worker re-measures every 5 minutes; match it so each new build sheet sees a fresh median.
   let config: { at: number; value: Promise<HostedSandboxConfigResponse | null> } | null = null
   ipcMain.handle(CH.getConfig, () => {
@@ -32,15 +60,51 @@ export function registerHostedAccountHandlers(
     return config.value
   })
 
-  ipcMain.handle(CH.connectGitHub, async () => {
+  ipcMain.handle(CH.connectGitHub, async (_event, args?: RepoArgs) => {
     try {
-      const { installUrl } = await client.connectGitHub()
+      const target = repoTarget(args)
+      const ids = target ? await repoIds(target.repo) : null
+      const { installUrl } = await client.connectGitHub(
+        undefined,
+        target ? { ...target, ...ids } : undefined
+      )
       // Only ever hand the browser a GitHub page, whatever the response says.
       if (new URL(installUrl).origin !== 'https://github.com') {
         return { ok: false, code: 'failed', message: 'Unexpected GitHub connect URL.' }
       }
       await shell.openExternal(installUrl)
       return { ok: true, value: null }
+    } catch (error) {
+      return failure(error)
+    }
+  })
+
+  ipcMain.handle(CH.getRepoAccess, async (_event, args?: RepoArgs) => {
+    const target = repoTarget(args)
+    if (!target) {
+      return { ok: false, code: 'failed', message: 'Not a GitHub repository.' }
+    }
+    try {
+      const answer = await client.githubRepoAccess(target)
+      if (answer.access !== 'missing') {
+        return { ok: true, value: answer }
+      }
+      // Missing: ask again with the ids GitHub's install page needs to preselect only this repo.
+      const ids = await repoIds(target.repo)
+      const value = ids ? await client.githubRepoAccess({ ...target, ...ids }) : answer
+      if (value.installUrl && new URL(value.installUrl).origin !== 'https://github.com') {
+        return { ok: true, value: { ...value, installUrl: undefined } }
+      }
+      return { ok: true, value }
+    } catch (error) {
+      return failure(error)
+    }
+  })
+
+  ipcMain.handle(CH.listGitHubRepositories, async (_event, args?: { cursor?: unknown }) => {
+    try {
+      const cursor = typeof args?.cursor === 'string' ? args.cursor : null
+      return { ok: true, value: await client.githubRepositories(cursor) }
     } catch (error) {
       return failure(error)
     }

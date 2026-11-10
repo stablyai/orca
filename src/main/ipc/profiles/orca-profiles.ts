@@ -325,5 +325,5 @@ export function registerOrcaProfileHandlers(
   )
 
   registerOrcaProfileOrgMemberHandlers()
-  registerOrcaProfileBillingHandlers()
+  registerOrcaProfileBillingHandlers(store)
 }

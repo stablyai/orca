@@ -102,7 +102,7 @@ function CurrentPlanStrip({
   const resets = entitlement.usageWindow
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(entitlement.usageWindow.end)
     : null
-  const warning = usageWarningLine(entitlement, t)
+  const warning = usageWarningLine(entitlement, t, locale)
   return (
     <div className="space-y-2 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center gap-2 text-sm">

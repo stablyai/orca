@@ -39,7 +39,7 @@ export const CLOUD_ENV_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca cloud env build [--wait] [--env <name|id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'env', 'wait'],
     notes: [
-      'A build boots a VM, clones the repos, runs the install script and snapshots the result. A succeeded build becomes the active one new workspaces start from.',
+      'A build starts a sandbox, clones the repos, runs the install script and saves a snapshot. A successful build becomes the one new workspaces start from.',
       '--wait streams the log to stdout/stderr and exits 1 unless the build succeeds, printing the failed step and error. With --json it prints the final build and the end of the log instead.',
       'Interrupting --wait leaves the build running; follow it again with `orca cloud env logs <number>`.',
       ENV_NOTE

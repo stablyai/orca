@@ -21,7 +21,7 @@ import {
   type RunActionTarget,
   type WorktreeRunActions
 } from './run-action-config'
-import { findLiveRunTabId, sameRunTab } from './run-action-tabs'
+import { findLiveRunTabId, runPanePtyId, sameRunTab } from './run-action-tabs'
 
 /** Conductor's grace period: an interrupted dev server gets this long before its shell is closed. */
 export const RUN_ACTION_STOP_GRACE_MS = 5_000
@@ -101,8 +101,7 @@ async function stopRunActionOnce(worktreeId: string, actionId: string): Promise<
     return
   }
   const state = useAppStore.getState()
-  const liveTabId = findLiveRunTabId(state, worktreeId, run.tabId)
-  const ptyId = liveTabId ? state.ptyIdsByTabId[liveTabId]?.[0] : undefined
+  const ptyId = runPanePtyId(state, worktreeId, run.tabId, run.leafId)
   if (!ptyId) {
     deleteRunActionRun(worktreeId, actionId)
     return
@@ -124,12 +123,14 @@ async function stopConflictingRuns(
   if (effectiveRunMode(action, scripts) !== 'nonconcurrent') {
     return
   }
-  // nonconcurrent: the project shares one port/database/stack, so any other live action must stop first.
+  // nonconcurrent (Conductor's run_mode): the same action can't run in two workspaces of the project
+  // at once (one fixed port, database or stack). Other actions keep running.
   const conflicting = listRunActionRuns().filter(
     (run) =>
       run.repoId === target.repoId &&
-      (run.status === 'running' || run.status === 'stopping') &&
-      !(run.worktreeId === target.worktreeId && run.actionId === action.id)
+      run.actionId === action.id &&
+      run.worktreeId !== target.worktreeId &&
+      (run.status === 'running' || run.status === 'stopping')
   )
   await Promise.all(conflicting.map((run) => stopRunAction(run.worktreeId, run.actionId)))
 }

@@ -181,7 +181,7 @@ describe('cloud credential resolution', () => {
         data: expect.objectContaining({
           nextSteps: [
             expect.stringContaining('orca cloud login'),
-            expect.stringContaining('vmCliEnabled')
+            expect.stringContaining('in-workspace CLI access turned on')
           ]
         })
       })
@@ -240,7 +240,7 @@ describe('cloud API error messages', () => {
 
   it('explains token expiry differently for workspace tokens and keys', () => {
     expect(cloudApiError(401, { error: 'unauthorized' }, { credentials: vm }).message).toContain(
-      'turned off for the organization'
+      'turned off for the team'
     )
     expect(cloudApiError(401, { error: 'unauthorized' }, { credentials: user }).data).toMatchObject(
       {
@@ -253,7 +253,7 @@ describe('cloud API error messages', () => {
     expect(
       cloudApiError(403, { error: 'forbidden', reason: 'own_workspace' }, { credentials: vm })
         .message
-    ).toContain('cannot sleep, archive or destroy itself')
+    ).toContain("can't sleep, archive or delete itself")
     expect(cloudApiError(404, { error: 'not_found' }, { credentials: vm }).message).toContain(
       'workspaces it created'
     )
@@ -266,7 +266,7 @@ describe('cloud API error messages', () => {
     ).toContain('workspaces:write')
     expect(
       cloudApiError(429, { error: 'rate_limited' }, { credentials: user, retryAfter: '12' }).data
-    ).toMatchObject({ retryAfterSeconds: 12, nextSteps: ['Retry in 12s.'] })
+    ).toMatchObject({ retryAfterSeconds: 12, nextSteps: ['Try again in 12 seconds.'] })
   })
 })
 
@@ -276,7 +276,7 @@ describe('orca cloud handlers', () => {
       'POST /v1/workspaces': () => [201, { workspace: workspace() }]
     })
     await createCloudHandlers(() => deps(api.fetchImpl))['cloud workspace create'](
-      ctx({ name: 'child', repo: 'git@github.com:acme/app.git', ref: 'main', size: 'large' })
+      ctx({ name: 'child', repo: 'git@github.com:acme/app.git', ref: 'main' })
     )
     expect(api.calls[0]).toMatchObject({
       method: 'POST',
@@ -284,8 +284,7 @@ describe('orca cloud handlers', () => {
       auth: 'Bearer orca_sk_test',
       body: {
         name: 'child',
-        repo: { url: 'https://github.com/acme/app.git', ref: 'main' },
-        machineSize: 'large'
+        repo: { url: 'https://github.com/acme/app.git', ref: 'main' }
       }
     })
     const out = lastJson()
@@ -326,9 +325,6 @@ describe('orca cloud handlers', () => {
     await expect(
       handlers['cloud workspace create'](ctx({ agent: 'gpt', prompt: 'x' }))
     ).rejects.toThrow('--agent must be one of: claude, codex')
-    await expect(handlers['cloud workspace create'](ctx({ size: 'huge' }))).rejects.toThrow(
-      '--size'
-    )
     await expect(
       handlers['cloud workspace create'](ctx({ repo: 'http://x.test/a' }))
     ).rejects.toThrow('https')
@@ -459,7 +455,8 @@ describe('orca cloud handlers', () => {
       )
     ).rejects.toMatchObject({
       code: 'cloud_message_failed',
-      message: expect.stringContaining('agent_launch_failed')
+      message: "Message msg_1 couldn't be delivered to the agent.",
+      data: { message: expect.objectContaining({ error: 'agent_launch_failed' }) }
     })
 
     const stuck = fakeApi({

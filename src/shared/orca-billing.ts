@@ -99,7 +99,7 @@ export type OrcaBillingEntitlement = {
   includedSeconds: number
   usedSeconds: number
   remainingIncludedSeconds: number
-  /** Highest included-hours warning level reached (80, 100), or null. */
+  /** Highest included-hours warning level reached (75, 90 or 100), or null. */
   usageWarningPercent: number | null
   overageSeconds: number
   overage: {
@@ -128,6 +128,8 @@ export type OrcaBillingCheckoutArgs = {
   plan: OrcaBillingPlanId
   interval: OrcaBillingInterval
   seats: number
+  /** The plans dialog joins an open cloud setup session: Checkout then returns to its next step. */
+  setupSessionId?: string
 }
 
 export type OrcaBillingOverageArgs = {
@@ -143,6 +145,8 @@ export type OrcaBillingOpenResult =
   | { status: 'forbidden' }
   | { status: 'already-subscribed' }
   | { status: 'no-billing-account' }
+  /** Personal account: every plan lands on a team, so the caller starts cloud setup instead. */
+  | { status: 'team-required' }
   | { status: 'failed'; error: string }
 
 export type OrcaBillingOverageResult =
@@ -154,6 +158,23 @@ export type OrcaBillingOverageResult =
   | { status: 'cap-too-high' }
   | { status: 'failed'; error: string }
 
+/** Another team the signed-in user is on, and its plan state (cloud start B2, "Switch to <team>"). */
+export type OrcaBillingTeamPlan = {
+  orgId: string
+  plan: string | null
+  planLabel: string | null
+  canStartSandbox: boolean
+}
+
+export type OrcaBillingTeamPlansResult =
+  | { status: 'ok'; teams: OrcaBillingTeamPlan[] }
+  | { status: 'unconfigured' }
+  | { status: 'signed-out' }
+  | { status: 'failed'; error: string }
+
+/** At most this many teams per lookup (the billing Worker's bound). */
+export const ORCA_BILLING_TEAM_PLANS_MAX_ORGS = 10
+
 export function isOrcaBillingPlanId(value: unknown): value is OrcaBillingPlanId {
   return ORCA_BILLING_PLAN_IDS.some((plan) => plan === value)
 }
@@ -164,6 +185,10 @@ export function isOrcaBillingInterval(value: unknown): value is OrcaBillingInter
 
 /** Where Stripe's hosted pages send the browser back: the Worker's return page opens this link. */
 export const ORCA_BILLING_RETURN_CHANNEL = 'billing:return'
+
+/** Target sent with `ui:openSettings` to land on Settings › Orca account (Plan & billing). */
+export const ORCA_PLAN_BILLING_SETTINGS_TARGET = { pane: 'orca-account' } as const
+export type OrcaOpenSettingsTarget = typeof ORCA_PLAN_BILLING_SETTINGS_TARGET
 export type OrcaBillingReturn = { kind: 'checkout-success' | 'checkout-cancel' | 'portal' }
 
 /** Parses `orca://billing/return?checkout=success|cancel` or `?portal=return`; anything else is null. */

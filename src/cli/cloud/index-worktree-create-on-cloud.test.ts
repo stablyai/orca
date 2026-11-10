@@ -147,10 +147,21 @@ describe('orca worktree create --on cloud via main()', () => {
     [
       { error: 'entitlement_denied', reason: 'included_hours_exhausted' },
       'cloud_out_of_hours',
-      'out of sandbox hours'
+      "Your team is out of sandbox hours. Running sandboxes go to sleep and new ones can't start. Nothing was created, and you weren't charged."
+    ],
+    [
+      { error: 'entitlement_denied', reason: 'overage_cap_reached' },
+      'cloud_spend_cap_reached',
+      "Your team reached its monthly spend cap. Running sandboxes go to sleep and new ones can't start. Nothing was created, and you weren't charged."
+    ],
+    [
+      { error: 'conflict', reason: 'concurrent_transition' },
+      'cloud_conflict',
+      'This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.',
+      409
     ]
-  ])('maps %o to %s with a next step', async (body, code, text) => {
-    fetchMock.mockResolvedValue(Response.json(body, { status: 403 }))
+  ])('maps %o to %s with a next step', async (body, code, text, status = 403) => {
+    fetchMock.mockResolvedValue(Response.json(body, { status }))
     await main(
       ['worktree', 'create', '--on', 'cloud', '--repo', 'https://github.com/acme/app', '--json'],
       home
@@ -183,5 +194,40 @@ describe('orca worktree create --on cloud via main()', () => {
     })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects --size before any request (there is one sandbox size)', async () => {
+    await main(['worktree', 'create', '--on', 'cloud', '--size', 'large', '--json'], home)
+    expect(process.exitCode).not.toBeUndefined()
+    expect(JSON.parse(printed())).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('prints the glossary state and the sandbox size without --json, never the raw status', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json(
+        {
+          workspace: {
+            id: 'sbx_on3',
+            name: 'fix',
+            status: 'running',
+            archived: false,
+            origin: 'api',
+            repoUrl: 'https://github.com/acme/app',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        },
+        { status: 201 }
+      )
+    )
+    await main(
+      ['worktree', 'create', '--on', 'cloud', '--repo', 'https://github.com/acme/app'],
+      home
+    )
+    expect(process.exitCode).toBeUndefined()
+    expect(printed()).toContain('State: Running')
+    expect(printed()).toContain('Sandbox size: 8 vCPU · 16 GB')
+    expect(printed()).not.toMatch(/status: running|standard/)
   })
 })

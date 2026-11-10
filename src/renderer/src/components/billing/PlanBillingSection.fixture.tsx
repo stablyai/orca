@@ -77,6 +77,27 @@ export const overageCapReached = defineFixture({
   )
 })
 
+// Overage is off by default: out of included hours, running sandboxes go to sleep.
+export const hoursUsedOverageOff = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: sampleTeam.includedSeconds,
+          remainingIncludedSeconds: 0,
+          usageWarningPercent: 100,
+          canStartSandbox: false,
+          reason: 'included_hours_exhausted'
+        }
+      }}
+    />
+  )
+})
+
 export const pastDueMember = defineFixture({
   width: 600,
   render: () => (
@@ -166,6 +187,68 @@ export const usageWarning90 = defineFixture({
           remainingIncludedSeconds: 1 * HOUR,
           usageWarningPercent: 90,
           overage: { ...sampleTeam.overage, optedIn: true, active: false }
+        }
+      }}
+    />
+  )
+})
+
+/** 100% with overage off: the alert says sandboxes sleep and points at overage (no repeat below). */
+export const usageAlert100OverageOff = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 120 * HOUR,
+          remainingIncludedSeconds: 0,
+          usageWarningPercent: 100,
+          canStartSandbox: false,
+          reason: 'included_hours_exhausted'
+        }
+      }}
+    />
+  )
+})
+
+/** 100% with overage on: the alert names the spend cap the team keeps going up to. */
+export const usageAlert100OverageOn = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 123 * HOUR,
+          remainingIncludedSeconds: 0,
+          overageSeconds: 3 * HOUR,
+          usageWarningPercent: 100,
+          overage: { ...sampleTeam.overage, optedIn: true, active: true, spentCents: 300 }
+        }
+      }}
+    />
+  )
+})
+
+/** A member at billing's 90% level: no admin usage notice (members aren't alerted). */
+export const usageWarningMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 109 * HOUR,
+          remainingIncludedSeconds: 11 * HOUR,
+          usageWarningPercent: 90,
+          canManageBilling: false
         }
       }}
     />

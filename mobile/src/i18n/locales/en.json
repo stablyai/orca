@@ -591,11 +591,12 @@
       "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
       "scanCodeTitle": "Scan the code",
       "connectedTitle": "You're connected",
-      "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
       "title": "Connect your desktop",
       "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
       "pairDesktopButton": "Pair desktop",
-      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
+      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen.",
+      "connectedCloudDescription": "Your desktop and your Orca Cloud workspaces will appear here. Everything is encrypted end-to-end.",
+      "cloudNote": "Your Orca Cloud workspaces show up here once a desktop is paired."
     },
     "listFooter": {
       "hostPickerTitle": "Open Tasks On"
@@ -1371,7 +1372,9 @@
       "child": "Child",
       "children_one": "{{count}} child",
       "children_other": "{{count}} children",
-      "unsavedName": "Unsaved name: {{name}}"
+      "unsavedName": "Unsaved name: {{name}}",
+      "cloudWorkspaceState": "Cloud workspace, {{state}}",
+      "cloudWorkspace": "Cloud workspace"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -4960,8 +4963,10 @@
       "otherPhones": "Other phones",
       "noOthers": "No other phones have access.",
       "lastUsed": "Last used {{date}}",
-      "removeLabel": "Remove {{device}}",
-      "disconnectThis": "Disconnect this phone"
+      "disconnectThis": "Disconnect this phone",
+      "deviceLabel": "{{device}}, last used {{date}}",
+      "removeHint": "Removes this phone’s access",
+      "deviceLabelConnected": "{{device}}, connected {{date}}"
     },
     "agent": {
       "label": "Agent"
@@ -5049,7 +5054,8 @@
       "missing": "This workspace is gone or you no longer have access.",
       "signIn": "Sign in to Orca Cloud on this phone",
       "signInAction": "Sign in",
-      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again."
+      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+      "signInDetail": "This link opens a cloud workspace your team shared. Sign in to see it."
     },
     "action": {
       "openSession": "Open session",
@@ -5114,8 +5120,8 @@
       "emptyDetail": "Start one here. It keeps running while this phone and your computer sleep.",
       "new": "New cloud workspace",
       "createdAgo": "Created {{ago}} ago",
-      "openWorkspace": "Open {{title}}, {{detail}}",
-      "createdJustNow": "Created just now"
+      "createdJustNow": "Created just now",
+      "workspaceRowLabel": "Cloud workspace, {{title}}, {{detail}}"
     },
     "connect": {
       "signedOut": "Sign in to Orca on {{desktop}}, then try again.",
@@ -5126,8 +5132,6 @@
       "title": "Connect Orca Cloud"
     },
     "denied": {
-      "hours": "Out of sandbox hours.",
-      "cap": "Spend cap reached.",
       "payment": "Payment failed, so new sandboxes can’t start.",
       "plan": "Orca Cloud needs a Team plan.",
       "teamLimit": "Your team is at its limit of running sandboxes (3 per seat).",
@@ -5154,8 +5158,11 @@
       "message": "{{problem}} {{safety}} {{next}}",
       "safety": {
         "create": "Nothing was created, and you weren’t charged.",
-        "existing": "Your files are safe."
-      }
+        "existing": "Your files are safe.",
+        "asleep": "Nothing is deleted, and your files are safe."
+      },
+      "hours2": "Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start.",
+      "cap2": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start."
     },
     "wake": {
       "slowQueued": "Taking longer than usual. Your files are safe. Your prompt sends as soon as it’s awake.",

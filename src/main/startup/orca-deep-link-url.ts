@@ -3,6 +3,7 @@ import { parseSkillShareId } from '../../shared/skill-share-link'
 import { parseCloudShareDeepLink } from '../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 import { parseCloudWorkspaceLink } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { parseOrcaBillingReturnLink } from '../../shared/orca-billing'
+import { parseOrcaCloudSetupReturnLink } from '../../shared/orca-cloud-setup-link'
 
 /** macOS open-url: claim only links Orca routes, so other schemes keep their default handling. */
 export function isRoutedOrcaDeepLink(url: string): boolean {
@@ -11,6 +12,7 @@ export function isRoutedOrcaDeepLink(url: string): boolean {
     isPluginInstallLinkArgument(url) ||
     parseCloudShareDeepLink(url) !== null ||
     parseCloudWorkspaceLink(url) !== null ||
-    parseOrcaBillingReturnLink(url) !== null
+    parseOrcaBillingReturnLink(url) !== null ||
+    parseOrcaCloudSetupReturnLink(url) !== null
   )
 }

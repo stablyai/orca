@@ -26,6 +26,11 @@ export type HookDeps = {
   now: () => number
   /** GITHUB_WEBHOOK_SECRET; GitHub deliveries answer 503 without it. */
   githubWebhookSecret?: string
+  /**
+   * The App's own lifecycle events (installation, installation_repositories), already verified:
+   * bindings and cloud setup (github-repo-access.ts). Routines never trigger on them.
+   */
+  onInstallationEvent?: (eventName: string, payload: unknown) => Promise<unknown>
 }
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -266,6 +271,9 @@ async function githubWebhook(request: Request, deps: HookDeps): Promise<Response
     payload = JSON.parse(body) as GitHubPayload
   } catch {
     return json({ error: 'invalid_json' }, 400)
+  }
+  if ((eventName === 'installation' || eventName === 'installation_repositories') && deps.onInstallationEvent) {
+    return json({ installation: await deps.onInstallationEvent(eventName, payload) }, 202)
   }
   const event = `${eventName}.${payload.action ?? ''}` as GitHubEventKey
   if (!GITHUB_EVENTS.includes(event)) {

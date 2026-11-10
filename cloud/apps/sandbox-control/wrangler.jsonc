@@ -17,9 +17,11 @@
     }
   ],
   // Usage settlement, lease/deadline enforcement and stuck-row reconciliation.
-  // Environment builds advance on Durable Object alarms (EnvironmentBuildRunner), not on readers.
-  "durable_objects": { "bindings": [{ "name": "ENV_BUILD_RUNNER", "class_name": "EnvironmentBuildRunner" }] },
-  "migrations": [{ "tag": "env-build-runner-v1", "new_sqlite_classes": ["EnvironmentBuildRunner"] }],
+  // Environment builds advance on Durable Object alarms (EnvironmentBuildRunner), not on readers. The
+  // runner is its own Worker (wrangler.build-runner.jsonc; `pnpm dev` runs both), see src/build-runner.ts.
+  "durable_objects": {
+    "bindings": [{ "name": "ENV_BUILD_RUNNER", "class_name": "EnvironmentBuildRunner", "script_name": "orca-sandbox-build-runner-local" }]
+  },
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": {
     "SANDBOX_ENV": "local",

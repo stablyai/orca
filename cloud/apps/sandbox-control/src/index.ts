@@ -18,6 +18,7 @@
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
+//   GET    /v1/github/repo-access?repo= | /v1/github/repositories   (see src/github-repo-access.ts)
 //   /v1/environments[/...]  org environments + versioned builds (see src/environment-routes.ts)
 //   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
 // Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
@@ -36,6 +37,8 @@ import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneRe
 import { refreshStaleEnvironments } from './environment-golden-refresh'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
+import { WorkerEntrypoint } from 'cloudflare:workers'
+import type { RunnerBuild } from './build-runner'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { cachedCreateTiming } from './create-timing'
 import { creatorLeftAccount } from './member-changes'
@@ -81,6 +84,7 @@ import {
   authorizeUrl,
   createConnectState,
   handleGitHubReturn,
+  SETUP_SESSION_ID,
   installUrl,
   isInstallationBound,
   listAccountInstallations,
@@ -88,11 +92,38 @@ import {
 } from './github-connect'
 import { GuardrailError, consumeCreateToken, guardrailsFromEnv } from './guardrails'
 import { handleOperator, isOperator } from './operator'
+import {
+  RepoAccessError,
+  billingSetupNotifier,
+  billingTrialNotifier,
+  handleInstallationEvent,
+  listAccountRepositories,
+  noticeAfterReturn,
+  repoAccess,
+  repoAccessView,
+  repoInstallUrl,
+  type RepoAccessDeps,
+  type SetupNotifier,
+  type TrialGitHubNotifier
+} from './github-repo-access'
 import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
-import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
+import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import { accountProvider, isSharedWorkspace } from './account-providers'
+import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
+import { refreshCodexLeases } from './codex-credentials'
+import {
+  AgentCredentialError,
+  PutClaudeSchema,
+  agentCredentialsView,
+  deleteAgentCredential,
+  providerEnabled,
+  putClaudeCredential,
+  markAgentCredentialRevoked,
+  readUsableAgentCredential
+} from './agent-credentials'
 import {
   AgentSourceError,
   PutOfferSchema,
@@ -191,6 +222,8 @@ export type Deps = {
   github?: GitHubAppMinter
   now?: () => number
   egressFetch?: typeof fetch
+  /** auth.openai.com token calls of the Codex lease refresher (tests). */
+  codexTokenFetch?: typeof fetch
   egressKeysForIssuer?: Parameters<typeof handleEgressProxy>[1]['keysForIssuer']
   /** GitHub OAuth/user API fetch (tests). */
   githubFetch?: typeof fetch
@@ -209,6 +242,10 @@ export type Deps = {
   onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
   /** Share-gateway fetch to the VM's share proxy (tests). */
   shareFetch?: typeof fetch
+  /** Billing setup-session notices (tests collect them). */
+  setupNotifier?: SetupNotifier
+  /** Billing trial abuse-key notices after a bind (tests collect them). */
+  trialNotifier?: TrialGitHubNotifier
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -289,6 +326,70 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
       }))
     )
   }
+  // D10/D13: re-decided per request, so a Source change, renewal, revocation, kill switch or the workspace
+  // becoming shared applies to the next request with no restart.
+  const accountRoutes = (row: SandboxRow, host: string): ProxiedRoute[] =>
+    egressAccountRoutes(row)
+      .filter((route) => route.host === host)
+      .flatMap(({ agent, owner }) => {
+        const provider = accountProvider(agent)
+        const keyring = keyringFor(env)
+        if (!provider || !keyring) {
+          return []
+        }
+        let real: string | null = null
+        return [
+          {
+            header: provider.header,
+            placeholders: [provider.format(provider.placeholder(row))],
+            label: `account:${agent}`,
+            ...(provider.pathAllowed ? { pathAllowed: provider.pathAllowed } : {}),
+            credential: async () => {
+              const now = (deps.now ?? Date.now)()
+              // The session was set up for this owner; a workspace handed to someone else never uses
+              // the new owner's account until its env is rebuilt for them.
+              if (owner !== row.user_id) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_owner_changed' }
+              }
+              if (isSharedWorkspace(row)) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_not_shared' }
+              }
+              if (!providerEnabled(env)[agent]) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_disabled' }
+              }
+              real = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
+              if (!real) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'no_agent_credential' }
+              }
+              return provider.format(real)
+            },
+            ...(provider.extraHeaders ? { extraHeaders: () => (real ? provider.extraHeaders!(real) : {}) } : {}),
+            onUpstreamStatus: (status) => {
+              if (status === 401) {
+                // The provider no longer accepts it (revoked at the source): stop using it until renewed.
+                const now = (deps.now ?? Date.now)()
+                const waitUntil = (work: Promise<unknown>) => (deps.waitUntil ? deps.waitUntil(work.catch(() => undefined)) : void work.catch(() => undefined))
+                const handled = provider.onUnauthorized
+                  ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil }))
+                  : markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now)
+                const work = handled.then(() => {
+                  forgetAccountCredential(row.user_id, agent)
+                  scheduleEnvRefresh(env, deps, row)
+                })
+                if (deps.waitUntil) {
+                  deps.waitUntil(work.catch(() => undefined))
+                } else {
+                  void work.catch(() => undefined)
+                }
+              }
+            }
+          }
+        ]
+      })
   return async (row, host) => {
     if (host === 'github.com') {
       return members.routes(row, host)
@@ -302,7 +403,129 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         ...secretRoutes(row, host)
       ]
     }
-    return secretRoutes(row, host)
+    return [...accountRoutes(row, host), ...secretRoutes(row, host)]
+  }
+}
+
+// Account credentials per person, decrypted at most once a minute per isolate; an edit or delete drops it.
+const ACCOUNT_CACHE_MS = 10_000
+const accountCache = new Map<string, { at: number; value: Promise<string | null> }>()
+function cachedAccountCredential(db: D1Database, keyring: Keyring, userId: string, agent: 'claude' | 'codex', now: number): Promise<string | null> {
+  const key = `${userId}:${agent}`
+  const hit = accountCache.get(key)
+  if (hit && now - hit.at < ACCOUNT_CACHE_MS) {
+    return hit.value
+  }
+  const value = readUsableAgentCredential(db, keyring, userId, agent, now)
+  accountCache.set(key, { at: now, value })
+  value.catch(() => accountCache.delete(key))
+  return value
+}
+export function forgetAccountCredential(userId: string, agent: 'claude' | 'codex'): void {
+  accountCache.delete(`${userId}:${agent}`)
+}
+
+/** Background env refresh for one sandbox (proxy-side self-healing when its account route stops applying). */
+const lastHealRefresh = new Map<string, number>()
+function scheduleEnvRefresh(env: Env, deps: Deps, row: SandboxRow): void {
+  const now = (deps.now ?? Date.now)()
+  if (now - (lastHealRefresh.get(row.id) ?? 0) < 60_000) {
+    return
+  }
+  lastHealRefresh.set(row.id, now)
+  if (lastHealRefresh.size > 1000) {
+    for (const [id, at] of lastHealRefresh) {
+      if (now - at >= 60_000) {
+        lastHealRefresh.delete(id)
+      }
+    }
+  }
+  const work = lifecycleDeps(env, deps).then((life) => (life ? refreshSandboxEnv(life, row) : false))
+  if (deps.waitUntil) {
+    deps.waitUntil(work.catch(() => undefined))
+  } else {
+    void work.catch(() => undefined)
+  }
+}
+
+/** Running sandboxes of this person whose session env depends on their account credential. */
+async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Promise<void> {
+  const { results } = await env.SANDBOX_DB.prepare(`SELECT * FROM sandboxes WHERE user_id = ? AND status = 'running' LIMIT 200`).bind(userId).all<SandboxRow>()
+  if (results.length === 0) {
+    return
+  }
+  const work = lifecycleDeps(env, deps).then(async (life) => {
+    if (life) {
+      for (const row of results) {
+        await refreshSandboxEnv(life, row).catch(() => false)
+      }
+    }
+  })
+  if (deps.waitUntil) {
+    deps.waitUntil(work.catch(() => undefined))
+  } else {
+    await work
+  }
+}
+
+/** Codex broker (codex-broker.ts): the lifecycle provider and keyring; null when either is missing. */
+async function codexBrokerDeps(env: Env, deps: Deps): Promise<BrokerDeps | null> {
+  const [life, keyring] = await Promise.all([lifecycleDeps(env, deps), keyringFor(env)])
+  if (!life || !keyring) {
+    return null
+  }
+  return {
+    life,
+    keyring,
+    onStored: async (userId) => {
+      forgetAccountCredential(userId, 'codex')
+      await refreshOwnersSandboxes(env, deps, userId)
+    }
+  }
+}
+
+async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
+  const db = env.SANDBOX_DB
+  const now = (deps.now ?? Date.now)()
+  const noStore = (body: unknown) => Response.json(body, { headers: { 'cache-control': 'no-store' } })
+  const keyring = keyringFor(env)
+  if (!keyring) {
+    return fail('not_configured', 503)
+  }
+  try {
+    if (request.method === 'GET' && url.pathname === '/v1/agent-credentials') {
+      return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    if (request.method === 'PUT' && url.pathname === '/v1/agent-credentials/claude') {
+      const body = PutClaudeSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      await putClaudeCredential(db, await keyring, env, caller, body.data, now)
+      forgetAccountCredential(caller.userId, 'claude')
+      await refreshOwnersSandboxes(env, deps, caller.userId)
+      return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    if (url.pathname === '/v1/agent-credentials/codex/broker' || url.pathname.startsWith('/v1/agent-credentials/codex/broker/')) {
+      return await handleCodexBrokerRoute(request, url, { enabled: providerEnabled(env).codex, deps: await codexBrokerDeps(env, deps), caller })
+    }
+    const del = /^\/v1\/agent-credentials\/(claude|codex)$/.exec(url.pathname)
+    if (request.method === 'DELETE' && del) {
+      const agent = del[1] as 'claude' | 'codex'
+      if (!(await deleteAgentCredential(db, caller.userId, agent))) {
+        return fail('not_found', 404)
+      }
+      forgetAccountCredential(caller.userId, agent)
+      console.log(JSON.stringify({ event: 'agent_credential_deleted', agent, by: caller.userId }))
+      await refreshOwnersSandboxes(env, deps, caller.userId)
+      return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    return fail('not_found', 404)
+  } catch (error) {
+    if (error instanceof AgentCredentialError) {
+      return fail(error.code, error.status, error.reason)
+    }
+    throw error
   }
 }
 
@@ -593,7 +816,10 @@ async function goldenRegions(
   return { goldenSnapshotId: goldens[defaultRegion]!, goldenSnapshots: goldens, defaultRegion, fallbackRegions: usable.slice(1) }
 }
 
-/** Arms the build's runner (one Durable Object per build); a no-op where the binding is absent. */
+/**
+ * Arms the build's runner: one Durable Object per build, hosted by the build runner Worker
+ * (src/build-runner.ts). A no-op where the binding is absent.
+ */
 function buildScheduler(env: Env): BuildDeps['schedule'] {
   const runners = env.ENV_BUILD_RUNNER
   if (!runners) {
@@ -760,7 +986,7 @@ async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
     return undefined
   }
   try {
-    return { keyring: await keyring, ...secretsEgressMode(env) }
+    return { keyring: await keyring, ...secretsEgressMode(env), accountProviders: providerEnabled(env) }
   } catch {
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
@@ -827,7 +1053,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       })
     }
     if (isRoutineHookPath(url.pathname)) {
-      return await handleRoutineHook(request, url, { db: env.SANDBOX_DB, now: deps.now ?? Date.now, githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET })
+      return await handleRoutineHook(request, url, {
+        db: env.SANDBOX_DB,
+        now: deps.now ?? Date.now,
+        githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET,
+        onInstallationEvent: (eventName, payload) =>
+          handleInstallationEvent(
+            { db: env.SANDBOX_DB, now: (deps.now ?? Date.now)(), notify: setupNotifier(env, deps), notifyTrial: trialNotifier(env, deps) },
+            eventName,
+            payload as Parameters<typeof handleInstallationEvent>[2]
+          )
+      })
     }
     if (url.pathname === '/v1/github/manifest-callback') {
       return githubManifestCallback(env, url)
@@ -837,6 +1073,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     }
     if (url.pathname === '/v1/github/setup' || url.pathname === '/v1/github/callback') {
       return await githubReturn(env, deps, url)
+    }
+    if (url.pathname === '/v1/internal/github/install-url' && request.method === 'GET') {
+      // Billing's cloud setup chain (shared CONTROL_PLANE_TOKEN, not the operator token).
+      if (!(await isOperator(request, env.CONTROL_PLANE_TOKEN))) {
+        return fail('not_found', 404)
+      }
+      return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
       if (!(await isOperator(request, env.OPERATOR_TOKEN))) {
@@ -987,6 +1230,31 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return fail('not_found', 404)
     }
+    if (url.pathname === '/v1/github/repo-access' || url.pathname === '/v1/github/repositories') {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
+      }
+      if (request.method !== 'GET') {
+        return fail('not_found', 404)
+      }
+      try {
+        if (url.pathname === '/v1/github/repositories') {
+          return json(await listAccountRepositories(repoAccessDeps(env, deps), caller.accountId, url.searchParams.get('cursor')))
+        }
+        const view = await repoAccessView(repoAccessDeps(env, deps), caller, url)
+        return json(view.body, view.status)
+      } catch (error) {
+        if (error instanceof RepoAccessError) {
+          return fail(error.code === 'not_github' ? 'invalid_request' : 'not_configured', error.code === 'not_github' ? 400 : 503, error.code)
+        }
+        console.log(JSON.stringify({ event: 'github_repo_access_failed', error: String(error).slice(0, 160) }))
+        return fail('provider_unavailable', 502, 'github_unavailable')
+      }
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -1007,6 +1275,18 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       if (!connect) {
         return fail('not_configured', 503)
+      }
+      // Optional body: the repository to preselect and the setup session waiting on it.
+      const target = ConnectBodySchema.safeParse(request.headers.get('content-length') === '0' ? {} : await readJson(request).catch(() => ({})))
+      const repo = target.success && target.data.repo ? parseGitHubRepo(target.data.repo) : null
+      if (target.success && repo) {
+        const access = repoAccessDeps(env, deps)
+        const preselected = await repoInstallUrl(access, caller, target.data.repo!, {
+          setupSessionId: target.data.setupSessionId,
+          repoId: target.data.repoId,
+          ownerId: target.data.ownerId
+        })
+        return json({ installUrl: preselected.url, authorizeUrl: authorizeUrl(connect, url.origin, preselected.state) })
       }
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, caller, (deps.now ?? Date.now)())
       return json({ installUrl: installUrl(connect, state), authorizeUrl: authorizeUrl(connect, url.origin, state) })
@@ -1082,6 +1362,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         }
       }
       return response
+    }
+    if (url.pathname === '/v1/agent-credentials' || url.pathname.startsWith('/v1/agent-credentials/')) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      // Desktop main only: never a phone's device session (and the renderer never holds the token).
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
+      }
+      return await agentCredentialsRoute(request, url, env, deps, caller)
     }
     if (url.pathname === '/v1/agent-sources' || url.pathname === '/v1/agent-sources/offer') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
@@ -1341,6 +1632,93 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
   }
 }
 
+/** POST /v1/github/connect body (optional): preselect this repository and return to this setup session. */
+const ConnectBodySchema = z
+  .object({
+    repo: z.string().max(400).optional(),
+    setupSessionId: z.string().regex(SETUP_SESSION_ID).optional(),
+    repoId: z.number().int().positive().optional(),
+    ownerId: z.number().int().positive().optional()
+  })
+  .strip()
+
+function repoAccessDeps(env: Env, deps: Deps): RepoAccessDeps {
+  return {
+    db: env.SANDBOX_DB,
+    github: deps.github ?? githubMinter(env),
+    connect: githubConnect(env, deps),
+    publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
+    fetch: deps.githubFetch ?? fetch,
+    now: (deps.now ?? Date.now)()
+  }
+}
+
+function setupNotifier(env: Env, deps: Deps): SetupNotifier {
+  if (deps.setupNotifier) {
+    return deps.setupNotifier
+  }
+  return billingSetupNotifier({
+    billingUrl: env.BILLING_URL,
+    token: env.CONTROL_PLANE_TOKEN,
+    fetch: env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
+  })
+}
+
+function trialNotifier(env: Env, deps: Deps): TrialGitHubNotifier {
+  return (
+    deps.trialNotifier ??
+    billingTrialNotifier({
+      billingUrl: env.BILLING_URL,
+      token: env.CONTROL_PLANE_TOKEN,
+      fetch: env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
+    })
+  )
+}
+
+/** Where the browser goes after GitHub when a cloud setup session started the install (auth's setup pages). */
+function cloudSetupNextUrl(origin: string, sessionId: string): string | null {
+  try {
+    const next = new URL('/cloud/setup/next', origin)
+    if (next.protocol !== 'https:' && next.hostname !== 'localhost') {
+      return null
+    }
+    next.searchParams.set('session', sessionId)
+    next.searchParams.set('from', 'github')
+    return next.toString()
+  } catch {
+    return null
+  }
+}
+
+/** GET /v1/internal/github/install-url: billing's setup chain asks where its GitHub step should go. */
+async function internalInstallUrl(env: Env, deps: Deps, url: URL): Promise<Response> {
+  const accountId = url.searchParams.get('accountId') ?? ''
+  const userId = url.searchParams.get('userId') ?? ''
+  const repo = url.searchParams.get('repo') ?? ''
+  const session = url.searchParams.get('session') ?? undefined
+  if (!/^[A-Za-z0-9_.:-]{1,160}$/.test(accountId) || !/^[A-Za-z0-9_.:@|-]{1,160}$/.test(userId) || !parseGitHubRepo(repo)) {
+    return fail('invalid_request', 400)
+  }
+  if (session !== undefined && !SETUP_SESSION_ID.test(session)) {
+    return fail('invalid_request', 400, 'session')
+  }
+  const access = repoAccessDeps(env, deps)
+  try {
+    const result = await repoAccess(access, accountId, repo)
+    if (result.access !== 'missing') {
+      return json({ access: result.access, url: null })
+    }
+    if (!access.connect) {
+      return fail('not_configured', 503)
+    }
+    const install = await repoInstallUrl(access, { accountId, userId }, repo, { setupSessionId: session })
+    return json({ access: result.access, url: install.url })
+  } catch (error) {
+    console.log(JSON.stringify({ event: 'github_install_url_failed', error: String(error).slice(0, 160) }))
+    return fail('provider_unavailable', 502, 'github_unavailable')
+  }
+}
+
 const DevMemberGitHubSchema = z
   .object({
     accountId: z.string().min(1).max(160),
@@ -1463,6 +1841,18 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
+      if (
+        patched.row.status === 'running' &&
+        (patched.row.user_id !== current.user_id || patched.row.visibility !== current.visibility)
+      ) {
+        // A new owner or a share changes which account (if any) the agents use (D10/D13): rebuild the env now.
+        const work = refreshSandboxEnv(life, patched.row).catch(() => false)
+        if (deps.waitUntil) {
+          deps.waitUntil(work)
+        } else {
+          await work
+        }
+      }
       return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })
     }
     case 'POST wake': {
@@ -1534,6 +1924,27 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
       )
     }
     const esc = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, '')
+    const requested = 'requested' in result
+    if ('boundIds' in result) {
+      const notify = trialNotifier(env, deps)
+      for (const ids of result.boundIds) {
+        await notify({ accountId: result.state.a, ...ids })
+      }
+    }
+    // Tell a waiting setup session (the desktop polls it and starts on its own), then go back to it.
+    const notice = await noticeAfterReturn(repoAccessDeps(env, deps), result.state, requested).catch(() => null)
+    if (notice) {
+      await setupNotifier(env, deps)(notice)
+    }
+    const next = result.state.s && env.CLOUD_SETUP_ORIGIN ? cloudSetupNextUrl(env.CLOUD_SETUP_ORIGIN, result.state.s) : null
+    if (next) {
+      return new Response(null, { status: 302, headers: { location: next, 'cache-control': 'no-store' } })
+    }
+    if ('requested' in result) {
+      return html(
+        `GitHub sent your request to an owner of <b>${esc(result.requested.owner)}</b>. Orca Cloud gets access once they approve it, and a waiting workspace starts then if Orca is open. You can close this tab.`
+      )
+    }
     return html(
       result.bound.length > 0
         ? `Connected GitHub ${result.bound.map((login) => `<b>${esc(login)}</b>`).join(', ')} to Orca. You can close this tab.`
@@ -1623,7 +2034,11 @@ export default {
         }
       })
     )
-    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) {
+    const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
+    if (env.AGENT_ACCOUNTS_CODEX === 'on') {
+      ctx.waitUntil(codexTick(env, fifthMinute))
+    }
+    if (!fifthMinute) {
       return
     }
     ctx.waitUntil(
@@ -1666,6 +2081,33 @@ export default {
   }
 } satisfies ExportedHandler<Env>
 
+/**
+ * Codex (flag S2): every minute, broker logins move on; every fifth, the lease refresher renews due tokens
+ * (kept fresh while the kill switch is on, so turning it off again just works) and leaked brokers go.
+ */
+export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {}): Promise<void> {
+  const broker = await codexBrokerDeps(env, deps)
+  if (!broker) {
+    return
+  }
+  const brokers = await codexBrokerTick(broker, { sweepProvider: fifthMinute }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+  if (!('advanced' in brokers) || brokers.advanced > 0 || brokers.leaked > 0) {
+    console.log(JSON.stringify({ event: 'codex_broker_tick', ...brokers }))
+  }
+  if (fifthMinute) {
+    const refresh = await refreshCodexLeases({
+      db: env.SANDBOX_DB,
+      keyring: broker.keyring,
+      now: deps.now ?? Date.now,
+      fetch: deps.codexTokenFetch,
+      onChanged: broker.onStored
+    }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+    if (!('due' in refresh) || refresh.due > 0) {
+      console.log(JSON.stringify({ event: 'codex_refresh', ...refresh }))
+    }
+  }
+}
+
 /** Org environments built on an older golden rebuild on the current one (environment-golden-refresh.ts). */
 export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps, deps: Deps = {}) {
   return refreshStaleEnvironments(buildDeps(life, deps, env)).catch((error: unknown) => {
@@ -1675,47 +2117,28 @@ export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps,
 }
 
 /**
- * One per environment build: wakes on an alarm, advances the build one step (finalize, snapshot,
- * smoke boot, billing all run here) and re-arms until the build is final. Builds therefore finish
- * with no client watching, at most a few seconds after their VM command ends.
+ * RPC entrypoint for the build runner Worker (src/build-runner.ts), bound there as its CONTROL service.
+ * Each runner alarm lands here: the step runs in this Worker, with its D1, provider and secrets, and
+ * answers the delay until the next step (null: final, the runner stops). A failure throws back to the
+ * runner, which retries. Not reachable from the internet: only a service binding can name an entrypoint.
  */
-export class EnvironmentBuildRunner implements DurableObject {
-  constructor(
-    private readonly state: DurableObjectState,
-    private readonly env: Env
-  ) {}
-
-  async fetch(request: Request): Promise<Response> {
-    const body = (await request.json().catch(() => null)) as { id?: string; environmentId?: string } | null
-    if (!body?.id || !body.environmentId) {
-      return new Response('bad request', { status: 400 })
-    }
-    await this.state.storage.put('build', { id: body.id, environmentId: body.environmentId })
-    if ((await this.state.storage.getAlarm()) === null) {
-      await this.state.storage.setAlarm(Date.now() + 2_000)
-    }
-    return new Response(null, { status: 204 })
+export class BuildTicker extends WorkerEntrypoint<Env> {
+  tickBuild(build: RunnerBuild): Promise<number | null> {
+    return runBuildTick(this.env, build)
   }
+}
 
-  async alarm(): Promise<void> {
-    const build = await this.state.storage.get<{ id: string; environmentId: string }>('build')
-    const life = build ? await lifecycleDeps(this.env, {}) : null
-    if (!build || !life) {
-      await this.state.storage.deleteAll()
-      return
-    }
-    let next: number | null
-    try {
-      next = await tickBuild(buildDeps(life, {}, this.env), build.environmentId, build.id)
-    } catch (error) {
-      console.log(JSON.stringify({ event: 'environment_build_tick_failed', buildId: build.id, error: String(error).slice(0, 200) }))
-      next = 15_000
-    }
-    if (next === null) {
-      await this.state.storage.deleteAll()
-      return
-    }
-    await this.state.storage.setAlarm(Date.now() + next)
+/** One runner step; null when the control plane is unconfigured (the cron re-arms the runner later). */
+export async function runBuildTick(env: Env, build: RunnerBuild, deps: Deps = {}): Promise<number | null> {
+  const life = await lifecycleDeps(env, deps)
+  if (!life) {
+    return null
+  }
+  try {
+    return await tickBuild(buildDeps(life, deps, env), build.environmentId, build.id)
+  } catch (error) {
+    console.log(JSON.stringify({ event: 'environment_build_tick_failed', buildId: build.id, error: String(error).slice(0, 200) }))
+    throw error
   }
 }
 
@@ -1727,7 +2150,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
   const noStore = (body: unknown) => Response.json(body, { headers: { 'cache-control': 'no-store' } })
   try {
     if (request.method === 'GET' && url.pathname === '/v1/agent-sources') {
-      return noStore(await agentSourcesView(db, caller, url.searchParams.get('workspaceId')))
+      return noStore(await agentSourcesView(db, caller, url.searchParams.get('workspaceId'), providerEnabled(env), now))
     }
     if (request.method === 'PUT' && url.pathname === '/v1/agent-sources/offer') {
       const body = PutOfferSchema.safeParse(await readJson(request))
@@ -1735,7 +2158,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
         return fail('invalid_request', 400)
       }
       await putOfferAnswer(db, caller, body.data, now)
-      return noStore(await agentSourcesView(db, caller, null))
+      return noStore(await agentSourcesView(db, caller, null, providerEnabled(env), now))
     }
     if (request.method === 'PUT' && url.pathname === '/v1/agent-sources') {
       const body = PutSourceSchema.safeParse(await readJson(request))
@@ -1759,7 +2182,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
           await work
         }
       }
-      return noStore(await agentSourcesView(db, caller, body.data.workspaceId ?? null))
+      return noStore(await agentSourcesView(db, caller, body.data.workspaceId ?? null, providerEnabled(env), now))
     }
     return fail('not_found', 404)
   } catch (error) {

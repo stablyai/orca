@@ -27,7 +27,8 @@
     // Stripe TEST MODE objects in acct_1Or7xeKb73TzRkjk (scripts/stripe-test-setup.ts).
     "STRIPE_PRICE_TEAM_MONTHLY": "price_1UZmKpKb73TzRkjk33aiB2th",
     "STRIPE_PRICE_TEAM_ANNUAL": "price_1UZmKpKb73TzRkjkS7qv85NI",
-    "STRIPE_PRICE_OVERAGE": "price_1UaBI9Kb73TzRkjkdxshOPZZ",
+    // $1.00 per sandbox hour, billed by the minute (unit_amount_decimal 1.666666666667, divide_by 60).
+    "STRIPE_PRICE_OVERAGE": "price_1UaDDzKb73TzRkjkznGWUEoC",
     "STRIPE_PORTAL_CONFIGURATION": "bpc_1UZmKvKb73TzRkjk59rIuHbx",
     "BILLING_RETURN_URL": "https://orca-billing-dev.lovecast.workers.dev/return",
     "BILLING_JWT_AUDIENCE": "orca-billing",
@@ -37,6 +38,9 @@
     // (secret MEMBERSHIP_SYNC_TOKEN must equal staging's ORCA_CLOUD_BILLING_MEMBERSHIP_TOKEN).
     "BILLING_STAGING_JWKS_URL": "https://auth-staging.onorca.dev/.well-known/jwks.json",
     "BILLING_STAGING_AUTH_ISSUER": "https://auth-staging.onorca.dev",
-    "AUTH_INTERNAL_URL": "https://auth-staging.onorca.dev"
+    "AUTH_INTERNAL_URL": "https://auth-staging.onorca.dev",
+    // Cloud setup sessions: pages on staging auth, GitHub install URLs from the dev control plane.
+    "CLOUD_SETUP_PAGES_URL": "https://auth-staging.onorca.dev",
+    "SANDBOX_CONTROL_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev"
   }
 }

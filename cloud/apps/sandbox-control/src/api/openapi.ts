@@ -69,6 +69,8 @@ const schemas: Record<string, object> = {
       machineSize: { type: 'string' },
       region: { type: 'string' },
       repoUrl: { type: ['string', 'null'] },
+      repoBranch: { type: ['string', 'null'], description: 'Branch the workspace was started on, when known' },
+      lastActivityAt: { type: 'integer', description: 'Last agent work or input (falls back to the last state change)' },
       session: { type: ['object', 'null'], properties: { startedAt: { type: 'integer' }, leaseExpiresAt: { type: 'integer' } } },
       createdAt: { type: 'integer' }
     }
