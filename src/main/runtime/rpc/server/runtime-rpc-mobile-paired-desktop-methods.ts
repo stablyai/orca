@@ -97,12 +97,6 @@ export const PAIRED_DESKTOP_METHODS = [
   'github.project.updatePullRequestBySlug',
   'github.project.viewTable',
   'github.project.workItemDetailsBySlug',
-  // Desktop main federates session history across hosts itself (executionHostId / scope params).
-  'aiVault.listSessions',
-  'aiVault.prepareSessionResume',
-  'aiVault.resolveSessionTitles',
-  'aiVault.searchSessions',
-  'aiVault.searchStatus',
   // User preferences live on the Mac; the phone's settings screens mirror the desktop's.
   'settings.get',
   'settings.getTerminalQuickCommands',
