@@ -207,6 +207,10 @@ export function overviewRows(args: {
       action: { kind: 'manage' }
     })
   }
-  // Rows that need attention sort first; otherwise the host order stays as listed.
-  return [...rows.filter((row) => row.attention), ...rows.filter((row) => !row.attention)]
+  // This computer, then Orca Cloud (the main path), then rows that need attention, then the rest.
+  const pinned = (row: OverviewRow): number =>
+    row.kind === 'local' ? 0 : row.kind === 'cloud' ? 1 : 2
+  return [...rows].sort(
+    (a, b) => pinned(a) - pinned(b) || Number(b.attention) - Number(a.attention)
+  )
 }

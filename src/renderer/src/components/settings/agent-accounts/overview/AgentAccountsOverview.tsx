@@ -1,14 +1,17 @@
 // S3 "Sign-ins by host": a real table, hosts as rows, Claude and Codex as columns. A row opens that
 // host's A16 panel (click or Enter); the one inline action still works without opening it.
 import React, { useState } from 'react'
-import { Lock } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { agentHostKindLabel } from '../../../agent-host-panel/agent-host-capabilities'
+import {
+  agentHostKindLabel,
+  type AgentHostKind
+} from '../../../agent-host-panel/agent-host-capabilities'
+import { HostGlyph, type HostGlyphKind } from '@/components/host-row-icon'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsSegmentedControl'
 import type { OverviewAction, OverviewRow } from './agent-accounts-overview-model'
 import { overviewCellText } from './overview-copy'
@@ -55,28 +58,35 @@ function Cell({ row, agent }: { row: OverviewRow; agent: 'claude' | 'codex' }): 
   )
 }
 
+const GLYPH: Record<AgentHostKind, HostGlyphKind> = {
+  local: 'local',
+  sshClassic: 'ssh',
+  sshOrcad: 'ssh',
+  wsl: 'orca-server',
+  paired: 'orca-server',
+  recipe: 'recipe-vm',
+  cloud: 'orca-cloud'
+}
+
 function HostHeader({ row }: { row: OverviewRow }): React.JSX.Element {
   const t = useTranslate()
-  if (row.kind === 'cloud') {
-    return (
-      <span className="flex items-center gap-2">
-        <Lock aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="text-foreground">{t('agentAccountsOverview.cloud', 'Orca Cloud')}</span>
-        <span className="text-xs text-muted-foreground">
-          {t('agentAccountsOverview.cloudAll', 'all your cloud workspaces')}
-        </span>
-      </span>
-    )
-  }
-  if (row.kind === 'local') {
-    return <span className="text-foreground">{agentHostKindLabel('local', t)}</span>
-  }
+  const name =
+    row.kind === 'cloud'
+      ? t('agentAccountsOverview.cloud', 'Orca Cloud')
+      : row.kind === 'local'
+        ? agentHostKindLabel('local', t)
+        : row.label
+  const detail =
+    row.kind === 'cloud'
+      ? t('agentAccountsOverview.cloudAll', 'all your cloud workspaces')
+      : row.kind === 'local'
+        ? null
+        : agentHostKindLabel(row.kind, t)
   return (
-    <span className="flex min-w-0 items-baseline gap-2">
-      <span className="truncate text-foreground">{row.label}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {agentHostKindLabel(row.kind, t)}
-      </span>
+    <span className="flex min-w-0 items-center gap-2">
+      <HostGlyph kind={GLYPH[row.kind]} size={14} />
+      <span className="truncate text-foreground">{name}</span>
+      {detail ? <span className="shrink-0 text-xs text-muted-foreground">{detail}</span> : null}
     </span>
   )
 }

@@ -45,11 +45,11 @@ describe('overviewRows', () => {
       cloud: { status: STATUS, keyKinds: { claude: null, codex: 'team' }, member: false }
     })
     expect(rows.map((row) => [row.id, row.cells.claude.kind, row.cells.codex.kind])).toEqual([
-      ['ssh:devbox', 'signedIn', 'signedOut'],
-      ['orca-cloud', 'cloudAccount', 'cloudKey']
+      ['orca-cloud', 'cloudAccount', 'cloudKey'],
+      ['ssh:devbox', 'signedIn', 'signedOut']
     ])
-    expect(rows[0]?.action).toEqual({ kind: 'review', agent: 'codex' })
-    expect(rows[1]).toMatchObject({ hostId: null, action: { kind: 'manage' } })
+    expect(rows[1]?.action).toEqual({ kind: 'review', agent: 'codex' })
+    expect(rows[0]).toMatchObject({ hostId: null, action: { kind: 'manage' } })
   })
 
   it('shows a host that can’t answer by its last verdict and date, never as checking', () => {
@@ -65,6 +65,19 @@ describe('overviewRows', () => {
       cloud: null
     })
     expect(unknown?.cells.claude.kind).toBe('notConnected')
+  })
+
+  it('pins This computer, then Orca Cloud, then attention rows', () => {
+    const rows = overviewRows({
+      hosts: [
+        host({ hostId: 'ssh:a', kind: 'sshOrcad' }),
+        host({ hostId: 'ssh:b', kind: 'sshOrcad' }),
+        host({ hostId: 'local', kind: 'local', environmentId: null })
+      ],
+      probes: { 'ssh:b': probe({ report: null, failed: true }), local: probe() },
+      cloud: { status: STATUS, keyKinds: { claude: null, codex: 'team' }, member: false }
+    })
+    expect(rows.map((row) => row.id)).toEqual(['local', 'orca-cloud', 'ssh:b', 'ssh:a'])
   })
 
   it('puts rows that need attention first (expired, couldn’t check)', () => {
