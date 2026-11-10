@@ -1,4 +1,5 @@
 import { useSourceControlReview } from './use-source-control-review'
+import { entryReviewSource } from '@/lib/editor/diff-reviewed-files'
 import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
@@ -82,7 +83,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
   const review = useSourceControlReview(currentWorktreeId, worktreePath)
-  const viewed = review.isViewed(entry, entry.area === 'staged' ? 'staged' : 'unstaged')
+  const viewed = review.isViewed(entry, entryReviewSource(entry))
   const t = useTranslate()
   useUiLanguageRevision()
   const fileName = basename(entry.path)

@@ -14,6 +14,7 @@ import {
 } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { DiffViewedCheckbox } from '../../diff/review/diff-viewed-checkbox'
 import { diffReviewContentSignature } from '../../diff/review/diff-review-content-signature'
+import { useDiffReviewReadInvalidation } from '../../diff/review/use-diff-review-read-invalidation'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { combinedDiffReviewIdentity } from './combined-diff-review-identity'
 
@@ -67,28 +68,14 @@ export function CombinedDiffViewedControl({
   const disabled =
     !identity || pending || section.dirty || !!section.saveConflict || (!viewed && !!unavailable)
 
-  const previousRead = useRef({ signature, modifiedTime: section.reviewModifiedTime })
-  useEffect(() => {
-    const changed =
-      previousRead.current.signature !== signature ||
-      previousRead.current.modifiedTime !== section.reviewModifiedTime
-    previousRead.current = { signature, modifiedTime: section.reviewModifiedTime }
-    if (!changed) {
-      return
-    }
-    if (
-      identity &&
-      record &&
-      !section.loading &&
-      !section.dirty &&
-      (record.entrySignature !== reviewEntrySignature(section) ||
-        (signature !== null && record.contentSignature !== signature) ||
-        (section.reviewModifiedTime !== undefined &&
-          record.modifiedTime !== section.reviewModifiedTime))
-    ) {
-      setDiffReviewed(identity.key, null)
-    }
-  }, [identity, record, section, signature])
+  useDiffReviewReadInvalidation({
+    key: identity?.key ?? null,
+    record,
+    signature,
+    entrySignature: reviewEntrySignature(section),
+    modifiedTime: section.reviewModifiedTime,
+    valid: !section.loading && !section.dirty
+  })
 
   const toggle = async (): Promise<void> => {
     if (disabled || !identity) {

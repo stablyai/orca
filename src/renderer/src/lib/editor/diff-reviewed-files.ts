@@ -12,7 +12,6 @@ export type ReviewedDiff = {
   entrySignature: string
 }
 const STORAGE_KEY = 'orca.reviewed-diffs.v1'
-const MAX_AGE = 30 * 24 * 60 * 60 * 1000
 const listeners = new Set<() => void>()
 let records: ReadonlyMap<string, ReviewedDiff> | undefined
 
@@ -22,6 +21,10 @@ export type DiffReviewEntry = Pick<GitStatusEntry, 'path' | 'oldPath' | 'added' 
 
 export function reviewEntrySignature(entry: DiffReviewEntry): string {
   return JSON.stringify([entry.status, entry.oldPath, entry.added, entry.removed])
+}
+
+export function entryReviewSource(entry: Pick<GitStatusEntry, 'area'>): 'staged' | 'unstaged' {
+  return entry.area === 'staged' ? 'staged' : 'unstaged'
 }
 
 export function diffReviewScope(file: {
@@ -68,7 +71,6 @@ export function getReviewedDiffs(): ReadonlyMap<string, ReviewedDiff> {
           value &&
           typeof value.viewedAt === 'number' &&
           Number.isFinite(value.viewedAt) &&
-          value.viewedAt >= Date.now() - MAX_AGE &&
           (value.modifiedTime === null ||
             (typeof value.modifiedTime === 'number' && Number.isFinite(value.modifiedTime))) &&
           typeof value.contentSignature === 'string' &&
@@ -91,11 +93,6 @@ export function setDiffReviewed(key: string, value: ReviewedDiff | null): void {
     next.set(key, value)
   } else if (!next.delete(key)) {
     return
-  }
-  for (const [id, record] of next) {
-    if (record.viewedAt < Date.now() - MAX_AGE) {
-      next.delete(id)
-    }
   }
   records = next
   try {

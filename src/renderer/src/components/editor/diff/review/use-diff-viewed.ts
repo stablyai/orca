@@ -31,13 +31,26 @@ import {
   editorViewPlacement
 } from '@/store/slices/editor/tabs/editor-view-placement'
 import { diffReviewContentSignature } from './diff-review-content-signature'
-import { joinPath } from '@/lib/path'
+import { useDiffReviewReadInvalidation } from './use-diff-review-read-invalidation'
+import { buildUncommittedReviewEntries } from './uncommitted-review-entries'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
   resolveSourceControlGroupOrder
 } from '../../../../../../shared/source-control/listing/source-control-section-order'
+
+// Inverse of the joinPath(worktreePath, entry.path) composition that diff files
+// are opened with; separator-agnostic so the root survives `/` vs `\` handling.
+function worktreeRootOf(filePath: string, relativePath: string): string | null {
+  for (const separator of ['/', '\\']) {
+    const joined = separator + relativePath.replaceAll('/', separator)
+    if (filePath.endsWith(joined)) {
+      return filePath.slice(0, filePath.length - joined.length)
+    }
+  }
+  return null
+}
 
 export function useDiffViewed(
   file: OpenFile,
@@ -61,13 +74,22 @@ export function useDiffViewed(
       return getEditorFileReadContext(
         useAppStore.getState(),
         file,
-        file.filePath.slice(0, file.filePath.length - file.relativePath.length - 1)
+        worktreeRootOf(file.filePath, file.relativePath)
       )
     } catch {
       return null
     }
   }, [file])
-  const scope = diffReviewScope(file)
+  const liveBranchCompare = useAppStore((s) =>
+    file.diffSource === 'branch' ? s.gitBranchCompareSummaryByWorktree[file.worktreeId] : undefined
+  )
+  // Branch marks share the scope the source-control side derives from the live
+  // summary, so a compare refresh cannot orphan the advance-to-next-file keys.
+  const scope = diffReviewScope(
+    file.diffSource === 'branch' && liveBranchCompare?.status === 'ready'
+      ? { ...file, branchCompare: liveBranchCompare }
+      : file
+  )
   const key = owner ? diffReviewKey(owner, file.relativePath, scope) : null
   const record = key ? records.get(key) : undefined
   const signature = useMemo(() => {
@@ -83,38 +105,24 @@ export function useDiffViewed(
   }, [content])
   const viewed =
     !file.isDirty &&
-    signature !== null &&
-    record?.contentSignature === signature &&
-    record.modifiedTime === content?.reviewModifiedTime
+    record != null &&
+    (signature === null || record.contentSignature === signature) &&
+    (content?.reviewModifiedTime === undefined ||
+      record.modifiedTime === content.reviewModifiedTime)
   const eligible =
-    signature !== null &&
     content?.reviewModifiedTime !== undefined &&
+    !content?.isStale &&
+    !content?.loadError &&
     !file.isDirty &&
-    !file.externalMutation &&
-    !file.conflict
+    !file.externalMutation
 
-  const previousRead = useRef({ signature, modifiedTime: content?.reviewModifiedTime })
-  useEffect(() => {
-    const changed =
-      previousRead.current.signature !== signature ||
-      previousRead.current.modifiedTime !== content?.reviewModifiedTime
-    previousRead.current = { signature, modifiedTime: content?.reviewModifiedTime }
-    // Another surface's new mark must survive this surface's older cached read.
-    if (!changed) {
-      return
-    }
-    if (
-      key &&
-      record &&
-      signature &&
-      !content?.isStale &&
-      (record.contentSignature !== signature ||
-        (content?.reviewModifiedTime !== undefined &&
-          record.modifiedTime !== content.reviewModifiedTime))
-    ) {
-      setDiffReviewed(key, null)
-    }
-  }, [key, record, signature, content])
+  useDiffReviewReadInvalidation({
+    key,
+    record,
+    signature,
+    modifiedTime: content?.reviewModifiedTime,
+    valid: !content?.isStale
+  })
 
   const toggle = async (): Promise<void> => {
     if (!owner || !key || !eligible || pending || !content) {
@@ -158,34 +166,20 @@ export function useDiffViewed(
         entries.length === 0 &&
         (file.diffSource === 'unstaged' || file.diffSource === 'staged')
       ) {
-        const rows = buildSourceControlDisplaySections(
-          groupSourceControlEntries(state.gitStatusByWorktree[file.worktreeId] ?? []),
-          resolveSourceControlGroupOrder(state.settings?.sourceControlGroupOrder)
-        )
-          .flatMap((section) => section.items)
-          .filter((entry) => !entry.conflictStatus && !entry.submodule)
-        entries = rows.map((entry) => ({
-          key: diffReviewKey(owner, entry.path, entry.area === 'staged' ? 'staged' : 'unstaged'),
-          entrySignature: reviewEntrySignature(entry),
-          open: (placement) =>
-            useAppStore
-              .getState()
-              .openDiff(
-                file.worktreeId,
-                joinPath(owner.worktreePath!, entry.path),
-                entry.path,
-                detectLanguage(entry.path),
-                entry.area === 'staged',
-                {
-                  ...placement,
-                  runtimeEnvironmentId: operation.provenance.generation.route.runtimeEnvironmentId,
-                  executionHostId:
-                    operation.provenance.generation.route.executionHostId ?? undefined,
-                  preview: true,
-                  oldPath: entry.area === 'staged' ? entry.oldPath : undefined
-                }
-              )
-        }))
+        entries = buildUncommittedReviewEntries({
+          owner,
+          worktreeId: file.worktreeId,
+          worktreePath: owner.worktreePath!,
+          rows: buildSourceControlDisplaySections(
+            groupSourceControlEntries(state.gitStatusByWorktree[file.worktreeId] ?? []),
+            resolveSourceControlGroupOrder(state.settings?.sourceControlGroupOrder)
+          )
+            .flatMap((section) => section.items)
+            .filter((entry) => !entry.conflictStatus && !entry.submodule),
+          executionHostId: operation.provenance.generation.route.executionHostId ?? undefined,
+          runtimeEnvironmentId:
+            operation.provenance.generation.route.runtimeEnvironmentId ?? undefined
+        })
       }
       if (entries.length === 0 && file.diffSource === 'branch') {
         const compare = state.gitBranchCompareSummaryByWorktree[file.worktreeId]
@@ -242,7 +236,7 @@ export function useDiffViewed(
       setDiffReviewed(key, {
         viewedAt: Date.now(),
         modifiedTime,
-        contentSignature: signature!,
+        contentSignature: signature ?? '',
         entrySignature:
           entry?.entrySignature ?? (sourceEntry ? reviewEntrySignature(sourceEntry) : '')
       })
@@ -275,5 +269,5 @@ export function useDiffViewed(
       }
     }
   }
-  return { viewed, disabled: !eligible || !owner || pending, toggle }
+  return { viewed, disabled: !eligible || !owner || !key || pending, toggle }
 }

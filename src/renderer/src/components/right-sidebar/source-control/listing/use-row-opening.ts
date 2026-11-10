@@ -11,7 +11,7 @@ import {
   reviewEntrySignature
 } from '@/lib/editor/diff-reviewed-files'
 import { diffReviewListKey, registerDiffReviewList } from '@/lib/editor/diff-review-navigation'
-import { joinPath } from '@/lib/path'
+import { buildUncommittedReviewEntries } from '../../../editor/diff/review/uncommitted-review-entries'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
@@ -62,40 +62,16 @@ export function useSourceControlRowOpening({
       return
     }
     const ownerKey = diffReviewOwnerKey(review.owner)
-    const uncommitted = reviewSelectionEntries.flatMap(({ entry }) => {
-      if (entry.conflictStatus || entry.submodule) {
-        return []
-      }
-      const key = review.keyFor(entry, entry.area === 'staged' ? 'staged' : 'unstaged')
-      return key
-        ? [
-            {
-              key,
-              entrySignature: reviewEntrySignature(entry),
-              open: (placement: { placementWorkspaceId: string; targetGroupId?: string }) => {
-                revealReviewPath(entry.path, entry.area === 'staged' ? 'staged' : 'unstaged')
-                useAppStore
-                  .getState()
-                  .openDiff(
-                    activeWorktreeId,
-                    joinPath(worktreePath, entry.path),
-                    entry.path,
-                    detectLanguage(entry.path),
-                    entry.area === 'staged',
-                    {
-                      ...placement,
-                      executionHostId,
-                      runtimeEnvironmentId,
-                      preview: true,
-                      ...(entry.area === 'staged' && entry.status === 'renamed'
-                        ? { oldPath: entry.oldPath }
-                        : {})
-                    }
-                  )
-              }
-            }
-          ]
-        : []
+    const uncommitted = buildUncommittedReviewEntries({
+      owner: review.owner,
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      rows: reviewSelectionEntries.flatMap(({ entry }) =>
+        entry.conflictStatus || entry.submodule ? [] : [entry]
+      ),
+      executionHostId: executionHostId ?? undefined,
+      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      reveal: (entry, source) => revealReviewPath(entry.path, source)
     })
     const clearUncommitted = registerDiffReviewList(
       diffReviewListKey(ownerKey, 'unstaged'),
@@ -120,7 +96,12 @@ export function useSourceControlRowOpening({
                           entry,
                           branchSummary,
                           detectLanguage(entry.path),
-                          { ...placement, executionHostId, runtimeEnvironmentId, preview: true }
+                          {
+                            ...placement,
+                            executionHostId,
+                            runtimeEnvironmentId,
+                            preview: true
+                          }
                         )
                     }
                   }

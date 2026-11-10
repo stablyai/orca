@@ -6,6 +6,7 @@ import {
   type DiffReviewEntry,
   diffReviewKey,
   diffReviewScope,
+  entryReviewSource,
   getReviewedDiffs,
   reviewEntrySignature,
   setDiffReviewed,
@@ -126,7 +127,7 @@ export function useRevalidateSourceControlReviews(
       }
     }
     for (const entry of entries) {
-      void check(entry, entry.area === 'staged' ? 'staged' : 'unstaged')
+      void check(entry, entryReviewSource(entry))
     }
     for (const entry of branchEntries) {
       void check(entry, 'branch')
@@ -164,7 +165,7 @@ export function useRevalidateSourceControlReviews(
         }
       }
       for (const entry of entries) {
-        invalidate(entry, entry.area === 'staged' ? 'staged' : 'unstaged')
+        invalidate(entry, entryReviewSource(entry))
       }
       for (const entry of branchEntries) {
         invalidate(entry, 'branch')

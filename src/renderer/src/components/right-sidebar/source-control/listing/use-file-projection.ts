@@ -36,6 +36,7 @@ import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
 import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useTranslate } from '@/i18n/use-translate'
+import { entryReviewSource } from '@/lib/editor/diff-reviewed-files'
 
 // Build only the rendered mode; gates and consumers must use the same synchronous mode prop so empty projections cannot appear.
 const EMPTY_TREE_ROOTS_BY_SECTION: Readonly<
@@ -100,8 +101,8 @@ export function useSourceControlFileProjection({
           ...section,
           items: [...filterSourceControlPathEntries(section.items, fileFilterState)].sort((a, b) =>
             sourceControlViewMode === 'list'
-              ? Number(review.isViewed(a, a.area === 'staged' ? 'staged' : 'unstaged')) -
-                Number(review.isViewed(b, b.area === 'staged' ? 'staged' : 'unstaged'))
+              ? Number(review.isViewed(a, entryReviewSource(a))) -
+                Number(review.isViewed(b, entryReviewSource(b)))
               : 0
           )
         }))
