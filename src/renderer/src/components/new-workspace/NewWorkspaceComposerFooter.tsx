@@ -2,7 +2,6 @@ import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
@@ -57,12 +56,9 @@ export function NewWorkspaceComposerFooter({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          'flex items-center gap-3',
-          showCreateMultiple ? 'justify-between' : 'justify-end'
-        )}
-      >
+      {/* Wraps instead of overflowing: "Use this computer instead" plus a long primary label
+          ("Give access and start") don't fit beside "Create more" in the modal's width. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         {showCreateMultiple ? (
           <button
             type="button"
@@ -72,36 +68,32 @@ export function NewWorkspaceComposerFooter({
             className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
           >
             <SwitchIndicator checked={createMultiple} />
-            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+            <span className="whitespace-nowrap text-muted-foreground transition-colors group-hover:text-foreground">
               {t('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>
           </button>
         ) : null}
-        {cloudStart?.onUseThisComputer ? (
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
+          {cloudStart?.onUseThisComputer ? (
+            <Button type="button" variant="ghost" size="sm" onClick={cloudStart.onUseThisComputer}>
+              {t('components.newWorkspace.cloudStart.useThisComputer', 'Use this computer instead')}
+            </Button>
+          ) : null}
           <Button
-            type="button"
-            variant="ghost"
+            onClick={heldReason ? undefined : () => void onCreate()}
+            disabled={createDisabled}
+            aria-disabled={heldReason ? true : undefined}
+            aria-describedby={heldReason ? heldReasonId : undefined}
+            title={heldReason}
+            variant={heldReason ? 'default-held' : 'default'}
             size="sm"
-            className="ml-auto"
-            onClick={cloudStart.onUseThisComputer}
+            className="text-xs"
           >
-            {t('components.newWorkspace.cloudStart.useThisComputer', 'Use this computer instead')}
+            {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+            {primaryActionLabel}
+            <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
           </Button>
-        ) : null}
-        <Button
-          onClick={heldReason ? undefined : () => void onCreate()}
-          disabled={createDisabled}
-          aria-disabled={heldReason ? true : undefined}
-          aria-describedby={heldReason ? heldReasonId : undefined}
-          title={heldReason}
-          variant={heldReason ? 'default-held' : 'default'}
-          size="sm"
-          className="text-xs"
-        >
-          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {primaryActionLabel}
-          <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
-        </Button>
+        </div>
         {heldReason ? (
           <span id={heldReasonId} className="sr-only">
             {heldReason}

@@ -8,7 +8,11 @@ import { useOrcaCloudRepoAccess } from '@/lib/orca-cloud/use-orca-cloud-repo-acc
 import { useCloudSetupSession } from '@/lib/orca-cloud/cloud-setup-session-seam'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
-import { deriveCloudSetupSteps, withReachableGitHub, type CloudSetupStep } from './cloud-start-model'
+import {
+  deriveCloudSetupSteps,
+  withReachableGitHub,
+  type CloudSetupStep
+} from './cloud-start-model'
 import { cloudStartAgentStep } from './cloud-start-agent-step'
 import {
   orcaCloudAgentSetupRow,

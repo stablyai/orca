@@ -80,7 +80,9 @@ export function ComposerPreview({
   prompt = 'Fix the flaky login test in e2e/auth.spec.ts and open a PR.',
   cloudRepos,
   pickedCloudRepo = null,
-  folderProject = false
+  folderProject = false,
+  showCreateMultiple = false,
+  width
 }: {
   availability: OrcaCloudAvailability
   access: OrcaCloudRunTargetAccess
@@ -95,6 +97,10 @@ export function ComposerPreview({
   pickedCloudRepo?: string | null
   /** The project is a plain folder (D3 for folders). */
   folderProject?: boolean
+  /** The modal's "Create more" switch, which shares the footer row with the actions. */
+  showCreateMultiple?: boolean
+  /** Pins the card's width, e.g. the modal's content width. */
+  width?: number
 }): React.JSX.Element {
   const [picked, setPicked] = useState<string | null>(pickedCloudRepo)
   const [host, setHost] = useState('local')
@@ -135,7 +141,10 @@ export function ComposerPreview({
       : {})
   }
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-background p-4">
+    <div
+      className="space-y-4 rounded-xl border border-border bg-background p-4"
+      style={width ? { width } : undefined}
+    >
       <h1 className="text-base font-semibold">Create workspace</h1>
       <p className="text-sm text-muted-foreground">{prompt}</p>
       <NewWorkspaceComposerProjectSection
@@ -178,6 +187,7 @@ export function ComposerPreview({
         }
         submitShortcutModifierLabel="⌘"
         cloudStart={cloudStart}
+        showCreateMultiple={showCreateMultiple}
       />
     </div>
   )

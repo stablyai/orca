@@ -23161,7 +23161,11 @@
           "teamCreateFailed": "Couldn’t create the team. Nothing was created, and you weren’t charged.",
           "wrongAccount": "Signed in as {{email}}, who isn’t on {{team}}. Switch accounts or ask an owner of {{team}} for an invite.",
           "wrongAccountGeneric": "Signed in with an account that isn’t on this team. Switch accounts or ask an owner for an invite."
-        }
+        },
+        "planCoveredByTrial": "Your trial covers it.",
+        "planCheckoutOpen": "Finish checkout in your browser.",
+        "githubRequestedSession": "Waiting for an owner on GitHub to approve Orca Cloud.",
+        "subtitleChoosePlanAndGitHub": "One visit to your browser to choose a plan and give Orca Cloud access on GitHub. Your prompt stays here and starts when you’re done."
       },
       "runOn": {
         "thisComputer": "This computer",
