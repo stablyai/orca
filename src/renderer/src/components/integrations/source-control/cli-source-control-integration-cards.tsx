@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { ExternalLink, Github, Gitlab, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,
@@ -12,6 +14,10 @@ import {
 import { getProviderAccountScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
+import {
+  formatGitHostWebSchemesText,
+  parseGitHostWebSchemesText
+} from './git-host-web-schemes-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -187,6 +193,45 @@ export function GitHubIntegrationCard(): React.JSX.Element {
   )
 }
 
+function GitHostWebSchemesField(): React.JSX.Element {
+  const schemes = useAppStore((s) => s.settings?.gitHostWebSchemes)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const [draft, setDraft] = useState(() => formatGitHostWebSchemesText(schemes))
+
+  useEffect(() => {
+    setDraft(formatGitHostWebSchemesText(schemes))
+  }, [schemes])
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="git-host-web-schemes" className="text-xs font-medium">
+        {translate(
+          'auto.components.settings.cli.source.control.integration.cards.git_host_web_schemes_label',
+          'Self-hosted web URL schemes'
+        )}
+      </Label>
+      <p className="text-xs text-muted-foreground">
+        {translate(
+          'auto.components.settings.cli.source.control.integration.cards.git_host_web_schemes_help',
+          'When git remotes use SSH but the forge web UI is HTTP-only, list one host per line as host=http (or host=https). Review/Open MR links use this scheme.'
+        )}
+      </p>
+      <textarea
+        id="git-host-web-schemes"
+        value={draft}
+        rows={3}
+        spellCheck={false}
+        className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+        placeholder="gitlab.company.test=http"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          void updateSettings({ gitHostWebSchemes: parseGitHostWebSchemesText(draft) })
+        }}
+      />
+    </div>
+  )
+}
+
 export function GitLabIntegrationCard(): React.JSX.Element {
   const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('glab')
@@ -215,6 +260,7 @@ export function GitLabIntegrationCard(): React.JSX.Element {
       statusLabel={integrationStatusLabel(status, t)}
     >
       <ProviderAccountScopeDetails>
+        <GitHostWebSchemesField />
         {status !== 'checking' && !connected ? (
           status === 'unavailable' ? (
             <>
