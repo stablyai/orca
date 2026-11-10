@@ -7,13 +7,16 @@ import { checkAgentUpdates, type AgentUpdateSettings } from './check-agent-updat
 import { runAgentUpdate, type AgentUpdateRunOutcome } from './run-agent-update'
 
 /** A refresh inside this window reuses the last check instead of probing every agent again. */
-const AGENT_UPDATE_CACHE_TTL_MS = 4 * 60 * 60 * 1000
+const AGENT_UPDATE_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+/** After a check that proved nothing (offline, rejected), the next one waits this long. */
+const AGENT_UPDATE_RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000
 
 type AgentUpdatesListener = (state: AgentUpdatesState) => void
 
 let rows: AgentUpdateRow[] = []
 let checking = false
 let checkedAt: number | null = null
+let retryNotBefore = 0
 let inFlightCheck: Promise<AgentUpdatesState> | null = null
 // Why: "update all" must not run several `npm install -g` at once, so every run joins one queue.
 let runQueue: Promise<void> = Promise.resolve()
@@ -78,13 +81,16 @@ async function runCheck(settings: AgentUpdateSettings): Promise<AgentUpdatesStat
     if (sourcesReachable) {
       rows = mergeCheckedRows(checked)
       checkedAt = Date.now()
+      retryNotBefore = 0
     } else {
-      // Why: an offline check proves nothing; keep the rows and leave checkedAt so the next refresh retries.
+      // Why: an offline check proves nothing; keep the rows and leave checkedAt unset so a retry is allowed after the wait.
       rows = withoutDoneRows(rows)
+      retryNotBefore = Date.now() + AGENT_UPDATE_RETRY_AFTER_FAILURE_MS
     }
   } catch {
-    // Why: a failed check keeps the previous rows; the next refresh retries because checkedAt is unchanged.
+    // Why: a failed check keeps the previous rows and retries after the wait instead of on every window focus.
     rows = withoutDoneRows(rows)
+    retryNotBefore = Date.now() + AGENT_UPDATE_RETRY_AFTER_FAILURE_MS
   } finally {
     checking = false
     inFlightCheck = null
@@ -99,7 +105,8 @@ export async function refreshAgentUpdates(
   if (inFlightCheck) {
     return inFlightCheck
   }
-  if (checkedAt !== null && Date.now() - checkedAt < AGENT_UPDATE_CACHE_TTL_MS) {
+  const now = Date.now()
+  if ((checkedAt !== null && now - checkedAt < AGENT_UPDATE_CACHE_TTL_MS) || now < retryNotBefore) {
     const kept = withoutDoneRows(rows)
     if (kept.length !== rows.length) {
       setRows(kept)
