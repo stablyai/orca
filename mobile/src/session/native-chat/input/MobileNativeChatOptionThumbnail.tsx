@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View, type TextStyle } from 'react-native'
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
@@ -82,10 +82,13 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     overflow: 'hidden'
   },
-  // A row leaves the absolute Text unconstrained in both axes; the wrapper only clips its drawing.
+  // Native rows measure absolute Text intrinsically; the web uses its explicit CSS width below.
   image: { position: 'relative', flexDirection: 'row', overflow: 'hidden' },
   text: {
     position: 'absolute',
+    ...(Platform.OS === 'web'
+      ? { whiteSpace: 'pre' as const, width: 'max-content' as TextStyle['width'] }
+      : {}),
     top: 0,
     left: 0,
     transformOrigin: 'top left',

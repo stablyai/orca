@@ -15,8 +15,10 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
 vi.mock('../../../components/composer-input/MessageBox', () => ({ MessageBox: 'MessageBox' }))
-vi.mock('../MobileNativeChatQuestionText', () => ({ MobileNativeChatQuestionText: 'QuestionText' }))
-vi.mock('../MobileNativeChatCardHeaderAction', () => ({
+vi.mock('../transcript/MobileNativeChatQuestionText', () => ({
+  MobileNativeChatQuestionText: 'QuestionText'
+}))
+vi.mock('./MobileNativeChatCardHeaderAction', () => ({
   MobileNativeChatCardHeaderAction: () => null
 }))
 vi.mock('../../../components/bottom-drawer/keyed-bottom-drawer', () => ({
