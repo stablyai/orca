@@ -14,7 +14,11 @@ import {
   hostTestRestingOptionsRecord
 } from './structured-agent-session-host-test-data'
 
-function claudeOptionsRead() {
+const RESPONSE_REPORT = { model: 'opus[1m]', reportedModel: 'claude-opus-4-8' }
+// Claude's confirmed init model stands in for a report when no response named one.
+const CONFIRMED_INIT = { model: 'opus[1m]', confirmed: ['model'] }
+
+function claudeOptionsRead(answer: Record<string, unknown> = RESPONSE_REPORT) {
   const record = {
     ...hostTestRestingOptionsRecord('session-1'),
     provider: 'claude',
@@ -40,7 +44,7 @@ function claudeOptionsRead() {
       adapter: {
         readOptions: async () => ({
           models: [],
-          current: { model: 'opus[1m]', reportedModel: 'claude-opus-4-8' }
+          current: answer
         })
       },
       agents: { definition: () => null, capabilities: () => null },
@@ -85,6 +89,9 @@ function claudeOptionsRead() {
 
 it('keeps a live fallback report that no pick has replaced, including an old client empty no-op', async () => {
   const host = claudeOptionsRead()
+  expect(await claudeOptionsRead(CONFIRMED_INIT).read()).toMatchObject({
+    reportedModel: 'opus[1m]'
+  })
   expect(await host.read(() => host.pick('', false))).toMatchObject({
     model: 'opus[1m]',
     reportedModel: 'claude-opus-4-8'
@@ -92,14 +99,18 @@ it('keeps a live fallback report that no pick has replaced, including an old cli
 })
 
 it.each([
-  ['picks back to the same model', ['sonnet', 'opus[1m]']],
-  ['re-picks the shown model', ['opus[1m]']]
-])('drops a report captured before the user %s while the read is in flight', async (_, models) => {
-  const host = claudeOptionsRead()
-  const current = await host.read(() => models.forEach((model) => host.pick(model)))
-  expect(current.model).toBe('opus[1m]')
-  expect(current.reportedModel).toBeUndefined()
-})
+  ['picks back to the same model', ['sonnet', 'opus[1m]'], RESPONSE_REPORT],
+  ['re-picks the shown model', ['opus[1m]'], RESPONSE_REPORT],
+  ['picks back while only the init model confirms', ['sonnet', 'opus[1m]'], CONFIRMED_INIT]
+])(
+  'drops a report captured before the user %s while the read is in flight',
+  async (_, models, answer) => {
+    const host = claudeOptionsRead(answer)
+    const current = await host.read(() => models.forEach((model) => host.pick(model)))
+    expect(current.model).toBe('opus[1m]')
+    expect(current.reportedModel).toBeUndefined()
+  }
+)
 
 it('drops a report from a child that ended or was replaced while the read was in flight', async () => {
   for (const next of [null, { fence: 3, phase: 'ready' }]) {
