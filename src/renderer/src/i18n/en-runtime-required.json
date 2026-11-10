@@ -17,6 +17,14 @@
       }
     }
   },
+  "agentHostPanel": {
+    "recipeEnvDetailNoKeys_one": "{{count}} variable, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_other": "{{count}} variables, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_one": "{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_other": "{{count}} variables, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_one": "{{count}} variable, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_other": "{{count}} variables, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM."
+  },
   "agentLaunch": {
     "opencode": {
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -236,7 +244,14 @@
           "sendInvites_other": "Send {{count}} invites",
           "skipInvalid_one": "Skipping {{count}} invalid entry.",
           "skipInvalid_other": "Skipping {{count}} invalid entries."
-        }
+        },
+        "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
+        "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
+        "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
+        "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
+        "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used"
       },
       "browser-pane": {
         "markup": {
@@ -916,6 +931,10 @@
           "foundRepositories_one": "Found {{count}} repository in {{path}}.",
           "foundRepositories_other": "Found {{count}} repositories in {{path}}."
         },
+        "DeleteCloudWorkspace": {
+          "uncommitted_one": "{{count}} uncommitted change",
+          "uncommitted_other": "{{count}} uncommitted changes"
+        },
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
           "removeBatchFolder_other": "Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.",
@@ -1509,6 +1528,14 @@
       "lines_one": "Multi-line value · {{count}} line",
       "lines_other": "Multi-line value · {{count}} lines"
     }
+  },
+  "cloudSecretsAsk": {
+    "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.",
+    "missing_one": "{{count}} secret missing",
+    "missing_other": "{{count}} secrets missing",
+    "save_one": "Save secret",
+    "save_other": "Save {{count}} secrets"
   },
   "codeHost": {
     "bitbucketConnect": {
@@ -2356,6 +2383,10 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "secretRequest": {
+    "more_one": "{{count}} more request",
+    "more_other": "{{count}} more requests"
   },
   "sessionSearch": {
     "panel": {

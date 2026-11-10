@@ -42,6 +42,9 @@
     "SANDBOX_ENV": "dev",
     // Flag S1 (contract D10/D11): Claude via the person's Orca account. Dev only until Neil's S1 sign-off.
     "AGENT_ACCOUNTS_CLAUDE": "on",
+    // Flag S2: Codex via the account broker (broker sandbox, lease refresher, placeholder auth.json). Dev only
+    // until Neil's S2 sign-off; the kill switch is AGENT_ACCOUNTS_CODEX_DISABLED=1.
+    "AGENT_ACCOUNTS_CODEX": "on",
     "SANDBOX_POOL_SIZE": "2",
     // Dev only (ignored unless SANDBOX_ENV is dev): these dev accounts hit the real billing gate.
     "SANDBOX_DEV_BILLING_ENFORCE_PREFIX": "dev:billing-test-",
@@ -63,6 +66,8 @@
     // Snapshots are region-locked: the seed is an iad1 image; pdx1 builds its first image from source.
     "GOLDEN_SNAPSHOT_REGION": "iad1",
     "GITHUB_APP_SLUG": "orca-cloud-dev",
+    // Cloud setup pages (staging auth): GitHub installs started from a setup session return there.
+    "CLOUD_SETUP_ORIGIN": "https://auth-staging.onorca.dev",
     "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
   }
 }

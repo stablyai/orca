@@ -55,7 +55,8 @@ export function sheet(
   value: PendingWorktreeCreation,
   error: string | null,
   now: number,
-  agentSignInRow?: React.ReactNode
+  agentSignInRow?: React.ReactNode,
+  options: { cloudAgentStep?: React.ReactNode; secretsRow?: React.ReactNode } = {}
 ) {
   return (
     <div className="bg-background p-3">
@@ -72,7 +73,8 @@ export function sheet(
         onEditRecipe={() => {}}
         agentSignInRow={agentSignInRow}
         stepTimings={FIXTURE_STEP_TIMINGS}
-        cloudAgentStep={null}
+        cloudAgentStep={options.cloudAgentStep ?? null}
+        secretsRow={options.secretsRow ?? null}
       />
     </div>
   )

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Signs every agent out on this sandbox before Orca deletes it (A9): each agent's own logout, then
+# its credential files. Covers logins made inside the sandbox (the kill-switch fallback path).
+# Never fails: the sandbox is deleted next whatever happens. Values are never printed.
+set -u
+HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"
+export PATH="/opt/orca/tools/bin:$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/opt/orca/bin:${PATH:-}"
+claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+claude_json="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
+codex_dir="${CODEX_HOME:-$HOME/.codex}"
+
+logged_out=0
+# Each logout gets a few seconds; a hung CLI must not hold up the delete.
+if command -v claude >/dev/null 2>&1 && timeout 8 claude auth logout </dev/null >/dev/null 2>&1; then
+  logged_out=$((logged_out + 1))
+fi
+if command -v codex >/dev/null 2>&1 && timeout 8 codex logout </dev/null >/dev/null 2>&1; then
+  logged_out=$((logged_out + 1))
+fi
+
+# The files go whether or not a logout ran: an older CLI, a missing binary or no network leaves them.
+rm -f -- "$claude_dir"/.credentials* "$HOME/.claude"/.credentials* "$codex_dir/auth.json" "$HOME/.codex/auth.json" 2>/dev/null
+# Orca-managed Codex homes keep their own auth.json under orcad's data dir.
+if [ -d "$HOME/.orcad-data" ]; then
+  find "$HOME/.orcad-data" -path '*codex*' -type f -name auth.json -delete 2>/dev/null
+fi
+# ~/.claude.json keeps settings Orca wrote (onboarding, trust); only the sign-in fields go.
+node_bin="$(command -v node || find /opt/orca/runtime/runtimes -type f -name node 2>/dev/null | head -n 1)"
+for file in "$claude_json" "$HOME/.claude.json"; do
+  [ -f "$file" ] || continue
+  if [ -n "$node_bin" ]; then
+    ORCA_FILE="$file" "$node_bin" -e '
+const fs = require("fs")
+const file = process.env.ORCA_FILE
+let c
+try { c = JSON.parse(fs.readFileSync(file, "utf8")) } catch { process.exit(2) }
+if (!c || typeof c !== "object" || Array.isArray(c)) process.exit(2)
+let changed = false
+for (const key of Object.keys(c)) {
+  if (/oauth/i.test(key) || key === "primaryApiKey") { delete c[key]; changed = true }
+}
+if (changed) {
+  const tmp = `${file}.orca-${process.pid}`
+  fs.writeFileSync(tmp, JSON.stringify(c, null, 2) + "\n", { mode: 0o600 })
+  fs.renameSync(tmp, file)
+}
+' 2>/dev/null || rm -f -- "$file"
+  else
+    # No node to edit it safely: losing Orca's settings beats leaving a sign-in behind.
+    rm -f -- "$file"
+  fi
+done
+
+left=0
+for file in "$claude_dir"/.credentials* "$HOME/.claude"/.credentials* "$codex_dir/auth.json" "$HOME/.codex/auth.json"; do
+  [ -e "$file" ] && left=$((left + 1))
+done
+printf '{"loggedOut":%d,"left":%d}\n' "$logged_out" "$left"

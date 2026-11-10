@@ -14,6 +14,9 @@ import { describeError } from './cloud-workspace-errors'
 export { usePendingHomeFilters } from './cloud-workspaces-home-nav'
 import type { Translate } from '@/i18n/use-translate'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
+import type { RowActions } from './CloudWorkspaceRowMenu'
+import { useAppStore } from '@/store'
+import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 
 export type HomeArchiveDeps = {
   localWorktreeId: (sandboxId: string) => Promise<string | null>
@@ -103,15 +106,64 @@ export function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => v
   void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
 }
 
+/** Sleep: this desktop's Sleep for a workspace it runs, else the control plane (owner or admin). */
+export async function sleepFromHome(w: CloudWorkspace, name: string): Promise<void> {
+  const worktreeId = await defaultDeps().localWorktreeId(w.id)
+  if (worktreeId) {
+    await runSleepWorktree(worktreeId)
+    return
+  }
+  const result = await window.api.cloudWorkspaces.sleep(w.id)
+  if (!result.ok) {
+    toastCloudSleepFailureRemote(name, describeError(result.error, result.reason, translate))
+  }
+}
+
+/** Delete: this desktop's delete dialog for a workspace it runs, else confirm then the control plane. */
+export async function deleteFromHome(
+  w: CloudWorkspace,
+  confirmDelete: (pending: { kind: 'delete'; workspace: CloudWorkspace }) => void
+): Promise<void> {
+  const worktreeId = await defaultDeps().localWorktreeId(w.id)
+  if (worktreeId) {
+    useAppStore.getState().openModal('delete-worktree', { worktreeId })
+    return
+  }
+  confirmDelete({ kind: 'delete', workspace: w })
+}
+
+export async function destroyFromHome(w: CloudWorkspace, name: string): Promise<void> {
+  const result = await window.api.cloudWorkspaces.destroy(w.id)
+  if (result.ok) {
+    toast.success(translate('orcaCloudWorkspace.deletedNamed', 'Deleted {{name}}', { name }))
+    return
+  }
+  toast.error(
+    translate('orcaCloudWorkspace.deleteFailedNamed', 'Couldn’t delete {{name}}', { name }),
+    {
+      description: describeError(result.error, result.reason, translate)
+    }
+  )
+}
+
+function toastCloudSleepFailureRemote(name: string, description: string): void {
+  toast.error(
+    translate('orcaCloudWorkspace.sleepFailedNamed', 'Couldn’t put {{name}} to sleep', { name }),
+    { description }
+  )
+}
+
 /** Row actions for the team list. A teammate's running workspace asks first (their agents stop). */
 export function homeArchiveActions(options: {
   selfId: string | null
   t: Translate
   refresh: () => void
-  confirmArchive: (pending: { kind: 'archive'; workspace: CloudWorkspace }) => void
-}): { archive: (w: CloudWorkspace) => void; unarchive: (w: CloudWorkspace) => void } {
+  confirmArchive: (pending: { kind: 'archive' | 'delete'; workspace: CloudWorkspace }) => void
+}): Pick<RowActions, 'archive' | 'unarchive' | 'sleep' | 'remove'> {
   const { selfId, t, refresh } = options
   return {
+    sleep: (w) => void sleepFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh),
+    remove: (w) => void deleteFromHome(w, options.confirmArchive),
     archive: (w) => {
       if (w.ownerUserId !== selfId && w.status === 'running') {
         options.confirmArchive({ kind: 'archive', workspace: w })
@@ -121,4 +173,19 @@ export function homeArchiveActions(options: {
     },
     unarchive: (w) => void unarchiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
   }
+}
+
+/** The team list's confirm dialog was accepted for an archive or a delete. */
+export function runConfirmed(
+  pending: { kind: 'archive' | 'delete'; workspace: CloudWorkspace },
+  t: Translate,
+  refresh: () => void
+): void {
+  if (pending.kind === 'archive') {
+    runHomeArchive(pending.workspace, t, refresh)
+    return
+  }
+  void destroyFromHome(pending.workspace, cloudWorkspaceTitle(pending.workspace, t)).finally(
+    refresh
+  )
 }

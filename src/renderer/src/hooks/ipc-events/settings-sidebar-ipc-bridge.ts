@@ -20,8 +20,13 @@ function getShortcutPlatform(): NodeJS.Platform {
 
 export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
-    window.api.ui.onOpenSettings(() => {
-      useAppStore.getState().openSettingsPage()
+    window.api.ui.onOpenSettings((target) => {
+      const store = useAppStore.getState()
+      if (target) {
+        // A usage alert's click: Settings › Orca account, where Plan & billing lives.
+        store.openSettingsTarget({ pane: target.pane, repoId: null })
+      }
+      store.openSettingsPage()
     })
   )
 

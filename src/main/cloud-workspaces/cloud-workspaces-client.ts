@@ -173,6 +173,18 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         GRANT_TIMEOUT_MS
       )
     },
+    /** Owner or team admin: put the sandbox to sleep (counts as a person choosing to sleep it). */
+    async sleep(id: string): Promise<void> {
+      await call(
+        'POST',
+        `/v1/sandboxes/${encodeURIComponent(id)}/suspend`,
+        NoteSentSchema.passthrough()
+      )
+    },
+    /** Owner or team admin: delete the sandbox and its disk (grants revoked server-side). */
+    async destroy(id: string): Promise<void> {
+      await call('DELETE', `/v1/sandboxes/${encodeURIComponent(id)}`, NoteSentSchema.passthrough())
+    },
     async listGrants(id: string) {
       return (await call('GET', `${ws(id)}/grants`, CloudWorkspaceGrantListSchema)).grants
     },

@@ -22,10 +22,17 @@ export function renderOrcaAccountSettingsSection(
     <SettingsSection
       id="orca-account"
       title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
-      description={t(
-        'auto.components.settings.orcaAccount.description',
-        'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-      )}
+      description={
+        model.orcaCloudApiAvailable
+          ? t(
+              'settings.orcaAccount.descriptionWithCloud',
+              'Sign-in, plan, team and Orca Cloud settings.'
+            )
+          : t(
+              'auto.components.settings.orcaAccount.description',
+              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('orca-account')}
     >
       {view.isSectionMounted('orca-account') ? <OrcaAccountSettingsPane /> : null}

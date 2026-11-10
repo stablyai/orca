@@ -5,6 +5,7 @@
 // is accepted and sent as `Authorization: Bearer`), Codex in codex-credentials.ts.
 import type { CredentialAgent } from './agent-credential-names'
 import { readUsableAgentCredential } from './agent-credentials'
+import { codexAccount } from './codex-credentials'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
 
@@ -18,6 +19,8 @@ export type AccountProvider = {
   header: string
   placeholder(row: Pick<SandboxRow, 'id'>): string
   format(credential: string): string
+  /** Narrows the account route to these requests (Codex: its ChatGPT backend APIs, not all of chatgpt.com). */
+  pathAllowed?(method: string, path: string): boolean
   /** Extra headers derived from the real credential (e.g. Codex's ChatGPT account id). */
   extraHeaders?(credential: string): Record<string, string>
   /**
@@ -29,9 +32,10 @@ export type AccountProvider = {
   credential(db: D1Database, keyring: Keyring, userId: string, now: number): Promise<string | null>
 }
 
-/** D13: a workspace shared with teammates never uses a personal account. */
+/** D13: a workspace shared with teammates never uses a personal account. Fails closed: only a row
+ * known to be private counts as unshared. */
 export function isSharedWorkspace(row: Pick<SandboxRow, 'visibility'>): boolean {
-  return row.visibility === 'team'
+  return row.visibility !== 'private'
 }
 
 export const claudeAccount: AccountProvider = {
@@ -45,7 +49,7 @@ export const claudeAccount: AccountProvider = {
   credential: (db, keyring, userId, now) => readUsableAgentCredential(db, keyring, userId, 'claude', now)
 }
 
-export const ACCOUNT_PROVIDERS: AccountProvider[] = [claudeAccount]
+export const ACCOUNT_PROVIDERS: AccountProvider[] = [claudeAccount, codexAccount]
 
 export function accountProvider(agent: CredentialAgent): AccountProvider | undefined {
   return ACCOUNT_PROVIDERS.find((provider) => provider.agent === agent)

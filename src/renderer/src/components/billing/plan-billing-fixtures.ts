@@ -48,3 +48,43 @@ export const sampleTeam: OrcaBillingEntitlement = {
   canManageBilling: true,
   offers: sampleOffers
 }
+
+/** A team on its one-time trial: 2 sandbox hours, 0.6 used, no plan, no card. */
+export const sampleTrial: OrcaBillingEntitlement = {
+  ...sampleTeam,
+  plan: null,
+  planLabel: null,
+  status: 'trial',
+  interval: null,
+  seats: 0,
+  period: null,
+  usageWindow: null,
+  trial: {
+    includedSeconds: 2 * HOUR,
+    usedSeconds: 0.6 * HOUR,
+    remainingSeconds: 1.4 * HOUR,
+    exhausted: false,
+    grantedAt: Date.UTC(2026, 10, 10)
+  },
+  includedSeconds: 2 * HOUR,
+  usedSeconds: 0.6 * HOUR,
+  remainingIncludedSeconds: 1.4 * HOUR,
+  offers: { ...sampleOffers, trial: null }
+}
+
+/** The same team once its trial hours are used up. */
+export const sampleTrialUsedUp: OrcaBillingEntitlement = {
+  ...sampleTrial,
+  trial: {
+    includedSeconds: 2 * HOUR,
+    usedSeconds: 2 * HOUR,
+    remainingSeconds: 0,
+    exhausted: true,
+    grantedAt: Date.UTC(2026, 10, 10)
+  },
+  usedSeconds: 2 * HOUR,
+  remainingIncludedSeconds: 0,
+  usageWarningPercent: 100,
+  canStartSandbox: false,
+  reason: 'trial_used_up'
+}

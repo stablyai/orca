@@ -19,7 +19,9 @@ const ACTIONS: RowActions = {
   goToChat: () => {},
   patch: () => {},
   archive: () => {},
-  unarchive: () => {}
+  unarchive: () => {},
+  sleep: () => {},
+  remove: () => {}
 }
 const SECTIONS = ['Payments', 'Platform']
 const MEMBERS = [...DIRECTORY.entries()].map(([userId, m]) => ({ userId, name: m.name }))

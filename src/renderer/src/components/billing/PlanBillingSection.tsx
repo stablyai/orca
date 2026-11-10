@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -7,19 +6,22 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
 import { cn } from '@/lib/utils'
-import type {
-  OrcaBillingOpenResult,
-  OrcaBillingOverageArgs,
-  OrcaBillingOverageResult,
-  OrcaBillingStatusResult
+import {
+  isOrcaCloudTrial,
+  type OrcaBillingOpenResult,
+  type OrcaBillingOverageArgs,
+  type OrcaBillingOverageResult,
+  type OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import { openPlansPage } from './plans/plans-page-store'
 import { PaymentIssueNotice } from './PaymentIssueNotice'
 import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
 import { PlanStatusBadge } from './PlanStatusBadge'
+import { TrialPlanSummary } from './TrialPlanSummary'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
 import { useAppStore } from '@/store/index'
+import { usageAlertLevel } from '../../../../shared/orca-billing-usage-alerts'
 import { BILLING_CAPABILITY } from './register-plan-billing-menu-item'
 
 export function PlanBillingSection(): React.JSX.Element | null {
@@ -131,37 +133,41 @@ export function PlanBillingView({
 }: PlanBillingViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const locale = useIntlLocale()
-  if (!result && loading) {
-    return <PlanBillingSkeleton />
+  if (!result) {
+    return loading ? <PlanBillingSkeleton /> : null
   }
-  if (!result || result.status === 'unconfigured' || result.status === 'signed-out') {
-    // The pane above already handles sign-in; billing stays out of builds without a service.
+  if (result.status === 'unconfigured') {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t(
+          'auto.components.billing.unconfigured',
+          'Billing isn’t available in this build of Orca.'
+        )}
+      </p>
+    )
+  }
+  if (result.status === 'signed-out') {
+    // The Orca Cloud panes show the sign-in prompt before this renders.
     return null
   }
 
-  const header = (
-    <SettingsGroupHeader
-      className="px-0"
-      title={t('auto.components.billing.title', 'Plan & billing')}
-      action={
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-disabled={refreshing || undefined}
-          onClick={refreshing ? undefined : onRefresh}
-          aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
-        >
-          <RefreshCw className={cn(refreshing && 'motion-safe:animate-spin')} />
-        </Button>
-      }
-    />
+  // Settings › Orca Cloud › Plan & billing owns the title; the refresh sits with the plan it reloads.
+  const refreshButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-disabled={refreshing || undefined}
+      onClick={refreshing ? undefined : onRefresh}
+      aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
+    >
+      <RefreshCw className={cn(refreshing && 'motion-safe:animate-spin')} />
+    </Button>
   )
 
   if (result.status === 'failed') {
     return (
-      <div className="space-y-3 border-t border-border/60 pt-5">
-        {header}
+      <div className="space-y-3">
         <InlineError
           title={t('auto.components.billing.loadFailedTitle', 'Couldn’t load your plan')}
           retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
@@ -174,12 +180,14 @@ export function PlanBillingView({
 
   const entitlement = result.entitlement
   const hasPlan = entitlement.plan !== null && entitlement.status !== 'canceled'
+  // The one-time trial stands in for a plan until one starts (spec T1).
+  const onTrial = !hasPlan && isOrcaCloudTrial(entitlement)
+  const trialUsedUp = onTrial && entitlement.trial?.exhausted === true
   const monthlyCents = entitlement.offers?.team.monthlyPriceCentsPerSeat ?? null
   const teamPrice = monthlyCents === null ? null : formatCents(monthlyCents, locale)
 
   return (
-    <div className="space-y-4 border-t border-border/60 pt-5">
-      {header}
+    <div className="space-y-4">
       <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
       {hasPlan ? (
         <div className="space-y-4">
@@ -198,6 +206,7 @@ export function PlanBillingView({
                   })}
             </span>
             <PlanStatusBadge entitlement={entitlement} />
+            <span className="ml-auto">{refreshButton}</span>
           </div>
           <UsageSummary entitlement={entitlement} />
           {/* Overage is moot while sandboxes are suspended for a failed payment. */}
@@ -212,17 +221,25 @@ export function PlanBillingView({
         </div>
       ) : null}
 
-      {/* The overage card carries the cap-reached hint for admins; don't repeat it here. */}
-      {hasPlan &&
+      {onTrial ? <TrialPlanSummary entitlement={entitlement} onChoosePlan={onSeePlans} /> : null}
+
+      {/* Admins already read these above: the overage card's cap-reached hint, and the usage
+          alert's out-of-hours sentence. */}
+      {(hasPlan || entitlement.reason === 'trial_unavailable') &&
       entitlement.reason &&
       entitlement.payment.pastDueSince === null &&
-      !(entitlement.reason === 'overage_cap_reached' && entitlement.canManageBilling) ? (
+      !(
+        entitlement.canManageBilling &&
+        (entitlement.reason === 'overage_cap_reached' ||
+          (entitlement.reason === 'included_hours_exhausted' &&
+            usageAlertLevel(entitlement) === 100))
+      ) ? (
         <p className="text-xs text-muted-foreground">
           {denyReasonCopy(entitlement.reason, t, entitlement.canManageBilling)}
         </p>
       ) : null}
 
-      {!hasPlan ? (
+      {!hasPlan && !onTrial ? (
         <p className="text-sm text-muted-foreground text-pretty">
           {teamPrice
             ? t(
@@ -238,7 +255,7 @@ export function PlanBillingView({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {hasPlan ? null : (
+        {hasPlan || onTrial ? null : (
           <Button type="button" size="sm" onClick={onSeePlans}>
             {t('auto.components.billing.upgrade.cta', 'See plans')}
           </Button>
@@ -259,11 +276,15 @@ export function PlanBillingView({
           <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
             {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
-        ) : null}
+        ) : (
+          <span className="ml-auto">{refreshButton}</span>
+        )}
       </div>
 
       {/* The payment alert already says who to ask; don't ask twice. */}
-      {!entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
+      {!entitlement.canManageBilling &&
+      entitlement.payment.pastDueSince === null &&
+      !trialUsedUp ? (
         <p className="text-xs text-muted-foreground">
           {t('auto.components.billing.askAdmin2', 'Ask an owner or admin to change the plan.')}
         </p>
@@ -285,15 +306,11 @@ function PlanBillingSkeleton(): React.JSX.Element {
   const t = useTranslate()
   return (
     <div
-      className="space-y-4 border-t border-border/60 pt-5"
+      className="space-y-4"
       role="status"
       aria-busy
       aria-label={t('auto.components.billing.loadingPlan', 'Loading your plan…')}
     >
-      <SettingsGroupHeader
-        className="px-0"
-        title={t('auto.components.billing.title', 'Plan & billing')}
-      />
       <div className="flex items-center gap-2">
         <Skeleton shape="circle" className="size-4" />
         <Skeleton shape="small" className="h-4 w-16" />
