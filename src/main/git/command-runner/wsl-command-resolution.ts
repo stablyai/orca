@@ -162,12 +162,14 @@ export function resolveCommand(
 
   if (options.useWslLoginShell) {
     // Fence only buffered reads: login rc output contaminates stdout, but markers would corrupt streaming records.
+    // Why: this outer sh only resolves the user's shell. -l would source ~/.profile as dash and abort before git.
+    const outerShell = '-c'
     if (options.captureLoginShellOutput) {
       const captured = buildWslCapturedLoginShellCommand(shellCmd)
       return withWslProcessGroupTermination(
         {
           binary: 'wsl.exe',
-          args: buildWslExecArgs(wsl.distro, ['sh', '-lc', captured.command]),
+          args: buildWslExecArgs(wsl.distro, ['sh', outerShell, captured.command]),
           cwd: resolveWslInteropSpawnCwd(),
           wsl,
           wslMode: 'login-shell',
@@ -179,7 +181,7 @@ export function resolveCommand(
     return withWslProcessGroupTermination(
       {
         binary: 'wsl.exe',
-        args: buildWslExecArgs(wsl.distro, ['sh', '-lc', buildWslLoginShellCommand(shellCmd)]),
+        args: buildWslExecArgs(wsl.distro, ['sh', outerShell, buildWslLoginShellCommand(shellCmd)]),
         cwd: resolveWslInteropSpawnCwd(),
         wsl,
         wslMode: 'login-shell'
