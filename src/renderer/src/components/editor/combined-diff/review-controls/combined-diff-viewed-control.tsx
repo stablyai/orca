@@ -1,3 +1,5 @@
+import type { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -23,6 +25,7 @@ async function requestCombinedViewedMark({
   file,
   section,
   signature,
+  loadForReview,
   isCurrentSection,
   isMounted,
   setPending,
@@ -31,7 +34,8 @@ async function requestCombinedViewedMark({
 }: {
   file: OpenFile
   section: DiffSection
-  signature: string
+  signature: string | null
+  loadForReview?: () => ReturnType<typeof fetchCombinedDiffSection>
   isCurrentSection: (modifiedTime: number | null | undefined) => boolean
   isMounted: () => boolean
   setPending: (pending: boolean) => void
@@ -39,6 +43,24 @@ async function requestCombinedViewedMark({
   onFailure: () => void
 }): Promise<void> {
   try {
+    let assertLoadedCurrent: (() => void) | undefined
+    let expectedTime = section.reviewModifiedTime
+    if (signature === null || expectedTime === undefined) {
+      const loaded = await loadForReview!()
+      expectedTime = await loaded.reviewModifiedTime
+      assertLoadedCurrent = loaded.operation.assertCurrent
+      assertLoadedCurrent()
+      const result = loaded.result
+      if (
+        expectedTime === undefined ||
+        (result.kind === 'binary' && result.tooLarge) ||
+        (result.kind === 'text' &&
+          (result.largeDiffRenderLimit ?? getLargeDiffRenderLimit(result)).limited)
+      ) {
+        throw new Error('Diff cannot be marked as viewed')
+      }
+      signature = diffReviewContentSignature(result)
+    }
     const { operation, key } = combinedDiffReviewIdentity(file, section)
     const modifiedTime = await statRuntimePath(
       operation.context,
@@ -53,7 +75,8 @@ async function requestCombinedViewedMark({
       }
     )
     operation.assertCurrent()
-    if (!isMounted() || !isCurrentSection(modifiedTime)) {
+    assertLoadedCurrent?.()
+    if (!isMounted() || expectedTime !== modifiedTime || !isCurrentSection(modifiedTime)) {
       return
     }
     setDiffReviewed(key, {
@@ -79,8 +102,10 @@ async function requestCombinedViewedMark({
 export function CombinedDiffViewedControl({
   file,
   section,
-  setSections
+  setSections,
+  loadForReview
 }: {
+  loadForReview?: () => ReturnType<typeof fetchCombinedDiffSection>
   file: OpenFile
   section: DiffSection
   setSections: Dispatch<SetStateAction<DiffSection[]>>
@@ -117,16 +142,22 @@ export function CombinedDiffViewedControl({
     record?.entrySignature === reviewEntrySignature(section) &&
     (signature === null || record.contentSignature === signature) &&
     (section.reviewModifiedTime === undefined || record.modifiedTime === section.reviewModifiedTime)
+  const blocked =
+    section.error ||
+    section.largeDiffRenderLimit?.limited ||
+    (section.diffResult?.kind === 'binary' && section.diffResult.tooLarge)
   const unavailable =
     !section.diffResult ||
     section.loading ||
     section.loadOnDemand ||
-    section.error ||
-    section.largeDiffRenderLimit?.limited ||
-    (section.diffResult.kind === 'binary' && section.diffResult.tooLarge) ||
+    blocked ||
     section.reviewModifiedTime === undefined
   const disabled =
-    !identity || pending || section.dirty || !!section.saveConflict || (!viewed && !!unavailable)
+    !identity ||
+    pending ||
+    section.dirty ||
+    !!section.saveConflict ||
+    (!viewed && (!!blocked || (!!unavailable && !loadForReview)))
 
   useDiffReviewReadInvalidation({
     key: identity?.key ?? null,
@@ -154,14 +185,17 @@ export function CombinedDiffViewedControl({
     await requestCombinedViewedMark({
       file,
       section,
-      signature: signature!,
+      signature: section.loading || section.loadOnDemand ? null : signature,
+      loadForReview,
       isCurrentSection: (modifiedTime) => {
         const current = latest.current
         return (
           !current.dirty &&
           !current.saveConflict &&
           current.diffResult === section.diffResult &&
-          current.reviewModifiedTime === modifiedTime
+          (current.reviewModifiedTime === undefined ||
+            current.reviewModifiedTime === modifiedTime) &&
+          reviewEntrySignature(current) === reviewEntrySignature(section)
         )
       },
       isMounted: () => mounted.current,

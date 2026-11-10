@@ -1,3 +1,4 @@
+import type { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
 import { combinedDiffViewportAttributes, combinedDiffRowAttributes } from './combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
@@ -27,6 +28,7 @@ export function CombinedDiffSectionList({
   isCommitMode,
   isDark,
   loadSection,
+  loadSectionForReview,
   loadDeferredSection,
   markDirectScrollInput,
   modifiedEditorsRef,
@@ -55,6 +57,7 @@ export function CombinedDiffSectionList({
   isBranchMode: boolean
   isCommitMode: boolean
   isDark: boolean
+  loadSectionForReview: (index: number) => ReturnType<typeof fetchCombinedDiffSection>
   loadSection: (index: number) => void
   loadDeferredSection: (index: number) => void
   markDirectScrollInput: () => void
@@ -154,6 +157,7 @@ export function CombinedDiffSectionList({
                     return (
                       <>
                         <CombinedDiffViewedControl
+                          loadForReview={() => loadSectionForReview(virtualItem.index)}
                           file={file}
                           section={section}
                           setSections={setSections}

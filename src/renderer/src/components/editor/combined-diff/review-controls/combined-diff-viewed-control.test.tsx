@@ -14,6 +14,8 @@ import { DiffViewedControl } from '../../diff/review/diff-viewed-control'
 import { DiffSectionHeader } from '../../diff/sections/DiffSectionHeader'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffReviewedCollapse } from './use-combined-diff-reviewed-collapse'
+import { combinedDiffReviewIdentity } from './combined-diff-review-identity'
+import type { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
 import { CombinedDiffViewedControl } from './combined-diff-viewed-control'
 
 const { stat } = vi.hoisted(() => ({ stat: vi.fn() }))
@@ -51,7 +53,13 @@ const entries = [
 ] satisfies Parameters<typeof useCombinedDiffEntrySet>[0]['gitStatusEntries']
 const branchEntries = []
 
-function Review() {
+function Review({
+  unloaded = false,
+  loadForReview
+}: {
+  unloaded?: boolean
+  loadForReview?: () => ReturnType<typeof fetchCombinedDiffSection>
+} = {}) {
   const [sections, setSections] = useState<DiffSection[]>([
     {
       key: 'unstaged:a.ts',
@@ -62,11 +70,11 @@ function Review() {
       removed: 1,
       originalContent: 'before',
       modifiedContent: 'after',
-      collapsed: false,
-      loading: false,
+      collapsed: unloaded,
+      loading: unloaded,
       dirty: false,
-      diffResult: result,
-      reviewModifiedTime: 123,
+      diffResult: unloaded ? null : result,
+      reviewModifiedTime: unloaded ? undefined : 123,
       largeDiffRenderLimit: null
     }
   ])
@@ -99,7 +107,12 @@ function Review() {
         onOpenSection={() => {}}
         openSectionTitle="Open diff"
         trailingContent={
-          <CombinedDiffViewedControl file={combined} section={section} setSections={setSections} />
+          <CombinedDiffViewedControl
+            file={combined}
+            section={section}
+            setSections={setSections}
+            loadForReview={loadForReview}
+          />
         }
       />
       <DiffViewedControl file={single} content={{ ...result, reviewModifiedTime: 123 }} />
@@ -285,4 +298,77 @@ it('keeps a new review mark when another surface still holds older cached bytes'
   expect(
     screen.getAllByRole('checkbox', { name: 'Viewed' }).map((c) => c.getAttribute('aria-checked'))
   ).toEqual(['true', 'false'])
+})
+
+it.each([123, 124])(
+  'verifies an unloaded collapsed file before marking it (mtime %s)',
+  async (mtime) => {
+    let finish!: (value: Awaited<ReturnType<typeof fetchCombinedDiffSection>>) => void
+    const loadForReview = () =>
+      new Promise<Awaited<ReturnType<typeof fetchCombinedDiffSection>>>((resolve) => {
+        finish = resolve
+      })
+    render(<Review unloaded loadForReview={loadForReview} />)
+    const checkbox = screen.getAllByRole('checkbox', { name: 'Viewed' })[0]!
+    expect(checkbox.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(checkbox)
+    expect(checkbox.hasAttribute('disabled')).toBe(true)
+    expect(checkbox.getAttribute('aria-checked')).toBe('false')
+    stat.mockResolvedValue({ mtime })
+    await act(async () =>
+      finish({
+        result,
+        reviewModifiedTime: Promise.resolve(123),
+        operation: combinedDiffReviewIdentity(combined, { path: 'a.ts', area: 'unstaged' })
+          .operation
+      })
+    )
+    expect(checkbox.getAttribute('aria-checked')).toBe(mtime === 123 ? 'true' : 'false')
+    expect(screen.queryByLabelText('Diff contents')).toBeNull()
+    expect(checkbox.hasAttribute('disabled')).toBe(false)
+  }
+)
+
+it('leaves a collapsed file unviewed when loading fails', async () => {
+  render(
+    <Review
+      unloaded
+      loadForReview={async () => {
+        throw new Error('offline')
+      }}
+    />
+  )
+  await act(async () => fireEvent.click(screen.getAllByRole('checkbox', { name: 'Viewed' })[0]!))
+  expect(screen.getAllByRole('checkbox', { name: 'Viewed' })[0]!.getAttribute('aria-checked')).toBe(
+    'false'
+  )
+  expect(screen.queryByLabelText('Diff contents')).toBeNull()
+})
+
+it('rejects an unloaded review invalidated during the final file verification', async () => {
+  let finish!: (value: { mtime: number }) => void
+  const assertCurrent = vi.fn()
+  const loadForReview = async () => ({
+    result,
+    reviewModifiedTime: Promise.resolve(123),
+    operation: {
+      ...combinedDiffReviewIdentity(combined, { path: 'a.ts', area: 'unstaged' }).operation,
+      assertCurrent
+    }
+  })
+  render(<Review unloaded loadForReview={loadForReview} />)
+  stat.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  )
+  await act(async () => fireEvent.click(screen.getAllByRole('checkbox', { name: 'Viewed' })[0]!))
+  assertCurrent.mockImplementation(() => {
+    throw new Error('invalidated')
+  })
+  await act(async () => finish({ mtime: 123 }))
+  expect(screen.getAllByRole('checkbox', { name: 'Viewed' })[0]!.getAttribute('aria-checked')).toBe(
+    'false'
+  )
+  expect(screen.queryByLabelText('Diff contents')).toBeNull()
 })
