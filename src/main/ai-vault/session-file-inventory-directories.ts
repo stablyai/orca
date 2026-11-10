@@ -27,7 +27,11 @@ export class SessionInventoryDirectories extends Map<string, SessionInventoryDir
     }
   }
 
-  removeTree(path: string, removeFile: (path: string) => void): void {
+  removeTree(
+    path: string,
+    removeFile: (path: string) => void,
+    removeDirectory?: (path: string) => void
+  ): void {
     const directory = this.get(path)
     if (!directory) {
       return
@@ -36,8 +40,9 @@ export class SessionInventoryDirectories extends Map<string, SessionInventoryDir
       removeFile(file)
     }
     for (const child of directory.children) {
-      this.removeTree(child, removeFile)
+      this.removeTree(child, removeFile, removeDirectory)
     }
     this.delete(path)
+    removeDirectory?.(path)
   }
 }

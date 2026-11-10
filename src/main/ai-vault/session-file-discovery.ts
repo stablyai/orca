@@ -1,4 +1,4 @@
-import { dirname, extname, relative } from 'node:path'
+import { dirname, extname, isAbsolute, relative } from 'node:path'
 import type { AiVaultAgentSource } from './session-scanner-types'
 
 export function isDiscoverableSessionFile(
@@ -6,7 +6,10 @@ export function isDiscoverableSessionFile(
   rootDir: string,
   filePath: string
 ): boolean {
-  if (!source.extensions.includes(extname(filePath).toLowerCase())) {
+  if (
+    !source.extensions.includes('*') &&
+    !source.extensions.includes(extname(filePath).toLowerCase())
+  ) {
     return false
   }
   if (source.filePredicate && !source.filePredicate(filePath)) {
@@ -28,5 +31,5 @@ export function pathSegments(filePath: string): string[] {
 
 export function isInsideSessionRoot(root: string, path: string): boolean {
   const rel = relative(root, path)
-  return rel !== '..' && !rel.startsWith('../') && !rel.startsWith('..\\') && !rel.startsWith('/')
+  return !isAbsolute(rel) && rel !== '..' && !rel.startsWith('../') && !rel.startsWith('..\\')
 }

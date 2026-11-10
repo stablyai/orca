@@ -1,23 +1,25 @@
 export type KimiSessionIndexIdentity = {
+  dev?: number
+  ino?: number
   changeTimeMs: number
   mtimeMs: number
   sizeBytes: number
 }
 
-type KimiSessionIndexCacheEntry = {
+type KimiSessionIndexCacheEntry<T> = {
   expiresAt: number
   generation: number
   identity: KimiSessionIndexIdentity
   timer: NodeJS.Timeout | null
-  value: Promise<Map<string, string>>
+  value: Promise<T>
 }
 
 export const KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS = 64
 // Active scans refresh expiry; idle surfaces release parsed index maps.
 export const KIMI_WORK_DIR_CACHE_TTL_MS = 5 * 60_000
 
-export class KimiSessionIndexCache {
-  private readonly entries = new Map<string, KimiSessionIndexCacheEntry>()
+export class KimiSessionIndexCache<T = Map<string, string>> {
+  private readonly entries = new Map<string, KimiSessionIndexCacheEntry<T>>()
   private minimumCacheGeneration = 0
   private nextGeneration = 0
 
@@ -48,10 +50,10 @@ export class KimiSessionIndexCache {
     indexPath: string,
     identity: KimiSessionIndexIdentity,
     generation: number,
-    load: () => Promise<Map<string, string>>
-  ): Promise<Map<string, string>> {
+    load: (previous: Promise<T> | undefined) => Promise<T>
+  ): Promise<T> {
     if (generation < this.minimumCacheGeneration) {
-      return load()
+      return load(undefined)
     }
     const cached = this.entries.get(indexPath)
     const now = Date.now()
@@ -61,15 +63,15 @@ export class KimiSessionIndexCache {
     }
     if (cached && cached.generation > generation) {
       // An older stat must not overwrite a generation cached by a newer concurrent read.
-      return load()
+      return load(undefined)
     }
 
-    const entry: KimiSessionIndexCacheEntry = {
+    const entry: KimiSessionIndexCacheEntry<T> = {
       expiresAt: now + KIMI_WORK_DIR_CACHE_TTL_MS,
       generation,
       identity,
       timer: null,
-      value: load()
+      value: load(cached?.value)
     }
     this.remember(indexPath, entry, now)
     return entry.value
@@ -83,7 +85,7 @@ export class KimiSessionIndexCache {
     return this.entries.size
   }
 
-  private forget(indexPath: string, entry: KimiSessionIndexCacheEntry): void {
+  private forget(indexPath: string, entry: KimiSessionIndexCacheEntry<T>): void {
     if (this.entries.get(indexPath) !== entry) {
       return
     }
@@ -93,7 +95,7 @@ export class KimiSessionIndexCache {
     this.entries.delete(indexPath)
   }
 
-  private remember(indexPath: string, entry: KimiSessionIndexCacheEntry, now: number): void {
+  private remember(indexPath: string, entry: KimiSessionIndexCacheEntry<T>, now: number): void {
     const replaced = this.entries.get(indexPath)
     if (replaced?.timer && replaced !== entry) {
       clearTimeout(replaced.timer)
@@ -119,6 +121,8 @@ export class KimiSessionIndexCache {
 
 function identitiesMatch(left: KimiSessionIndexIdentity, right: KimiSessionIndexIdentity): boolean {
   return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
     left.changeTimeMs === right.changeTimeMs &&
     left.mtimeMs === right.mtimeMs &&
     left.sizeBytes === right.sizeBytes

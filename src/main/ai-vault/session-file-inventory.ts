@@ -8,16 +8,13 @@ import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
   isMissingTranscriptPathError,
-  observeSessionFile,
   type DiscoverSessionFilesArgs
 } from './session-scanner-discovery'
-import type { FileWithMtime } from './session-scanner-types'
 import { isDiscoverableSessionFile, isInsideSessionRoot } from './session-file-discovery'
 import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
-import { retainRecentSessionFile } from './session-file-observation'
-import { sidecarUnchanged } from './parse-cache/session-sidecar-stat'
+import { SessionInventoryFiles, type SessionFileChange } from './session-file-inventory-files'
 
-export type SessionFileChange = { file: FileWithMtime; force: boolean }
+export type { SessionFileChange } from './session-file-inventory-files'
 type Walk = {
   path: string
   depth: number
@@ -29,34 +26,56 @@ type Walk = {
 
 /** Retains discovery position independently of the read queue and of watcher delivery. */
 export class SessionFileInventory {
-  readonly files = new Map<string, FileWithMtime>()
-  readonly dependencies = new Map<string, Set<string>>()
+  private readonly observations: SessionInventoryFiles
+  get files() {
+    return this.observations.files
+  }
+  get dependencies() {
+    return this.observations.dependencies
+  }
   private readonly directories: SessionInventoryDirectories
   private readonly dirty = new Map<string, boolean>()
   private readonly walks: Walk[] = []
   private readonly scheduled = new Set<string>()
   private readonly trailing = new Set<string>()
-  private readonly recent = new Map<string, FileWithMtime>()
-  private readonly dependencyByFile = new Map<string, string>()
-  private readonly changes = new Map<string, SessionFileChange>()
-  private readonly removed = new Set<string>()
   private readonly failures = new Set<string>()
   private reconcileAgain = false
+  private reconciling = false
+  private chooseDirty = true
+  private readonly removedDirectories = new Set<string>()
 
   constructor(readonly root: string) {
     this.directories = new SessionInventoryDirectories(root)
+    this.observations = new SessionInventoryFiles(
+      (path) => this.directories.addFile(path),
+      (path) => this.schedule(dirname(path)),
+      (path) => this.dirty.delete(path)
+    )
     this.reconcile()
   }
 
   get pending(): boolean {
-    return this.walks.length > 0 || this.dirty.size > 0 || this.reconcileAgain
+    return (
+      this.walks.length > 0 ||
+      this.dirty.size > 0 ||
+      this.reconcileAgain ||
+      this.failures.size > 0 ||
+      this.observations.failures.size > 0
+    )
+  }
+
+  get walking(): boolean {
+    return this.walks.length > 0 || this.reconcileAgain
   }
 
   reconcile(): void {
     // A burst during a crawl leaves one trailing obligation, never restarts its prefix.
-    if (!this.scheduled.has(this.root)) {
-      this.schedule(this.root, true)
+    if (this.reconciling) {
+      this.reconcileAgain = true
+      return
     }
+    this.reconciling = true
+    this.schedule(this.root, true)
   }
 
   invalidate(path: string, force = true): void {
@@ -69,7 +88,7 @@ export class SessionFileInventory {
   }
 
   private schedule(path: string, reconcile = false): void {
-    if (this.scheduled.has(path)) {
+    if (!isInsideSessionRoot(this.root, path) || this.scheduled.has(path)) {
       return
     }
     const rel = relative(this.root, path)
@@ -79,9 +98,11 @@ export class SessionFileInventory {
 
   async pollRecent(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
     // This set is bounded on admission; never project/sort the archive to find recent paths.
-    const paths = [...this.recent.keys()]
+    const paths = [...this.observations.recent.keys()]
     for (const path of paths) {
-      await this.observe(path, args, false, limit)
+      if (!this.dirty.has(path)) {
+        await this.observations.observe(path, args, false, limit)
+      }
     }
   }
 
@@ -89,77 +110,52 @@ export class SessionFileInventory {
     args: DiscoverSessionFilesArgs,
     overdue: () => boolean,
     recentLimit: number
-  ): Promise<{ changes: SessionFileChange[]; removed: string[] }> {
+  ): Promise<{ changes: SessionFileChange[]; removed: string[]; removedDirectories: string[] }> {
     let consumed = 0
-    // Events arriving during an await stay in dirty; deleting before reading preserves their version.
-    for (let index = 0; index < 16_384 && this.dirty.size; index++) {
-      if (consumed > 0 && overdue()) {
-        break
+    while ((this.dirty.size || this.walks.length) && (consumed === 0 || !overdue())) {
+      if (this.dirty.size && (!this.walks.length || this.chooseDirty)) {
+        this.chooseDirty = false
+        await this.drainDirty(args, recentLimit)
+        consumed++
+        continue
       }
-      const first = this.dirty.entries().next().value
-      if (!first) {
-        break
-      }
-      const [path, force] = first
-      this.dirty.delete(path)
-      const owners = this.dependencies.get(path)
-      if (owners) {
-        for (const owner of owners) {
-          this.invalidate(owner, force)
-        }
-      }
-      if (this.accepts(path, args)) {
-        await this.observe(path, args, force, recentLimit)
-      } else if (isInsideSessionRoot(this.root, path)) {
-        try {
-          if ((await wslGatedStat(path, 'scan', args.signal)).isDirectory()) {
-            if (this.scheduled.has(path)) {
-              this.trailing.add(path)
-            } else {
-              this.schedule(path)
-            }
-          } else if (this.directories.has(path)) {
-            this.schedule(dirname(path))
-          }
-        } catch (error) {
-          throwIfAiVaultScanCancelled(args.signal)
-          if (isMissingTranscriptPathError(error)) {
-            this.schedule(dirname(path))
-          } else {
-            this.issue(path, error, args)
-          }
-        }
-      }
-      consumed++
-    }
-    while (this.walks.length && (consumed === 0 || !overdue())) {
+      this.chooseDirty = true
       throwIfAiVaultScanCancelled(args.signal)
-      const walk = this.walks.at(-1)!
+      const walk = this.walks[0]
       if (!walk.entries) {
         try {
           walk.entries = await wslGatedReaddir(walk.path, 'scan', args.signal)
           args.onDirectoryEntries?.(walk.path, walk.entries)
-          const names = new Set(walk.entries.map((entry) => entry.name))
+          const entries = new Map(walk.entries.map((entry) => [entry.name, entry]))
           const old = this.directories.get(walk.path)
           walk.previous = old
           if (old) {
             for (const path of old.files) {
-              if (!names.has(relative(walk.path, path))) {
-                this.forget(path)
+              if (!entries.get(relative(walk.path, path))?.isFile()) {
+                this.observations.forget(path)
+                old.files.delete(path)
               }
             }
             for (const child of old.children) {
-              if (!names.has(relative(walk.path, child))) {
-                this.directories.removeTree(child, (path) => this.forget(path))
+              if (!entries.get(relative(walk.path, child))?.isDirectory()) {
+                this.removeDirectory(child)
               }
             }
           }
-          this.directories.set(walk.path, { files: new Set(), children: new Set() })
+          this.directories.set(walk.path, old ?? { files: new Set(), children: new Set() })
           this.failures.delete(walk.path)
         } catch (error) {
           throwIfAiVaultScanCancelled(args.signal)
-          this.issue(walk.path, error, args)
-          this.walks.pop()
+          if (isMissingTranscriptPathError(error)) {
+            this.failures.delete(walk.path)
+            this.removeDirectory(walk.path)
+          } else {
+            this.issue(walk.path, error, args)
+          }
+          const index = this.walks.indexOf(walk)
+          if (index !== -1) {
+            this.walks.splice(index, 1)
+          }
           this.scheduled.delete(walk.path)
           continue
         }
@@ -170,15 +166,17 @@ export class SessionFileInventory {
         const entry = walk.entries[walk.offset]
         const path = join(walk.path, entry.name)
         if (entry.isDirectory() && (args.directoryPredicate?.(entry.name, walk.depth) ?? true)) {
+          const known = walk.previous?.children.has(path)
           node.children.add(path)
-          if (walk.reconcile || !walk.previous?.children.has(path)) {
+          if (walk.reconcile || !known) {
             this.schedule(path, walk.reconcile)
           }
         } else if (entry.isFile() && this.accepts(path, args)) {
+          const known = walk.previous?.files.has(path)
           node.files.add(path)
           // Do not advance past an aborted observation.
-          if (walk.reconcile || !walk.previous?.files.has(path)) {
-            await this.observe(path, args, false, recentLimit)
+          if (walk.reconcile || !known) {
+            await this.observations.observe(path, args, false, recentLimit)
           }
         }
         walk.offset++
@@ -193,113 +191,97 @@ export class SessionFileInventory {
         }
       }
     }
-    if (!this.walks.length && this.reconcileAgain) {
-      this.reconcileAgain = false
-      this.schedule(this.root, true)
+    if (!this.walks.length) {
+      this.reconciling = false
+      if (this.reconcileAgain) {
+        this.reconcileAgain = false
+        this.reconcile()
+      }
     }
-    const changes = [...this.changes.values()]
-    const removed = [...this.removed]
-    this.changes.clear()
-    this.removed.clear()
-    return { changes, removed }
+    const changes = [...this.observations.changes.values()]
+    const removed = [...this.observations.removed]
+    this.observations.changes.clear()
+    this.observations.removed.clear()
+    const removedDirectories = [...this.removedDirectories]
+    this.removedDirectories.clear()
+    return { changes, removed, removedDirectories }
+  }
+
+  private async drainDirty(args: DiscoverSessionFilesArgs, recentLimit: number): Promise<void> {
+    const first = this.dirty.entries().next().value
+    if (!first) {
+      return
+    }
+    const [path, force] = first
+    this.dirty.delete(path)
+    const owners = this.dependencies.get(path)
+    if (owners) {
+      for (const owner of owners) {
+        this.invalidate(owner, force)
+      }
+    }
+    if (this.accepts(path, args)) {
+      await this.observations.observe(path, args, force, recentLimit)
+    } else if (isInsideSessionRoot(this.root, path)) {
+      try {
+        const stat = await wslGatedStat(path, 'scan', args.signal)
+        this.failures.delete(path)
+        if (stat.isDirectory()) {
+          if (!isInsideSessionRoot(this.root, path) || this.scheduled.has(path)) {
+            this.trailing.add(path)
+          } else {
+            this.schedule(path)
+          }
+        } else if (this.directories.has(path)) {
+          this.schedule(dirname(path))
+        }
+      } catch (error) {
+        throwIfAiVaultScanCancelled(args.signal)
+        if (isMissingTranscriptPathError(error)) {
+          this.removeDirectory(path)
+          this.schedule(dirname(path))
+        } else {
+          this.issue(path, error, args)
+        }
+      }
+    }
+  }
+
+  private removeDirectory(path: string): void {
+    for (let index = this.walks.length - 1; index >= 0; index--) {
+      const walk = this.walks[index]
+      if (isInsideSessionRoot(path, walk.path)) {
+        this.walks.splice(index, 1)
+        this.scheduled.delete(walk.path)
+        this.trailing.delete(walk.path)
+      }
+    }
+    for (const failed of this.failures) {
+      if (isInsideSessionRoot(path, failed)) {
+        this.failures.delete(failed)
+      }
+    }
+    this.directories.get(dirname(path))?.children.delete(path)
+    this.directories.removeTree(
+      path,
+      (file) => this.observations.forget(file),
+      (directory) => {
+        this.removedDirectories.add(directory)
+      }
+    )
   }
 
   retryFailures(): void {
     for (const path of this.failures) {
-      this.schedule(path)
+      this.schedule(path, true)
+    }
+    for (const [path, force] of this.observations.failures) {
+      this.invalidate(path, force)
     }
   }
 
   private accepts(path: string, args: DiscoverSessionFilesArgs): boolean {
     return isInsideSessionRoot(this.root, path) && isDiscoverableSessionFile(args, this.root, path)
-  }
-
-  private async observe(
-    path: string,
-    args: DiscoverSessionFilesArgs,
-    force: boolean,
-    limit: number
-  ) {
-    const observation = await observeSessionFile(
-      path,
-      !force && this.dependencyByFile.has(path)
-        ? () => this.dependencyByFile.get(path)
-        : args.contentDependencyPath,
-      args.signal
-    )
-    throwIfAiVaultScanCancelled(args.signal)
-    if ('issue' in observation) {
-      if (!observation.missing) {
-        recordSessionScanIssue(args.issues, { agent: args.agent, ...observation.issue })
-      }
-      // Only a successful parent listing removes membership; an unreadable stat is never deletion proof.
-      if (this.files.has(path)) {
-        this.schedule(dirname(path))
-      }
-      return
-    }
-    const file = {
-      ...observation.file,
-      modifiedAt: new Date(observation.file.mtimeMs).toISOString()
-    }
-    const old = this.files.get(path)
-    const dependency = observation.sidecarPath
-    const previous = this.dependencyByFile.get(path)
-    if (previous !== dependency) {
-      if (previous) {
-        this.dependencies.get(previous)?.delete(path)
-      }
-      if (dependency) {
-        const owners = this.dependencies.get(dependency) ?? new Set<string>()
-        owners.add(path)
-        this.dependencies.set(dependency, owners)
-        this.dependencyByFile.set(path, dependency)
-      } else {
-        this.dependencyByFile.delete(path)
-      }
-    }
-    const dependencyChanged =
-      !!old &&
-      file.sidecar !== 'unknown' &&
-      !sidecarUnchanged(old.sidecar ?? 'none', file.sidecar ?? 'none')
-    this.files.set(path, file)
-    if (!old) {
-      this.directories.addFile(path)
-    }
-    if (
-      force ||
-      !old ||
-      dependencyChanged ||
-      old.mtimeMs !== file.mtimeMs ||
-      old.sizeBytes !== file.sizeBytes ||
-      old.dev !== file.dev ||
-      old.ino !== file.ino
-    ) {
-      this.changes.set(path, {
-        file,
-        force:
-          dependencyChanged ||
-          (force &&
-            !!old &&
-            old.mtimeMs === file.mtimeMs &&
-            old.sizeBytes === file.sizeBytes &&
-            old.dev === file.dev &&
-            old.ino === file.ino)
-      })
-    }
-    retainRecentSessionFile(this.recent, file, limit)
-  }
-
-  private forget(path: string): void {
-    this.files.delete(path)
-    this.recent.delete(path)
-    const dependency = this.dependencyByFile.get(path)
-    if (dependency) {
-      this.dependencies.get(dependency)?.delete(path)
-    }
-    this.dependencyByFile.delete(path)
-    this.changes.delete(path)
-    this.removed.add(path)
   }
 
   private issue(path: string, error: unknown, args: DiscoverSessionFilesArgs) {

@@ -24,15 +24,18 @@ export async function discoverOpenCodeSessions(args: {
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const walksScope = scopeWalksAgentFiles('opencode', args.scopePaths)
-  const listSqlite = (scopePaths?: readonly string[]) =>
+  const listSqlite = (
+    scopePaths?: readonly string[],
+    dbPaths = args.dbPaths,
+    limit = args.limitPerAgent
+  ) =>
     listOpenCodeSqliteSessionsViaWorker({
-      dbPaths: args.dbPaths,
-      limit: args.limitPerAgent,
+      dbPaths,
+      limit,
       issues: args.issues,
       scopePaths,
       signal: args.signal
     })
-  const containerKey = `opencode:${args.dbPaths.join('|')}`
   const [fileDiscovery, sqliteDiscovery, sqliteScopeCandidates] = await Promise.all([
     discoverFiles({
       rootDir: join(args.storageDir, 'session'),
@@ -51,22 +54,28 @@ export async function discoverOpenCodeSessions(args: {
       keepScopeFiles: walksScope,
       signal: args.signal
     }),
-    discoverSessionContainer(containerKey, args.dbPaths, async () => {
-      const before = args.issues.length
-      const candidates = await listSqlite()
-      return {
-        agent: 'opencode',
-        rootDir: args.storageDir,
-        files: candidates.map((candidate) => candidate.file),
-        complete: !args.issues.slice(before).some((issue) => issue.kind !== 'notice')
-      }
-    }),
+    discoverSessionContainer(
+      `opencode:${args.storageDir}`,
+      args.dbPaths,
+      async (paths, limit) => {
+        const before = args.issues.length
+        const candidates = await listSqlite(undefined, paths, limit)
+        return {
+          agent: 'opencode',
+          rootDir: args.storageDir,
+          files: candidates.map((candidate) => candidate.file),
+          complete: !args.issues.slice(before).some((issue) => issue.kind !== 'notice')
+        }
+      },
+      args.limitPerAgent,
+      args.issues
+    ),
     walksScope ? listSqlite(args.scopePaths) : undefined
   ])
 
   const sqliteFiles = sqliteDiscovery.files
   const sqliteScopeFiles = sqliteScopeCandidates?.map((c) => c.file)
-  const sqliteSessionIds = currentSessionDiscovery()?.membership(containerKey) ?? new Set<string>()
+  const sqliteSessionIds = new Set<string>()
   for (const file of [...sqliteFiles, ...(sqliteScopeFiles ?? [])]) {
     const parsed = splitOpenCodeSqliteCandidate(file.path)
     if (parsed) {

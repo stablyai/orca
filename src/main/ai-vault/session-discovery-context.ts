@@ -1,13 +1,15 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { DiscoverSessionFilesArgs } from './session-scanner-discovery'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileDiscovery } from './session-scanner-types'
 
 export type SessionDiscoveryDependency = {
   path: string
+  mode?: 'shallow' | 'recursive'
   fileKey?: (path: string) => string | null
   eventKey?: (path: string) => string | null
   metadata?: boolean
-  snapshot?: () => Promise<ReadonlyMap<string, string>>
+  observe?: () => (force: boolean) => Promise<ReadonlySet<string>>
 }
 
 export type SessionDiscoveryContext = {
@@ -15,10 +17,11 @@ export type SessionDiscoveryContext = {
   container(
     key: string,
     paths: readonly string[],
-    read: () => Promise<SessionFileDiscovery>
+    read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
+    limit: number,
+    issues: readonly AiVaultScanIssue[]
   ): Promise<SessionFileDiscovery>
   artifacts(root: string): Map<string, string>
-  membership(key: string): ReadonlySet<string> | undefined
 }
 
 const discoveryContext = new AsyncLocalStorage<SessionDiscoveryContext>()
@@ -34,7 +37,9 @@ export function withSessionDiscovery<T>(context: SessionDiscoveryContext, read: 
 export function discoverSessionContainer(
   key: string,
   paths: readonly string[],
-  read: () => Promise<SessionFileDiscovery>
+  read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
+  limit: number,
+  issues: readonly AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery> {
-  return currentSessionDiscovery()?.container(key, paths, read) ?? read()
+  return currentSessionDiscovery()?.container(key, paths, read, limit, issues) ?? read(paths, limit)
 }

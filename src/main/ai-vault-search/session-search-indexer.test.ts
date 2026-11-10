@@ -595,7 +595,7 @@ it('retains a deferred recent file after it leaves the top-N window', async () =
   const paths = ids.map((id) => transcriptPath(id))
   await writeClaudeTranscript(paths[0], ['deferredreviewneedle'], ids[0])
   await writeClaudeTranscript(paths[1], ['firstreviewneedle'], ids[1])
-  const time = Date.now()
+  const time = Date.UTC(2099, 0, 1)
   await utimes(paths[0], new Date(time), new Date(time))
   await utimes(paths[1], new Date(time + 1000), new Date(time + 1000))
   await nextCycle()

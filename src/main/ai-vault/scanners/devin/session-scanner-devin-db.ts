@@ -1,9 +1,8 @@
-import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { wasWslDistroLastSeenRunningSettled } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../../../native-chat/wsl-transcript-running-admission'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { readOpenCodeDatabase } from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
@@ -177,14 +176,3 @@ function unixSecondsToIso(value: unknown): string | null {
   const date = new Date(seconds * 1000)
   return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }
-
-export const devinSearchDependencies: (root: string) => readonly SessionDiscoveryDependency[] = (
-  root
-) => [
-  {
-    path: dirname(root),
-    eventKey: (path) => (/^sessions\.db(?:-wal)?$/.test(basename(path)) ? 'db' : null),
-    fileKey: () => 'db',
-    metadata: true
-  }
-]

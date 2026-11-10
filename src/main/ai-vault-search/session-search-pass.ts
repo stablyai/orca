@@ -17,6 +17,7 @@ import { runSessionSearchIndexPass } from './session-search-index-pass'
 import {
   discoverSessionSearchCandidates,
   sessionSearchEmptiedRoots,
+  isUnderScanRoot,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchIndexStore, SessionSearchFileRow } from './session-search-store'
@@ -30,6 +31,7 @@ export class SessionSearchPassState {
   readonly queue = new SessionSearchWorkQueue()
   retirement: Iterator<SessionSearchFileRow> | null = null
   readonly retire = new Set<string>()
+  readonly parkedRetire = new Set<string>()
   needsRetirement = true
   constructor(entryPath?: string) {
     this.discovery = new SessionSearchDiscoveryInventory(entryPath)
@@ -82,31 +84,47 @@ export async function runSessionSearchPass(
   }
   state.discovery.begin({
     full: args.full,
+    maintenance: args.purge ?? args.full,
     recentLimit: args.recentPerAgent,
     overdue: args.discoveryOverdue ?? (() => false)
   })
   if (args.full) {
     state.needsRetirement = true
   }
+  if (args.full || args.purge) {
+    for (const path of state.parkedRetire) {
+      state.retire.add(path)
+    }
+    state.parkedRetire.clear()
+  }
   return withCursorChatMetaScan(async () => {
     const swept = await withSessionDiscovery(state.discovery, () =>
       discoverSessionSearchCandidates(args.roots, { limitPerAgent: Infinity, signal, raw: true })
     )
+    await state.discovery.end()
     const issues: AiVaultScanIssue[] = [...swept.issues]
     const update = await state.candidates.update(
       swept.discoveries,
       state.discovery.removed,
       { ...args.roots, signal },
-      state.discovery.forced
+      state.discovery.forced,
+      state.discovery.removedCandidates
     )
     for (const path of update.suppressed) {
       state.queue.remove(path)
     }
-    for (const path of state.discovery.removed) {
+    for (const path of new Set([
+      ...state.discovery.removed,
+      ...state.discovery.removedCandidates.keys()
+    ])) {
+      if (state.candidates.has(path, store.fileRow(path)?.agent)) {
+        continue
+      }
       state.queue.remove(path)
       state.retire.add(path)
     }
     for (const candidate of update.candidates) {
+      state.parkedRetire.delete(candidate.file.path)
       state.queue.enqueue(
         candidate,
         store,
@@ -128,7 +146,7 @@ export async function runSessionSearchPass(
       ? sessionSearchEmptiedRoots(args.previousRootsWithFiles, rootsWithFiles)
       : new Set<string>()
     const degraded: SessionSearchDegradedRoot[] = []
-    if (!state.discovery.pending && state.needsRetirement) {
+    if (!state.discovery.walking && state.needsRetirement) {
       state.retirement ??= store.fileRows()
       state.needsRetirement = false
     }
@@ -150,7 +168,7 @@ export async function runSessionSearchPass(
           state.retirement = null
           break
         }
-        if (!state.candidates.has(row.value.path)) {
+        if (!state.candidates.has(row.value.path, row.value.agent)) {
           paths.push(row.value.path)
         }
       }
@@ -170,8 +188,15 @@ export async function runSessionSearchPass(
         directoryLimit: 512,
         signal
       })
-      for (const path of [...retirement.unverifiable, ...retirement.unchecked]) {
+      for (const path of retirement.unchecked) {
         retry.add(path)
+      }
+      for (const path of retirement.unverifiable) {
+        if ([...emptiedRoots].some((root) => isUnderScanRoot(path, root))) {
+          retry.add(path)
+        } else {
+          state.parkedRetire.add(path)
+        }
       }
       degraded.push(...retirement.degradedRoots)
       // Retry refused paths next cycle, but keep advancing the older retirement frontier now.
@@ -192,7 +217,6 @@ export async function runSessionSearchPass(
       signal
     )
     await store.flush?.()
-    await state.discovery.end()
     return {
       rootsWithFiles,
       degradedRoots: mergeDegradedRoots(

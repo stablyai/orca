@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- Its worker factory mock must be installed in each importing module graph.
 import type * as WorkerClient from './session-search-worker-client'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'

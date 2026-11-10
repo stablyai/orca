@@ -8,6 +8,7 @@ import {
   codexFixture,
   CODEX_FIXTURE_SESSION_ID
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
+import { subagentTranscriptsDirFor } from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
@@ -66,7 +67,11 @@ it.each([40, 400])(
         stat.mock.calls.filter(([path]) => path === root || path.startsWith(`${root}/`)).length
       ).toBeLessThanOrEqual(16)
       expect(
-        readdir.mock.calls.filter(([path]) => path === root || path.startsWith(`${root}/`))
+        readdir.mock.calls.filter(
+          ([observed]) =>
+            observed !== subagentTranscriptsDirFor(path) &&
+            (observed === root || observed.startsWith(`${root}/`))
+        )
       ).toHaveLength(0)
       expect(
         harness.read((db) =>
@@ -76,7 +81,7 @@ it.each([40, 400])(
             )
             .get()
         )
-      ).toEqual({ n: 1 })
+      ).toEqual({ n: 2 })
     } finally {
       await subject.close()
       stat.mockRestore()
@@ -157,7 +162,7 @@ it('indexes a delivered equal-stat rewrite outside the recent window', async () 
           )
           .get()
       )
-    ).toEqual({ n: 1 })
+    ).toEqual({ n: 2 })
     expect(
       harness.read((db) =>
         db

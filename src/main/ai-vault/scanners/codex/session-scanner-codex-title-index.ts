@@ -1,3 +1,5 @@
+import { createSessionJsonlDependency } from '../../session-jsonl-dependency'
+import { parseCodexTitleIndexRecord } from './session-scanner-codex-index-read'
 import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
@@ -186,10 +188,15 @@ export const codexSearchDependencies: (root: string) => readonly SessionDiscover
 ) => [
   {
     path: dirname(root),
+    mode: 'shallow',
     eventKey: (path) => (basename(path) === 'session_index.jsonl' ? 'titles' : null),
     fileKey: (path) =>
       /([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\.jsonl$/i.exec(path)?.[1] ?? '*',
-    snapshot: () => readCodexSessionIndexTitles(dirname(root)),
+    observe: () =>
+      createSessionJsonlDependency(
+        join(dirname(root), CODEX_SESSION_INDEX_FILE),
+        parseCodexTitleIndexRecord
+      ),
     metadata: true
   }
 ]

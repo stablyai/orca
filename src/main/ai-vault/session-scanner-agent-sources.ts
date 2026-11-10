@@ -2,10 +2,7 @@ import {
   kimiSearchDependencies,
   resolveKimiSessionsDir
 } from './scanners/kimi/session-scanner-kimi-paths'
-import {
-  devinSearchDependencies,
-  devinSessionsDbDependencyPath
-} from './scanners/devin/session-scanner-devin-db'
+import * as devin from './scanners/devin/session-scanner-devin-db'
 import {
   cursorSearchDependencies,
   cursorChatMetaPath
@@ -78,7 +75,6 @@ const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
 
-// OpenCode and Antigravity use dedicated discovery for their storage layouts.
 export const AI_VAULT_AGENT_SOURCES: Record<AiVaultDeletableAgent, AiVaultAgentSource> &
   Partial<Record<AiVaultAgent, AiVaultAgentSource>> = {
   claude: {
@@ -175,8 +171,7 @@ export const AI_VAULT_AGENT_SOURCES: Record<AiVaultDeletableAgent, AiVaultAgentS
     mergeRootDiscoveries: true,
     extensions: ['.json'],
     // Database-only title or visibility changes must refresh sessions without rereading transcripts.
-    contentDependencyPath: devinSessionsDbDependencyPath,
-    searchDependencies: devinSearchDependencies
+    contentDependencyPath: devin.devinSessionsDbDependencyPath
   },
   hermes: {
     rootDirs: (options, wslHomeDirs) =>
@@ -316,3 +311,5 @@ export function sessionRowRootDirs(
 }
 
 export { isDiscoverableSessionFile } from './session-file-discovery'
+
+export type { AiVaultAgentSource } from './session-scanner-types'

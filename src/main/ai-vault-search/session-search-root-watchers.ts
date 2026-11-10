@@ -10,6 +10,8 @@ export type SessionSearchRootWatch = {
   failed: boolean
   events: Map<string, WatcherProcessEvent>
   reconcile: boolean
+  attempts: number
+  retryAt: number
 }
 
 export class SessionSearchRootWatchers {
@@ -36,10 +38,15 @@ export class SessionSearchRootWatchers {
     this.watches.clear()
     return this.supervisor.disposeAndWait()
   }
-  watch(path: string, signal?: AbortSignal): Promise<SessionSearchRootWatch | undefined> {
-    let probe = this.probes.get(path)
+  watch(
+    path: string,
+    signal?: AbortSignal,
+    mode: 'recursive' | 'shallow' = 'recursive'
+  ): Promise<SessionSearchRootWatch | undefined> {
+    const key = `${mode}:${path}`
+    let probe = this.probes.get(key)
     if (!probe) {
-      probe = this.probeWatch(path, signal).then((watch) => {
+      probe = this.probeWatch(path, key, mode, signal).then((watch) => {
         if (!watch) {
           return undefined
         }
@@ -48,28 +55,38 @@ export class SessionSearchRootWatchers {
         watch.reconcile = false
         return delivery
       })
-      this.probes.set(path, probe)
+      this.probes.set(key, probe)
     }
     return probe
   }
 
   private async probeWatch(
     path: string,
+    key: string,
+    mode: 'recursive' | 'shallow',
     signal?: AbortSignal
   ): Promise<SessionSearchRootWatch | undefined> {
+    const previous = this.watches.get(key)
     let identity: string
     try {
       const stat = await wslGatedStat(path, 'scan', signal)
       if (!stat.isDirectory()) {
+        this.watches.delete(key)
+        await previous?.subscription?.unsubscribe()
         return undefined
       }
       identity = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`
     } catch {
       throwIfAiVaultScanCancelled(signal)
+      this.watches.delete(key)
+      await previous?.subscription?.unsubscribe().catch(() => undefined)
       return undefined
     }
-    const previous = this.watches.get(path)
-    if (previous && !previous.failed && previous.identity === identity) {
+    if (
+      previous &&
+      previous.identity === identity &&
+      (!previous.failed || Date.now() < previous.retryAt)
+    ) {
       return previous
     }
     await previous?.subscription?.unsubscribe().catch(() => undefined)
@@ -77,10 +94,15 @@ export class SessionSearchRootWatchers {
       identity,
       failed: false,
       events: new Map(),
-      reconcile: true
+      reconcile: true,
+      attempts: previous?.attempts ?? 0,
+      retryAt: 0
     }
-    this.watches.set(path, watch)
+    this.watches.set(key, watch)
     const fail = () => {
+      if (!watch.failed) {
+        watch.retryAt = Date.now() + Math.min(300_000, 5_000 * 2 ** Math.min(watch.attempts++, 6))
+      }
       watch.failed = true
       watch.reconcile = true
     }
@@ -102,10 +124,12 @@ export class SessionSearchRootWatchers {
             watch.events.set(event.path, event)
           }
         },
-        { mode: 'recursive' },
+        { mode },
         {
           signal: this.owner.signal,
-          onInterruption: fail,
+          onInterruption: () => {
+            watch.reconcile = true
+          },
           onOverflow: () => {
             watch.reconcile = true
           },
@@ -115,9 +139,11 @@ export class SessionSearchRootWatchers {
       )
       if (this.owner.signal.aborted) {
         await watch.subscription.unsubscribe()
+      } else if (!watch.failed) {
+        watch.attempts = 0
       }
     } catch {
-      watch.failed = true
+      fail()
       throwIfAiVaultScanCancelled(this.owner.signal)
     }
     return watch

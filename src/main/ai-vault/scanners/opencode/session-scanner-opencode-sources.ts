@@ -1,4 +1,4 @@
-import { discoverSessionContainer } from '../../session-discovery-context'
+import { currentSessionDiscovery, discoverSessionContainer } from '../../session-discovery-context'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
@@ -12,6 +12,7 @@ import { discoverOpenCodeSessions } from './sqlite/session-scanner-opencode-sqli
 import { listOpenCode2SqliteSessionsViaWorker } from './reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { isOpenCodeV2DatabaseName } from '../../../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
+import { isMissingTranscriptPathError } from '../../session-scanner-discovery'
 import { scopeWalksAgentFiles } from '../../session-scope-cwd'
 
 type OpenCodeSource = {
@@ -55,12 +56,17 @@ function opencodeSources(
   const onRefusal = (path: string, error: WslTranscriptFsError): void => {
     recordSessionScanIssue(issues, { agent: 'opencode', path, ...scanIssueTextFromError(error) })
   }
+  const onFsError = (path: string, error: unknown): void => {
+    if (currentSessionDiscovery() && !isMissingTranscriptPathError(error)) {
+      recordSessionScanIssue(issues, { agent: 'opencode', path, ...scanIssueTextFromError(error) })
+    }
+  }
   const dataDirectorySource = (dataDirectory: string): OpenCodeSource => ({
     storageDir: join(dataDirectory, 'storage'),
     dbPaths: async () =>
       options.opencodeDbPaths
         ? []
-        : listOpenCodeDatabasesInDirectory(dataDirectory, onRefusal, options.signal)
+        : listOpenCodeDatabasesInDirectory(dataDirectory, onRefusal, options.signal, onFsError)
   })
   const storageDir = options.opencodeStorageDir ?? resolveOpenCodeStorageDirectory()
   const primary: OpenCodeSource = {
@@ -71,8 +77,13 @@ function opencodeSources(
       }
       // Custom storage roots still place SQLite databases in the parent data directory.
       return options.opencodeStorageDir
-        ? listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
-        : listOpenCodeDatabases(onRefusal, undefined, options.signal)
+        ? listOpenCodeDatabasesInDirectory(
+            dirname(storageDir),
+            onRefusal,
+            options.signal,
+            onFsError
+          )
+        : listOpenCodeDatabases(onRefusal, onFsError, options.signal)
     }
   }
   // Orca-managed accounts relocate XDG_DATA_HOME, so their stores are invisible to the default lookup.
@@ -95,24 +106,30 @@ async function discoverOpenCode2Sessions(
   issues: AiVaultScanIssue[],
   options: AiVaultScanOptions
 ): Promise<SessionFileDiscovery> {
-  const list = (scopePaths?: readonly string[]) =>
+  const list = (scopePaths?: readonly string[], paths = dbPaths, count = limit) =>
     listOpenCode2SqliteSessionsViaWorker({
-      dbPaths,
-      limit,
+      dbPaths: paths,
+      limit: count,
       issues,
       scopePaths,
       signal: options.signal
     }).then((candidates) => candidates.map((candidate) => candidate.file))
   const [discovery, scopeFiles] = await Promise.all([
-    discoverSessionContainer(`opencode2:${dbPaths.join('|')}`, dbPaths, async () => {
-      const before = issues.length
-      return {
-        agent: 'opencode2',
-        rootDir: storageDir,
-        files: await list(),
-        complete: !issues.slice(before).some((issue) => issue.kind !== 'notice')
-      }
-    }),
+    discoverSessionContainer(
+      `opencode2:${storageDir}`,
+      dbPaths,
+      async (paths, count) => {
+        const before = issues.length
+        return {
+          agent: 'opencode2',
+          rootDir: storageDir,
+          files: await list(undefined, paths, count),
+          complete: !issues.slice(before).some((issue) => issue.kind !== 'notice')
+        }
+      },
+      limit,
+      issues
+    ),
     scopeWalksAgentFiles('opencode2', options.scopePaths) ? list(options.scopePaths) : undefined
   ])
   return {

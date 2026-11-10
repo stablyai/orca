@@ -79,7 +79,12 @@ export async function retireDeletedSessionSearchSources(
       signal
     })
     const proof = synthetic
-      ? proveSyntheticSource(synthetic, containerProof, args.enumeratedContainers)
+      ? proveSyntheticSource(
+          synthetic,
+          containerProof,
+          args.enumeratedContainers,
+          store.fileRow(path)?.agent
+        )
       : containerProof
     if (proof.verdict === 'gone') {
       store.removeFile(path)
@@ -146,12 +151,14 @@ async function proveSource(
 function proveSyntheticSource(
   synthetic: { container: string; id: string },
   containerProof: SessionSearchSourceVerdict,
-  enumerated?: ReadonlyMap<string, ReadonlySet<string>>
+  enumerated?: ReadonlyMap<string, ReadonlySet<string>>,
+  agent?: string | null
 ): SessionSearchSourceVerdict {
   if (containerProof.verdict !== 'present') {
     return containerProof
   }
-  const ids = enumerated?.get(synthetic.container)
+  const ids =
+    enumerated?.get(`${agent}:${synthetic.container}`) ?? enumerated?.get(synthetic.container)
   // Unknown schemas can enumerate empty; require nonempty evidence before retiring container entries.
   if (!ids || ids.size === 0) {
     return {

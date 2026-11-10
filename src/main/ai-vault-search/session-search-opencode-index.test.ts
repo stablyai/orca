@@ -1,9 +1,12 @@
 import './session-search-worker.test-fixture'
+import { rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 // Replace worker transport while exercising the real SQLite readers.
 export const openCodeReadCalls: string[] = []
+export const openCodeListObservations: { paths: readonly string[]; limit: number; rows: number }[] =
+  []
 vi.mock(
   '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
   async () => {
@@ -16,12 +19,23 @@ vi.mock(
     const own = await import('./session-search-opencode-index.test')
     const { listOpenCode2SqliteSessions } =
       await import('../ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    const parse2 = await import('../ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite')
     return {
+      parseOpenCode2SqliteSessionViaWorker: parse2.parseOpenCode2SqliteSession,
+      captureOpenCode2SqliteSessionViaWorker: parse2.captureOpenCode2SqliteSession,
       listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions,
       resolveOpenCodeSqliteWorkerEntryPath: () => null,
       listOpenCodeSqliteSessionsViaWorker: (
         args: Parameters<typeof list.listOpenCodeSqliteSessions>[0]
-      ) => list.listOpenCodeSqliteSessions(args),
+      ) =>
+        list.listOpenCodeSqliteSessions(args).then((candidates) => {
+          own.openCodeListObservations.push({
+            paths: args.dbPaths,
+            limit: args.limit,
+            rows: candidates.length
+          })
+          return candidates
+        }),
       parseOpenCodeSqliteSessionViaWorker: (
         args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
       ) => {
@@ -43,7 +57,7 @@ import {
   appendOpenCodeSqliteTurn,
   writeOpenCodeSqliteDatabase
 } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
-import type SyncDatabase from '../sqlite/sync-database'
+import SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchEngine } from './session-search-engine'
 import { SessionSearchIndexer } from './session-search-indexer'
 import { openSessionSearchDatabase } from './session-search-schema'
@@ -73,6 +87,7 @@ beforeEach(async () => {
   indexer = null
   engineDbs = []
   openCodeReadCalls.length = 0
+  openCodeListObservations.length = 0
 })
 
 afterEach(async () => {
@@ -175,4 +190,153 @@ it('re-reads a session that gained a message and replaces its rows', async () =>
   expect(engine.search({ query: 'orthogonal vestibule' }).hits[0]?.sessionId).toBe(SESSION)
   expect(engine.search({ query: ANSWER }).hits).toHaveLength(1)
   expect(openCodeReadCalls.filter((call) => call === `capture:${SESSION}`)).toHaveLength(2)
+})
+
+it.each([40, 400])(
+  'keeps recent database observations bounded at %s rows while old imports reach search on maintenance',
+  async (population) => {
+    writeOpenCodeSqliteDatabase(
+      dbPath(),
+      Array.from({ length: population }, (_, index) => ({
+        id: `ses_${index}`,
+        turns: [{ role: 'user', parts: ['retainedarchive'] }]
+      }))
+    )
+    const subject = await startIndexer()
+    appendOpenCodeSqliteTurn(dbPath(), 'ses_0', {
+      role: 'assistant',
+      parts: ['recentdatabaseneedle']
+    })
+    clock.advance(20000)
+    await subject.settled()
+    expect(openEngine().search({ query: 'recentdatabaseneedle' }).hits[0]?.sessionId).toBe('ses_0')
+    expect(openCodeListObservations.at(-1)).toMatchObject({ limit: 12, rows: 12 })
+    writeOpenCodeSqliteDatabase(dbPath(), [
+      { id: 'ses_imported', turns: [{ role: 'user', parts: ['oldimportneedle'] }] }
+    ])
+    const source = new SyncDatabase(dbPath())
+    source
+      .prepare("UPDATE session SET time_created=1000, time_updated=2000 WHERE id='ses_imported'")
+      .run()
+    source.close()
+    for (let cycle = 0; cycle < 14; cycle++) {
+      clock.advance(20000)
+      await subject.settled()
+    }
+    expect(
+      openCodeListObservations.filter((observation) => observation.limit === Infinity)
+    ).toHaveLength(2)
+    expect(
+      openCodeListObservations
+        .filter((observation) => observation.limit === 12)
+        .every((observation) => observation.rows === 12)
+    ).toBe(true)
+    expect(openEngine().search({ query: 'oldimportneedle' }).hits[0]?.sessionId).toBe(
+      'ses_imported'
+    )
+  }
+)
+
+it('keeps a duplicate physical row and promotes it when the selected database disappears', async () => {
+  const alternative = join(harness.root, 'opencode-db', 'opencode-alternative.db')
+  writeOpenCodeSqliteDatabase(dbPath(), [
+    { id: 'ses_shared', turns: [{ role: 'user', parts: ['winningcopyneedle'] }] },
+    { id: 'ses_primary', turns: [{ role: 'user', parts: ['primaryonlyneedle'] }] }
+  ])
+  writeOpenCodeSqliteDatabase(alternative, [
+    { id: 'ses_shared', turns: [{ role: 'user', parts: ['alternativecopyneedle'] }] },
+    { id: 'ses_alternative', turns: [{ role: 'user', parts: ['alternativeonlyneedle'] }] }
+  ])
+  let paths = [dbPath(), alternative]
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: { ...harness.roots, opencodeDbPaths: paths },
+    resolveRoots: async () => ({ ...harness.roots, opencodeDbPaths: paths }),
+    historyDays: null,
+    clock
+  })
+  indexer = subject
+  await subject.start()
+  await subject.reconcile({ full: true })
+  expect(openEngine().search({ query: 'winningcopyneedle' }).hits).toHaveLength(1)
+  expect(openEngine().search({ query: 'alternativecopyneedle' }).hits).toHaveLength(0)
+  await rm(dbPath())
+  paths = [alternative]
+  await subject.reconcile({ full: true })
+  expect(openEngine().search({ query: 'alternativecopyneedle' }).hits[0]?.sessionId).toBe(
+    'ses_shared'
+  )
+  expect(openEngine().search({ query: 'winningcopyneedle' }).hits).toHaveLength(0)
+  expect(openEngine().search({ query: 'primaryonlyneedle' }).hits).toHaveLength(0)
+})
+
+it('retains refused database membership while healthy owners settle and retries only the refused full observation', async () => {
+  const alternative = join(harness.root, 'opencode-db', 'opencode-alternative.db')
+  writeOpenCodeSqliteDatabase(dbPath(), [
+    { id: 'ses_primary', turns: [{ role: 'user', parts: ['preservedneedle'] }] }
+  ])
+  writeOpenCodeSqliteDatabase(alternative, [
+    { id: 'ses_alternative', turns: [{ role: 'user', parts: ['healthyneedle'] }] }
+  ])
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: { ...harness.roots, opencodeDbPaths: [dbPath(), alternative] },
+    historyDays: null,
+    clock
+  })
+  indexer = subject
+  await subject.start()
+  await rename(dbPath(), `${dbPath()}.saved`)
+  await writeFile(dbPath(), 'temporarily unreadable sqlite')
+  appendOpenCodeSqliteTurn(alternative, 'ses_alternative', {
+    role: 'assistant',
+    parts: ['healthyupdateneedle']
+  })
+  await subject.reconcile({ full: true })
+  expect(openEngine().search({ query: 'preservedneedle' }).hits).toHaveLength(1)
+  expect(openEngine().search({ query: 'healthyupdateneedle' }).hits).toHaveLength(1)
+  await rm(dbPath())
+  await rename(`${dbPath()}.saved`, dbPath())
+  openCodeListObservations.length = 0
+  clock.advance(20000)
+  await subject.settled()
+  expect(
+    openCodeListObservations.filter((observation) => observation.paths[0] === alternative)
+  ).toEqual([{ paths: [alternative], limit: 12, rows: 1 }])
+  expect(
+    openCodeListObservations.filter((observation) => observation.paths[0] === dbPath())
+  ).toEqual([{ paths: [dbPath()], limit: Infinity, rows: 1 }])
+  expect(openEngine().search({ query: 'preservedneedle' }).hits).toHaveLength(1)
+})
+
+it('keeps full membership proofs separate when v1 and v2 share one physical database', async () => {
+  writeVault()
+  const subject = await startIndexer()
+  expect(openEngine().search({ query: ANSWER }).hits).toHaveLength(1)
+  const db = new SyncDatabase(dbPath())
+  db.exec(`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+    INSERT INTO session_v2 VALUES ('ses_capture', 1740000000000, 1740000010000)`)
+  db.close()
+  const changed = new SyncDatabase(dbPath())
+  changed.prepare('DELETE FROM session WHERE id=?').run(SESSION)
+  changed.close()
+  await subject.reconcile({ full: true })
+  // The v2 copy of this ID is not positive membership evidence for the removed v1 row.
+  expect(openEngine().search({ query: ANSWER }).hits).toHaveLength(0)
+  expect(openEngine().search({ query: OTHER }).hits).toHaveLength(1)
+})
+
+it('keeps indexed rows when an existing physical database becomes empty or unrecognized', async () => {
+  writeVault()
+  const subject = await startIndexer()
+  const db = new SyncDatabase(dbPath())
+  db.exec('DELETE FROM session')
+  db.close()
+  await subject.reconcile({ full: true })
+  expect(openEngine().search({ query: ANSWER }).hits).toHaveLength(1)
+  const changed = new SyncDatabase(dbPath())
+  changed.exec('DROP TABLE session')
+  changed.close()
+  await subject.reconcile({ full: true })
+  expect(openEngine().search({ query: ANSWER }).hits).toHaveLength(1)
 })

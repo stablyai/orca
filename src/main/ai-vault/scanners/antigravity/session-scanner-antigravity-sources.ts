@@ -3,7 +3,7 @@ import { completeAntigravityTranscriptPairs } from './antigravity-transcript-can
 import { recordAntigravityArtifactPath } from './antigravity-session-artifacts'
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
 import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   isAntigravityTranscriptPath,
@@ -49,15 +49,6 @@ export function antigravityDiscoveries(
       agent: 'antigravity',
       issues,
       extensions: ['.jsonl'],
-      searchDependencies: [
-        {
-          path: dirname(rootDir),
-          metadata: true,
-          fileKey: () => 'history',
-          eventKey: (path) =>
-            ['history.jsonl'].includes(basename(path)) || path.endsWith('.meta') ? 'history' : null
-        }
-      ],
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
       onDirectoryEntries: (dirPath, entries) =>

@@ -1,62 +1,73 @@
+import { SessionSearchDependencyInventory } from './session-search-dependency-inventory'
 import { SessionSearchRootWatchers } from './session-search-root-watchers'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { SessionSearchContainerInventory } from './session-search-container-inventory'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
-import {
-  discoverSessionFiles,
-  isMissingTranscriptPathError,
-  type DiscoverSessionFilesArgs
-} from '../ai-vault/session-scanner-discovery'
+import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
 import type { SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import type { SessionDiscoveryContext } from '../ai-vault/session-discovery-context'
-import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
-import { splitSyntheticSessionSource } from './session-search-synthetic-sources'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 type Root = {
   inventory: SessionFileInventory
   args: DiscoverSessionFilesArgs
   identity?: string
   fallback: boolean
-  fallbackCount?: number
-  dependencyKeys: Map<string, Map<string, Set<string>>>
-  dependencySnapshots: Map<string, ReadonlyMap<string, string>>
+  dependencies: Map<string, SessionSearchDependencyInventory>
 }
-type Container = { signature: string; discovery: SessionFileDiscovery; membership: Set<string> }
 
 /** Search owns its notifications and raw membership; ordinary History discovery stays stateless. */
 export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext {
   private readonly roots = new Map<string, Root>()
   private readonly artifactMaps = new Map<string, Map<string, string>>()
-  private readonly containers = new Map<string, Container>()
+  readonly containers = new SessionSearchContainerInventory()
   private readonly owner = new AbortController()
   private readonly watchers: SessionSearchRootWatchers
   private force = false
+  private maintenance = false
   private overdue = () => false
   private recentLimit = 12
   private seen = new Set<string>()
   readonly forced = new Set<string>()
   readonly metadata = new Set<string>()
   readonly removed = new Set<string>()
-  readonly enumeratedContainers = new Map<string, ReadonlySet<string>>()
+  readonly removedCandidates = this.containers.removed
+  readonly enumeratedContainers = this.containers.proofs
 
   constructor(entryPath?: string) {
     this.watchers = new SessionSearchRootWatchers(entryPath)
   }
 
-  begin(options: { full: boolean; overdue: () => boolean; recentLimit: number }): void {
+  begin(options: {
+    full: boolean
+    maintenance?: boolean
+    overdue: () => boolean
+    recentLimit: number
+  }): void {
     this.force = options.full
+    this.maintenance = options.maintenance === true
     this.overdue = options.overdue
     this.recentLimit = options.recentLimit
     this.watchers.begin()
     this.seen = new Set()
+    this.containers.begin(options.full || this.maintenance, this.recentLimit)
     this.forced.clear()
     this.metadata.clear()
     this.removed.clear()
-    this.enumeratedContainers.clear()
+  }
+
+  get walking(): boolean {
+    return [...this.roots.values()].some((root) => root.inventory.walking)
   }
 
   get pending(): boolean {
+    if (this.containers.pending) {
+      return true
+    }
     for (const root of this.roots.values()) {
-      if (!root.fallback && root.inventory.pending) {
+      if (
+        root.inventory.pending ||
+        [...root.dependencies.values()].some((dependency) => dependency.pending)
+      ) {
         return true
       }
     }
@@ -66,7 +77,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
   listings(): { root: string; files: number }[] {
     return [...this.roots.values()].map((root) => ({
       root: root.inventory.root,
-      files: root.fallback ? (root.fallbackCount ?? 0) : root.inventory.files.size
+      files: root.inventory.files.size
     }))
   }
 
@@ -79,10 +90,6 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     return map
   }
 
-  membership(key: string): ReadonlySet<string> | undefined {
-    return this.containers.get(key)?.membership
-  }
-
   async files(args: DiscoverSessionFilesArgs): Promise<SessionFileDiscovery> {
     const key = `${args.agent}:${args.rootDir}`
     this.seen.add(key)
@@ -93,92 +100,69 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
         inventory: new SessionFileInventory(args.rootDir),
         args,
         fallback,
-        dependencyKeys: new Map(),
-        dependencySnapshots: new Map()
+        dependencies: new Map()
       }
       this.roots.set(key, root)
     }
     root.args = args
-    if (root.fallback) {
-      const discovery = await discoverSessionFiles(args)
-      root.fallbackCount = discovery.files.length
-      return discovery
+    if (this.maintenance) {
+      root.fallback = await this.watchers.requiresPolling(args.rootDir)
     }
-    const watch = await this.watchers.watch(args.rootDir, args.signal)
-    if (!watch) {
-      // Missing roots remain obligations; never replace their retained membership with an empty delta.
-      root.inventory.reconcile()
-    } else {
-      if (this.force || watch.reconcile || root.identity !== watch.identity) {
+    if (root.fallback) {
+      if (!root.inventory.walking) {
         root.inventory.reconcile()
       }
-      if (root.identity !== watch.identity && (await this.watchers.requiresPolling(args.rootDir))) {
-        root.fallback = true
-        const discovery = await discoverSessionFiles(args)
-        root.fallbackCount = discovery.files.length
-        return discovery
-      }
-      root.identity = watch.identity
-      for (const event of watch.events.values()) {
-        root.inventory.invalidate(event.path)
+    } else {
+      const watch = await this.watchers.watch(args.rootDir, args.signal)
+      if (!watch) {
+        if (!root.inventory.walking) {
+          root.inventory.reconcile()
+        }
+      } else {
+        if (
+          (this.force || watch.reconcile || root.identity !== watch.identity) &&
+          (root.identity !== undefined || !root.inventory.walking)
+        ) {
+          root.inventory.reconcile()
+        }
+        if (
+          root.identity !== watch.identity &&
+          (await this.watchers.requiresPolling(args.rootDir))
+        ) {
+          root.fallback = true
+        }
+        if (watch.failed && !root.inventory.walking) {
+          root.inventory.reconcile()
+        }
+        root.identity = watch.identity
+        for (const event of watch.events.values()) {
+          root.inventory.invalidate(event.path)
+        }
       }
     }
     const auxiliaries = await Promise.all(
-      (args.searchDependencies ?? []).map(async (dependency) => ({
-        dependency,
-        watch: await this.watchers.watch(dependency.path, args.signal)
-      }))
+      (args.searchDependencies ?? []).map(async (dependency) => {
+        let observer = root.dependencies.get(dependency.path)
+        if (!observer) {
+          const polling = root.fallback || (await this.watchers.requiresPolling(dependency.path))
+          observer = new SessionSearchDependencyInventory(dependency, polling)
+          root.dependencies.set(dependency.path, observer)
+        } else if (this.maintenance) {
+          observer.polling = root.fallback || (await this.watchers.requiresPolling(dependency.path))
+        }
+        return {
+          dependency,
+          observer,
+          watch: observer.polling
+            ? undefined
+            : await this.watchers.watch(dependency.path, args.signal, dependency.mode)
+        }
+      })
     )
-    for (const { dependency, watch: auxiliary } of auxiliaries) {
-      let keys = root.dependencyKeys.get(dependency.path)
-      if (!keys) {
-        keys = new Map()
-        root.dependencyKeys.set(dependency.path, keys)
-      }
-      if (!auxiliary) {
-        continue
-      }
-      if (auxiliary.reconcile || auxiliary.failed) {
-        for (const file of root.inventory.files.values()) {
-          root.inventory.invalidate(file.path)
-          if (dependency.metadata) {
-            this.metadata.add(file.path)
-          }
-        }
-      }
-      const eventKeys = new Set<string>()
-      for (const event of auxiliary.events.values()) {
-        for (const path of root.inventory.dependencies.get(event.path) ?? []) {
-          root.inventory.invalidate(path)
-          if (dependency.metadata) {
-            this.metadata.add(path)
-          }
-        }
-        const key = dependency.eventKey?.(event.path)
-        if (key) {
-          eventKeys.add(key)
-        }
-      }
-      if (dependency.snapshot && (auxiliary.reconcile || eventKeys.size)) {
-        const snapshot = await dependency.snapshot()
-        const previous = root.dependencySnapshots.get(dependency.path)
-        root.dependencySnapshots.set(dependency.path, snapshot)
-        eventKeys.clear()
-        for (const [key, value] of snapshot) {
-          if (previous?.get(key) !== value) {
-            eventKeys.add(key)
-          }
-        }
-        for (const key of previous?.keys() ?? []) {
-          if (!snapshot.has(key)) {
-            eventKeys.add(key)
-          }
-        }
-        // Nonstandard filenames cannot identify their thread until parsed.
-        eventKeys.add('*')
-      }
+    for (const { dependency, observer, watch: auxiliary } of auxiliaries) {
+      const eventKeys = await observer.changedKeys(auxiliary, args, this.overdue)
       for (const key of eventKeys) {
-        for (const path of keys.get(key) ?? []) {
+        for (const path of observer.owners(key)) {
           root.inventory.invalidate(path)
           if (dependency.metadata) {
             this.metadata.add(path)
@@ -193,28 +177,16 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
       if (change.force) {
         this.forced.add(change.file.path)
       }
-      for (const { dependency } of auxiliaries) {
-        const key = dependency.fileKey?.(change.file.path)
-        if (!key) {
-          continue
-        }
-        const keys = root.dependencyKeys.get(dependency.path)!
-        const paths = keys.get(key) ?? new Set<string>()
-        paths.add(change.file.path)
-        keys.set(key, paths)
+      for (const observer of root.dependencies.values()) {
+        observer.addFile(change.file.path)
       }
     }
+    for (const path of delta.removedDirectories) {
+      this.artifactMaps.get(args.rootDir)?.delete(path)
+    }
     for (const path of delta.removed) {
-      for (const dependency of args.searchDependencies ?? []) {
-        const key = dependency.fileKey?.(path)
-        if (key) {
-          const keys = root.dependencyKeys.get(dependency.path)
-          const paths = keys?.get(key)
-          paths?.delete(path)
-          if (!paths?.size) {
-            keys?.delete(key)
-          }
-        }
+      for (const observer of root.dependencies.values()) {
+        observer.removeFile(path)
       }
       this.removed.add(path)
     }
@@ -225,65 +197,26 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     }
   }
 
-  async container(
+  container(
     key: string,
     paths: readonly string[],
-    read: () => Promise<SessionFileDiscovery>
+    read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
+    _limit: number,
+    issues: readonly AiVaultScanIssue[]
   ): Promise<SessionFileDiscovery> {
-    const signature = (
-      await Promise.all(
-        paths
-          .flatMap((path) => [path, `${path}-wal`])
-          .map(async (path) => {
-            try {
-              const stat = await wslGatedStat(path, 'scan', this.owner.signal)
-              return `${path}:${stat.dev}:${stat.ino}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`
-            } catch (error) {
-              throwIfAiVaultScanCancelled(this.owner.signal)
-              return `${path}:${isMissingTranscriptPathError(error) ? 'missing' : 'unknown'}`
-            }
-          })
-      )
-    ).join('|')
-    const old = this.containers.get(key)
-    if (!this.force && old?.signature === signature && !signature.includes(':unknown')) {
-      return { agent: old.discovery.agent, rootDir: old.discovery.rootDir, files: [] }
-    }
-    const discovery = await read()
-    const membership = new Set<string>()
-    const idsByContainer = new Map<string, Set<string>>()
-    for (const file of discovery.files) {
-      const synthetic = splitSyntheticSessionSource(file.path)
-      if (!synthetic) {
-        continue
-      }
-      membership.add(synthetic.id)
-      const ids = idsByContainer.get(synthetic.container) ?? new Set<string>()
-      ids.add(synthetic.id)
-      idsByContainer.set(synthetic.container, ids)
-    }
-    if (discovery.complete === false) {
-      return discovery
-    }
-    for (const [path, ids] of idsByContainer) {
-      this.enumeratedContainers.set(path, ids)
-    }
-    if (old) {
-      const current = new Set(discovery.files.map((file) => file.path))
-      for (const file of old.discovery.files) {
-        if (!current.has(file.path)) {
-          this.removed.add(file.path)
-        }
-      }
-    }
-    this.containers.set(key, { signature, discovery, membership })
-    return discovery
+    return this.containers.discover(key, paths, read, issues, this.owner.signal)
   }
 
   async end(): Promise<void> {
     await this.watchers.end()
+    this.containers.end()
     for (const key of this.roots.keys()) {
       if (!this.seen.has(key)) {
+        const root = this.roots.get(key)!
+        for (const path of root.inventory.files.keys()) {
+          this.removed.add(path)
+        }
+        this.artifactMaps.delete(root.inventory.root)
         this.roots.delete(key)
       }
     }
@@ -293,6 +226,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     this.owner.abort()
     this.roots.clear()
     this.containers.clear()
+    this.artifactMaps.clear()
     return this.watchers.close()
   }
 }
