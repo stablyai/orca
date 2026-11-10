@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { KeyRound, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { InlineError } from '@/components/ui/inline-error'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
   CloudApiApproval,
@@ -24,12 +25,10 @@ import { CloudConfirmDialog } from './CloudConfirmDialog'
 import { CloudConnectedApps } from './CloudConnectedApps'
 import type { CloudLoadState } from './cloud-load-state'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
-import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
+import { formatKeyPrefix } from './cloud-api-format'
 import { PersonSentence } from './PersonName'
-import { ScopeSummary } from './ScopeSummary'
-import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
-
-const EXPIRY_WARNING_MS = 7 * 86_400_000
+import { CloudApiEmptyState, CloudApiSkeletonRows } from './cloud-api-parts'
+import { KeyRow } from './ApiKeyRow'
 
 export type CloudApiKeysViewProps = {
   controlPlaneUrl: string
@@ -119,8 +118,22 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
     </Button>
   )
 
+  // One failure, one message: a load error is shown once at the top, not in every section.
+  const pageError = keys.status === 'error' ? keys.message : null
+
   return (
     <div className="space-y-8">
+      {pageError ? (
+        <InlineError
+          title={pageError}
+          detail={t(
+            'auto.components.settings.cloudApi.pageErrorDetail',
+            'Keys, connected apps and team settings are unavailable until Orca Cloud answers.'
+          )}
+          onRetry={props.onRefresh}
+          retryLabel={t('auto.components.settings.cloudApi.retry', 'Try again')}
+        />
+      ) : null}
       <SettingsGroup
         title={t('auto.components.settings.cloudApi.keys.listTitle', 'Keys')}
         description={
@@ -169,9 +182,12 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
             label={t('auto.components.settings.cloudApi.keys.loading', 'Loading Orca API keys')}
           />
         ) : keys.status === 'error' ? (
-          <div data-settings-row="" className="py-4">
-            <CloudApiErrorNotice message={keys.message} onRetry={props.onRefresh} />
-          </div>
+          <p data-settings-row="" className="py-4 text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.cloudApi.keys.unavailable',
+              'Your keys appear here once Orca Cloud is reachable.'
+            )}
+          </p>
         ) : keys.data.keys.length === 0 ? (
           <CloudApiEmptyState
             icon={KeyRound}
@@ -206,27 +222,39 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
 
       <AccessLinks controlPlaneUrl={props.controlPlaneUrl} onApprove={() => setApproveOpen(true)} />
 
-      <CloudConnectedApps
-        grants={props.grants}
-        viewer={viewer}
-        now={props.now}
-        onApprove={() => setApproveOpen(true)}
-        onRevoke={props.onRevokeGrant}
-        onRetry={props.onRefreshGrants}
-        initialRevokeId={initial?.revokeGrantId}
-      />
-
-      <OrgSettings settings={props.settings} onToggle={props.onToggleVmCli} />
-
-      {props.audit ? (
-        <AuditLog
-          audit={props.audit}
-          now={props.now}
+      {/* Disabled while the page can't reach Orca Cloud; the error above says why. */}
+      <div
+        className={cn('space-y-8', pageError && 'opacity-60')}
+        inert={pageError ? true : undefined}
+        aria-disabled={pageError ? true : undefined}
+      >
+        <CloudConnectedApps
+          blocked={Boolean(pageError)}
+          grants={props.grants}
           viewer={viewer}
-          initiallyOpen={initial?.auditOpen ?? false}
-          onLoad={props.onLoadAudit}
+          now={props.now}
+          onApprove={() => setApproveOpen(true)}
+          onRevoke={props.onRevokeGrant}
+          onRetry={props.onRefreshGrants}
+          initialRevokeId={initial?.revokeGrantId}
         />
-      ) : null}
+
+        <OrgSettings
+          blocked={Boolean(pageError)}
+          settings={props.settings}
+          onToggle={props.onToggleVmCli}
+        />
+
+        {props.audit ? (
+          <AuditLog
+            audit={props.audit}
+            now={props.now}
+            viewer={viewer}
+            initiallyOpen={initial?.auditOpen ?? false}
+            onLoad={props.onLoadAudit}
+          />
+        ) : null}
+      </div>
 
       <CreateApiKeyDialog
         open={createOpen}
@@ -319,93 +347,5 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
         }}
       />
     </div>
-  )
-}
-
-function KeyRow({
-  apiKey,
-  viewer,
-  now,
-  onRevoke
-}: {
-  apiKey: CloudApiKey
-  viewer: CloudApiMe | null
-  now: number
-  onRevoke: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const locale = useIntlLocale()
-  const mine = viewer?.userId === apiKey.createdBy
-  const expiresSoon = apiKey.expiresAt !== null && apiKey.expiresAt - now < EXPIRY_WARNING_MS
-  const created = formatRelativeFromNow(apiKey.createdAt, now, locale)
-  return (
-    <li data-settings-row="" data-key-id={apiKey.id} className="flex items-start gap-3 py-3">
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <p className="truncate text-sm font-medium" title={apiKey.name}>
-            {apiKey.name}
-          </p>
-          <code className="shrink-0 font-mono text-xs text-muted-foreground">
-            {formatKeyPrefix(apiKey.prefix)}
-          </code>
-          <ScopeSummary scopes={apiKey.scopes} />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          <time
-            dateTime={new Date(apiKey.createdAt).toISOString()}
-            title={formatAbsoluteTime(apiKey.createdAt, locale)}
-          >
-            {mine ? (
-              t('auto.components.settings.cloudApi.keys.createdMine', 'Created {{time}}', {
-                time: created
-              })
-            ) : (
-              <PersonSentence
-                sentence={t(
-                  'auto.components.settings.cloudApi.keys.createdByPerson',
-                  'Created by <person></person> {{time}}',
-                  { time: created }
-                )}
-                name={apiKey.createdByName}
-                id={apiKey.createdBy}
-              />
-            )}
-          </time>
-          <span aria-hidden> · </span>
-          <span>
-            {apiKey.lastUsedAt
-              ? t('auto.components.settings.cloudApi.keys.lastUsed', 'Last used {{time}}', {
-                  time: formatRelativeFromNow(apiKey.lastUsedAt, now, locale)
-                })
-              : t('auto.components.settings.cloudApi.keys.neverUsed', 'Never used')}
-          </span>
-          {apiKey.expiresAt !== null ? (
-            <>
-              <span aria-hidden> · </span>
-              <span className={cn(expiresSoon && 'text-status-warning-text')}>
-                {apiKey.expiresAt <= now
-                  ? t('auto.components.settings.cloudApi.keys.expired', 'Expired')
-                  : t('auto.components.settings.cloudApi.keys.expires', 'Expires {{time}}', {
-                      time: formatRelativeFromNow(apiKey.expiresAt, now, locale)
-                    })}
-              </span>
-            </>
-          ) : null}
-        </p>
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        data-revoke=""
-        onClick={onRevoke}
-        aria-label={t('auto.components.settings.cloudApi.keys.revokeLabel', 'Revoke {{keyName}}', {
-          keyName: apiKey.name
-        })}
-      >
-        <Trash2 />
-        {t('auto.components.settings.cloudApi.keys.revoke', 'Revoke')}
-      </Button>
-    </li>
   )
 }

@@ -17,8 +17,10 @@ type InlineErrorProps = {
   /** 'compact' for narrow panels (sidebar sections): tighter padding, xs text. */
   density?: 'default' | 'compact'
   /** 'toast' leaves room for the toast's own dismiss button and puts the action under the text.
-   *  'strip-top' / 'strip-bottom' run edge to edge at the top or bottom of a framed panel. */
-  layout?: 'inline' | 'toast' | 'strip-top' | 'strip-bottom'
+   *  'strip-top' / 'strip-bottom' run edge to edge at the top or bottom of a framed panel.
+   *  'line' is one muted line with no box, for a reason under a row in a dense list; it is a note
+   *  (not announced) because it describes something that already happened. */
+  layout?: 'inline' | 'toast' | 'strip-top' | 'strip-bottom' | 'line'
   /** A next step other than retry (e.g. "Sign in"), rendered inside the box after the text.
    *  Pass an outline xs Button with a short verb-first label; never a primary button. */
   action?: React.ReactNode
@@ -43,6 +45,27 @@ function InlineError({
   className
 }: InlineErrorProps): React.JSX.Element {
   const Icon = tone === 'error' ? CircleAlert : Info
+  if (layout === 'line') {
+    return (
+      <p
+        role="note"
+        data-slot="inline-error"
+        className={cn('flex items-start gap-1.5 text-xs text-muted-foreground', className)}
+      >
+        <Icon
+          className={cn(
+            'mt-0.5 size-3.5 shrink-0',
+            tone === 'error' ? 'text-destructive' : 'text-muted-foreground'
+          )}
+          aria-hidden
+        />
+        <span className="min-w-0">
+          {title}
+          {detail ? <span> {detail}</span> : null}
+        </span>
+      </p>
+    )
+  }
   return (
     <div
       role={tone === 'error' ? 'alert' : 'status'}

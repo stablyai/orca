@@ -8,6 +8,14 @@ const AI_GATEWAY_OPENAI_BASE_URL = `https://${AI_GATEWAY_HOST}/v1`
 
 export const GEMINI_HOST = 'generativelanguage.googleapis.com'
 export const CURSOR_API_HOST = 'api2.cursor.sh'
+export const VERTEX_HOST = 'aiplatform.googleapis.com'
+/** Copilot's API, per plan; which one a token uses comes from GitHub at sign-in. */
+export const COPILOT_API_HOSTS = [
+  'api.githubcopilot.com',
+  'api.individual.githubcopilot.com',
+  'api.business.githubcopilot.com',
+  'api.enterprise.githubcopilot.com'
+] as const
 
 export const BASE_URL_NAMES: ReadonlySet<string> = new Set(['ANTHROPIC_BASE_URL', 'OPENAI_BASE_URL', 'COPILOT_PROVIDER_BASE_URL'])
 const HOST = /^([a-z0-9-]+\.)+[a-z]{2,63}$/
@@ -81,8 +89,8 @@ export type CredentialTarget = {
 } & CredentialPolicy
 
 export type CredentialPolicy = {
-  /** Only these requests may carry the key (exact method, path up to an optional query). Absent: any. */
-  paths?: readonly { method: string; path: string }[]
+  /** Only these requests may carry the key (method, then the path up to its query: exact, or a prefix). Absent: any. */
+  paths?: readonly { method: string; path: string; prefix?: true }[]
   /**
    * The host stays reachable without the placeholder. Cursor trades the key for a short-lived access
    * token and sends that on every later call, so a 403 for unclaimed requests would break it.
@@ -93,6 +101,8 @@ export type CredentialPolicy = {
    * headers that set state either); anything else is refused.
    */
   keepResponseFields?: readonly string[]
+  /** More ways the client may send the key in a header (gh-style `token <value>`). */
+  altHeaderFormats?: Record<string, readonly ((value: string) => string)[]>
 }
 
 const bearer = (value: string) => `Bearer ${value}`
@@ -102,11 +112,15 @@ const raw = (value: string) => value
 export type ValueScopes = Readonly<Record<string, string>>
 
 type CredentialSpec = CredentialPolicy & {
+  /** Hosts (of the default ones) that stay open without the placeholder. */
+  allowUnclaimedHosts?: readonly string[]
+  /** Per-host request limits, over `paths`. */
+  pathsByHost?: Readonly<Record<string, NonNullable<CredentialPolicy['paths']>>>
   secret: string
   /** Env var that may point this key at a custom host (honoured only from the key's own scope). */
   baseUrl?: string
-  /** Host without a base URL; null: the key is only routed together with its base URL. */
-  defaultHost: string | null
+  /** Hosts without a base URL (a base URL replaces them); empty: only routed with its base URL. */
+  defaultHosts: readonly string[]
   headers: Record<string, (value: string) => string>
 }
 
@@ -120,23 +134,23 @@ const CREDENTIALS: readonly CredentialSpec[] = [
   {
     secret: 'ANTHROPIC_API_KEY',
     baseUrl: 'ANTHROPIC_BASE_URL',
-    defaultHost: 'api.anthropic.com',
+    defaultHosts: ['api.anthropic.com'],
     headers: { 'x-api-key': raw, authorization: bearer }
   },
   {
     secret: 'ANTHROPIC_AUTH_TOKEN',
     baseUrl: 'ANTHROPIC_BASE_URL',
-    defaultHost: 'api.anthropic.com',
+    defaultHosts: ['api.anthropic.com'],
     headers: { authorization: bearer, 'x-api-key': raw }
   },
   // AI SDK clients (OpenCode's `vercel/...` models) read the gateway key directly.
-  { secret: 'AI_GATEWAY_API_KEY', defaultHost: AI_GATEWAY_HOST, headers: { authorization: bearer, 'x-api-key': raw } },
-  { secret: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL', defaultHost: 'api.openai.com', headers: { authorization: bearer } },
-  { secret: 'GEMINI_API_KEY', defaultHost: GEMINI_HOST, headers: { 'x-goog-api-key': raw } },
-  { secret: 'GOOGLE_GENERATIVE_AI_API_KEY', defaultHost: GEMINI_HOST, headers: { 'x-goog-api-key': raw } },
+  { secret: 'AI_GATEWAY_API_KEY', defaultHosts: [AI_GATEWAY_HOST], headers: { authorization: bearer, 'x-api-key': raw } },
+  { secret: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL', defaultHosts: ['api.openai.com'], headers: { authorization: bearer } },
+  { secret: 'GEMINI_API_KEY', defaultHosts: [GEMINI_HOST], headers: { 'x-goog-api-key': raw } },
+  { secret: 'GOOGLE_GENERATIVE_AI_API_KEY', defaultHosts: [GEMINI_HOST], headers: { 'x-goog-api-key': raw } },
   {
     secret: 'CURSOR_API_KEY',
-    defaultHost: CURSOR_API_HOST,
+    defaultHosts: [CURSOR_API_HOST],
     headers: { authorization: bearer },
     paths: [{ method: 'POST', path: '/auth/exchange_user_api_key' }],
     allowUnclaimed: true,
@@ -144,16 +158,37 @@ const CREDENTIALS: readonly CredentialSpec[] = [
     // and exchanges the key again when it expires; with one it would persist a long-lived credential.
     keepResponseFields: ['accessToken']
   },
+  // Gemini CLI and the Google GenAI SDK read GOOGLE_API_KEY for the Gemini API and for Vertex AI
+  // express mode (GOOGLE_GENAI_USE_VERTEXAI=true).
+  { secret: 'GOOGLE_API_KEY', defaultHosts: [GEMINI_HOST, VERTEX_HOST], headers: { 'x-goog-api-key': raw } },
+  {
+    // A user's own GitHub token for Copilot CLI (fine-grained PAT with Copilot Requests). Copilot
+    // checks it on api.github.com, then calls its API with it. The Copilot hosts stay open without
+    // the placeholder: a session token Copilot gets back is sent there too.
+    secret: 'COPILOT_GITHUB_TOKEN',
+    defaultHosts: ['api.github.com', ...COPILOT_API_HOSTS],
+    headers: { authorization: bearer },
+    altHeaderFormats: { authorization: [(value: string) => `token ${value}`] },
+    allowUnclaimedHosts: [...COPILOT_API_HOSTS],
+    // On GitHub's API the user's token checks Copilot access and nothing else: the rest of the API
+    // (repos, gists, ...) stays out of reach of whatever runs in the workspace.
+    pathsByHost: {
+      'api.github.com': [
+        { method: 'GET', path: '/user' },
+        { method: 'GET', path: '/copilot_internal/', prefix: true }
+      ]
+    }
+  },
   {
     secret: 'COPILOT_PROVIDER_API_KEY',
     baseUrl: 'COPILOT_PROVIDER_BASE_URL',
-    defaultHost: null,
+    defaultHosts: [],
     headers: { authorization: bearer, 'api-key': raw }
   },
   {
     secret: 'COPILOT_PROVIDER_BEARER_TOKEN',
     baseUrl: 'COPILOT_PROVIDER_BASE_URL',
-    defaultHost: null,
+    defaultHosts: [],
     headers: { authorization: bearer }
   }
 ]
@@ -167,7 +202,7 @@ export function credentialShape(secret: string): Omit<CredentialTarget, 'host'> 
   if (!spec) {
     return null
   }
-  const { baseUrl: _baseUrl, defaultHost: _defaultHost, ...shape } = spec
+  const { baseUrl: _baseUrl, defaultHosts: _defaultHosts, allowUnclaimedHosts: _openHosts, pathsByHost: _paths, ...shape } = spec
   return shape
 }
 
@@ -175,25 +210,43 @@ export function credentialShape(secret: string): Omit<CredentialTarget, 'host'> 
  * A base URL only redirects a credential from the same scope: a member's personal base URL must
  * never route the org's shared key to a host the member picked (the proxy would hand it over).
  */
-function hostFor(env: Record<string, string>, spec: CredentialSpec, scopes?: ValueScopes): string | null {
+function hostsFor(env: Record<string, string>, spec: CredentialSpec, scopes?: ValueScopes): readonly string[] {
   const base = spec.baseUrl ? env[spec.baseUrl] : undefined
   if (!base || !spec.baseUrl) {
-    return spec.defaultHost
+    return spec.defaultHosts
   }
   if (scopes && scopes[spec.baseUrl] !== scopes[spec.secret]) {
-    return spec.defaultHost
+    return spec.defaultHosts
   }
-  return baseUrlHost(base)
+  const host = baseUrlHost(base)
+  return host ? [host] : []
 }
 
-/** Where each model credential in `env` is used, so the egress proxy can swap it in on that host only. */
+/** How a credential is sent and policed on one of its hosts. */
+export function credentialTarget(secret: string, host: string): CredentialTarget | null {
+  const spec = CREDENTIALS.find((candidate) => candidate.secret === secret)
+  const shape = credentialShape(secret)
+  if (!spec || !shape) {
+    return null
+  }
+  const { allowUnclaimed: _open, ...rest } = shape
+  const open = spec.allowUnclaimed || spec.allowUnclaimedHosts?.includes(host)
+  const paths = spec.pathsByHost?.[host] ?? spec.paths
+  return { ...rest, ...(open ? { allowUnclaimed: true as const } : {}), ...(paths ? { paths } : {}), host }
+}
+
+/** Where each model credential in `env` is used, so the egress proxy can swap it in on those hosts only. */
 export function credentialTargets(env: Record<string, string>, scopes?: ValueScopes): CredentialTarget[] {
   const targets: CredentialTarget[] = []
   for (const spec of CREDENTIALS) {
-    const host = env[spec.secret] ? hostFor(env, spec, scopes) : null
-    const shape = host ? credentialShape(spec.secret) : null
-    if (host && shape) {
-      targets.push({ ...shape, host })
+    if (!env[spec.secret]) {
+      continue
+    }
+    for (const host of hostsFor(env, spec, scopes)) {
+      const target = credentialTarget(spec.secret, host)
+      if (target) {
+        targets.push(target)
+      }
     }
   }
   return targets

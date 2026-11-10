@@ -245,8 +245,8 @@ export function runtimePortForwardFailureText(failure: RuntimePortForwardFailure
     case 'invalid_request':
     case 'listen_failed':
       return translate(
-        'auto.lib.runtimePortForwards.listenFailedRetry',
-        "Couldn't listen on this computer. Retry or pick another port"
+        'auto.lib.runtimePortForwards.listenFailedTryAgain',
+        "Couldn't listen on this computer. Try again or pick another port."
       )
     case 'tunnel_failed':
       return translate('auto.lib.runtimePortForwards.hostNotReachable', 'Host not reachable')

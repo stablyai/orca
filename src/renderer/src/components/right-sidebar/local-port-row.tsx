@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react'
-import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
+import React, { useCallback, useRef } from 'react'
+import { Box, Copy, Ellipsis, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ export function LocalPortRow({
   forwardStatus,
   forwardMenuItems,
   forwardActions,
+  shareAction,
   copyAddress
 }: {
   port: WorkspacePort
@@ -41,10 +42,13 @@ export function LocalPortRow({
   forwardMenuItems?: React.ReactNode
   /** Hover actions for the forward (Stop Forwarding), next to Open/Copy. */
   forwardActions?: React.ReactNode
+  /** Orca Cloud: a "Share…" hover button after Open (the same action as the menu's Share…). */
+  shareAction?: React.ReactNode
   /** Overrides the copied address, e.g. with the forwarded localhost one. */
   copyAddress?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const menuTriggerRef = useRef<HTMLDivElement>(null)
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(copyAddress ?? addressForPort(port))
   }, [copyAddress, port])
@@ -87,6 +91,20 @@ export function LocalPortRow({
     [onStop, port]
   )
 
+  // The row menu is a context menu; this opens it under the button so keyboard and trackpad users reach Share… and the rest.
+  const handleMoreActionsClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    menuTriggerRef.current?.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: rect.left,
+        clientY: rect.bottom
+      })
+    )
+  }, [])
+
   const processLabel =
     port.processName ??
     (port.pid
@@ -103,9 +121,15 @@ export function LocalPortRow({
           )
         : t('auto.components.right.sidebar.PortsPanel.unassigned', 'Unassigned')
   const openBrowserLabel = t(
-    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
-    'Open in Browser'
+    'auto.components.right.sidebar.PortsPanel.openInBrowser',
+    'Open in browser'
   )
+  const moreActionsLabel = t(
+    'auto.components.right.sidebar.PortsPanel.moreActionsForPort',
+    'More actions for port {{port}}',
+    { port: port.port }
+  )
+  const stopProcessLabel = t('auto.components.right.sidebar.PortsPanel.stopProcess', 'Stop process')
   const canStopProcess =
     port.kind === 'workspace' && Boolean(port.pid) && port.processName !== 'Electron'
 
@@ -114,7 +138,8 @@ export function LocalPortRow({
       <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
         <ContextMenuTrigger asChild>
           <div
-            className="flex min-w-0 flex-1 items-start gap-2 rounded focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            ref={menuTriggerRef}
+            className="flex min-w-0 flex-1 items-start gap-2 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             tabIndex={0}
             role="group"
             aria-label={t(
@@ -168,6 +193,7 @@ export function LocalPortRow({
                 </TooltipContent>
               </Tooltip>
             )}
+            {shareAction}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -200,19 +226,34 @@ export function LocalPortRow({
                     size="icon-xs"
                     className="text-muted-foreground hover:text-destructive"
                     onClick={handleStopButtonClick}
-                    aria-label={t(
-                      'auto.components.right.sidebar.PortsPanel.f9528da632',
-                      'Stop Process'
-                    )}
+                    aria-label={stopProcessLabel}
                   >
                     <Trash2 size={13} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {t('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
+                  {stopProcessLabel}
                 </TooltipContent>
               </Tooltip>
             )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={handleMoreActionsClick}
+                  aria-label={moreActionsLabel}
+                  aria-haspopup="menu"
+                >
+                  <Ellipsis size={13} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {moreActionsLabel}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </TooltipProvider>
       </div>
@@ -231,7 +272,7 @@ export function LocalPortRow({
         )}
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
+          {t('auto.components.right.sidebar.PortsPanel.copyAddress', 'Copy address')}
         </ContextMenuItem>
         {forwardMenuItems}
         <ContextMenuItem
@@ -241,14 +282,14 @@ export function LocalPortRow({
           }}
         >
           <Copy size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.bdac206faf', 'Copy Details')}
+          {t('auto.components.right.sidebar.PortsPanel.copyDetails', 'Copy details')}
         </ContextMenuItem>
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => onShowDetails(port)}
         >
           <Info size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
+          {t('auto.components.right.sidebar.PortsPanel.showDetails', 'Show details')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -258,7 +299,7 @@ export function LocalPortRow({
           onSelect={() => onStop(port)}
         >
           <Trash2 size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
+          {stopProcessLabel}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

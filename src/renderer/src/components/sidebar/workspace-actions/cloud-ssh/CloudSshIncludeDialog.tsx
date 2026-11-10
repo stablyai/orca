@@ -104,7 +104,7 @@ const CloudSshIncludeDialog = React.memo(function CloudSshIncludeDialog() {
             {t('auto.components.sidebar.CloudSshIncludeDialog.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleConfirm}>
-            {t('auto.components.sidebar.CloudSshIncludeDialog.confirm', 'Add Line and Open')}
+            {t('auto.components.sidebar.CloudSshIncludeDialog.addLineAndOpen', 'Add line and open')}
           </Button>
         </DialogFooter>
       </DialogContent>

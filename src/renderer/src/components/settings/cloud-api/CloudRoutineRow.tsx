@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import {
   CalendarClock,
   Github,
@@ -161,9 +162,7 @@ export function RoutineRow({
             {where ? <span className="text-muted-foreground"> · {where}</span> : null}
             <span className="text-muted-foreground">
               {' · '}
-              {routine.agent === 'codex'
-                ? t('auto.components.settings.cloudRoutines.agentCodex', 'Codex')
-                : t('auto.components.settings.cloudRoutines.agentClaude', 'Claude Code')}
+              {formatAgentTypeLabel(routine.agent)}
             </span>
             {viewerUserId && routine.createdBy !== viewerUserId ? (
               <span className="text-muted-foreground">

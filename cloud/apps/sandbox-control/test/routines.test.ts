@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ORCA_CLOUD_IMAGE_AGENTS } from '../../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
 import type { GitHubAppMinter } from '../src/github-app'
 import type { RunCommandParams } from '../src/sandbox-provider'
 import { redactLog } from '../src/routines/vm-runner'
@@ -197,6 +198,26 @@ describe('routine runs (state machine on the fake provider)', () => {
       { actor_type: 'routine', actor_id: routine.id, user_id: 'olga', action: 'routine.run.start' },
       { actor_type: 'routine', actor_id: routine.id, user_id: 'olga', action: 'routine.run.finish' }
     ])
+  })
+
+  it('runs every agent the image ships, headless, and refuses any other', async () => {
+    const h = await harness()
+    for (const agent of ORCA_CLOUD_IMAGE_AGENTS) {
+      const created = await h.create({ name: `r-${agent}`, agent })
+      expect(created.status, agent).toBe(201)
+      expect(created.body.routine.agent).toBe(agent)
+      const run = (await h.call('POST', `/v1/routines/${created.body.routine.id}/run`)).body.run
+      await h.tick()
+      const start = h.runnerCalls.find((c) => c.mode === 'start' && c.args.includes(run.id))!
+      expect(start.args[5]).toBe(agent)
+      // The worker has a headless command for it (an unknown agent ends as unknown_agent).
+      expect(start.args.at(-1)).toMatch(new RegExp(`^${agent}\\)$`, 'm'))
+      h.runs.set(run.id, h.done())
+      await h.tick()
+    }
+    expect((await h.create({ agent: 'aider' })).body.reason).toMatch(/^agent/)
+    const routine = (await h.create({ name: 'patch-me' })).body.routine
+    expect((await h.call('PATCH', `/v1/routines/${routine.id}`, { body: { agent: 'gemini' } })).body.routine.agent).toBe('gemini')
   })
 
   it('pr mode: falls back to opening the PR from the control plane when gh did not report one', async () => {

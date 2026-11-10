@@ -80,6 +80,8 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'accounts.google.com',
   // Vercel AI Gateway: Anthropic/OpenAI-compatible endpoint teams point agents at (ANTHROPIC_BASE_URL).
   'ai-gateway.vercel.sh',
+  // Vertex AI express mode (GOOGLE_API_KEY with GOOGLE_GENAI_USE_VERTEXAI=true).
+  'aiplatform.googleapis.com',
   // Gemini CLI signed in with Google: Code Assist API and the account lookup after OAuth.
   'cloudcode-pa.googleapis.com',
   'www.googleapis.com',

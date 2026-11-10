@@ -46,6 +46,16 @@ export function formatCents(cents: number, locale: string): string {
   }).format(cents / 100)
 }
 
+/** A per-hour rate always shows cents ("$1.00", "$0.75"), unlike whole-dollar prices. */
+export function formatRateCents(cents: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(cents / 100)
+}
+
 export const MIN_SEATS = 1
 
 export function clampSeats(value: number, max: number): number {
