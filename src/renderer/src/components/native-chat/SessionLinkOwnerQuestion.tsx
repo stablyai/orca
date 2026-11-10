@@ -1,7 +1,7 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { sessionLinkOwnerRequest } from '../../../../shared/session-link-wait'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import { translate as t } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { Button } from '@/components/ui/button'
 import { SessionLinkOwnerDecision } from './SessionLinkOwnerDecision'
@@ -17,6 +17,8 @@ export function SessionLinkOwnerQuestion({
   target: RuntimeClientTarget
   shouldFocus?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
+
   const state = useSessionLink(sessionId, target, false)
   const snapshot = state.snapshot
   const request = snapshot && sessionLinkOwnerRequest(snapshot.events)
