@@ -309,6 +309,8 @@ export type IpcPtyTransportOptions = {
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   resumeOrigin?: 'saved'
+  /** The pane a saved restore resumes, when it opens in another pane. */
+  resumeSourcePaneKey?: string
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
   freshAgentLaunch?: FreshWorkspaceAgentLaunch

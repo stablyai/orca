@@ -8,7 +8,7 @@ import {
   runtimeHostsPagesOnThisDesktop,
   type ClientCreationActionAvailability
 } from '../../client-creation-action-policy'
-import { resolveWorktreeOperationRoute } from '../../worktree-operation-route'
+import { resolveWorktreeOperationRoute } from '../../workspace/ownership/worktree-operation-route'
 import { getExecutionHostIdForWorktree } from '../../workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
 

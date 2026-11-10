@@ -1,3 +1,4 @@
+import { shouldAcceptMergedFallbackPR } from '../../shared/github/pr-branch-fallback-rule'
 import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
@@ -17,14 +18,6 @@ type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
   'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
-
-function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
-  return (
-    candidate.linkedPRNumber == null &&
-    candidate.fallbackPRNumber != null &&
-    candidate.fallbackPRSource != null
-  )
-}
 
 export function hostedReviewOptionArgs(
   candidate: PRBranchLookupCandidate,

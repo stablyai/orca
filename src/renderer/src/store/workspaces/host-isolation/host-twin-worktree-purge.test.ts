@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
-import { getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { resetHostTwinModuleStores } from './host-twin-state-projection.test-fixture'
 import {

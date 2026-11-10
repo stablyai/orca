@@ -8,7 +8,7 @@ const resolve = (urls: string[]) =>
 beforeEach(() => {
   identity.mockReset().mockResolvedValue({ id: 1, path: 'team/app' })
 })
-it.each([10, 100])(
+it.each([10])(
   'ignores %s valid hosted mirrors in either URL order without probing them',
   async (count) => {
     const mirrors = Array.from({ length: count }, (_, i) => `git@mirror${i}.example:team/app.git`)

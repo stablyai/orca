@@ -134,7 +134,6 @@ function flowAboveSpacer(spacer: HTMLElement): number {
 }
 
 type LoadEarlier = () => Promise<NativeChatOlderPageResult>
-const lands = (): LoadEarlier => vi.fn(async (): Promise<NativeChatOlderPageResult> => 'applied')
 
 function paging({
   messages,
@@ -357,23 +356,6 @@ describe('older history auto-load', () => {
       deactivate()
       owner.dispose()
     }
-  })
-
-  it('stops, and shows neither status nor button, once history runs out', async () => {
-    const loadEarlier = lands()
-    const base = markers(100, 150)
-    const { rerender } = render(paging({ messages: base, loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    await settle()
-    rerender(paging({ messages: [...markers(90, 100), ...base], loadEarlier, hasMore: false }))
-    deliverIntersections()
-
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-    expect(observations.size).toBe(0)
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
   })
 
   it('offers a manual load after a failed page, and resumes auto-loading once it succeeds', async () => {

@@ -3,7 +3,7 @@ import {
   gitGraphSupport,
   gitGraphUpdateMessage,
   probeGitGraphSupport
-} from '@/lib/git-graph-tab'
+} from '@/lib/source-control/graph/git-graph-tab'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'

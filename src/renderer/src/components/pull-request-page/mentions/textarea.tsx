@@ -1,6 +1,6 @@
 import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useId, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'

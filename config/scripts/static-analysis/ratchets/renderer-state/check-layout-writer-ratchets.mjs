@@ -320,6 +320,24 @@ function isSameNameCopy(property, name) {
   return ts.isPropertyAccessExpression(value) && value.name.text === name
 }
 
+// The transition seam names the fields it tracks in `const SEAM_*_FIELDS = [...] as const` lists; names, not writes.
+function isSeamFieldNameConstant(literal) {
+  let list = literal.parent
+  if (!ts.isArrayLiteralExpression(list)) {
+    return false
+  }
+  let declaration = list.parent
+  while (ts.isAsExpression(declaration) || ts.isSatisfiesExpression(declaration)) {
+    declaration = declaration.parent
+  }
+  return (
+    ts.isVariableDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    /^SEAM_[A-Z_]+_FIELDS$/.test(declaration.name.text) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0
+  )
+}
+
 /** Layout writes in one file under one ratchet's rules. */
 export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
   const names = [...ratchet.writerNames, ...ratchet.assignedFields]
@@ -392,7 +410,8 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
         node.parent.expression.expression.text === 'Object' &&
         node.parent.expression.name.text === 'hasOwn'
       ) &&
-      !ts.isLiteralTypeNode(node.parent)
+      !ts.isLiteralTypeNode(node.parent) &&
+      !isSeamFieldNameConstant(node)
     ) {
       count += 1
     }

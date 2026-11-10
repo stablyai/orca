@@ -8,6 +8,10 @@ import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
 import {
+  hideVmCreateCheckout,
+  settleVmCreateCheckoutAfterCleanup
+} from '@/lib/vm-create-hidden-checkouts'
+import {
   appendProvisioningLog,
   appendProvisioningWarnings
 } from '@/lib/pending-creation-provisioning-log'
@@ -60,7 +64,14 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
-      setupExistingFolder: store.setupProjectExistingFolder
+      setupExistingFolder: async (args) => {
+        const setup = await store.setupProjectExistingFolder(args)
+        if (setup) {
+          // Why: until the create adopts it, the VM's primary checkout is not a workspace; the pending row stands for it.
+          hideVmCreateCheckout(creationId, { repoId: setup.repo.id, path: setup.repo.path })
+        }
+        return setup
+      }
     })
   } finally {
     unsubscribeProvisionEvents?.()
@@ -119,7 +130,7 @@ async function prepareEphemeralVmRecipeRequest(
         preparedTarget.setup.repo.path
       )))
   if (!proceed) {
-    await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+    await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     return null
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -182,10 +193,12 @@ function resolvePortableEphemeralVmProjectId(repo: Repo | undefined): string | n
   return key.startsWith('github:') ? key : null
 }
 
+/** A VM cleaned up stays out of the sidebar; one that could not be is shown again so the user can remove it. */
 export async function cleanupEphemeralVmRuntimeForFailedCreate(
-  request: WorktreeCreationRequest
+  request: WorktreeCreationRequest,
+  creationId: string
 ): Promise<void> {
-  await cleanupFailedEphemeralVmWorkspace(request, {
+  const cleanedUp = await cleanupFailedEphemeralVmWorkspace(request, {
     deleteProjectHostSetup: (setupId, hostId) =>
       useAppStore.getState().deleteProjectHostSetup({ setupId, hostId }),
     cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
@@ -197,6 +210,7 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
         error
       )
   })
+  settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp)
 }
 
 export function getProvisionedRootSparseCheckoutError(): string {

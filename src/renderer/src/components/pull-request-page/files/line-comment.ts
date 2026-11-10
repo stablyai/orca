@@ -5,7 +5,7 @@ import type { DiffSection } from '@/components/editor/diff/sections/diff-section
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function addPullRequestLineComment(args: {
   headSha: string | undefined

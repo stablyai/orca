@@ -16,7 +16,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
+import './workspace-tab-palette-entry-builder'
 import './workspace-tab-palette-results'
 
 export type WorkspaceTabContentType = Exclude<TabContentType, 'browser' | 'simulator'>
@@ -76,5 +76,3 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
-
-export const buildSearchableWorkspaceTabs = buildSearchableWorkspaceTabEntries

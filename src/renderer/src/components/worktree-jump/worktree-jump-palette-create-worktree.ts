@@ -18,7 +18,7 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
-import { buildLinearIssueComposerData } from '@/lib/linear-linked-work-item'
+import { buildLinearIssueComposerData } from '@/lib/work-items/linear/linear-linked-work-item'
 import { isWorktreePaletteCreateActivationAllowed } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export function createWorktreeJumpPaletteWorktreeHandler({

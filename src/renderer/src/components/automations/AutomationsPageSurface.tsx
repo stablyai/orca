@@ -1,16 +1,19 @@
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AutomationEditorDialog } from './AutomationEditorDialog'
-import { AutomationsDetailPane } from './AutomationsDetailPane'
+import { AutomationEditorDialog } from './authoring/AutomationEditorDialog'
+import { AutomationsDetailPane } from './details/AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
-import { getAutomationAuthorityTarget } from './automation-host-client'
-import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
-import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import { getAutomationAuthorityTarget } from './hosts/automation-host-client'
+import {
+  automationProjectName,
+  type AutomationListRow
+} from './listing/automation-list-row-identity'
+import type { AutomationHostRecoveryAction } from './hosts/automation-host-status-descriptors'
 import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
-import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface'
-import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { AutomationRunsDashboardSurface } from './runs/AutomationRunsDashboardSurface'
+import { AutomationRunDetailsPage } from './runs/AutomationRunDetailsPage'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
 export function AutomationsPageSurface({

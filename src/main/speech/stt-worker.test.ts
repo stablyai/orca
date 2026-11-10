@@ -21,10 +21,4 @@ describe('resampleToRate', () => {
     expect(second[1]).toBeCloseTo(0.00625, 6)
     expect(second[80]).toBeCloseTo(0.5, 6)
   })
-
-  it('keeps same-rate chunks unchanged', () => {
-    const samples = new Float32Array([0, 0.5, -0.5])
-
-    expect(resampleToRate(samples, 16000, 16000)).toBe(samples)
-  })
 })

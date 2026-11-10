@@ -2,7 +2,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../../../shared/worktree/retired-name-registry'
-import type { GitHubLinkQuery } from '@/lib/github-links'
+import type { GitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
 import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
 
 export type ComposerDerivedModel = {
