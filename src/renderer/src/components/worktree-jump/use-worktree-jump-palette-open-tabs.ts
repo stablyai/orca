@@ -10,10 +10,11 @@ import {
 } from '@/lib/simulator/search/simulator-palette-search'
 import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'
-import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
 import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+
 import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
-import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
+import { comparePaletteRankedItems } from '@/lib/workspace/search/palette/cmd-j-section-leadership'
 import { getPaletteWorktreeIdentity } from '@/lib/workspace/search/palette-repo-resolution'
 import type {
   BrowserPaletteItem,

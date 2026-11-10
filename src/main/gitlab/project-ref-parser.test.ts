@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseGitLabProjectRef } from './project-ref-parser'
+import { parseGitLabProjectRef, parseRemoteProjectRefCandidate } from './project-ref-parser'
 
 describe('gitlab project ref parsing', () => {
   it.each([
@@ -42,5 +42,32 @@ describe('gitlab project ref parsing', () => {
     expect(
       parseGitLabProjectRef('http://gitea.example.com:3030/team/api.git', knownHosts)
     ).toBeNull()
+  })
+
+  it('keeps public ownership authoritative without narrowing generic mirror parsing', () => {
+    for (const [remote, host] of [
+      ['https://github.com:8443/team/project.git', 'github.com:8443'],
+      ['git@SSH.GITHUB.COM:team/project.git', 'ssh.github.com'],
+      ['git@acme.ghe.com:team/project.git', 'acme.ghe.com'],
+      ['git@ssh.bitbucket.org:team/project.git', 'ssh.bitbucket.org'],
+      ['https://dev.azure.com/acme/project/_git/repo', 'dev.azure.com'],
+      ['git@ssh.dev.azure.com:v3/acme/project/repo', 'ssh.dev.azure.com'],
+      ['https://acme.visualstudio.com/project/_git/repo', 'acme.visualstudio.com'],
+      ['https://codeberg.org/team/project.git', 'codeberg.org']
+    ]) {
+      expect(parseGitLabProjectRef(remote, [host])).toBeNull()
+    }
+    expect(parseRemoteProjectRefCandidate('git@github.com:team/project.git')).toEqual({
+      host: 'github.com',
+      path: 'team/project'
+    })
+    expect(
+      parseGitLabProjectRef('https://git.bitbucket.acme.com/team/project.git', [
+        'git.bitbucket.acme.com'
+      ])
+    ).toEqual({
+      host: 'git.bitbucket.acme.com',
+      path: 'team/project'
+    })
   })
 })

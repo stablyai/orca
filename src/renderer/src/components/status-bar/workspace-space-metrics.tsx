@@ -5,7 +5,7 @@ import {
   getWorkspaceSpaceScanDateTimeLabel,
   getWorkspaceSpaceScanTimeLabel
 } from './workspace-space-format'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 
 export function Metric({
   label,

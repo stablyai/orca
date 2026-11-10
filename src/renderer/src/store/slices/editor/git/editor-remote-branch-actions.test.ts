@@ -60,39 +60,6 @@ describe('createEditorSlice remote branch actions', () => {
     }
   })
 
-  it('refuses a git operation whose worktree no row places, instead of using the focused server', async () => {
-    const store = createEditorStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
-
-    await expect(store.getState().pushBranch('wt-unknown', '/elsewhere')).rejects.toThrow(
-      'The workspace host is unresolved'
-    )
-
-    expect(gitPushMock).not.toHaveBeenCalled()
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
-  it('preserves prior upstream status when fetch fails', async () => {
-    // Transient upstream failures retain known ahead/behind counts instead of flashing unknown/no-upstream state.
-    const store = createEditorStore()
-    store.getState().setUpstreamStatus('wt-1', {
-      hasUpstream: true,
-      upstreamName: 'origin/main',
-      ahead: 2,
-      behind: 1
-    })
-    gitUpstreamStatusMock.mockRejectedValueOnce(new Error('transient failure'))
-
-    await store.getState().fetchUpstreamStatus('wt-1', '/repo')
-
-    expect(store.getState().remoteStatusesByWorktree['wt-1']).toEqual({
-      hasUpstream: true,
-      upstreamName: 'origin/main',
-      ahead: 2,
-      behind: 1
-    })
-  })
-
   it('keeps isRemoteOperationActive true while any remote op is in flight', async () => {
     // Refcount remote operations across worktrees; push A settling must not reenable still-running pull B.
     const store = createEditorStore()

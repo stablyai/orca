@@ -5,7 +5,7 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
-import type { WorktreeGitCopy } from '@/lib/worktree-git-copy'
+import type { WorktreeGitCopy } from '@/lib/workspace/ownership/worktree-git-copy'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider

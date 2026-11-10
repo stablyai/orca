@@ -14,7 +14,7 @@ import { buildPaletteTabDocument } from '../../../../../shared/palette-match/tab
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../worktree-default-display-name'
+} from '../../workspace/display/worktree-default-display-name'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type {

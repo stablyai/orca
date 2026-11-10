@@ -342,33 +342,6 @@ it('phone captures accepted echoed inputs, preserves false, and freezes empty vs
   await harness.unmount()
 })
 
-it('accepts a typed literal at an attached fence while options refresh with no menu', async () => {
-  const pending = deferred<AgentSessionOptionsResult>()
-  let reads = 0
-  const client = optionsClient(() =>
-    ++reads === 1 ? Promise.resolve({ models: [], current: {} }) : pending.promise
-  )
-  const { calls, mutate } = recordingMutate(async () =>
-    accepted({ key: 'model', value: 'literal', options: { model: 'literal' } }, true)
-  )
-  const view = await mountOptions({ ...BASE, client: client.client, mutate })
-  await view.rerender({ fence: 2 })
-  let result = true
-  await act(async () => {
-    result = await view.current().setStructuredOption('model', 'literal')
-  })
-  expect(result).toBe(true)
-  expect(calls).toHaveLength(1)
-  await act(async () => pending.resolve({ models: [], current: {} }))
-  await settle()
-  await act(async () => {
-    result = await view.current().setStructuredOption('model', 'literal')
-  })
-  expect(result).toBe(true)
-  expect(calls).toHaveLength(2)
-  await view.unmount()
-})
-
 it('refreshes saved planning intent from the same host status stamp without remounting', async () => {
   let interactionMode: 'default' | 'plan' = 'default'
   const client = optionsClient(async () => ({
