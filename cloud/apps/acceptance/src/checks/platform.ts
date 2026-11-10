@@ -1,5 +1,9 @@
 // W1 environment builds, W4 multiplayer, W5 public API / MCP / routines, W8 device sessions.
 import { createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, createDecipheriv } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { SignJWT } from 'jose'
 import { control } from '../clients'
 import { config, secrets } from '../env'
@@ -387,10 +391,54 @@ export const platformChecks: Record<string, Check> = {
     return { status: ok ? 'pass' : 'fail', detail: `initialize ${init.status}; ${names.length} tools (${names.slice(0, 6).join(', ')}…); list_workspaces ${call.status}${call.body?.error ? ` ${JSON.stringify(call.body.error)}` : ''}` }
   },
 
-  'api.cli': async () => ({
-    status: 'partial',
-    detail: 'CLI has `orca cloud env …` (builds) and `orca ssh`; creating a cloud workspace is via REST/MCP, not a CLI verb yet'
-  }),
+  'api.cli': async (ctx) => {
+    // `orca worktree create --on cloud` (W5 #167), headless: the CLI calls the control plane with an
+    // API key (no app involved). Needs out/cli/index.js built from this checkout.
+    const repoRoot = new URL('../../../../../', import.meta.url).pathname
+    const cli = `${repoRoot}out/cli/index.js`
+    if (!existsSync(cli)) {
+      return { status: 'skipped', detail: 'out/cli/index.js not built (node config/scripts/cli-build/build-cli.mjs)' }
+    }
+    const credDir = mkdtempSync(join(tmpdir(), 'orca-cli-cred-'))
+    const run = (args: string[], env: Record<string, string>) =>
+      new Promise<{ code: number; json: any; ms: number; stderr: string }>((resolve) => {
+        const t0 = Date.now()
+        execFile('node', [cli, ...args], { cwd: repoRoot, timeout: 180_000, env: { ...process.env, ORCA_CLOUD_CREDENTIALS_FILE: join(credDir, 'credentials.json'), ...env } }, (e, stdout, stderr) => {
+          let json: any = null
+          try {
+            json = JSON.parse(stdout)
+          } catch {
+            json = null
+          }
+          resolve({ code: e ? (typeof (e as any).code === 'number' ? (e as any).code : 1) : 0, json, ms: Date.now() - t0, stderr: stderr.slice(0, 300) })
+        })
+      })
+    try {
+      const signedOut = await run(['worktree', 'create', '--on', 'cloud', '--name', 'w9-cli-noauth', '--json'], { ORCA_CLOUD_TOKEN: '', ORCA_CLOUD_API_URL: '' })
+      const env = { ORCA_CLOUD_TOKEN: await key(ctx), ORCA_CLOUD_API_URL: config.controlPlaneUrl }
+      const created = await run(['worktree', 'create', '--on', 'cloud', '--name', `w9-cli-${tag(ctx)}`, '--repo', config.testRepo, '--json'], env)
+      const ws = created.json?.result?.workspace
+      if (ws?.id) {
+        ctx.run.created({ kind: 'sandbox', id: ws.id, label: 'CLI --on cloud workspace', vcpus: 4 })
+      }
+      const destroyed = ws?.id ? await run(['cloud', 'workspace', 'destroy', ws.id, '--json'], env) : null
+      if (ws?.id && destroyed?.code === 0) {
+        ctx.run.destroyed('sandbox', ws.id)
+      } else if (ws?.id) {
+        await api(ctx, 'DELETE', `/v1/workspaces/${ws.id}`)
+        ctx.run.destroyed('sandbox', ws.id)
+      }
+      const notSignedIn = JSON.stringify(signedOut.json ?? signedOut.stderr).includes('cloud_not_signed_in')
+      const ok = created.code === 0 && ws?.status === 'running' && created.json?.result?.host?.origin?.target === 'cloud' && destroyed?.code === 0 && notSignedIn
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `orca worktree create --on cloud --repo … (API key) -> ${ws?.status ?? `exit ${created.code} ${created.stderr || JSON.stringify(created.json?.error ?? '').slice(0, 120)}`} in ${created.ms} ms; cloud workspace destroy -> exit ${destroyed?.code}; signed out -> ${notSignedIn ? 'cloud_not_signed_in' : `unexpected ${JSON.stringify(signedOut.json?.error ?? signedOut.stderr).slice(0, 120)}`}`,
+        timingsMs: { cliCreate: created.ms }
+      }
+    } finally {
+      rmSync(credDir, { recursive: true, force: true })
+    }
+  },
 
   'api.routine-webhook': async (ctx) => {
     // Routine runs act with the creator's credentials: give the account the gateway key the product way.
