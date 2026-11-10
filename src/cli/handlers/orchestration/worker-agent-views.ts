@@ -47,7 +47,7 @@ export type WorkerShowResult = {
 }
 
 /** A worker a paired server runs, as this Orca names that server and last heard from it. */
-type RemoteWorkerServer = { name: string; lastSeenAt: string }
+type RemoteWorkerServer = { name: string; asOf: string; repaired?: true }
 
 type WorkerShowFields = {
   dispatchId: string
@@ -63,7 +63,7 @@ type WorkerShowFields = {
   terminalState?: string
   workspace?: string
   server?: string
-  lastSeen?: string
+  asOf?: string
   lastReport?: string
   note?: string
   attention?: string[]
@@ -95,7 +95,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
         undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
       server: value.server?.name,
-      lastSeen: value.server?.lastSeenAt,
+      asOf: value.server?.asOf,
       lastReport: value.lastReport ?? undefined,
       note: value.server ? value.observation?.reason : undefined,
       attention: actionableAttention(value.projection),
@@ -151,7 +151,7 @@ type WorkerListRow = {
   workspace?: string
   host?: string
   coordinatedFrom?: string
-  lastSeen?: string
+  asOf?: string
   attention?: string[]
   autoReleaseAt?: string
   next?: string
@@ -186,9 +186,9 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         terminalState: worker.terminalState ?? undefined,
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
-        host: projection?.host.id ?? worker.server?.name,
+        host: projection?.host.id ?? remoteHost(worker.server),
         coordinatedFrom: worker.coordinatedFrom ?? undefined,
-        lastSeen: worker.server?.lastSeenAt,
+        asOf: worker.server?.asOf,
         attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
         next: projection
@@ -210,6 +210,11 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         }
       : undefined
   }
+}
+
+/** A re-made pairing leaves the record, but its server no longer reports the worker here. */
+export function remoteHost(server: RemoteWorkerServer | undefined): string | undefined {
+  return server && (server.repaired ? `${server.name} (pairing re-made)` : server.name)
 }
 
 // Older runtimes send no projection and cannot close finished workers on their own.

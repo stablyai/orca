@@ -1,7 +1,7 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
-import { WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
+import { remoteHost, WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
 import {
   formatHelperStops,
   WORKER_RELEASE_VIEW,
@@ -167,7 +167,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const details = projection
                   ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
                   : worker.server
-                    ? `] host=${worker.server.name} lastSeen=${worker.server.lastSeenAt}`
+                    ? `] host=${remoteHost(worker.server)} asOf=${worker.server.asOf}`
                     : `]`
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`

@@ -51,17 +51,30 @@ export function getRemoteDispatch(
     | undefined
 }
 
-/** Newest first, in one Run or every Run. */
+/** Newest first, in one Run or every Run, with the state of the link each came home under. */
 export function listRemoteDispatches(
   db: OrchestrationDb,
   scope: { runId?: string; limit: number }
-): RemoteDispatchRow[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
+): (RemoteDispatchRow & { link_state: RemoteRunLinkRow['state'] | null })[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the record's columns plus the joined link state.
   return db.db
     .prepare(
-      `SELECT * FROM remote_dispatches WHERE (? IS NULL OR run_id = ?) ORDER BY rowid DESC LIMIT ?`
+      `SELECT record.*, link.state AS link_state FROM remote_dispatches record
+       LEFT JOIN remote_run_links link ON link.conversation_id = record.conversation_id
+       WHERE (? IS NULL OR record.run_id = ?) ORDER BY record.rowid DESC LIMIT ?`
     )
-    .all(scope.runId ?? null, scope.runId ?? null, scope.limit) as RemoteDispatchRow[]
+    .all(scope.runId ?? null, scope.runId ?? null, scope.limit) as (RemoteDispatchRow & {
+    link_state: RemoteRunLinkRow['state'] | null
+  })[]
+}
+
+export function countRemoteDispatches(db: OrchestrationDb, runId: string | undefined): number {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) returns one number.
+  return (
+    db.db
+      .prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE (? IS NULL OR run_id = ?)')
+      .get(runId ?? null, runId ?? null) as { count: number }
+  ).count
 }
 
 /** Identity only: which server runs the Dispatch and for which Task. State comes from the server's queue. */
