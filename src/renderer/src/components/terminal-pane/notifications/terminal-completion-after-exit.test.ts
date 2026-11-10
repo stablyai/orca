@@ -20,7 +20,9 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } })
 vi.mock('../agent-completion/agent-hook-terminal-lifecycle', () => ({
   dispatchAgentHookTerminalLifecycle: vi.fn()
 }))
-vi.mock('@/lib/desktop-notification-sound', () => ({ playDesktopNotificationSound: vi.fn() }))
+vi.mock('@/lib/notifications/desktop-notification-sound', () => ({
+  playDesktopNotificationSound: vi.fn()
+}))
 vi.mock('@/store/slices/worktrees/metadata/worktree-meta-persist', () => ({
   persistWorktreeMeta: vi.fn(async () => undefined)
 }))
