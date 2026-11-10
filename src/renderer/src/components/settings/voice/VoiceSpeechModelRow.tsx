@@ -173,16 +173,19 @@ export function VoiceSpeechModelRow({
               value0: totalMb
             })}
       </div>
-      <div className="-mr-2 flex justify-end">
+      <div
+        className={cn(
+          '-mr-2 flex justify-end',
+          !active &&
+            !deletePending &&
+            'opacity-0 group-hover/model:opacity-100 focus-within:opacity-100'
+        )}
+      >
         {deletable ? (
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            className={cn(
-              !active &&
-                'opacity-0 group-hover/model:opacity-100 focus-visible:opacity-100 disabled:opacity-100'
-            )}
             aria-label={t('auto.components.settings.VoicePane.6fa734ed95', 'Delete {{value0}}', {
               value0: manifest.label
             })}
