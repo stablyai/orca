@@ -34,29 +34,31 @@ type IssueSourceActionsInput = Pick<
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
-  toLinearLinkedWorkItem,
-  getLinkedItemDisplayName,
-  getSmartNameSelection as getFolderSmartNameSelection
-} from '@/components/sidebar/folder-workspace-composer-helpers'
-import {
-  buildLinearIssueLinkedWorkItem,
-  getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
-import {
-  getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
-import {
+  buildLinearWorkspaceSource as toLinearLinkedWorkItem,
   buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
+import {
+  getLinkedItemDisplayName,
+  getSmartNameSelection as getFolderSmartNameSelection
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
+import {
+  buildLinearIssueLinkedWorkItem,
+  getLinearLinkedWorkItemBranchName
+} from '@/lib/work-items/linear/linear-linked-work-item'
+import {
+  getLinearIssueWorkspaceName,
+  getLinkedWorkItemSuggestedName,
+  getLinkedWorkItemWorkspaceName
+} from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {

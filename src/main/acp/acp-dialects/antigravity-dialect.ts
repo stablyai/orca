@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/agent-session-question-answer'
-import { AcpRpcError } from '../acp-errors'
-import { readAcpPermissionRequest } from '../acp-permission-requests'
-import { acpPermissionPresentation, pendingAcpResolution } from '../acp-timeline-requests'
+import { AcpRpcError } from '../transport/acp-errors'
+import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
+import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
-import type { AcpDialect, AcpRequestPresentation } from './acp-dialect'
+import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 
 // interaction_ permissions are questions, even in yolo mode; never auto-approve them.
 function questionRequest(method: string, params: unknown): AcpRequestPresentation | undefined {

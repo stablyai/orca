@@ -5,7 +5,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { taskSourceCacheScopeHostId } from '../task-source-context'
+import { taskSourceCacheScopeHostId } from '../work-items/task-source-context'
 
 export type RuntimeFocusSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>

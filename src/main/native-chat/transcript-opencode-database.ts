@@ -3,12 +3,12 @@ import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { getAiVaultWslScanHomeDirs } from '../ai-vault/cached-session-list'
-import { prepareOpenCodeWslReaders } from '../ai-vault/opencode-wsl-runtime-preparation'
+import { prepareOpenCodeWslReaders } from '../ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import {
   configureOpenCodeWslReaders,
   openCodeWslPath
-} from '../ai-vault/session-scanner-opencode-wsl-client'
-import { readOpenCodeTranscriptSignalViaWorker } from '../ai-vault/session-scanner-opencode-sqlite-worker-spawn'
+} from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
+import { readOpenCodeTranscriptSignalViaWorker } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import {
   compareOpenCodeClaimPriority,
   listOpenCodeDatabases,

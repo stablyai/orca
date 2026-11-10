@@ -7,6 +7,7 @@ import type {
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import {
   DropdownMenu,
@@ -21,8 +22,9 @@ type SampleAccount = {
   id: string
   email: string
   workspace: string | null
-  /** Weekly used percent; null when the account needs a sign-in. */
+  /** Weekly used percent; null when usage is unavailable. */
   weekly: number | null
+  error?: string
   resetsInDays: number
 }
 
@@ -109,7 +111,7 @@ function usageFor(account: SampleAccount): ProviderRateLimits {
           },
     weekly: account.weekly === null ? null : weeklyWindow(account.weekly, account.resetsInDays),
     updatedAt: NOW - 60_000,
-    error: account.weekly === null ? 'Not signed in' : null,
+    error: account.weekly === null ? (account.error ?? 'Not signed in') : null,
     status: account.weekly === null ? 'error' : 'ok'
   }
 }
@@ -128,7 +130,12 @@ function managed(account: SampleAccount): CodexManagedAccount {
   }
 }
 
-function switcherFixture(accounts: SampleAccount[], asSubmenu = false) {
+function switcherFixture(
+  accounts: SampleAccount[],
+  asSubmenu = false,
+  staleRestart = false,
+  systemDefaultOnly = false
+) {
   const [active, ...inactive] = accounts
   const codex: ProviderRateLimits = {
     ...usageFor(active),
@@ -145,11 +152,26 @@ function switcherFixture(accounts: SampleAccount[], asSubmenu = false) {
     store: {
       settings: {
         ...getDefaultSettings('/home/me'),
-        codexManagedAccounts: accounts.map(managed),
-        activeCodexManagedAccountId: active.id,
-        activeCodexManagedAccountIdsByRuntime: { host: active.id, wsl: {} }
+        codexManagedAccounts: systemDefaultOnly ? [] : accounts.map(managed),
+        activeCodexManagedAccountId: systemDefaultOnly ? null : active.id,
+        activeCodexManagedAccountIdsByRuntime: {
+          host: systemDefaultOnly ? null : active.id,
+          wsl: {}
+        }
       },
       rateLimits: createEmptyRateLimitState({ codex, inactiveCodexAccounts }),
+      ...(staleRestart
+        ? {
+            tabsByWorktree: { wt1: [makeTab({ id: 'tab1', worktreeId: 'wt1' })] },
+            ptyIdsByTabId: { tab1: ['pty1'] },
+            codexRestartNoticeByPtyId: {
+              pty1: {
+                previousAccountLabel: 'echo@example.com',
+                nextAccountLabel: 'jinjing@example.com'
+              }
+            }
+          }
+        : {}),
       fetchInactiveCodexAccountUsage: async () => {}
     },
     setup: () => {
@@ -195,6 +217,16 @@ function switcherFixture(accounts: SampleAccount[], asSubmenu = false) {
 
 export const sixAccounts = switcherFixture(BASE_ACCOUNTS)
 
+export const systemDefaultOnly = switcherFixture(BASE_ACCOUNTS.slice(1, 2), false, false, true)
+
+export const staleSession = switcherFixture(BASE_ACCOUNTS, false, true)
+
 export const longList = switcherFixture([...BASE_ACCOUNTS, ...EXTRA_ACCOUNTS])
 
 export const submenu = switcherFixture([...BASE_ACCOUNTS, ...EXTRA_ACCOUNTS], true)
+
+export const transientUsageFailures = switcherFixture([
+  ...BASE_ACCOUNTS.slice(0, 2),
+  { ...BASE_ACCOUNTS[2], weekly: null, error: 'Sign-in probe timed out' },
+  { ...BASE_ACCOUNTS[3], weekly: null, error: 'Session index rebuilding' }
+])

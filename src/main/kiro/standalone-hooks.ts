@@ -1,9 +1,16 @@
 import { unlinkSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { parseHooksJsonText, readHooksJsonWithRaw } from '../agent-hooks/hooks-json-read'
-import { writeHooksJson } from '../agent-hooks/installer-utils'
-import { readTextFileRemote, writeHooksJsonRemote } from '../agent-hooks/installer-utils-remote'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import {
+  parseHooksJsonText,
+  readHooksJsonWithRaw
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { readTextFileRemote } from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeHooksJsonRemote } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import {
   buildKiroStandaloneHooksFile,
   getKiroStandaloneHooksFileConflict,

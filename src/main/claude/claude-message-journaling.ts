@@ -4,7 +4,7 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 import {
@@ -29,7 +29,12 @@ import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text
 import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
 import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
 import type { ClaudeSubagentIdentities } from './claude-subagent-identities'
-import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
+import {
+  claudeStreamTurnSource,
+  claudeStreamTurnStartSource,
+  claudeTurnOpenedBySendEcho,
+  type ClaudeTurnSource
+} from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 import type { ClaudeUsageLimits } from './claude-usage-limits'
@@ -51,6 +56,23 @@ export type ClaudeMessageJournalContext = {
   assistantFailures: ClaudeAssistantFailures
   usageLimits: ClaudeUsageLimits
   threadGoal: ClaudeThreadGoal
+}
+
+export function journalClaudeStream(
+  ctx: ClaudeMessageJournalContext,
+  message: Record<string, unknown>,
+  observedAt: number
+): boolean {
+  const delta = ctx.streamedBlocks.observe(message, observedAt)
+  const thinking = ctx.streamedThinking.observe(message, observedAt)
+  // Prefer message_start; use the first content delta for older streams that omit it.
+  const source =
+    delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
+  ctx.turn.ensureOpen(message, source, observedAt)
+  if (delta) {
+    ctx.streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
+  }
+  return delta !== null || thinking
 }
 
 export function journalClaudeMessage(
@@ -174,7 +196,10 @@ export function journalClaudeMessage(
       tool.name === 'Monitor' &&
       ctx.toolOrigins.has(result.toolUseId)
     ) {
-      ctx.backgroundTasks.observeMonitorToolResult(claudeRecord(message.tool_use_result)?.taskId)
+      ctx.backgroundTasks.observeMonitorToolResult(
+        claudeRecord(message.tool_use_result)?.taskId,
+        result.toolUseId
+      )
     }
     ctx.tools.delete(result.toolUseId)
     changed = true

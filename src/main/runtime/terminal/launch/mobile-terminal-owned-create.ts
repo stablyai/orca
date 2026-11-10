@@ -1,16 +1,18 @@
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
-import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
+import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
 import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
@@ -18,11 +20,15 @@ import {
   buildHeadlessMobileSessionTabGroups,
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
-} from '../../mobile-session-layout-projection'
+} from '../surface/mobile-session-layout-projection'
 
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
+  protected abstract createMobileSessionTabsDelivery(): ReturnType<
+    SessionTabsPublication['createMobileSessionTabsDelivery']
+  >
+
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
@@ -63,7 +69,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: an SSH sessionId means reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
-      opts.identity?.sessionId ?? (workspace.connectionId ? undefined : `serve-${randomUUID()}`)
+      opts.identity?.sessionId ??
+      (workspace.connectionId ? undefined : mintServePtySessionId(workspace.id, randomUUID()))
     const isNewSession = stableSessionId !== undefined && opts.identity?.sessionId === undefined
     const mutationHandle = opts.createMutation
       ? deriveRemoteRuntimeTerminalCreateHandle(
@@ -112,6 +119,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.wslUserAct ? { wslUserAct: true } : {}),
         ...(opts.resumeOrigin ? { resumeOrigin: opts.resumeOrigin } : {}),
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+        ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
@@ -173,7 +181,12 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       }
       if (recipe) {
         livePty.pty.launchAgent ??= recipe.launchAgent ?? null
-        if (!livePty.pty.launchConfig && recipe.launchConfig) {
+        // A finished launch's recipe must not return to the shell left behind.
+        if (
+          !livePty.pty.launchConfig &&
+          recipe.launchConfig &&
+          livePty.pty.launchEvidence?.kind !== 'gone'
+        ) {
           livePty.pty.launchConfig = copySleepingAgentLaunchConfig(recipe.launchConfig)
         }
       }
@@ -268,11 +281,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       // New epochs retire the prior publisher and reject its later updates.
       publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      // Activating the new tab must also focus its requested split group.
       activeGroupId:
-        activate && opts.targetGroupId
-          ? opts.targetGroupId
-          : (existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId)),
+        (activate ? tabGroups.find((group) => group.tabOrder.includes(parentTabId))?.id : null) ??
+        existing?.activeGroupId ??
+        getHeadlessMobileSessionGroupId(worktreeId),
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups,
@@ -282,14 +294,11 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
-    const result = this.toMobileSessionTabsResult(stored)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
+    if (activate && this.shouldPersistHeadlessMobileSessionActivation(stored, tab)) {
+      this.persistHeadlessTerminalActiveLeaf(worktreeId, tab, stored)
     }
+    const result = this.toMobileSessionTabsResult(stored)
+    this.createMobileSessionTabsDelivery()(result, ++this.mobileSessionTabsChangeSequence)
     const created = result.tabs.find((candidate) => candidate.id === tab.id)
     if (!created || created.type !== 'terminal') {
       throw new Error('terminal_handle_stale')

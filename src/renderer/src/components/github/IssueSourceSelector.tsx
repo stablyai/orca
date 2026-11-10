@@ -5,7 +5,8 @@ import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type IssueSourceSelectorProps = {
   /** Unset preferences behave as auto; untouched repos omit the stored key. */
@@ -54,6 +55,7 @@ export default function IssueSourceSelector({
   suppressTooltip = false,
   issueSource
 }: IssueSourceSelectorProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!origin || !upstream) {
     return null
   }
@@ -71,10 +73,7 @@ export default function IssueSourceSelector({
   const group = (
     <div
       role="group"
-      aria-label={translate(
-        'auto.components.github.IssueSourceSelector.787c970baf',
-        'Issue source'
-      )}
+      aria-label={t('auto.components.github.IssueSourceSelector.787c970baf', 'Issue source')}
       className={cn(
         'inline-flex items-center overflow-hidden rounded border border-border/40',
         className
@@ -94,7 +93,7 @@ export default function IssueSourceSelector({
       >
         {density === 'compact'
           ? 'U'
-          : translate('auto.components.github.IssueSourceSelector.30b2c9df91', 'Upstream')}
+          : t('auto.components.github.IssueSourceSelector.30b2c9df91', 'Upstream')}
       </button>
       <button
         type="button"
@@ -113,7 +112,7 @@ export default function IssueSourceSelector({
       >
         {density === 'compact'
           ? 'O'
-          : translate('auto.components.github.IssueSourceSelector.51d1608920', 'Origin')}
+          : t('auto.components.github.IssueSourceSelector.51d1608920', 'Origin')}
       </button>
     </div>
   )
@@ -121,27 +120,29 @@ export default function IssueSourceSelector({
   const shownIssueSource =
     issueSource === undefined ? (effective === 'upstream' ? upstream : origin) : issueSource
   // Let issue-only callers omit the tooltip without coupling this control to page identity.
-  if (suppressTooltip || !shownIssueSource) {
+  if (suppressTooltip) {
     return group
   }
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>{group}</TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
-        <Trans
-          i18n={i18n}
-          defaults={translate(
-            'auto.components.github.IssueSourceSelector.showingIssuesFromRepo',
-            'Showing issues from <repo/>'
-          )}
-          components={{
-            repo: (
-              <span className="font-mono">{`${shownIssueSource.owner}/${shownIssueSource.repo}`}</span>
-            )
-          }}
-        />
-      </TooltipContent>
+      {shownIssueSource && (
+        <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'auto.components.github.IssueSourceSelector.showingIssuesFromRepo',
+              'Showing issues from <repo/>'
+            )}
+            components={{
+              repo: (
+                <span className="font-mono">{`${shownIssueSource.owner}/${shownIssueSource.repo}`}</span>
+              )
+            }}
+          />
+        </TooltipContent>
+      )}
     </Tooltip>
   )
 }

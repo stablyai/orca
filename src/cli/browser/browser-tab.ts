@@ -3,7 +3,7 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { formatTabList, formatTabListWithProfiles, formatTabShow } from './browser-format'
 import { printResult } from '../format'
@@ -15,7 +15,8 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
-import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
+import { getBrowserWorktreeSelector } from '../selectors'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {

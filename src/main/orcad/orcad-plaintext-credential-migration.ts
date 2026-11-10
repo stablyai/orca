@@ -4,8 +4,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SecretStore } from '../../shared/secret-store'
 import { classifyUnenvelopedCredential } from '../../shared/secret-at-rest-protection'
-import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
+import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-storage/secure-file'
+import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 import {
   getWorkspaceTokenDir,
   getWorkspaceTokenPath,
@@ -18,6 +18,7 @@ import { API_KEY_ENVELOPE_PREFIX, getZcodePlanApiKeyPath } from '../zcode/zcode-
 import { COOKIE_ENVELOPE_PREFIX, getMiniMaxCookiePath } from '../minimax/minimax-cookie-store'
 import { miniMaxApiKeyEnvelopeFile } from '../minimax/minimax-api-key-store'
 import { openCodeGoApiKeyEnvelopeFile } from '../opencode/opencode-go-api-key-store'
+import { openAiCompatibleSpeechProviderEnvelopeFile } from '../speech/openai-compatible-speech-provider-store'
 
 type PlaintextCredentialTarget = {
   path: string
@@ -53,7 +54,8 @@ function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
     { path: getMiniMaxCookiePath(), envelopePrefix: COOKIE_ENVELOPE_PREFIX, raw: true },
     { path: getZcodePlanApiKeyPath(), envelopePrefix: API_KEY_ENVELOPE_PREFIX },
     miniMaxApiKeyEnvelopeFile(),
-    openCodeGoApiKeyEnvelopeFile()
+    openCodeGoApiKeyEnvelopeFile(),
+    openAiCompatibleSpeechProviderEnvelopeFile()
   ]
 }
 

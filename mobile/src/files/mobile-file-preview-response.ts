@@ -1,8 +1,8 @@
 import type { MobileFileMedia } from './mobile-file-media'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import type { RpcFailure } from '../transport/types'
+import type { RpcFailure } from '../transport/rpc/rpc-wire-types'
 import { isMarkdownPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
@@ -224,4 +224,10 @@ function textKindForPreviewPath(relativePath: string): MobileFilePreviewTextKind
     return 'svg'
   }
   return isMarkdownPath(relativePath) ? 'markdown' : 'text'
+}
+
+export function saveErrorMessageFromPreviewResult(result: MobileFilePreviewResult): string {
+  return result.status === 'error' || result.status === 'waiting'
+    ? result.message
+    : translate('files.filePreviewScreen.saveFailed', 'Unable to save file')
 }

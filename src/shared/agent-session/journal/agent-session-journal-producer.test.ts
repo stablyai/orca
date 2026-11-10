@@ -1,18 +1,32 @@
-import { describe, expect, it } from 'vitest'
-import { agentJournalLinkageFields, isRootAgentJournalItem } from './agent-session-journal-producer'
+import { expect, it } from 'vitest'
+import {
+  agentJournalItemSubagentId,
+  isRootAgentJournalItem
+} from './agent-session-journal-producer'
+import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
-describe('isRootAgentJournalItem', () => {
-  it('reads an id that failed to resolve as a subagent’s, not as root', () => {
-    // Presence, not truthiness: an unresolved child id must never attribute its content to the parent.
-    expect(isRootAgentJournalItem({ agentId: '' })).toBe(false)
-  })
-})
-
-describe('agentJournalLinkageFields', () => {
-  it('omits absent members rather than writing them as undefined', () => {
-    // An own key set to undefined is still present; absence alone claims root.
-    expect(agentJournalLinkageFields({ agentId: 'task-1' })).toEqual({ agentId: 'task-1' })
-    expect(Object.keys(agentJournalLinkageFields({ agentId: 'task-1' }))).toEqual(['agentId'])
-    expect(agentJournalLinkageFields(undefined)).toEqual({})
-  })
+it('groups only a background producer own task row under its owner on both journal and message readers', () => {
+  const linkage = { agentId: 'shell', parentAgentId: 'owner', producerKind: 'background' as const }
+  const task: NativeChatBlock = {
+    type: 'background-task',
+    taskId: 'shell',
+    kind: 'command',
+    label: 'sleep',
+    state: 'working'
+  }
+  const output: NativeChatBlock = { type: 'text', text: 'workflow output' }
+  for (const [blocks, expected] of [
+    [[task], 'owner'],
+    [[output], 'shell'],
+    [[{ ...task, taskId: 'another' }], 'shell']
+  ] as const) {
+    expect(agentJournalItemSubagentId({ ...linkage, blocks })).toBe(expected)
+    const journal = {
+      ...linkage,
+      body: { kind: 'message' as const, role: 'assistant' as const, blocks: [...blocks] }
+    }
+    expect(agentJournalItemSubagentId(journal)).toBe(expected)
+    expect(isRootAgentJournalItem(journal)).toBe(false)
+  }
+  expect(isRootAgentJournalItem({})).toBe(true)
 })

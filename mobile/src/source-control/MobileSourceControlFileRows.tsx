@@ -1,19 +1,13 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, {
-  Easing,
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming
-} from 'react-native-reanimated'
-import { SHEET_CURVE } from '../components/sheet-motion-values'
-import { useDrawerReducedMotion } from '../components/bottom-drawer/bottom-drawer-constants'
+import { SwipeRowActions } from '../components/SwipeRowActions'
 import { Minus, Plus, Undo2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
-import type { GitConflictKind, GitFileStatus } from '../../../src/shared/git-status-types'
+import { STATUS_LABELS } from '../../../src/shared/git/status/git-status-labels'
+import type {
+  GitConflictKind,
+  GitFileStatus
+} from '../../../src/shared/git/status/git-status-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -111,101 +105,6 @@ function FileRowBody({
   )
 }
 
-// The width the Discard action uncovers; a swipe past half of it settles open.
-const DISCARD_WIDTH = 84
-const SWIPE_SETTLE_MS = 250
-const DRAG_CLICK_WINDOW_MS = 400
-
-/** Discard sits behind a left swipe and still asks first; it is also on the diff screen. */
-function SwipeToDiscard({
-  available,
-  enabled,
-  label,
-  accessibilityLabel,
-  onDiscard,
-  children
-}: {
-  /** Only discardable rows get the swipe; toggling it would remount the row. */
-  available: boolean
-  enabled: boolean
-  label: string
-  accessibilityLabel: string
-  onDiscard: () => void
-  /** Gets a wrapper for the row's press: a tap on a swiped row closes it instead. */
-  children: (guardPress: (onPress: () => void) => () => void) => ReactNode
-}) {
-  useMobileColorScheme()
-  const reducedMotion = useDrawerReducedMotion()
-  const offset = useSharedValue(0)
-  const start = useSharedValue(0)
-  // When the last drag ended: on the web, releasing a mouse drag also clicks the row.
-  const dragEndedAt = useSharedValue(0)
-  // Built per render: a module-level easing would run before a test's Reanimated mock can serve it.
-  const settle = (to: number) => {
-    'worklet'
-    return withTiming(
-      to,
-      reducedMotion
-        ? { duration: 0, reduceMotion: ReduceMotion.Never }
-        : { duration: SWIPE_SETTLE_MS, easing: Easing.bezier(...SHEET_CURVE) }
-    )
-  }
-  // Horizontal only, so the list keeps scrolling under a vertical drag.
-  const pan = Gesture.Pan()
-    .enabled(enabled)
-    .activeOffsetX([-12, 12])
-    .failOffsetY([-10, 10])
-    .onBegin(() => {
-      start.value = offset.value
-    })
-    .onUpdate((event) => {
-      offset.value = Math.min(0, Math.max(-DISCARD_WIDTH, start.value + event.translationX))
-    })
-    .onEnd(() => {
-      // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
-      dragEndedAt.value = Date.now()
-      offset.value = settle(offset.value < -DISCARD_WIDTH / 2 ? -DISCARD_WIDTH : 0)
-    })
-  // Web has no worklet plugin; mapper hooks need this explicit dependency list.
-  const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }), [offset])
-  // A tap on an open row closes it rather than opening the diff.
-  const guardPress = (onPress: () => void) => () => {
-    // The click a drag release produces belongs to the drag, not to the row.
-    if (Date.now() - dragEndedAt.value < DRAG_CLICK_WINDOW_MS) {
-      return
-    }
-    if (offset.value !== 0) {
-      offset.value = settle(0)
-      return
-    }
-    onPress()
-  }
-  if (!available) {
-    return children((onPress) => onPress)
-  }
-  return (
-    <View>
-      <Pressable
-        style={({ pressed }) => [styles.discardAction, pressed && styles.iconButtonPressed]}
-        disabled={!enabled}
-        onPress={() => {
-          offset.value = settle(0)
-          onDiscard()
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-      >
-        <Undo2 size={17} color={colors.onStatusRed} strokeWidth={2.2} />
-        <Text style={styles.discardActionText}>{label}</Text>
-      </Pressable>
-      {/* pan-y keeps the page scrolling vertically over the row on the web. */}
-      <GestureDetector gesture={pan} touchAction="pan-y">
-        <Animated.View style={rowStyle}>{children(guardPress)}</Animated.View>
-      </GestureDetector>
-    </View>
-  )
-}
-
 export function ChangeFileRow({
   item,
   state
@@ -291,14 +190,23 @@ export function ChangeFileRow({
       </Pressable>
     ) : null
   return (
-    <SwipeToDiscard
-      available={item.canDiscard}
+    // Discard sits behind a left swipe and still asks first; it is also on the diff screen.
+    <SwipeRowActions
       enabled={!ioBusy}
-      label={t('sourceControl.fileRows.discard', 'Discard')}
-      accessibilityLabel={t('sourceControl.fileRows.discardFile', 'Discard {{path}}', {
-        path: item.path
-      })}
-      onDiscard={() => setDiscardTarget(item)}
+      trailing={
+        item.canDiscard
+          ? {
+              label: t('sourceControl.fileRows.discard', 'Discard'),
+              accessibilityLabel: t('sourceControl.fileRows.discardFile', 'Discard {{path}}', {
+                path: item.path
+              }),
+              icon: Undo2,
+              background: colors.statusRed,
+              foreground: colors.onStatusRed,
+              onPress: () => setDiscardTarget(item)
+            }
+          : undefined
+      }
     >
       {(guardPress) => (
         <Pressable
@@ -334,7 +242,7 @@ export function ChangeFileRow({
           />
         </Pressable>
       )}
-    </SwipeToDiscard>
+    </SwipeRowActions>
   )
 }
 

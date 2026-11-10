@@ -36,8 +36,6 @@ export type AttemptCoordinatorAcknowledgment = {
   reportId?: string
 }
 
-export type AttemptLivenessObservation = PtyLivenessVerdict
-
 export type AttemptAdditiveOutcomeFact = {
   outcome: 'outcome_unknown' | 'finished_unverified'
   reason: string
@@ -106,4 +104,5 @@ export type AttemptOutcomeProjection = {
   coordinatorAcknowledgment: AttemptCoordinatorAcknowledgment | null
   liveness: AttemptLivenessObservation & { freshness: AttemptFreshness }
 }
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+
+import type { PtyLivenessVerdict as AttemptLivenessObservation } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'

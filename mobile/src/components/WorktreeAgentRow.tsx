@@ -1,4 +1,4 @@
-import { agentNoUpdateLabel } from '../../../src/shared/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../src/shared/agent-status/presentation/agent-row-decay-state'
 import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
@@ -14,8 +14,8 @@ import {
 } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
-import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
-import { mobileAgentChildRowText } from '../session/mobile-agent-child-row-text'
+import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
+import { mobileAgentChildRowText } from '../worktree/mobile-agent-child-row-text'
 
 export const AGENT_ROW_INDENT_PER_DEPTH = 14
 

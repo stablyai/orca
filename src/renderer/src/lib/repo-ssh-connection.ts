@@ -1,8 +1,8 @@
 import {
   selectRuntimeAwareSshStatus,
   type RuntimeAwareSshStatusState
-} from '@/store/slices/runtime-environment-ssh-selectors'
-import { connectRuntimeEnvironmentSshTarget } from '@/runtime/runtime-environment-ssh-state'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
+import { connectRuntimeEnvironmentSshTarget } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,

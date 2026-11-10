@@ -4,14 +4,17 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { loadHosts } from '../transport/host-store'
-import { loadTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
+import { loadHosts } from '../host-catalog/host-store'
+import {
+  loadTerminalAccessoryLayout,
+  saveTerminalSmartRail
+} from '../terminal/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
 } from '../terminal/terminal-foreground-recovery'
 import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
-import type { MobileSessionTabReconciliationModel } from './use-mobile-session-tab-reconciliation'
+import type { MobileSessionTabReconciliationModel } from './tabs/use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
   const shellStorage = useShellStorage()
@@ -25,11 +28,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     setCustomKeys,
     setVisibleBuiltInIds,
     setDirectionPadEnabled,
+    setSmartRailEnabled,
     setHostEndpoint,
     setHostName,
     connStateRef,
     terminalRefs,
     initializedHandlesRef,
+    terminalResume,
     activeHandleRef,
     visibleTerminalHandlesRef,
     scheduleDelayedAction,
@@ -100,6 +105,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         if (layout) {
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
           setDirectionPadEnabled(layout.directionPadEnabled !== false)
+          setSmartRailEnabled(layout.smartRail === true)
         }
         setAccessoryLayoutLoaded(true)
       }
@@ -110,6 +116,19 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       }
     }
   }, [padAvailable, shellStorage])
+
+  const handleSmartRailChange = useCallback(
+    (enabled: boolean) => {
+      // A read that started before the toggle must not flip it back.
+      layoutReadRevisionRef.current += 1
+      setSmartRailEnabled(enabled)
+      saveTerminalSmartRail(enabled, padAvailable).catch((error: unknown) => {
+        console.warn('[terminal-keys] the store would not take the Smart rail setting', error)
+        setSmartRailEnabled(!enabled)
+      })
+    },
+    [padAvailable]
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -158,6 +177,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         visibleTerminalHandlesRef,
         terminalRefs,
         initializedHandlesRef,
+        terminalResume,
         connStateRef,
         unsubscribeTerminal,
         subscribeToTerminal,
@@ -168,7 +188,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     return () => {
       sub.remove()
     }
-  }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+  }, [scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
 
   // Repeat resume recovery after reconnect or an iOS-blanked WebView can remain stale.
   useEffect(() => {
@@ -184,14 +204,16 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       visibleTerminalHandlesRef,
       terminalRefs,
       initializedHandlesRef,
+      terminalResume,
       connStateRef,
       unsubscribeTerminal,
       subscribeToTerminal,
       schedule: scheduleDelayedAction
     })
-  }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+  }, [connState, scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
   return {
     accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
+    handleSmartRailChange,
     pendingForegroundRecoveryRef
   }
 }

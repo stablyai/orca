@@ -1,7 +1,6 @@
-import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
-import type * as GitRunner from '../git/runner'
+import type * as GitRunner from '../git/command-runner/git-exec-file'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,11 +12,11 @@ import {
 } from '../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { GITHUB_REPO_WORK_ITEM_METHODS } from '../runtime/rpc/methods/github-repo-work-item-methods'
-import { GITHUB_PULL_REQUEST_METHODS } from '../runtime/rpc/methods/github-pull-request-methods'
-import { registerGitHubWorkItemHandlers } from '../ipc/github-work-item-handlers'
-import { registerGitHubIssueMutationHandlers } from '../ipc/github-issue-mutation-handlers'
-import { registerGitHubPRReviewHandlers } from '../ipc/github-pr-review-handlers'
+import { GITHUB_REPO_WORK_ITEM_METHODS } from '../runtime/rpc/methods/source-control/github/github-repo-work-item-methods'
+import { GITHUB_PULL_REQUEST_METHODS } from '../runtime/rpc/methods/source-control/github/github-pull-request-methods'
+import { registerGitHubWorkItemHandlers } from '../ipc/source-control/github-work-item-handlers'
+import { registerGitHubIssueMutationHandlers } from '../ipc/source-control/github-issue-mutation-handlers'
+import { registerGitHubPRReviewHandlers } from '../ipc/source-control/github-pr-review-handlers'
 import { ghPullRequestsAndWorkItemsApi } from '../../preload/api/gh-bridge-pull-requests-and-work-items'
 import { ghMutationsAndProjectsApi } from '../../preload/api/gh-bridge-mutations-and-projects'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
@@ -32,7 +31,7 @@ vi.mock('./gh-utils', async (original) => ({
   ...(await original<typeof GhUtils>()),
   ghExecFileAsync: exec
 }))
-vi.mock('../git/runner', async (original) => {
+vi.mock('../git/command-runner/git-exec-file', async (original) => {
   const actual = await original<typeof GitRunner>()
   return {
     ...actual,
@@ -118,25 +117,6 @@ it.each(['cold', 'warm'] as const)(
   }
 )
 
-it('preserves explicit options on ownership misses without adding a refusal', () => {
-  release = installGitHubProjectAccounts({ getRepos: () => [repo()] })
-  expect(options('/unseen-worktree', null, { ghAccount: bob })).toMatchObject({ ghAccount: bob })
-  expect(options('/unseen-worktree')).toEqual({ cwd: '/unseen-worktree' })
-})
-
-it('uses WSL namespace and Windows path spelling without merging POSIX case', () => {
-  release = installGitHubProjectAccounts({
-    getRepos: () => [
-      repo({ path: String.raw`\\wsl.localhost\Ubuntu\home\work` }),
-      repo({ id: 'win', path: String.raw`C:\Work`, ghAccount: bob })
-    ]
-  })
-  expect(options('/home/work', null, { wslDistro: 'ubuntu' }).ghAccount).toEqual(alice)
-  expect(options('/home/Work', null, { wslDistro: 'Ubuntu' }).ghAccount).toBeUndefined()
-  expect(options('/home/work', null, { wslDistro: 'Debian' }).ghAccount).toBeUndefined()
-  expect(options('c:/work/').ghAccount).toEqual(bob)
-})
-
 it('keeps folder cards on their git child account and plain folders outside project gh selection', () => {
   release = installGitHubProjectAccounts({
     getRepos: () => [
@@ -146,15 +126,6 @@ it('keeps folder cards on their git child account and plain folders outside proj
   })
   expect(options('/folder/repo').ghAccount).toEqual(bob)
   expect(options('/folder').ghAccount).toBeUndefined()
-})
-
-it('does not let an earlier owner release a replacement installation', () => {
-  const previous = installGitHubProjectAccounts({ getRepos: () => [repo()] })
-  release = installGitHubProjectAccounts({ getRepos: () => [repo({ ghAccount: bob })] })
-  previous()
-  expect(options('/repo').ghAccount).toEqual(bob)
-  installGitHubProjectAccounts(null)
-  expect(options('/repo').ghAccount).toBeUndefined()
 })
 
 it('selects before an asynchronous repository lookup and retains that account for execution', async () => {

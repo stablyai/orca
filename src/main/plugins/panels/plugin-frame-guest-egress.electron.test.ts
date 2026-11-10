@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildSync } from 'esbuild'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runBrowserRouteEgressElectron } from '../../browser/browser-route-egress-electron-launch'
+import { runBrowserRouteEgressElectron } from '../../browser/network/egress/browser-route-egress-electron-launch'
 
 const roots: string[] = []
 const closers: (() => Promise<void>)[] = []

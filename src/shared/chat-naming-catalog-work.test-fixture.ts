@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
+import { normalizeSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
 
 export function savedChatNamingCatalog(size: number) {
   const source = normalizeSourceControlAiSettings(undefined)

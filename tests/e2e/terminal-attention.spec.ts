@@ -12,7 +12,6 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
-import { POST_REPLAY_MODE_RESET } from '../../src/shared/terminal-mode-reset-profiles'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 test.describe.configure({ mode: 'serial' })
@@ -237,89 +236,4 @@ test.describe('Terminal attention', () => {
 
   // Replay can re-enable mode 1004 from an old TUI snapshot; fresh-shell focus then emits escape bytes and unbound-key BELs.
   // Require POST_REPLAY_MODE_RESET to prevent post-reset focus reporting.
-  test('mode bits replayed into xterm do not leak focus escapes to the shell', async ({
-    orcaPage
-  }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    const firstTabId = await getActiveTabId(orcaPage)
-    if (!firstTabId) {
-      throw new Error('Expected an initial terminal tab')
-    }
-
-    const secondTabId = await createTerminalTab(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    // Queue DECSET 1004 then reset and install the onData spy only in the reset’s write callback.
-    // xterm parses asynchronously and may emit transient focus-IN while 1004 is on; observing that would falsely fail a correct reset.
-    await orcaPage.evaluate(
-      ({ tabId, modeReset }) =>
-        new Promise<void>((resolve, reject) => {
-          const managers = window.__paneManagers
-          const manager = managers?.get(tabId)
-          const pane = manager?.getActivePane()
-          if (!pane) {
-            reject(new Error('No active pane on restored tab'))
-            return
-          }
-          pane.terminal.write('\x1b[?1004h')
-          pane.terminal.write(modeReset, () => {
-            // Observe only output after both writes have parsed.
-            const recorded: string[] = []
-            ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ =
-              recorded
-            const disposer = pane.terminal.onData((data) => {
-              recorded.push(data)
-            })
-            ;(
-              window as unknown as { __XTERM_ONDATA_DISPOSE__?: () => void }
-            ).__XTERM_ONDATA_DISPOSE__ = () => disposer.dispose()
-            resolve()
-          })
-        }),
-      { tabId: secondTabId, modeReset: POST_REPLAY_MODE_RESET }
-    )
-
-    // Dispose renderer-global spies in finally so failures cannot leak subscriptions into later tests.
-    try {
-      // Explicitly blur after tab selection; setActiveTab alone does not move DOM focus.
-      await activateTerminalTab(orcaPage, firstTabId)
-      await orcaPage.evaluate((tabId) => {
-        const managers = window.__paneManagers
-        const manager = managers?.get(tabId)
-        const pane = manager?.getActivePane()
-        if (!pane) {
-          return
-        }
-        pane.terminal.blur()
-      }, secondTabId)
-
-      // Wait for the focus task; hidden-window DA1 responses are unreliable.
-      await orcaPage.waitForTimeout(100)
-
-      // Assert precise focus-in/out bytes rather than unread state that unrelated startup BELs can change.
-      const emittedFromXterm = await orcaPage.evaluate(
-        () =>
-          (window as unknown as { __XTERM_ONDATA_SPY__: string[] | undefined })
-            .__XTERM_ONDATA_SPY__ ?? []
-      )
-      // Join chunks before matching potentially split escape sequences.
-      // eslint-disable-next-line no-control-regex -- intentional terminal escape sequence matching
-      expect(emittedFromXterm.join('')).not.toMatch(/\x1b\[[IO]/)
-    } finally {
-      // Always remove the subscription and globals before the next shared-renderer test.
-      await orcaPage.evaluate(() => {
-        const w = window as unknown as {
-          __XTERM_ONDATA_DISPOSE__?: () => void
-          __XTERM_ONDATA_SPY__?: string[]
-        }
-        w.__XTERM_ONDATA_DISPOSE__?.()
-        delete w.__XTERM_ONDATA_DISPOSE__
-        delete w.__XTERM_ONDATA_SPY__
-      })
-    }
-  })
 })

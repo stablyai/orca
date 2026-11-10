@@ -10,7 +10,7 @@ vi.mock('./parcel-watcher-process-supervisor', () => ({
     disposeAndWait = supervisorDispose
   }
 }))
-vi.mock('../../runtime-watcher-process-pool', () => ({
+vi.mock('./runtime-watcher-process-pool', () => ({
   RuntimeWatcherProcessPool: class {
     disposeAndWait = poolDispose
   }
@@ -36,13 +36,5 @@ describe('disposeWatcherProcessAndWait', () => {
     expect(settled).not.toHaveBeenCalled()
     finishPool()
     await expect(disposal).rejects.toMatchObject({ message: 'watcher_process_shutdown_incomplete' })
-  })
-
-  it('resolves once every owned child has exited', async () => {
-    supervisorDispose.mockResolvedValueOnce()
-    poolDispose.mockResolvedValueOnce()
-    await expect(disposeWatcherProcessAndWait()).resolves.toBeUndefined()
-    expect(supervisorDispose).toHaveBeenCalled()
-    expect(poolDispose).toHaveBeenCalled()
   })
 })

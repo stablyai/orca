@@ -33,7 +33,7 @@ import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
-import { MobileNativeChatDiffCard } from '../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { MobileNativeChatTaskList } from '../input/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from '../visual/mobile-native-chat-opened-detail'
 import {
@@ -42,7 +42,7 @@ import {
   useMobileNativeChatDisclosure
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-import { mobileNativeChatMemberId } from '../../mobile-native-chat-reading-place'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
@@ -175,7 +175,6 @@ export function ToolRun({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile,
   viewedImages
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   useMobileColorScheme()
@@ -262,7 +261,6 @@ export function ToolRun({
             disclosureId={disclosureId}
             asides={asides}
             fontScale={fontScale}
-            onOpenFile={onOpenFile}
           />
         </ToolRunMembers>
       ) : null}
@@ -277,8 +275,7 @@ function ToolRunMemberList({
   asides,
   previousTodoWrite,
   previousUpdatePlan,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   blocks: NativeChatBlock[]
   disclosureId?: string
@@ -286,7 +283,6 @@ function ToolRunMemberList({
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
   fontScale: number
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   const taskLists = useMemo(
     () =>
@@ -331,7 +327,6 @@ function ToolRunMemberList({
                 disclosureId === undefined ? undefined : `diff:${disclosureId}:${id}:${fileIndex}`
               }
               fontScale={fontScale}
-              onOpenFile={onOpenFile}
             />
           ))}
         </View>
@@ -356,7 +351,6 @@ function ToolRunMemberList({
           disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
         }
         fontScale={fontScale}
-        onOpenFile={onOpenFile}
       />
     )
   }

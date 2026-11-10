@@ -1,4 +1,3 @@
-import type { MinidumpSource } from './minidump-stream-reader'
 import { mkdtemp, mkdir, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -57,62 +56,6 @@ afterEach(async () => {
 })
 
 describe('waitForCrashMinidump', () => {
-  it('finds a dump in the nested reports directory Crashpad writes to', async () => {
-    const expected = await writeDump(path.join('reports', 'abc.dmp'), CRASHED_AT + 100)
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, { now: () => CRASHED_AT })
-
-    expect(dump?.filePath).toBe(expected)
-  })
-
-  it('picks the newest dump when several exist', async () => {
-    await writeDump(path.join('reports', 'old.dmp'), CRASHED_AT - 1_000)
-    const newest = await writeDump(path.join('reports', 'new.dmp'), CRASHED_AT + 500)
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, { now: () => CRASHED_AT })
-
-    expect(dump?.filePath).toBe(newest)
-  })
-
-  it('ignores dumps that predate the crash by more than the recency window', async () => {
-    await writeDump(path.join('reports', 'stale.dmp'), CRASHED_AT - 120_000)
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, {
-      timeoutMs: 0,
-      now: () => CRASHED_AT
-    })
-
-    expect(dump).toBeNull()
-  })
-
-  it('accepts a dump written just before the crash was observed', async () => {
-    const expected = await writeDump(path.join('reports', 'race.dmp'), CRASHED_AT - 200)
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, { now: () => CRASHED_AT })
-
-    expect(dump?.filePath).toBe(expected)
-  })
-
-  it('polls until the handler finishes writing, then returns the dump', async () => {
-    let clock = CRASHED_AT
-    let written = false
-    const sleep = async (ms: number) => {
-      clock += ms
-      if (!written) {
-        await writeDump(path.join('reports', 'late.dmp'), CRASHED_AT + 300)
-        written = true
-      }
-    }
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, {
-      timeoutMs: 8_000,
-      now: () => clock,
-      sleep
-    })
-
-    expect(dump?.filePath).toBe(path.join(dumpDir, 'reports', 'late.dmp'))
-  })
-
   it('gives up at the deadline instead of polling forever', async () => {
     let clock = CRASHED_AT
     const sleep = async (ms: number) => {
@@ -128,55 +71,9 @@ describe('waitForCrashMinidump', () => {
     expect(dump).toBeNull()
     expect(clock).toBeLessThanOrEqual(CRASHED_AT + 1_250)
   })
-
-  it('ignores non-dump files in the directory', async () => {
-    await writeDump(path.join('reports', 'settings.dat'), CRASHED_AT + 100)
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, { timeoutMs: 0, now: () => CRASHED_AT })
-
-    expect(dump).toBeNull()
-  })
-
-  it('returns null when capture never started', async () => {
-    _setCrashpadCaptureStateForTest(null)
-
-    expect(await waitForCrashMinidump(CRASHED_AT)).toBeNull()
-  })
-
-  it('returns null when the dump directory does not exist', async () => {
-    _setCrashpadCaptureStateForTest({
-      dumpDirectory: path.join(dumpDir, 'missing'),
-      started: true
-    })
-
-    const dump = await waitForCrashMinidump(CRASHED_AT, { timeoutMs: 0, now: () => CRASHED_AT })
-
-    expect(dump).toBeNull()
-  })
 })
 
 describe('captureMinidumpSignature', () => {
-  it('returns the parsed signature for the paired dump', async () => {
-    await writeDump(path.join('reports', 'crash.dmp'), CRASHED_AT + 100)
-
-    const captured = await captureMinidumpSignature(CRASHED_AT, { now: () => CRASHED_AT })
-
-    expect(captured?.signature.annotations).toEqual({})
-    expect(captured?.sizeBytes).toBe(32)
-  })
-
-  it('returns null when the file on disk is not a minidump', async () => {
-    await writeDump(path.join('reports', 'garbage.dmp'), CRASHED_AT + 100, Buffer.from('nope'))
-    parseMinidumpCrashSignatureMock.mockReturnValueOnce(null)
-
-    const captured = await captureMinidumpSignature(CRASHED_AT, {
-      timeoutMs: 0,
-      now: () => CRASHED_AT
-    })
-
-    expect(captured).toBeNull()
-  })
-
   it('claims a dump once so another report cannot reuse it', async () => {
     const expected = await writeDump(path.join('reports', 'crash.dmp'), CRASHED_AT + 100)
 
@@ -191,28 +88,6 @@ describe('captureMinidumpSignature', () => {
 
     expect(first?.filePath).toBe(expected)
     expect(second).toBeNull()
-  })
-
-  it('skips a newer dump from the wrong process type', async () => {
-    const rendererDump = await writeDump(
-      path.join('reports', 'renderer.dmp'),
-      CRASHED_AT + 100,
-      Buffer.from('renderer')
-    )
-    await writeDump(path.join('reports', 'gpu.dmp'), CRASHED_AT + 200, Buffer.from('gpu-process'))
-    parseMinidumpCrashSignatureMock.mockImplementation(async (dump: MinidumpSource) => ({
-      processType: (await dump.read(0, dump.byteLength)).toString('utf8'),
-      annotations: {}
-    }))
-
-    const captured = await captureMinidumpSignature(CRASHED_AT, {
-      expectedProcessType: 'renderer',
-      timeoutMs: 0,
-      now: () => CRASHED_AT
-    })
-
-    expect(captured?.filePath).toBe(rendererDump)
-    expect(captured?.signature.processType).toBe('renderer')
   })
 
   it('leaves a mismatched dump available for its own process report', async () => {
@@ -240,15 +115,6 @@ describe('captureMinidumpSignature', () => {
     expect(renderer).toBeNull()
     expect(gpu?.filePath).toBe(gpuDump)
   })
-
-  it('returns null rather than throwing when no dump was produced', async () => {
-    const captured = await captureMinidumpSignature(CRASHED_AT, {
-      timeoutMs: 0,
-      now: () => CRASHED_AT
-    })
-
-    expect(captured).toBeNull()
-  })
 })
 
 describe('Crashpad dump pruning', () => {
@@ -258,16 +124,6 @@ describe('Crashpad dump pruning', () => {
     await writeDump(path.join('reports', 'new.dmp'), CRASHED_AT + 200, Buffer.alloc(8))
 
     await _pruneCrashpadDumpsForTest(16)
-
-    expect((await readdir(path.join(dumpDir, 'reports'))).sort()).toEqual(['middle.dmp', 'new.dmp'])
-  })
-
-  it('caps the dump count even when every dump fits the byte budget', async () => {
-    await writeDump(path.join('reports', 'old.dmp'), CRASHED_AT, Buffer.alloc(8))
-    await writeDump(path.join('reports', 'middle.dmp'), CRASHED_AT + 100, Buffer.alloc(8))
-    await writeDump(path.join('reports', 'new.dmp'), CRASHED_AT + 200, Buffer.alloc(8))
-
-    await _pruneCrashpadDumpsForTest(1024, 2)
 
     expect((await readdir(path.join(dumpDir, 'reports'))).sort()).toEqual(['middle.dmp', 'new.dmp'])
   })

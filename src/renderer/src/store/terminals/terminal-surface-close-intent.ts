@@ -1,4 +1,4 @@
-import type { TerminalSurfaceCloseTarget } from '../../../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surface-close-target'
 
 /** Commits a terminal tab or split-pane close in main, which owns membership: a renderer save
  *  cannot shrink it, so without this the close would ride on the PTY exit. */

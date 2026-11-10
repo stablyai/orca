@@ -10,43 +10,11 @@ export const hostEditStyles = themedStyleSheet(() => ({
   flex: {
     flex: 1
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  heading: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700'
-  },
-  saveButton: {
-    minWidth: 64,
-    height: 34,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.surfaceBright,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  saveButtonDisabled: {
-    opacity: 0.4
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+  removeGroup: {
+    marginTop: spacing.xl
   },
   form: {
+    paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },

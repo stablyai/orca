@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { BRIDGE_MAX_METHOD_CHARS } from './bridge-caps'
 
 // Version gates incompatible shape; negotiate capabilities through grants. Drop unknown keys so independently updated desktop bundles and installed shells tolerate additive fields.
@@ -25,3 +25,13 @@ export const BRIDGE_EXTERNAL_LINK_GRANT = 'externalLink'
 
 // Negotiate rpcEnvelope before relying on extra wire fields; older shells drop unknown fields and could execute without caller-required metadata.
 export const BRIDGE_RPC_ENVELOPE_GRANT = 'rpcEnvelope'
+
+// The shell skipped the build's language-catalog chunks, so the page reads its catalog from the desktop.
+export const BRIDGE_HOST_CATALOGS_GRANT = 'hostCatalogs'
+
+// Granted to every page this shell opens, whatever its route declares.
+export const BRIDGE_SHELL_GRANTS: readonly string[] = [
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_RPC_ENVELOPE_GRANT,
+  BRIDGE_HOST_CATALOGS_GRANT
+]

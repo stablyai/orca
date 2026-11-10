@@ -1,24 +1,25 @@
 import { getGitHubMutationTarget } from './github-work-item-mutation-target'
 export { getGitHubMutationTarget } from './github-work-item-mutation-target'
-import { callGitHubTargetOperation } from '@/lib/github-work-item-target-request'
+import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
   getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import {
   resolvePullRequestRepo,
   type GitHubWorkItemProjectOrigin
 } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function runIssueUpdate(args: {
   repoPath: string | null
@@ -29,7 +30,7 @@ export async function runIssueUpdate(args: {
   type?: 'issue' | 'pr'
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
-}): Promise<void> {
+}): Promise<{ bodyImageUrls?: Record<string, string> } | undefined> {
   const issueRepo = args.projectOrigin
   if (issueRepo) {
     const target =
@@ -43,17 +44,10 @@ export async function runIssueUpdate(args: {
       number: args.number,
       updates: args.updates
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
-            target,
-            'github.project.updateIssueBySlug',
-            updateArgs,
-            {
-              timeoutMs: 30_000
-            }
-          )
-        : await window.api.gh.updateIssueBySlug({ ...updateArgs, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+      ...updateArgs,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -67,7 +61,7 @@ export async function runIssueUpdate(args: {
       },
       { local: target.kind !== 'environment' }
     )
-    return
+    return args.updates.body !== undefined ? { bodyImageUrls: res.bodyImageUrls } : undefined
   }
   if (!args.issueRepo) {
     throw new Error('Unable to identify this GitHub item. Open it again from Tasks.')
@@ -112,6 +106,7 @@ export async function runIssueUpdate(args: {
       { local: !runtimeHost }
     )
   }
+  return args.updates.body !== undefined ? { bodyImageUrls: res.bodyImageUrls } : undefined
 }
 
 export async function runWorkItemBodyUpdate(args: {
@@ -121,7 +116,7 @@ export async function runWorkItemBodyUpdate(args: {
   projectOrigin: GitHubWorkItemProjectOrigin | undefined
   body: string
   parsedSlug: GitHubOwnerRepo | null
-}): Promise<void> {
+}): Promise<{ bodyImageUrls?: Record<string, string> } | undefined> {
   if (args.item.type === 'pr') {
     const targetSlug = resolvePullRequestRepo(args.item, args.projectOrigin) ?? args.parsedSlug
     if (!targetSlug) {
@@ -138,17 +133,10 @@ export async function runWorkItemBodyUpdate(args: {
       number: args.item.number,
       updates: { body: args.body }
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
-            target,
-            'github.project.updatePullRequestBySlug',
-            updateArgs,
-            {
-              timeoutMs: 30_000
-            }
-          )
-        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+      ...updateArgs,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -164,10 +152,10 @@ export async function runWorkItemBodyUpdate(args: {
         { local: false }
       )
     }
-    return
+    return { bodyImageUrls: res.bodyImageUrls }
   }
 
-  await runIssueUpdate({
+  return runIssueUpdate({
     repoPath: args.repoPath,
     repoId: args.item.repoId,
     sourceContext: args.sourceContext,
@@ -199,17 +187,10 @@ export async function runPullRequestStateUpdate(args: {
       number: args.number,
       updates: args.updates
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
-            target,
-            'github.project.updatePullRequestBySlug',
-            updateArgs,
-            {
-              timeoutMs: 30_000
-            }
-          )
-        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+      ...updateArgs,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       throw new Error(res.error.message)
     }

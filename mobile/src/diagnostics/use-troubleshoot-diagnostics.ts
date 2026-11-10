@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from 'react-native'
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { loadHostCatalog, loadHosts } from '../transport/host-store'
+import { loadHostCatalog, loadHosts } from '../host-catalog/host-store'
 import { primeEndpointAuthHeaders } from '../transport/endpoint-auth-headers-store'
 import { endpointAuthMutationEpoch } from '../transport/endpoint-auth-headers'
-import { getHostCredentialWriteRevision } from '../transport/host-credential-write-revision'
+import { getHostCredentialWriteRevision } from '../host-credentials/host-credential-write-revision'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout

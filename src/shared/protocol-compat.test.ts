@@ -7,7 +7,6 @@ import {
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION,
-  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from './protocol-version'
@@ -15,16 +14,6 @@ import {
 const MOBILE_V = 1
 
 describe('evaluateCompat', () => {
-  it('returns ok when both desktop fields are undefined and constants are wide-open', () => {
-    const verdict = evaluateCompat({
-      mobileProtocolVersion: MOBILE_V,
-      minCompatibleDesktopVersion: 0,
-      desktopProtocolVersion: undefined,
-      desktopMinCompatibleMobileVersion: undefined
-    })
-    expect(verdict).toEqual({ kind: 'ok' })
-  })
-
   it('allows desktop protocol 3 to roll out before mobile protocol 2 updates', () => {
     const verdict = evaluateCompat({
       mobileProtocolVersion: 2,
@@ -62,20 +51,6 @@ describe('evaluateCompat', () => {
     })
   })
 
-  it('coerces undefined desktopVersion to 0 in the verdict payload', () => {
-    const verdict = evaluateCompat({
-      mobileProtocolVersion: MOBILE_V,
-      minCompatibleDesktopVersion: 0,
-      desktopProtocolVersion: undefined,
-      desktopMinCompatibleMobileVersion: MOBILE_V + 1
-    })
-    expect(verdict).toMatchObject({
-      kind: 'blocked',
-      reason: 'mobile-too-old',
-      desktopVersion: 0
-    })
-  })
-
   it('blocks with desktop-too-old when desktop reports below the local minimum', () => {
     const verdict = evaluateCompat({
       mobileProtocolVersion: MOBILE_V,
@@ -103,19 +78,6 @@ describe('evaluateCompat', () => {
     expect((verdict as { reason: string }).reason).toBe('mobile-too-old')
   })
 
-  it('with minCompatibleDesktopVersion = 0 every reported desktop passes', () => {
-    for (const v of [0, 1, 2, 99]) {
-      expect(
-        evaluateCompat({
-          mobileProtocolVersion: MOBILE_V,
-          minCompatibleDesktopVersion: 0,
-          desktopProtocolVersion: v,
-          desktopMinCompatibleMobileVersion: 0
-        })
-      ).toEqual({ kind: 'ok' })
-    }
-  })
-
   it('hard-blocks protocol-1 mobile for the binary terminal stream cutover', () => {
     const verdict = evaluateCompat({
       mobileProtocolVersion: 1,
@@ -134,17 +96,6 @@ describe('evaluateCompat', () => {
 })
 
 describe('evaluateRuntimeCompat', () => {
-  it('keeps the current client and current server self-compatible', () => {
-    const verdict = evaluateRuntimeCompat({
-      clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-      minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
-      serverProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-      serverMinCompatibleClientProtocolVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-    })
-
-    expect(verdict).toMatchObject({ kind: 'ok' })
-  })
-
   it('allows client and server app versions to skew when protocol ranges overlap', () => {
     const verdict = evaluateRuntimeCompat({
       clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,

@@ -3,9 +3,11 @@
 
 import {
   agentSessionLegacyRefusalFields,
+  type AgentSessionLegacyRefusalFields
+} from './agent-session-legacy-refusal-fields'
+import {
   readAgentSessionRefusalDetails,
   type AgentSessionAnyRefusalDetails,
-  type AgentSessionLegacyRefusalFields,
   type AgentSessionRefusalDetails,
   type AgentSessionRefusalDetailsByCode,
   type AgentSessionRefusalFacts

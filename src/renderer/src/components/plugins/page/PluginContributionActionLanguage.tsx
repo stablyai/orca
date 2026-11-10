@@ -3,9 +3,10 @@ import { isUsablePluginLanguagePack } from '../../../../../shared/plugins/langua
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../../../../shared/ui-language'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
-import { languageDisplayName } from '../presentation/plugin-contributions'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 
 // Why module state: settings have no "language before plugin" field, and the page may unmount
 // between switching and switching back. Falls back to following the system language.
@@ -50,27 +51,26 @@ export function PluginContributionActionLanguage({
 }: {
   pack: PluginLanguagePackRegistration
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const settings = useAppStore((state) => state.settings)
   if (!settings || !isUsablePluginLanguagePack(pack)) {
     return null
   }
-  const name = languageDisplayName(pack.locale)
+  const name = languageDisplayName(pack.locale, intlLocale)
   if (settings.uiLanguage === pack.id) {
     return (
       <Button
         variant="outline"
         size="xs"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.settings.PluginContributionActionLanguage.switchBackFrom',
           'Switch back from {{value0}}',
           { value0: name }
         )}
         onClick={switchBackFromPluginLanguage}
       >
-        {translate(
-          'auto.components.settings.PluginContributionActionLanguage.switchBack',
-          'Switch back'
-        )}
+        {t('auto.components.settings.PluginContributionActionLanguage.switchBack', 'Switch back')}
       </Button>
     )
   }
@@ -78,17 +78,14 @@ export function PluginContributionActionLanguage({
     <Button
       variant="outline"
       size="xs"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.settings.PluginContributionActionLanguage.switchTo',
         'Switch language to {{value0}}',
         { value0: name }
       )}
       onClick={() => void switchToPluginLanguage(pack)}
     >
-      {translate(
-        'auto.components.settings.PluginContributionActionLanguage.switch',
-        'Switch language'
-      )}
+      {t('auto.components.settings.PluginContributionActionLanguage.switch', 'Switch language')}
     </Button>
   )
 }

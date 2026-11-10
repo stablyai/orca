@@ -1,9 +1,10 @@
-import { isCrewSetupFact } from '../shared/runtime-environment-subscription-setup'
-import type {
-  CrewSubscriptionAttemptArgs,
-  CrewSubscriptionAttemptCallbacks,
-  CrewSubscriptionSetupResult
-} from '../shared/runtime-environment-subscription-setup'
+import {
+  isCrewSetupFact,
+  type CrewSubscriptionAttemptArgs,
+  type CrewSubscriptionAttemptCallbacks,
+  type CrewSubscriptionSetupResult
+} from '../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {

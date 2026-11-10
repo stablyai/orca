@@ -6,16 +6,16 @@ import {
   wslHomeSessionDirs,
   type SessionHomeAgent
 } from '../ai-vault/session-scanner-roots'
-import { resolveWslGuestRealDirAsync } from '../wsl'
+import { resolveWslGuestRealDirAsync } from '../wsl/filesystem/unc-path-access'
 import {
   listRunningWslHomeDirsUnlessStopped,
   wslHomeUnlessStopped
-} from '../wsl/wsl-home-unless-stopped'
+} from '../wsl/discovery/wsl-home-unless-stopped'
 import { admitWslTranscriptPath } from './wsl-transcript-running-admission'
 import {
   filterPathsToRunningWslDistrosAsync,
   filterPathsToWslDistros
-} from '../wsl-running-path-filter'
+} from '../wsl/filesystem/wsl-running-path-filter'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 

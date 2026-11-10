@@ -3,11 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useTroubleshootDiagnostics } from './use-troubleshoot-diagnostics'
 import { noteEndpointAuthHeadersChanged } from '../transport/endpoint-auth-headers'
-import { markHostCredentialWrite } from '../transport/host-credential-write-revision'
+import { markHostCredentialWrite } from '../host-credentials/host-credential-write-revision'
 
 const dependencies = vi.hoisted(() => ({ loadHosts: vi.fn(), prime: vi.fn(), probe: vi.fn() }))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
-vi.mock('../transport/host-store', () => ({
+vi.mock('../host-catalog/host-store', () => ({
   loadHosts: dependencies.loadHosts,
   loadHostCatalog: async () => [host]
 }))

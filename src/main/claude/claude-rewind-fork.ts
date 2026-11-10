@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import {
   agentSessionProviderHandleChainHead,
@@ -7,26 +7,48 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
 import { claudeSessionIdForRewind } from './structured/claude-structured-session-id'
 import { materializeClaudeRewindTranscript } from './claude-rewind-transcript'
 
-type TranscriptPromptRow = { type: 'user'; uuid: string; parentUuid?: unknown }
+type TranscriptUserRow = {
+  type: 'user'
+  uuid: string
+  parentUuid?: unknown
+  isMeta?: unknown
+  message?: unknown
+}
 
-function isPromptRow(value: unknown, promptUuid: string): value is TranscriptPromptRow {
+const LOCAL_COMMAND_CAVEAT_OPEN = '<local-command-caveat>'
+
+function isUserRow(value: unknown): value is TranscriptUserRow {
   return (
     typeof value === 'object' &&
     value !== null &&
     'type' in value &&
     value.type === 'user' &&
     'uuid' in value &&
-    value.uuid === promptUuid
+    typeof value.uuid === 'string'
   )
 }
 
-/** Rewind cuts at the prompt's parent: null for the first prompt, undefined if not found. */
+export function isLocalCommandCaveatRow(row: Record<string, unknown>): boolean {
+  return (
+    row.isMeta === true &&
+    typeof row.message === 'object' &&
+    row.message !== null &&
+    'content' in row.message &&
+    typeof row.message.content === 'string' &&
+    row.message.content.startsWith(LOCAL_COMMAND_CAVEAT_OPEN)
+  )
+}
+
+/**
+ * Rewind cuts at the prompt's parent, skipping a local command's caveat so the next prompt isn't
+ * read as that command. Null for the first prompt, undefined if not found.
+ */
 export async function readClaudePromptParentUuid(input: {
   providerSessionId: string
   promptUuid: string
@@ -38,8 +60,11 @@ export async function readClaudePromptParentUuid(input: {
   if (!path) {
     return undefined
   }
+  // Claude appends a local command's caveat before the command row, so one pass sees it first.
+  const caveatParents = new Map<string, string | null>()
   for await (const { line } of splitTranscriptStreamLines(createReadStream(path))) {
-    if (!line.includes(input.promptUuid)) {
+    const mayBeCaveat = line.includes(LOCAL_COMMAND_CAVEAT_OPEN)
+    if (!mayBeCaveat && !line.includes(input.promptUuid)) {
       continue
     }
     let row: unknown
@@ -48,8 +73,16 @@ export async function readClaudePromptParentUuid(input: {
     } catch {
       continue
     }
-    if (isPromptRow(row, input.promptUuid)) {
-      return typeof row.parentUuid === 'string' && row.parentUuid ? row.parentUuid : null
+    if (!isUserRow(row)) {
+      continue
+    }
+    const parent = typeof row.parentUuid === 'string' && row.parentUuid ? row.parentUuid : null
+    if (row.uuid === input.promptUuid) {
+      const caveatParent = parent ? caveatParents.get(parent) : undefined
+      return caveatParent === undefined ? parent : caveatParent
+    }
+    if (mayBeCaveat && isLocalCommandCaveatRow(row)) {
+      caveatParents.set(row.uuid, parent)
     }
   }
   return undefined
@@ -62,6 +95,7 @@ export async function resolveClaudeRewindFork(input: {
   head: AgentSessionProviderHandle
   prompt: { sessionId: string; uuid: string }
   claudeConfigDirs: readonly string[]
+  destinationConfigDir?: string
 }): Promise<AgentSessionRewindFork | null> {
   for (const claudeConfigDir of new Set(input.claudeConfigDirs)) {
     const parent = await readClaudePromptParentUuid({
@@ -83,7 +117,13 @@ export async function resolveClaudeRewindFork(input: {
       if (!sourcePath) {
         return null
       }
-      return materializeClaudeRewindTranscript(sourcePath, fork)
+      return materializeClaudeRewindTranscript(
+        sourcePath,
+        fork,
+        input.destinationConfigDir
+          ? join(input.destinationConfigDir, 'projects', basename(dirname(sourcePath)))
+          : undefined
+      )
     }
   }
   return null
@@ -103,6 +143,7 @@ export const claudeForkForRewind: NonNullable<
     rewindOperationId,
     head,
     prompt: beforeMessage,
+    destinationConfigDir: requireLegacyAgentSessionAccountHome(record.accountHome).path,
     claudeConfigDirs: [
       requireLegacyAgentSessionAccountHome(record.accountHome).path,
       ...(router ? [...router.accountHomes(), router.systemDefaultHome()] : [])

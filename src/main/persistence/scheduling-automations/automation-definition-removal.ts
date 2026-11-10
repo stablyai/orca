@@ -1,8 +1,8 @@
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import {
   assertAutomationOwnerFence,
   type AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
+} from '../../../shared/automations/ownership/automation-owner-precondition'
 import { automationProjectionContext } from './automation-owner-projection'
 import type { AutomationDefinitionOperations } from './automation-definition-operations'
 

@@ -1,9 +1,7 @@
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type { AppState } from '@/store/types'
-import type {
-  RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
@@ -14,7 +12,8 @@ import {
 import {
   buildMobileSessionAgentStatusByWorktree,
   buildMobileSessionWorktreeInputs,
-  getOpenFileIndexes
+  getOpenFileIndexes,
+  excludeCrossPlacedEditorFiles
 } from './mobile-session-inputs'
 import { getEditorDraftVersionByFileId } from './sync-projections'
 import { getMobileTerminalTheme } from './mobile-terminal-theme'
@@ -33,7 +32,7 @@ import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-edi
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
 import type { MobileSessionPublicationInputs } from './types'
 import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function buildMobileSessionTabSnapshots(
@@ -43,7 +42,10 @@ export function buildMobileSessionTabSnapshots(
     state.tabsByWorktree
   )
 ): RuntimeMobileSessionTabsSnapshot[] {
-  const openFileIndexes = getOpenFileIndexes(state.openFiles)
+  const openFileIndexes = excludeCrossPlacedEditorFiles(
+    getOpenFileIndexes(state.openFiles),
+    state.unifiedTabsByWorktree
+  )
   const browserTabsByWorktree = state.browserTabsByWorktree ?? {}
   const publicationInputs: MobileSessionPublicationInputs = {
     browserTabsByWorktree,
@@ -202,8 +204,12 @@ export function buildMobileSessionTabSnapshots(
       tabGroups && tabGroups.length > 0
         ? pruneTabGroupLayout(inputs.tabGroupLayout, new Set(tabGroups.map((group) => group.id)))
         : groupProjection.tabGroupLayout
+    const hasCrossPlacedTabs = openFileIndexes.crossPlacedWorkspaces.has(worktreeId)
     const content = {
-      activeGroupId: inputs.activeGroupId,
+      activeGroupId:
+        hasCrossPlacedTabs && !tabGroups?.some((group) => group.id === inputs.activeGroupId)
+          ? null
+          : inputs.activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),

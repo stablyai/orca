@@ -5,14 +5,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
 import { readFirefoxRowPartition } from './browser-cookie-source-partition'
-import {
-  importValidatedCookies,
-  cookieImportTarget,
-  type CookieImportOptions
-} from '../browser-cookie-import-pipeline'
+import { importValidatedCookies } from '../imports/import-validated-cookies'
+import { cookieImportTarget } from '../storage/browser-cookie-session-target'
+import type { CookieImportOptions } from '../imports/cookie-import-contracts'
 import { databaseSameSite, deriveUrl, type ValidatedCookie } from './browser-cookie-validation'
-import type { DetectedBrowser } from './browser-cookie-detection-types'
+import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { diag } from '../browser-cookie-import-diagnostics'
+import { isMacPrivacyDenial } from './browser-cookie-macos-privacy-denial'
 
 export async function importCookiesFromFirefox(
   browser: DetectedBrowser,
@@ -36,9 +35,10 @@ export async function importCookiesFromFirefox(
         }
       }
     }
-  } catch {
+  } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
-    return browserCookieImportFailure('databaseCopyFailed', { browser: 'Firefox' })
+    const code = isMacPrivacyDenial(err) ? 'macFullDiskAccess' : 'databaseCopyFailed'
+    return browserCookieImportFailure(code, { browser: 'Firefox' })
   }
 
   try {
@@ -113,7 +113,7 @@ export async function importCookiesFromFirefox(
       return browserCookieImportFailure('noValidCookies', { browser: 'Firefox' })
     }
 
-    return importValidatedCookies(
+    return await importValidatedCookies(
       validated,
       rows.length,
       cookieImportTarget(targetPartition),

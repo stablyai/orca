@@ -8,12 +8,12 @@ import {
   type OrcadMigrationSnapshotUploadState,
   type OrcadMigrationTerminalScrollbackSnapshot
 } from '../../../shared/orcad-migration/orcad-migration-scrollback'
-import { syncDirectoryDurablySync } from '../../durable-file-write'
+import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 import {
   getTerminalScrollbackSnapshotPath,
   getTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   appendOrcadMigrationStagedChunk,
   ensureOrcadMigrationDirectory,

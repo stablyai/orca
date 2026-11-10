@@ -1,10 +1,10 @@
-// Codex picks describe the next turn; other modes follow the running agent’s report.
+// Saved choices describe requested policy; runtime observations never replace that intent.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   type AgentChatPermissionMode
-} from '../../agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../agent-chat-permission-support'
+} from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../agent-launch/permissions/agent-chat-permission-support'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import type { SessionOptionDescriptor } from '../../native-chat/input/native-chat-session-options'
 
@@ -62,21 +62,17 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   if (!support || (!own && !support.modes.some((mode) => mode === state.permissionMode))) {
     return null
   }
-  const selectedForNextTurn = state.record.agent === 'codex' && !own
-  const current =
-    !selectedForNextTurn && state.reportedPermissionMode !== undefined
-      ? (state.reportedPermissionMode ?? undefined)
-      : own
-        ? undefined
-        : (state.permissionMode ?? undefined)
+  const current = state.permissionMode ?? undefined
   const reported = support.modes.find((mode) => mode === current)
-  const label = reported
-    ? MODE_COPY[reported].label
-    : current === 'plan'
-      ? 'Plan mode'
-      : current === 'read-only'
-        ? 'Read only'
-        : (current ?? 'Permissions')
+  const label = own
+    ? "Agent's own settings"
+    : reported
+      ? MODE_COPY[reported].label
+      : current === 'plan'
+        ? 'Plan mode'
+        : current === 'read-only'
+          ? 'Read only'
+          : (current ?? 'Permissions')
   return {
     description: label,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -91,14 +87,9 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
       }))
     },
-    valueSource:
-      current === undefined
-        ? 'unknown'
-        : current === state.reportedPermissionMode
-          ? 'reported'
-          : 'applied',
+    valueSource: 'applied',
     transport: 'agent-session',
-    settable: state.permissionOwnSupported !== null && current !== undefined
+    settable: state.permissionOwnSupported !== null
   }
 }
 
@@ -129,25 +120,48 @@ export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
   }
 }
 
+/** No runtime permission evidence: the options fallback stands. */
+export const NO_RUNTIME_PERMISSION_REPORT = false
+
+/** A primitive per answer, so subscribers re-render only when it changes: no evidence, cleared or stale (undefined), or the reported mode. */
+export function runtimePermissionReport(
+  summary: unknown,
+  fence: number | null
+): typeof NO_RUNTIME_PERMISSION_REPORT | string | null | undefined {
+  if (typeof summary !== 'object' || summary === null || !('runtimePermission' in summary)) {
+    return NO_RUNTIME_PERMISSION_REPORT
+  }
+  const report = summary.runtimePermission
+  if (
+    typeof report !== 'object' ||
+    report === null ||
+    !('fence' in report) ||
+    !Number.isSafeInteger(report.fence) ||
+    typeof report.fence !== 'number' ||
+    report.fence < 0 ||
+    report.fence !== fence ||
+    !('mode' in report)
+  ) {
+    return undefined
+  }
+  const mode = report.mode
+  return mode === null || typeof mode === 'string' ? mode : undefined
+}
+
 /** Absent producers retain options fallback; present evidence owns the description, even cleared. */
+export function applyRuntimePermissionReport<T extends { reportedPermissionMode?: string | null }>(
+  state: T,
+  report: ReturnType<typeof runtimePermissionReport>
+): T {
+  return report === NO_RUNTIME_PERMISSION_REPORT
+    ? state
+    : { ...state, reportedPermissionMode: report }
+}
+
 export function projectRuntimePermission<T extends { reportedPermissionMode?: string | null }>(
   state: T,
   summary: unknown,
   fence: number | null
 ): T {
-  if (typeof summary !== 'object' || summary === null || !('runtimePermission' in summary)) {
-    return state
-  }
-  const report = summary.runtimePermission
-  const valid =
-    typeof report === 'object' &&
-    report !== null &&
-    'fence' in report &&
-    Number.isSafeInteger(report.fence) &&
-    typeof report.fence === 'number' &&
-    report.fence >= 0 &&
-    report.fence === fence &&
-    'mode' in report &&
-    (report.mode === null || typeof report.mode === 'string')
-  return { ...state, reportedPermissionMode: valid ? report.mode : undefined }
+  return applyRuntimePermissionReport(state, runtimePermissionReport(summary, fence))
 }

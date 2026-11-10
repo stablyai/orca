@@ -1,27 +1,27 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { sendRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
-import { parsePairingCode } from '../../../src/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { parsePairingCode } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/shared/electron-remote-runtime-client-capabilities'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/runtime-rpc'
-import { RuntimeClientSettingsController } from '../../../src/main/runtime/runtime-client-settings'
-import type { RuntimeClientSettings } from '../../../src/main/runtime/runtime-client-settings-shape'
+import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/rpc/server/runtime-rpc'
+import { RuntimeClientSettingsController } from '../../../src/main/runtime/client/settings/runtime-client-settings'
+import type { RuntimeClientSettings } from '../../../src/main/runtime/client/settings/runtime-client-settings-shape'
 import { AgentModelCatalogStore } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogService } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { agentModelCatalogFingerprintForRecord } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
-import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-ui'
-import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/status'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
+import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-state/client-ui'
+import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/host-management/status'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
+import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
 import {
-  createRestTestRig,
-  REST_TEST_SESSION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import {
+  HOST_TEST_SESSION as REST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'
@@ -42,12 +42,12 @@ import {
   structuredAgentSessionSendSelection
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { runtimeStub } from './structured-agent-session-surface-execution'
-import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/native-chat-session-option-settings-write'
-import { clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/runtime-rpc-client'
+import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/session/options/native-chat-session-option-settings-write'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../src/shared/native-chat/input/native-chat-session-options'
 
 const pairedPort = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../../../src/renderer/src/runtime/runtime-rpc-environment-call', () => ({
+vi.mock('../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-environment-call', () => ({
   callRuntimeEnvironmentWithRevision: pairedPort.call
 }))
 afterEach(() => {
@@ -159,26 +159,32 @@ it('pairs to host-owned options and persists only a genuine pick on that host', 
     const connection = pairedRuntimeConnectionFromOffer(parsed)
     pairedPort.call.mockImplementation(({ environmentId, method, params }) => {
       expect(environmentId).toBe('paired-host-B')
-      return sendRemoteRuntimeRequest(
+      return sendRemoteRuntimeRequestOnSocket(
         connection,
         method,
         params,
         5_000,
         undefined,
         undefined,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        undefined,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        undefined,
+        undefined
       )
     })
     const client = {
       async call<T>(method: string, params?: unknown) {
-        const response = await sendRemoteRuntimeRequest<T>(
+        const response = await sendRemoteRuntimeRequestOnSocket<T>(
           connection,
           method,
           params,
           5_000,
           undefined,
           undefined,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+          undefined,
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          undefined,
+          undefined
         )
         if (!response.ok) {
           throw new Error(JSON.stringify(response.error))

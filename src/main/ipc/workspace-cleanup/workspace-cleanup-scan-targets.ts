@@ -2,7 +2,7 @@ import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   type WorkspaceCleanupScanArgs
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 export function hasTargetedWorkspaceCleanupScan(args: WorkspaceCleanupScanArgs): boolean {
   return typeof args.worktreeId === 'string' || Array.isArray(args.worktreeIds)

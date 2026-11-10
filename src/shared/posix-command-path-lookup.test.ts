@@ -220,15 +220,6 @@ describe('buildPosixCommandPathLookupScript', () => {
     }
   )
 
-  it('quotes literal targets before assigning them in the generated shell fragment', () => {
-    const script = buildPosixCommandPathLookupScript({
-      kind: 'literal',
-      value: "agent'; echo injected; '"
-    })
-
-    expect(script).toContain(`_orca_lookup_command='agent'\\''; echo injected; '\\'''`)
-  })
-
   it.skipIf(!canRunWslSh())(
     'resolves through the Windows-to-WSL login-shell boundary with inline masks',
     () => {

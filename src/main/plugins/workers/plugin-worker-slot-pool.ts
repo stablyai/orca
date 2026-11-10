@@ -106,12 +106,13 @@ export class PluginWorkerSlotPool {
   }
 }
 
-/** The active-worker cap, plus a separate soft cap for hook workers, which never idle out and
- *  so would otherwise starve every other plugin of the shared one. Past the soft cap a hook worker
- *  still starts (logged once), so admission never waits on a worker that never stops. */
+/** The active-worker cap, plus a separate soft cap for resident workers (hooks, status bar items),
+ *  which never idle out and so would otherwise starve every other plugin of the shared one. Past
+ *  the soft cap a resident worker still starts (logged once), so admission never waits on a
+ *  worker that never stops. */
 export class PluginWorkerSlots {
   private readonly active: PluginWorkerSlotPool
-  // Why unbounded: waiting here would hang refresh, disable and uninstall behind hook workers.
+  // Why unbounded: waiting here would hang refresh, disable and uninstall behind resident workers.
   private readonly keepWarm = new PluginWorkerSlotPool(Number.MAX_SAFE_INTEGER)
   private keepWarmCapLogged = false
 
@@ -130,7 +131,7 @@ export class PluginWorkerSlots {
       this.keepWarmCapLogged = true
       log(
         'warn',
-        `more than ${this.maxKeepWarm} plugins with hooks are running; each extra one adds a process`
+        `more than ${this.maxKeepWarm} plugins with hooks or status bar items are running; each extra one adds a process`
       )
     }
     return this.keepWarm

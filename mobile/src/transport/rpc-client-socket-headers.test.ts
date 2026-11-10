@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEndpointAuthSocket } from './endpoint-auth-headers'
-import { connect } from './rpc-client'
-import { RpcClientSocketFactory } from './rpc-client-socket-factory'
-import type { ConnectionLogEntry } from './types'
+import { connect } from './rpc/direct-rpc-connect'
+import { RpcClientSocketFactory } from './rpc/rpc-client-socket-factory'
+import type { ConnectionLogEntry } from '../diagnostics/connection/connection-log-types'
 
-vi.mock('./e2ee', () => ({
+vi.mock('./encryption/e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
     secretKey: new Uint8Array(32)

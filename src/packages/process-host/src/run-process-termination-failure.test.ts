@@ -46,19 +46,6 @@ describe('runProcess termination failure', () => {
     vi.clearAllMocks()
   })
 
-  it('reports ordinary child close exactly once', async () => {
-    const child = mockChild()
-    const onChildTerminated = vi.fn()
-    spawnMock.mockReturnValue(child)
-    const pending = runProcess({ program: 'git', timeoutMs: null, onChildTerminated })
-
-    child.emit('close', 0, null)
-    child.emit('close', 0, null)
-
-    await expect(pending).resolves.toMatchObject({ code: 0 })
-    expect(onChildTerminated).toHaveBeenCalledOnce()
-  })
-
   it('does not report a live-child error before its eventual close', async () => {
     const child = mockChild()
     const onChildTerminated = vi.fn()

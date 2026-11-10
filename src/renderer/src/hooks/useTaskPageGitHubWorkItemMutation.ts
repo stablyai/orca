@@ -1,12 +1,12 @@
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { buildTaskPageGitHubWorkItemMutationPatch } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { ParsedTaskQuery } from '../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../shared/work-items/task-query'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { useAppStore } from '@/store'
 import {
   beginTaskPageGitHubWorkItemMutation,
@@ -24,7 +24,7 @@ import {
   setTaskPageGitHubMutationQueryKey
 } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 import { useMountedRef } from './useMountedRef'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type UseTaskPageGitHubWorkItemMutationArgs = {
   queryKey: string

@@ -1,8 +1,10 @@
-import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
 import {
+  PROVIDER_BRIEF_SIGTERM_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
   createProviderSpawnSpec,
   type ProviderSupervisorLifetime
@@ -11,7 +13,7 @@ import {
   terminateProviderProcessTree,
   type ProviderProcessTeardownVerdict
 } from './provider-process-teardown'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { providerSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
@@ -19,6 +21,7 @@ import {
   acceptProviderWriterClose,
   closeProviderProcess,
   rootOnlyProviderClosePolicy,
+  type ProviderProcessCloseOptions,
   type ProviderProcessClosePolicy,
   type ProviderProcessCloseResult,
   type ProviderProcessTree
@@ -51,7 +54,7 @@ type ManagedProviderProcessOptions = {
 }
 
 export type ManagedProviderProcess = {
-  child: PipedChildProcess
+  child: ChildProcessWithoutNullStreams
   supervised: boolean
   /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
   readonly processless: boolean
@@ -72,9 +75,16 @@ export type ManagedProviderProcess = {
   stderrTail(): string
   onExit(listener: (exit: ProviderProcessExit) => void): void
   terminateTree(): Promise<ProviderProcessTeardownVerdict>
-  close(tree?: ProviderProcessTree): Promise<ProviderProcessCloseResult>
+  /** A close joining one already in flight shares that close's grace. */
+  close(
+    tree?: ProviderProcessTree,
+    options?: ProviderProcessCloseOptions
+  ): Promise<ProviderProcessCloseResult>
   /** Writer retirement can finish while explicitly stricter tree cleanup remains retryable. */
-  closeWriter(tree: ProviderProcessTree): Promise<ProviderProcessCloseResult>
+  closeWriter(
+    tree: ProviderProcessTree,
+    options?: ProviderProcessCloseOptions
+  ): Promise<ProviderProcessCloseResult>
 }
 
 export function spawnManagedProviderProcess(
@@ -199,7 +209,10 @@ export function spawnManagedProviderProcess(
     return lastCloseResult?.killDelivered ? lastCloseResult : null
   }
 
-  const close = (tree?: ProviderProcessTree): Promise<ProviderProcessCloseResult> =>
+  const close = (
+    tree?: ProviderProcessTree,
+    closeOptions?: ProviderProcessCloseOptions
+  ): Promise<ProviderProcessCloseResult> =>
     exitProof.run(async () => {
       const known = knownWriterClose(tree)
       if (known && !options.acceptClose) {
@@ -217,7 +230,10 @@ export function spawnManagedProviderProcess(
         supervised: spec.supervised,
         policy,
         tree,
-        terminateTree
+        terminateTree,
+        ...(closeOptions?.grace === 'brief'
+          ? { briefGraceMs: PROVIDER_BRIEF_SIGTERM_GRACE_MS }
+          : {})
       })
       lastCloseResult = {
         ...result,
@@ -261,9 +277,9 @@ export function spawnManagedProviderProcess(
     },
     terminateTree,
     close,
-    closeWriter(tree) {
+    closeWriter(tree, closeOptions) {
       const known = knownWriterClose(tree)
-      return known ? Promise.resolve(known) : close(tree)
+      return known ? Promise.resolve(known) : close(tree, closeOptions)
     }
   }
 }

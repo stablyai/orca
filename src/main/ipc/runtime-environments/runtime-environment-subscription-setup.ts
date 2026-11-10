@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import { isAbortSignalReason, throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
@@ -9,13 +9,11 @@ import {
   runtimeEnvironmentSetupFailure,
   type CrewSubscriptionSetupResult,
   type RuntimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
-import {
-  resolveEnvironment,
-  RuntimeEnvironmentStoreError
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getAcceptedRuntimeEnvironmentCapabilityOutcome } from './runtime-environment-capability-evidence'
 import { getRuntimeEnvironmentStatusSnapshot } from './runtime-environment-request-connections'
 
@@ -176,7 +174,7 @@ export function crewSubscriptionSetupFailure(
   }
 }
 
-export type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
+export type RetainedRemoteRuntimeSubscription = RemoteRuntimeTransportSubscription & {
   setupController: AbortController
   environmentId: string
   ownerWebContentsId: number
@@ -196,7 +194,7 @@ export function assertSubscriptionPairingCurrent(
   transportIsCurrent: () => boolean,
   crewResult: boolean,
   disposeRendererLifetime: () => void,
-  subscription: RemoteRuntimeSubscription,
+  subscription: RemoteRuntimeTransportSubscription,
   observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
 ): void {
   let pairingIsCurrent = false
@@ -248,7 +246,7 @@ export function assertSettledCrewSubscriptionCurrent(
   crewResult: boolean,
   assertCrewCurrent: () => void,
   disposeRendererLifetime: () => void,
-  subscription: RemoteRuntimeSubscription
+  subscription: RemoteRuntimeTransportSubscription
 ): void {
   if (crewResult) {
     try {
@@ -260,11 +258,6 @@ export function assertSettledCrewSubscriptionCurrent(
     }
   }
 }
-
-export type {
-  CrewSubscriptionSetupResult,
-  RuntimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
 
 export function assertCrewSourceCurrent(environment: ReturnType<typeof resolveEnvironment>): void {
   const connection = getPreferredPairedRuntimeConnection(environment)

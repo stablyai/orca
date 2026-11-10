@@ -1,11 +1,11 @@
-import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/structured-agent-session-status-ownership'
+import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   parseAgentStatusSubject,
   serializeAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
-} from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/contracts/agent-status-subject'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -14,7 +14,7 @@ import {
   continueMainAgentStatus,
   isAgentStatusHeldOpenByChildWork,
   mainAgentTurnInterrupted
-} from '../../../shared/agent-lead-status-fold'
+} from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   structuredAgentSessionDatedMainAgent,
