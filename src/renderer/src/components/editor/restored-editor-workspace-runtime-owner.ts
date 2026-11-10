@@ -5,7 +5,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolv
 import {
   findRuntimeWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
-} from '@/lib/runtime-workspace-file-route'
+} from '@/lib/files/access/runtime-workspace-file-route'
 
 export type RestoredEditorWorkspaceRuntimeOwner = {
   route: RuntimeWorkspaceFileRoute

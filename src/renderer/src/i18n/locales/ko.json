@@ -341,10 +341,10 @@
       "customArgsBadge": "사용자 정의",
       "rowPermissions": "권한",
       "permissionsAutoDescription": "<agents>지원되는 에이전트</agents>는 안전한 작업을 스스로 승인합니다.",
-      "permissionsSearchDescription": "수동, 자동 또는 Yolo 권한으로 에이전트를 시작합니다.",
+      "permissionsSearchDescription": "대신 승인, 전체 액세스 또는 각 에이전트의 자체 권한 설정을 선택합니다.",
       "permissionsMixedNoMajority": "에이전트는 다른 설정을 사용합니다. 모드를 선택하면 모두에게 적용됩니다.",
       "permissionsDescription": "에이전트가 확인 없이 수행할 수 있는 작업 범위입니다. 사용자 지정 실행 인수가 있는 에이전트는 해당 인수를 유지합니다.",
-      "autoUnsupported": "자동 모드를 사용하려면 이 호스트의 Orca를 최신 버전으로 업데이트해야 합니다.",
+      "autoUnsupported": "대신 승인을 사용하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다.",
       "customPermissions": "맞춤 인수",
       "otherAgentsPermissions": "다른 에이전트",
       "permissionsMixed": "대부분의 에이전트는 {{mode}} 모드를 사용합니다. 모드를 선택하면 사용자 지정 인수를 제외한 표시된 예외가 초기화됩니다.",
@@ -369,6 +369,7 @@
       "permissionOwnDescription": "터미널과 채팅은 에이전트 자체 권한 설정을 따릅니다.",
       "permissionOwnShort": "자체 설정",
       "permissionWithoutAuto": "'대신 승인'이 없는 에이전트",
+      "permissionMixed": "혼합",
       "permissionSurfaceDifference": "터미널은 에이전트 자체 설정을 사용하고, 새 채팅은 {{mode}}을(를) 사용합니다.",
       "permissionSameAsAll": "모든 에이전트와 동일",
       "permissionChipRemove": "{{flag}}을(를) 제거하고 {{agent}} 자체 설정 사용",
@@ -13502,6 +13503,10 @@
                     "title": "리포지토리가 보관됨",
                     "body": "이 리포지토리가 보관되어 있으므로 Orca가 {{reviewLabel}} 상태를 새로고치지 않습니다."
                   },
+                  "host_off": {
+                    "title": "WSL 호스트가 꺼져 있습니다",
+                    "body": "Orca는 이 프로젝트의 WSL 호스트를 통해 {{reviewLabel}} 상태를 새로고침하지만 호스트가 꺼져 있습니다. 새로고침하려면 다시 연결하세요."
+                  },
                   "not_git": {
                     "title": "Git 리포지토리가 아님",
                     "body": "Orca는 {{reviewLabel}} 상태용으로 이 폴더를 Git 리포지토리로 처리할 수 없었습니다."
@@ -22749,7 +22754,7 @@
     "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
     "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
     "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
-    "search": "에이전트 및 설정 검색…",
+    "search": "검색, 예: Opus 5.5…",
     "configure": "{{agent}} 설정",
     "arguments": "인수",
     "argumentsHint": "CLI 실행에만 적용됩니다.",
@@ -23335,7 +23340,7 @@
     "unsupportedDescription": "Apple은 이 Mac에서 macOS {{macos}}을(를) 지원하지 않습니다.",
     "unknownDescription": "이 Mac의 업그레이드 가능 여부를 확인하지 못했습니다. Apple의 호환성 안내를 확인하세요.",
     "whyTitle": "왜 변경되나요?",
-    "whyIntro": "Orca의 기반인 Electron을 업데이트하여 다음을 제공합니다:",
+    "whyIntro": "Electron과 기기 내 음성 엔진 등 Orca 기반의 일부를 업데이트하여 다음을 제공합니다:",
     "whySecurity": "Electron 및 Chromium의 지속적인 보안 수정.",
     "whyPerformance": "더 빠른 시작과 효율적인 네이티브 API 호출.",
     "whySystemApis": "최신 macOS 알림 API 및 안전한 키체인 저장소 지원.",
@@ -23410,29 +23415,23 @@
     "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
   },
   "speechModelUpdate": {
-    "updateTitle": "음성 모델을 업데이트하세요",
-    "updateDescription": "이제 받아쓰기가 더 빠른 엔진에서 실행됩니다. 다시 받아쓰려면 {{model}}을(를) 한 번 다운로드해야 합니다({{size}} MB).",
     "update": "업데이트",
-    "replacedTitle": "음성 모델이 교체되었습니다",
-    "replacedDescription": "{{old}}은(는) 새 음성 엔진에서 실행할 수 없습니다. {{model}}이(가) 대신합니다({{size}} MB).",
-    "downloadReplacement": "{{model}} 다운로드",
-    "later": "나중에",
-    "dismiss": "닫기",
-    "updatingTitle": "{{model}} 업데이트 중",
-    "downloadingTitle": "{{model}} 다운로드 중",
-    "downloadingDescription": "계속 작업하셔도 됩니다. 완료되면 받아쓰기를 다시 사용할 수 있습니다.",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "취소",
-    "doneTitle": "받아쓰기 준비 완료",
-    "doneDescription": "{{model}}이(가) 업데이트되었습니다. 이전 파일은 삭제되었습니다.",
-    "doneRetiredDescription": "{{model}} 설정이 완료되었습니다. 이전 {{old}} 파일은 아직 디스크에 있습니다.",
-    "keep": "유지",
-    "deleteOld": "이전 모델 삭제",
-    "deleteFailed": "{{model}}을(를) 삭제하지 못했습니다.",
-    "updateFailedTitle": "{{model}}을(를) 업데이트하지 못했습니다",
-    "downloadFailedTitle": "{{model}}을(를) 다운로드하지 못했습니다",
-    "failedAtDescription": "다운로드가 {{mb}} MB에서 중단되었습니다. 연결을 확인하고 다시 시도하세요.",
-    "failedDescription": "다운로드가 중단되었습니다. 연결을 확인하고 다시 시도하세요.",
-    "tryAgain": "다시 시도"
+    "pill": {
+      "updateNotice": "더 빠른 받아쓰기를 설치할 수 있습니다",
+      "retiredNotice": "받아쓰기가 더 빠른 음성 모델로 바뀌었습니다",
+      "install": "설치",
+      "installTooltip": "1회 다운로드 · {{size}}MB",
+      "downloading": "받아쓰기 설정 중",
+      "downloadingTooltip": "{{done}} / {{size}}MB",
+      "ready": "받아쓰기가 준비되었습니다. <kbd></kbd> 키를 누르세요",
+      "readyNoShortcut": "받아쓰기가 준비되었습니다.",
+      "failed": "다운로드가 중단되었습니다. 연결을 확인하세요.",
+      "tryAgain": "다시 시도",
+      "deleteOld": "이전 모델 삭제",
+      "deleteFailed": "{{model}}을(를) 삭제하지 못했습니다.",
+      "dismiss": "닫기",
+      "cancelDownload": "다운로드 취소"
+    }
   }
 }

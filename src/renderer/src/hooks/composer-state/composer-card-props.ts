@@ -1,6 +1,6 @@
 import { resolveComposerAttachmentTarget } from './composer-attachment-target'
-import { getAttachmentLabel } from '@/lib/new-workspace'
-import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
+import { getAttachmentLabel } from '@/lib/workspace/creation/new-workspace'
+import { getQuickComposerCreateDisabled } from '@/lib/workspace/creation/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
 import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'

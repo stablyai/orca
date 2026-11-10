@@ -4,7 +4,7 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { loadHosts } from '../transport/hosts/host-store'
+import { loadHosts } from '../host-catalog/host-store'
 import {
   loadTerminalAccessoryLayout,
   saveTerminalSmartRail
