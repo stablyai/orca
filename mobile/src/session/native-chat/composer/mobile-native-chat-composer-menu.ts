@@ -19,7 +19,7 @@ import type {
   SlashCommandSuggestion
 } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
-import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
+import { getAgentAnsweredNativeChatCommands } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
@@ -66,7 +66,7 @@ export function mobileComposerCatalog({
         structured.compactInstructions,
         interactionModeSupported
       )
-    : getMobileNativeChatCommands(agent)
+    : getAgentAnsweredNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),
     commands: nativeChatPickerCommands(agent, commands, discovery.skills),

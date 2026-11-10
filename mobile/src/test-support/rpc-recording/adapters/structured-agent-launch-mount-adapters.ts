@@ -10,9 +10,9 @@ export function structuredAgentLaunchMountAdapters(
   return {
     'agentSession.structured-launch': ({ client }) => {
       const create = modules.load<
-        typeof import('../../../session/mobile-structured-agent-session-launch')
+        typeof import('../../../session/native-chat/agent-session/mobile-structured-agent-session-launch')
       >(
-        'mobile/src/session/mobile-structured-agent-session-launch.ts'
+        'mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts'
       ).createMobileStructuredAgentSession
       let launched: unknown = 'unlaunched'
       return {
