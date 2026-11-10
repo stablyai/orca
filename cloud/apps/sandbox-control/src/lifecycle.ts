@@ -2,6 +2,7 @@
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import { accountProvider } from './account-providers'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
+import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
 import { parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
@@ -830,6 +831,12 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await recordSessionEnd(deps.db, destroying, deps.now(), null, deps.now())
   if (settled !== destroying.usage_settled_at) {
     destroying = await claim(deps, destroying, { usage_settled_at: settled })
+  }
+  // A9: sign each agent out on the VM first (bounded, best effort; never blocks the delete). A
+  // suspended sandbox has no session and is never woken for it: its disk goes with the delete.
+  // A retried destroy already tried once, and its box may be gone: don't wait on it again.
+  if (destroying.session_id && row.status !== 'destroying') {
+    await signOutAgentsBeforeDelete(deps.provider, destroying.session_id, { sandboxId: row.id })
   }
   await deps.provider.deleteSandbox(destroying.provider_name)
   // Persistent sandboxes leave automatic snapshots behind delete; prove none survive.

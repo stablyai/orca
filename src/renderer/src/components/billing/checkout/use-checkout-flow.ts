@@ -3,6 +3,10 @@ import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
 import { getBillingGeneration, recordBillingStatusIfCurrent } from '../billing-summary-store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
+  activeCloudSetupSessionId,
+  startCloudSetupSession
+} from '@/lib/orca-cloud/cloud-setup-session'
+import {
   CHECKOUT_POLL_MS,
   CHECKOUT_SLOW_POLL_MS,
   CHECKOUT_SLOW_WATCH_MS,
@@ -42,12 +46,28 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
   const start = useCallback((order: CheckoutOrder) => {
     const id = ++runId.current
     setPhase({ kind: 'opening', order })
+    // Joins an open setup session, so Checkout returns to its next step (T2 Compare plans).
+    const setupSessionId = activeCloudSetupSessionId()
     void window.api.orcaProfiles
-      .billingOpenCheckout({ plan: 'team', interval: order.interval, seats: order.seats })
+      .billingOpenCheckout({
+        plan: 'team',
+        interval: order.interval,
+        seats: order.seats,
+        ...(setupSessionId ? { setupSessionId } : {})
+      })
       .catch((error: unknown): OrcaBillingOpenResult => ({
         status: 'failed',
         error: String(error)
       }))
+      .then(async (result): Promise<OrcaBillingOpenResult> => {
+        if (result.status !== 'team-required') {
+          return result
+        }
+        // O1: a plan always lands on a team. The browser makes or picks the team, then Checkout;
+        // the setup session switches this profile to that team when it's there.
+        const started = await startCloudSetupSession({ needs: ['team', 'plan'], chooseTeam: true })
+        return started ? { status: 'opened' } : result
+      })
       .then((result) => {
         if (id === runId.current) {
           setPhase(nextPhaseAfterOpen(order, result, Date.now()))

@@ -1,11 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import './delete-worktree-flow'
@@ -14,7 +8,7 @@ import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
-import { DeleteWorktreeDialogDescription } from './DeleteWorktreeDialogDescription'
+import { DeleteWorktreeDialogHeading } from './DeleteWorktreeDialogDescription'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
@@ -44,6 +38,8 @@ import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-tar
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { useDetachWorktreeDeleteChildren } from './use-detach-worktree-delete-children'
 import { useDeleteWorktreeDialogDismissal } from './use-delete-worktree-dialog-dismissal'
+import * as cloudDelete from './DeleteCloudWorkspaceParts'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const t = useTranslate()
@@ -126,6 +122,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  // One Orca Cloud workspace: its own copy, Archive instead, and no Force step when it's asleep.
+  const isCloud = useIsCloudWorkspace(isBatchDelete ? null : worktree?.id)
   // Git cannot remove the original clone with worktree remove; block it before the force-delete dead end.
   const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
   const childWorkspaceCount = lineageDelete.descendants.length
@@ -323,31 +321,36 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {isBatchDelete
-              ? t('auto.components.sidebar.DeleteWorktreeDialog.86f0ae1257', 'Delete Workspaces')
-              : t('auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf', 'Delete Workspace')}
-          </DialogTitle>
-          <DeleteWorktreeDialogDescription
-            showUnknownChangeLossWarning={hasUnknownChangeState}
-            targetClassName={deleteCopy.targetClassName}
-            targetName={isBatchDelete ? undefined : worktree?.displayName}
-            description={deleteAllLineage ? lineageDeleteDescription : deleteCopy.description}
-          />
+          {isCloud && worktree ? (
+            <cloudDelete.DeleteCloudWorkspaceHeader
+              worktree={worktree}
+              dirtyCounts={dirtyChanges.counts}
+            />
+          ) : (
+            <DeleteWorktreeDialogHeading
+              isBatchDelete={isBatchDelete}
+              showUnknownChangeLossWarning={hasUnknownChangeState}
+              targetClassName={deleteCopy.targetClassName}
+              targetName={isBatchDelete ? undefined : worktree?.displayName}
+              description={deleteAllLineage ? lineageDeleteDescription : deleteCopy.description}
+            />
+          )}
         </DialogHeader>
 
         <div className="scrollbar-sleek max-h-[50vh] min-w-0 space-y-4 overflow-y-auto">
-          <DeleteWorktreeTargetPreview
-            isBatchDelete={isBatchDelete}
-            worktree={worktree}
-            worktrees={worktrees}
-            collisionWorktrees={allWorktrees}
-            hostLabelById={hostLabelById}
-            deleteStateByWorktreeId={deleteStateByWorktreeId}
-            changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
-            dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
-            dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
-          />
+          {isCloud ? null : (
+            <DeleteWorktreeTargetPreview
+              isBatchDelete={isBatchDelete}
+              worktree={worktree}
+              worktrees={worktrees}
+              collisionWorktrees={allWorktrees}
+              hostLabelById={hostLabelById}
+              deleteStateByWorktreeId={deleteStateByWorktreeId}
+              changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
+              dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
+              dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+            />
+          )}
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
 
@@ -374,31 +377,42 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         <DialogFooter>
-          <DeleteWorktreeDialogFooter
-            isMainWorktree={isMainWorktree}
-            isDeleting={isDeleting || isSavingForcePreference}
-            isDetachingChildren={isDetachingChildren}
-            deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
-            canForceDelete={canForceDelete}
-            isBatchDelete={isBatchDelete}
-            worktreeCount={worktrees.length}
-            canDeleteAllLineage={deleteAllLineage}
-            lineageDeleteTargetCount={lineageDelete.deleteAllTargets.length}
-            onCancel={() => handleOpenChange(false)}
-            onForceDelete={
-              preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
-            }
-            onSavingChange={setIsSavingForcePreference}
-            onDelete={
-              preserveChildrenSelected
-                ? handleDetachAndDelete
-                : canDeleteAllLineage
-                  ? handleDeleteAll
-                  : () => handleDelete(false)
-            }
-            onAlwaysDelete={allowSkipConfirm ? persistSkipConfirmPreference : undefined}
-            confirmButtonRef={confirmButtonRef}
-          />
+          {isCloud && worktree ? (
+            <cloudDelete.DeleteCloudWorkspaceFooter
+              isDeleting={isDeleting}
+              onCancel={() => handleOpenChange(false)}
+              onArchive={() => cloudDelete.archiveInsteadOfDelete(worktree, closeModal)}
+              // The dialog is the consent: an asleep sandbox is deleted without waking it.
+              onDelete={() => handleDelete(true)}
+              cancelButtonRef={confirmButtonRef}
+            />
+          ) : (
+            <DeleteWorktreeDialogFooter
+              isMainWorktree={isMainWorktree}
+              isDeleting={isDeleting || isSavingForcePreference}
+              isDetachingChildren={isDetachingChildren}
+              deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
+              canForceDelete={canForceDelete}
+              isBatchDelete={isBatchDelete}
+              worktreeCount={worktrees.length}
+              canDeleteAllLineage={deleteAllLineage}
+              lineageDeleteTargetCount={lineageDelete.deleteAllTargets.length}
+              onCancel={() => handleOpenChange(false)}
+              onForceDelete={
+                preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
+              }
+              onSavingChange={setIsSavingForcePreference}
+              onDelete={
+                preserveChildrenSelected
+                  ? handleDetachAndDelete
+                  : canDeleteAllLineage
+                    ? handleDeleteAll
+                    : () => handleDelete(false)
+              }
+              onAlwaysDelete={allowSkipConfirm ? persistSkipConfirmPreference : undefined}
+              confirmButtonRef={confirmButtonRef}
+            />
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

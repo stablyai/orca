@@ -9,13 +9,16 @@ import { CloudMcpSyncPanel, CloudMcpSyncSkeleton } from './CloudMcpSyncPanel'
 
 /** Renders only for Orca Cloud workspaces; main answers null for every other host. */
 export function CloudMcpSyncSection({
-  environmentId
+  environmentId,
+  defaultExpanded = false
 }: {
   environmentId: string
+  /** Settings › Orca Cloud › MCP servers opens the list when there is only one workspace. */
+  defaultExpanded?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const status = useCloudMcpSyncStatus(environmentId, true)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   if (status === undefined) {
     return <CloudMcpSyncSkeleton />
   }

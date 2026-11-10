@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
-import { sampleTeam } from './plan-billing-fixtures'
+import { sampleTeam, sampleTrial, sampleTrialUsedUp } from './plan-billing-fixtures'
+import { denyReasonCopy, statusLabel } from './plan-billing-copy'
+import { planHealth } from './PlanStatusBadge'
 import {
+  accountMenuTrialRow,
   accountMenuUsageLines,
+  trialHoursLeftHint,
+  trialHoursUsedLine,
   includedUsageTone,
   sandboxHoursCount,
   sandboxHoursLeftLine,
@@ -48,30 +53,58 @@ describe('sandbox hours copy', () => {
   })
 
   it('warns at the level billing reports until the hours run out', () => {
-    expect(usageWarningLine(team({ usageWarningPercent: null }), t)).toBeNull()
-    expect(usageWarningLine(team({ usageWarningPercent: 75 }), t)).toBe(
+    expect(usageWarningLine(team({ usageWarningPercent: null }), t, 'en')).toBeNull()
+    expect(usageWarningLine(team({ usageWarningPercent: 75 }), t, 'en')).toBe(
       'Your team has used 75% of this month’s sandbox hours.'
     )
-    expect(usageWarningLine(team({ usageWarningPercent: 90 }), t)).toBe(
+    expect(usageWarningLine(team({ usageWarningPercent: 90 }), t, 'en')).toBe(
       'Your team has used 90% of this month’s sandbox hours.'
     )
-    expect(usageWarningLine(team({ usageWarningPercent: 80 }), t)).toBe(
+    expect(usageWarningLine(team({ usageWarningPercent: 80 }), t, 'en')).toBe(
       'Your team has used 80% of this month’s sandbox hours.'
     )
-    expect(usageWarningLine(team({ usageWarningPercent: 100 }), t)).toBeNull()
+  })
+
+  it('says what happens next at 100%, by overage', () => {
+    const out = { usedSeconds: 120 * HOUR, remainingIncludedSeconds: 0, usageWarningPercent: 100 }
+    expect(usageWarningLine(team(out), t, 'en')).toBe(
+      'Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.'
+    )
+    expect(
+      usageWarningLine(
+        team({ ...out, overage: { ...sampleTeam.overage, optedIn: true, spendCapCents: 2500 } }),
+        t,
+        'en'
+      )
+    ).toBe(
+      'Your team has used all of this month’s sandbox hours. Overage is on, up to your $25 spend cap.'
+    )
   })
 
   it('states the actual share used, floored, not the level that triggered it', () => {
-    expect(usageWarningLine(team({ usedSeconds: 119 * HOUR, usageWarningPercent: 90 }), t)).toBe(
-      'Your team has used 99% of this month’s sandbox hours.'
-    )
-    expect(usageWarningLine(team({ usedSeconds: 92 * HOUR, usageWarningPercent: 75 }), t)).toBe(
-      'Your team has used 76% of this month’s sandbox hours.'
-    )
+    expect(
+      usageWarningLine(team({ usedSeconds: 119 * HOUR, usageWarningPercent: 90 }), t, 'en')
+    ).toBe('Your team has used 99% of this month’s sandbox hours.')
+    expect(
+      usageWarningLine(team({ usedSeconds: 92 * HOUR, usageWarningPercent: 75 }), t, 'en')
+    ).toBe('Your team has used 76% of this month’s sandbox hours.')
     // Never "100%" while billing still reports hours left.
-    expect(usageWarningLine(team({ usedSeconds: 119.9 * HOUR, usageWarningPercent: 90 }), t)).toBe(
-      'Your team has used 99% of this month’s sandbox hours.'
-    )
+    expect(
+      usageWarningLine(team({ usedSeconds: 119.9 * HOUR, usageWarningPercent: 90 }), t, 'en')
+    ).toBe('Your team has used 99% of this month’s sandbox hours.')
+  })
+
+  it('shows the warning to owners and admins only: members are not alerted', () => {
+    const member = team({
+      usedSeconds: 110 * HOUR,
+      usageWarningPercent: 90,
+      canManageBilling: false
+    })
+    expect(usageWarningLine(member, t, 'en')).toBeNull()
+    expect(accountMenuUsageLines({ status: 'ok', entitlement: member }, t, 'en')).toEqual({
+      hoursLeft: '78.5 sandbox hours left',
+      warning: null
+    })
   })
 
   it('turns the hours bar to the warning tone at 90%', () => {
@@ -87,7 +120,8 @@ describe('sandbox hours copy', () => {
           status: 'ok',
           entitlement: team({ remainingIncludedSeconds: 20 * HOUR, usageWarningPercent: 90 })
         },
-        t
+        t,
+        'en'
       )
     ).toEqual({
       hoursLeft: '20 sandbox hours left',
@@ -96,9 +130,61 @@ describe('sandbox hours copy', () => {
     expect(
       accountMenuUsageLines(
         { status: 'ok', entitlement: team({ plan: null, planLabel: null, status: 'none' }) },
-        t
+        t,
+        'en'
       )
     ).toBeNull()
-    expect(accountMenuUsageLines({ status: 'failed', error: 'offline' }, t)).toBeNull()
+    expect(accountMenuUsageLines({ status: 'failed', error: 'offline' }, t, 'en')).toBeNull()
+  })
+})
+
+describe('trial copy (spec T1, glossary "Trial")', () => {
+  it('counts the one-time trial hours without "this month"', () => {
+    expect(trialHoursUsedLine(sampleTrial, t)).toBe('0.6 of 2 sandbox hours used')
+    expect(trialHoursLeftHint(sampleTrial, t)).toBe('Trial · 1.4 sandbox hours left')
+    expect(trialHoursLeftHint({ ...sampleTrial, remainingIncludedSeconds: HOUR }, t)).toBe(
+      'Trial · 1 sandbox hour left'
+    )
+  })
+
+  it('shows the account menu row to every member, Choose plan to owners and admins only', () => {
+    expect(accountMenuTrialRow({ status: 'ok', entitlement: sampleTrial }, t)).toEqual({
+      label: 'Trial · 1.4 sandbox hours left',
+      usedUp: false,
+      canChoosePlan: true
+    })
+    expect(
+      accountMenuTrialRow(
+        { status: 'ok', entitlement: { ...sampleTrial, canManageBilling: false } },
+        t
+      )
+    ).toMatchObject({ canChoosePlan: false })
+    expect(accountMenuTrialRow({ status: 'ok', entitlement: sampleTrialUsedUp }, t)).toMatchObject({
+      label: 'Your trial is used up',
+      usedUp: true
+    })
+    // Gone once a plan starts, and never for a team without a trial.
+    expect(accountMenuTrialRow({ status: 'ok', entitlement: sampleTeam }, t)).toBeNull()
+    expect(accountMenuTrialRow({ status: 'failed', error: 'x' }, t)).toBeNull()
+    // The plan's hours line stays off during a trial.
+    expect(accountMenuUsageLines({ status: 'ok', entitlement: sampleTrial }, t, 'en-US')).toBeNull()
+  })
+
+  it('labels the trial "Trial" and says what to do when it is used up or unavailable', () => {
+    expect(statusLabel('trial', t)).toBe('Trial')
+    expect(planHealth(sampleTrial, t)).toEqual({ label: 'Trial', dot: null })
+    expect(planHealth(sampleTrialUsedUp, t)).toEqual({ label: 'Trial', dot: 'warning' })
+    expect(denyReasonCopy('trial_used_up', t, true)).toBe(
+      'Your trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Choose a plan to keep using Orca Cloud.'
+    )
+    expect(denyReasonCopy('trial_used_up', t, false)).toBe(
+      'Your team’s trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to choose a plan.'
+    )
+    expect(denyReasonCopy('trial_unavailable', t, true)).toBe(
+      'This account or team already used its trial. Choose a plan to use Orca Cloud.'
+    )
+    expect(denyReasonCopy('trial_unavailable', t, false)).toBe(
+      'This account or team already used its trial. Ask an owner or admin to choose a plan.'
+    )
   })
 })

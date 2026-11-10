@@ -311,7 +311,8 @@ export function CloudSecretList({
     <div ref={rootRef} className="space-y-3">
       <div className="flex min-h-8 items-center justify-between gap-3">
         {description ? (
-          <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+          // Inset like the rows below so the text lines up with their content.
+          <p className="pl-3 text-xs leading-5 text-muted-foreground">{description}</p>
         ) : (
           <span />
         )}

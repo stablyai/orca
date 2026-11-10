@@ -63,6 +63,7 @@ import {
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
 import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
+import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -174,11 +175,12 @@ export function renderSettingsPage(
                     {renderLinearSettingsSection(context, t)}
                     {renderDesktopCapabilitySettingsSections(context, t)}
                     {renderOrcaAccountSettingsSection(context, t)}
-                    {renderCloudApiSettingsSections(context, t)}
                     {renderSetupGuideSettingsSection(context, t)}
                     {renderGeneralSettingsSection(context, t)}
                     {renderIntegrationsSettingsSection(context, t)}
                     {renderMobileSettingsSection(context, t)}
+                    {renderOrcaCloudSettingsSections(context, t)}
+                    {renderCloudApiSettingsSections(context, t)}
                     {renderAutomationsSettingsSection(context, t)}
                     {renderArtifactsSettingsSection(context, t)}
                     {renderShareSkillsSettingsSection(context, t)}
