@@ -73,10 +73,35 @@ export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
 export function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string | null {
   const t = useTranslate()
   const locale = useIntlLocale()
+  if (access.state === 'no-plan' && access.trialOfferSeconds) {
+    // B1: the team's trial, not started yet.
+    const offered = getOrcaCloudHoursLeft(access.trialOfferSeconds)
+    return t(
+      'components.newWorkspace.cloudHours.trialOffered',
+      'Trial · {{hours}} sandbox hours left · No card needed',
+      {
+        count: offered,
+        hours: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(offered),
+        defaultValue_one: 'Trial · {{hours}} sandbox hour left · No card needed'
+      }
+    )
+  }
   if (access.state !== 'entitled') {
     return null
   }
   const count = getOrcaCloudHoursLeft(access.remainingSeconds)
+  if (access.trial) {
+    // T1: trial hours are a one-time allowance, so the line says whose hours these are.
+    return t(
+      'components.newWorkspace.cloudHours.trialChip',
+      'Trial · {{hours}} sandbox hours left',
+      {
+        count,
+        hours: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(count),
+        defaultValue_one: 'Trial · {{hours}} sandbox hour left'
+      }
+    )
+  }
   return t(
     'auto.components.new.workspace.RunTargetCombobox.orcaCloudSandboxHoursLeft',
     '{{hours}} sandbox hours left',

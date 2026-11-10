@@ -38,6 +38,7 @@ import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-r
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useComposerCloudStart } from './new-workspace/run-on/use-composer-cloud-start'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -121,6 +122,13 @@ function QuickTabBody({
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
+  const recordCreatedRef = useRef<(() => void) | null>(null)
+  // Stable, like onClose was: composer state keys effects on it. Only a start that happened
+  // becomes the project's remembered Run on target.
+  const onCreated = useCallback(() => {
+    recordCreatedRef.current?.()
+    onClose()
+  }, [onClose])
   const {
     cardProps,
     composerRef,
@@ -146,7 +154,7 @@ function QuickTabBody({
     initialParentWorktreeId: modalData.initialParentWorktreeId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
-    onCreated: onClose,
+    onCreated,
     isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
     enableIssueAutomation: modalData.enableIssueAutomation === true
@@ -255,6 +263,15 @@ function QuickTabBody({
     modalData,
     cardProps
   ])
+  const { cloudStart, primaryCreateDisabled, onPrimary } = useComposerCloudStart({
+    active,
+    modalData,
+    cardProps,
+    quickAgent,
+    handleCreate,
+    createDisabled,
+    recordCreatedRef
+  })
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
@@ -291,11 +308,13 @@ function QuickTabBody({
     cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
     'project-group'
   // An Orca Cloud sandbox is a whole workspace, not a local worktree.
-  const primaryActionLabel = isFolderWorkspaceTarget
-    ? getFolderWorkspacePrimaryActionLabel(t)
-    : cardProps.selectedRepoIsGit && !orcaCloud
-      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+  const primaryActionLabel =
+    cloudStart.primaryActionLabel ??
+    (isFolderWorkspaceTarget
+      ? getFolderWorkspacePrimaryActionLabel(t)
+      : cardProps.selectedRepoIsGit && !orcaCloud
+        ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+        : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace'))
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
@@ -316,15 +335,18 @@ function QuickTabBody({
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
-      if (createDisabled || composerRef.current?.hasAttribute('data-sparse-preset-editing')) {
+      if (
+        primaryCreateDisabled ||
+        composerRef.current?.hasAttribute('data-sparse-preset-editing')
+      ) {
         return
       }
       event.preventDefault()
-      void handleCreate()
+      onPrimary()
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
+  }, [active, composerRef, primaryCreateDisabled, onPrimary, nestedDialogOpen])
 
   return (
     <>
@@ -360,7 +382,8 @@ function QuickTabBody({
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}
-        createDisabled={createDisabled}
+        createDisabled={primaryCreateDisabled}
+        cloudStart={cloudStart.view}
         agentSurfaceRows={
           agentMenuModel
             ? {
@@ -377,7 +400,7 @@ function QuickTabBody({
           agentSettingsInvoker.current = invoker
           setAgentSettingsOpen(true)
         }}
-        onCreate={() => void handleCreate()}
+        onCreate={onPrimary}
         onAddProjectOverride={handleOpenAddProject}
         onNestedDialogOpenChange={setSetLocationOpen}
       />
