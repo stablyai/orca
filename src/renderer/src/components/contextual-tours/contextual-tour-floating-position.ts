@@ -10,6 +10,7 @@ import {
 } from '@floating-ui/dom'
 import type { CSSProperties } from 'react'
 import type { ContextualTourStepPlacement } from '../../../../shared/contextual-tours'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 
 export type ContextualTourPanelPlacement = 'top' | 'right' | 'bottom' | 'left'
 
@@ -27,7 +28,7 @@ const ARROW_HEIGHT = 8
 
 // Park after enough still frames to tolerate dropped animation frames without polling indefinitely.
 const MOTION_SETTLE_FRAMES = 12
-// Probe eventless movement at 4Hz if IntersectionObserver cannot wake the tracker.
+// Clipped targets can move without crossing an IntersectionObserver threshold.
 const PARKED_PROBE_MS = 250
 
 const FALLBACK_PLACEMENTS = {
@@ -93,34 +94,57 @@ export function watchContextualTourFloatingPosition(args: {
   let disposed = false
   let updateSequence = 0
   let lastDelivered: ContextualTourFloatingPosition | null = null
-  const update = (): void => {
-    const sequence = ++updateSequence
-    void getContextualTourFloatingPosition(args)
-      .then((position) => {
-        // Ignore async positions from disposed trackers or superseded frames.
-        if (disposed || sequence !== updateSequence) {
-          return
-        }
-        // Suppress unchanged positions; ancestor scroll recomputes must not trigger React commits.
-        if (arePositionsEqual(lastDelivered, position)) {
-          return
-        }
-        lastDelivered = position
-        args.onPosition(position)
-      })
-      .catch(() => undefined)
+  let stopVisibleTracking: (() => void) | null = null
+  const startVisibleTracking = (): (() => void) => {
+    let active = true
+    const update = (): void => {
+      if (!active || disposed) {
+        return
+      }
+      const sequence = ++updateSequence
+      void getContextualTourFloatingPosition(args)
+        .then((position) => {
+          // A hidden generation stays obsolete even after the window becomes visible again.
+          if (!active || disposed || sequence !== updateSequence) {
+            return
+          }
+          if (arePositionsEqual(lastDelivered, position)) {
+            return
+          }
+          lastDelivered = position
+          args.onPosition(position)
+        })
+        .catch(() => undefined)
+    }
+    const tracker = createTargetMotionTracker(args.targetElement, update)
+    const stopAutoUpdate = autoUpdate(args.targetElement, args.floatingElement, () => {
+      update()
+      if (active) {
+        tracker.wake()
+      }
+    })
+    return () => {
+      active = false
+      updateSequence += 1
+      tracker.stop()
+      stopAutoUpdate()
+    }
   }
-
-  const tracker = createTargetMotionTracker(args.targetElement, update)
-  // Observers wake frame tracking only during motion; animationFrame:true would poll throughout the tour’s life.
-  const stopAutoUpdate = autoUpdate(args.targetElement, args.floatingElement, () => {
-    update()
-    tracker.wake()
-  })
+  const reconcileVisibility = (): void => {
+    if (!isWindowVisible()) {
+      stopVisibleTracking?.()
+      stopVisibleTracking = null
+    } else if (!disposed) {
+      stopVisibleTracking ??= startVisibleTracking()
+    }
+  }
+  document.addEventListener('visibilitychange', reconcileVisibility)
+  reconcileVisibility()
   return () => {
     disposed = true
-    tracker.stop()
-    stopAutoUpdate()
+    document.removeEventListener('visibilitychange', reconcileVisibility)
+    stopVisibleTracking?.()
+    stopVisibleTracking = null
   }
 }
 
