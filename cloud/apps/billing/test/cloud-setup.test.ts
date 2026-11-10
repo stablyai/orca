@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TrialPort, SetupTrial } from '../src/cloud-setup-trial'
 import { normalizeRepo } from '../src/cloud-setup'
+import type { Env } from '../src/env'
 import { checkoutCompleted } from './stripe-fake'
 import { CONTROL_TOKEN, createHarness } from './harness'
 
@@ -27,8 +28,13 @@ function fakeTrials(options: { refuse?: boolean } = {}) {
   return { port, trials, grants }
 }
 
-async function setup(options: { refuseTrial?: boolean } = {}) {
-  const h = await createHarness({ MEMBERSHIP_SYNC_TOKEN: SYNC, CLOUD_SETUP_PAGES_URL: 'https://auth.test', SANDBOX_CONTROL_URL: 'https://cp.test' })
+async function setup(options: { refuseTrial?: boolean; env?: Partial<Env> } = {}) {
+  const h = await createHarness({
+    MEMBERSHIP_SYNC_TOKEN: SYNC,
+    CLOUD_SETUP_PAGES_URL: 'https://auth.test',
+    SANDBOX_CONTROL_URL: 'https://cp.test',
+    ...options.env
+  })
   const trials = fakeTrials({ refuse: options.refuseTrial })
   h.setTrial(trials.port)
   const sync = { authorization: `Bearer ${SYNC}` }
@@ -55,6 +61,30 @@ describe('cloud setup sessions', () => {
     const offers = await h.call('GET', '/v1/cloud-setup/offers')
     expect(offers.body.trial).toEqual({ includedSeconds: 7200 })
     expect(offers.body.team.monthlyPriceLabel).toMatch(/per seat per month/)
+  })
+
+  it('asks the control plane for the GitHub install URL over its service binding when bound', async () => {
+    // Same-account workers.dev Workers can't fetch each other (Cloudflare 1042): use the binding.
+    const viaBinding: string[] = []
+    const binding = {
+      fetch: async (input: RequestInfo | URL) => {
+        viaBinding.push(String(input))
+        return Response.json({ access: 'missing', url: 'https://github.com/apps/orca-cloud/installations/new?state=s' })
+      }
+    } as unknown as Fetcher
+    const { h, create, pages } = await setup({ env: { SANDBOX_CONTROL: binding } })
+    const viaFetch: string[] = []
+    h.setFetch(async (input) => {
+      viaFetch.push(String(input))
+      return new Response('error code: 1042', { status: 404 })
+    })
+    const { session, ticket } = ticketOf((await create()).body.url)
+    await pages.redeem(session, ticket)
+    await pages.post(session, 'team', { userId: 'u1', orgId: 'o_acme', name: 'acme', created: true })
+    const install = await pages.post(session, 'github', { userId: 'u1' })
+    expect(install.body).toEqual({ access: 'missing', url: 'https://github.com/apps/orca-cloud/installations/new?state=s' })
+    expect(viaBinding.map((url) => new URL(url).pathname)).toEqual(['/v1/internal/github/install-url'])
+    expect(viaFetch.filter((url) => url.includes('install-url'))).toEqual([])
   })
 
   it('normalizes GitHub repositories', () => {
