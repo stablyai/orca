@@ -39,6 +39,7 @@ function singleReferenceLabel(item: WorkspaceAttachment, t: Translate = translat
       })
 }
 
+/** Glyph for one linked reference: the review icon for PRs/MRs, the state-tinted Linear icon, or a grey issue icon. */
 function ReferenceGlyph({
   item,
   details
