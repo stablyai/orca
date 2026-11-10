@@ -56,6 +56,14 @@ const PRE = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', t
 const POST = JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: {} })
 const DENY =
   '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"acme.guard: no"}}'
+const ASK = JSON.stringify({
+  hook_event_name: 'PermissionRequest',
+  prompt_id: 'prompt-1',
+  tool_name: 'Bash',
+  tool_input: {}
+})
+const PERMISSION_DENY =
+  '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"use a script file"}}}'
 
 describe.skipIf(process.platform === 'win32')(
   'Claude PreToolUse decisions in the hook script',
@@ -104,6 +112,19 @@ describe.skipIf(process.platform === 'win32')(
       const address = server.address()
       const port = typeof address === 'object' && address ? address.port : 0
       expect(await runHook(PRE, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe('{}\n')
+    })
+
+    it('waits for, and prints, Orca’s answer to a PermissionRequest and nothing else', async () => {
+      const { port, seen } = await hookServer(({ headers }) =>
+        headers['x-orca-hook-decision'] === 'claude-permission-request-v1' ? PERMISSION_DENY : DENY
+      )
+      expect(await runHook(ASK, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe(
+        `${PERMISSION_DENY}\n`
+      )
+      expect(seen[0]?.headers['x-orca-hook-decision']).toBe('claude-permission-request-v1')
+      // A PreToolUse-shaped reply to a PermissionRequest is not its decision.
+      const wrong = await hookServer(() => DENY)
+      expect(await runHook(ASK, { ORCA_AGENT_HOOK_PORT: String(wrong.port) })).toBe('{}\n')
     })
 
     it('keeps print-then-post for CLIs reusing Claude’s script, such as OpenClaude', async () => {

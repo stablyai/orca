@@ -7,8 +7,13 @@ import type {
 
 export type WorkerApprovalDecision = 'allow' | 'deny'
 export type WorkerApprovalState = 'open' | 'answered' | 'expired'
-/** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat, or no one Orca can name. */
-export type WorkerApprovalAnswerer = 'person' | 'coordinator' | 'worker-chat' | 'unknown'
+/** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or terminal, or no one Orca can name. */
+export type WorkerApprovalAnswerer =
+  | 'person'
+  | 'coordinator'
+  | 'worker-chat'
+  | 'worker-terminal'
+  | 'unknown'
 
 export type WorkerApprovalOutcome = {
   by: WorkerApprovalAnswerer
@@ -21,7 +26,7 @@ export type WorkerApprovalOutcome = {
 /** Versioned so a reader can skip a shape it does not know; older readers ignore the field. */
 export type WorkerApprovalPayload = {
   v: 1
-  /** The prompt's journal item id. */
+  /** The prompt's journal item id, or a terminal worker's waiting-hook record id. */
   approvalId: string
   state: WorkerApprovalState
   worker: { handle: string; dispatchId: string; taskId: string }

@@ -105,18 +105,6 @@ export function getManagedCommand(
   return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
 }
 
-export function getManagedEventHook(
-  eventName: string,
-  scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS,
-  nativeHookPath: string | null = null,
-  options: NativeHookFormOptions = {}
-): HookCommandConfig {
-  return process.platform === 'win32'
-    ? getManagedLifecycleHook(scriptPath, settings, nativeHookPath, options)
-    : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
-}
-
 // Claude adds the full PostCompact command to the model's context after compaction.
 export function getRemoteManagedEventCommand(eventName: string, scriptPath: string): string {
   return eventName === 'PostCompact'
