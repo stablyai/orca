@@ -33,6 +33,8 @@ export function toGitHubSetupStep(
     case 'failed':
       return {
         ...shared,
+        // D3 isn't a step that failed; the row explains itself, with no status word.
+        status: row.status ?? '',
         state: 'failed',
         need: 'github',
         blocksStart: true,

@@ -57,11 +57,15 @@ function trialCopy(step: CloudSetupStep, t: Translate): RowCopy {
     detail:
       hours === null
         ? null
-        : t('components.newWorkspace.cloudSetup.trialOffer', '{{hours}} sandbox hours to try Orca Cloud', {
-            count: hours,
-            hours: String(hours),
-            defaultValue_one: '{{hours}} sandbox hour to try Orca Cloud'
-          }),
+        : t(
+            'components.newWorkspace.cloudSetup.trialOffer',
+            '{{hours}} sandbox hours to try Orca Cloud',
+            {
+              count: hours,
+              hours: String(hours),
+              defaultValue_one: '{{hours}} sandbox hour to try Orca Cloud'
+            }
+          ),
     note: t(
       'components.newWorkspace.cloudSetup.trialNoCard',
       'No card needed. Nothing is charged until you choose a plan.'
@@ -249,7 +253,7 @@ export function OrcaCloudSetupPanel({
                   <Button
                     type="button"
                     variant="link"
-                    size="inline"
+                    size="statusAction"
                     onClick={step.action.onClick}
                   >
                     {step.action.label}

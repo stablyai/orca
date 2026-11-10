@@ -209,6 +209,7 @@ export const d3NotOnGitHub = defineFixture({
         need: 'github',
         blocksStart: true,
         label: 'GitHub repository',
+        status: '',
         detail: 'Orca Cloud starts from a GitHub repository.',
         note: 'Push this project to GitHub, or pick a repository Orca Cloud can reach from Project.',
         action: { label: 'How to push', onClick: () => {} }
