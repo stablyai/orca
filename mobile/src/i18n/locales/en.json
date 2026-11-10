@@ -4999,10 +4999,6 @@
       "errorAgent": "That agent isn’t installed in this workspace",
       "errorLaunch": "The agent didn’t start"
     },
-    "spend": {
-      "asleep": "{{cost}} so far · no sandbox hours while asleep",
-      "running": "{{cost}} so far · uses sandbox hours while running"
-    },
     "status": {
       "waking": "Waking",
       "cantConnect": "Can’t connect",
@@ -5151,6 +5147,12 @@
     "wake": {
       "slowQueued": "Taking longer than usual. Your files are safe. Your prompt sends as soon as it’s awake.",
       "slow": "Taking longer than usual. Your files are safe."
+    },
+    "usage": {
+      "asleep_one": "{{hours}} sandbox hour so far · no sandbox hours while asleep",
+      "asleep_other": "{{hours}} sandbox hours so far · no sandbox hours while asleep",
+      "running_one": "{{hours}} sandbox hour so far · uses sandbox hours while running",
+      "running_other": "{{hours}} sandbox hours so far · uses sandbox hours while running"
     }
   }
 }

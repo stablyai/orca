@@ -6,35 +6,50 @@ import { CloudPhaseSteps } from './CloudPhaseSteps'
 import { CloudStatusDot } from './CloudStatusDot'
 import { CloudWakeSlowNote } from './CloudWakeSlowNote'
 import type { CloudWorkspace } from './cloud-control-plane-client'
-import { cloudStatusLabel, formatCloudCost } from './cloud-workspace-display'
+import { cloudSandboxHours, cloudStatusLabel } from './cloud-workspace-display'
 import { statusSentence } from './cloud-workspace-copy'
 import { cloudWorkspaceScreenStyles as styles } from './cloud-workspace-screen-styles'
 import type { CloudWorkspaceRun } from './use-cloud-workspace-run'
 
-/** Spend once, honestly: what it cost so far, and whether it is using sandbox hours now. Plans
- *  include hours, so no per-hour dollar figure is quoted as if it were the meter. */
+/** Usage once, honestly: sandbox hours so far (what the plan meters), and whether it is using them
+ *  now. No per-workspace dollars: included hours are not charged. */
 function spendLine(
   workspace: CloudWorkspace,
-  usage: { costCents: number } | null,
+  usage: { totalMs: number } | null,
   awake: boolean,
   t: Translate
 ): string | null {
-  const usd = usage ? usage.costCents / 100 : (workspace.cost?.usd ?? null)
-  if (usd === null) {
+  const ms = usage ? usage.totalMs : workspace.sandboxMs
+  if (ms === null) {
     return null
   }
-  const cost = formatCloudCost(usd)
+  const { value, label } = cloudSandboxHours(ms)
   if (!awake) {
-    return t('cloud.spend.asleep', '{{cost}} so far · no sandbox hours while asleep', { cost })
+    return t(
+      'cloud.usage.asleep',
+      '{{hours}} sandbox hours so far · no sandbox hours while asleep',
+      {
+        count: value,
+        hours: label,
+        defaultValue_one: '{{hours}} sandbox hour so far · no sandbox hours while asleep'
+      }
+    )
   }
-  // One sandbox size, so every awake hour counts the same.
-  return t('cloud.spend.running', '{{cost}} so far · uses sandbox hours while running', { cost })
+  return t(
+    'cloud.usage.running',
+    '{{hours}} sandbox hours so far · uses sandbox hours while running',
+    {
+      count: value,
+      hours: label,
+      defaultValue_one: '{{hours}} sandbox hour so far · uses sandbox hours while running'
+    }
+  )
 }
 
 export function CloudStatusCard(props: {
   workspace: CloudWorkspace
   run: CloudWorkspaceRun
-  usage: { costCents: number } | null
+  usage: { totalMs: number } | null
   uptimeMs: number | null
   /** Shows the "start the agent" step only when a prompt is actually waiting. */
   promptsWaiting: boolean

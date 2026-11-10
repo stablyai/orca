@@ -9,6 +9,13 @@ import { z } from 'zod'
  */
 export const ORCA_CLOUD_IDLE_SLEEP_MINUTES = 15
 
+/**
+ * Overage price per sandbox hour, in cents. The one source: billing's plan (overageCentsPerHour, and
+ * the Stripe overage price must match it) and the control plane's per-workspace cost both read it.
+ * Every size counts 1x, so this is also the price of any awake hour.
+ */
+export const ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR = 100
+
 /** Median and slow-tail durations of a recent operation, as the control plane measured them. */
 export const HostedSandboxTimingSchema = z.object({
   p50Ms: z.number().nonnegative(),

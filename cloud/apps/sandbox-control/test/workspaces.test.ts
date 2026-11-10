@@ -85,12 +85,12 @@ describe('workspace registry', () => {
     const t = await team()
     t.h.advance(90 * MIN)
     let [w] = (await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine')).body.workspaces
-    expect(w.cost).toMatchObject({ computeMs: 90 * MIN, rateUsdMicrosPerHour: 750_000, computeUsdMicros: 1_125_000, tokenUsdMicros: null })
+    expect(w.cost).toMatchObject({ computeMs: 90 * MIN, rateUsdMicrosPerHour: 1_000_000, computeUsdMicros: 1_500_000, tokenUsdMicros: null })
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
     t.h.advance(600 * MIN)
     await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { tokenUsdMicros: 2_500_000 })
     ;[w] = (await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine')).body.workspaces
-    expect(w.cost).toMatchObject({ computeMs: 90 * MIN, computeUsdMicros: 1_125_000, tokenUsdMicros: 2_500_000, totalUsdMicros: 3_625_000 })
+    expect(w.cost).toMatchObject({ computeMs: 90 * MIN, computeUsdMicros: 1_500_000, tokenUsdMicros: 2_500_000, totalUsdMicros: 4_000_000 })
   })
 
   it('labels owners and present teammates with the name claim from their own tokens', async () => {

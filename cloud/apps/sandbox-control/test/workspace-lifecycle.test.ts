@@ -139,7 +139,7 @@ describe('status panel', () => {
     expect(status.state).toBe('ready')
     expect(status.metrics?.memUsedBytes).toBe(2e9)
     expect(status.uptimeMs).toBe(90 * 60_000)
-    expect(status.usage).toEqual({ totalMs: 90 * 60_000, centsPerHour: 75, costCents: 113 })
+    expect(status.usage).toEqual({ totalMs: 90 * 60_000, centsPerHour: 100, costCents: 150 })
   })
 
   it('says unresponsive when the VM does not answer or orcad is dead, and surfaces OOM kills', async () => {
@@ -159,7 +159,7 @@ describe('status panel', () => {
     let probes = 0
     h.vercel.onScript = () => (probes++, undefined)
     const { status } = HostedWorkspaceStatusResponseSchema.parse((await h.call('GET', `/v1/sandboxes/${id}/status`)).body)
-    expect(status).toMatchObject({ state: 'sleeping', metrics: null, uptimeMs: null, usage: { totalMs: 60 * 60_000, costCents: 75 } })
+    expect(status).toMatchObject({ state: 'sleeping', metrics: null, uptimeMs: null, usage: { totalMs: 60 * 60_000, costCents: 100 } })
     expect(probes).toBe(0)
   })
 })

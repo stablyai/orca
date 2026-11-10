@@ -17,7 +17,7 @@ import { NEW_SECTION } from './CloudWorkspaceRowMenu'
 import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
-import { formatUsdMicros, type MemberDirectory } from './cloud-workspace-format'
+import { formatSandboxHours, sandboxHours, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
@@ -162,7 +162,7 @@ export function CloudWorkspacesHome({
       })),
     [directory, selfId, t]
   )
-  const totalCost = visible.reduce((sum, w) => sum + w.cost.totalUsdMicros, 0)
+  const totalMs = visible.reduce((sum, w) => sum + w.cost.computeMs, 0)
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(async (w: CloudWorkspace, chatId?: string | null) => {
@@ -261,10 +261,18 @@ export function CloudWorkspacesHome({
         metaStale={stale}
         meta={
           state.status === 'ready'
-            ? t('auto.components.cloudWorkspaces.listMeta', '{{count}} workspaces · {{cost}}', {
+            ? t('auto.components.cloudWorkspaces.listMeta2', '{{count}} workspaces · {{usage}}', {
                 count: visible.length,
-                cost: formatUsdMicros(totalCost, intlLocale),
-                defaultValue_one: '{{count}} workspace · {{cost}}'
+                usage: t(
+                  'auto.components.cloudWorkspaces.listSandboxHours',
+                  '{{hours}} sandbox hours used',
+                  {
+                    count: sandboxHours(totalMs),
+                    hours: formatSandboxHours(totalMs, intlLocale),
+                    defaultValue_one: '{{hours}} sandbox hour used'
+                  }
+                ),
+                defaultValue_one: '{{count}} workspace · {{usage}}'
               })
             : null
         }

@@ -8,18 +8,6 @@ import type { CloudWorkspacePresence } from '../../../../shared/cloud-workspaces
 const DATE_FORMAT: Intl.DateTimeFormatOptions = {}
 const HOURS: Intl.NumberFormatOptions = { maximumFractionDigits: 1 }
 const HOURS_FINE: Intl.NumberFormatOptions = { maximumFractionDigits: 2 }
-const USD_CENTS: Intl.NumberFormatOptions = {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-}
-const USD_WHOLE: Intl.NumberFormatOptions = {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0
-}
 
 export type MemberDirectory = Map<string, { name: string; email: string | null }>
 
@@ -48,20 +36,6 @@ export function initials(name: string): string {
   const letters =
     words.length >= 2 ? `${words[0]![0]}${words[1]![0]}` : (words[0] ?? '?').slice(0, 2)
   return letters.toUpperCase()
-}
-
-/** Cost under a cent reads as "<$0.01", otherwise two decimals (never "$0.00" for a running VM). */
-export function formatUsdMicros(micros: number, intlLocale?: string): string {
-  if (micros <= 0) {
-    return uiNumberFormat(USD_WHOLE, intlLocale).format(0)
-  }
-  if (micros < 10_000) {
-    return `<${uiNumberFormat(USD_CENTS, intlLocale).format(0.01)}`
-  }
-  const dollars = micros / 1_000_000
-  return dollars >= 100
-    ? uiNumberFormat(USD_WHOLE, intlLocale).format(Math.round(dollars))
-    : uiNumberFormat(USD_CENTS, intlLocale).format(dollars)
 }
 
 /** Sandbox hours as shown (one decimal, two under an hour), also the plural count for the copy. */

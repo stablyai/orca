@@ -75,7 +75,7 @@ export function workspace(overrides: Partial<CloudWorkspace>): CloudWorkspace {
     lastActivityBy: SELF_ID,
     cost: {
       computeMs: 2.6 * 3_600_000,
-      rateUsdMicrosPerHour: 750_000,
+      rateUsdMicrosPerHour: 1_000_000,
       computeUsdMicros: 1_950_000,
       tokenUsdMicros: 410_000,
       totalUsdMicros: 2_360_000
@@ -120,7 +120,7 @@ export function teamWorkspaces(): CloudWorkspace[] {
       status: 'creating',
       cost: {
         computeMs: 6 * 60_000,
-        rateUsdMicrosPerHour: 750_000,
+        rateUsdMicrosPerHour: 1_000_000,
         computeUsdMicros: 75_000,
         tokenUsdMicros: null,
         totalUsdMicros: 75_000
