@@ -60,3 +60,12 @@ export async function tokenPredatesRemoval(db: D1Database, caller: SandboxCaller
     .first<{ removed_at: number | null }>()
   return row?.removed_at != null && caller.tokenIssuedAt <= row.removed_at
 }
+
+/** True once auth reported this user removed from the account (a later re-add is not recorded). */
+export async function creatorLeftAccount(db: D1Database, accountId: string, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT removed_at FROM member_changes WHERE account_id = ? AND user_id = ?')
+    .bind(accountId, userId)
+    .first<{ removed_at: number | null }>()
+  return row?.removed_at != null
+}

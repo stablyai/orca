@@ -117,6 +117,10 @@ export function isSubmoduleWorktreeRemovalRefusal(error: string): boolean {
 const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
   /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
 
+/** An asleep Orca Cloud sandbox can't be checked for unsaved work; deleting it needs Force delete. */
+export const CLOUD_ASLEEP_DELETE_REFUSAL =
+  'This sandbox is asleep, so Orca can’t check it for unsaved changes. Use Force delete to delete it and its disk without waking it.'
+
 export function classifyWorktreeForceDeleteReason(
   error: string,
   force = false,
@@ -149,6 +153,7 @@ export function classifyWorktreeForceDeleteReason(
     return 'missing-registration'
   }
   if (
+    error === CLOUD_ASLEEP_DELETE_REFUSAL ||
     error.includes('Worktree has uncommitted or untracked changes') ||
     error.includes('contains modified or untracked files') ||
     FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)

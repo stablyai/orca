@@ -1,6 +1,24 @@
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { useAppStore } from '@/store/index'
+import {
+  cancelOrcaCloudSelectionAfterSignIn,
+  requestOrcaCloudSelectionAfterSignIn
+} from '@/lib/orca-cloud-select-after-sign-in'
+
+/** Signing in from the row selects Orca Cloud once main offers it (the recipe list reloads). */
+function signInThenSelectOrcaCloud(): void {
+  requestOrcaCloudSelectionAfterSignIn()
+  void useAppStore
+    .getState()
+    .connectCurrentOrcaProfile()
+    .then((result) => {
+      if (result?.status !== 'connected') {
+        cancelOrcaCloudSelectionAfterSignIn()
+      }
+    })
+    .catch(cancelOrcaCloudSelectionAfterSignIn)
+}
 
 /**
  * What the Run-on picker knows about the account's Orca Cloud access.
@@ -66,7 +84,7 @@ export type OrcaCloudPick =
 export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPick {
   switch (access.state) {
     case 'signed-out':
-      return { kind: 'act', run: () => void useAppStore.getState().connectCurrentOrcaProfile() }
+      return { kind: 'act', run: signInThenSelectOrcaCloud }
     case 'no-plan':
       return { kind: 'act', run: () => openPlansPage('sandbox') }
     case 'out-of-hours':

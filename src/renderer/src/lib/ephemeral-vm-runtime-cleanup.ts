@@ -6,6 +6,10 @@ import {
 } from '../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { refreshRuntimeEnvironmentCatalog } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import {
+  reportCloudSandboxDestroyError,
+  reportCloudSandboxDestroyFailure
+} from '@/store/slices/worktrees/teardown/cloud-sandbox-delete-guard'
 
 /** Destroy runtimes for removed workspaces and runtime-owned SSH targets. Share with project removal because SSH-mode main worktrees delete through that path; classify targets so callers purge only confirmed destruction. */
 export type EphemeralVmCleanupSummary = {
@@ -61,6 +65,7 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     for (const runtime of matchingRuntimes) {
       try {
         const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+        reportCloudSandboxDestroyFailure(cleaned)
         releasedServer ||=
           runtime.runtimeEnvironmentId !== undefined || runtime.sshTargetId !== undefined
         if (runtime.sshTargetId) {
@@ -69,6 +74,7 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
         }
       } catch (error) {
         console.error('Failed to clean up ephemeral VM runtime for deleted workspace:', error)
+        reportCloudSandboxDestroyError(runtime.id, error, runtime)
         if (runtime.sshTargetId) {
           retainedSshTargetIds.add(runtime.sshTargetId)
         }

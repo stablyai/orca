@@ -1646,7 +1646,9 @@
           },
           "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
           "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
-          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu.",
+          "cloudDeleteFailedTitle": "Couldn’t delete the sandbox",
+          "cloudDeleteTryAgain": "Try again"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
