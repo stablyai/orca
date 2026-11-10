@@ -18,7 +18,7 @@ import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
 import { OrcaCloudSelectionHint } from './OrcaCloudSelectionHint'
 import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
 import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
-import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
+import { orcaCloudCanStart, type OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -199,7 +199,11 @@ export function NewWorkspaceComposerProjectSection({
           </div>
         ) : null}
       </div>
-      {selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? <ComposerCloudAgentHint /> : null}
+      {/* Agent access is moot while Orca Cloud can't start (no plan, cap, payment, signed out). */}
+      {selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID &&
+      orcaCloudCanStart(orcaCloudAccess ?? fetchedOrcaCloudAccess) ? (
+        <ComposerCloudAgentHint />
+      ) : null}
       {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (
         <p className="whitespace-pre-line text-2xs text-destructive">{ephemeralVmRecipeError}</p>
       ) : null}

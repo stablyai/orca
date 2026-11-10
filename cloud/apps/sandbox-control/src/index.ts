@@ -18,6 +18,7 @@
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
+//   GET    /v1/github/repo-access?repo= | /v1/github/repositories   (see src/github-repo-access.ts)
 //   /v1/environments[/...]  org environments + versioned builds (see src/environment-routes.ts)
 //   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
 // Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
@@ -83,6 +84,8 @@ import {
   authorizeUrl,
   createConnectState,
   handleGitHubReturn,
+  installerFromIdentity,
+  SETUP_SESSION_ID,
   installUrl,
   isInstallationBound,
   listAccountInstallations,
@@ -90,12 +93,28 @@ import {
 } from './github-connect'
 import { GuardrailError, consumeCreateToken, guardrailsFromEnv } from './guardrails'
 import { handleOperator, isOperator } from './operator'
+import {
+  RepoAccessError,
+  billingSetupNotifier,
+  billingTrialNotifier,
+  handleInstallationEvent,
+  listAccountRepositories,
+  noticeAfterReturn,
+  repoAccess,
+  repoAccessView,
+  repoInstallUrl,
+  type RepoAccessDeps,
+  type SetupNotifier,
+  type TrialGitHubNotifier
+} from './github-repo-access'
 import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { accountProvider, isSharedWorkspace } from './account-providers'
+import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
+import { refreshCodexLeases } from './codex-credentials'
 import {
   AgentCredentialError,
   PutClaudeSchema,
@@ -204,6 +223,8 @@ export type Deps = {
   github?: GitHubAppMinter
   now?: () => number
   egressFetch?: typeof fetch
+  /** auth.openai.com token calls of the Codex lease refresher (tests). */
+  codexTokenFetch?: typeof fetch
   egressKeysForIssuer?: Parameters<typeof handleEgressProxy>[1]['keysForIssuer']
   /** GitHub OAuth/user API fetch (tests). */
   githubFetch?: typeof fetch
@@ -222,6 +243,10 @@ export type Deps = {
   onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
   /** Share-gateway fetch to the VM's share proxy (tests). */
   shareFetch?: typeof fetch
+  /** Billing setup-session notices (tests collect them). */
+  setupNotifier?: SetupNotifier
+  /** Billing trial abuse-key notices after a bind (tests collect them). */
+  trialNotifier?: TrialGitHubNotifier
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -319,6 +344,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             header: provider.header,
             placeholders: [provider.format(provider.placeholder(row))],
             label: `account:${agent}`,
+            ...(provider.pathAllowed ? { pathAllowed: provider.pathAllowed } : {}),
             credential: async () => {
               const now = (deps.now ?? Date.now)()
               // The session was set up for this owner; a workspace handed to someone else never uses
@@ -443,6 +469,22 @@ async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Pro
   }
 }
 
+/** Codex broker (codex-broker.ts): the lifecycle provider and keyring; null when either is missing. */
+async function codexBrokerDeps(env: Env, deps: Deps): Promise<BrokerDeps | null> {
+  const [life, keyring] = await Promise.all([lifecycleDeps(env, deps), keyringFor(env)])
+  if (!life || !keyring) {
+    return null
+  }
+  return {
+    life,
+    keyring,
+    onStored: async (userId) => {
+      forgetAccountCredential(userId, 'codex')
+      await refreshOwnersSandboxes(env, deps, userId)
+    }
+  }
+}
+
 async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
   const db = env.SANDBOX_DB
   const now = (deps.now ?? Date.now)()
@@ -464,6 +506,9 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       forgetAccountCredential(caller.userId, 'claude')
       await refreshOwnersSandboxes(env, deps, caller.userId)
       return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    if (url.pathname === '/v1/agent-credentials/codex/broker' || url.pathname.startsWith('/v1/agent-credentials/codex/broker/')) {
+      return await handleCodexBrokerRoute(request, url, { enabled: providerEnabled(env).codex, deps: await codexBrokerDeps(env, deps), caller })
     }
     const del = /^\/v1\/agent-credentials\/(claude|codex)$/.exec(url.pathname)
     if (request.method === 'DELETE' && del) {
@@ -530,7 +575,11 @@ function githubConnect(env: Env, deps: Deps): GitHubConnectConfig | null {
     clientId: env.GITHUB_APP_CLIENT_ID,
     clientSecret: env.GITHUB_APP_CLIENT_SECRET,
     stateSecret: env.GITHUB_STATE_SECRET!,
-    fetch: deps.githubFetch
+    fetch: deps.githubFetch,
+    verifyInstaller: async (installationId, user) => {
+      const minter = deps.github ?? githubMinter(env)
+      return minter ? installerFromIdentity(minter, installationId, user) : null
+    }
   }
 }
 
@@ -1009,7 +1058,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       })
     }
     if (isRoutineHookPath(url.pathname)) {
-      return await handleRoutineHook(request, url, { db: env.SANDBOX_DB, now: deps.now ?? Date.now, githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET })
+      return await handleRoutineHook(request, url, {
+        db: env.SANDBOX_DB,
+        now: deps.now ?? Date.now,
+        githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET,
+        onInstallationEvent: (eventName, payload) =>
+          handleInstallationEvent(
+            { db: env.SANDBOX_DB, now: (deps.now ?? Date.now)(), notify: setupNotifier(env, deps), notifyTrial: trialNotifier(env, deps) },
+            eventName,
+            payload as Parameters<typeof handleInstallationEvent>[2]
+          )
+      })
     }
     if (url.pathname === '/v1/github/manifest-callback') {
       return githubManifestCallback(env, url)
@@ -1019,6 +1078,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     }
     if (url.pathname === '/v1/github/setup' || url.pathname === '/v1/github/callback') {
       return await githubReturn(env, deps, url)
+    }
+    if (url.pathname === '/v1/internal/github/install-url' && request.method === 'GET') {
+      // Billing's cloud setup chain (shared CONTROL_PLANE_TOKEN, not the operator token).
+      if (!(await isOperator(request, env.CONTROL_PLANE_TOKEN))) {
+        return fail('not_found', 404)
+      }
+      return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
       if (!(await isOperator(request, env.OPERATOR_TOKEN))) {
@@ -1169,6 +1235,31 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return fail('not_found', 404)
     }
+    if (url.pathname === '/v1/github/repo-access' || url.pathname === '/v1/github/repositories') {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
+      }
+      if (request.method !== 'GET') {
+        return fail('not_found', 404)
+      }
+      try {
+        if (url.pathname === '/v1/github/repositories') {
+          return json(await listAccountRepositories(repoAccessDeps(env, deps), caller.accountId, url.searchParams.get('cursor')))
+        }
+        const view = await repoAccessView(repoAccessDeps(env, deps), caller, url)
+        return json(view.body, view.status)
+      } catch (error) {
+        if (error instanceof RepoAccessError) {
+          return fail(error.code === 'not_github' ? 'invalid_request' : 'not_configured', error.code === 'not_github' ? 400 : 503, error.code)
+        }
+        console.log(JSON.stringify({ event: 'github_repo_access_failed', error: String(error).slice(0, 160) }))
+        return fail('provider_unavailable', 502, 'github_unavailable')
+      }
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -1189,6 +1280,18 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       if (!connect) {
         return fail('not_configured', 503)
+      }
+      // Optional body: the repository to preselect and the setup session waiting on it.
+      const target = ConnectBodySchema.safeParse(request.headers.get('content-length') === '0' ? {} : await readJson(request).catch(() => ({})))
+      const repo = target.success && target.data.repo ? parseGitHubRepo(target.data.repo) : null
+      if (target.success && repo) {
+        const access = repoAccessDeps(env, deps)
+        const preselected = await repoInstallUrl(access, caller, target.data.repo!, {
+          setupSessionId: target.data.setupSessionId,
+          repoId: target.data.repoId,
+          ownerId: target.data.ownerId
+        })
+        return json({ installUrl: preselected.url, authorizeUrl: authorizeUrl(connect, url.origin, preselected.state) })
       }
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, caller, (deps.now ?? Date.now)())
       return json({ installUrl: installUrl(connect, state), authorizeUrl: authorizeUrl(connect, url.origin, state) })
@@ -1534,6 +1637,103 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
   }
 }
 
+/** POST /v1/github/connect body (optional): preselect this repository and return to this setup session. */
+const ConnectBodySchema = z
+  .object({
+    repo: z.string().max(400).optional(),
+    setupSessionId: z.string().regex(SETUP_SESSION_ID).optional(),
+    repoId: z.number().int().positive().optional(),
+    ownerId: z.number().int().positive().optional()
+  })
+  .strip()
+
+function repoAccessDeps(env: Env, deps: Deps): RepoAccessDeps {
+  return {
+    db: env.SANDBOX_DB,
+    github: deps.github ?? githubMinter(env),
+    connect: githubConnect(env, deps),
+    publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
+    fetch: deps.githubFetch ?? fetch,
+    now: (deps.now ?? Date.now)()
+  }
+}
+
+function setupNotifier(env: Env, deps: Deps): SetupNotifier {
+  if (deps.setupNotifier) {
+    return deps.setupNotifier
+  }
+  return billingSetupNotifier({
+    billingUrl: env.BILLING_URL,
+    token: env.CONTROL_PLANE_TOKEN,
+    fetch: env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
+  })
+}
+
+function trialNotifier(env: Env, deps: Deps): TrialGitHubNotifier {
+  return (
+    deps.trialNotifier ??
+    billingTrialNotifier({
+      billingUrl: env.BILLING_URL,
+      token: env.CONTROL_PLANE_TOKEN,
+      fetch: env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
+    })
+  )
+}
+
+/** Where the browser goes after GitHub when a cloud setup session started the install (auth's setup pages). */
+function cloudSetupNextUrl(origin: string, sessionId: string): string | null {
+  try {
+    const next = new URL('/cloud/setup/next', origin)
+    if (next.protocol !== 'https:' && next.hostname !== 'localhost') {
+      return null
+    }
+    next.searchParams.set('session', sessionId)
+    next.searchParams.set('from', 'github')
+    return next.toString()
+  } catch {
+    return null
+  }
+}
+
+/** GET /v1/internal/github/install-url: billing's setup chain asks where its GitHub step should go. */
+async function internalInstallUrl(env: Env, deps: Deps, url: URL): Promise<Response> {
+  const accountId = url.searchParams.get('accountId') ?? ''
+  const userId = url.searchParams.get('userId') ?? ''
+  const repo = url.searchParams.get('repo') ?? ''
+  const session = url.searchParams.get('session') ?? undefined
+  if (!/^[A-Za-z0-9_.:-]{1,160}$/.test(accountId) || !/^[A-Za-z0-9_.:@|-]{1,160}$/.test(userId) || !parseGitHubRepo(repo)) {
+    return fail('invalid_request', 400)
+  }
+  if (session !== undefined && !SETUP_SESSION_ID.test(session)) {
+    return fail('invalid_request', 400, 'session')
+  }
+  const access = repoAccessDeps(env, deps)
+  try {
+    const result = await repoAccess(access, accountId, repo)
+    if (result.access !== 'missing') {
+      return json({ access: result.access, url: null })
+    }
+    if (!access.connect) {
+      return fail('not_configured', 503)
+    }
+    // N5: a GitHub identity auth verified from the user's GitHub sign-in (billing passes it on).
+    const githubUserId = Number(url.searchParams.get('githubUserId') ?? NaN)
+    const githubLogin = url.searchParams.get('githubLogin') ?? ''
+    const githubUser =
+      Number.isSafeInteger(githubUserId) && githubUserId > 0 && /^[A-Za-z0-9-]{1,39}$/.test(githubLogin)
+        ? { id: githubUserId, login: githubLogin }
+        : undefined
+    const install = await repoInstallUrl(access, { accountId, userId }, repo, {
+      setupSessionId: session,
+      ...(githubUser ? { githubUser } : {})
+    })
+    return json({ access: result.access, url: install.url })
+  } catch (error) {
+    console.log(JSON.stringify({ event: 'github_install_url_failed', error: String(error).slice(0, 160) }))
+    return fail('provider_unavailable', 502, 'github_unavailable')
+  }
+}
+
 const DevMemberGitHubSchema = z
   .object({
     accountId: z.string().min(1).max(160),
@@ -1739,6 +1939,27 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
       )
     }
     const esc = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, '')
+    const requested = 'requested' in result
+    if ('boundIds' in result) {
+      const notify = trialNotifier(env, deps)
+      for (const ids of result.boundIds) {
+        await notify({ accountId: result.state.a, ...ids })
+      }
+    }
+    // Tell a waiting setup session (the desktop polls it and starts on its own), then go back to it.
+    const notice = await noticeAfterReturn(repoAccessDeps(env, deps), result.state, requested).catch(() => null)
+    if (notice) {
+      await setupNotifier(env, deps)(notice)
+    }
+    const next = result.state.s && env.CLOUD_SETUP_ORIGIN ? cloudSetupNextUrl(env.CLOUD_SETUP_ORIGIN, result.state.s) : null
+    if (next) {
+      return new Response(null, { status: 302, headers: { location: next, 'cache-control': 'no-store' } })
+    }
+    if ('requested' in result) {
+      return html(
+        `GitHub sent your request to an owner of <b>${esc(result.requested.owner)}</b>. Orca Cloud gets access once they approve it, and a waiting workspace starts then if Orca is open. You can close this tab.`
+      )
+    }
     return html(
       result.bound.length > 0
         ? `Connected GitHub ${result.bound.map((login) => `<b>${esc(login)}</b>`).join(', ')} to Orca. You can close this tab.`
@@ -1828,7 +2049,11 @@ export default {
         }
       })
     )
-    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) {
+    const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
+    if (env.AGENT_ACCOUNTS_CODEX === 'on') {
+      ctx.waitUntil(codexTick(env, fifthMinute))
+    }
+    if (!fifthMinute) {
       return
     }
     ctx.waitUntil(
@@ -1870,6 +2095,33 @@ export default {
     )
   }
 } satisfies ExportedHandler<Env>
+
+/**
+ * Codex (flag S2): every minute, broker logins move on; every fifth, the lease refresher renews due tokens
+ * (kept fresh while the kill switch is on, so turning it off again just works) and leaked brokers go.
+ */
+export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {}): Promise<void> {
+  const broker = await codexBrokerDeps(env, deps)
+  if (!broker) {
+    return
+  }
+  const brokers = await codexBrokerTick(broker, { sweepProvider: fifthMinute }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+  if (!('advanced' in brokers) || brokers.advanced > 0 || brokers.leaked > 0) {
+    console.log(JSON.stringify({ event: 'codex_broker_tick', ...brokers }))
+  }
+  if (fifthMinute) {
+    const refresh = await refreshCodexLeases({
+      db: env.SANDBOX_DB,
+      keyring: broker.keyring,
+      now: deps.now ?? Date.now,
+      fetch: deps.codexTokenFetch,
+      onChanged: broker.onStored
+    }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+    if (!('due' in refresh) || refresh.due > 0) {
+      console.log(JSON.stringify({ event: 'codex_refresh', ...refresh }))
+    }
+  }
+}
 
 /** Org environments built on an older golden rebuild on the current one (environment-golden-refresh.ts). */
 export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps, deps: Deps = {}) {

@@ -18,7 +18,8 @@ export function SecretValueInput({
   invalid = false,
   autoFocus = false,
   disabled = false,
-  describedBy
+  describedBy,
+  ariaLabel
 }: {
   id: string
   value: string
@@ -28,6 +29,8 @@ export function SecretValueInput({
   autoFocus?: boolean
   disabled?: boolean
   describedBy?: string
+  /** For fields with no visible <label>, such as a row in the .env paste preview. */
+  ariaLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const [revealed, setRevealed] = useState(false)
@@ -72,6 +75,7 @@ export function SecretValueInput({
             onChange={(event) => onChange(event.target.value)}
             aria-invalid={invalid || undefined}
             aria-describedby={describedBy}
+            aria-label={ariaLabel}
             disabled={disabled}
             spellCheck={false}
             autoComplete="off"
@@ -91,6 +95,7 @@ export function SecretValueInput({
             })}
             aria-invalid={invalid || undefined}
             aria-describedby={describedBy}
+            aria-label={ariaLabel}
             disabled={disabled}
             className="h-8"
           />
@@ -134,6 +139,7 @@ export function SecretValueInput({
         placeholder={placeholder}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
+        aria-label={ariaLabel}
         autoFocus={autoFocus}
         disabled={disabled}
         spellCheck={false}

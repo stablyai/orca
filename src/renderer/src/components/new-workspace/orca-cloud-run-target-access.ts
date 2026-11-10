@@ -119,13 +119,13 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
   }
 }
 
-/** Section id on the overage controls in Settings › Orca account, where the switch and cap live. */
+/** Section id on the overage controls in Settings › Orca Cloud › Plan & billing (switch and cap). */
 export const ORCA_BILLING_OVERAGE_SECTION_ID = 'orca-billing-overage'
 
 function openOverageSettings(): void {
   const state = useAppStore.getState()
   state.openSettingsTarget({
-    pane: 'orca-account',
+    pane: 'cloud-billing',
     repoId: null,
     sectionId: ORCA_BILLING_OVERAGE_SECTION_ID
   })
@@ -140,4 +140,22 @@ export function getOrcaCloudHoursLeft(remainingSeconds: number): number {
   }
   // The last few minutes read 0.1 rather than a misleading 0 while starts are still allowed.
   return remainingSeconds > 0 ? Math.max(0.1, Math.floor(hours * 10) / 10) : 0
+}
+
+/** Whether a create on Orca Cloud can start now (or may: still loading or unknown). */
+export function orcaCloudCanStart(access: OrcaCloudRunTargetAccess | undefined): boolean {
+  if (!access) {
+    return true
+  }
+  switch (access.state) {
+    case 'signed-out':
+    case 'no-plan':
+    case 'out-of-hours':
+    case 'payment-issue':
+      return false
+    case 'loading':
+    case 'unknown':
+    case 'entitled':
+      return true
+  }
 }

@@ -151,6 +151,11 @@ export type Env = {
   EGRESS_EXTRA_HOSTS?: string
   /** GitHub App webhook secret (secret): verifies X-Hub-Signature-256 on /v1/github/webhook. */
   GITHUB_WEBHOOK_SECRET?: string
+  /**
+   * Origin of the cloud setup pages (Orca Cloud auth, e.g. https://auth-staging.onorca.dev). After a
+   * GitHub install started by a setup session, the browser goes to <origin>/cloud/setup/next.
+   */
+  CLOUD_SETUP_ORIGIN?: string
   /** Archived workspaces are destroyed this many days after archive (default 30). */
   ARCHIVE_TTL_DAYS?: string
   /** Idle minutes before a sandbox sleeps (default 15; keep equal to billing's plan idleSleepMinutes). */

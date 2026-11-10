@@ -67,7 +67,7 @@ describe('checkout and portal', () => {
     expect(annual!.headers.get('idempotency-key')).toMatch(/^checkout:org:o1:/)
   })
 
-  it('lets only org owners and admins buy or manage the plan; personal accounts manage themselves', async () => {
+  it('lets only org owners and admins buy or manage the plan; personal accounts must make a team first', async () => {
     const h = await createHarness()
     const member = await h.desktopToken({ sub: 'u2', org: 'o1', orgRole: 'member' })
     const auth = { authorization: `Bearer ${member}` }
@@ -79,8 +79,10 @@ describe('checkout and portal', () => {
     expect((await h.call('POST', '/v1/billing/overage', { body: { enabled: true }, headers: auth })).status).toBe(403)
 
     const solo = await h.desktopToken({ sub: 'u3' })
-    expect((await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team' }, headers: { authorization: `Bearer ${solo}` } })).status).toBe(200)
-    expect(h.stripe.customers.values().next().value?.metadata.account_id).toBe('user:u3')
+    expect((await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team' }, headers: { authorization: `Bearer ${solo}` } })).body).toEqual({
+      error: 'team_required'
+    })
+    expect(h.stripe.customers.size).toBe(0)
   })
 
   it('rejects bad tokens, unknown plans and a second subscription', async () => {
@@ -470,7 +472,7 @@ describe('entitlements, overage and usage', () => {
 
   it('refuses to run with a live Stripe key', async () => {
     const h = await createHarness({ STRIPE_SECRET_KEY: 'sk_live_nope' })
-    const token = await h.desktopToken({ sub: 'u1' })
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })
     expect(await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team' }, headers: { authorization: `Bearer ${token}` } })).toEqual({
       status: 503,
       body: { error: 'billing_misconfigured' }

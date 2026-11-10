@@ -39,6 +39,9 @@ export type CloudWorkspacesApi = {
   listGrants: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspaceGrant[]>>
   revokeGrant: (id: string, grantId: string) => Promise<CloudWorkspacesResult<void>>
   localWorkspaces: () => Promise<LocalCloudWorkspace[]>
+  /** Owner or team admin, from the team list: sleep or delete a workspace this desktop doesn't run. */
+  sleep: (id: string) => Promise<CloudWorkspacesResult<void>>
+  destroy: (id: string) => Promise<CloudWorkspacesResult<void>>
   /** "I just sent a message here" (opens my git-as-sender window on the control plane). */
   noteSent: (id: string) => Promise<void>
   /** Remembers which local runtime environment a granted workspace was added as. */

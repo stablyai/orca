@@ -3,6 +3,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
+import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 
 const repo: Repo = {
   id: 'orca-plugins',
@@ -66,4 +67,22 @@ export const alwaysDeleteMenu = dialogFixture(dirtyEntries, () => {
   document
     .querySelector<HTMLButtonElement>('[aria-label="More delete options"]')
     ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+})
+
+/** An Orca Cloud workspace: sandbox + disk copy, Archive instead, no Force step (DS-07). */
+export const cloudWorkspace = defineFixture({
+  width: 640,
+  store: {
+    repos: [repo],
+    worktreesByRepo: { [repo.id]: [worktree] },
+    gitStatusByWorktree: { [worktree.id]: [] },
+    activeModal: 'delete-worktree',
+    modalData: { worktreeId: worktree.id }
+  },
+  setup: () => seedCloudWorkspaceSnapshot({ ids: new Set([worktree.id]), idsLoaded: true }),
+  render: () => (
+    <div className="h-[440px] bg-background">
+      <DeleteWorktreeDialog />
+    </div>
+  )
 })

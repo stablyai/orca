@@ -5,23 +5,42 @@
 //   POST /v1/billing/checkout {plan,interval,seats} -> { url } hosted Stripe Checkout
 //   POST /v1/billing/overage {enabled, spendCapCents?} opt in/out of overage, set the cap
 //   POST /v1/billing/portal                 -> { url } Stripe Customer Portal
+//   POST /v1/billing/team-plans {orgIds}    other teams' plan state ("Switch to <team>"), read-only
+//   POST /v1/billing/trial                  claim the team's one-time trial -> entitlement (trial.ts)
 // Stripe:
 //   POST /v1/stripe/webhook                 signed events
 // Sandbox control plane (CONTROL_PLANE_TOKEN):
 //   POST /v1/internal/entitlements/check {accountId, machineSize, runningSandboxes}
 //   POST /v1/internal/usage {usageId, accountId, sandboxId, machineSize, startedAt, endedAt}
 //   GET  /v1/internal/suspensions          accounts whose payment grace expired (suspend running)
+//   POST /v1/internal/trial/github {accountId, githubUserId?, githubOwnerId?} GitHub binding -> trial abuse keys
 // Orca Cloud auth (MEMBERSHIP_SYNC_TOKEN):
 //   POST /v1/internal/seats {accountId, members}
+//   POST /v1/internal/cloud-setup/redeem {sessionId, ticket} -> {userId}   one-time browser ticket
+//   GET  /v1/internal/cloud-setup/sessions/:id?userId=                     session for the pages
+//   POST /v1/internal/cloud-setup/sessions/:id/team {userId, orgId, name, created, ...abuse keys}
+//   POST /v1/internal/cloud-setup/sessions/:id/team-plans {userId, orgIds[]} -> {plans}
+//   POST /v1/internal/cloud-setup/sessions/:id/checkout {userId, orgRole, email?, interval} -> {url}
+//   POST /v1/internal/cloud-setup/sessions/:id/github {userId, githubUserId?, githubLogin?}
+//   POST /v1/internal/cloud-setup/sessions/:id/error {userId, kind|null, detail?}
+// Cloud setup (desktop billing JWT):
+//   POST /v1/cloud-setup/sessions {repo?, needs[], device?, useActiveTeam?} -> {id, url, expiresAt}
+//   GET  /v1/cloud-setup/sessions/:id      steps, team, trial, finished, error
+//   POST /v1/cloud-setup/sessions/:id/link -> {url}   fresh one-time link ("Copy setup link")
+//   GET  /v1/cloud-setup/offers            public: trial hours and Team prices for the setup pages
+// Control plane (CONTROL_PLANE_TOKEN):
+//   POST /v1/internal/cloud-setup/github {sessionId?, accountId, repo, state}
 import { z } from 'zod'
 import {
   ADMIN_ACTION_MAX_TOKEN_AGE,
   authenticateControlPlane,
   authenticateDesktop,
-  authenticateMembershipSync
+  authenticateMembershipSync,
+  readBearer
 } from './auth'
 import { SeatSyncSchema, reconcileSeats, syncSeats } from './seats'
 import { MembershipUnavailableError, authMembershipSource, type MembershipSource } from './membership'
+import { TeamPlansRequestSchema, authOrgMemberCheck, teamPlans, type OrgMemberCheck } from './team-plans'
 import { graceExpiredAccounts } from './store'
 import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
 import { checkStart, computeEntitlement } from './entitlements'
@@ -32,6 +51,32 @@ import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClien
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
 import { handleStripeWebhook } from './webhook'
 import { renderReturnPage, returnOutcome } from './return-page'
+import {
+  BindTeamSchema,
+  CreateSetupSessionSchema,
+  GithubEventSchema,
+  GithubInstallSchema,
+  InternalReadSchema,
+  RedeemSchema,
+  SetupCheckoutSchema,
+  SetupErrorSchema,
+  TeamPlansSchema,
+  bindSetupTeam,
+  setupTeamPlans,
+  createSetupCheckout,
+  createSetupSession,
+  loadSetupSession,
+  readSetupSessionForPages,
+  recordGithubEvent,
+  recordSetupError,
+  redeemSetupTicket,
+  reissueSetupTicket,
+  setupGithubInstall,
+  setupSessionView
+} from './cloud-setup'
+import { billingTrialPort, type TrialPort } from './cloud-setup-trial'
+import { grantTrial, isTeamAccount, recordTrialGithub, trialOffer, type TrialInput } from './trial'
+import type { BillingCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
 
@@ -46,6 +91,34 @@ const StartCheckSchema = z
   })
   .strict()
 
+const GITHUB_ID = z.string().regex(/^\d{1,20}$/)
+const TrialGithubSchema = z
+  .object({ accountId: z.string().min(1).max(128), githubUserId: GITHUB_ID.optional(), githubOwnerId: GITHUB_ID.optional() })
+  .strict()
+
+function trialInput(caller: BillingCaller, request: Request): TrialInput {
+  return {
+    accountId: caller.accountId,
+    userId: caller.userId,
+    email: caller.email,
+    emailVerified: caller.emailVerified,
+    githubUserId: caller.githubUserId,
+    ip: request.headers.get('cf-connecting-ip') ?? undefined
+  }
+}
+
+/** The desktop's entitlement body: the account's state plus what this caller is offered. */
+async function desktopEntitlement(env: Env, caller: BillingCaller, request: Request, now: number) {
+  const entitlement = await computeEntitlement(env, caller.accountId, now)
+  const offers = publicOffers(planCatalog(env))
+  const neverHadPlan = entitlement.reason === 'no_subscription'
+  const trial = neverHadPlan ? await trialOffer(env, trialInput(caller, request), now) : null
+  // A team that never had a plan but can't get a trial (one already used by this user, email,
+  // GitHub identity, or a disposable email) is told so instead of being offered one.
+  const reason = neverHadPlan && !trial && isTeamAccount(caller.accountId) ? 'trial_unavailable' : entitlement.reason
+  return { ...entitlement, reason, canManageBilling: caller.canManage, offers: { ...offers, trial } }
+}
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
 }
@@ -58,7 +131,149 @@ async function readJson(request: Request): Promise<unknown> {
   return text ? JSON.parse(text) : {}
 }
 
-export type Deps = { stripe?: StripeClient; now?: () => number; membership?: MembershipSource }
+export type Deps = {
+  stripe?: StripeClient
+  now?: () => number
+  membership?: MembershipSource
+  orgMember?: OrgMemberCheck
+  trial?: TrialPort
+  fetch?: typeof fetch
+}
+
+const SETUP_SESSION_PATH = /^\/v1\/cloud-setup\/sessions\/(cs_[A-Za-z0-9_-]{22})(\/link)?$/
+const INTERNAL_SETUP_PATH = /^\/v1\/internal\/cloud-setup\/sessions\/(cs_[A-Za-z0-9_-]{22})(?:\/(team|team-plans|checkout|github|error))?$/
+
+async function handleCloudSetup(
+  request: Request,
+  env: Env,
+  url: URL,
+  now: number,
+  deps: { stripe: StripeClient; membership: MembershipSource; trial: TrialPort; fetch: typeof fetch }
+): Promise<Response | null> {
+  const route = `${request.method} ${url.pathname}`
+  if (route === 'GET /v1/cloud-setup/offers') {
+    // Public: the setup pages show the trial and prices before anyone has signed in.
+    const offered = deps.trial.offeredSeconds(env)
+    return json({ ...publicOffers(planCatalog(env)), trial: offered ? { includedSeconds: offered } : null })
+  }
+  if (route === 'POST /v1/cloud-setup/sessions') {
+    const caller = await authenticateDesktop(env, request)
+    if (!caller) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    const body = CreateSetupSessionSchema.safeParse(await readJson(request))
+    if (!body.success) {
+      return json({ error: 'invalid_request' }, 400)
+    }
+    const created = await createSetupSession(env, caller, body.data, now)
+    return created.ok
+      ? json({ id: created.id, url: created.url, expiresAt: created.expiresAt }, 201)
+      : json({ error: created.error }, created.status)
+  }
+  const desktopMatch = SETUP_SESSION_PATH.exec(url.pathname)
+  if (desktopMatch?.[2] && request.method === 'POST') {
+    const caller = await authenticateDesktop(env, request)
+    if (!caller) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    const link = await reissueSetupTicket(env, caller, desktopMatch[1]!, now)
+    return link ? json(link) : json({ error: 'not_found' }, 404)
+  }
+  if (desktopMatch && !desktopMatch[2] && request.method === 'GET') {
+    const caller = await authenticateDesktop(env, request)
+    if (!caller) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    const row = await loadSetupSession(env, desktopMatch[1]!, now)
+    if (!row || row.user_id !== caller.userId) {
+      return json({ error: 'not_found' }, 404)
+    }
+    return json(await setupSessionView(env, deps.trial, row, now))
+  }
+  if (route === 'POST /v1/internal/cloud-setup/github') {
+    if (!(await authenticateControlPlane(env, request))) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    const body = GithubEventSchema.safeParse(await readJson(request))
+    if (!body.success) {
+      return json({ error: 'invalid_request' }, 400)
+    }
+    return json({ ok: true, ...(await recordGithubEvent(env, body.data, now)) })
+  }
+  if (route === 'POST /v1/internal/cloud-setup/redeem') {
+    if (!(await authenticateMembershipSync(env, request))) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    const body = RedeemSchema.safeParse(await readJson(request))
+    if (!body.success) {
+      return json({ error: 'invalid_request' }, 400)
+    }
+    const redeemed = await redeemSetupTicket(env, body.data, now)
+    return redeemed ? json(redeemed) : json({ error: 'invalid_ticket' }, 404)
+  }
+  const internalMatch = INTERNAL_SETUP_PATH.exec(url.pathname)
+  if (!internalMatch) {
+    return null
+  }
+  if (!(await authenticateMembershipSync(env, request))) {
+    return json({ error: 'unauthorized' }, 401)
+  }
+  const id = internalMatch[1]!
+  const action = internalMatch[2]
+  if (!action && request.method === 'GET') {
+    const query = InternalReadSchema.safeParse({ userId: url.searchParams.get('userId') ?? '' })
+    if (!query.success) {
+      return json({ error: 'invalid_request' }, 400)
+    }
+    const session = await readSetupSessionForPages(env, deps.trial, id, query.data.userId, now)
+    return session ? json({ ...session, offers: publicOffers(planCatalog(env)) }) : json({ error: 'not_found' }, 404)
+  }
+  if (request.method !== 'POST' || !action) {
+    return json({ error: 'not_found' }, 404)
+  }
+  const raw = await readJson(request)
+  switch (action) {
+    case 'team': {
+      const body = BindTeamSchema.safeParse(raw)
+      if (!body.success) {
+        return json({ error: 'invalid_request' }, 400)
+      }
+      const bound = await bindSetupTeam(env, deps.trial, id, body.data, now)
+      return bound.ok ? json(bound) : json({ error: bound.error }, bound.status)
+    }
+    case 'team-plans': {
+      const body = TeamPlansSchema.safeParse(raw)
+      if (!body.success) {
+        return json({ error: 'invalid_request' }, 400)
+      }
+      const plans = await setupTeamPlans(env, deps.trial, id, body.data, now)
+      return plans ? json({ plans }) : json({ error: 'not_found' }, 404)
+    }
+    case 'checkout': {
+      const body = SetupCheckoutSchema.safeParse(raw)
+      if (!body.success) {
+        return json({ error: 'invalid_request' }, 400)
+      }
+      const outcome = await createSetupCheckout(env, deps.stripe, id, body.data, now, deps.membership)
+      return outcome.ok ? json({ url: outcome.url }) : json({ error: outcome.error }, outcome.status)
+    }
+    case 'github': {
+      const body = GithubInstallSchema.safeParse(raw)
+      if (!body.success) {
+        return json({ error: 'invalid_request' }, 400)
+      }
+      const outcome = await setupGithubInstall(env, id, body.data, now, deps.fetch)
+      return outcome.ok ? json({ access: outcome.access, url: outcome.url }) : json({ error: outcome.error }, outcome.status)
+    }
+    default: {
+      const body = SetupErrorSchema.safeParse(raw)
+      if (!body.success) {
+        return json({ error: 'invalid_request' }, 400)
+      }
+      return (await recordSetupError(env, id, body.data, now)) ? json({ ok: true }) : json({ error: 'not_found' }, 404)
+    }
+  }
+}
 
 export async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, deps: Deps = {}): Promise<Response> {
   const url = new URL(request.url)
@@ -67,6 +282,17 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
   const membership = deps.membership ?? authMembershipSource(env)
   const route = `${request.method} ${url.pathname}`
   try {
+    if (url.pathname.startsWith('/v1/cloud-setup/') || url.pathname.startsWith('/v1/internal/cloud-setup/')) {
+      const handled = await handleCloudSetup(request, env, url, now, {
+        stripe,
+        membership,
+        trial: deps.trial ?? billingTrialPort,
+        fetch: deps.fetch ?? fetch
+      })
+      if (handled) {
+        return handled
+      }
+    }
     switch (route) {
       case 'GET /return':
         // Where Checkout and the Portal send the browser back; hands off to the desktop app.
@@ -80,8 +306,46 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)
         }
-        const entitlement = await computeEntitlement(env, caller.accountId, now)
-        return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
+        return json(await desktopEntitlement(env, caller, request, now))
+      }
+
+      case 'POST /v1/billing/trial': {
+        // Any member may start the team's trial the first time they pick Orca Cloud (spec B1).
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const outcome = await grantTrial(env, trialInput(caller, request), now)
+        if (!outcome.ok) {
+          return json({ error: outcome.reason }, outcome.reason === 'team_required' ? 409 : 403)
+        }
+        return json(await desktopEntitlement(env, caller, request, now))
+      }
+
+      case 'POST /v1/internal/trial/github': {
+        if (!(await authenticateControlPlane(env, request))) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const body = TrialGithubSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        return json(await recordTrialGithub(env, body.data, now))
+      }
+
+      case 'POST /v1/billing/team-plans': {
+        // Other teams' plan state for "Switch to <team>" (cloud start B2); read-only, own token.
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const body = TeamPlansRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        // authenticateDesktop accepted the bearer, so it is present.
+        const billingToken = readBearer(request.headers.get('authorization'))!
+        return json(await teamPlans(env, billingToken, body.data.orgIds, deps.orgMember ?? authOrgMemberCheck(env), now))
       }
 
       case 'POST /v1/billing/checkout': {
@@ -93,7 +357,15 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        const outcome = await createCheckout(env, stripe, caller, body.data, now, membership)
+        const { setupSessionId, ...checkout } = body.data
+        if (setupSessionId) {
+          // The plans dialog joins the open setup session only for its own user and team.
+          const session = await loadSetupSession(env, setupSessionId, now)
+          if (!session || session.user_id !== caller.userId || (session.account_id && session.account_id !== caller.accountId)) {
+            return json({ error: 'setup_session_mismatch' }, 409)
+          }
+        }
+        const outcome = await createCheckout(env, stripe, caller, checkout, now, membership, setupSessionId ? { setupSessionId } : {})
         return outcome.ok ? json({ url: outcome.url }) : json({ error: outcome.error }, outcome.status)
       }
 
@@ -110,8 +382,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!outcome.ok) {
           return json({ error: outcome.error }, outcome.status)
         }
-        const entitlement = await computeEntitlement(env, caller.accountId, now)
-        return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
+        return json(await desktopEntitlement(env, caller, request, now))
       }
 
       case 'POST /v1/internal/seats': {

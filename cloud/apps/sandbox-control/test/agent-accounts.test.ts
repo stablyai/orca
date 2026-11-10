@@ -1,5 +1,6 @@
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isSharedWorkspace } from '../src/account-providers'
 import { ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import { createHarness } from './harness'
 
@@ -197,5 +198,15 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
     expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.providerEnabled.claude).toBe(false)
+  })
+})
+
+describe('D13 fails closed', () => {
+  it('treats any visibility other than private as shared', () => {
+    expect(isSharedWorkspace({ visibility: 'private' })).toBe(false)
+    expect(isSharedWorkspace({ visibility: 'team' })).toBe(true)
+    for (const visibility of ['', 'org', null, undefined] as unknown as string[]) {
+      expect(isSharedWorkspace({ visibility } as never)).toBe(true)
+    }
   })
 })

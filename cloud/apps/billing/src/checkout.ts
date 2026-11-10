@@ -6,6 +6,7 @@ import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type P
 import { StripeError, type StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
 import { orgIdOf, type MembershipSource } from './membership'
+import { setupCheckoutReturnUrls } from './cloud-setup-urls'
 
 export const MAX_TEAM_SEATS = 500
 
@@ -13,7 +14,9 @@ export const CheckoutRequestSchema = z
   .object({
     plan: z.enum(PLAN_IDS),
     interval: z.enum(BILLING_INTERVALS).default('month'),
-    seats: z.number().int().min(1).max(MAX_TEAM_SEATS).default(1)
+    seats: z.number().int().min(1).max(MAX_TEAM_SEATS).default(1),
+    // The in-app plans dialog joins an open setup session: Checkout returns to its next step.
+    setupSessionId: z.string().regex(/^cs_[A-Za-z0-9_-]{22}$/).optional()
   })
   .strict()
 
@@ -46,10 +49,16 @@ export async function createCheckout(
   caller: BillingCaller,
   request: { plan: PlanId; interval: BillingInterval; seats: number },
   now: number,
-  membership: MembershipSource
+  membership: MembershipSource,
+  options: { setupSessionId?: string } = {}
 ): Promise<CheckoutOutcome> {
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
+  }
+  // O1/N4: every Checkout lands on a team. A personal account's subscription could never move to
+  // a team later (the account id is the billing key), so the desktop creates the team first.
+  if (!caller.accountId.startsWith('org:')) {
+    return { ok: false, status: 409, error: 'team_required' }
   }
   const existing = await currentSubscription(env.BILLING_DB, caller.accountId)
   if (existing && OPEN_STATUSES.has(existing.status)) {
@@ -78,7 +87,13 @@ export async function createCheckout(
       throw error
     }
   }
-  const metadata = { account_id: caller.accountId, plan: request.plan, interval: request.interval }
+  const metadata = {
+    account_id: caller.accountId,
+    plan: request.plan,
+    interval: request.interval,
+    ...(options.setupSessionId ? { setup_session_id: options.setupSessionId } : {})
+  }
+  const setupReturn = options.setupSessionId ? setupCheckoutReturnUrls(env, options.setupSessionId) : null
   const session = await stripe.createCheckoutSession(
     {
       mode: 'subscription',
@@ -92,8 +107,9 @@ export async function createCheckout(
       payment_method_collection: 'always',
       allow_promotion_codes: true,
       customer_update: { address: 'auto', name: 'auto' },
-      success_url: returnUrl(env, { checkout: 'success', session_id: 'CHECKOUT_SESSION_ID_PLACEHOLDER' }),
-      cancel_url: returnUrl(env, { checkout: 'cancel' }),
+      success_url:
+        setupReturn?.success ?? returnUrl(env, { checkout: 'success', session_id: 'CHECKOUT_SESSION_ID_PLACEHOLDER' }),
+      cancel_url: setupReturn?.cancel ?? returnUrl(env, { checkout: 'cancel' }),
       metadata,
       ...(env.STRIPE_AUTOMATIC_TAX === 'true'
         ? { automatic_tax: { enabled: true }, tax_id_collection: { enabled: true } }

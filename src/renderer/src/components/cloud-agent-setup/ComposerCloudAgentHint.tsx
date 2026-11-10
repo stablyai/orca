@@ -25,7 +25,7 @@ export function ComposerCloudAgentHintView({
       <p className="min-w-0 flex-1 text-xs text-muted-foreground">
         {t(
           'cloudAgentSetup.composerHint',
-          'Claude Code and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.'
+          'Claude and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.'
         )}
       </p>
       <Button type="button" variant="outline" size="xs" onClick={onSetUp}>

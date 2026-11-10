@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest'
+import { buildSetupSettingsSections } from './settings-navigation-capability-sections'
+import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+import { buildOrcaCloudSettingsSections } from './settings-navigation-orca-cloud-sections'
+
+function options(patch: Partial<SettingsNavigationBuildOptions>): SettingsNavigationBuildOptions {
+  return {
+    isMac: true,
+    isWindows: false,
+    isLocalWindowsHost: false,
+    isWindowsTerminalHost: false,
+    isWebClient: false,
+    hostQueuesMessages: false,
+    managedBrowserCreationEnabled: true,
+    mobileEmulatorCreationEnabled: true,
+    isDev: false,
+    isLinearConnected: false,
+    isOrcaCloudApiAvailable: true,
+    repos: [],
+    ...patch
+  }
+}
+
+describe('Orca Cloud settings group', () => {
+  it('holds every Orca Cloud pane, in order, when the build has a control plane', () => {
+    const sections = buildOrcaCloudSettingsSections(options({}))
+    expect(sections.map((section) => section.id)).toEqual([
+      'cloud-billing',
+      'cloud-team',
+      'cloud-secrets',
+      'cloud-environments',
+      'cloud-mcp',
+      'cloud-api-keys',
+      'cloud-routines'
+    ])
+    expect(new Set(sections.map((section) => section.group))).toEqual(new Set(['orca-cloud']))
+  })
+
+  it('is absent without a control plane and on the web client', () => {
+    expect(buildOrcaCloudSettingsSections(options({ isOrcaCloudApiAvailable: false }))).toEqual([])
+    expect(buildOrcaCloudSettingsSections(options({ isWebClient: true }))).toEqual([])
+  })
+
+  it('leaves Set Up with the account, and describes it by what it now holds', () => {
+    const setup = buildSetupSettingsSections(options({}))
+    expect(setup.some((section) => section.id.startsWith('cloud-'))).toBe(false)
+    expect(setup.find((section) => section.id === 'orca-account')?.description).toBe(
+      'Sign-in, plan, team and Orca Cloud settings.'
+    )
+    const local = buildSetupSettingsSections(options({ isOrcaCloudApiAvailable: false }))
+    expect(local.find((section) => section.id === 'orca-account')?.description).not.toMatch(
+      /Orca Cloud/
+    )
+  })
+})

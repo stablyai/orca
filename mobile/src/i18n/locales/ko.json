@@ -1485,7 +1485,6 @@
       "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
     },
     "emptyState": {
-      "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
       "connectedTitle": "연결 완료",
       "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
       "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",

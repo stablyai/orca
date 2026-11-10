@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
+  isOrcaCloudTrial,
   ORCA_BILLING_MAX_SEATS,
   type OrcaBillingEntitlement,
   type OrcaBillingInterval,
@@ -21,6 +22,7 @@ import {
   sandboxHoursLeftLine,
   usageWarningLine
 } from '../plan-billing-usage-copy'
+import { TrialPlanSummary } from '../TrialPlanSummary'
 import { EnterprisePlanCard } from './EnterprisePlanCard'
 import { PlansIntervalToggle } from './PlansIntervalToggle'
 import { TeamPlanCard, type TeamPlanCardMode } from './TeamPlanCard'
@@ -102,7 +104,7 @@ function CurrentPlanStrip({
   const resets = entitlement.usageWindow
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(entitlement.usageWindow.end)
     : null
-  const warning = usageWarningLine(entitlement, t)
+  const warning = usageWarningLine(entitlement, t, locale)
   return (
     <div className="space-y-2 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -285,6 +287,11 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
           />
           <CurrentPlanStrip entitlement={entitlement} />
         </>
+      ) : isOrcaCloudTrial(entitlement) ? (
+        // The trial's strip: the plan cards right below are the way out of it (spec T1).
+        <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+          <TrialPlanSummary entitlement={entitlement} />
+        </div>
       ) : (
         <ValueProps />
       )}

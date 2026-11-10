@@ -98,7 +98,7 @@ export function CloudAgentSetupDialog({
           <DialogDescription>
             {t(
               'cloudAgentSetup.subtitle',
-              'Choose how Claude Code or Codex gets access in your Orca Cloud workspaces.'
+              'Choose how your agents get access in your Orca Cloud workspaces.'
             )}
           </DialogDescription>
         </DialogHeader>

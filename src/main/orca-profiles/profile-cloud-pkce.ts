@@ -14,7 +14,15 @@ export type OrcaCloudAuthorizationCode = {
   nonce: string
   redirectUri: string
   state: string
+  /**
+   * Only with `holdBrowser`: finishes the browser tab, either sending it on to `location` (cloud
+   * setup continues in the same tab) or showing the usual "signed in" page when null.
+   */
+  finishBrowser?: (location: string | null) => void
 }
+
+/** How long a held browser tab waits for the caller before it gets the "signed in" page. */
+const HOLD_BROWSER_MS = 30_000
 
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -43,7 +51,14 @@ function closeServer(server: Server): void {
 export function beginOrcaCloudPkceFlow(
   config: OrcaCloudAuthConfig,
   localProfileId: string,
-  options: { onAuthorizeUrl?: (url: string) => void; signal?: AbortSignal } = {}
+  options: {
+    onAuthorizeUrl?: (url: string) => void
+    signal?: AbortSignal
+    /** Extra authorize parameters (cloud setup: setup=1, device, setup_steps). */
+    authorizeParams?: Record<string, string>
+    /** Keep the browser's callback request open until the caller calls finishBrowser. */
+    holdBrowser?: boolean
+  } = {}
 ): Promise<OrcaCloudAuthorizationCode> {
   const codeVerifier = createCodeVerifier()
   const nonce = base64Url(randomBytes(32))
@@ -62,19 +77,35 @@ export function beginOrcaCloudPkceFlow(
       closeServer(server)
     }
 
-    function resolveFlow(code: string): void {
+    function resolveFlow(code: string, held?: ServerResponse): void {
       if (settled) {
         return
       }
       settled = true
-      resolve({
-        code,
-        codeVerifier,
-        nonce,
-        redirectUri,
-        state
-      })
-      closeServer(server)
+      if (!held) {
+        resolve({ code, codeVerifier, nonce, redirectUri, state })
+        closeServer(server)
+        return
+      }
+      let finished = false
+      const finishBrowser = (location: string | null): void => {
+        if (finished) {
+          return
+        }
+        finished = true
+        clearTimeout(holdTimer)
+        // Only an https page may follow a sign-in in the same tab.
+        if (location && location.startsWith('https://')) {
+          held.writeHead(302, { location, 'cache-control': 'no-store' })
+          held.end()
+        } else {
+          held.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
+          held.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
+        }
+        closeServer(server)
+      }
+      const holdTimer = setTimeout(() => finishBrowser(null), HOLD_BROWSER_MS)
+      resolve({ code, codeVerifier, nonce, redirectUri, state, finishBrowser })
     }
 
     function writeInvalidCallback(response: ServerResponse): void {
@@ -114,6 +145,10 @@ export function beginOrcaCloudPkceFlow(
           writeInvalidCallback(response)
           return
         }
+        if (options.holdBrowser) {
+          resolveFlow(code, response)
+          return
+        }
         response.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
         response.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
         resolveFlow(code)
@@ -149,6 +184,9 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('code_challenge', createCodeChallenge(codeVerifier))
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
+      for (const [key, value] of Object.entries(options.authorizeParams ?? {})) {
+        authorizeUrl.searchParams.set(key, value)
+      }
       options.onAuthorizeUrl?.(authorizeUrl.toString())
       // Dev automation only (unpackaged): hand the sign-in URL to a test driver instead of
       // opening the developer's own browser. Same pattern as ORCA_BILLING_DEV_OPEN_URL_FILE.

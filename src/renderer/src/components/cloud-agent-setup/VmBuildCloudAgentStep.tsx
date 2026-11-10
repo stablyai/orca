@@ -146,8 +146,8 @@ export function VmBuildCloudAgentStepView({
         icon={KEY_ICON}
         title={t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')}
         detail={t(
-          'cloudAgentSetup.skippedDetail',
-          'Set it up any time from Settings › Orca Account › Cloud secrets.'
+          'cloudAgentSetup.skippedDetailCloudGroup',
+          'Set it up any time from Settings → Orca Cloud → Cloud secrets.'
         )}
       />
     )
@@ -228,10 +228,7 @@ export function VmBuildCloudAgentStepView({
               </span>
             </>
           }
-          detail={t(
-            'cloudAgentSetup.subtitleBuild',
-            'Give Claude Code or Codex access in Orca Cloud.'
-          )}
+          detail={t('cloudAgentSetup.subtitleBuild', 'Give your agents access in Orca Cloud.')}
           actions={
             mode.kind === 'offer' ? (
               <>
