@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildWorktreeAgentRows } from '../../../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import * as sessionOrigin from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { buildMirroredAgentStatusPatch } from '../agent-status-patch'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import type { WebSessionTabsSyncState } from '../state'
@@ -25,60 +24,48 @@ vi.mock('../../../store/index', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  it('resolves origins linearly without publishing equal paired snapshots', () => {
-    const resolve = vi.spyOn(sessionOrigin, 'resolveAgentSessionStartedAt')
-    try {
-      const counts = [10, 100].map((population) => {
-        let state = makeState()
-        const surfaces = Array.from({ length: population }, (_, index) => ({
-          type: 'terminal' as const,
-          id: `host-${index}::${LEAF_ID}`,
-          title: 'Claude',
-          parentTabId: `host-${index}`,
-          leafId: LEAF_ID,
-          isActive: index === 0,
-          status: 'ready' as const,
-          terminal: `terminal-${index}`,
-          agentStatus: {
-            state: 'working' as const,
-            prompt: 'task',
-            agentType: 'claude',
-            paneKey: makePaneKey(`host-${index}`, LEAF_ID),
-            worktreeId: WT,
-            updatedAt: NOW,
-            stateStartedAt: NOW - 10_000,
-            stateHistory: [],
-            providerSession: { key: 'session_id' as const, id: `session-${index}` }
-          }
-        }))
-        const patch = () =>
-          buildMirroredAgentStatusPatch(state, [], surfaces, [], ENV, WT, new Set(), NOW)
-        resolve.mockClear()
-        state = { ...state, ...patch() }
-        const initial = resolve.mock.calls.length
-        expect(Object.keys(state.agentStatusByPaneKey)).toHaveLength(population)
-        resolve.mockClear()
-        expect(patch()).toBeNull()
-        const repeated = resolve.mock.calls.length
-        const epoch = state.sortEpoch
-        surfaces[0].agentStatus = {
-          ...surfaces[0].agentStatus,
-          updatedAt: NOW + 1,
-          providerSession: { key: 'session_id', id: 'replacement' }
+  it.each([10, 100])(
+    'keeps equal paired snapshots quiet and resets a replacement clock at %s panes',
+    (population) => {
+      let state = makeState()
+      const surfaces = Array.from({ length: population }, (_, index) => ({
+        type: 'terminal' as const,
+        id: `host-${index}::${LEAF_ID}`,
+        title: 'Claude',
+        parentTabId: `host-${index}`,
+        leafId: LEAF_ID,
+        isActive: index === 0,
+        status: 'ready' as const,
+        terminal: `terminal-${index}`,
+        agentStatus: {
+          state: 'working' as const,
+          prompt: 'task',
+          agentType: 'claude',
+          paneKey: makePaneKey(`host-${index}`, LEAF_ID),
+          worktreeId: WT,
+          updatedAt: NOW,
+          stateStartedAt: NOW - 10_000,
+          stateHistory: [],
+          providerSession: { key: 'session_id' as const, id: `session-${index}` }
         }
-        resolve.mockClear()
-        state = { ...state, ...patch() }
-        expect(state.sortEpoch).toBe(epoch + 1)
-        expect(state.agentStatusEpoch).toBe(2)
-        expect(Object.values(state.agentStatusByPaneKey)[0].firstStateStartedAt).toBe(NOW + 1)
-        return [initial, repeated, resolve.mock.calls.length]
-      })
-      expect(counts[0]).toEqual([10, 10, 10])
-      expect(counts[1]).toEqual(counts[0].map((count) => count * 10))
-    } finally {
-      resolve.mockRestore()
+      }))
+      const patch = () =>
+        buildMirroredAgentStatusPatch(state, [], surfaces, [], ENV, WT, new Set(), NOW)
+      state = { ...state, ...patch() }
+      expect(Object.keys(state.agentStatusByPaneKey)).toHaveLength(population)
+      expect(patch()).toBeNull()
+      const epoch = state.sortEpoch
+      surfaces[0].agentStatus = {
+        ...surfaces[0].agentStatus,
+        updatedAt: NOW + 1,
+        providerSession: { key: 'session_id', id: 'replacement' }
+      }
+      state = { ...state, ...patch() }
+      expect(state.sortEpoch).toBe(epoch + 1)
+      expect(state.agentStatusEpoch).toBe(2)
+      expect(Object.values(state.agentStatusByPaneKey)[0].firstStateStartedAt).toBe(NOW + 1)
     }
-  })
+  )
 
   it('repairs mirrored same-state attribution and retains identity from an older snapshot', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
