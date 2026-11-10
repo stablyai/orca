@@ -55,7 +55,9 @@ const labels = new Map([
 const settings = { ...getDefaultSettings('/projects/acme'), uiLanguage: 'en' as const }
 async function hover(frame: HTMLElement) {
   const button = frame.querySelector<HTMLButtonElement>('[aria-label^="2026-11-06:"]')
-  if (!button) throw new Error('Daily chart day missing')
+  if (!button) {
+    throw new Error('Daily chart day missing')
+  }
   const bounds = button.getBoundingClientRect()
   const init = { bubbles: true, clientX: bounds.left + bounds.width / 2, clientY: bounds.top + 80 }
   button.dispatchEvent(new MouseEvent('mouseover', init))
