@@ -236,7 +236,7 @@ export function registerRuntimeClientIpcBridge(
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
-    subscribe: (environmentId, onEvent, onError, isCurrent) => {
+    subscribe: (environmentId, onEvent, onError, isCurrent, onClose) => {
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -274,7 +274,7 @@ export function registerRuntimeClientIpcBridge(
             sync: runtimeClientEventsSync.sync
           })
         },
-        { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId), onClose }
       )
       return subscription
     },

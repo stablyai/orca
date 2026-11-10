@@ -229,7 +229,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       subscriptionId,
       type: 'close'
     })
-    deliver({ id: 'stream-1', ok: true, result: { type: 'batch' } })
+    deliver({
+      id: 'stream-1',
+      ok: true,
+      result: { type: 'batch' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
     expect(send).not.toHaveBeenCalledWith(
       'runtimeEnvironments:subscriptionEvent',
       expect.objectContaining({ type: 'response' })

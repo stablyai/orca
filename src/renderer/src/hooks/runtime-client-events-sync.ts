@@ -15,7 +15,9 @@ export type RuntimeClientEventsSyncDeps = {
     onEvent: (event: RuntimeClientEvent) => void,
     onError: (error: unknown) => void,
     /** Use for subscription-side recovery that runs before event delivery. */
-    isCurrent: () => boolean
+    isCurrent: () => boolean,
+    /** The stream ended (e.g. its host connection was replaced); the owner resubscribes. */
+    onClose: () => void
   ) => Promise<RuntimeClientEventSubscriptionHandle>
   onEvent: (environmentId: string, event: RuntimeClientEvent) => void
   /** Base retry delay; doubles per consecutive failure up to retryMaxDelayMs. */
@@ -160,6 +162,7 @@ export function createRuntimeClientEventsSync(
         subscribeGeneration === generation &&
         (pending.get(environmentId) === pendingSubscriptionToken ||
           subscriptions.get(environmentId)?.token === pendingSubscriptionToken)
+      let closed = false
       void deps
         .subscribe(
           environmentId,
@@ -172,7 +175,16 @@ export function createRuntimeClientEventsSync(
           (error) => {
             console.warn('[runtime-client-events] subscription error:', error)
           },
-          isCurrent
+          isCurrent,
+          () => {
+            // Main closes streams whose host connection was replaced; the key can stay unchanged.
+            closed = true
+            if (subscriptions.get(environmentId)?.token !== pendingSubscriptionToken) {
+              return
+            }
+            subscriptions.delete(environmentId)
+            scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
+          }
         )
         .then((subscription) => {
           const isCurrentPending = pending.get(environmentId) === pendingSubscriptionToken
@@ -191,6 +203,11 @@ export function createRuntimeClientEventsSync(
           // Another subscribe already won; unsubscribe this duplicate instead of overwriting and leaking the winner’s handle.
           if (subscriptions.get(environmentId)?.key === subscriptionKey) {
             subscription.unsubscribe()
+            return
+          }
+          if (closed) {
+            subscription.unsubscribe()
+            scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
             return
           }
           consecutiveFailures.delete(environmentId)

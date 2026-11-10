@@ -211,6 +211,58 @@ describe('createRuntimeClientEventsSync', () => {
     }
   })
 
+  it('resubscribes with an unchanged key when the stream closes, including mid-setup', async () => {
+    vi.useFakeTimers()
+    try {
+      const closes: (() => void)[] = []
+      const unsubscribes: ReturnType<typeof vi.fn>[] = []
+      const subscribe = vi.fn(
+        (
+          _environmentId: string,
+          _onEvent: unknown,
+          _onError: unknown,
+          _isCurrent: unknown,
+          onClose: () => void
+        ): Promise<RuntimeClientEventSubscriptionHandle> => {
+          const unsubscribe = vi.fn()
+          unsubscribes.push(unsubscribe)
+          closes.push(onClose)
+          // The first stream closes before its setup settles.
+          if (closes.length === 1) {
+            onClose()
+          }
+          return Promise.resolve({ unsubscribe })
+        }
+      )
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => ['A'],
+        getSubscriptionKey: () => 'A:1',
+        subscribe,
+        onEvent: vi.fn(),
+        retryDelayMs: 10,
+        random: () => 1
+      })
+
+      sync.sync()
+      await Promise.resolve()
+      expect(unsubscribes[0]).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(10)
+      expect(subscribe).toHaveBeenCalledTimes(2)
+
+      closes[1]()
+      sync.sync()
+      expect(subscribe).toHaveBeenCalledTimes(3)
+      await Promise.resolve()
+
+      // A late close from a replaced stream must not drop the live one.
+      closes[1]()
+      sync.sync()
+      expect(subscribe).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('backs off exponentially with a cap while an environment keeps failing', async () => {
     vi.useFakeTimers()
     try {
