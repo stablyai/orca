@@ -36,9 +36,9 @@ export const CHEAP_PS_ARGS = (
 /** Shell-proof tier keeps job control/argv, dropping costly unused tty/start columns; enough to name foreground processes,
  * never correlate reused PIDs across captures. Linux adds `sid=` so the session filter can exclude
  * a Docker container sharing the pts number (#39488); macOS ps has no `sid` keyword. */
-export const SHELL_FOREGROUND_PS_ARGS = HOST_IS_DARWIN
-  ? (['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='] as readonly string[])
-  : (['-axo', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command='] as readonly string[])
+export const SHELL_FOREGROUND_PS_ARGS: readonly string[] = HOST_IS_DARWIN
+  ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command=']
+  : ['-axo', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=']
 
 /** The name inside ps's `(comm)`, printed when argv was unreadable (another user's process, an exiting one, or a
  * recovery the fork budget withheld): its identity is unknown, so it never proves which program holds a terminal. */
